@@ -211,6 +211,88 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
                 for relative in owned
             },
         )
+        (self.source / "graphify-out/graph.json").unlink()
+        self.seed("--check")
+
+    def test_rejects_destination_parent_symlinks_without_external_writes(self) -> None:
+        for top_level in ("graphify-out", "graphify-input"):
+            with self.subTest(top_level=top_level):
+                external = self.sandbox / f"external-{top_level}"
+                external.mkdir()
+                target = self.destination / top_level
+                target.symlink_to(external, target_is_directory=True)
+
+                result = self.seed(check=False)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unsafe destination parent", result.stderr)
+                self.assertEqual(list(external.iterdir()), [])
+                target.unlink()
+
+                missing = self.sandbox / f"missing-{top_level}"
+                target.symlink_to(missing, target_is_directory=True)
+                result = self.seed(check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unsafe destination parent", result.stderr)
+                self.assertFalse(missing.exists())
+                target.unlink()
+
+    def test_rejects_parent_symlinks_for_owned_check_without_external_writes(
+        self,
+    ) -> None:
+        self.seed()
+        for top_level in ("graphify-out", "graphify-input"):
+            with self.subTest(top_level=top_level):
+                target = self.destination / top_level
+                external = self.sandbox / f"owned-{top_level}"
+                target.rename(external)
+                target.symlink_to(external, target_is_directory=True)
+                before = {
+                    path.relative_to(external): path.read_bytes()
+                    for path in external.rglob("*")
+                    if path.is_file()
+                }
+
+                result = self.seed("--check", check=False)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unsafe destination parent", result.stderr)
+                after = {
+                    path.relative_to(external): path.read_bytes()
+                    for path in external.rglob("*")
+                    if path.is_file()
+                }
+                self.assertEqual(after, before)
+                target.unlink()
+                external.rename(target)
+
+    def test_rejects_symlinked_source_parents(self) -> None:
+        for top_level in ("graphify-out", "graphify-input"):
+            with self.subTest(top_level=top_level):
+                source_parent = self.source / top_level
+                external = self.sandbox / f"source-{top_level}"
+                source_parent.rename(external)
+                source_parent.symlink_to(external, target_is_directory=True)
+
+                result = self.seed(check=False)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unsafe source parent", result.stderr)
+                self.assertFalse(
+                    (self.destination / "graphify-out/graph.json").exists()
+                )
+                source_parent.unlink()
+                external.rename(source_parent)
+
+    def test_rejects_non_directory_destination_parent(self) -> None:
+        parent = self.destination / "graphify-out"
+        parent.write_text("preserve\n", encoding="utf-8")
+
+        result = self.seed(check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe destination parent", result.stderr)
+        self.assertEqual(parent.read_text(encoding="utf-8"), "preserve\n")
 
     def test_rejects_collision_and_partial_owned_state_without_overwrite(self) -> None:
         collision = self.destination / "graphify-out/graph.json"

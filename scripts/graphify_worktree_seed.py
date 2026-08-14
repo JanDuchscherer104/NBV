@@ -34,6 +34,19 @@ def regular(path: Path, label: str) -> None:
         fail(f"{label} must be a regular local file: {path}")
 
 
+def validate_parent_chain(
+    root: Path, relative: Path, label: str, *, require_existing: bool
+) -> None:
+    """Reject symlinked or non-directory parents below an already-resolved root."""
+    current = root
+    for part in relative.parent.parts:
+        current /= part
+        if current.is_symlink() or (current.exists() and not current.is_dir()):
+            fail(f"unsafe {label} parent: {current}")
+        if require_existing and not current.exists():
+            fail(f"unsafe {label} parent: {current}")
+
+
 def safe_path(value: Any, label: str) -> Path:
     if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
         fail(f"unsafe {label} path: {value!r}")
@@ -108,6 +121,7 @@ def manifest_markdown(root: Path) -> list[Path]:
         if not isinstance(entry, dict):
             fail(f"invalid source manifest entry: {path}")
         if path.parts[0] == "graphify-input" and path.suffix.lower() == ".md":
+            validate_parent_chain(root, path, "source", require_existing=True)
             regular(root / path, "manifest source")
             result.append(path)
     index = Path("graphify-input/index.md")
@@ -167,6 +181,8 @@ def validate_interpreter(root: Path) -> None:
 
 
 def validate_source(source: Path) -> tuple[list[Path], str]:
+    for path in (*CORE, Path("graphify-out/needs_update")):
+        validate_parent_chain(source, path, "source", require_existing=True)
     if (source / "graphify-out/needs_update").exists() or (
         source / "graphify-out/needs_update"
     ).is_symlink():
@@ -190,6 +206,7 @@ def owned_files(payload: dict[str, Any]) -> list[Path]:
 
 
 def validate_owned(destination: Path, common: Path) -> None:
+    validate_parent_chain(destination, SENTINEL, "destination", require_existing=True)
     payload = json_object(destination / SENTINEL, "worktree seed sentinel")
     if payload.get("target_root") != str(destination) or payload.get(
         "git_common_dir"
@@ -199,6 +216,7 @@ def validate_owned(destination: Path, common: Path) -> None:
     if not set((*CORE, ROOT)).issubset(files):
         fail("partial owned Graphify seed install")
     for path in files:
+        validate_parent_chain(destination, path, "destination", require_existing=True)
         regular(destination / path, "seeded artifact")
     if (destination / ROOT).read_text(encoding="utf-8") != f"{destination}\n":
         fail("child .graphify_root is not bound to this worktree")
@@ -218,13 +236,17 @@ def seed(
     if not source.is_dir() or not destination.is_dir():
         fail("source and destination must be directories")
     common = validate_topology(source, destination, source_git_dir, destination_git_dir)
-    markdown, graph_revision = validate_source(source)
-    source_head = git(source, source_git_dir, "rev-parse", "HEAD")
+    for path in (*CORE, ROOT, SENTINEL, Path("graphify-input/index.md")):
+        validate_parent_chain(destination, path, "destination", require_existing=False)
     sentinel = destination / SENTINEL
-    targets = [*CORE, *markdown, ROOT, SENTINEL]
     if sentinel.exists() or sentinel.is_symlink():
         validate_owned(destination, common)
         return
+    markdown, graph_revision = validate_source(source)
+    source_head = git(source, source_git_dir, "rev-parse", "HEAD")
+    targets = [*CORE, *markdown, ROOT, SENTINEL]
+    for path in targets:
+        validate_parent_chain(destination, path, "destination", require_existing=False)
     if any(
         (destination / path).exists() or (destination / path).is_symlink()
         for path in targets
