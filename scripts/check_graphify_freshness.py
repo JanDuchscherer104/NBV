@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
-"""Fail-closed freshness check for the optional local Graphify artifact."""
+"""Fail-closed freshness gate backed by Graphify's pinned detector."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import tempfile
 from typing import Any
 
 
 PROJECTION_INDEX = Path("graphify-input/index.md")
 GRAPH = Path("graphify-out/graph.json")
-STAT_INDEX = Path("graphify-out/cache/stat-index.json")
 MANIFEST = Path("graphify-out/manifest.json")
+INTERPRETER = Path("graphify-out/.graphify_python")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
-_FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
+PINNED_GRAPHIFY_VERSION = "0.9.31"
+MAX_STALE_SOURCES = 128
 _OWNER_DIGEST = re.compile(r"^- ([^:\r\n]+): sha256:([0-9a-f]{64})\r?$")
 
 
@@ -30,24 +33,31 @@ def _head(root: Path) -> str:
         capture_output=True,
         text=True,
     )
-    value = result.stdout.strip()
-    if result.returncode or not value:
+    if result.returncode or not result.stdout.strip():
         raise ValueError("current Git HEAD is unavailable")
-    return value
+    return result.stdout.strip()
 
 
 def _is_ancestor(root: Path, older: str, newer: str) -> bool:
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", older, newer],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", older, newer],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
     )
-    return result.returncode == 0
+
+
+def _regular(path: Path, label: str) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"missing or unsafe {label}: {path.as_posix()}")
 
 
 def _json_object(path: Path, label: str) -> dict[str, Any]:
+    _regular(path, label)
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -55,6 +65,36 @@ def _json_object(path: Path, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"invalid {label}: expected a JSON object")
     return value
+
+
+def _normalize_path(value: str) -> str:
+    normalized = value.replace("\\", "/")
+    if re.match(r"^[A-Za-z]:/", normalized):
+        raise ValueError("unsafe source path")
+    path = PurePosixPath(normalized)
+    if path.is_absolute() or "." in path.parts or ".." in path.parts:
+        raise ValueError("unsafe source path")
+    return path.as_posix()
+
+
+def _contained_existing(root: Path, value: str) -> str:
+    candidate = Path(value)
+    if candidate.is_absolute():
+        try:
+            candidate = candidate.resolve(strict=True)
+            relative = candidate.relative_to(root.resolve()).as_posix()
+        except (OSError, RuntimeError, ValueError) as error:
+            raise ValueError(f"stale source escapes repository: {value}") from error
+    else:
+        relative = _normalize_path(value)
+        candidate = root / relative
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError(f"stale source is unavailable: {relative}: {error}") from error
+    if not resolved.is_relative_to(root.resolve()) or not resolved.is_file():
+        raise ValueError(f"stale source escapes repository: {relative}")
+    return relative
 
 
 def _projection_metadata(index: Path) -> tuple[str, str, dict[str, str]]:
@@ -78,17 +118,13 @@ def _projection_metadata(index: Path) -> tuple[str, str, dict[str, str]]:
     revision = single_value("source_revision")
     owner_state = single_value("owner_worktree_state")
     if owner_state not in {"clean", "dirty"}:
-        raise ValueError(
-            "invalid projection index: owner_worktree_state must be clean or dirty"
-        )
-
-    lines = text.splitlines()
+        raise ValueError("invalid projection index: owner_worktree_state is invalid")
     try:
-        section_start = lines.index("## Owner digests") + 1
+        start = text.splitlines().index("## Owner digests") + 1
     except ValueError as error:
         raise ValueError("invalid projection index: missing Owner digests") from error
-    owner_digests: dict[str, str] = {}
-    for line in lines[section_start:]:
+    owners: dict[str, str] = {}
+    for line in text.splitlines()[start:]:
         if line.startswith("## "):
             break
         if not line.strip():
@@ -98,276 +134,186 @@ def _projection_metadata(index: Path) -> tuple[str, str, dict[str, str]]:
             raise ValueError(f"invalid projection index owner digest: {line}")
         owner, digest = match.groups()
         normalized = _normalize_path(owner)
-        if normalized in owner_digests:
+        if normalized in owners:
             raise ValueError(f"invalid projection index: duplicate owner {normalized}")
-        owner_digests[normalized] = digest
-    if not owner_digests:
+        owners[normalized] = digest
+    if not owners:
         raise ValueError("invalid projection index: Owner digests must not be empty")
-    return revision, owner_state, owner_digests
+    return revision, owner_state, owners
 
 
-def _normalize_path(value: str) -> str:
-    normalized = value.replace("\\", "/")
-    if re.match(r"^[A-Za-z]:/", normalized):
-        raise ValueError("unsafe source path")
-    path = PurePosixPath(normalized)
-    if path.is_absolute() or ".." in path.parts:
-        raise ValueError("unsafe source path")
-    result = path.as_posix()
-    while result.startswith("./"):
-        result = result[2:]
-    return result
-
-
-def _upstream_file_hash(content: bytes, relative_path: str) -> str:
-    """Reproduce Graphify 0.9.31's content-plus-relative-path digest."""
-    text = content.decode(errors="replace")
-    opener = _FRONTMATTER_DELIM.match(text)
-    if opener is not None:
-        closer = _FRONTMATTER_DELIM.search(text, opener.end())
-        if closer is not None:
-            content = text[closer.start() + 3 :].encode()
-    digest = hashlib.sha256()
-    digest.update(content)
-    digest.update(b"\x00")
-    digest.update(relative_path.lower().encode())
-    return digest.hexdigest()
-
-
-def _index_digest(stat_index: dict[str, Any]) -> str:
-    entry = stat_index.get(INDEX_PATH)
-    if not isinstance(entry, dict):
-        raise ValueError(
-            "invalid stat index: missing object entry for graphify-input/index.md"
-        )
-    hashes = entry.get("hashes")
-    if not isinstance(hashes, dict):
-        raise ValueError("invalid stat index: index hashes must be an object")
-    digest = hashes.get(INDEX_PATH)
-    if not isinstance(digest, str) or not digest:
-        raise ValueError("invalid stat index: index digest must be a non-empty string")
-    return digest
-
-
-def _manifest_drift(root: Path, manifest: dict[str, Any]) -> list[str]:
-    """Return indexed source paths whose current bytes differ from the manifest."""
-    stale: list[str] = []
-    repository = root.resolve()
-    for raw_path, raw_entry in sorted(manifest.items()):
-        if not isinstance(raw_path, str):
-            raise ValueError("invalid manifest: source path must be a string")
-        relative = _normalize_path(raw_path)
-        source = repository / relative
-        try:
-            resolved = source.resolve(strict=False)
-        except (OSError, RuntimeError) as error:
-            raise ValueError(
-                f"manifest source cannot be resolved: {relative}: {error}"
-            ) from error
-        if not resolved.is_relative_to(repository):
-            raise ValueError(f"manifest source escapes repository: {relative}")
-        if not resolved.is_file():
-            stale.append(relative)
-            continue
-        if not isinstance(raw_entry, dict):
-            raise ValueError(f"invalid manifest entry: {relative}")
-        expected = (
-            raw_entry.get("semantic_hash")
-            or raw_entry.get("ast_hash")
-            or raw_entry.get("hash")
-        )
-        if not isinstance(expected, str) or not expected:
-            stale.append(relative)
-            continue
-        digest = hashlib.md5(resolved.read_bytes(), usedforsecurity=False).hexdigest()
-        if digest != expected:
-            stale.append(relative)
-    return stale
-
-
-def _contains_index_node(graph: dict[str, Any]) -> bool:
+def _graph_revision(root: Path) -> str:
+    graph = _json_object(root / GRAPH, "graph")
+    revision = graph.get("built_at_commit")
     nodes = graph.get("nodes")
-    if not isinstance(nodes, list):
-        raise ValueError("invalid graph: nodes must be a list")
+    if not isinstance(revision, str) or not revision:
+        raise ValueError("invalid graph: built_at_commit must be a non-empty string")
+    if not isinstance(nodes, list) or any(not isinstance(node, dict) for node in nodes):
+        raise ValueError("invalid graph: nodes must be a list of objects")
+    found = False
     for node in nodes:
-        if not isinstance(node, dict):
-            raise ValueError("invalid graph: node must be an object")
         source = node.get("source_file")
         if source is None:
             continue
         if not isinstance(source, str):
             raise ValueError("invalid graph: node source_file must be a string")
         if _normalize_path(source) == INDEX_PATH:
-            return True
-    return False
+            found = True
+    if not found:
+        raise ValueError("graph has no node sourced from graphify-input/index.md")
+    return revision
 
 
-def _live_owner_reasons(root: Path, owner_digests: dict[str, str]) -> list[str]:
+def _owner_reasons(root: Path, owners: dict[str, str]) -> list[str]:
     reasons: list[str] = []
-    repository = root.resolve()
-    owners = sorted(owner_digests)
-    for relative in owners:
-        owner = repository / relative
+    for relative, expected in owners.items():
+        owner = root / relative
         try:
-            resolved = owner.resolve(strict=False)
+            resolved = owner.resolve(strict=True)
         except (OSError, RuntimeError) as error:
             raise ValueError(
-                f"projection owner cannot be resolved: {relative}: {error}"
-            )
-        if not resolved.is_relative_to(repository):
+                f"projection owner is unavailable: {relative}: {error}"
+            ) from error
+        if not resolved.is_relative_to(root.resolve()) or not resolved.is_file():
             raise ValueError(f"projection owner escapes repository: {relative}")
-        if not resolved.is_file():
-            reasons.append(f"projection owner is missing: {relative}")
-            continue
-        try:
-            digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
-        except OSError as error:
-            raise ValueError(f"projection owner cannot be read: {relative}: {error}")
-        if digest != owner_digests[relative]:
+        if hashlib.sha256(resolved.read_bytes()).hexdigest() != expected:
             reasons.append(f"projection owner digest changed: {relative}")
-
-    result = subprocess.run(
+    status = subprocess.run(
         ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *owners],
         cwd=root,
         check=False,
         capture_output=True,
         text=True,
     )
-    if result.returncode:
+    if status.returncode:
         raise ValueError("projection owner worktree status is unavailable")
-    if result.stdout.strip():
+    if status.stdout.strip():
         reasons.append("projection owner worktree is dirty")
     return reasons
 
 
-def check(root: Path) -> dict[str, Any]:
-    """Return the stable freshness result without printing or exiting."""
-    reasons: list[str] = []
-    invalid = False
-    missing = False
+def _graphify_interpreter(root: Path) -> str:
+    marker = root / INTERPRETER
+    _regular(marker, "Graphify interpreter marker")
+    value = marker.read_text(encoding="utf-8").strip()
+    candidate = Path(value)
+    if (
+        not value
+        or not candidate.is_absolute()
+        or not candidate.is_file()
+        or not os.access(candidate, os.X_OK)
+    ):
+        raise ValueError("invalid Graphify interpreter marker")
+    return str(candidate)
 
+
+def _detect_incremental(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    interpreter = _graphify_interpreter(root)
+    manifest = (root / MANIFEST).resolve()
+    _regular(manifest, "manifest")
+    program = """
+import json
+import sys
+from importlib.metadata import version
+from pathlib import Path
+from graphify.detect import detect_incremental
+if version('graphifyy') != sys.argv[4]:
+    raise RuntimeError('unexpected graphifyy version')
+root = Path(sys.argv[1])
+manifest = sys.argv[2]
+kwargs = dict(
+    manifest_path=manifest,
+    follow_symlinks=False,
+    google_workspace=False,
+)
+print(json.dumps({
+    'ast': detect_incremental(root, kind='ast', **kwargs),
+    'semantic': detect_incremental(root, kind='semantic', **kwargs),
+}))
+"""
+    with tempfile.TemporaryDirectory(prefix="aria-graphify-freshness-") as output:
+        env = {**os.environ, "GRAPHIFY_OUT": output}
+        result = subprocess.run(
+            [
+                interpreter,
+                "-c",
+                program,
+                str(root.resolve()),
+                str(manifest),
+                output,
+                PINNED_GRAPHIFY_VERSION,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+    if result.returncode:
+        raise ValueError(
+            f"Graphify detector failed: {result.stderr.strip() or result.stdout.strip()}"
+        )
     try:
-        head = _head(root)
-    except ValueError as error:
-        head = None
-        invalid = True
-        reasons.append(str(error))
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Graphify detector returned invalid JSON: {error}") from error
+    if not isinstance(payload, dict) or not all(
+        isinstance(payload.get(kind), dict) for kind in ("ast", "semantic")
+    ):
+        raise ValueError("Graphify detector returned an invalid result")
+    return payload["ast"], payload["semantic"]
 
-    paths = (
-        (PROJECTION_INDEX, "projection index"),
-        (GRAPH, "graph"),
-        (STAT_INDEX, "stat index"),
-        (MANIFEST, "manifest"),
-    )
-    for relative, label in paths:
-        if not (root / relative).is_file():
-            missing = True
-            reasons.append(f"missing {label}: {relative.as_posix()}")
 
-    projection_revision: str | None = None
-    owner_worktree_state: str | None = None
-    owner_digests: dict[str, str] | None = None
-    graph: dict[str, Any] | None = None
-    graph_revision: str | None = None
-    manifest: dict[str, Any] | None = None
-    digest: str | None = None
-    node_present: bool | None = None
-    if (root / PROJECTION_INDEX).is_file():
-        try:
-            (
-                projection_revision,
-                owner_worktree_state,
-                owner_digests,
-            ) = _projection_metadata(root / PROJECTION_INDEX)
-        except ValueError as error:
-            invalid = True
-            reasons.append(str(error))
-    if (root / GRAPH).is_file():
-        try:
-            graph = _json_object(root / GRAPH, "graph")
-            built_at_commit = graph.get("built_at_commit")
-            if not isinstance(built_at_commit, str) or not built_at_commit:
-                raise ValueError(
-                    "invalid graph: built_at_commit must be a non-empty string"
-                )
-            graph_revision = built_at_commit
-            node_present = _contains_index_node(graph)
-        except ValueError as error:
-            invalid = True
-            reasons.append(str(error))
-    if (root / STAT_INDEX).is_file():
-        try:
-            digest = _index_digest(_json_object(root / STAT_INDEX, "stat index"))
-        except ValueError as error:
-            invalid = True
-            reasons.append(str(error))
-    if (root / MANIFEST).is_file():
-        try:
-            manifest = _json_object(root / MANIFEST, "manifest")
-        except ValueError as error:
-            invalid = True
-            reasons.append(str(error))
-
-    stale_sources: list[str] = []
-    if head is not None:
-        if (
-            projection_revision is not None
-            and projection_revision != head
-            and not _is_ancestor(root, projection_revision, head)
+def _detector_stale_sources(
+    root: Path, ast: dict[str, Any], semantic: dict[str, Any]
+) -> list[str]:
+    stale: set[str] = set()
+    for result, accepted in (
+        (ast, {"code"}),
+        (semantic, {"document", "paper", "image"}),
+    ):
+        files = result.get("new_files")
+        if not isinstance(files, dict):
+            raise ValueError("Graphify detector has invalid new_files")
+        for kind, paths in files.items():
+            if kind not in accepted:
+                continue
+            if not isinstance(paths, list) or any(
+                not isinstance(path, str) for path in paths
+            ):
+                raise ValueError("Graphify detector has invalid source paths")
+            stale.update(_contained_existing(root, path) for path in paths)
+        for key in ("deleted_files", "excluded_files"):
+            values = result.get(key)
+            if not isinstance(values, list) or any(
+                not isinstance(path, str) for path in values
+            ):
+                raise ValueError(f"Graphify detector has invalid {key}")
+            if values:
+                raise ValueError(f"Graphify detector reported {key}")
+        files = result.get("files")
+        if not isinstance(files, dict):
+            raise ValueError("Graphify detector has invalid files")
+        video = files.get("video", [])
+        if not isinstance(video, list) or any(
+            not isinstance(path, str) for path in video
         ):
-            reasons.append("projection source_revision is not an ancestor of HEAD")
-        if owner_worktree_state == "dirty":
-            reasons.append("projection was built from a dirty owner worktree")
-        if owner_digests is not None:
-            try:
-                reasons.extend(_live_owner_reasons(root, owner_digests))
-            except ValueError as error:
-                invalid = True
-                reasons.append(str(error))
-        if (
-            graph_revision is not None
-            and graph_revision != head
-            and not _is_ancestor(root, graph_revision, head)
-        ):
-            reasons.append("graph built_at_commit is not an ancestor of HEAD")
-        if manifest is not None:
-            try:
-                stale_sources = _manifest_drift(root, manifest)
-            except ValueError as error:
-                invalid = True
-                reasons.append(str(error))
-            if stale_sources:
-                reasons.append(
-                    f"{len(stale_sources)} indexed source(s) differ from the Graphify manifest"
-                )
-        if (root / PROJECTION_INDEX).is_file() and digest is not None:
-            actual_digest = _upstream_file_hash(
-                (root / PROJECTION_INDEX).read_bytes(), INDEX_PATH
-            )
-        else:
-            actual_digest = None
-        if actual_digest is not None and digest != actual_digest:
-            reasons.append("projection index digest does not match stat index")
-        if node_present is False:
-            reasons.append("graph has no node sourced from graphify-input/index.md")
+            raise ValueError("Graphify detector has invalid video files")
+        if video:
+            raise ValueError("Graphify detector reported unsupported video sources")
+    if len(stale) > MAX_STALE_SOURCES:
+        raise ValueError("Graphify detector reported an unbounded stale-source set")
+    return sorted(stale)
 
-    semantic_stale = (root / NEEDS_UPDATE).exists()
-    if semantic_stale:
-        reasons.append("semantic refresh required: graphify-out/needs_update exists")
 
-    if invalid:
-        state = "invalid"
-    elif missing:
-        state = "missing"
-    elif semantic_stale:
-        state = "semantic-stale"
-    elif reasons:
-        state = "structural-stale"
-    else:
-        state = "fresh"
-
+def _result(
+    state: str,
+    head: str | None,
+    graph_revision: str | None,
+    stale_sources: list[str],
+    reasons: list[str],
+) -> dict[str, Any]:
     fresh = state == "fresh"
-    usable = state not in {"invalid", "missing"}
+    usable = state in {"fresh", "usable-stale"}
     return {
         "state": state,
         "fresh": fresh,
@@ -379,45 +325,73 @@ def check(root: Path) -> dict[str, Any]:
         "next_action": (
             "query Graphify first; validate consequential claims at source_location"
             if fresh
-            else (
-                "query Graphify first; verify stale source_location paths directly and refresh before strict scaffold validation"
-                if usable
-                else "repair or rebuild Graphify before graph queries"
-            )
+            else "query Graphify first; verify stale source_location paths directly and refresh before strict validation"
+            if usable
+            else "repair or rebuild Graphify before graph queries"
         ),
     }
+
+
+def check(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    reasons: list[str] = []
+    try:
+        head = _head(root)
+        projection_revision, owner_state, owners = _projection_metadata(
+            root / PROJECTION_INDEX
+        )
+        graph_revision = _graph_revision(root)
+        if (root / NEEDS_UPDATE).exists() or (root / NEEDS_UPDATE).is_symlink():
+            raise ValueError(
+                "semantic refresh required: graphify-out/needs_update exists"
+            )
+        if owner_state == "dirty":
+            raise ValueError("projection was built from a dirty owner worktree")
+        reasons.extend(_owner_reasons(root, owners))
+        if not _is_ancestor(root, projection_revision, head):
+            raise ValueError("projection source_revision is not an ancestor of HEAD")
+        if not _is_ancestor(root, graph_revision, head):
+            raise ValueError("graph built_at_commit is not an ancestor of HEAD")
+        ast, semantic = _detect_incremental(root)
+        stale_sources = _detector_stale_sources(root, ast, semantic)
+    except ValueError as error:
+        return _result(
+            "unusable",
+            locals().get("head"),
+            locals().get("graph_revision"),
+            [],
+            [*reasons, str(error)],
+        )
+    if (
+        reasons
+        or projection_revision != head
+        or graph_revision != head
+        or stale_sources
+    ):
+        return _result("usable-stale", head, graph_revision, stale_sources, reasons)
+    return _result("fresh", head, graph_revision, stale_sources, reasons)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     output = parser.add_mutually_exclusive_group()
-    output.add_argument("--quiet", action="store_true", help="emit no output")
-    output.add_argument("--json", action="store_true", help="emit stable JSON")
-    parser.add_argument(
-        "--usable",
-        action="store_true",
-        help="succeed for a structurally valid graph even when refresh is pending",
-    )
+    output.add_argument("--quiet", action="store_true")
+    output.add_argument("--json", action="store_true")
+    parser.add_argument("--usable", action="store_true")
     args = parser.parse_args(argv)
     try:
         result = check(Path.cwd())
-    except Exception as error:  # Defensive outer fail-closed boundary.
-        result = {
-            "state": "invalid",
-            "fresh": False,
-            "usable": False,
-            "head": None,
-            "graph_revision": None,
-            "stale_sources": [],
-            "reasons": [f"unexpected freshness-check failure: {error}"],
-            "next_action": "repair or rebuild Graphify before graph queries",
-        }
+    except Exception as error:
+        result = _result(
+            "unusable", None, None, [], [f"unexpected freshness-check failure: {error}"]
+        )
     if not args.quiet:
         if args.json:
             print(json.dumps(result, sort_keys=True))
         else:
-            reasons = "; ".join(result["reasons"]) or "all freshness predicates pass"
-            print(f"Graphify freshness: {result['state']} — {reasons}")
+            print(
+                f"Graphify freshness: {result['state']} — {'; '.join(result['reasons']) or 'all checks pass'}"
+            )
             print(f"Next action: {result['next_action']}")
     return 0 if (result["usable"] if args.usable else result["fresh"]) else 1
 
