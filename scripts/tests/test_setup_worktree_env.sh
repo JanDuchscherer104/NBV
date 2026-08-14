@@ -9,6 +9,8 @@ SHARED_ROOT="${SANDBOX}/shared"
 WORKTREE_ROOT="${SANDBOX}/worktree"
 SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
+UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
+UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
 FAKE_BIN="${SANDBOX}/bin"
 
 mkdir -p \
@@ -39,6 +41,8 @@ chmod +x "${SHARED_ROOT}/fake-graphify-python"
 git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
 
 # The source seed is deliberately untracked. Graphify output is an ignored,
 # derived artifact and setup must nevertheless require a complete valid parent.
@@ -90,6 +94,41 @@ run_setup() {
     bash "$1/scripts/setup_worktree_env.sh" "${@:2}"
 }
 
+snapshot_tree() {
+  local root="$1"
+  find "${root}" -mindepth 1 -printf '%P %y\n' | LC_ALL=C sort
+  find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+}
+
+# Setup must reject Graphify directory symlinks before mkdir or cache linking can
+# mutate an existing external target or create a dangling target.
+for relative in graphify-out graphify-out/cache; do
+  case "${relative}" in
+    graphify-out) unsafe_root="${UNSAFE_OUT_ROOT}" ;;
+    *) unsafe_root="${UNSAFE_CACHE_ROOT}"; mkdir -p "${unsafe_root}/graphify-out" ;;
+  esac
+  for target_state in existing dangling; do
+    external="${SANDBOX}/${relative//\//-}-${target_state}"
+    if [[ "${target_state}" == existing ]]; then
+      mkdir "${external}"
+      printf 'preserve\0bytes' >"${external}/keep.bin"
+      before="$(snapshot_tree "${external}")"
+    fi
+    ln -s "${external}" "${unsafe_root}/${relative}"
+    if run_setup "${unsafe_root}" >"${SANDBOX}/unsafe.out" 2>"${SANDBOX}/unsafe.err"; then
+      echo "setup unexpectedly accepted ${relative} ${target_state} symlink" >&2
+      exit 1
+    fi
+    grep -Fq "unsafe destination parent" "${SANDBOX}/unsafe.err"
+    if [[ "${target_state}" == existing ]]; then
+      [[ "$(snapshot_tree "${external}")" == "${before}" ]]
+    else
+      [[ ! -e "${external}" ]]
+    fi
+    unlink "${unsafe_root}/${relative}"
+  done
+done
+
 if run_setup "${WORKTREE_ROOT}" --check >"${SANDBOX}/fresh.out" 2>"${SANDBOX}/fresh.err"; then
   echo "--check unexpectedly accepted an unseeded worktree" >&2
   exit 1
@@ -134,6 +173,38 @@ run_setup "${WORKTREE_ROOT}"
 [[ "$(sha256sum "${WORKTREE_ROOT}/graphify-out/graph.json")" == "${before}" ]]
 run_setup "${WORKTREE_ROOT}" --check
 [[ "$(sha256sum "${WORKTREE_ROOT}/graphify-out/graph.json")" == "${before}" ]]
+
+# The same directory guards apply to normal idempotent and --check paths after
+# a child is fully seeded.
+for relative in graphify-out graphify-out/cache; do
+  held="${WORKTREE_ROOT}/${relative}.held"
+  mv "${WORKTREE_ROOT}/${relative}" "${held}"
+  for mode in normal check; do
+    for target_state in existing dangling; do
+      external="${SANDBOX}/owned-${relative//\//-}-${mode}-${target_state}"
+      if [[ "${target_state}" == existing ]]; then
+        mkdir "${external}"
+        printf 'owned-preserve\0bytes' >"${external}/keep.bin"
+        before="$(snapshot_tree "${external}")"
+      fi
+      ln -s "${external}" "${WORKTREE_ROOT}/${relative}"
+      args=()
+      [[ "${mode}" == check ]] && args+=(--check)
+      if run_setup "${WORKTREE_ROOT}" "${args[@]}" >"${SANDBOX}/owned-unsafe.out" 2>"${SANDBOX}/owned-unsafe.err"; then
+        echo "setup unexpectedly accepted owned ${relative} ${target_state} symlink in ${mode} mode" >&2
+        exit 1
+      fi
+      grep -Fq "unsafe destination parent" "${SANDBOX}/owned-unsafe.err"
+      if [[ "${target_state}" == existing ]]; then
+        [[ "$(snapshot_tree "${external}")" == "${before}" ]]
+      else
+        [[ ! -e "${external}" ]]
+      fi
+      unlink "${WORKTREE_ROOT}/${relative}"
+    done
+  done
+  mv "${held}" "${WORKTREE_ROOT}/${relative}"
+done
 
 unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic"
 ln -s "${SHARED_ROOT}/.data/offline_cache" "${WORKTREE_ROOT}/graphify-out/cache/semantic"

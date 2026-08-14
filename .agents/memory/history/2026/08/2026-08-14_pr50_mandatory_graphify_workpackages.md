@@ -36,12 +36,22 @@ fields. G006 remediated those gaps with fail-closed parent-chain, marker, scope,
 and detector-result validation. This records remediation evidence, not final
 review approval.
 
+G007 then found that setup's shell-level `mkdir -p graphify-out/cache` could
+still follow a child `graphify-out` or `graphify-out/cache` symlink before the
+seed guard ran. Setup now reuses the Python parent-chain guard through a narrow
+cache-preparation mode before directory creation and again immediately before
+linking only the `semantic` and `semantic-deep` cache leaves. This remediation
+also does not constitute final review approval.
+
 ## Verification
 Focused seed/setup, freshness, upstream-identity, CI-impact, Ruff, Python
 compile, `git diff --check`, agent-memory, agent-DB, and scaffold-audit gates
 were run during the workpackages. Hosted CI is configured to repeat them.
 G006 also added and passed eight focused seed regressions and seven focused
 freshness regressions.
+G007 expanded the seed suite to eleven regressions and added setup coverage for
+existing and dangling external targets in bootstrap, idempotent, and `--check`
+paths; the live setup `--check` also passed.
 
 Focused local commits `f01a6f8f`, `ea41f079`, `3ac503e5`, and `15a5c134`
 were created during the completed workpackages. No push or other external

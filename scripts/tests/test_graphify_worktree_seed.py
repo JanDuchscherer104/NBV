@@ -124,6 +124,23 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             text=True,
         )
 
+    def prepare_cache(
+        self, *extra: str, check: bool = True
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SEEDER),
+                "--prepare-cache",
+                "--destination",
+                str(self.destination),
+                *extra,
+            ],
+            check=check,
+            capture_output=True,
+            text=True,
+        )
+
     def test_copies_only_manifest_backed_durable_artifacts_and_rebinds_child(
         self,
     ) -> None:
@@ -213,6 +230,69 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         )
         (self.source / "graphify-out/graph.json").unlink()
         self.seed("--check")
+
+    def test_prepares_only_a_regular_local_cache_parent(self) -> None:
+        self.prepare_cache()
+        cache = self.destination / "graphify-out/cache"
+        self.assertTrue(cache.is_dir())
+        self.assertFalse(cache.is_symlink())
+        self.assertEqual(list(cache.iterdir()), [])
+        self.prepare_cache("--check")
+
+    def test_prepare_cache_rejects_external_or_dangling_parent_symlinks(self) -> None:
+        for relative in (Path("graphify-out"), Path("graphify-out/cache")):
+            for target_exists in (True, False):
+                with self.subTest(relative=relative, target_exists=target_exists):
+                    parent = self.destination / relative
+                    if parent.parent != self.destination:
+                        parent.parent.mkdir()
+                    external = self.sandbox / (
+                        f"prepare-{relative.as_posix().replace('/', '-')}-{target_exists}"
+                    )
+                    if target_exists:
+                        external.mkdir()
+                        (external / "keep").write_bytes(b"preserve\x00bytes")
+                        before = {
+                            path.relative_to(external): path.read_bytes()
+                            for path in external.rglob("*")
+                            if path.is_file()
+                        }
+                    parent.symlink_to(external, target_is_directory=True)
+                    try:
+                        result = self.prepare_cache(check=False)
+
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("unsafe destination parent", result.stderr)
+                        if target_exists:
+                            after = {
+                                path.relative_to(external): path.read_bytes()
+                                for path in external.rglob("*")
+                                if path.is_file()
+                            }
+                            self.assertEqual(after, before)
+                        else:
+                            self.assertFalse(external.exists())
+                    finally:
+                        if parent.is_symlink():
+                            parent.unlink()
+                        if parent.parent != self.destination:
+                            parent.parent.rmdir()
+
+    def test_owned_root_marker_accepts_only_exact_absolute_path_with_optional_newline(
+        self,
+    ) -> None:
+        self.seed()
+        marker = self.destination / "graphify-out/.graphify_root"
+        marker.write_text(str(self.destination.resolve()), encoding="utf-8")
+        self.seed("--check")
+        for suffix in (" ", "\n\n"):
+            with self.subTest(suffix=suffix):
+                marker.write_text(
+                    f"{self.destination.resolve()}{suffix}", encoding="utf-8"
+                )
+                result = self.seed("--check", check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("child .graphify_root", result.stderr)
 
     def test_rejects_destination_parent_symlinks_without_external_writes(self) -> None:
         for top_level in ("graphify-out", "graphify-input"):

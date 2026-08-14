@@ -55,6 +55,8 @@ shared_graphify_semantic_cache="$shared_graphify_cache_root/semantic"
 shared_graphify_semantic_deep_cache="$shared_graphify_cache_root/semantic-deep"
 
 if [[ "$check_only" == false ]]; then
+  "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
+    --prepare-cache --destination "$repo_root"
   mkdir -p "$shared_graphify_semantic_cache" "$shared_graphify_semantic_deep_cache"
 else
   [[ -d "$shared_graphify_semantic_cache" ]] || fail "shared Graphify semantic cache is missing: $shared_graphify_semantic_cache"
@@ -84,7 +86,7 @@ link_or_check "$shared_root/aria_nbv/.venv" "aria_nbv/.venv"
   >/dev/null 2>&1 || fail "linked Python cannot run: $repo_root/aria_nbv/.venv/bin/python"
 
 if [[ "$check_only" == false ]]; then
-  mkdir -p .data docs/literature graphify-out/cache
+  mkdir -p .data docs/literature
 fi
 
 # Seed durable Graphify state from a sibling Git worktree. The helper copies a
@@ -118,6 +120,8 @@ fi
 # between worktrees. Graphs, manifests, projections, AST state, and run state
 # stay local. Clearing either cache increases future extraction cost everywhere
 # but cannot make a stale graph current.
+"$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
+  --prepare-cache --destination "$repo_root" --check
 link_or_check "$shared_graphify_semantic_cache" "graphify-out/cache/semantic"
 link_or_check "$shared_graphify_semantic_deep_cache" "graphify-out/cache/semantic-deep"
 
