@@ -54,17 +54,25 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertIn("jobs:\n  ci:\n", workflow)
         self.assertNotIn("ci-gate", workflow)
-        self.assertNotIn("Install Graphify", workflow)
-        self.assertNotIn("Validate Graphify", workflow)
-        self.assertNotIn('pip install "graphifyy==', workflow)
+        self.assertIn('pip install --upgrade pip PyYAML "graphifyy==0.9.31"', workflow)
+        self.assertIn(
+            "make agents-db-validate check-agent-memory scaffold-audit", workflow
+        )
+        self.assertIn("python3 scripts/tests/test_agent_governance_g002.py", workflow)
+        self.assertIn("python3 scripts/tests/test_graphify_worktree_seed.py", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
+        self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
+        self.assertIn('"scripts/scaffold_audit.py"', workflow)
+        self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
         self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
+        self.assertIn('"scripts/tests/test_agent_governance_g002.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
+        self.assertIn('"scripts/tests/test_graphify_worktree_seed.py"', workflow)
         self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
         self.assertIn("bash scripts/tests/test_setup_worktree_env.sh", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_freshness.py", workflow)
@@ -106,9 +114,14 @@ class SelectionTests(unittest.TestCase):
             "scripts/build_graphify_projection.py": {"docs"},
             "scripts/tests/test_build_graphify_projection.py": {"docs"},
             "scripts/check_graphify_freshness.py": {"scaffold"},
+            "scripts/graphify_worktree_seed.py": {"scaffold"},
+            "scripts/scaffold_audit.py": {"scaffold"},
+            "scripts/scaffold/fixtures/routing.json": {"scaffold"},
             "scripts/setup_worktree_env.sh": {"scaffold"},
+            "scripts/tests/test_agent_governance_g002.py": {"scaffold"},
             "scripts/tests/test_graphify_freshness.py": {"scaffold"},
             "scripts/tests/test_graphify_upstream_skill.py": {"scaffold"},
+            "scripts/tests/test_graphify_worktree_seed.py": {"scaffold"},
             "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
             "docs/literature/sources.jsonl": {"docs"},
             "docs/literature/README.md": {"docs"},
@@ -164,8 +177,7 @@ class SelectionTests(unittest.TestCase):
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
-        self.assertIn("scripts/build_graphify_projection.py", context_guidance)
-        self.assertIn('fork_turns="none"', context_guidance)
+        self.assertIn("scripts/setup_worktree_env.sh", context_guidance)
         self.assertIn(boundary_owner, canonical_sources)
         for scalar in (boundary_owner, f"'{boundary_owner}'", f'"{boundary_owner}"'):
             with self.subTest(scalar=scalar):
@@ -285,6 +297,14 @@ class SelectionTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertNotEqual(result.returncode, 0)
+
+    def test_freshness_fixture_uses_portable_graphify_resolution(self) -> None:
+        fixture = (REPO_ROOT / "scripts/tests/test_graphify_freshness.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("/home/jd/repos/ARIA-NBV", fixture)
+        self.assertIn('ROOT / "graphify-out/.graphify_python"', fixture)
+        self.assertIn("Graphify 0.9.31 is required", fixture)
 
 
 if __name__ == "__main__":

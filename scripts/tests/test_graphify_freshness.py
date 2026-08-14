@@ -7,13 +7,34 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "scripts/check_graphify_freshness.py"
-GRAPHIFY_PYTHON = Path("/home/jd/repos/ARIA-NBV/graphify-out/.graphify_python")
+
+
+def graphify_python() -> Path:
+    """Use the local marker when present, otherwise CI's pinned interpreter."""
+    marker = ROOT / "graphify-out/.graphify_python"
+    candidate = (
+        Path(marker.read_text().strip()) if marker.is_file() else Path(sys.executable)
+    )
+    result = subprocess.run(
+        [
+            str(candidate),
+            "-c",
+            "import graphify; from importlib.metadata import version; print(version('graphifyy'))",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode or result.stdout.strip() != "0.9.31":
+        raise RuntimeError("Graphify 0.9.31 is required for freshness tests")
+    return candidate
 
 
 class FreshnessTests(unittest.TestCase):
@@ -24,7 +45,7 @@ class FreshnessTests(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory(prefix="aria-freshness-")
         self.root = Path(self.directory.name)
-        self.graphify_python = Path(GRAPHIFY_PYTHON.read_text().strip())
+        self.graphify_python = graphify_python()
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
         subprocess.run(
             ["git", "config", "user.email", "test@example.invalid"],
@@ -124,7 +145,6 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
             check=True,
             capture_output=True,
             text=True,
-            env={**dict(), **{"PATH": str(Path("/usr/bin"))}},
         )
 
     def run_checker(self, *args: str) -> subprocess.CompletedProcess[str]:

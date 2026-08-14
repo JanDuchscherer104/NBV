@@ -24,10 +24,15 @@ SCAFFOLD_PATHS = {
     "AGENTS.md",
     "scripts/agents_db.py",
     "scripts/check_graphify_freshness.py",
+    "scripts/graphify_worktree_seed.py",
+    "scripts/scaffold_audit.py",
+    "scripts/scaffold/fixtures/routing.json",
     "scripts/setup_worktree_env.sh",
     "scripts/validate_agent_memory.py",
+    "scripts/tests/test_agent_governance_g002.py",
     "scripts/tests/test_graphify_freshness.py",
     "scripts/tests/test_graphify_upstream_skill.py",
+    "scripts/tests/test_graphify_worktree_seed.py",
     "scripts/tests/test_setup_worktree_env.sh",
 }
 
