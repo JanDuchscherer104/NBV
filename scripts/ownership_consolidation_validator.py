@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -39,6 +40,10 @@ RETIRED_SOURCE_PATHS = {
     ".agents/memory/state/OPEN_QUESTIONS.md",
 }
 LEGACY_MARKERS = ("roadmap.qmd", "questions.qmd", "m1_contract_report.qmd", "PROJECT_STATE.md", "DECISIONS.md", "GOTCHAS.md", "OPEN_QUESTIONS.md")
+KNOWN_MIGRATION_RECEIPTS = {
+    ".omx/specs/ownership-branch-consolidation-inventory.json",
+    ".omx/specs/ownership-branch-consolidation-inventory.md",
+}
 
 
 @dataclass(frozen=True)
@@ -118,17 +123,60 @@ def classify_reference(path: str, *, resolved: bool = False, receipt: bool = Fal
     return "live-reference"
 
 
+def _normalized_path(path: str, root: Path) -> str | None:
+    """Return a repository-relative path, rejecting traversal and absolutes."""
+    candidate = Path(path.replace("\\", "/"))
+    if candidate.is_absolute():
+        return None
+    root = root.resolve()
+    try:
+        return (root / candidate).resolve().relative_to(root).as_posix()
+    except ValueError:
+        return None
+
+
+def _is_tracked_file(root: Path, relative: str) -> bool:
+    candidate = root / relative
+    if not candidate.is_file():
+        return False
+    result = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", relative],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and result.stdout.strip() == relative
+
+
+def _bounded_provenance(path: str, classification: str, root: Path) -> bool:
+    normalized = _normalized_path(path, root)
+    if normalized is None:
+        return False
+    if normalized in KNOWN_MIGRATION_RECEIPTS:
+        return True
+    if normalized in RETIRED_SOURCE_PATHS:
+        return True
+    if normalized.startswith(".omx/specs/") and _is_tracked_file(root, normalized):
+        return True
+    if classification == "resolved-provenance":
+        return _is_tracked_file(root, normalized)
+    if classification in {"dated-history", "transcript-provenance", "archive-provenance"}:
+        return _is_tracked_file(root, normalized)
+    return False
+
+
 def validate_reference_classes(references: Iterable[dict[str, Any]], root: Path = Path.cwd()) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for index, ref in enumerate(references):
         path = str(ref.get("path", f"reference-{index}"))
-        inferred = classify_reference(path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt")))
+        normalized = _normalized_path(path, root)
+        inferred = classify_reference(normalized or path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt"))) if normalized else "live-reference"
         classification = inferred
         if inferred == "live-reference" and ref.get("classification") == "resolved-provenance":
-            candidate = root / path
-            if path in RETIRED_SOURCE_PATHS or (candidate.is_file() and not any(marker in candidate.read_text(encoding="utf-8") for marker in LEGACY_MARKERS)):
+            candidate = root / normalized if normalized else root / "__invalid__"
+            if normalized in RETIRED_SOURCE_PATHS or (candidate.is_file() and _is_tracked_file(root, normalized) and not any(marker in candidate.read_text(encoding="utf-8") for marker in LEGACY_MARKERS)):
                 classification = "resolved-provenance"
-        if classification not in ALLOWED_REFERENCE_CLASSES:
+        if classification not in ALLOWED_REFERENCE_CLASSES or not _bounded_provenance(path, classification, root):
             errors.append(ValidationError(path, "live legacy-state reference is not allowed"))
     return errors
 
@@ -222,7 +270,7 @@ def validate_repository_sinks(root: Path, refs: Iterable[dict[str, Any]]) -> lis
         if not isinstance(path, str):
             continue
         classification = classify_reference(path)
-        if classification in ALLOWED_REFERENCE_CLASSES:
+        if classification in ALLOWED_REFERENCE_CLASSES and _bounded_provenance(path, classification, root):
             continue
         candidate = root / path
         if candidate.is_file():
@@ -238,7 +286,7 @@ def validate_typst_contract(text: str, *, future_integration: bool = False) -> l
     return []
 
 
-def validate_inventory(data: dict[str, Any], *, mode: str = "schema") -> list[ValidationError]:
+def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path = Path.cwd()) -> list[ValidationError]:
     """Validate the frozen inventory schema, optionally enforcing deletion gates."""
     errors: list[ValidationError] = []
     required_sections = {"schema_version", "baseline", "disposition_ledger", "theory_qmd_matrix", "consumer_inventory", "python_docstring_coverage", "verification", "expected_pages_manifest"}
@@ -272,8 +320,8 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema") -> list[Va
             errors.append(ValidationError(item, "destination_verified must be boolean"))
         if row.get("disposition") == "unresolved" or row.get("destination_verified") is False:
             blockers.append(ValidationError(item, "unresolved or destination not verified"))
-    errors.extend(validate_migration_ledger(ledger, root=Path.cwd(), full=True, materialize=(mode == "deletion-ready"), enforce_readiness=(mode == "deletion-ready")))
-    errors.extend(validate_source_blobs(ledger, Path.cwd(), receipt_commit=data.get("source_receipt_commit")))
+    errors.extend(validate_migration_ledger(ledger, root=root, full=True, materialize=(mode == "deletion-ready"), enforce_readiness=(mode == "deletion-ready")))
+    errors.extend(validate_source_blobs(ledger, root, receipt_commit=data.get("source_receipt_commit")))
     matrix = data.get("theory_qmd_matrix", [])
     if not isinstance(matrix, list):
         errors.append(ValidationError("theory_qmd_matrix", "must be a list")); matrix = []
@@ -284,17 +332,17 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema") -> list[Va
             if field not in row: errors.append(ValidationError(item, f"missing field: {field}"))
         if row.get("classification") not in THEORY_CLASSES: errors.append(ValidationError(item, "invalid classification"))
         if row.get("destination_verified") is False: blockers.append(ValidationError(item, "destination not verified"))
-    errors.extend(validate_theory_matrix(matrix, [str(p) for p in Path("docs/contents/theory").glob("*.qmd")]))
+    errors.extend(validate_theory_matrix(matrix, [p.relative_to(root).as_posix() for p in (root / "docs/contents/theory").glob("*.qmd")]))
     manifest = data.get("expected_pages_manifest", {})
-    actual_pages = [p.relative_to("docs").as_posix() for p in Path("docs/contents").rglob("*.qmd")]
+    actual_pages = [p.relative_to(root / "docs").as_posix() for p in (root / "docs/contents").rglob("*.qmd")]
     errors.extend(validate_expected_pages(manifest, actual_pages))
     consumer = data.get("consumer_inventory", {})
     errors.extend(validate_consumer_inventory(consumer))
-    sink_errors = validate_repository_sinks(Path.cwd(), consumer.get("references", []) if isinstance(consumer, dict) else [])
+    sink_errors = validate_repository_sinks(root, consumer.get("references", []) if isinstance(consumer, dict) else [])
     if mode == "deletion-ready":
         errors.extend(sink_errors)
     if mode == "deletion-ready":
-        errors.extend(validate_reference_classes(data.get("consumer_inventory", {}).get("references", []), Path.cwd()))
+        errors.extend(validate_reference_classes(data.get("consumer_inventory", {}).get("references", []), root))
     consumers = data.get("consumer_inventory", {})
     if not isinstance(consumers, dict): errors.append(ValidationError("consumer_inventory", "must be an object"))
     elif mode == "deletion-ready" and consumers.get("unresolved_count", 0): blockers.append(ValidationError("consumer_inventory", f"{consumers['unresolved_count']} unresolved live consumers"))
@@ -318,7 +366,7 @@ def main() -> int:
         data = json.loads(args.ledger.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("inventory root must be an object")
-        errors = validate_inventory(data, mode=args.mode)
+        errors = validate_inventory(data, mode=args.mode, root=args.root.resolve())
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         errors = [ValidationError("input", str(exc))]
     if errors:

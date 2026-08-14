@@ -90,18 +90,34 @@ class OwnershipValidatorTests(unittest.TestCase):
         assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md"}]))
         assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md", "classification": "transcript-provenance"}]))
 
+    def test_reference_classifier_rejects_traversal_and_fake_provenance(self) -> None:
+        references = [
+            {"path": ".agents/memory/transcripts/../state/DECISIONS.md"},
+            {"path": ".agents/archive/fake.md"},
+            {"path": ".agents/memory/history/fake.md"},
+            {"path": ".omx/specs/fake-receipt.json"},
+        ]
+        errors = validate_reference_classes(references, Path(__file__).parents[2])
+        assert len(errors) == len(references)
+
+    def test_inventory_uses_supplied_root_for_materialization(self) -> None:
+        inventory = json.loads((Path(__file__).parents[2] / ".omx/specs/ownership-branch-consolidation-inventory.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            errors = validate_inventory(inventory, mode="deletion-ready", root=Path(directory))
+        assert any("canonical destination does not exist" in str(error) for error in errors)
+
 
     def test_transcript_and_debrief_cannot_be_generic_decision_sinks(self) -> None:
         errors = validate_no_generic_sinks([("transcript.jsonl", 'promotion_target: .agents/memory/state/DECISIONS.md')])
         assert errors
 
-    def test_historical_transcript_sink_is_ignored_by_repository_scan(self) -> None:
+    def test_untracked_transcript_sink_is_scanned_by_repository_scan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / ".agents" / "memory" / "transcripts" / "2026" / "transcript.jsonl"
             path.parent.mkdir(parents=True)
             path.write_text("promotion_target: .agents/memory/state/DECISIONS.md", encoding="utf-8")
-            assert validate_repository_sinks(root, [{"path": ".agents/memory/transcripts/2026/transcript.jsonl", "classification": "transcript-provenance"}]) == []
+            assert validate_repository_sinks(root, [{"path": ".agents/memory/transcripts/2026/transcript.jsonl", "classification": "transcript-provenance"}])
 
 
     def test_theory_matrix_covers_every_page(self) -> None:
