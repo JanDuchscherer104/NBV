@@ -345,11 +345,26 @@ def test_capture_and_routing_contracts() -> None:
     manifest = tomllib.loads(
         _read(ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml")
     )
-    deprecated_route = next(
-        skill for skill in manifest["skill"] if skill["name"] == "design-an-interface"
+    assert manifest["source"]["install_command"] == (
+        "npx skills@latest add mattpocock/skills --global --agent codex"
     )
-    assert deprecated_route["posture"] == "skip"
-    assert deprecated_route["aria_owner"] == "codebase-design"
+
+    skill_routes = {skill["name"]: skill for skill in manifest["skill"]}
+    posture_names = {
+        name for names in manifest["postures"].values() for name in names
+    }
+    assert set(skill_routes) == posture_names
+    for posture, names in manifest["postures"].items():
+        assert all(skill_routes[name]["posture"] == posture for name in names)
+
+    assert "design-an-interface" not in skill_routes
+    assert "writing-great-skills" not in skill_routes
+    assert skill_routes["codebase-design"]["posture"] == "explicit"
+    assert skill_routes["codebase-design"]["aria_owner"] == "aria-grill"
+    assert skill_routes["writing-for-agents"]["posture"] == "reference"
+    assert skill_routes["writing-for-agents"]["aria_owner"] == (
+        ".agents/references/source_order.md"
+    )
 
 
 def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:

@@ -7,16 +7,16 @@
 [source]
 repo = "mattpocock/skills"
 url = "https://github.com/mattpocock/skills.git"
-reviewed_ref = "896f14d9c25659f03b24e08e4efc3ee69bbade08"
-reviewed_at = "2026-07-08"
+reviewed_ref = "8b78b531ab965735c5dc74f6f7a219e1e37326df"
+reviewed_at = "2026-08-14"
 license = "MIT"
-install_command = "npx skills@latest add mattpocock/skills"
+install_command = "npx skills@latest add mattpocock/skills --global --agent codex"
 default_policy = "disabled_unless_selected"
 runtime_note = ".codex/config.toml is untracked operator-local state; mirror this manifest there only when the local runtime supports project-specific skill enablement."
 
 [postures]
 model = ["tdd"]
-explicit = ["codebase-design", "improve-codebase-architecture", "domain-modeling", "writing-great-skills", "handoff", "teach"]
+explicit = ["codebase-design", "improve-codebase-architecture", "domain-modeling", "handoff", "teach"]
 reference = [
   "ask-matt",
   "code-review",
@@ -29,23 +29,24 @@ reference = [
   "research",
   "resolving-merge-conflicts",
   "setup-matt-pocock-skills",
-  "to-issues",
-  "to-prd",
+  "to-questionnaire",
+  "to-spec",
+  "to-tickets",
   "triage",
   "writing-beats",
+  "writing-for-agents",
   "writing-fragments",
   "writing-shape",
 ]
 skip = [
-  "edit-article",
+  "claude-handoff",
+  "git-guardrails-claude-code",
   "loop-me",
   "migrate-to-shoehorn",
-  "obsidian-vault",
-  "qa",
-  "request-refactor-plan",
   "scaffold-exercises",
   "setup-pre-commit",
-  "ubiquitous-language",
+  "setup-ts-deep-modules",
+  "wait-what",
   "wayfinder",
   "wizard",
 ]
@@ -120,7 +121,7 @@ bucket = "engineering"
 upstream_path = "skills/engineering/prototype/SKILL.md"
 posture = "reference"
 aria_owner = "agent-behavior"
-reason = "Install only if the runtime can force explicit-only use; upstream model invocation is too broad for default ARIA routing."
+reason = "Use only for bounded learning; prototype artifacts remain evidence and never replace current ARIA source, tests, or accepted records."
 
 [[skill]]
 name = "research"
@@ -155,20 +156,20 @@ aria_owner = "agent-behavior"
 reason = "Generic red-green-refactor loop with low routing collision; ARIA still owns package tests and seams."
 
 [[skill]]
-name = "to-issues"
+name = "to-spec"
 bucket = "engineering"
-upstream_path = "skills/engineering/to-issues/SKILL.md"
-posture = "reference"
-aria_owner = "agents-db"
-reason = "Issue slicing may inspire work breakdowns, but ARIA active work remains TOML-backed."
-
-[[skill]]
-name = "to-prd"
-bucket = "engineering"
-upstream_path = "skills/engineering/to-prd/SKILL.md"
+upstream_path = "skills/engineering/to-spec/SKILL.md"
 posture = "reference"
 aria_owner = "aria-grill"
-reason = "ARIA roadmap/questions and OMX plans own PRD-like surfaces."
+reason = "Specification synthesis may inspire handoffs, but accepted ARIA direction remains with source-order owners and OMX artifacts."
+
+[[skill]]
+name = "to-tickets"
+bucket = "engineering"
+upstream_path = "skills/engineering/to-tickets/SKILL.md"
+posture = "reference"
+aria_owner = "agents-db"
+reason = "Tracer-bullet slicing may inspire work breakdowns, but ARIA active work remains TOML-backed."
 
 [[skill]]
 name = "triage"
@@ -177,6 +178,22 @@ upstream_path = "skills/engineering/triage/SKILL.md"
 posture = "reference"
 aria_owner = "agents-db"
 reason = "ARIA backlog triage stays in .agents/*.toml through agents-db."
+
+[[skill]]
+name = "wayfinder"
+bucket = "engineering"
+upstream_path = "skills/engineering/wayfinder/SKILL.md"
+posture = "skip"
+aria_owner = "aria-grill"
+reason = "OMX and Aria Grill own durable multi-session planning and decision routing."
+
+[[skill]]
+name = "wizard"
+bucket = "engineering"
+upstream_path = "skills/engineering/wizard/SKILL.md"
+posture = "skip"
+aria_owner = "agent-behavior"
+reason = "Human-only external steps remain task-specific and require the existing ARIA external-action boundary."
 
 [[skill]]
 name = "grill-me"
@@ -211,44 +228,36 @@ aria_owner = "agent-behavior"
 reason = "Optional user-invoked learning workspace; no ARIA truth ownership."
 
 [[skill]]
-name = "writing-great-skills"
+name = "to-questionnaire"
 bucket = "productivity"
-upstream_path = "skills/productivity/writing-great-skills/SKILL.md"
-posture = "explicit"
-aria_owner = "skill_style_guide.md"
-reason = "Use for skill-pruning craft; ARIA skill style guide remains the local rule owner."
+upstream_path = "skills/productivity/to-questionnaire/SKILL.md"
+posture = "reference"
+aria_owner = "aria-grill"
+reason = "External questionnaires may collect missing decisions; accepted answers still return to the source-order owner."
 
 [[skill]]
-name = "design-an-interface"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/design-an-interface/SKILL.md"
-posture = "skip"
-aria_owner = "codebase-design"
-reason = "Deprecated upstream; use the maintained codebase-design DESIGN-IT-TWICE workflow for competing interface shapes."
-
-[[skill]]
-name = "qa"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/qa/SKILL.md"
+name = "wait-what"
+bucket = "productivity"
+upstream_path = "skills/productivity/wait-what/SKILL.md"
 posture = "skip"
 aria_owner = "agent-behavior"
-reason = "Deprecated upstream; root guidance and nearest owners provide ARIA review and verification routing."
+reason = "Conversational re-pitching needs no repository policy or additional ARIA routing surface."
 
 [[skill]]
-name = "request-refactor-plan"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/request-refactor-plan/SKILL.md"
-posture = "skip"
-aria_owner = "simplification"
-reason = "Deprecated upstream; ARIA uses aria-grill/simplification for refactor decisions."
+name = "writing-for-agents"
+bucket = "productivity"
+upstream_path = "skills/productivity/writing-for-agents/SKILL.md"
+posture = "reference"
+aria_owner = ".agents/references/source_order.md"
+reason = "Borrow context-pointer and pruning mechanics only; ARIA source order and human-owner intent remain the local guidance owners."
 
 [[skill]]
-name = "ubiquitous-language"
-bucket = "deprecated"
-upstream_path = "skills/deprecated/ubiquitous-language/SKILL.md"
+name = "claude-handoff"
+bucket = "in-progress"
+upstream_path = "skills/in-progress/claude-handoff/SKILL.md"
 posture = "skip"
-aria_owner = "docs/typst/shared/glossary.typ"
-reason = "Deprecated upstream; ARIA glossary remains the terminology owner."
+aria_owner = "agent-behavior"
+reason = "Claude-specific handoff behavior does not replace Codex or OMX context ownership."
 
 [[skill]]
 name = "loop-me"
@@ -259,20 +268,12 @@ aria_owner = "agent-behavior"
 reason = "In-progress upstream; not part of ARIA default routing."
 
 [[skill]]
-name = "wayfinder"
+name = "setup-ts-deep-modules"
 bucket = "in-progress"
-upstream_path = "skills/in-progress/wayfinder/SKILL.md"
+upstream_path = "skills/in-progress/setup-ts-deep-modules/SKILL.md"
 posture = "skip"
-aria_owner = "aria-nbv-context"
-reason = "In-progress upstream; ARIA already has deterministic local discovery."
-
-[[skill]]
-name = "wizard"
-bucket = "in-progress"
-upstream_path = "skills/in-progress/wizard/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "In-progress upstream; use only if a future task explicitly names it."
+aria_owner = "codebase-design"
+reason = "TypeScript package-boundary setup is unrelated to the Python ARIA implementation; retain only the generic deep-module vocabulary."
 
 [[skill]]
 name = "writing-beats"
@@ -299,6 +300,14 @@ aria_owner = "typst-authoring"
 reason = "Use as reference-only paragraph-shaping mechanics inside typst-authoring; final prose still follows ARIA claim and notation gates."
 
 [[skill]]
+name = "git-guardrails-claude-code"
+bucket = "misc"
+upstream_path = "skills/misc/git-guardrails-claude-code/SKILL.md"
+posture = "skip"
+aria_owner = "agent-behavior"
+reason = "Claude-specific hooks do not replace ARIA's Codex external-action and git-safety guidance."
+
+[[skill]]
 name = "migrate-to-shoehorn"
 bucket = "misc"
 upstream_path = "skills/misc/migrate-to-shoehorn/SKILL.md"
@@ -321,19 +330,3 @@ upstream_path = "skills/misc/setup-pre-commit/SKILL.md"
 posture = "skip"
 aria_owner = "agent-behavior"
 reason = "Misc upstream; ARIA hook/setup decisions stay local."
-
-[[skill]]
-name = "edit-article"
-bucket = "personal"
-upstream_path = "skills/personal/edit-article/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Personal upstream workflow; docs/AGENTS.md and Typst authoring keep ARIA prose routing local."
-
-[[skill]]
-name = "obsidian-vault"
-bucket = "personal"
-upstream_path = "skills/personal/obsidian-vault/SKILL.md"
-posture = "skip"
-aria_owner = "agent-behavior"
-reason = "Personal upstream workflow and not an ARIA source owner; use repository docs structure."
