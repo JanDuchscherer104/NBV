@@ -9,13 +9,17 @@ rather than overwritten.
 
 from __future__ import annotations
 
+# Helper is intentionally defined before heavyweight rollout imports.
+# ruff: noqa: E402
 import json
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig
+from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig  # noqa: E402
 from ...rollouts.manifest import (
     RolloutStoreInvocation,
     collect_runtime_provenance,
@@ -24,6 +28,23 @@ from ...rollouts.manifest import (
     read_rollout_store_manifest,
     utc_timestamp,
 )
+
+
+def quarantine_rollout_staging(path: Path, quarantine_root: Path, *, reason: str = "timed_out") -> Path | None:
+    """Atomically move staging evidence into collision-safe quarantine."""
+    if not path.exists():
+        return None
+    quarantine_root.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    destination = quarantine_root / f"{path.name}.{reason}-{stamp}-{os.getpid()}"
+    suffix = 0
+    while destination.exists():
+        suffix += 1
+        destination = quarantine_root / f"{path.name}.{reason}-{stamp}-{os.getpid()}-{suffix}"
+    path.rename(destination)
+    return destination
+
+
 from ...rollouts.shard_manifest import (
     ROLLOUT_SHARD_OWNER_FILENAME,
     ROLLOUT_SHARD_SUCCESS_FILENAME,
@@ -37,7 +58,12 @@ from ...rollouts.shard_manifest import (
 )
 from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
-from .rollout_dataset import RolloutDatasetWriterConfig, _apply_manifest_rows, _RolloutSourceLineageBuilder
+from .rollout_dataset import (
+    InsufficientRootSupportError,
+    RolloutDatasetWriterConfig,
+    _apply_manifest_rows,
+    _RolloutSourceLineageBuilder,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +84,9 @@ class RolloutShardRunResult:
 
     store_result: RolloutZarrWriteResult | None = None
     """Fresh write summary, or ``None`` when a completed shard was skipped."""
+
+    outcome: str = "succeeded"
+    reason: str | None = None
 
     @property
     def manifest_path(self) -> Path:
@@ -161,7 +190,6 @@ def plan_rollout_source_manifest(source: VinOfflineDatasetConfig) -> RolloutSour
     retention, and output paths so paired campaigns can derive their own shard
     manifests from one reviewed source population.
     """
-
     dataset = source.setup_target()
     if dataset is None:
         raise RuntimeError("VinOfflineDatasetConfig did not instantiate a dataset.")
@@ -360,7 +388,21 @@ def run_rollout_shard(
             owner_path=owner_path,
             store_result=result,
         )
+    except InsufficientRootSupportError as exc:
+        return RolloutShardRunResult(
+            final_dir=final_dir,
+            skipped=False,
+            success_path=success_path,
+            owner_path=owner_path,
+            store_result=None,
+            outcome="insufficient_support",
+            reason=exc.reason,
+        )
     except Exception as exc:
+        if isinstance(exc, TimeoutError) and tmp_dir.exists():
+            # Preserve timed-out evidence through the shard-owned atomic
+            # quarantine helper; the canonical final path remains untouched.
+            quarantine_rollout_staging(tmp_dir, tmp_dir.parent / "quarantine", reason="timed_out")
         _write_failed_marker(
             final_dir.parent,
             shard_entry=shard_entry,

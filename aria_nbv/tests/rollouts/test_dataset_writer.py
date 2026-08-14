@@ -15,10 +15,12 @@ import pytest
 import torch
 import zarr
 
+import aria_nbv.oracle.pipelines.shards as shards_module
 from aria_nbv.oracle.evidence import OracleEvidenceInvalidReason
 from aria_nbv.oracle.pipelines.evaluated_rollout import OracleReplayInvalidityError
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     ExplicitRolloutTargetConfig,
+    InsufficientRootSupportError,
     RolloutDatasetWriter,
     RolloutDatasetWriterConfig,
     RolloutDatasetWriterStats,
@@ -562,7 +564,6 @@ def test_rollout_shard_campaign_binding_is_copied_and_required_for_resume(tmp_pa
     assert run_rollout_shard(
         config, shard_entry=entry, output_tmp=tmp_path / "tmp" / "retry.tmp", output_final=final_dir
     ).skipped
-
     for field in ("campaign_id", "plan_hash", "work_unit_hash", "target_id", "profile_hash", "explicit_target_hash"):
         tampered = replace(binding, **{field: f"tampered-{field}"})
         with pytest.raises(RuntimeError, match="not a validated completed shard"):
@@ -572,6 +573,118 @@ def test_rollout_shard_campaign_binding_is_copied_and_required_for_resume(tmp_pa
                 output_tmp=tmp_path / "tmp" / f"{field}.tmp",
                 output_final=final_dir,
             )
+
+
+def test_rollout_shard_insufficient_support_is_typed_and_leaves_no_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+
+    class _InsufficientWriter:
+        def run(self, **_kwargs):
+            raise InsufficientRootSupportError("insufficient_root_support:9<10")
+
+    monkeypatch.setattr(config, "setup_target", lambda: _InsufficientWriter())
+    tmp_dir = tmp_path / "tmp" / "unit.tmp"
+    final_dir = tmp_path / "final" / entry.shard_id
+    result = run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_dir, output_final=final_dir)
+    assert result.outcome == "insufficient_support"
+    assert result.reason == "insufficient_root_support:9<10"
+    assert not tmp_dir.exists()
+    assert not final_dir.exists()
+    assert not list(final_dir.parent.glob("_FAILED.*"))
+
+
+@pytest.mark.parametrize(("valid_count", "expected_calls", "raises"), [(9, 1, True), (10, 7, False)])
+def test_rollout_target_probe_is_disposable_and_recipes_regenerate(
+    monkeypatch: pytest.MonkeyPatch, valid_count: int, expected_calls: int, raises: bool
+) -> None:
+    import aria_nbv.oracle.pipelines.rollout_dataset as rollout_module
+
+    class _Scorer:
+        invalidity = None
+
+    class _Candidates:
+        def __init__(self) -> None:
+            self.mask_valid = torch.tensor([True] * valid_count + [False] * (12 - valid_count))
+
+    class _Step:
+        candidates = _Candidates()
+
+    class _Trajectory:
+        steps = (_Step(),)
+
+    class _Result:
+        trajectories = (_Trajectory(),)
+
+    calls = 0
+
+    class _Generator:
+        def generate_from_typed_sample(self, *_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return _Result()
+
+    recipes = [
+        SimpleNamespace(
+            name=f"recipe-{i}",
+            policy=RolloutPolicySpec(horizon=1, branch_factor=1, selection_policy="random_valid", seed=i),
+        )
+        for i in range(6)
+    ]
+    config = SimpleNamespace(
+        min_valid_root_candidates=10,
+        target_scorer=SimpleNamespace(setup_target=lambda **_kwargs: _Scorer()),
+        selected_depth=SimpleNamespace(enabled=False),
+        store=SimpleNamespace(target_eval_crops_enabled=False),
+        candidate_mixture=CandidateMixtureViewGeneratorConfig(),
+        recipes=recipes,
+        log_timing=False,
+        verbosity=1,
+        is_debug=False,
+    )
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = config
+    writer.stats = RolloutDatasetWriterStats()
+    writer.console = SimpleNamespace(warn=lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(CounterfactualPoseGeneratorConfig, "setup_target", lambda self: _Generator())
+    monkeypatch.setattr(
+        rollout_module,
+        "OracleReplayAdapter",
+        lambda _scorer: SimpleNamespace(materialize=lambda result, **_kwargs: result),
+    )
+    monkeypatch.setattr(writer, "_target_lineage", lambda *_args, **_kwargs: SimpleNamespace())
+
+    def call():
+        return writer._rollout_target(
+            sample=SimpleNamespace(
+                efm_snippet_view=object(),
+                scene_id="scene",
+                snippet_id="snippet",
+                sample_index=0,
+                sample_key="sample",
+                split="train",
+                source_shard_id="s",
+                source_shard_row=0,
+            ),
+            target=SimpleNamespace(target_id="target", descriptor=_target_descriptor()),
+            target_rank=0,
+            source_lineage=SimpleNamespace(
+                config_hash=lambda *_args: "hash",
+                mesh_version=lambda *_args: "mesh",
+                source_manifest_hash="source",
+                source_cache_version="cache",
+                split_manifest_hash="split",
+            ),
+        )
+
+    if raises:
+        with pytest.raises(rollout_module.InsufficientRootSupportError):
+            call()
+    else:
+        call()
+    assert calls == expected_calls
 
 
 def test_rollout_shard_without_campaign_binding_preserves_legacy_evidence(tmp_path: Path) -> None:
@@ -776,6 +889,49 @@ def test_rollout_shard_atomic_promotion_writes_markers_and_skips_completed(tmp_p
     assert result.owner_path.exists()
     assert not tmp_dir.exists()
     assert skipped.skipped
+
+
+def test_rollout_shard_timeout_delegates_atomic_quarantine_and_allows_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    tmp_dir = tmp_path / "tmp" / "shard-000000.tmp"
+    final_dir = tmp_path / "final" / entry.shard_id
+    calls: list[tuple[Path, Path, str]] = []
+    original_quarantine = shards_module.quarantine_rollout_staging
+    original_run = _FakeShardWriter.run
+
+    def recording_quarantine(path: Path, quarantine_root: Path, *, reason: str = "timed_out") -> Path | None:
+        calls.append((path, quarantine_root, reason))
+        return original_quarantine(path, quarantine_root, reason=reason)
+
+    monkeypatch.setattr(shards_module, "quarantine_rollout_staging", recording_quarantine)
+
+    def timeout_run(self: _FakeShardWriter, **_kwargs: object) -> None:
+        self.config.store.store_dir.mkdir(parents=True)
+        raise TimeoutError("synthetic timeout")
+
+    monkeypatch.setattr(_FakeShardWriter, "run", timeout_run)
+
+    with pytest.raises(TimeoutError, match="synthetic timeout"):
+        run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_dir, output_final=final_dir)
+
+    assert calls == [(tmp_dir, tmp_dir.parent / "quarantine", "timed_out")]
+    quarantined = list((tmp_dir.parent / "quarantine").glob(f"{tmp_dir.name}.timed_out-*"))
+    assert len(quarantined) == 1
+    assert not tmp_dir.exists()
+    assert not final_dir.exists()
+
+    monkeypatch.setattr(_FakeShardWriter, "run", original_run)
+    restarted = run_rollout_shard(
+        config,
+        shard_entry=entry,
+        output_tmp=tmp_path / "tmp" / "restart.tmp",
+        output_final=final_dir,
+    )
+    assert restarted.skipped is False
+    assert final_dir.exists()
 
 
 def test_rollout_shard_resume_rejects_tampered_owner_sidecar(tmp_path: Path) -> None:

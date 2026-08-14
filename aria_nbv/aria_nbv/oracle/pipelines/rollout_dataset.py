@@ -123,6 +123,14 @@ class RolloutDatasetWriterStats:
         self.skipped_reasons[reason] = self.skipped_reasons.get(reason, 0) + 1
 
 
+class InsufficientRootSupportError(RuntimeError):
+    """Typed preflight outcome that must not create a rollout store."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
 @dataclass(frozen=True, slots=True)
 class ExplicitRolloutTarget:
     """Immutable V1 observed target consumed by one rollout writer unit."""
@@ -724,6 +732,21 @@ class RolloutDatasetWriter:
         )
         self.stats = RolloutDatasetWriterStats()
 
+    def root_support_preflight(self, valid_candidates: int) -> str | None:
+        """Apply the campaign root-support gate before recipe generation.
+
+        The caller supplies the one-shot probe count; probe tensors are not
+        retained by this writer.  A shortfall is a typed skip reason and must
+        be handled by the shard owner without creating a store.
+        """
+        count = int(valid_candidates)
+        minimum = int(self.config.min_valid_root_candidates)
+        if count < minimum:
+            reason = f"insufficient_root_support:{count}<{minimum}"
+            self.stats.skip(reason)
+            return reason
+        return None
+
     def run(
         self,
         *,
@@ -942,6 +965,36 @@ class RolloutDatasetWriter:
                 f"target={target.target_id}: {scorer.invalidity.message}",
             )
             return records
+        # Probe one fresh root shell solely for the hard support gate.  The
+        # probe result is discarded; every recipe below regenerates its own
+        # candidate root and therefore cannot accidentally reuse probe state.
+        if getattr(self.config, "min_valid_root_candidates", 0) > 0 and self.config.recipes:
+            probe_recipe = self.config.recipes[0]
+            probe_cfg = CounterfactualPoseGeneratorConfig(
+                candidate_config=self.config.candidate_mixture,
+                policy=probe_recipe.policy,
+                log_timing=self.config.log_timing,
+                verbosity=self.config.verbosity,
+                is_debug=self.config.is_debug,
+            )
+            try:
+                probe_result = probe_cfg.setup_target().generate_from_typed_sample(
+                    sample.efm_snippet_view,
+                    score_candidates=OracleReplayAdapter(scorer),
+                    candidate_runtime_context=runtime_context,
+                )
+                root_counts = [
+                    int(t.steps[0].candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
+                    for t in probe_result.trajectories
+                    if t.steps
+                ]
+                support_reason = self.root_support_preflight(min(root_counts) if root_counts else 0)
+            except OracleReplayInvalidityError as exc:
+                support_reason = f"insufficient_root_support:invalid:{exc.invalidity.reason.value}"
+                self.stats.skip(support_reason)
+            if support_reason is not None:
+                self.stats.rollout_invalid_skips += 1
+                raise InsufficientRootSupportError(support_reason)
         selected_depth_renderer = (
             self.config.selected_depth.renderer_config(self.config.target_scorer.depth).setup_target()
             if self.config.selected_depth.enabled
@@ -1164,6 +1217,7 @@ __all__ = [
     "RolloutDatasetWriter",
     "RolloutDatasetWriterConfig",
     "RolloutDatasetWriterStats",
+    "InsufficientRootSupportError",
     "RolloutRecipeConfig",
     "SelectedDepthRetentionConfig",
 ]

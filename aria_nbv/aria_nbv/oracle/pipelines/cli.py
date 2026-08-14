@@ -22,10 +22,10 @@ from ...rollouts.manifest import RolloutStoreInvocation
 from ...rollouts.shard_manifest import load_rollout_shard_entry
 from ...utils.cli_format import cli_console, key_value_panel
 from ...utils.config_paths import resolve_config_toml_path
-from ...utils.fingerprints import stable_config_hash
+from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CudaRolloutCampaignConfig
+from .campaign import CampaignEvent, CampaignStatus, CudaRolloutCampaignConfig
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
@@ -47,6 +47,29 @@ def _campaign(config_path: Path):
     return CudaRolloutCampaignConfig.from_toml(resolve_config_toml_path(config_path)).setup_target()
 
 
+def _writer_config(campaign):
+    path = campaign.config.writer_config_path
+    if path is None:
+        return None
+    return RolloutDatasetWriterConfig.from_toml(resolve_config_toml_path(path))
+
+
+def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
+    """Reject stale campaign or writer inputs before any progress is persisted."""
+    has_config_hash = hasattr(plan, "config_hash")
+    expected_config_hash = getattr(plan, "config_hash", "")
+    config_payload = getattr(campaign.config, "model_dump_jsonable", None)
+    current_config_hash = stable_msgspec_hash(config_payload()) if config_payload is not None else expected_config_hash
+    if has_config_hash and expected_config_hash != current_config_hash:
+        raise typer.BadParameter("campaign config hash does not match plan")
+    current_writer_hash = stable_config_hash(writer_cfg) if writer_cfg is not None else ""
+    has_writer_hash = hasattr(plan, "writer_config_hash")
+    expected_writer_hash = getattr(plan, "writer_config_hash", "")
+    if has_writer_hash and expected_writer_hash != current_writer_hash:
+        raise typer.BadParameter("writer config hash does not match plan")
+    return current_writer_hash
+
+
 @campaign_app.command("plan")
 def campaign_plan(
     config_path: Annotated[Path, typer.Option("--config-path")],
@@ -57,9 +80,36 @@ def campaign_plan(
     """Load the canonical campaign and render its typed configuration."""
     cfg = _campaign(config_path)
     campaign = cfg
+    writer_cfg = _writer_config(campaign)
+    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     if source_manifest is not None:
         raw = source_manifest.read_bytes()
-        payload = campaign.plan(json.loads(raw), source_manifest_hash=hashlib.sha256(raw).hexdigest()).to_jsonable()
+        planned = campaign.plan(
+            json.loads(raw),
+            source_manifest_hash=hashlib.sha256(raw).hexdigest(),
+            writer_config_hash=stable_config_hash(writer_cfg) if writer_cfg is not None else "",
+        )
+        campaign.write_plan(planned, output_json if output_json is not None else None)
+        event_identity = {
+            "plan_hash": planned.plan_hash,
+            "config_hash": planned.config_hash,
+            "writer_config_hash": planned.writer_config_hash,
+            "source_manifest_hash": planned.source_manifest_hash,
+        }
+        campaign.append_event(
+            CampaignEvent("source_selection", timestamp=campaign.utc_now().isoformat(), **event_identity)
+        )
+        campaign.append_event(CampaignEvent("plan_ready", timestamp=campaign.utc_now().isoformat(), **event_identity))
+        campaign.write_status(
+            CampaignStatus(
+                "planned",
+                {"pending": len(planned.work_units)},
+                planned.plan_hash,
+                campaign.utc_now().isoformat(),
+                current_stage="source_selection",
+            )
+        )
+        payload = planned.to_jsonable()
     else:
         payload = campaign.config.model_dump_jsonable()
     if output_json:
@@ -70,7 +120,9 @@ def campaign_plan(
 @campaign_app.command("preflight")
 def campaign_preflight(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
     """Run the CUDA availability gate."""
-    _campaign(config_path).preflight()
+    campaign = _campaign(config_path)
+    writer_cfg = _writer_config(campaign)
+    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     typer.echo("cuda preflight passed")
 
 
@@ -85,24 +137,46 @@ def campaign_status(
     payload = {
         "state": status.state,
         "campaign_id": cfg.config.campaign_id,
-        "counts": status.counts,
+        "counts": cfg.progress_summary().get("counts", status.counts),
         "plan_hash": status.plan_hash,
         "updated_at": status.updated_at,
+        "current_work_unit": status.current_work_unit,
+        "current_target_id": status.current_target_id,
+        "current_profile": status.current_profile,
+        "current_stage": status.current_stage,
+        "elapsed_seconds": status.elapsed_seconds,
+        "latest_failure_reason": status.latest_failure_reason,
     }
-    typer.echo(json.dumps(payload, sort_keys=True))
+    if json_output:
+        typer.echo(json.dumps(payload, sort_keys=True))
+    else:
+        typer.echo(
+            "\n".join(
+                (
+                    f"campaign: {payload['campaign_id']}",
+                    f"state: {payload['state']}",
+                    f"stage: {payload['current_stage'] or '-'}",
+                    f"target/profile: {payload['current_target_id'] or payload['current_work_unit'] or '-'}/{payload['current_profile'] or '-'}",
+                    f"elapsed_seconds: {payload['elapsed_seconds']}",
+                    f"counts: {json.dumps(payload['counts'], sort_keys=True)}",
+                    f"latest_failure_reason: {payload['latest_failure_reason'] or '-'}",
+                )
+            )
+        )
 
 
 @campaign_app.command("smoke")
 def campaign_smoke(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
     """Validate CUDA preflight before a smoke worker is launched."""
     campaign = _campaign(config_path)
-    campaign.preflight()
+    writer_cfg = _writer_config(campaign)
+    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     plan_path = campaign.config.output_root / "plan.json"
     if not plan_path.exists():
         raise typer.BadParameter("plan.json is required before smoke")
-    campaign.smoke(
-        campaign.load_plan(plan_path), config_path=resolve_config_toml_path(config_path), plan_path=plan_path
-    )
+    plan = campaign.load_plan(plan_path)
+    _validate_plan_digests(campaign, plan, writer_cfg)
+    campaign.smoke(plan, config_path=resolve_config_toml_path(config_path), plan_path=plan_path)
     typer.echo("smoke preflight passed")
 
 
@@ -113,11 +187,14 @@ def campaign_run(
 ) -> None:
     """Start a foreground campaign after preflight (planning is supplied by API callers)."""
     campaign = _campaign(config_path)
+    writer_cfg = _writer_config(campaign)
+    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     plan = campaign.load_plan(plan_path)
+    writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
     evidence = campaign.config.output_root / "smoke-evidence.json"
     if not evidence.exists() or json.loads(evidence.read_text()).get("plan_hash") != plan.plan_hash:
         raise typer.BadParameter("current passing smoke evidence is required")
-    campaign.run(plan, plan_path=plan_path, config_path=config_path)
+    campaign.run(plan, plan_path=plan_path, config_path=config_path, current_writer_config_hash=writer_hash)
     typer.echo("campaign run complete")
 
 
@@ -128,11 +205,14 @@ def campaign_resume(
 ) -> None:
     """Resume a campaign through the Python campaign API."""
     campaign = _campaign(config_path)
+    writer_cfg = _writer_config(campaign)
+    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     plan = campaign.load_plan(plan_path)
+    writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
     evidence = campaign.config.output_root / "smoke-evidence.json"
     if not evidence.exists() or json.loads(evidence.read_text()).get("plan_hash") != plan.plan_hash:
         raise typer.BadParameter("current passing smoke evidence is required")
-    campaign.run(plan, plan_path=plan_path, config_path=config_path)
+    campaign.run(plan, plan_path=plan_path, config_path=config_path, current_writer_config_hash=writer_hash)
     typer.echo("campaign resume complete")
 
 
@@ -163,6 +243,7 @@ def campaign_worker(
         writer_cfg = RolloutDatasetWriterConfig.from_toml(resolve_config_toml_path(writer_path))
     except Exception as exc:
         raise typer.BadParameter(f"writer config is required for worker: {exc}") from exc
+    _validate_plan_digests(campaign, plan, writer_cfg)
     entry = campaign.shard_entry_for_unit(plan, unit)
     from dataclasses import replace
 
@@ -177,9 +258,12 @@ def campaign_worker(
         shard_entry=entry,
         explicit_target=explicit_target,
         plan_hash=plan.plan_hash,
-        profile_hash=plan.profile_hash,
+        profile_hash=unit.profile_hash,
     )
     entry = replace(entry, writer_config_hash=stable_config_hash(writer_cfg))
+    # Validate every nested source/candidate/renderer/scorer/depth device
+    # before the shard owner creates its staging directory.
+    campaign.preflight(nested_configs=(writer_cfg,))
     result = run_rollout_shard(
         writer_cfg,
         shard_entry=entry,
@@ -189,7 +273,10 @@ def campaign_worker(
     typer.echo(
         json.dumps(
             {
-                "outcome": "skipped" if result.skipped else "succeeded",
+                "outcome": result.outcome
+                if hasattr(result, "outcome")
+                else ("skipped" if result.skipped else "succeeded"),
+                "reason": getattr(result, "reason", None),
                 "validated": not result.skipped,
                 "plan_hash": plan_hash,
                 "work_unit_hash": unit.work_unit_hash,
