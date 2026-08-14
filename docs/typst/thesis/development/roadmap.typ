@@ -1,165 +1,93 @@
 #import "../draft_markers.typ": development_only, promotion_entry, thesis_status
 
-// The roadmap is an operator-facing schedule and gate view.  Scientific
-// definitions, equations, implementation contracts, and durable terminology
-// remain owned by the thesis sections, package docs, tests, and configuration.
+// Development-only schedule and gate view. Scientific prose, equations, and
+// implementation contracts remain owned by the active thesis and package
+// sources named below.
 #development_only[
   #heading(level: 1, numbering: none)[Development roadmap] <roadmap>
   #metadata("roadmap-outcome") <outcome>
-  This page records the development schedule for ARIA-NBV from the current
-  correctness gates through release freeze. It is intentionally omitted from
-  submission output. The thesis claim and research-question wording remain in
-  `sections/01-introduction.typ` and `sections/05-experimental-design/`;
-  implementation ownership remains in `aria_nbv/`, its tests, and active
-  configuration.
+  This page records schedule, status, evidence pointers, and promotion gates.
+  It is omitted from submission output. The active thesis owns claims; Python,
+  tests, configuration, and immutable artifacts own behavior and measurements.
 
   #thesis_status(
     implementation: "partial",
     evidence: "pending",
-    source: [thesis sections; package tests and configs],
+    source: [`docs/typst/thesis/sections/`; `docs/typst/thesis/development/m1-contract-report.typ`; `aria_nbv/`; `aria_nbv/tests/`; active configuration],
     gate: [M1 correctness and M5 headroom evidence],
-  )[The schedule and gates are current planning state, not evidence that a
-  learned policy has improved over its baselines.]
+  )[Planning status only; this view promotes no policy-improvement claim.]
 
   #heading(level: 2, numbering: none)[Outcome] <outcome-detail>
-  The intended outcome is a reproducible, target-conditioned NBV evaluation:
-  trusted oracle labels, an actor-visible target protocol, finite candidate
-  rollouts, a learned one-step comparator, and a finite-horizon candidate value
-  model evaluated by oracle re-scoring under equal budgets. The authoritative
-  target/RRI and Q_H contracts are in
-  `sections/03-oracle-and-data-generation/`, `sections/04-method/`, and
-  `sections/05-experimental-design/`; this page only tracks their gates.
+  The development outcome is a reproducible, evidence-backed thesis package.
+  Canonical narrative and equation labels live in `docs/typst/thesis/sections/`;
+  this page tracks readiness and gates only.
 
   #heading(level: 2, numbering: none)[Milestones] <milestones>
-  - *M0 — scope and foundation (2026-04-29–2026-05-10):* classify existing
-    work, freeze the compact thesis boundary, and establish citation/source
-    hygiene. Exit requires the thesis seed and scope decisions to be aligned.
-  - *M1 — data, cache, and oracle correctness (2026-05-11–2026-05-31):* establish
-    store, split, frame/CW90, candidate alignment, depth/backprojection, and
-    oracle-throughput evidence. Scaling is blocked until these checks pass or
-    their gaps are explicit in the M1 report.
-  - *M2 — VIN baseline and scale gate (2026-06-01–2026-06-21):* reproduce the
-    one-step baseline, calibration/ranking diagnostics, controlled ablations,
-    and the Zarr/LRZ plan needed before generation.
-  - *M3 — target-RRI and generation readiness (2026-06-22–2026-07-12):* validate
-    GT-OBB target tasks and crops on a trusted subset, then separate the
-    actor-visible OBS-SEL / PRED-Q / GT-EVAL protocol.
-  - *M4 — target-conditioned one-step scorer (2026-07-13–2026-08-09):* compare
-    scene-level and target-conditioned scoring with held-out ranking,
-    calibration, oracle-evaluated selections, and grouped failures.
-  - *M5 — lookahead headroom and Q_H (2026-08-10–2026-08-30):* compare
-    random-valid, one-step, bounded oracle lookahead, and stochastic oracle
-    traces under equal budgets. Train/evaluate Q_H only after headroom and
-    rollout support are measured.
-  - *M6 — scale and bridge decisions (2026-08-31–2026-09-13):* decide whether
-    full offline scale, external mesh-compatible support, or the RQ5 online
-    discrete bridge is justified. Continuous control remains time-permitting.
-  - *M7 — final experiments and writing (2026-09-14–2026-09-27):* freeze final
-    tables, figures, failure cases, and coverage accounting over the 100-scene /
-    4,608-window target, or record an explicit scene-level fallback.
-  - *M8 — release freeze (2026-09-28–2026-09-30):* complete reproducible
-    configs, demo path, documentation links, and final smoke checks.
+  - *M0 — scope and foundation (2026-04-29–2026-05-10):* #strong[status: complete]; gate: thesis scope, source policy, and citation owners aligned. Evidence: `docs/typst/thesis/main.typ`, `docs/typst/thesis/sections/01-research-questions.typ`, `docs/references.bib`.
+  - *M1 — data, cache, and oracle correctness (2026-05-11–2026-05-31):* #strong[status: blocked]; gate: fresh store, scene split, frame/depth, candidate alignment, Rerun, and throughput evidence. Evidence: `docs/typst/thesis/development/m1-contract-report.typ#m1-status`, `aria_nbv/tests/data_handling/`, `aria_nbv/tests/pose_generation/`, `aria_nbv/tests/rollouts/`, `.configs/offline_only.toml`.
+  - *M2 — VIN baseline and scale gate (2026-06-01–2026-06-21):* #strong[status: blocked by M1]; gate: reproducible baseline, diagnostics, and scale receipt. Evidence: `aria_nbv/tests/vin/`, `aria_nbv/tests/lightning/`, `docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`.
+  - *M3 — target-RRI and generation readiness (2026-06-22–2026-07-12):* #strong[status: blocked by M1]; gate: trusted target subset, actor-visible protocol, and deterministic generation checks. Evidence: `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ`, `aria_nbv/tests/oracle/test_target_selection.py`, `aria_nbv/tests/pose_generation/`, `aria_nbv/tests/rollouts/`.
+  - *M4 — target-conditioned one-step scorer (2026-07-13–2026-08-09):* #strong[status: pending M3 evidence]; gate: held-out ranking, calibration, oracle selections, and grouped failures. Evidence: `docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ`, `aria_nbv/tests/oracle/test_scoring.py`, `aria_nbv/tests/lightning/test_candidate_scorer_contract.py`.
+  - *M5 — lookahead headroom and Q_H (2026-08-10–2026-08-30):* #strong[status: pending prerequisite gates]; gate: equal-budget rollout comparisons, measured headroom, and supported Q_H evidence. Evidence: `docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ`, `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`, `aria_nbv/tests/data_handling/test_qh.py`, `aria_nbv/tests/rollouts/`.
+  - *M6 — scale and bridge decisions (2026-08-31–2026-09-13):* #strong[status: pending M5]; gate: scale decision and explicit bridge scope. Evidence: `docs/typst/thesis/sections/07-discussion.typ`, `aria_nbv/tests/oracle/test_online_vin.py`, `aria_nbv/tests/rollouts/test_reporting.py`.
+  - *M7 — final experiments and writing (2026-09-14–2026-09-27):* #strong[status: pending M5/M6]; gate: immutable run/config links, coverage statement, final tables, and failure cases. Evidence: `docs/typst/thesis/sections/06-results.typ`, `docs/typst/thesis/sections/07-discussion.typ`, `aria_nbv/tests/rollouts/test_reporting.py`.
+  - *M8 — release freeze (2026-09-28–2026-09-30):* #strong[status: pending M7]; gate: reproducible configs, docs, demo path, and smoke checks. Evidence: `Makefile`, `docs/README.md`, CI workflows, final evidence bundle.
 
   #heading(level: 2, numbering: none)[Ablations] <ablations>
-  Each axis is a scientific comparison, not an architecture backlog. The
-  detailed metric and tensor contracts remain in the experimental-design
-  sections and package tests.
-
-  - *Target input:* V0 GT-OBB sanity; V1 observed/predicted OBB; optional crop
-    descriptor and entity-token variants.
-  - *Candidate mixture:* generic shell; target-point; mixed target plus
-    exploration; later shortlist variants only with evidence.
-  - *Objective:* scene RRI; cumulative target-root gain; diagnostic target RRI;
-    log-gain as a diagnostic ablation.
-  - *Planner:* random-valid; learned one-step; one-step oracle greedy; bounded
-    oracle lookahead; Q_H.
-  - *Invalidity and loss:* hard masks first; validity heads, scalar penalties,
-    CORAL variants, and return losses only after the base contract is stable.
-  - *State and scale:* geometry/ray memory, selected synthetic observations,
-    visibility-gated descriptors, trusted subset, scene-level holdout, and full
-    coverage. Record support and coverage rather than silently changing them.
+  Comparison axes remain in canonical owners; this page records pointers and gates only.
+  - *Target input:* `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ`; gate: V0/V1 protocol tests and actor-visible boundary.
+  - *Candidate mixture:* `docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ`, `aria_nbv/aria_nbv/pose_generation/`; gate: validity and provenance diagnostics.
+  - *Objective/planner:* `docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`; gate: equal budget and oracle receipt.
+  - *Invalidity/learning:* `docs/typst/thesis/sections/04-method/04-04-architecture-contract.typ`, `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`; gate: masks, reason codes, replay tests.
+  - *State/scale:* `docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ`, `docs/typst/thesis/sections/03-oracle-and-data-generation/03-03-replay-stores-and-diagnostics.typ`; gate: support and coverage accounting.
 
   #heading(level: 2, numbering: none)[Evidence] <evidence>
-  A thesis-grade comparison must identify its scene, snippet, target, candidate,
-  transition, seed, split, invalid-rate, and coverage-gap counts. Report equal
-  horizon, candidate budget, generation distribution, and validity constraints;
-  pair endpoint gain with cumulative target-root gain, diagnostic target RRI,
-  runtime/path cost, and uncertainty. The immutable measurement manifests,
-  figures, and tests are the evidence owners; this page points to the gate.
+  - M1: `docs/typst/thesis/development/m1-contract-report.typ`, focused data/geometry/rollout tests, `.configs/offline_only.toml`, immutable store/Rerun receipts.
+  - M2–M4: `aria_nbv/tests/vin/`, `aria_nbv/tests/oracle/`, `aria_nbv/tests/lightning/`, and `docs/typst/thesis/sections/05-experimental-design/` plus saved calibration/ranking artifacts.
+  - M5–M7: rollout manifests, reports, configs, result tables, and exact support/coverage gaps in those artifacts.
+  - M8: CI, `make qmd-frontmatter-check`, `make thesis-pdf`, and final smoke receipts; tracked PDF remains a development artifact.
 
   #heading(level: 2, numbering: none)[Risks] <risks>
-  - Frame/CW90/projection mismatch can produce plausible but invalid labels;
-    retain M1 frame and Rerun normal/boundary/failure checks.
-  - Sparse or ambiguous targets can destabilise labels or leak GT into actor
-    inputs; retain explicit eligibility, unmatched counts, and V0/V1 audits.
-  - Low valid-candidate fractions can make Q_H learn feasibility artifacts;
-    preserve reason codes, minimum-valid gates, and provenance diagnostics.
-  - Narrow rollout support can overstate value on unsupported actions; use
-    random-valid and masked temperature-softmax traces with scene-level splits.
-  - Oracle throughput can block scale; use Zarr-first storage, deterministic
-    LRZ sharding, subset intervals, and exact coverage reporting.
-  - If lookahead headroom is near zero, report that bounded result for its
-    split/horizon/branch factor and do not reinterpret it as a Q_H failure.
-  - If positive headroom exists but Q_H fails, retain the defensible oracle and
-    one-step study; do not replace it with unvalidated continuous RL.
+  Active risk state is pointer-only: frame/depth `aria_nbv/tests/rendering/test_depth_backprojection_conventions.py`, target validity `aria_nbv/tests/oracle/test_target_selection.py`, rollout support `aria_nbv/tests/rollouts/test_zarr_store.py`. Open blockers remain in `docs/typst/thesis/development/m1-contract-report.typ` and `.agents/issues.toml`/`.agents/todos.toml`; no duplicate risk narrative is maintained here.
 
   #heading(level: 2, numbering: none)[Freeze] <freeze>
-  Release freeze requires a clean, reproducible smoke matrix; figures linked to
-  immutable run/config identifiers; no stale paths or placeholders; and a
-  final coverage statement. Full continuous control, VLM/global planning,
-  semantic memory, external simulators, and real-device deployment remain
-  bridge/future work unless separately justified by completed finite-candidate
-  evidence. The exact submission evidence gate is owned by `main.typ` and its
-  report bundle.
+  Freeze gate: clean reproducible smoke matrix, immutable run/config links, final coverage statement, and no stale paths or placeholders. The exact submission evidence gate remains owned by `docs/typst/thesis/main.typ` and its report bundle; this development projection does not satisfy it.
 
   #heading(level: 2, numbering: none)[Promotion queue] <promotion-queue>
   #promotion_entry(
-    [Promote the M5 lookahead/Q_H comparison into thesis results after paired held-out evidence is immutable.],
-    source: [sections/05-experimental-design/; package tests and configs],
-    target-section: [06-results.typ and 07-discussion.typ],
-    gate: [positive headroom, oracle re-scoring, uncertainty, and coverage report],
+    [Promote M5 lookahead/Q_H results after paired held-out evidence is immutable.],
+    source: [docs/typst/thesis/sections/05-experimental-design/; aria_nbv/tests/rollouts/test_reporting.py],
+    target-section: [docs/typst/thesis/sections/06-results.typ and docs/typst/thesis/sections/07-discussion.typ],
+    gate: [positive headroom, oracle re-scoring, uncertainty, and coverage],
     disposition: "candidate",
   )
   #promotion_entry(
-    [Resolve the current scale fallback before claiming full-population coverage.],
-    source: [M1/M2 owners; storage and rollout tests],
-    target-section: [05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ],
-    gate: [LRZ/Zarr throughput and scene-level held-out coverage],
+    [Resolve the scale fallback before claiming population coverage.],
+    source: [docs/typst/thesis/development/m1-contract-report.typ; aria_nbv/tests/data_handling/; aria_nbv/tests/rollouts/],
+    target-section: [docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ],
+    gate: [throughput and scene-level held-out coverage],
     disposition: "blocked",
   )
   #promotion_entry(
-    [Keep online discrete Q_H and continuous target-then-pose control as bridge work until offline gates close.],
-    source: [07-discussion.typ; advisor scope decision],
-    target-section: [07-discussion.typ],
-    gate: [stable offline Q_H plus explicit advisor scope decision],
+    [Keep online discrete Q_H and continuous target-then-pose work as bridge scope until offline gates close.],
+    source: [docs/typst/thesis/sections/07-discussion.typ; .agents/issues.toml],
+    target-section: [docs/typst/thesis/sections/07-discussion.typ],
+    gate: [stable offline Q_H and explicit scope decision],
     disposition: "deferred",
   )
   #promotion_entry(
     [Do not promote unsupported continuous, VLM, semantic-global, or real-device claims into the thesis core.],
-    source: [thesis scope and discussion sections],
-    target-section: [08-conclusion.typ],
-    gate: [none; retain as bounded non-claim],
+    source: [docs/typst/thesis/main.typ; docs/typst/thesis/sections/07-discussion.typ],
+    target-section: [docs/typst/thesis/sections/08-conclusion.typ],
+    gate: [bounded non-claim retained],
     disposition: "rejected",
   )
 
   #heading(level: 2, numbering: none)[Priorities] <priorities>
-  1. Protect the thesis core: ASE/EFM oracle target-RRI, actor-visible target
-     conditioning, finite candidates, and equal-budget evaluation.
-  2. Close M1 correctness and M5 lookahead gates before scale or bridge work.
-  3. Scale trusted supervision within the current ecosystem, reporting exact
-     scene/snippet/target/trajectory/transition coverage.
-  4. Keep VIN improvements bounded to calibration and required controls; avoid
-     architecture search before Q_H evidence.
+  Gate order is M1 correctness, M2–M4 target/scorer readiness, M5 headroom, M6 bridge decision, then M7/M8 freeze. Each transition requires the evidence pointer and exit gate above; no scale or bridge work bypasses a blocked prerequisite.
 
   #heading(level: 2, numbering: none)[Issues and blockers] <issues-and-blockers>
-  - Fine-detail supervision is sensitive to aggressive mesh/point downsampling.
-  - Calibration, stage dependence, and ordinal-collapse causes are not yet
-    separated by decisive evidence.
-  - Candidate realism versus exploratory coverage remains under-specified.
-  - Oracle throughput and partial offline stores constrain training-scale work.
-  - Counterfactual states do not yet contain full RGB, SLAM, or semantic
-    modalities without synthesis; this limits claims about richer memory.
-  - The held-out split, Q_H success threshold, and fallback coverage bar remain
-    advisor-facing decisions that must be resolved before the final experiment
-    gate.
+  - M1 store, scene split, Rerun, and throughput: `docs/typst/thesis/development/m1-contract-report.typ#m1-blockers`.
+  - M5 support and headroom: `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`.
+  - Actionable follow-up: `.agents/issues.toml` and `.agents/todos.toml`; these records do not replace canonical owners.
 ]
