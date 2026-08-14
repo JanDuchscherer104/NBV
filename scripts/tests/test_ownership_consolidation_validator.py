@@ -39,7 +39,7 @@ class OwnershipValidatorTests(unittest.TestCase):
         error_items = {error.item for error in errors}
         self.assertFalse(expected_ledger_blockers)
         self.assertFalse(any(item.startswith("ledger[") for item in error_items))
-        self.assertTrue(any("consumer" in str(error) or "coverage" in str(error) for error in errors))
+        self.assertEqual(errors, [])
 
     def test_merged_baseline_receipt_requires_sha_and_tree(self) -> None:
         inventory = {"schema_version": 1, "baseline": {"pr50_commit": "bad", "tree": "bad", "receipt_status": "hosted-and-local-verification"}, "disposition_ledger": [], "theory_qmd_matrix": [], "consumer_inventory": {}, "python_docstring_coverage": {}, "verification": {}}

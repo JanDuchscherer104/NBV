@@ -35,9 +35,6 @@
 !.agents/references/**/
 !.agents/references/**/*.md
 !.agents/memory/
-!.agents/memory/state/
-!.agents/memory/state/**/
-!.agents/memory/state/**/*.md
 
 # Deterministic identities for Typst links, citations, and local source assets.
 !graphify-input/

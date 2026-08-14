@@ -881,7 +881,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/archive/skills/mojo-nbv-acceleration/SKILL.md",
@@ -907,7 +907,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/README.md",
@@ -920,7 +920,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/history/2026/03/2026-03-30_data_handling_legacy_api_split.md",
@@ -2067,7 +2067,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/state/PROJECT_STATE.md",
@@ -2078,7 +2078,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-05-09/candidate_decisions.jsonl",
@@ -28141,7 +28141,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/references/source_order.md",
@@ -28152,7 +28152,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/resolved.toml",
@@ -28190,7 +28190,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/skills/aria-grill/SKILL.md",
@@ -28205,7 +28205,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/skills/aria-grill/references/upstream-mattpocock.md",
@@ -28216,7 +28216,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/skills/aria-nbv-context/references/context_map.md",
@@ -28248,7 +28248,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/skills/aria-nbv-context/scripts/nbv_context_index.sh",
@@ -28268,7 +28268,7 @@
         "consumer_type": "executable consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/todos.toml",
@@ -28307,7 +28307,7 @@
         "consumer_type": "guidance/backlog consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".graphifyignore",
@@ -28319,7 +28319,7 @@
         "consumer_type": "generated artifact",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".omx/specs/autoresearch-agent-scaffold-rework-20260729/report.md",
@@ -28345,7 +28345,7 @@
         "consumer_type": "public/documentation consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": "docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ",
@@ -28363,7 +28363,7 @@
         "consumer_type": "public/documentation consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "dated-history"
       },
       {
         "path": "scripts/codex_transcript_extract.py",
@@ -28378,7 +28378,7 @@
         "consumer_type": "executable consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": "scripts/new_debrief.py",
@@ -28388,7 +28388,7 @@
         "consumer_type": "executable consumer",
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".omx/specs/ownership-branch-consolidation-inventory.json",
@@ -28403,10 +28403,10 @@
     ],
     "reference_count": 123,
     "class_counts": {
-      "dated-history": 84,
-      "live-reference": 36,
+      "dated-history": 85,
+      "live-reference": 18,
       "migration-receipt": 2,
-      "resolved-provenance": 1
+      "resolved-provenance": 18
     },
     "scan_method": "git grep -n over tracked files; locators grouped per path; executable/generated classes reviewed by path; untracked derived artifacts remain explicit gaps",
     "allowed_mentions": [
@@ -28416,7 +28416,7 @@
     ]
   },
   "python_docstring_coverage": {
-    "status": "pending destination materialization",
+    "status": "verified",
     "canonical_rule": "Python/config/types/docstrings plus focused tests own implementation contracts",
     "rows": [
       {
@@ -28427,31 +28427,31 @@
         "coverage": "generated API command surface"
       },
       {
-        "id": "api-002",
-        "source": "aria_nbv/aria_nbv/data_handling",
-        "owner": "defining config/types/docstrings + aria_nbv/tests/data_handling",
-        "destination_verified": false,
+      "id": "api-002",
+      "source": "aria_nbv/aria_nbv/data_handling",
+      "owner": "aria_nbv/aria_nbv/data_handling/vin_store/source.py#VinOfflineSourceConfig",
+      "destination_verified": true,
         "coverage": "offline store/schema/frame contracts"
       },
       {
-        "id": "api-003",
-        "source": "aria_nbv/aria_nbv/rollouts",
-        "owner": "rollout types/docstrings + aria_nbv/tests/rollouts",
-        "destination_verified": false,
+      "id": "api-003",
+      "source": "aria_nbv/aria_nbv/rollouts",
+      "owner": "aria_nbv/aria_nbv/rollouts/trace.py#RolloutLineage",
+      "destination_verified": true,
         "coverage": "lifecycle, masks, serialization"
       },
       {
-        "id": "api-004",
-        "source": "aria_nbv/aria_nbv/vin",
-        "owner": "VIN model/config docstrings + aria_nbv/tests/vin",
-        "destination_verified": false,
+      "id": "api-004",
+      "source": "aria_nbv/aria_nbv/vin",
+      "owner": "aria_nbv/aria_nbv/vin/models/vin_model_v3.py#VinModelV3",
+      "destination_verified": true,
         "coverage": "Q_H/scorer tensor contracts"
       },
       {
-        "id": "api-005",
-        "source": "aria_nbv/aria_nbv/rri_metrics",
-        "owner": "metric docstrings + aria_nbv/tests/rri_metrics",
-        "destination_verified": false,
+      "id": "api-005",
+      "source": "aria_nbv/aria_nbv/rri_metrics",
+      "owner": "aria_nbv/aria_nbv/rri_metrics/torch_rollout_metrics.py#candidate_primary_invalid_reason_share",
+      "destination_verified": true,
         "coverage": "RRI/frame/invalidity contracts"
       }
     ],
@@ -28459,7 +28459,7 @@
       "Makefile:666-685",
       "docs/reference/"
     ],
-    "destination_verified": false
+    "destination_verified": true
   },
   "branch_pr_ledger": [
     {
