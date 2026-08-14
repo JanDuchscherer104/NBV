@@ -129,9 +129,10 @@ implies supersession; ingestion-only dates stay unknown.
    - Code/contracts: `scripts/nbv_get_context.sh modules|contracts|match <term>`
 8. Open the exact candidate source and nearest nested `AGENTS.md` once the
    surface is known; reject optional retrieval that conflicts with its owner.
-9. For external API behavior, use the localized skill's `metadata.context7_refs`;
-   otherwise consult `references/context7_library_ids.md`, re-resolve consequential
-   IDs at use time, and verify against local source/tests.
+9. For consequential or uncertain external API/version behavior, use the localized
+   skill's `metadata.context7_refs` or `references/context7_library_ids.md`: use a
+   supplied exact ID directly; otherwise resolve it, then get current docs. Verify
+   installed behavior against pinned source/tests and the exact repository owner.
 10. Use targeted `rg` inside the narrowed file set.
 
 ## Zoom-Out Output
