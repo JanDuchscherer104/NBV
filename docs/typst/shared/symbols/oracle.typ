@@ -1,6 +1,8 @@
+// Candidate-generation and privileged reconstruction-label notation.
 #let oracle = (
-    // Abstract point set (use subscripts for time/candidate: #(symb.oracle.points)_t, #symb.oracle.points_q).
+    // Generic abstract reconstruction point set before time or candidate indexing.
     points: $cal(P)$,
+    // Actor-visible point set accumulated through rollout step t.
     points_t: $cal(P)_t$,
     // Candidate point set.
     points_q: $cal(P)_q$,
@@ -29,8 +31,11 @@
     offset: $bold(o)$,
     // Directional point-mesh error terms. `acc` / `comp` are compatibility aliases.
     dist_pm: $D_(P -> M)$,
+    // Mesh-to-point directional reconstruction error.
     dist_mp: $D_(M -> P)$,
+    // Compatibility alias for point-to-mesh reconstruction error.
     acc: $D_(P -> M)$,
+    // Compatibility alias for mesh-to-point reconstruction error.
     comp: $D_(M -> P)$,
     // Symmetric point-mesh error aggregate.
     err: $D$,

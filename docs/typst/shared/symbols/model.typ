@@ -1,3 +1,4 @@
+// Learned tokens and assembled rows consumed by the candidate value model.
 #let model = (
   // Learned selected-target token consumed by the value model.
   target_token: $bold(h)_e^"tgt"$,

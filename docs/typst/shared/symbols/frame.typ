@@ -1,3 +1,4 @@
+// Short labels used as coordinate-frame arguments in transforms and poses.
 #let frame = (
     // World frame label.
     w: $w$,
