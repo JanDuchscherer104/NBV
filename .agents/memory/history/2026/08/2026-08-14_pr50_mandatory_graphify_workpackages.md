@@ -67,6 +67,11 @@ upstream-reuse, EFM-key, and rollout DTO/target boundaries. It removed the
 unconsumed Quarto agent-doc generator and added a focused governance regression
 that prevents those routes from becoming circular or disappearing again.
 
+A later owner clarification made architect and critic review outputs
+session-local rather than versioned plan artifacts. Eleven unconsumed role-review
+files were removed; root guidance, memory capture policy, ignore rules, and G002
+now preserve only accepted decisions and actionable findings in canonical owners.
+
 Focused local commits `f01a6f8f`, `ea41f079`, `3ac503e5`, `15a5c134`,
 `e98e3027`, `2c902989`, and `a30d64c4` were created during the completed
 workpackages. No push or other external publication was performed. Existing

@@ -357,6 +357,46 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     assert "severity-ranked, line-referenced findings" in root_guidance
     assert "P0-P2 PR findings as resolvable GitHub review threads" in root_guidance
     assert "resolve them only\n  after exact-head evidence" in root_guidance
+    assert "Architect and\n  critic review outputs stay session-local" in root_guidance
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split("\0")
+    tracked_role_reviews = [
+        path
+        for path in tracked
+        if "review" in Path(path).name.lower()
+        and any(role in Path(path).name.lower() for role in ("architect", "critic"))
+    ]
+    assert not tracked_role_reviews
+
+    ignored = _read(ROOT / ".gitignore")
+    for role in ("architect", "critic"):
+        assert f".omx/plans/**/*{role}-review*" in ignored
+    ignored_role_reviews = subprocess.run(
+        [
+            "git",
+            "check-ignore",
+            "--no-index",
+            "--stdin",
+        ],
+        cwd=ROOT,
+        check=True,
+        input=(
+            ".omx/plans/example-architect-review.md\n"
+            ".omx/plans/nested/example-critic-review-iteration-1.md\n"
+        ),
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert ignored_role_reviews == [
+        ".omx/plans/example-architect-review.md",
+        ".omx/plans/nested/example-critic-review-iteration-1.md",
+    ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
     conventions = _read(
