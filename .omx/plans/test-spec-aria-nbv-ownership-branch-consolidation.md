@@ -26,9 +26,13 @@ The CLI has two modes: `--mode schema` validates shape, section coverage, and
 the merged-baseline receipt SHA/tree; `--mode deletion-ready` additionally
 reports each unresolved or unverified ledger/matrix row, live consumer
 references, and pending Python-docstring gates. The current frozen inventory
-passes schema mode and intentionally fails deletion-ready mode with 193
-structured blockers (including ledger readiness, materialized destination,
-matrix, consumer, coverage, and concrete transcript/debrief sink blockers).
+passes schema mode and intentionally fails deletion-ready mode with structured
+blockers (including ledger readiness, materialized destination, matrix,
+consumer, coverage, and concrete transcript/debrief sink blockers). At the
+current G003 inventory snapshot this produced 140 errors; that number is
+observational evidence, not a fixed test invariant. Tests derive the required
+ledger blocker set from inventory rows so readiness changes remain visible
+without making stale counts authoritative.
 
 ## Current interface needed from inventory
 
