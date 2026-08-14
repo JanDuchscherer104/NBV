@@ -9,6 +9,7 @@ owners remain authoritative and this module only checks their receipts.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -26,7 +27,7 @@ ALLOWED_REFERENCE_CLASSES = {
     "resolved-provenance",
     "migration-receipt",
 }
-THEORY_CLASSES = {"keep", "thin", "delete"}
+THEORY_CLASSES = {"deprecated", "keep", "thin", "delete"}
 INVENTORY_DISPOSITIONS = LEDGER_DISPOSITIONS | {"unresolved"}
 AGENTS_DB_MARKERS = ("agents-db", ".agents/issues.toml", ".agents/todos.toml", ".agents/refactors.toml")
 RETIRED_SOURCE_PATHS = {
@@ -197,7 +198,8 @@ def _bounded_provenance(path: str, classification: str, root: Path) -> bool:
     if normalized in frozen:
         frozen_class = frozen[normalized]
         compatible = frozen_class == classification or {frozen_class, classification} == {"dated-history", "archive-provenance"}
-        return compatible and _is_tracked_file(root, normalized) and _matches_head_blob(root, normalized)
+        immutable = "/transcripts/" in normalized or "/history/" in normalized or normalized.startswith(".agents/archive/")
+        return compatible and _is_tracked_file(root, normalized) and (not immutable or _matches_head_blob(root, normalized))
     if normalized in KNOWN_MIGRATION_RECEIPTS:
         return True
     if normalized.startswith(".omx/specs/") and _is_tracked_file(root, normalized):
@@ -256,6 +258,32 @@ def validate_theory_matrix(rows: Iterable[dict[str, Any]], theory_paths: Iterabl
             errors.append(ValidationError(path, "inbound_links and citation_disposition are required"))
     for missing in sorted(actual - seen):
         errors.append(ValidationError(missing, "theory page missing from matrix"))
+    return errors
+
+
+def validate_theory_topology(rows: Iterable[dict[str, Any]], root: Path) -> list[ValidationError]:
+    """Require retained theory pages to remain deprecated docs-owned pointers."""
+    errors: list[ValidationError] = []
+    forbidden = re.compile(r"\b(?:canonical|current)\s+(?:theory|implementation|source)\s+owner\b|\bowns?\s+(?:theory|implementation contract)\b", re.IGNORECASE)
+    for row in rows:
+        path = str(row.get("path", "<missing-path>"))
+        normalized = _normalized_path(path, root)
+        if normalized is None:
+            errors.append(ValidationError(path, "theory path must be repository-relative")); continue
+        candidate = root / normalized
+        if not candidate.is_file():
+            errors.append(ValidationError(path, "theory page does not exist")); continue
+        text = candidate.read_text(encoding="utf-8")
+        frontmatter = text.split("\n---\n", 1)[0] if text.startswith("---\n") else ""
+        for key, expected in (("phase", "archive"), ("status", "deprecated"), ("owner", "docs")):
+            if not re.search(rf"(?m)^{key}:\s*{re.escape(expected)}\s*$", frontmatter):
+                errors.append(ValidationError(path, f"frontmatter {key} must be {expected!r}"))
+        if forbidden.search(text):
+            errors.append(ValidationError(path, "deprecated theory page contains an ownership claim"))
+        expected_hash = row.get("content_sha256")
+        actual_hash = hashlib.sha256(candidate.read_bytes()).hexdigest()
+        if expected_hash != actual_hash:
+            errors.append(ValidationError(path, "content_sha256 does not match file"))
     return errors
 
 
@@ -385,7 +413,7 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
         if not isinstance(row, dict):
             errors.append(ValidationError(item, "must be an object"))
             continue
-        for field in ("path", "classification", "unique_role", "canonical_destination", "destination_verified", "inbound_links"):
+        for field in ("path", "classification", "unique_role", "canonical_destination", "destination_verified", "inbound_links", "content_sha256"):
             if field not in row:
                 errors.append(ValidationError(item, f"missing field: {field}"))
         if row.get("classification") not in THEORY_CLASSES:
@@ -393,6 +421,7 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
         if row.get("destination_verified") is False:
             blockers.append(ValidationError(item, "destination not verified"))
     errors.extend(validate_theory_matrix(matrix, [p.relative_to(root).as_posix() for p in (root / "docs/contents/theory").glob("*.qmd")]))
+    errors.extend(validate_theory_topology(matrix, root))
     manifest = data.get("expected_pages_manifest", {})
     actual_pages = [p.relative_to(root / "docs").as_posix() for p in (root / "docs/contents").rglob("*.qmd")]
     errors.extend(validate_expected_pages(manifest, actual_pages))

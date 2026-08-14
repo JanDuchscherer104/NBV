@@ -146,6 +146,25 @@ class OwnershipValidatorTests(unittest.TestCase):
         rows = [{"path": "a.qmd", "classification": "thin", "canonical_destination": "thesis.typ", "inbound_links": [], "citation_disposition": "retain"}]
         assert validate_theory_matrix(rows, ["a.qmd", "b.qmd"])
 
+    def test_theory_topology_rejects_current_owner_and_hash_drift(self) -> None:
+        from ownership_consolidation_validator import validate_theory_topology
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            page = root / "page.qmd"
+            page.write_text("---\nphase: thesis\nstatus: current\nowner: theory\n---\nThis is the canonical theory owner.\n", encoding="utf-8")
+            errors = validate_theory_topology([{"path": "page.qmd", "content_sha256": "0" * 64}], root)
+        assert len(errors) >= 4
+
+    def test_theory_topology_accepts_deprecated_docs_page_with_matching_hash(self) -> None:
+        from hashlib import sha256
+        from ownership_consolidation_validator import validate_theory_topology
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            page = root / "page.qmd"
+            page.write_text("---\nphase: archive\nstatus: deprecated\nowner: docs\n---\nExternal background only.\n", encoding="utf-8")
+            digest = sha256(page.read_bytes()).hexdigest()
+            assert validate_theory_topology([{"path": "page.qmd", "content_sha256": digest}], root) == []
+
 
     def test_expected_page_manifest_is_exact(self) -> None:
         manifest = {"expected_pages": ["index.html", "api.html"]}

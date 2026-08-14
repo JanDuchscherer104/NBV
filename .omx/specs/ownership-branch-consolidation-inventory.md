@@ -59,11 +59,11 @@ retain the source path and blob hash.
 
 ## Theory-QMD matrix
 
-All 8 theory pages are classified. `rl_planning.qmd` and `rri_theory.qmd` are
-**thin** candidates after Typst promotion; the remaining six are **keep**
-candidates for external background/evidence. This is not deletion approval:
-inbound-link and citation scans remain required, and every candidate records a
-planned Typst destination with an exact existing owner and `destination_verified: true`.
+All 8 theory pages are retained only as **deprecated** docs-owned archive,
+navigation, or external-background references. Their content hashes are recorded
+in the JSON receipt; Typst and Python owners remain authoritative. This is not
+deletion approval: inbound-link and citation scans remain required, and every
+candidate records a planned Typst destination with `destination_verified: true`.
 
 ## Live-consumer and provenance inventory
 
