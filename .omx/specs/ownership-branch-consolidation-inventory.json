@@ -28410,8 +28410,8 @@
         "disposition": "remove or replace",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
         "classification": "resolved-provenance",
-        "blob_oid": "edf737a729ae22f484c03f66d1d73034d9f93980",
-        "content_sha256": "e16e869c7e6b58928b2bb9f09fe27d94fad85c6cd2ea8aad2452105c59a3ea65"
+        "blob_oid": "771df094bc42b13752b41306e16d994d59baaabe",
+        "content_sha256": "68d363646302167a2c2ec61b275b20fe88e924f0a28dd93e325bdcf89144ba0c"
       },
       {
         "path": ".agents/skills/aria-grill/references/upstream-mattpocock.md",
