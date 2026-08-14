@@ -1,4 +1,10 @@
-"""Stage admission and deterministic loaders for ``Q_H`` chain datasets."""
+"""Stage admission and deterministic loaders for ``Q_H`` chain datasets.
+
+Construction is a hard admission boundary: configured stages must be nonempty,
+share one :class:`~aria_nbv.rollouts.qh_reader.QhDataContract`, and have
+disjoint scene sets.  Once admitted, loaders preserve the dataset's padded
+candidate width and derive worker seeds from the Lightning base seed.
+"""
 
 from __future__ import annotations
 

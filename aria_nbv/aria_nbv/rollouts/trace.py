@@ -380,6 +380,14 @@ def _primary_candidate_invalid_reason(*, bitset: torch.Tensor, valid_mask: torch
 
 
 def termination_reason(result: CounterfactualRolloutResult, trajectory: CounterfactualTrajectory) -> str:
+    """Classify why a replay chain stopped without inventing a partial label.
+
+    Early termination takes precedence over horizon completion.  A trajectory
+    shorter than ``result.horizon`` without the explicit early-stop marker is
+    reported as ``incomplete_rollout`` so persisted stores can distinguish a
+    valid terminal transition from missing generation output.
+    """
+
     if trajectory.terminated_early:
         return "terminated_early"
     if len(trajectory.steps) >= int(result.horizon):
@@ -388,6 +396,8 @@ def termination_reason(result: CounterfactualRolloutResult, trajectory: Counterf
 
 
 def policy_name(policy: str | CounterfactualSelectionPolicy) -> str:
+    """Return the stable persisted policy label for enum or string inputs."""
+
     return policy.value if isinstance(policy, CounterfactualSelectionPolicy) else str(policy)
 
 
