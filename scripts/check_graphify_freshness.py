@@ -217,7 +217,7 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 from graphify.detect import detect_incremental
-if version('graphifyy') != sys.argv[4]:
+if version('graphifyy') != sys.argv[3]:
     raise RuntimeError('unexpected graphifyy version')
 root = Path(sys.argv[1])
 manifest = sys.argv[2]
@@ -240,7 +240,6 @@ print(json.dumps({
                 program,
                 str(root.resolve()),
                 str(manifest),
-                output,
                 PINNED_GRAPHIFY_VERSION,
             ],
             check=False,
