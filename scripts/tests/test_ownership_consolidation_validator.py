@@ -88,6 +88,7 @@ class OwnershipValidatorTests(unittest.TestCase):
         assert classify_reference(".agents/resolved.toml") == "resolved-provenance"
         assert classify_reference(".omx/plans/migration-receipt.json") == "migration-receipt"
         assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md"}]))
+        assert any("live" in str(e) for e in validate_reference_classes([{"path": ".agents/memory/state/DECISIONS.md", "classification": "transcript-provenance"}]))
 
 
     def test_transcript_and_debrief_cannot_be_generic_decision_sinks(self) -> None:
@@ -97,9 +98,10 @@ class OwnershipValidatorTests(unittest.TestCase):
     def test_historical_transcript_sink_is_ignored_by_repository_scan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            path = root / "transcript.jsonl"
+            path = root / ".agents" / "memory" / "transcripts" / "2026" / "transcript.jsonl"
+            path.parent.mkdir(parents=True)
             path.write_text("promotion_target: .agents/memory/state/DECISIONS.md", encoding="utf-8")
-            assert validate_repository_sinks(root, [{"path": "transcript.jsonl", "classification": "transcript-provenance"}]) == []
+            assert validate_repository_sinks(root, [{"path": ".agents/memory/transcripts/2026/transcript.jsonl", "classification": "transcript-provenance"}]) == []
 
 
     def test_theory_matrix_covers_every_page(self) -> None:

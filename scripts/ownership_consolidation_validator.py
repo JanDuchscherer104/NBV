@@ -29,6 +29,16 @@ ALLOWED_REFERENCE_CLASSES = {
 THEORY_CLASSES = {"keep", "thin", "delete"}
 INVENTORY_DISPOSITIONS = LEDGER_DISPOSITIONS | {"unresolved"}
 AGENTS_DB_MARKERS = ("agents-db", ".agents/issues.toml", ".agents/todos.toml", ".agents/refactors.toml")
+RETIRED_SOURCE_PATHS = {
+    "docs/contents/thesis/roadmap.qmd",
+    "docs/contents/thesis/questions.qmd",
+    "docs/contents/thesis/m1_contract_report.qmd",
+    ".agents/memory/state/PROJECT_STATE.md",
+    ".agents/memory/state/DECISIONS.md",
+    ".agents/memory/state/GOTCHAS.md",
+    ".agents/memory/state/OPEN_QUESTIONS.md",
+}
+LEGACY_MARKERS = ("roadmap.qmd", "questions.qmd", "m1_contract_report.qmd", "PROJECT_STATE.md", "DECISIONS.md", "GOTCHAS.md", "OPEN_QUESTIONS.md")
 
 
 @dataclass(frozen=True)
@@ -93,12 +103,14 @@ def validate_migration_ledger(rows: Iterable[dict[str, Any]], root: Path, *, ful
 def classify_reference(path: str, *, resolved: bool = False, receipt: bool = False) -> str:
     """Classify a legacy-state reference; live references are rejected by callers."""
     normalized = path.replace("\\", "/")
-    if receipt or normalized.startswith(".omx/") and ("receipt" in normalized or "migration" in normalized):
+    if receipt or normalized.startswith(".omx/specs/") or normalized.startswith(".omx/") and ("receipt" in normalized or "migration" in normalized):
         return "migration-receipt"
     if resolved or normalized.startswith(".agents/resolved"):
         return "resolved-provenance"
     if "/transcripts/" in normalized or normalized.startswith(".agents/memory/transcripts/"):
         return "transcript-provenance"
+    if normalized.startswith("docs/typst/thesis_slides/"):
+        return "dated-history"
     if normalized.startswith(".agents/archive/") or "/archive/" in normalized:
         return "archive-provenance"
     if "/history/" in normalized or normalized.startswith(".agents/archive/"):
@@ -106,17 +118,16 @@ def classify_reference(path: str, *, resolved: bool = False, receipt: bool = Fal
     return "live-reference"
 
 
-def validate_reference_classes(references: Iterable[dict[str, Any]]) -> list[ValidationError]:
+def validate_reference_classes(references: Iterable[dict[str, Any]], root: Path = Path.cwd()) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for index, ref in enumerate(references):
         path = str(ref.get("path", f"reference-{index}"))
-        classification = ref.get("classification") or classify_reference(
-            path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt"))
-        )
-        if classification == "live-reference":
-            inferred = classify_reference(path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt")))
-            if inferred in ALLOWED_REFERENCE_CLASSES:
-                classification = inferred
+        inferred = classify_reference(path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt")))
+        classification = inferred
+        if inferred == "live-reference" and ref.get("classification") == "resolved-provenance":
+            candidate = root / path
+            if path in RETIRED_SOURCE_PATHS or (candidate.is_file() and not any(marker in candidate.read_text(encoding="utf-8") for marker in LEGACY_MARKERS)):
+                classification = "resolved-provenance"
         if classification not in ALLOWED_REFERENCE_CLASSES:
             errors.append(ValidationError(path, "live legacy-state reference is not allowed"))
     return errors
@@ -210,9 +221,7 @@ def validate_repository_sinks(root: Path, refs: Iterable[dict[str, Any]]) -> lis
         path = ref.get("path") if isinstance(ref, dict) else None
         if not isinstance(path, str):
             continue
-        classification = ref.get("classification") if isinstance(ref, dict) else None
-        if classification == "live-reference":
-            classification = classify_reference(path)
+        classification = classify_reference(path)
         if classification in ALLOWED_REFERENCE_CLASSES:
             continue
         candidate = root / path
@@ -285,7 +294,7 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema") -> list[Va
     if mode == "deletion-ready":
         errors.extend(sink_errors)
     if mode == "deletion-ready":
-        errors.extend(validate_reference_classes(data.get("consumer_inventory", {}).get("references", [])))
+        errors.extend(validate_reference_classes(data.get("consumer_inventory", {}).get("references", []), Path.cwd()))
     consumers = data.get("consumer_inventory", {})
     if not isinstance(consumers, dict): errors.append(ValidationError("consumer_inventory", "must be an object"))
     elif mode == "deletion-ready" and consumers.get("unresolved_count", 0): blockers.append(ValidationError("consumer_inventory", f"{consumers['unresolved_count']} unresolved live consumers"))

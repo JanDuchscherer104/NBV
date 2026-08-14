@@ -64,8 +64,8 @@ thesis contract.
 
 ## Thesis State
 
-- **[Project Roadmap](contents/thesis/roadmap.qmd)**: Milestones and timeline
-- **[Research Questions](contents/thesis/questions.qmd)**: Open problems and directions
+- **[Project Roadmap](typst/thesis/development/roadmap.typ)**: Milestones and timeline
+- **[Research Questions](typst/thesis/sections/01-research-questions.typ)**: Open problems and directions
 
 ## Theory & Background
 

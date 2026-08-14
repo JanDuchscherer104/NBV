@@ -89,4 +89,4 @@ Key local mirrors include VIN-NBV, GenNBV, Hestia, PB-NBV, EFM3D, Project Aria, 
 
 ## Navigation
 
-Return to [main documentation](../../index.qmd), [research questions](../thesis/questions.qmd), [roadmap](../thesis/roadmap.qmd), or [RRI theory](../theory/rri_theory.qmd).
+Return to [main documentation](../../index.qmd), [research questions](../../typst/thesis/sections/01-research-questions.typ), [roadmap](../../typst/thesis/development/roadmap.typ), or [RRI theory](../theory/rri_theory.qmd).

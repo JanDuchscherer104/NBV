@@ -13,7 +13,7 @@ format: html
 
 **Source status.** The corpus has local TeX mirrors for several 3DGS/NBV papers, including FisherRF, Dynamic 3DGS, Next Best Sense, and Instance/Object-centric NBV. The method-specific review preserves three selected Instance-NBV source figures as PNGs under [`figures/external/arXiv/Instance-NBV/`](../../figures/external/arXiv/Instance-NBV/). FOV-HPE is tracked through DOI/PDF evidence, not a local TeX mirror.
 
-**Related ARIA-NBV pages.** [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd), [RRI theory](../theory/rri_theory.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../thesis/questions.qmd).
+**Related ARIA-NBV pages.** [Instance-aware object-centric 3DGS NBV](3dgs_instance_nbv.qmd), [RRI theory](../theory/rri_theory.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../../typst/thesis/sections/01-research-questions.typ).
 
 ### Core contribution
 

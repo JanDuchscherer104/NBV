@@ -14,8 +14,8 @@ TODOs, and obsolete repository-structure drafts are kept under
 `.agents/archive/docs/` so they remain available to agents without being
 published as reader-facing documentation.
 
-Current project direction lives in the [roadmap](../thesis/roadmap.qmd) and
-[research questions](../thesis/questions.qmd). Active implementation work lives
+Current project direction lives in the [roadmap](../../typst/thesis/development/roadmap.typ) and
+[research questions](../../typst/thesis/sections/01-research-questions.typ). Active implementation work lives
 in the `.agents/*.toml` backlog, and canonical terms live in the
 [glossary](../glossary.qmd).
 

@@ -9,8 +9,8 @@ format: html
 
 This page preserves historical visual findings from the main seminar phase.
 It is not current thesis evidence; current thesis direction lives in the
-[roadmap](../thesis/roadmap.qmd) and
-[research questions](../thesis/questions.qmd).
+[roadmap](../../typst/thesis/development/roadmap.typ) and
+[research questions](../../typst/thesis/sections/01-research-questions.typ).
 
 ![ASE Semi-Dense Point Cloud Visualization](../../figures/dataset/ase_semi_dense.png)
 
