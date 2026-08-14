@@ -75,12 +75,12 @@
       "lines": "97-125",
       "subject": "primary claim and explicit non-claims",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/main.typ#introduction",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#introduction",
+      "destination_verified": true,
       "link_action": "retain citations in Typst; remove duplicate QMD prose",
       "id": "retired-002-roadmap-literature-grounding",
       "source_blob_id": "96be4e83fdf77ba08d76b9cc4e12928c5c44ae94",
-      "destination_locator": "roadmap-literature-grounding"
+      "destination_locator": "introduction"
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
@@ -88,12 +88,12 @@
       "lines": "128-326",
       "subject": "mathematical model and equations",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/sections/02-method.typ",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ#eqs.rl.finite_horizon_return",
+      "destination_verified": true,
       "link_action": "rewrite into active Typst sections; no ledger copy",
       "id": "retired-003-roadmap-mathematical-model",
       "source_blob_id": "96be4e83fdf77ba08d76b9cc4e12928c5c44ae94",
-      "destination_locator": "roadmap-mathematical-model"
+      "destination_locator": "eqs.rl.finite_horizon_return"
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
@@ -101,12 +101,12 @@
       "lines": "328-369",
       "subject": "evidence-flow diagrams",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/figures/ or sections/",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ#fig:qh-actor-oracle-contract",
+      "destination_verified": true,
       "link_action": "retain only if active thesis uses diagram",
       "id": "retired-004-roadmap-evidence-flow",
       "source_blob_id": "96be4e83fdf77ba08d76b9cc4e12928c5c44ae94",
-      "destination_locator": "roadmap-evidence-flow"
+      "destination_locator": "fig:qh-actor-oracle-contract"
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
@@ -180,12 +180,12 @@
       "lines": "735-751",
       "subject": "standing verification commands",
       "disposition": "unresolved",
-      "canonical_destination": "docs/README.md#verification and Makefile targets",
-      "destination_verified": false,
+      "canonical_destination": "docs/README.md#verification",
+      "destination_verified": true,
       "link_action": "keep setup/commands role-disjoint",
       "id": "retired-010-roadmap-verification",
       "source_blob_id": "96be4e83fdf77ba08d76b9cc4e12928c5c44ae94",
-      "destination_locator": "roadmap-verification"
+      "destination_locator": "verification"
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
@@ -398,12 +398,12 @@
       "lines": "57-72",
       "subject": "implementation contract map",
       "disposition": "code-owned",
-      "canonical_destination": "aria_nbv/aria_nbv/** docstrings and tests",
-      "destination_verified": false,
+      "canonical_destination": "aria_nbv/aria_nbv/data_handling/vin_store/source.py#VinOfflineSourceConfig",
+      "destination_verified": true,
       "link_action": "replace copied contract prose with exact owners",
       "id": "retired-026-m1-contract-map",
       "source_blob_id": "3a2be94b278513fefcf376eba12013a450a70b2f",
-      "destination_locator": "m1-contract-map"
+      "destination_locator": "VinOfflineSourceConfig"
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
@@ -411,12 +411,12 @@
       "lines": "73-95",
       "subject": "checks and serialized contract facts",
       "disposition": "test-owned",
-      "canonical_destination": "aria_nbv/tests/** and CI",
-      "destination_verified": false,
+      "canonical_destination": "aria_nbv/tests/data_handling/test_public_api_contract.py#test_storage_and_training_contracts_are_documented_at_their_owners",
+      "destination_verified": true,
       "link_action": "retain command/result pointers only",
       "id": "retired-027-m1-passing-checks",
       "source_blob_id": "3a2be94b278513fefcf376eba12013a450a70b2f",
-      "destination_locator": "m1-passing-checks"
+      "destination_locator": "test_storage_and_training_contracts_are_documented_at_their_owners"
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
@@ -441,12 +441,12 @@
       "lines": "114-160",
       "subject": "command/evidence ledger",
       "disposition": "unresolved",
-      "canonical_destination": "docs/README.md#commands and .omx receipt",
-      "destination_verified": false,
+      "canonical_destination": "docs/README.md#commands-and-evidence",
+      "destination_verified": true,
       "link_action": "keep role-disjoint commands",
       "id": "retired-029-m1-command-ledger",
       "source_blob_id": "3a2be94b278513fefcf376eba12013a450a70b2f",
-      "destination_locator": "m1-command-ledger"
+      "destination_locator": "commands-and-evidence"
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
@@ -454,12 +454,12 @@
       "lines": "12-20",
       "subject": "core claim and implementation status",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/main.typ#introduction; Python owners",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#introduction",
+      "destination_verified": true,
       "link_action": "split theory from implementation",
       "id": "retired-030-goal-core-claim",
       "source_blob_id": "470b9cfd54e4fcb34b4865dd199d32093c1b7fe8",
-      "destination_locator": "goal-core-claim"
+      "destination_locator": "introduction"
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
@@ -497,12 +497,12 @@
       "lines": "43-61",
       "subject": "near-term next steps and contracts",
       "disposition": "unresolved",
-      "canonical_destination": "Typst development roadmap; Python/config/tests",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/development/roadmap.typ#promotion-queue",
+      "destination_verified": true,
       "link_action": "split by owner",
       "id": "retired-033-next-steps",
       "source_blob_id": "470b9cfd54e4fcb34b4865dd199d32093c1b7fe8",
-      "destination_locator": "next-steps"
+      "destination_locator": "promotion-queue"
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
@@ -524,12 +524,12 @@
       "lines": "12-39",
       "subject": "workflow/source-order decisions",
       "disposition": "unresolved",
-      "canonical_destination": "AGENTS.md; .agents/references/source_order.md; skills",
-      "destination_verified": false,
+      "canonical_destination": ".agents/references/source_order.md#role-split",
+      "destination_verified": true,
       "link_action": "retain only unique guidance",
       "id": "retired-035-workflow",
       "source_blob_id": "0c72a15bd633f8c67fafd3b79204ac1c63200282",
-      "destination_locator": "workflow"
+      "destination_locator": "role-split"
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
@@ -537,12 +537,12 @@
       "lines": "40-180",
       "subject": "thesis theory, notation, RQ and reward decisions",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/** and docs/typst/shared/glossary.typ",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#introduction",
+      "destination_verified": true,
       "link_action": "route to Typst owners",
       "id": "retired-036-scientific",
       "source_blob_id": "0c72a15bd633f8c67fafd3b79204ac1c63200282",
-      "destination_locator": "scientific"
+      "destination_locator": "introduction"
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
@@ -550,12 +550,12 @@
       "lines": "181-320",
       "subject": "storage, schema, rollout and experiment contracts",
       "disposition": "code-owned",
-      "canonical_destination": "aria_nbv/** docstrings/types/config/tests",
-      "destination_verified": false,
+      "canonical_destination": "aria_nbv/aria_nbv/rollouts/trace.py#RolloutLineage",
+      "destination_verified": true,
       "link_action": "route to defining owners",
       "id": "retired-037-implementation",
       "source_blob_id": "0c72a15bd633f8c67fafd3b79204ac1c63200282",
-      "destination_locator": "implementation"
+      "destination_locator": "RolloutLineage"
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
@@ -563,12 +563,12 @@
       "lines": "321-321",
       "subject": "CI/pre-commit policy",
       "disposition": "unresolved",
-      "canonical_destination": "AGENTS.md/.github/workflows/ci.yml",
-      "destination_verified": false,
+      "canonical_destination": ".github/workflows/ci.yml#ci-workflow",
+      "destination_verified": true,
       "link_action": "verify existing owner before deletion",
       "id": "retired-038-ci",
       "source_blob_id": "0c72a15bd633f8c67fafd3b79204ac1c63200282",
-      "destination_locator": "ci"
+      "destination_locator": "ci-workflow"
     },
     {
       "source": ".agents/memory/state/GOTCHAS.md",
@@ -576,12 +576,12 @@
       "lines": "12-18",
       "subject": "environment/tooling gotchas",
       "disposition": "unresolved",
-      "canonical_destination": "docs/README.md#setup; .agents/skills/lrz-ai-systems",
-      "destination_verified": false,
+      "canonical_destination": "SETUP.md#offline-store-and-vin-diagnostics",
+      "destination_verified": true,
       "link_action": "keep setup guidance only",
       "id": "retired-039-environment",
       "source_blob_id": "ce680d4634ca5d3cc52ecdf572c6737d6ce9eb95",
-      "destination_locator": "environment"
+      "destination_locator": "offline-store-and-vin-diagnostics"
     },
     {
       "source": ".agents/memory/state/GOTCHAS.md",
@@ -589,12 +589,12 @@
       "lines": "19-29",
       "subject": "training and offline-store contracts",
       "disposition": "code-owned",
-      "canonical_destination": "aria_nbv/** config/types/tests",
-      "destination_verified": false,
+      "canonical_destination": "aria_nbv/aria_nbv/data_handling/vin_store/source.py#VinOfflineSourceConfig",
+      "destination_verified": true,
       "link_action": "replace prose with pointers",
       "id": "retired-040-training-storage",
       "source_blob_id": "ce680d4634ca5d3cc52ecdf572c6737d6ce9eb95",
-      "destination_locator": "training-storage"
+      "destination_locator": "VinOfflineSourceConfig"
     },
     {
       "source": ".agents/memory/state/GOTCHAS.md",
@@ -602,12 +602,12 @@
       "lines": "30-42",
       "subject": "frames, EVL and Pydantic behavior",
       "disposition": "code-owned",
-      "canonical_destination": "aria_nbv/** docstrings/tests",
-      "destination_verified": false,
+      "canonical_destination": "aria_nbv/aria_nbv/pose_generation/candidate_generation.py#CandidateViewGeneratorConfig",
+      "destination_verified": true,
       "link_action": "replace prose with pointers",
       "id": "retired-041-geometry-config",
       "source_blob_id": "ce680d4634ca5d3cc52ecdf572c6737d6ce9eb95",
-      "destination_locator": "geometry-config"
+      "destination_locator": "CandidateViewGeneratorConfig"
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
@@ -655,12 +655,12 @@
       "lines": "32-36",
       "subject": "storage, scale and reporting choices",
       "disposition": "code-owned",
-      "canonical_destination": "aria_nbv/** config/tests; docs/README.md",
-      "destination_verified": false,
+      "canonical_destination": "aria_nbv/aria_nbv/data_handling/vin_store/store.py#VinOfflineStoreConfig",
+      "destination_verified": true,
       "link_action": "split implementation/setup",
       "id": "retired-045-storage",
       "source_blob_id": "f391257d6aecbd2c0692be206ae13c50660b22d8",
-      "destination_locator": "storage"
+      "destination_locator": "VinOfflineStoreConfig"
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
@@ -682,12 +682,12 @@
       "lines": "44-50",
       "subject": "recently locked decisions",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/**; aria_nbv/**",
-      "destination_verified": false,
+      "canonical_destination": "docs/typst/thesis/development/roadmap.typ#freeze",
+      "destination_verified": true,
       "link_action": "deduplicate against canonical owners",
       "id": "retired-047-locked",
       "source_blob_id": "f391257d6aecbd2c0692be206ae13c50660b22d8",
-      "destination_locator": "locked"
+      "destination_locator": "freeze"
     }
   ],
   "theory_qmd_matrix": [
