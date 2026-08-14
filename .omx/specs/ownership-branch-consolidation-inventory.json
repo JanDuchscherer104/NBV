@@ -28484,7 +28484,7 @@
   "verification": {
     "json_markdown_consistency": "must compare row/source counts before S1 handoff",
     "git_diff_check": "required",
-    "current_status": "inventory intentionally provisional: destination_verified false until materialized",
+    "current_status": "materialized and deletion-ready: all ledger destinations and provenance checks verified",
     "g003_typst_owner_checks": "development compile includes roadmap and M1; submission mode omits both; labels and anchors verified in active sources",
     "g003_rows_verified": [
       "001",
