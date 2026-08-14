@@ -44,7 +44,11 @@ from .zarr_store import (
 
 CandidateGroupField = Literal["position", "strategy", "mixture", "invalid_reason", "policy"]
 CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
-    "position", "strategy", "mixture", "invalid_reason", "policy"
+    "position",
+    "strategy",
+    "mixture",
+    "invalid_reason",
+    "policy",
 )
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}

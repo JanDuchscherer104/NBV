@@ -41,7 +41,9 @@ from tests.rollout_fixtures import build_rollout_records
 
 
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
-    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=71))
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=71)
+    )
     import aria_nbv.rollouts.reporting as reporting
 
     original = reporting.candidate_audit_rows
