@@ -251,7 +251,11 @@ def validate_theory_matrix(rows: Iterable[dict[str, Any]], theory_paths: Iterabl
         path = str(row.get("path", "<missing-path>"))
         seen.add(path)
         if row.get("classification") not in THEORY_CLASSES:
-            errors.append(ValidationError(path, "classification must be keep, thin, or delete"))
+            errors.append(
+                ValidationError(
+                    path, "classification must be deprecated, keep, thin, or delete"
+                )
+            )
         if row.get("classification") != "delete" and not _nonempty(row.get("canonical_destination")):
             errors.append(ValidationError(path, "retained page requires canonical_destination"))
         if not isinstance(row.get("inbound_links"), list) or not isinstance(row.get("citation_disposition"), str):
@@ -269,10 +273,14 @@ def validate_theory_topology(rows: Iterable[dict[str, Any]], root: Path) -> list
         path = str(row.get("path", "<missing-path>"))
         normalized = _normalized_path(path, root)
         if normalized is None:
-            errors.append(ValidationError(path, "theory path must be repository-relative")); continue
+            errors.append(
+                ValidationError(path, "theory path must be repository-relative")
+            )
+            continue
         candidate = root / normalized
         if not candidate.is_file():
-            errors.append(ValidationError(path, "theory page does not exist")); continue
+            errors.append(ValidationError(path, "theory page does not exist"))
+            continue
         text = candidate.read_text(encoding="utf-8")
         frontmatter = text.split("\n---\n", 1)[0] if text.startswith("---\n") else ""
         for key, expected in (("phase", "archive"), ("status", "deprecated"), ("owner", "docs")):
