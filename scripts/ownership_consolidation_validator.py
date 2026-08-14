@@ -166,16 +166,17 @@ def _is_tracked_file(root: Path, relative: str) -> bool:
     return result.returncode == 0 and result.stdout.strip() == relative
 
 
-def _matches_head_blob(root: Path, relative: str) -> bool:
+def _file_digests(root: Path, relative: str) -> tuple[str, str] | None:
     candidate = root / relative
     if not candidate.is_file():
         return False
-    expected = subprocess.run(["git", "rev-parse", f"HEAD:{relative}"], cwd=root, capture_output=True, text=True)
-    actual = subprocess.run(["git", "hash-object", str(candidate)], cwd=root, capture_output=True, text=True)
-    return expected.returncode == 0 and actual.returncode == 0 and expected.stdout.strip() == actual.stdout.strip()
+    git_hash = subprocess.run(["git", "hash-object", str(candidate)], cwd=root, capture_output=True, text=True)
+    if git_hash.returncode != 0:
+        return None
+    return git_hash.stdout.strip(), hashlib.sha256(candidate.read_bytes()).hexdigest()
 
 
-def _frozen_provenance_classes(root: Path) -> dict[str, str]:
+def _frozen_provenance_receipts(root: Path) -> dict[str, dict[str, str]]:
     """Load the exact path/class receipt set frozen by the migration inventory."""
     inventory = root / ".omx/specs/ownership-branch-consolidation-inventory.json"
     try:
@@ -184,9 +185,10 @@ def _frozen_provenance_classes(root: Path) -> dict[str, str]:
     except (OSError, KeyError, TypeError, json.JSONDecodeError):
         return {}
     return {
-        str(ref["path"]): str(ref["classification"])
+        str(ref["path"]): ref
         for ref in refs
         if isinstance(ref, dict) and isinstance(ref.get("path"), str) and isinstance(ref.get("classification"), str)
+        and isinstance(ref.get("blob_oid"), str) and isinstance(ref.get("content_sha256"), str)
     }
 
 
@@ -194,20 +196,15 @@ def _bounded_provenance(path: str, classification: str, root: Path) -> bool:
     normalized = _normalized_path(path, root)
     if normalized is None:
         return False
-    frozen = _frozen_provenance_classes(root)
+    frozen = _frozen_provenance_receipts(root)
     if normalized in frozen:
-        frozen_class = frozen[normalized]
+        receipt = frozen[normalized]
+        frozen_class = str(receipt["classification"])
         compatible = frozen_class == classification or {frozen_class, classification} == {"dated-history", "archive-provenance"}
-        immutable = "/transcripts/" in normalized or "/history/" in normalized or normalized.startswith(".agents/archive/")
-        return compatible and _is_tracked_file(root, normalized) and (not immutable or _matches_head_blob(root, normalized))
-    if normalized in KNOWN_MIGRATION_RECEIPTS:
-        return True
-    if normalized.startswith(".omx/specs/") and _is_tracked_file(root, normalized):
-        return True
-    if classification == "resolved-provenance":
-        return (normalized in RESOLVED_PROVENANCE_PATHS or normalized.startswith(".agents/memory/transcripts/")) and _is_tracked_file(root, normalized)
-    if classification in {"dated-history", "archive-provenance"}:
-        return _is_tracked_file(root, normalized)
+        if normalized == ".omx/specs/ownership-branch-consolidation-inventory.json":
+            return compatible and normalized in KNOWN_MIGRATION_RECEIPTS and _is_tracked_file(root, normalized)
+        digests = _file_digests(root, normalized)
+        return compatible and digests is not None and digests == (receipt["blob_oid"], receipt["content_sha256"])
     return False
 
 
@@ -281,7 +278,10 @@ def validate_theory_topology(rows: Iterable[dict[str, Any]], root: Path) -> list
         if not candidate.is_file():
             errors.append(ValidationError(path, "theory page does not exist"))
             continue
-        text = candidate.read_text(encoding="utf-8")
+        try:
+            text = candidate.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
         frontmatter = text.split("\n---\n", 1)[0] if text.startswith("---\n") else ""
         for key, expected in (("phase", "archive"), ("status", "deprecated"), ("owner", "docs")):
             if not re.search(rf"(?m)^{key}:\s*{re.escape(expected)}\s*$", frontmatter):
@@ -353,17 +353,30 @@ def validate_source_blobs(rows: Iterable[dict[str, Any]], root: Path, *, receipt
 
 def validate_repository_sinks(root: Path, refs: Iterable[dict[str, Any]]) -> list[ValidationError]:
     texts: list[tuple[str, str]] = []
-    for ref in refs:
-        path = ref.get("path") if isinstance(ref, dict) else None
-        if not isinstance(path, str):
-            continue
-        classification = classify_reference(path)
-        if classification in ALLOWED_REFERENCE_CLASSES and _bounded_provenance(path, classification, root):
+    paths = {ref.get("path") for ref in refs if isinstance(ref, dict) and isinstance(ref.get("path"), str)}
+    tracked = subprocess.run(["git", "ls-files", "--", ".agents/memory/transcripts", ".agents/memory/history", ".agents/archive", ".omx/specs"], cwd=root, capture_output=True, text=True)
+    if tracked.returncode == 0:
+        paths.update(line.strip() for line in tracked.stdout.splitlines() if line.strip())
+    errors: list[ValidationError] = []
+    frozen = _frozen_provenance_receipts(root)
+    for path in sorted(paths):
+        classification = str(frozen[path]["classification"]) if path in frozen else classify_reference(path)
+        bounded = classification in ALLOWED_REFERENCE_CLASSES and _bounded_provenance(path, classification, root)
+        if path in frozen and not bounded:
+            errors.append(ValidationError(path, "frozen provenance receipt blob/hash mismatch"))
             continue
         candidate = root / path
-        if candidate.is_file():
-            texts.append((path, candidate.read_text(encoding="utf-8")))
-    return validate_no_generic_sinks(texts)
+        if not candidate.is_file() or bounded:
+            continue
+        try:
+            text = candidate.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        texts.append((path, text))
+        if re.search(r"(?im)(?:promotion[_ ]target|canonical(?:[_ ]destination)?|canonical_updates_needed)\s*[:=].*(?:roadmap\.qmd|questions\.qmd|m1_contract_report\.qmd|PROJECT_STATE\.md|DECISIONS\.md|GOTCHAS\.md|OPEN_QUESTIONS\.md)", text):
+            errors.append(ValidationError(path, "unfrozen provenance contains retired-source marker"))
+    errors.extend(validate_no_generic_sinks(texts))
+    return errors
 
 
 def validate_typst_contract(text: str, *, future_integration: bool = False) -> list[ValidationError]:

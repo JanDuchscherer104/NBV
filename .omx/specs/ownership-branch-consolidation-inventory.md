@@ -60,7 +60,7 @@ retain the source path and blob hash.
 ## Theory-QMD matrix
 
 All 8 theory pages are retained only as **deprecated** docs-owned archive,
-navigation, or external-background references. Their content hashes are recorded
+navigation, or external-background references. Their immutable blob OIDs and content hashes are recorded
 in the JSON receipt; Typst and Python owners remain authoritative. This is not
 deletion approval: inbound-link and citation scans remain required, and every
 candidate records a planned Typst destination with `destination_verified: true`.
