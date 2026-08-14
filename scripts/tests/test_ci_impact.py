@@ -54,7 +54,10 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertIn("jobs:\n  ci:\n", workflow)
         self.assertNotIn("ci-gate", workflow)
-        self.assertIn('pip install --upgrade pip PyYAML "graphifyy==0.9.31"', workflow)
+        self.assertIn(
+            'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"',
+            workflow,
+        )
         self.assertIn(
             "make agents-db-validate check-agent-memory scaffold-audit", workflow
         )
@@ -63,6 +66,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
+        self.assertIn('"scripts/ownership_consolidation_validator.py"', workflow)
         self.assertIn('"scripts/scaffold_audit.py"', workflow)
         self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
@@ -73,6 +77,10 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_worktree_seed.py"', workflow)
+        self.assertIn(
+            '"scripts/tests/test_ownership_consolidation_validator.py"', workflow
+        )
+        self.assertIn('"scripts/tests/test_validate_agent_memory_retired.py"', workflow)
         self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
         self.assertIn("bash scripts/tests/test_setup_worktree_env.sh", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_freshness.py", workflow)
@@ -83,6 +91,12 @@ class SelectionTests(unittest.TestCase):
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )
+        self.assertIn(
+            "make ownership-consolidation-contract PYTHON_INTERPRETER=python",
+            workflow,
+        )
+        self.assertIn("steps.impact.outputs.scaffold == 'true' ||", workflow)
+        self.assertIn("steps.impact.outputs.docs == 'true'", workflow)
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn(
             "docs-render-core: graphify-projection-self-test "
@@ -95,10 +109,6 @@ class SelectionTests(unittest.TestCase):
         self.assertIn(
             "scaffold-check: agents-db-validate check-agent-memory "
             "scaffold-audit scaffold-audit-self-test graphify-state-check",
-            makefile,
-        )
-        self.assertIn(
-            "ownership-consolidation-contract",
             makefile,
         )
         self.assertIn(

@@ -4,8 +4,9 @@ Use this reference when a task needs current project truth or sources disagree.
 
 ## Role Split
 
-- Thesis narrative and research questions: `docs/typst/thesis/main.typ` and its
-  active sections own current prose, objectives, boundaries, and RQ1--RQ4.
+- Thesis narrative and research questions: `docs/typst/thesis/main.typ` and
+  `docs/typst/thesis/sections/01-research-questions.typ` own current prose,
+  objectives, boundaries, and RQ1--RQ4.
   Development-only planning and gate views are owned by
   `docs/typst/thesis/development/roadmap.typ` and
   `docs/typst/thesis/development/m1-contract-report.typ`, guarded by

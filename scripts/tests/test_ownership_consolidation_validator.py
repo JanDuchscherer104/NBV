@@ -20,6 +20,7 @@ from ownership_consolidation_validator import (  # noqa: E402
     validate_repository_sinks,
     validate_no_generic_sinks,
     validate_reference_classes,
+    validate_source_order_owners,
     validate_theory_matrix,
     validate_typst_contract,
 )
@@ -220,6 +221,20 @@ class OwnershipValidatorTests(unittest.TestCase):
     def test_typst_contract_can_be_marked_future_integration(self) -> None:
         assert validate_typst_contract("", future_integration=True) == []
         assert validate_typst_contract("", future_integration=False)
+
+    def test_source_order_must_link_all_three_absorbed_typst_owners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / ".agents/references/source_order.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "`docs/typst/thesis/development/roadmap.typ`\n"
+                "`docs/typst/thesis/development/m1-contract-report.typ`\n",
+                encoding="utf-8",
+            )
+            errors = validate_source_order_owners(root)
+        assert len(errors) == 1
+        assert "01-research-questions.typ" in str(errors[0])
 
 
 if __name__ == "__main__":
