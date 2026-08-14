@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -322,6 +322,20 @@ class CampaignStatus:
     active_process_group: int | None = None
     active_started_at: str | None = None
 
+    _VALID_STATES: ClassVar[frozenset[str]] = frozenset(
+        {
+            "not_started",
+            "planned",
+            "preflight_passed",
+            "smoke_passed",
+            "running",
+            "completed",
+            "completed_with_failures",
+            "blocked",
+            "conflicted",
+        }
+    )
+
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignStatus":
         required = {"state", "counts", "plan_hash", "updated_at"}
@@ -329,9 +343,15 @@ class CampaignStatus:
             raise ValueError("status is missing required fields")
         if payload.get("schema_version", "campaign-status-v1") not in {"campaign-status-v1", "campaign-status-v2"}:
             raise ValueError("unsupported campaign status schema version")
+        state = str(payload["state"])
+        if state not in cls._VALID_STATES:
+            raise ValueError("unsupported campaign status state")
+        counts = payload["counts"]
+        if not isinstance(counts, dict) or any(not isinstance(v, int) or v < 0 for v in counts.values()):
+            raise ValueError("campaign status counts must be non-negative integers")
         return cls(
-            str(payload["state"]),
-            {str(k): int(v) for k, v in payload["counts"].items()},
+            state,
+            {str(k): int(v) for k, v in counts.items()},
             str(payload["plan_hash"]),
             str(payload["updated_at"]),
             payload.get("current_work_unit"),
@@ -1786,6 +1806,7 @@ class CudaRolloutCampaign:
         active_started_at: str | None = None,
         started_at: str | None = None,
         finished_at: str | None = None,
+        last_unit: CampaignWorkUnit | None = None,
     ) -> CampaignStatus:
         counts = {o.value: 0 for o in CampaignOutcome}
         for result in results:
@@ -1862,20 +1883,26 @@ class CudaRolloutCampaign:
             except (OSError, ValueError, json.JSONDecodeError):
                 smoke_summary = {"outcome": "invalid", "validated": False}
                 latest_failure = latest_failure or "invalid_smoke_evidence"
+        active = stage in {"running", "worker", "preflight", "promotion", *[p.name for p in self.config.profiles]}
+        if stage in {CampaignOutcome.BLOCKED.value, CampaignOutcome.CONFLICTED.value, "terminal"}:
+            active = False
+        retained_last = last_unit or self._persisted_last_unit(plan)
+        if retained_last is None and not active:
+            retained_last = current_unit
         return CampaignStatus(
             state,
             counts,
             plan.plan_hash,
             self.utc_now().isoformat(),
-            current_unit.work_unit_hash if current_unit else None,
-            current_unit.target_id if current_unit else None,
-            current_unit.profile if current_unit else None,
+            current_unit.work_unit_hash if current_unit and active else None,
+            current_unit.target_id if current_unit and active else None,
+            current_unit.profile if current_unit and active else None,
             stage,
             float(elapsed_seconds),
             latest_failure,
             campaign_id=self.config.campaign_id,
             config_hash=plan.config_hash,
-            last_work_unit=current_unit.work_unit_hash if current_unit else None,
+            last_work_unit=retained_last.work_unit_hash if retained_last else None,
             bounded_error=bounded_error,
             smoke_evidence_hash=smoke_hash,
             smoke_evidence_summary=smoke_summary,
@@ -1886,6 +1913,19 @@ class CudaRolloutCampaign:
             started_at=started_at,
             finished_at=finished_at,
         )
+
+    def _persisted_last_unit(self, plan: CampaignPlan) -> CampaignWorkUnit | None:
+        """Read only the prior typed terminal identity for status continuity."""
+        target = self.config.output_root / "status.json"
+        if not target.exists():
+            return None
+        try:
+            previous = CampaignStatus.from_jsonable(json.loads(target.read_text(encoding="utf-8")))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if previous.plan_hash not in {"", plan.plan_hash}:
+            return None
+        return next((unit for unit in plan.work_units if unit.work_unit_hash == previous.last_work_unit), None)
 
     def run_with_watchdog(
         self, unit: CampaignWorkUnit, worker: Callable[[CampaignWorkUnit], Any], *, timeout: float | None = None
@@ -2102,9 +2142,56 @@ class CudaRolloutCampaign:
                 or (status.config_hash and status.config_hash != plan.config_hash)
             ):
                 raise ValueError("campaign status plan identity mismatch")
+            if plan is not None:
+                self._cross_check_status_evidence(status, plan)
             return status
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             raise ValueError("invalid campaign status") from exc
+
+    def _cross_check_status_evidence(self, status: CampaignStatus, plan: CampaignPlan) -> None:
+        """Reject stale or divergent status when canonical progress exists."""
+        events = self.read_events(plan=plan)
+        if not events:
+            return
+        if status.state in {"completed", "completed_with_failures"} and not any(
+            event.kind == "campaign_finished" for event in events
+        ):
+            raise ValueError("terminal status lacks campaign_finished evidence")
+        if status.state == "running" and not any(event.kind == "campaign_started" for event in events):
+            raise ValueError("running status lacks campaign_started evidence")
+        latest: dict[str, str] = {}
+        for event in events:
+            if event.work_unit_hash and event.kind.startswith("unit_") and event.outcome:
+                latest[event.work_unit_hash] = event.outcome
+        if not latest:
+            return
+        counts = {outcome.value: 0 for outcome in CampaignOutcome}
+        for outcome in latest.values():
+            counts[outcome] = counts.get(outcome, 0) + 1
+        counts["pending"] = max(0, len(plan.work_units) - len(latest))
+        for key, value in counts.items():
+            if int(status.counts.get(key, 0)) != value:
+                raise ValueError("campaign status diverges from canonical events")
+        for work_unit_hash, outcome in latest.items():
+            # A skipped unit may be produced by the injected resume seam before
+            # a shard path exists; successful promotions always require the
+            # canonical validated leaf below.
+            if outcome != CampaignOutcome.SUCCEEDED.value:
+                continue
+            unit = next((item for item in plan.work_units if item.work_unit_hash == work_unit_hash), None)
+            if unit is None:
+                raise ValueError("event references unknown work unit")
+            from .shards import read_validated_completed_shard
+
+            if (
+                read_validated_completed_shard(
+                    self.config.output_root / "shards" / work_unit_hash,
+                    shard_entry=self.shard_entry_for_unit(plan, unit),
+                    writer_config_hash=plan.writer_config_hash,
+                )
+                is None
+            ):
+                raise ValueError("successful status lacks validated shard evidence")
 
     def progress_summary(self, plan: CampaignPlan | None = None) -> dict[str, Any]:
         """Presentation-free status/events read model for CLI and UI adapters."""
@@ -2142,12 +2229,13 @@ class CudaRolloutCampaign:
 
             for unit in plan.work_units:
                 try:
-                    writer_hash = unit.writer_config_hash or plan.writer_config_hash
-                    entry = replace(self.shard_entry_for_unit(plan, unit), writer_config_hash=writer_hash)
+                    entry = replace(self.shard_entry_for_unit(plan, unit), writer_config_hash=plan.writer_config_hash)
                 except (TypeError, ValueError, KeyError):
                     continue
                 path = shards_root / unit.work_unit_hash
-                evidence = read_validated_completed_shard(path, shard_entry=entry)
+                evidence = read_validated_completed_shard(
+                    path, shard_entry=entry, writer_config_hash=plan.writer_config_hash
+                )
                 if evidence is None:
                     continue
                 binding = entry.campaign_binding.to_jsonable() if entry.campaign_binding else {}

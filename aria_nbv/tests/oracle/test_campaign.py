@@ -3,7 +3,7 @@
 import json
 import signal
 import subprocess
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -414,6 +414,36 @@ def test_status_exposes_current_unit_profile_stage_and_failure_reason(tmp_path):
     assert status.latest_failure_reason == "timeout"
 
 
+def test_status_separates_active_and_last_work_unit(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    active = campaign.status(plan, current_unit=plan.work_units[0], stage="worker")
+    terminal = campaign.status(plan, current_unit=plan.work_units[0], stage="failed")
+    assert active.current_work_unit == plan.work_units[0].work_unit_hash
+    assert active.last_work_unit is None
+    assert terminal.current_work_unit is None
+    assert terminal.last_work_unit == plan.work_units[0].work_unit_hash
+
+
+def test_status_rejects_negative_counts_and_divergent_event_counts(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    status = campaign.status(plan, stage="running")
+    payload = asdict(status)
+    payload["counts"]["pending"] = -1
+    with pytest.raises(ValueError, match="non-negative"):
+        CampaignStatus.from_jsonable(payload)
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.append_event(
+        campaign._event(plan, "unit_failed", unit=plan.work_units[0], outcome="failed")
+    )
+    payload = asdict(status)
+    payload["counts"]["pending"] = 0
+    campaign.write_status(CampaignStatus.from_jsonable(payload))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
 def test_status_does_not_invent_coordinator_worker_identity(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -773,12 +803,15 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
         )
         for unit in plan.work_units
     )
-    plan = replace(plan, work_units=units)
+    plan = replace(plan, work_units=units, writer_config_hash="planned-writer")
     entries = {unit.work_unit_hash: campaign.shard_entry_for_unit(plan, unit) for unit in plan.work_units}
     monkeypatch.setattr(campaign, "shard_entry_for_unit", lambda _plan, unit: entries[unit.work_unit_hash])
     from aria_nbv.oracle.pipelines import shards as shard_module
 
+    seen_writer_hashes = []
+
     def read(path, *, shard_entry, writer_config_hash=""):
+        seen_writer_hashes.append(writer_config_hash)
         if path.name != plan.work_units[0].work_unit_hash:
             return None
         return {
@@ -794,6 +827,7 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
     assert [row["work_unit_hash"] for row in artifacts] == [plan.work_units[0].work_unit_hash]
     assert artifacts[0]["store_path"] == str((shards / plan.work_units[0].work_unit_hash).resolve())
     assert artifacts[0]["effective_writer_config_hash"] == "effective"
+    assert seen_writer_hashes == [plan.writer_config_hash] * len(plan.work_units)
     assert "owner_evidence" not in artifacts[0]
     assert not any(row["work_unit_hash"] == "unrelated" for row in artifacts)
 

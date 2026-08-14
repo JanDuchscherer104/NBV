@@ -175,6 +175,7 @@ def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, m
             return SimpleNamespace(plan_hash="plan")
 
         def preflight(self, *args, **kwargs):
+            calls.append("preflight")
             return SimpleNamespace(ok=True)
 
         def smoke_evidence(self, plan):
@@ -188,6 +189,7 @@ def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, m
     assert result.exit_code == 0
     assert message in result.stdout
     assert len(calls) == 1
+    assert "preflight" not in calls
 
 
 def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch, capsys) -> None:

@@ -259,11 +259,6 @@ def campaign_run(
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
     plan = campaign.load_plan(plan_path)
-    campaign.preflight(
-        nested_configs=(writer_cfg,) if writer_cfg is not None else (),
-        plan_path=plan_path,
-        writer_config_path=getattr(campaign.config, "writer_config_path", None),
-    )
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
     _require_smoke_evidence(campaign, plan)
     campaign.run(
@@ -290,11 +285,6 @@ def campaign_resume(
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
     plan = campaign.load_plan(plan_path)
-    campaign.preflight(
-        nested_configs=(writer_cfg,) if writer_cfg is not None else (),
-        plan_path=plan_path,
-        writer_config_path=getattr(campaign.config, "writer_config_path", None),
-    )
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
     _require_smoke_evidence(campaign, plan)
     campaign.run(
