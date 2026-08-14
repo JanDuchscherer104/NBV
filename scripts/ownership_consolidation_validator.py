@@ -165,10 +165,39 @@ def _is_tracked_file(root: Path, relative: str) -> bool:
     return result.returncode == 0 and result.stdout.strip() == relative
 
 
+def _matches_head_blob(root: Path, relative: str) -> bool:
+    candidate = root / relative
+    if not candidate.is_file():
+        return False
+    expected = subprocess.run(["git", "rev-parse", f"HEAD:{relative}"], cwd=root, capture_output=True, text=True)
+    actual = subprocess.run(["git", "hash-object", str(candidate)], cwd=root, capture_output=True, text=True)
+    return expected.returncode == 0 and actual.returncode == 0 and expected.stdout.strip() == actual.stdout.strip()
+
+
+def _frozen_provenance_classes(root: Path) -> dict[str, str]:
+    """Load the exact path/class receipt set frozen by the migration inventory."""
+    inventory = root / ".omx/specs/ownership-branch-consolidation-inventory.json"
+    try:
+        data = json.loads(inventory.read_text(encoding="utf-8"))
+        refs = data["consumer_inventory"]["references"]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return {}
+    return {
+        str(ref["path"]): str(ref["classification"])
+        for ref in refs
+        if isinstance(ref, dict) and isinstance(ref.get("path"), str) and isinstance(ref.get("classification"), str)
+    }
+
+
 def _bounded_provenance(path: str, classification: str, root: Path) -> bool:
     normalized = _normalized_path(path, root)
     if normalized is None:
         return False
+    frozen = _frozen_provenance_classes(root)
+    if normalized in frozen:
+        frozen_class = frozen[normalized]
+        compatible = frozen_class == classification or {frozen_class, classification} == {"dated-history", "archive-provenance"}
+        return compatible and _is_tracked_file(root, normalized) and _matches_head_blob(root, normalized)
     if normalized in KNOWN_MIGRATION_RECEIPTS:
         return True
     if normalized.startswith(".omx/specs/") and _is_tracked_file(root, normalized):

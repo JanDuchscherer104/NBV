@@ -112,6 +112,16 @@ class OwnershipValidatorTests(unittest.TestCase):
         errors = validate_reference_classes(references, Path(__file__).parents[2])
         assert len(errors) == len(references)
 
+    def test_new_tracked_looking_provenance_paths_are_not_frozen_receipts(self) -> None:
+        references = [
+            {"path": ".agents/memory/transcripts/user/2099-01-01/new.jsonl"},
+            {"path": ".agents/memory/history/2099/01/new.md"},
+            {"path": ".agents/archive/2099/new.md"},
+            {"path": ".omx/specs/new-receipt.json"},
+        ]
+        errors = validate_reference_classes(references, Path(__file__).parents[2])
+        assert len(errors) == len(references)
+
     def test_inventory_uses_supplied_root_for_materialization(self) -> None:
         inventory = json.loads((Path(__file__).parents[2] / ".omx/specs/ownership-branch-consolidation-inventory.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as directory:

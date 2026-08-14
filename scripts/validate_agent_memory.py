@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,8 @@ RETIRED_SOURCE_PATHS = {
     ".agents/memory/state/GOTCHAS.md",
     ".agents/memory/state/OPEN_QUESTIONS.md",
 }
+LEGACY_RECEIPT_CUTOFF = date(2026, 8, 13)
+LEGACY_RECEIPT_STATUSES = {"done", "legacy-imported", "archived"}
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -109,6 +112,17 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         raise ValueError(f"unsupported frontmatter line: {raw_line!r}")
 
     return data
+
+
+def allows_retired_canonical_update(frontmatter: dict[str, object], update_path: str) -> bool:
+    """Allow only pre-cutoff, completed historical receipts for retired paths."""
+    if update_path not in RETIRED_SOURCE_PATHS:
+        return False
+    try:
+        historical_date = date.fromisoformat(str(frontmatter.get("date")))
+    except ValueError:
+        return False
+    return historical_date <= LEGACY_RECEIPT_CUTOFF and str(frontmatter.get("status", "")) in LEGACY_RECEIPT_STATUSES
 
 
 def check_codex_notes() -> list[str]:
@@ -196,7 +210,11 @@ def check_history_records() -> list[str]:
                 errors.append(f"{rel}: empty path in `canonical_updates_needed`")
                 continue
             resolved = REPO_ROOT / update_text
-            if not resolved.exists() and update_text not in RETIRED_SOURCE_PATHS:
+            if not resolved.exists() and update_text in RETIRED_SOURCE_PATHS:
+                if allows_retired_canonical_update(frontmatter, update_text):
+                    continue
+                errors.append(f"{rel}: retired canonical update requires a pre-cutoff legacy record: {update_text}")
+            elif not resolved.exists():
                 errors.append(
                     f"{rel}: canonical update path does not exist: {update_text}"
                 )
