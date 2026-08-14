@@ -15,7 +15,7 @@ format: html
 
 **Local source mirrors.** SCONE source: [`camera_ready.tex`](../../literature/tex-src/arXiv-SCONE/camera_ready.tex), [`camera_ready_2_approach.tex`](../../literature/tex-src/arXiv-SCONE/camera_ready_2_approach.tex), and [`camera_ready_6_appendix.tex`](../../literature/tex-src/arXiv-SCONE/camera_ready_6_appendix.tex). FisherRF source: [`main.tex`](../../literature/tex-src/arXiv-FisherRF/main.tex), [`sec/method.tex`](../../literature/tex-src/arXiv-FisherRF/sec/method.tex), and [`sec/exps.tex`](../../literature/tex-src/arXiv-FisherRF/sec/exps.tex). The manifest entries live in [`sources.jsonl`](../../literature/sources.jsonl).
 
-**Related ARIA-NBV pages.** [RRI theory](../theory/rri_theory.qmd), [active 3DGS and targeted NBV](active_3dgs_nbv.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../thesis/questions.qmd).
+**Related ARIA-NBV pages.** [RRI theory](../theory/rri_theory.qmd), [active 3DGS and targeted NBV](active_3dgs_nbv.qmd), [RL planning](rl_planning.qmd), and [target-aware thesis questions](../../typst/thesis/sections/01-research-questions.typ).
 
 ### Executive Takeaway
 

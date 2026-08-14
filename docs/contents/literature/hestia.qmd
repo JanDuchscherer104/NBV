@@ -13,7 +13,7 @@ format: html
 
 **Local source.** [`main.tex`](../../literature/tex-src/arXiv-Hestia/main.tex) and section sources under [`tex-src/arXiv-Hestia/sec/`](../../literature/tex-src/arXiv-Hestia/sec/).
 
-**Related ARIA-NBV pages.** [GenNBV](gen_nbv.qmd), [RL planning](rl_planning.qmd), and [roadmap](../thesis/roadmap.qmd).
+**Related ARIA-NBV pages.** [GenNBV](gen_nbv.qmd), [RL planning](rl_planning.qmd), and [roadmap](../../typst/thesis/development/roadmap.typ).
 
 ### Core contribution
 

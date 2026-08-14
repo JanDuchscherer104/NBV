@@ -14,8 +14,8 @@ tags: [read-only, project-ideas, future-directions, multi-step rri based rl]
 
 ::: {.callout-note}
 This page is retained as renderable scratch history. Current thesis decisions
-belong in [roadmap](thesis/roadmap.qmd), active research questions belong in
-[questions](thesis/questions.qmd), and actionable work belongs in the
+belong in [roadmap](../typst/thesis/development/roadmap.typ), active research questions belong in
+[questions](../typst/thesis/sections/01-research-questions.typ), and actionable work belongs in the
 `.agents/*.toml` backlog.
 :::
 

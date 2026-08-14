@@ -13,7 +13,7 @@ This page owns the source-backed RL distillation used for thesis writing. The fo
 
 **Primary sources.** Trajectory Transformer [@TrajectoryTransformer-janner2021], Gumbel-Top-k / stochastic beam search [@GumbelTopK-kool2019], DQN [@DBLP:journals/corr/MnihKSGAWR13], Double DQN [@DoubleDQN-vanHasselt2015], Implicit Q-Learning [@IQL-kostrikov2021], Deep Energy-Based Policies / soft Q-learning [@DeepEnergyPolicies-haarnoja2017], PPO [@PPO-schulman2017], and SAC [@SAC-haarnoja2018].
 
-**Related ARIA-NBV pages.** [rollout contract](../theory/rl_planning.qmd), [VIN-NBV](vin_nbv.qmd), [GenNBV](gen_nbv.qmd), [Hestia](hestia.qmd), [roadmap](../thesis/roadmap.qmd), and [research questions](../thesis/questions.qmd).
+**Related ARIA-NBV pages.** [rollout contract](../theory/rl_planning.qmd), [VIN-NBV](vin_nbv.qmd), [GenNBV](gen_nbv.qmd), [Hestia](hestia.qmd), [roadmap](../../typst/thesis/development/roadmap.typ), and [research questions](../../typst/thesis/sections/01-research-questions.typ).
 
 ### Core contribution
 

@@ -38,6 +38,15 @@ REQUIRED_NATIVE_KEYS = {
     "confidence",
     "canonical_updates_needed",
 }
+RETIRED_SOURCE_PATHS = {
+    "docs/contents/thesis/roadmap.qmd",
+    "docs/contents/thesis/questions.qmd",
+    "docs/contents/thesis/m1_contract_report.qmd",
+    ".agents/memory/state/PROJECT_STATE.md",
+    ".agents/memory/state/DECISIONS.md",
+    ".agents/memory/state/GOTCHAS.md",
+    ".agents/memory/state/OPEN_QUESTIONS.md",
+}
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -187,7 +196,7 @@ def check_history_records() -> list[str]:
                 errors.append(f"{rel}: empty path in `canonical_updates_needed`")
                 continue
             resolved = REPO_ROOT / update_text
-            if not resolved.exists():
+            if not resolved.exists() and update_text not in RETIRED_SOURCE_PATHS:
                 errors.append(
                     f"{rel}: canonical update path does not exist: {update_text}"
                 )

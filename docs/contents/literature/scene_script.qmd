@@ -13,7 +13,7 @@ format: html
 
 **Local source.** [`main.tex`](../../literature/tex-src/arXiv-scene-script/main.tex), [`sections/dataset.tex`](../../literature/tex-src/arXiv-scene-script/sections/dataset.tex), and [`sections/structured_scene_language.tex`](../../literature/tex-src/arXiv-scene-script/sections/structured_scene_language.tex).
 
-**Related ARIA-NBV pages.** [Project Aria](project_aria.qmd), [EFM3D/EVL](efm3d.qmd), and [target-aware research questions](../thesis/questions.qmd).
+**Related ARIA-NBV pages.** [Project Aria](project_aria.qmd), [EFM3D/EVL](efm3d.qmd), and [target-aware research questions](../../typst/thesis/sections/01-research-questions.typ).
 
 ### Core contribution
 
