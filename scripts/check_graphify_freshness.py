@@ -18,6 +18,7 @@ PROJECTION_INDEX = Path("graphify-input/index.md")
 GRAPH = Path("graphify-out/graph.json")
 MANIFEST = Path("graphify-out/manifest.json")
 INTERPRETER = Path("graphify-out/.graphify_python")
+ROOT_MARKER = Path("graphify-out/.graphify_root")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
 PINNED_GRAPHIFY_VERSION = "0.9.31"
@@ -54,6 +55,17 @@ def _is_ancestor(root: Path, older: str, newer: str) -> bool:
 def _regular(path: Path, label: str) -> None:
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"missing or unsafe {label}: {path.as_posix()}")
+
+
+def _local_regular(root: Path, relative: Path, label: str) -> Path:
+    current = root
+    for part in relative.parent.parts:
+        current /= part
+        if current.is_symlink() or not current.is_dir():
+            raise ValueError(f"missing or unsafe {label} parent: {current.as_posix()}")
+    path = root / relative
+    _regular(path, label)
+    return path
 
 
 def _json_object(path: Path, label: str) -> dict[str, Any]:
@@ -266,21 +278,29 @@ def _detector_stale_sources(
     root: Path, ast: dict[str, Any], semantic: dict[str, Any]
 ) -> list[str]:
     stale: set[str] = set()
+    supported_kinds = {"code", "document", "paper", "image", "video"}
     for result, accepted in (
         (ast, {"code"}),
         (semantic, {"document", "paper", "image"}),
     ):
+        if result.get("scan_root") != str(root.resolve()):
+            raise ValueError("Graphify detector reported an unexpected scan_root")
+        for key in ("unclassified", "walk_errors", "skipped_sensitive"):
+            values = result.get(key)
+            if not isinstance(values, list):
+                raise ValueError(f"Graphify detector has invalid {key}")
+            if values:
+                raise ValueError(f"Graphify detector reported {key}")
         files = result.get("new_files")
-        if not isinstance(files, dict):
+        if not isinstance(files, dict) or set(files) != supported_kinds:
             raise ValueError("Graphify detector has invalid new_files")
         for kind, paths in files.items():
-            if kind not in accepted:
-                continue
             if not isinstance(paths, list) or any(
                 not isinstance(path, str) for path in paths
             ):
                 raise ValueError("Graphify detector has invalid source paths")
-            stale.update(_contained_existing(root, path) for path in paths)
+            if kind in accepted:
+                stale.update(_contained_existing(root, path) for path in paths)
         for key in ("deleted_files", "excluded_files"):
             values = result.get(key)
             if not isinstance(values, list) or any(
@@ -290,13 +310,14 @@ def _detector_stale_sources(
             if values:
                 raise ValueError(f"Graphify detector reported {key}")
         files = result.get("files")
-        if not isinstance(files, dict):
+        if not isinstance(files, dict) or set(files) != supported_kinds:
             raise ValueError("Graphify detector has invalid files")
-        video = files.get("video", [])
-        if not isinstance(video, list) or any(
-            not isinstance(path, str) for path in video
-        ):
-            raise ValueError("Graphify detector has invalid video files")
+        for paths in files.values():
+            if not isinstance(paths, list) or any(
+                not isinstance(path, str) for path in paths
+            ):
+                raise ValueError("Graphify detector has invalid source paths")
+        video = files["video"]
         if video:
             raise ValueError("Graphify detector reported unsupported video sources")
     if len(stale) > MAX_STALE_SOURCES:
@@ -336,8 +357,22 @@ def check(root: Path) -> dict[str, Any]:
     reasons: list[str] = []
     try:
         head = _head(root)
+        projection_index = _local_regular(root, PROJECTION_INDEX, "projection index")
+        root_marker = _local_regular(root, ROOT_MARKER, "Graphify root marker")
+        try:
+            marker_value = root_marker.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise ValueError(f"invalid Graphify root marker: {error}") from error
+        if marker_value != f"{root}\n":
+            raise ValueError("Graphify root marker is not bound to this worktree")
+        for relative, label in (
+            (GRAPH, "graph"),
+            (MANIFEST, "manifest"),
+            (INTERPRETER, "Graphify interpreter marker"),
+        ):
+            _local_regular(root, relative, label)
         projection_revision, owner_state, owners = _projection_metadata(
-            root / PROJECTION_INDEX
+            projection_index
         )
         graph_revision = _graph_revision(root)
         if (root / NEEDS_UPDATE).exists() or (root / NEEDS_UPDATE).is_symlink():

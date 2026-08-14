@@ -30,10 +30,18 @@ The live checkout remains `unusable` as of 2026-08-14: its projection-owner
 worktree is dirty and the upstream detector reports deleted manifest entries.
 That is an artifact-repair condition, not a direct-source authority failure.
 
+An independent final review later found fail-open gaps around destination-parent
+symlinks, projection and root-marker validation, and upstream detector coverage
+fields. G006 remediated those gaps with fail-closed parent-chain, marker, scope,
+and detector-result validation. This records remediation evidence, not final
+review approval.
+
 ## Verification
 Focused seed/setup, freshness, upstream-identity, CI-impact, Ruff, Python
 compile, `git diff --check`, agent-memory, agent-DB, and scaffold-audit gates
 were run during the workpackages. Hosted CI is configured to repeat them.
+G006 also added and passed eight focused seed regressions and seven focused
+freshness regressions.
 
 Focused local commits `f01a6f8f`, `ea41f079`, `3ac503e5`, and `15a5c134`
 were created during the completed workpackages. No push or other external

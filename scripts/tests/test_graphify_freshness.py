@@ -14,6 +14,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "scripts/check_graphify_freshness.py"
+sys.path.insert(0, str(ROOT / "scripts"))
+from check_graphify_freshness import _detector_stale_sources  # noqa: E402
 
 
 def graphify_python() -> Path:
@@ -40,7 +42,7 @@ def graphify_python() -> Path:
 class FreshnessTests(unittest.TestCase):
     """Use Graphify's own manifest writer; tests never reproduce its hashes."""
 
-    OWNER = "docs/typst/thesis/main.typ"
+    OWNER = "docs/thesis/main.md"
 
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory(prefix="aria-freshness-")
@@ -58,7 +60,7 @@ class FreshnessTests(unittest.TestCase):
         for relative, content in {
             self.OWNER: "owner\n",
             "src/example.py": "def example(): return 1\n",
-            "seed": "seed\n",
+            "seed.md": "seed\n",
         }.items():
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,6 +113,9 @@ class FreshnessTests(unittest.TestCase):
         (output / ".graphify_python").write_text(
             f"{self.graphify_python}\n", encoding="utf-8"
         )
+        root_marker = output / ".graphify_root"
+        root_marker.unlink(missing_ok=True)
+        root_marker.write_text(f"{self.root.resolve()}\n", encoding="utf-8")
 
     def _write_unsafe_graph(self) -> None:
         (self.root / "graphify-out/graph.json").write_text(
@@ -194,8 +199,8 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         self.assertTrue(index.exists())
 
     def test_ancestor_snapshot_is_usable_stale_and_usable_cli_succeeds(self) -> None:
-        (self.root / "unrelated").write_text("later\n", encoding="utf-8")
-        subprocess.run(["git", "add", "unrelated"], cwd=self.root, check=True)
+        (self.root / "unrelated.md").write_text("later\n", encoding="utf-8")
+        subprocess.run(["git", "add", "unrelated.md"], cwd=self.root, check=True)
         subprocess.run(["git", "commit", "-qm", "later"], cwd=self.root, check=True)
         strict = self.run_checker("--quiet")
         usable = self.run_checker("--quiet", "--usable")
@@ -234,6 +239,73 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
                 self._save_upstream_manifest()
                 mutate()
                 self.assertEqual(self.payload()["state"], "unusable")
+
+    def test_projection_index_symlink_is_unusable_even_when_target_is_in_root(
+        self,
+    ) -> None:
+        index = self.root / "graphify-input/index.md"
+        target = self.root / "graphify-input/index-target.md"
+        target.write_bytes(index.read_bytes())
+        index.unlink()
+        index.symlink_to(target.name)
+
+        self.assertEqual(self.payload()["state"], "unusable")
+
+    def test_graphify_root_must_be_regular_and_exactly_bound(self) -> None:
+        marker = self.root / "graphify-out/.graphify_root"
+        outside = self.root / "root-marker-target"
+        cases = {
+            "missing": lambda: marker.unlink(),
+            "wrong": lambda: marker.write_text("/wrong/root\n", encoding="utf-8"),
+            "symlink": lambda: (
+                outside.write_text(f"{self.root.resolve()}\n", encoding="utf-8"),
+                marker.unlink(),
+                marker.symlink_to(outside),
+            ),
+        }
+        for name, mutate in cases.items():
+            with self.subTest(name=name):
+                self._write_graph()
+                mutate()
+                self.assertEqual(self.payload()["state"], "unusable")
+
+    def test_nonempty_detector_coverage_gaps_are_unusable(self) -> None:
+        empty_files = {
+            kind: [] for kind in ("code", "document", "paper", "image", "video")
+        }
+        base = {
+            "files": empty_files,
+            "new_files": empty_files,
+            "deleted_files": [],
+            "excluded_files": [],
+            "unclassified": [],
+            "walk_errors": [],
+            "skipped_sensitive": [],
+            "scan_root": str(self.root.resolve()),
+        }
+        for field in ("unclassified", "walk_errors", "skipped_sensitive"):
+            with self.subTest(field=field):
+                result = {**base, field: ["coverage-gap"]}
+                with self.assertRaisesRegex(ValueError, field):
+                    _detector_stale_sources(self.root, result, base)
+
+        unhandled = {
+            **base,
+            "new_files": {**empty_files, "audio": []},
+        }
+        with self.assertRaisesRegex(ValueError, "new_files"):
+            _detector_stale_sources(self.root, unhandled, base)
+
+        benign_metadata = {
+            **base,
+            "ignored": ["ignored.txt"],
+            "pruned_noise_dirs": ["cache"],
+            "total_files": 0,
+            "warning": "informational",
+        }
+        self.assertEqual(
+            _detector_stale_sources(self.root, benign_metadata, benign_metadata), []
+        )
 
 
 if __name__ == "__main__":
