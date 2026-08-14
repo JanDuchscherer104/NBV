@@ -41,7 +41,7 @@ path and section/symbol exist and focused verification passes. Deferred action
 never substitutes for migration; it records a pointer plus a pending backlog
 gate.
 
-G003 materialized and verified 30 destination pointers (including the two
+G003 materialized and verified 29 destination pointers (including the two
 deferred promotion-queue rows) against the active Typst owner graph; unresolved
 rows remain intentionally open where the destination is code/setup-owned or
 requires a later evidence gate.
