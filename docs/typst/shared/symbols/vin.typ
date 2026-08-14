@@ -1,3 +1,4 @@
+// VIN scorer inputs, learned features, losses, and compatibility aliases.
 #let vin = (
     // Loss symbol.
     loss: $cal(L)$,
@@ -31,8 +32,9 @@
     n_obs_max: $n_"obs"^"max"$,
     // Inverse-distance std (sigma_rho) from semi-dense tracks.
     inv_dist_std: $sigma_(rho)$,
-    // Min / p95 of inverse-distance std for normalization.
+    // Minimum inverse-distance standard deviation used for normalization.
     inv_dist_std_min: $sigma_(rho,"min")$,
+    // 95th-percentile inverse-distance standard deviation for normalization.
     inv_dist_std_p95: $sigma_(rho,"p95")$,
     // Distance std (sigma_d) for completeness.
     dist_std: $sigma_d$,
@@ -95,25 +97,40 @@
     field_v: $bold(F)_v$,
     // Time-indexed EVL/EFM evidence field used by proposal rollouts.
     field_evl_t: $bold(F)_t^"EVL"$,
+    // Initial EVL/EFM evidence field at the rollout root.
     field_evl_0: $bold(F)_0^"EVL"$,
-    // Compatibility aliases. New thesis prose should use symb.scene.*.
+    // Compatibility alias for the composite scene-memory tensor.
     scene_memory_t: $bold(Phi)_t^"scene"$,
+    // Compatibility alias for the root-local EVL evidence field.
     evl_local: $bold(E)_0^"EVL-local"$,
+    // Compatibility alias for candidate EVL support fraction.
     evl_support_frac: $omega_(t,i)^"EVL"$,
+    // Compatibility alias for the candidate-conditioned EVL support token.
     evl_support_token: $bold(g)_(t,i)^"EVL"$,
+    // Compatibility alias for the target support-pool descriptor.
     target_pool: $bold(g)_e^"tgt"$,
+    // Compatibility alias for the frustum support-pool descriptor.
     frustum_pool: $bold(g)_(t,i)^"fr"$,
+    // Compatibility alias for the target-frustum intersection descriptor.
     target_frustum_pool: $bold(g)_(t,e,i)^"cap"$,
+    // Compatibility alias for the candidate-conditioned ray-query vector.
     ray_query_ti: $bold(g)_(t,i)^"ray"$,
+    // Compatibility alias for the named render-query operator.
     render_query: $op("RenderQuery")$,
     // Per-candidate voxel features sampled/pooled from the scene field.
     field_q: $bold(F)_q^("vox")$,
     // Candidate pose/orientation and directional-observation features.
     pose_6d: $bold(R)^"6D"$,
+    // Unit viewing direction used by candidate pose features.
     dir_unit: $bold(d)$,
+    // Compatibility directional-history embedding used by VIN variants.
     dir_memory: $bold(h)_"dir"$,
+    // Compatibility directional-moment matrix used by VIN variants.
     dir_moment: $bold(M)_"dir"$,
+    // Spherical-harmonic basis values through degree L.
     sh_basis: $bold(Y)_L$,
+    // Candidate-local pose descriptor used by the VIN scorer.
     candidate_pose_feat: $bold(h)_(t,i)^"pose"$,
+    // Candidate-local directional-history descriptor used by the VIN scorer.
     candidate_dir_feat: $bold(h)_(t,i)^"dir"$,
   )

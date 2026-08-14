@@ -1,3 +1,4 @@
+// Symbols for the ASE dataset, trajectories, and mesh-supervised substrate.
 #let ase = (
     // GT mesh / surface.
     mesh: $cal(M)^"GT"$,
@@ -5,9 +6,9 @@
     mesh_target: $cal(M)_e^"GT"$,
     // GT mesh faces / triangles.
     faces: $cal(F)^"GT"$,
-    // Trajectory
+    // Time-indexed world-from-rig trajectory pose.
     traj: $bold(T)_"rig"^"w" (t)$,
-    // Final trajectory pose
+    // Final world-from-rig trajectory pose at step T.
     traj_final: $bold(T)_"rig"^"w" (T)$,
     // Semi-dense point set.
     points_semi: $cal(P)_t^"semi"$,
