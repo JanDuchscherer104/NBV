@@ -18,14 +18,17 @@ being changed.
   candidate-context contracts. Cross a boundary through its owning leaf contract.
 - Preserve EFM3D/ATEK coordinate conventions and typed frame containers; make
   failures actionable rather than silently falling back.
-- `python-standards` is the sole Python-contract guidance owner. Source
-  docstrings, types, formatter configuration, and tests own the implementation
-  details it routes to.
+- `python-standards` owns generic Python, typing, config, docstring, and upstream
+  reuse rules. `pyproject.toml` owns executable formatter/linter configuration;
+  nearest source and tests own behavior and local API detail.
 
 ## Procedure And Proof
 
 - Use config `.setup_target()` surfaces for runtime construction when present;
   do not substitute raw dictionaries or revive retired cache/training APIs.
+- Every behavior change adds a targeted regression at the narrowest public
+  interface. For risky changes, start with one failing tracer-bullet test and
+  the minimal fix; prefer real-data or integration seams when feasible.
 - Run `ruff format` and `ruff check` on touched files, then
   `cd aria_nbv && uv run pytest <target>` for the smallest affected test seam.
   Run `make context-contracts` only when its contract index is relevant.

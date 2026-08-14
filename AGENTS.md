@@ -21,7 +21,10 @@ tests, configuration, and Typst own behavior and scientific claims.
 - Vague, high-impact, advisor-facing, architecture, interface-design, committed
   Mermaid, or interactive-visualization work routes through `aria-grill` unless
   the user explicitly chooses another route.
-- Review exact diffs with nearest owners. Failure-first diagnosis is the
+- Reviews report severity-ranked, line-referenced findings. Publish actionable
+  P0-P2 PR findings as resolvable GitHub review threads and resolve them only
+  after exact-head evidence; report local-only reviews locally. Failure-first
+  diagnosis is the
   repository-wide invariant for bugs, regressions, suspicious metrics, and
   failing checks; `agent-behavior` owns the repeatable procedure, while the
   nearest semantic guide owns behavior. Reproduce the smallest failure, inspect

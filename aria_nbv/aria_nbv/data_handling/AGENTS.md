@@ -14,6 +14,9 @@ are owned by `vin_store/format.py`, `store.py`, `writer.py`, and `dataset.py`.
 
 - Preserve typed EFM/frame boundaries and the single adapter path into VIN;
   raw matrices and parallel adapter schemas are not substitutes.
+- Prefer existing upstream implementations, including PyTorch3D, over local
+  reimplementation. Import dataset keys from `efm3d.aria.aria_constants`; do
+  not duplicate their string values.
 - Writers maintain manifests, indices, splits, shards, and optional records.
   Readers validate and provide rebuild guidance: never hand-edit derived store
   artifacts to satisfy a test.

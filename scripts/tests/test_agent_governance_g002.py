@@ -352,6 +352,51 @@ def test_capture_and_routing_contracts() -> None:
     assert deprecated_route["aria_owner"] == "codebase-design"
 
 
+def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
+    root_guidance = _read(ROOT / "AGENTS.md")
+    assert "severity-ranked, line-referenced findings" in root_guidance
+    assert "P0-P2 PR findings as resolvable GitHub review threads" in root_guidance
+    assert "resolve them only\n  after exact-head evidence" in root_guidance
+
+    package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
+    conventions = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "python-standards"
+        / "references"
+        / "general_conventions.md"
+    )
+    assert "python-standards` owns generic Python" in package_guidance
+    assert "`pyproject.toml` owns executable formatter/linter" in package_guidance
+    assert "Binding short-form rules live in" not in conventions
+    assert "This file owns the generic non-docstring Python" in conventions
+    for contract in (
+        "targeted regression",
+        "public\n  interface",
+        "tracer-bullet test",
+        "real-data or integration seams",
+    ):
+        assert contract in package_guidance
+
+    data_guidance = _read(
+        ROOT / "aria_nbv" / "aria_nbv" / "data_handling" / "AGENTS.md"
+    )
+    assert "including PyTorch3D" in data_guidance
+    assert "efm3d.aria.aria_constants" in data_guidance
+
+    rollout_guidance = _read(ROOT / "aria_nbv" / "aria_nbv" / "rollouts" / "AGENTS.md")
+    for owner in (
+        "aria_nbv.targets.protocol",
+        "aria_nbv.oracle.target_selection",
+        "data_handling.vin_store.dataset.VinOfflineSample",
+        "data_handling.vin_store.batch.VinOracleBatch",
+    ):
+        assert owner in rollout_guidance
+
+    assert not (ROOT / "scripts" / "quarto_generate_agent_docs.py").exists()
+
+
 def test_thesis_context_and_context7_routing() -> None:
     context_path = ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md"
     metadata = load_frontmatter(context_path)["metadata"]
