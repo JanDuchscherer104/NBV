@@ -42,13 +42,15 @@ git_in_worktree() {
   git --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
 }
 
+[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
+git -C "$shared_root" rev-parse --git-common-dir >/dev/null 2>&1 || \
+  fail "shared root is not a Git worktree; cannot seed Graphify"
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
 shared_python="$shared_root/aria_nbv/.venv/bin/python"
 [[ -x "$shared_python" ]] || fail "shared Python is not executable: $shared_python"
 "$shared_python" -c 'import sys; raise SystemExit(0 if sys.executable else 1)' \
   >/dev/null 2>&1 || fail "shared Python cannot run: $shared_python"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
-[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
 
 shared_graphify_cache_root="$shared_root/.data/graphify-semantic-cache"
 shared_graphify_semantic_cache="$shared_graphify_cache_root/semantic"
@@ -92,14 +94,10 @@ fi
 # Seed durable Graphify state from a sibling Git worktree. The helper copies a
 # strict allowlist and synthesizes child metadata; cache links below are the
 # only shared Graphify state.
-if git -C "$shared_root" rev-parse --git-common-dir >/dev/null 2>&1; then
-  seed_args=(--source "$shared_root" --destination "$repo_root")
-  seed_args+=(--destination-git-dir "$repo_git_dir")
-  [[ "$check_only" == true ]] && seed_args+=(--check)
-  "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
-elif [[ "$check_only" == true ]]; then
-  fail "shared root is not a Git worktree; cannot validate Graphify seed"
-fi
+seed_args=(--source "$shared_root" --destination "$repo_root")
+seed_args+=(--destination-git-dir "$repo_git_dir")
+[[ "$check_only" == true ]] && seed_args+=(--check)
+"$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
 
 # Download manifests are tracked; every other top-level .data directory is an
 # ignored cache and can be shared without copying it into each worktree. The
