@@ -182,6 +182,39 @@ def test_mandatory_graphify_routing_scenarios() -> None:
     )
 
 
+def test_context7_graphify_api_route_keeps_installed_authority() -> None:
+    fixtures = {
+        fixture["id"]: fixture
+        for fixture in json.loads(
+            _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+        )["fixtures"]
+    }
+    fixture = fixtures["context7-graphify-api-change"]
+    assert _fixture_owner_paths_exist(ROOT, fixture)
+    assert fixture["expected_tool_refs"] == [
+        "mcp__MCP_DOCKER.resolve_library_id",
+        "mcp__MCP_DOCKER.get_library_docs",
+    ]
+    assert "supplied exact Context7 ID skips resolution" in fixture["required_outcomes"]
+    assert "Context7 is required for local owner lookup" in fixture["forbidden_outcomes"]
+
+    context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
+    registry = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "aria-nbv-context"
+        / "references"
+        / "context7_library_ids.md"
+    )
+    provenance = _read(ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md")
+    assert "supplied exact ID directly; otherwise resolve it, then get current docs" in context
+    assert "/graphify-labs/graphify" in registry
+    assert "pinned skill/source" in registry
+    assert "exact resolved" in provenance
+    assert "paired `repo:` anchors" in provenance
+
+
 def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     spec = _read(
         ROOT

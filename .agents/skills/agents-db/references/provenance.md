@@ -17,3 +17,9 @@ and record only stable source pointers in `references`.
 Backlog records should remain compact but auditable. If a context pack omits
 active backlog rows or references, amend `issue-023` or `issue-025` rather than
 inventing a parallel tracker.
+
+For a Context7-backed external-library record, include the exact resolved
+`context7:<library-id>`, current-doc version context, and paired `repo:` anchors
+to the installed source and focused test. Context7 is current documentation
+evidence; the installed source/test pair and exact repository owner remain the
+behavioral authority.

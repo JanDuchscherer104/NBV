@@ -7,12 +7,20 @@ only when no retained skill owns the external API question.
 ## Use order
 
 1. Open the local package/docs owner and installed call site first.
-2. Select one exact ID from the owning skill metadata or this inventory.
-3. Request the smallest topic-specific official-doc slice.
-4. Re-resolve the ID before consequential API or dependency changes; Context7
-   availability and rankings can change.
-5. Verify the answer against the installed version, local source, and focused
-   tests. Context7 evidence never replaces ARIA behavior or scientific owners.
+2. Use a supplied exact ID directly. Otherwise call
+   `mcp__MCP_DOCKER.resolve_library_id`, then pass its exact resolved ID to
+   `mcp__MCP_DOCKER.get_library_docs` for the smallest topic-specific slice.
+3. For consequential API or dependency changes, record the current-doc version
+   context and verify the answer against the installed version, local source, and
+   focused tests. Context7 evidence never replaces ARIA behavior or scientific
+   owners.
+
+## Graphify
+
+- `/graphify-labs/graphify` - Current upstream Graphify API and lifecycle docs
+  for consequential or uncertain external-library behavior. The byte-identical
+  pinned skill/source, its focused identity tests, and the exact ARIA owner still
+  decide installed behavior and repository policy.
 
 ## Typst publication packages
 
