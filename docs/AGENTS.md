@@ -25,6 +25,9 @@ owners conflict.
 - Use the outline helpers or direct source search to locate one relevant page or
   Typst include. `typst-authoring` owns full authoring and citation procedure;
   `aria-nbv-mermaid` owns Mermaid procedure and local rendering.
+- Role-disjoint setup and documentation verification commands route through
+  [`docs/README.md`](README.md); executable behavior remains owned by the
+  Makefile, CI workflow, and exact source/test owners.
 - For thesis claims, inspect the cited primary source and the local evidence.
   Compile the touched Typst surface; for final-link review use the documented
   `aria-wip-links=false` and pinned `aria-code-ref` inputs in `style.typ`.
