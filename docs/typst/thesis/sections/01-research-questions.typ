@@ -4,10 +4,10 @@
 #import "../../shared/equations.typ": eqs
 
 The thesis asks whether ARIA-NBV can perform target-conditioned, quality-driven
-multi-step next-best-view (NBV) selection with a finite candidate action space.
-The utility is target-specific Relative Reconstruction Improvement (RRI), and
+multi-step @next-best-view (NBV) selection with a finite candidate action space.
+The utility is target-specific @relative-reconstruction-improvement (RRI), and
 every learned action is re-evaluated with the oracle under the same candidate
-support, validity rules, and acquisition budget. Ground-truth (GT) geometry
+support, validity rules, and acquisition budget. @ground-truth:short (GT) geometry
 defines target tasks, labels, and evaluation; it is not an ordinary actor input.
 
 === Objectives and scope <objectives>

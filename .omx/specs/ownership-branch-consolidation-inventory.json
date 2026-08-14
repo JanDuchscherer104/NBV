@@ -372,12 +372,12 @@
       "lines": "19-33",
       "subject": "M1 status",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#status",
+      "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#m1-status",
       "destination_verified": true,
       "link_action": "development-only rewrite",
       "id": "retired-024-m1-status-summary",
       "source_blob_id": "3a2be94b278513fefcf376eba12013a450a70b2f",
-      "destination_locator": "m1-status-summary"
+      "destination_locator": "m1-status"
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
@@ -385,12 +385,12 @@
       "lines": "34-56",
       "subject": "M1 evidence snapshot",
       "disposition": "unresolved",
-      "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#evidence",
+      "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#m1-evidence",
       "destination_verified": true,
       "link_action": "pointers to artifacts/tests only",
       "id": "retired-025-m1-evidence-snapshot",
       "source_blob_id": "3a2be94b278513fefcf376eba12013a450a70b2f",
-      "destination_locator": "m1-evidence-snapshot"
+      "destination_locator": "m1-evidence"
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
@@ -424,7 +424,7 @@
       "lines": "96-113",
       "subject": "M1 blockers",
       "disposition": "deferred-action",
-      "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#blockers",
+      "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#m1-blockers",
       "destination_verified": true,
       "tracking_record": "follow-up only after canonical content is materialized; not a deletion escape",
       "link_action": "no narrative copy",
@@ -683,7 +683,7 @@
       "subject": "recently locked decisions",
       "disposition": "unresolved",
       "canonical_destination": "docs/typst/thesis/**; aria_nbv/**",
-      "destination_verified": true,
+      "destination_verified": false,
       "link_action": "deduplicate against canonical owners",
       "id": "retired-047-locked",
       "source_blob_id": "f391257d6aecbd2c0692be206ae13c50660b22d8",
@@ -28514,7 +28514,9 @@
       "006",
       "007",
       "008",
+      "009",
       "011",
+      "012",
       "013",
       "014",
       "015",
@@ -28525,16 +28527,17 @@
       "020",
       "021",
       "022",
+      "023",
       "024",
       "025",
       "028",
       "031",
       "032",
+      "034",
       "042",
       "043",
       "044",
-      "046",
-      "047"
+      "046"
     ]
   },
   "expected_pages_manifest": {

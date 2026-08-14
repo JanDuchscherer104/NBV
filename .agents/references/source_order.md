@@ -85,8 +85,8 @@ implemented evidence. Do not promote planned work to implemented results.
 
 - Repo invariant: root or nearest nested `AGENTS.md`.
 - Repeatable workflow: `.agents/skills/*/SKILL.md`.
-- Current state context: `.agents/memory/state/` is historical/context evidence
-  only; it is not a current-truth or replacement narrative owner.
+- The retired duplicate memory-state layer is historical/context evidence only;
+  it is not a current-truth or replacement narrative owner.
 - Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
