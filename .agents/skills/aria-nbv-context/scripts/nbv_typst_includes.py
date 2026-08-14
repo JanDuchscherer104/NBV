@@ -92,7 +92,10 @@ def main() -> int:
     default_typst_root = (repo_root / "docs" / "typst").resolve()
     default_thesis = default_typst_root / "thesis" / "main.typ"
     default_seminar = default_typst_root / "seminar_paper" / "main.typ"
-    default_slides = default_typst_root / "seminar_slides"
+    default_slide_roots = (
+        default_typst_root / "seminar_slides",
+        default_typst_root / "thesis_slides",
+    )
 
     parser = argparse.ArgumentParser(
         description="Outline the active thesis by default; opt into historical seminar or slides when needed."
@@ -128,8 +131,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--slides-root",
-        default=str(default_slides),
-        help="Slides directory used when --with-slides is set.",
+        action="append",
+        default=None,
+        help=(
+            "Slides directory used when --with-slides is set. Repeat to select "
+            "multiple roots; defaults to seminar_slides and thesis_slides."
+        ),
     )
     parser.add_argument(
         "--mode",
@@ -140,7 +147,11 @@ def main() -> int:
     args = parser.parse_args()
 
     typst_root = Path(args.root).resolve()
-    slides_root = Path(args.slides_root).resolve()
+    slide_roots = (
+        [Path(value).resolve() for value in args.slides_root]
+        if args.slides_root
+        else list(default_slide_roots)
+    )
 
     targets: list[Path] = []
     selected = [value for value in (args.thesis, args.seminar, args.paper) if value]
@@ -150,8 +161,13 @@ def main() -> int:
         target = Path(value).resolve()
         if target.exists() and target not in targets:
             targets.append(target)
-    if args.with_slides and slides_root.exists():
-        targets.extend(sorted(slides_root.glob("*.typ")))
+    if args.with_slides:
+        for slides_root in slide_roots:
+            if not slides_root.exists():
+                continue
+            for target in sorted(slides_root.glob("*.typ")):
+                if target not in targets:
+                    targets.append(target)
 
     if args.mode == "includes":
         for target in targets:
