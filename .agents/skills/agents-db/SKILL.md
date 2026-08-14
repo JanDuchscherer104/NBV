@@ -67,8 +67,8 @@ or durable maintenance debt capture.
    maintenance picture.
 4. Keep records compact but auditable with `context` plus stable `references`.
 5. Route extracted requirements to the smallest owner: `.agents/*.toml` for
-   active work, `.agents/memory/state/` for durable current truth, and dated
-   history debriefs for episodic task records.
+   active work, the exact Typst/Python/configuration/test/setup/guidance source
+   for durable current truth, and dated history debriefs for episodic records.
 6. Resolve or retire completed records into `.agents/resolved.toml`; do not
    delete records outright.
 
