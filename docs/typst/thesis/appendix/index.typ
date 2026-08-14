@@ -1,8 +1,8 @@
 #import "../experiment_data.typ": thesis-report-settings, load-thesis-report, short-store-label, digest-prefix, format-report-value
+#import "../draft_markers.typ": development_only
 #import "@preview/booktabs:0.0.4": *
 
 #let report-settings = thesis-report-settings()
-#let development_mode = report-settings.mode == "development"
 #let thesis_evidence_status = report-settings.evidence-status
 #let thesis_data = load-thesis-report(
   report-settings.path,
@@ -105,6 +105,6 @@ The report bundle is the single numerical interface between validated rollout ar
   This pilot evidence bundle preserves provenance but is not confirmatory. Its numerical parameter rows are not rendered or interpreted as thesis results.
 ]
 
-#if development_mode [
+#development_only[
   #include "../sections/06-draft-open-work.typ"
 ]

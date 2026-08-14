@@ -4,7 +4,8 @@
 // definitions, equations, implementation contracts, and durable terminology
 // remain owned by the thesis sections, package docs, tests, and configuration.
 #development_only[
-  #heading(level: 1, numbering: none)[Development roadmap] <outcome>
+  #heading(level: 1, numbering: none)[Development roadmap] <roadmap>
+  #metadata("roadmap-outcome") <outcome>
   This page records the development schedule for ARIA-NBV from the current
   correctness gates through release freeze. It is intentionally omitted from
   submission output. The thesis claim and research-question wording remain in
@@ -15,7 +16,7 @@
   #thesis_status(
     implementation: "partial",
     evidence: "pending",
-    source: [roadmap.qmd; thesis sections; package tests and configs],
+    source: [thesis sections; package tests and configs],
     gate: [M1 correctness and M5 headroom evidence],
   )[The schedule and gates are current planning state, not evidence that a
   learned policy has improved over its baselines.]
@@ -114,7 +115,7 @@
   #heading(level: 2, numbering: none)[Promotion queue] <promotion-queue>
   #promotion_entry(
     [Promote the M5 lookahead/Q_H comparison into thesis results after paired held-out evidence is immutable.],
-    source: [roadmap.qmd; sections/05-experimental-design/],
+    source: [sections/05-experimental-design/; package tests and configs],
     target-section: [06-results.typ and 07-discussion.typ],
     gate: [positive headroom, oracle re-scoring, uncertainty, and coverage report],
     disposition: "candidate",
@@ -135,7 +136,7 @@
   )
   #promotion_entry(
     [Do not promote unsupported continuous, VLM, semantic-global, or real-device claims into the thesis core.],
-    source: [roadmap.qmd: explicit non-claims],
+    source: [thesis scope and discussion sections],
     target-section: [08-conclusion.typ],
     gate: [none; retain as bounded non-claim],
     disposition: "rejected",

@@ -12,8 +12,8 @@
     implementation: "partial",
     evidence: "pending",
     source: [
-      `docs/contents/thesis/m1_contract_report.qmd` (working source, not a
-      second contract owner)
+      thesis M1 gate notes and executable package owners (not a second
+      contract owner)
     ],
     gate: [fresh store, scene-split, Rerun, and throughput evidence],
   )[
@@ -40,8 +40,9 @@
       train/validation proof before promotion.
     ],
     [Rerun diagnostics], [blocked], [
-      Expected evidence artifacts are `.artifacts/rerun/m1-normal.rrd`,
-      `.artifacts/rerun/m1-boundary.rrd`, and `.artifacts/rerun/m1-failure.rrd`.
+      No M1 Rerun recordings are present in this worktree. The recording gate
+      remains open; absence is reported explicitly rather than linked to a
+      nonexistent artifact.
     ],
     [Oracle throughput], [blocked], [
       Representative mesh, rendering, backprojection, and RRI timing remains
@@ -60,14 +61,14 @@
     `aria_nbv/tests/pose_generation/`, and `aria_nbv/tests/rollouts/`.
   - Local smoke configuration and artifact root: `.configs/offline_only.toml`
     and `.data/offline_cache/vin_offline/`.
-  - Rerun evidence destinations: `.artifacts/rerun/m1-normal.rrd`,
-    `.artifacts/rerun/m1-boundary.rrd`, and `.artifacts/rerun/m1-failure.rrd`.
+  - Rerun evidence: absent in the current worktree; the normal/boundary/failure
+    recording gate remains open.
 
   #heading(level: 2, numbering: none)[Blockers] <m1-blockers>
 
   #promotion_entry(
     [Refresh the configured-store evidence and report coverage status.],
-    source: [`docs/contents/thesis/m1_contract_report.qmd`],
+    source: [M1 gate notes and executable package owners],
     target-section: [M1 status and evidence],
     gate: [fresh immutable-store inspection],
     disposition: "blocked",

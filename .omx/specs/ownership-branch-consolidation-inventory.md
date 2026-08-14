@@ -24,7 +24,7 @@ are in the JSON companion.
 
 The JSON companion contains 47 source-block rows (each with stable id, source blob, heading/anchor or bullet
 span), each with subject, disposition, canonical destination, destination
-verification, and link action. Current counts:
+verification, and link action. Current disposition counts remain:
 
 | disposition | rows |
 |---|---:|
@@ -40,6 +40,11 @@ owners; every row now carries a destination locator. No row is eligible for dele
 path and section/symbol exist and focused verification passes. Deferred action
 never substitutes for migration; it records a pointer plus a pending backlog
 gate.
+
+G003 materialized and verified 30 destination pointers (including the two
+deferred promotion-queue rows) against the active Typst owner graph; unresolved
+rows remain intentionally open where the destination is code/setup-owned or
+requires a later evidence gate.
 
 The three former DB-shaped destinations are now non-DB canonical owners:
 `retired-008-roadmap-risks` -> `development/roadmap.typ#risks`,

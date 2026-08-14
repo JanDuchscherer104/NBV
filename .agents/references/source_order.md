@@ -4,10 +4,13 @@ Use this reference when a task needs current project truth or sources disagree.
 
 ## Role Split
 
-- Current thesis direction: `docs/contents/thesis/roadmap.qmd`,
-  `docs/contents/thesis/questions.qmd`, and `.agents/memory/state/` describe
-  the active thesis plan, locked decisions, open questions, gotchas, and current
-  state.
+- Thesis narrative and research questions: `docs/typst/thesis/main.typ` and its
+  active sections own current prose, objectives, boundaries, and RQ1--RQ4.
+  Development-only planning and gate views are owned by
+  `docs/typst/thesis/development/roadmap.typ` and
+  `docs/typst/thesis/development/m1-contract-report.typ`, guarded by
+  `development_only`. Quarto thesis pages are historical/migration inputs, not
+  current-truth owners.
 - Current terminology: `docs/typst/shared/glossary.typ` owns terms and symbols;
   `docs/contents/glossary.qmd` is generated public output.
 - Idea archive: `docs/contents/ideas.qmd` is read-only scratch/history, not
@@ -23,6 +26,14 @@ Use this reference when a task needs current project truth or sources disagree.
   active configuration files own executable package behavior. Mandatory
   Graphify navigation and optional memory retrieval never substitute for
   opening these exact sources.
+- Development-only thesis owners: `docs/typst/thesis/development/roadmap.typ`,
+  `docs/typst/thesis/development/m1-contract-report.typ`, and
+  `docs/typst/thesis/sections/06-draft-open-work.typ` provide guarded planning,
+  gate status, and open-work notes; they are included only through
+  `development_only` and are absent from submission output.
+- Agents-DB action records (`.agents/issues.toml`, `.agents/todos.toml`, and
+  `.agents/refactors.toml`) own actionable follow-up metadata only. They do not
+  replace thesis narrative, implementation, tests, or current state owners.
 - Active maintenance work: `.agents/issues.toml`, `.agents/todos.toml`,
   `.agents/refactors.toml`, and `.agents/resolved.toml` via `make agents-db`.
 - Accepted scaffold-rework target state:
@@ -74,7 +85,8 @@ implemented evidence. Do not promote planned work to implemented results.
 
 - Repo invariant: root or nearest nested `AGENTS.md`.
 - Repeatable workflow: `.agents/skills/*/SKILL.md`.
-- Current truth: `.agents/memory/state/`.
+- Current state context: `.agents/memory/state/` is historical/context evidence
+  only; it is not a current-truth or replacement narrative owner.
 - Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or
   `.agents/refactors.toml` through `agents-db`.
 - Public narrative: Quarto or Typst docs.
