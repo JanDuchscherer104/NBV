@@ -72,9 +72,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-literature-grounding",
-     "lines": "97-125",
-     "subject": "primary claim and explicit non-claims",
+      "anchor": "roadmap-literature-grounding",
+      "lines": "97-125",
+      "subject": "primary claim and explicit non-claims",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#introduction",
       "destination_verified": true,
@@ -85,9 +85,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-mathematical-model",
-     "lines": "128-326",
-     "subject": "mathematical model and equations",
+      "anchor": "roadmap-mathematical-model",
+      "lines": "128-326",
+      "subject": "mathematical model and equations",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ#eqs.rl.finite_horizon_return",
       "destination_verified": true,
@@ -98,9 +98,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-evidence-flow",
-     "lines": "328-369",
-     "subject": "evidence-flow diagrams",
+      "anchor": "roadmap-evidence-flow",
+      "lines": "328-369",
+      "subject": "evidence-flow diagrams",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ#fig:qh-actor-oracle-contract",
       "destination_verified": true,
@@ -111,9 +111,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-milestones",
-     "lines": "371-636",
-     "subject": "M0-M8 milestones, gates, implementation pointers",
+      "anchor": "roadmap-milestones",
+      "lines": "371-636",
+      "subject": "M0-M8 milestones, gates, implementation pointers",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#milestones",
       "destination_verified": true,
@@ -124,9 +124,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-ablations",
-     "lines": "637-652",
-     "subject": "required ablations",
+      "anchor": "roadmap-ablations",
+      "lines": "637-652",
+      "subject": "required ablations",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#ablations",
       "destination_verified": true,
@@ -137,9 +137,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-evidence-contract",
-     "lines": "653-705",
-     "subject": "evidence reporting contract",
+      "anchor": "roadmap-evidence-contract",
+      "lines": "653-705",
+      "subject": "evidence reporting contract",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#evidence",
       "destination_verified": true,
@@ -150,9 +150,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-risks",
-     "lines": "706-717",
-     "subject": "risk register",
+      "anchor": "roadmap-risks",
+      "lines": "706-717",
+      "subject": "risk register",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#risks",
       "destination_verified": true,
@@ -177,9 +177,9 @@
     },
     {
       "source": "docs/contents/thesis/roadmap.qmd",
-     "anchor": "roadmap-verification",
-     "lines": "735-751",
-     "subject": "standing verification commands",
+      "anchor": "roadmap-verification",
+      "lines": "735-751",
+      "subject": "standing verification commands",
       "disposition": "historical",
       "canonical_destination": "docs/README.md#verification",
       "destination_verified": true,
@@ -190,9 +190,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq-objectives",
-     "lines": "32-58",
-     "subject": "objectives and evidence protocol",
+      "anchor": "rq-objectives",
+      "lines": "32-58",
+      "subject": "objectives and evidence protocol",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq-objectives",
       "destination_verified": true,
@@ -217,9 +217,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq-thesis-boundary",
-     "lines": "80-96",
-     "subject": "thesis boundary",
+      "anchor": "rq-thesis-boundary",
+      "lines": "80-96",
+      "subject": "thesis boundary",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#boundary",
       "destination_verified": true,
@@ -230,9 +230,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq-proposal-freeze-gate",
-     "lines": "98-120",
-     "subject": "proposal freeze decisions",
+      "anchor": "rq-proposal-freeze-gate",
+      "lines": "98-120",
+      "subject": "proposal freeze decisions",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#freeze",
       "destination_verified": true,
@@ -243,9 +243,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq1-objective",
-     "lines": "122-220",
-     "subject": "RQ1 objective/reward contract",
+      "anchor": "rq1-objective",
+      "lines": "122-220",
+      "subject": "RQ1 objective/reward contract",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq1",
       "destination_verified": true,
@@ -256,9 +256,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq2-offline-qh",
-     "lines": "223-333",
-     "subject": "RQ2 offline finite-candidate Q_H",
+      "anchor": "rq2-offline-qh",
+      "lines": "223-333",
+      "subject": "RQ2 offline finite-candidate Q_H",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq2",
       "destination_verified": true,
@@ -269,9 +269,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq3-representation",
-     "lines": "335-424",
-     "subject": "RQ3 actor-visible target representation",
+      "anchor": "rq3-representation",
+      "lines": "335-424",
+      "subject": "RQ3 actor-visible target representation",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq3",
       "destination_verified": true,
@@ -282,9 +282,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq4-support",
-     "lines": "426-535",
-     "subject": "RQ4 candidate/rollout/scale support",
+      "anchor": "rq4-support",
+      "lines": "426-535",
+      "subject": "RQ4 candidate/rollout/scale support",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       "destination_verified": true,
@@ -329,9 +329,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq-evidence-protocol",
-     "lines": "587-639",
-     "subject": "shared evidence/protocol constraints",
+      "anchor": "rq-evidence-protocol",
+      "lines": "587-639",
+      "subject": "shared evidence/protocol constraints",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#protocol",
       "destination_verified": true,
@@ -342,9 +342,9 @@
     },
     {
       "source": "docs/contents/thesis/questions.qmd",
-     "anchor": "rq-matrix",
-     "lines": "640-651",
-     "subject": "research matrix",
+      "anchor": "rq-matrix",
+      "lines": "640-651",
+      "subject": "research matrix",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#matrix",
       "destination_verified": true,
@@ -369,9 +369,9 @@
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
-     "anchor": "m1-status-summary",
-     "lines": "19-33",
-     "subject": "M1 status",
+      "anchor": "m1-status-summary",
+      "lines": "19-33",
+      "subject": "M1 status",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#m1-status",
       "destination_verified": true,
@@ -382,9 +382,9 @@
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
-     "anchor": "m1-evidence-snapshot",
-     "lines": "34-56",
-     "subject": "M1 evidence snapshot",
+      "anchor": "m1-evidence-snapshot",
+      "lines": "34-56",
+      "subject": "M1 evidence snapshot",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/m1-contract-report.typ#m1-evidence",
       "destination_verified": true,
@@ -438,9 +438,9 @@
     },
     {
       "source": "docs/contents/thesis/m1_contract_report.qmd",
-     "anchor": "m1-command-ledger",
-     "lines": "114-160",
-     "subject": "command/evidence ledger",
+      "anchor": "m1-command-ledger",
+      "lines": "114-160",
+      "subject": "command/evidence ledger",
       "disposition": "historical",
       "canonical_destination": "docs/README.md#commands-and-evidence",
       "destination_verified": true,
@@ -451,9 +451,9 @@
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
-     "anchor": "goal-core-claim",
-     "lines": "12-20",
-     "subject": "core claim and implementation status",
+      "anchor": "goal-core-claim",
+      "lines": "12-20",
+      "subject": "core claim and implementation status",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#introduction",
       "destination_verified": true,
@@ -464,9 +464,9 @@
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
-     "anchor": "priorities",
-     "lines": "22-33",
-     "subject": "priorities and meeting decisions",
+      "anchor": "priorities",
+      "lines": "22-33",
+      "subject": "priorities and meeting decisions",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#priorities",
       "destination_verified": true,
@@ -494,9 +494,9 @@
     },
     {
       "source": ".agents/memory/state/PROJECT_STATE.md",
-     "anchor": "next-steps",
-     "lines": "43-61",
-     "subject": "near-term next steps and contracts",
+      "anchor": "next-steps",
+      "lines": "43-61",
+      "subject": "near-term next steps and contracts",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#promotion-queue",
       "destination_verified": true,
@@ -521,9 +521,9 @@
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
-     "anchor": "workflow",
-     "lines": "12-39",
-     "subject": "workflow/source-order decisions",
+      "anchor": "workflow",
+      "lines": "12-39",
+      "subject": "workflow/source-order decisions",
       "disposition": "historical",
       "canonical_destination": ".agents/references/source_order.md#role-split",
       "destination_verified": true,
@@ -534,9 +534,9 @@
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
-     "anchor": "scientific",
-     "lines": "40-180",
-     "subject": "thesis theory, notation, RQ and reward decisions",
+      "anchor": "scientific",
+      "lines": "40-180",
+      "subject": "thesis theory, notation, RQ and reward decisions",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ#introduction",
       "destination_verified": true,
@@ -560,9 +560,9 @@
     },
     {
       "source": ".agents/memory/state/DECISIONS.md",
-     "anchor": "ci",
-     "lines": "321-321",
-     "subject": "CI/pre-commit policy",
+      "anchor": "ci",
+      "lines": "321-321",
+      "subject": "CI/pre-commit policy",
       "disposition": "historical",
       "canonical_destination": ".github/workflows/ci.yml",
       "destination_verified": true,
@@ -573,9 +573,9 @@
     },
     {
       "source": ".agents/memory/state/GOTCHAS.md",
-     "anchor": "environment",
-     "lines": "12-18",
-     "subject": "environment/tooling gotchas",
+      "anchor": "environment",
+      "lines": "12-18",
+      "subject": "environment/tooling gotchas",
       "disposition": "historical",
       "canonical_destination": "SETUP.md#5-offline-store-and-vin-diagnostics",
       "destination_verified": true,
@@ -612,9 +612,9 @@
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
-     "anchor": "advisor",
-     "lines": "12-16",
-     "subject": "advisor-facing scale and Q_H decisions",
+      "anchor": "advisor",
+      "lines": "12-16",
+      "subject": "advisor-facing scale and Q_H decisions",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#promotion-queue",
       "destination_verified": true,
@@ -626,9 +626,9 @@
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
-     "anchor": "matching",
-     "lines": "17-21",
-     "subject": "target matching and representation choices",
+      "anchor": "matching",
+      "lines": "17-21",
+      "subject": "target matching and representation choices",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq3",
       "destination_verified": true,
@@ -639,9 +639,9 @@
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
-     "anchor": "qh",
-     "lines": "22-30",
-     "subject": "Q_H and offline RL choices",
+      "anchor": "qh",
+      "lines": "22-30",
+      "subject": "Q_H and offline RL choices",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/sections/01-research-questions.typ#rq2",
       "destination_verified": true,
@@ -665,9 +665,9 @@
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
-     "anchor": "representation",
-     "lines": "38-42",
-     "subject": "representation and ablation choices",
+      "anchor": "representation",
+      "lines": "38-42",
+      "subject": "representation and ablation choices",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#promotion-queue",
       "destination_verified": true,
@@ -679,9 +679,9 @@
     },
     {
       "source": ".agents/memory/state/OPEN_QUESTIONS.md",
-     "anchor": "locked",
-     "lines": "44-50",
-     "subject": "recently locked decisions",
+      "anchor": "locked",
+      "lines": "44-50",
+      "subject": "recently locked decisions",
       "disposition": "historical",
       "canonical_destination": "docs/typst/thesis/development/roadmap.typ#freeze",
       "destination_verified": true,
@@ -2057,28 +2057,6 @@
         "disposition": "retain as provenance",
         "replacement_owner": "Git history and dated debriefs",
         "classification": "dated-history"
-      },
-      {
-        "path": ".agents/memory/state/DECISIONS.md",
-        "locators": [
-          20,
-          33
-        ],
-        "consumer_type": "guidance/backlog consumer",
-        "disposition": "remove or replace",
-        "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
-      },
-      {
-        "path": ".agents/memory/state/PROJECT_STATE.md",
-        "locators": [
-          72,
-          73
-        ],
-        "consumer_type": "guidance/backlog consumer",
-        "disposition": "remove or replace",
-        "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-05-09/candidate_decisions.jsonl",
@@ -3873,9 +3851,9 @@
           226
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-05-09/reviewed_decisions.jsonl",
@@ -5752,9 +5730,9 @@
           226
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-16/candidate_decisions.jsonl",
@@ -8382,9 +8360,9 @@
           226
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-16/reviewed_decisions.jsonl",
@@ -11076,9 +11054,9 @@
           226
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-18/candidate_decisions.jsonl",
@@ -13828,9 +13806,9 @@
           232
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-18/reviewed_decisions.jsonl",
@@ -16640,9 +16618,9 @@
           232
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-22/candidate_decisions.jsonl",
@@ -19498,9 +19476,9 @@
           232
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/distilled/2026-06-22/reviewed_decisions.jsonl",
@@ -22421,9 +22399,9 @@
           232
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/raw/2026-06-18/chat_messages.jsonl",
@@ -24738,9 +24716,9 @@
           36493
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/raw/2026-06-22/chat_messages.jsonl",
@@ -27169,9 +27147,9 @@
           41676
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-05-09/plan_mode_answers.jsonl",
@@ -27189,9 +27167,9 @@
           226
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-05-09/user_messages.jsonl",
@@ -27349,9 +27327,9 @@
           2102
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-16/plan_mode_answers.jsonl",
@@ -27381,9 +27359,9 @@
           226
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-16/user_messages.jsonl",
@@ -27591,9 +27569,9 @@
           2621
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-18/plan_mode_answers.jsonl",
@@ -27623,9 +27601,9 @@
           232
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-18/user_messages.jsonl",
@@ -27853,9 +27831,9 @@
           2810
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-22/plan_mode_answers.jsonl",
@@ -27885,9 +27863,9 @@
           232
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/memory/transcripts/user/2026-06-22/user_messages.jsonl",
@@ -28126,9 +28104,9 @@
           2810
         ],
         "consumer_type": "executable consumer",
-        "disposition": "remove or replace",
+        "disposition": "historical/non-authoritative",
         "replacement_owner": "exact Typst/Python/config/test/guidance owner",
-        "classification": "live-reference"
+        "classification": "resolved-provenance"
       },
       {
         "path": ".agents/refactors.toml",
@@ -28401,12 +28379,11 @@
         "replacement_owner": ".omx/specs/ownership-branch-consolidation-inventory.json"
       }
     ],
-    "reference_count": 123,
+    "reference_count": 121,
     "class_counts": {
       "dated-history": 85,
-      "live-reference": 18,
       "migration-receipt": 2,
-      "resolved-provenance": 18
+      "resolved-provenance": 34
     },
     "scan_method": "git grep -n over tracked files; locators grouped per path; executable/generated classes reviewed by path; untracked derived artifacts remain explicit gaps",
     "allowed_mentions": [
@@ -28427,31 +28404,31 @@
         "coverage": "generated API command surface"
       },
       {
-      "id": "api-002",
-      "source": "aria_nbv/aria_nbv/data_handling",
-      "owner": "aria_nbv/aria_nbv/data_handling/vin_store/source.py#VinOfflineSourceConfig",
-      "destination_verified": true,
+        "id": "api-002",
+        "source": "aria_nbv/aria_nbv/data_handling",
+        "owner": "aria_nbv/aria_nbv/data_handling/vin_store/source.py#VinOfflineSourceConfig",
+        "destination_verified": true,
         "coverage": "offline store/schema/frame contracts"
       },
       {
-      "id": "api-003",
-      "source": "aria_nbv/aria_nbv/rollouts",
-      "owner": "aria_nbv/aria_nbv/rollouts/trace.py#RolloutLineage",
-      "destination_verified": true,
+        "id": "api-003",
+        "source": "aria_nbv/aria_nbv/rollouts",
+        "owner": "aria_nbv/aria_nbv/rollouts/trace.py#RolloutLineage",
+        "destination_verified": true,
         "coverage": "lifecycle, masks, serialization"
       },
       {
-      "id": "api-004",
-      "source": "aria_nbv/aria_nbv/vin",
-      "owner": "aria_nbv/aria_nbv/vin/models/vin_model_v3.py#VinModelV3",
-      "destination_verified": true,
+        "id": "api-004",
+        "source": "aria_nbv/aria_nbv/vin",
+        "owner": "aria_nbv/aria_nbv/vin/models/vin_model_v3.py#VinModelV3",
+        "destination_verified": true,
         "coverage": "Q_H/scorer tensor contracts"
       },
       {
-      "id": "api-005",
-      "source": "aria_nbv/aria_nbv/rri_metrics",
-      "owner": "aria_nbv/aria_nbv/rri_metrics/torch_rollout_metrics.py#candidate_primary_invalid_reason_share",
-      "destination_verified": true,
+        "id": "api-005",
+        "source": "aria_nbv/aria_nbv/rri_metrics",
+        "owner": "aria_nbv/aria_nbv/rri_metrics/torch_rollout_metrics.py#candidate_primary_invalid_reason_share",
+        "destination_verified": true,
         "coverage": "RRI/frame/invalidity contracts"
       }
     ],

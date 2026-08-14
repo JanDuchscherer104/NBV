@@ -22,7 +22,6 @@ LEDGER_DISPOSITIONS = {
 }
 ALLOWED_REFERENCE_CLASSES = {
     "dated-history",
-    "transcript-provenance",
     "archive-provenance",
     "resolved-provenance",
     "migration-receipt",
@@ -43,6 +42,24 @@ LEGACY_MARKERS = ("roadmap.qmd", "questions.qmd", "m1_contract_report.qmd", "PRO
 KNOWN_MIGRATION_RECEIPTS = {
     ".omx/specs/ownership-branch-consolidation-inventory.json",
     ".omx/specs/ownership-branch-consolidation-inventory.md",
+}
+RESOLVED_PROVENANCE_PATHS = {
+    ".agents/AGENTS_INTERNAL_DB.md",
+    ".agents/issues.toml",
+    ".agents/todos.toml",
+    ".agents/memory/README.md",
+    ".agents/refactors.toml",
+    ".agents/references/source_order.md",
+    ".agents/resolved.toml",
+    ".agents/skills/agents-db/SKILL.md",
+    ".agents/skills/aria-grill/SKILL.md",
+    ".agents/skills/aria-grill/references/upstream-mattpocock.md",
+    ".agents/skills/aria-nbv-context/references/context_map.md",
+    ".agents/skills/aria-nbv-context/scripts/nbv_context_index.sh",
+    ".graphifyignore",
+    "aria_nbv/tests/agent_memory/test_codex_transcript_extract.py",
+    "scripts/codex_transcript_extract.py",
+    "scripts/new_debrief.py",
 }
 
 
@@ -113,7 +130,7 @@ def classify_reference(path: str, *, resolved: bool = False, receipt: bool = Fal
     if resolved or normalized.startswith(".agents/resolved"):
         return "resolved-provenance"
     if "/transcripts/" in normalized or normalized.startswith(".agents/memory/transcripts/"):
-        return "transcript-provenance"
+        return "resolved-provenance"
     if normalized.startswith("docs/typst/thesis_slides/"):
         return "dated-history"
     if normalized.startswith(".agents/archive/") or "/archive/" in normalized:
@@ -154,13 +171,11 @@ def _bounded_provenance(path: str, classification: str, root: Path) -> bool:
         return False
     if normalized in KNOWN_MIGRATION_RECEIPTS:
         return True
-    if normalized in RETIRED_SOURCE_PATHS:
-        return True
     if normalized.startswith(".omx/specs/") and _is_tracked_file(root, normalized):
         return True
     if classification == "resolved-provenance":
-        return _is_tracked_file(root, normalized)
-    if classification in {"dated-history", "transcript-provenance", "archive-provenance"}:
+        return (normalized in RESOLVED_PROVENANCE_PATHS or normalized.startswith(".agents/memory/transcripts/")) and _is_tracked_file(root, normalized)
+    if classification in {"dated-history", "archive-provenance"}:
         return _is_tracked_file(root, normalized)
     return False
 
@@ -169,12 +184,15 @@ def validate_reference_classes(references: Iterable[dict[str, Any]], root: Path 
     errors: list[ValidationError] = []
     for index, ref in enumerate(references):
         path = str(ref.get("path", f"reference-{index}"))
+        if ref.get("classification") == "live-reference":
+            errors.append(ValidationError(path, "live-reference classification is not allowed"))
+            continue
         normalized = _normalized_path(path, root)
         inferred = classify_reference(normalized or path, resolved=bool(ref.get("resolved")), receipt=bool(ref.get("receipt"))) if normalized else "live-reference"
         classification = inferred
         if inferred == "live-reference" and ref.get("classification") == "resolved-provenance":
             candidate = root / normalized if normalized else root / "__invalid__"
-            if normalized in RETIRED_SOURCE_PATHS or (candidate.is_file() and _is_tracked_file(root, normalized) and not any(marker in candidate.read_text(encoding="utf-8") for marker in LEGACY_MARKERS)):
+            if candidate.is_file() and _is_tracked_file(root, normalized) and normalized not in RETIRED_SOURCE_PATHS and not any(marker in candidate.read_text(encoding="utf-8") for marker in LEGACY_MARKERS):
                 classification = "resolved-provenance"
         if classification not in ALLOWED_REFERENCE_CLASSES or not _bounded_provenance(path, classification, root):
             errors.append(ValidationError(path, "live legacy-state reference is not allowed"))
@@ -338,6 +356,10 @@ def validate_inventory(data: dict[str, Any], *, mode: str = "schema", root: Path
     errors.extend(validate_expected_pages(manifest, actual_pages))
     consumer = data.get("consumer_inventory", {})
     errors.extend(validate_consumer_inventory(consumer))
+    if mode == "deletion-ready" and isinstance(consumer, dict):
+        for ref in consumer.get("references", []):
+            if isinstance(ref, dict) and ref.get("classification") == "live-reference":
+                errors.append(ValidationError(str(ref.get("path", "reference")), "live-reference classification is not allowed in deletion-ready inventory"))
     sink_errors = validate_repository_sinks(root, consumer.get("references", []) if isinstance(consumer, dict) else [])
     if mode == "deletion-ready":
         errors.extend(sink_errors)
