@@ -436,6 +436,19 @@ def test_thesis_context_and_context7_routing() -> None:
     )
     assert "# docs/typst/seminar_paper/main.typ" in seminar_result.stdout
 
+    slides_result = subprocess.run(
+        [sys.executable, str(outline_script), "--with-slides", "--mode", "outline"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "# docs/typst/seminar_slides/slides_1.typ" in slides_result.stdout
+    assert (
+        "# docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ"
+        in slides_result.stdout
+    )
+
 
 if __name__ == "__main__":
     tests = [
