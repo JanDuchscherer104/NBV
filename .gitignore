@@ -250,8 +250,14 @@ graphify-out/
 !.omx/interviews/
 !.omx/specs/
 !.omx/plans/
-.omx/plans/**/*architect-review*
-.omx/plans/**/*critic-review*
+.omx/**/*architect*review*
+.omx/**/*review*architect*
+.omx/**/*architecture*review*
+.omx/**/*review*architecture*
+.omx/**/*critic*review*
+.omx/**/*review*critic*
+.omx/**/*critique*review*
+.omx/**/*review*critique*
 .omx/specs/**/mission.md
 .omx/specs/**/sandbox.md
 .omx/specs/**/result.json

@@ -370,13 +370,17 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         path
         for path in tracked
         if "review" in Path(path).name.lower()
-        and any(role in Path(path).name.lower() for role in ("architect", "critic"))
+        and any(
+            role in Path(path).name.lower()
+            for role in ("architect", "architecture", "critic", "critique")
+        )
     ]
     assert not tracked_role_reviews
 
     ignored = _read(ROOT / ".gitignore")
-    for role in ("architect", "critic"):
-        assert f".omx/plans/**/*{role}-review*" in ignored
+    for role in ("architect", "architecture", "critic", "critique"):
+        assert f".omx/**/*{role}*review*" in ignored
+        assert f".omx/**/*review*{role}*" in ignored
     ignored_role_reviews = subprocess.run(
         [
             "git",
@@ -388,14 +392,26 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         check=True,
         input=(
             ".omx/plans/example-architect-review.md\n"
+            ".omx/plans/example-review-architect.md\n"
+            ".omx/interviews/example-architecture-review.md\n"
+            ".omx/specs/example-review-architecture.md\n"
             ".omx/plans/nested/example-critic-review-iteration-1.md\n"
+            ".omx/plans/nested/example-review-critic.md\n"
+            ".omx/plans/example-critique-review.md\n"
+            ".omx/plans/example-review-critique.md\n"
         ),
         capture_output=True,
         text=True,
     ).stdout.splitlines()
     assert ignored_role_reviews == [
         ".omx/plans/example-architect-review.md",
+        ".omx/plans/example-review-architect.md",
+        ".omx/interviews/example-architecture-review.md",
+        ".omx/specs/example-review-architecture.md",
         ".omx/plans/nested/example-critic-review-iteration-1.md",
+        ".omx/plans/nested/example-review-critic.md",
+        ".omx/plans/example-critique-review.md",
+        ".omx/plans/example-review-critique.md",
     ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
