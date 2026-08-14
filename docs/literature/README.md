@@ -58,7 +58,7 @@ uv run python scripts/download_arxiv_tex_src.py docs/literature/sources.jsonl --
 
 By default the script writes extracted source trees into `docs/literature/tex-src/` and PDFs into `docs/literature/pdf/`. Use `--overwrite` to replace an existing extracted tree or PDF target.
 
-## Optional Graphify projection
+## Graphify projection
 
 The exact literature owners remain `sources.jsonl`, `docs/references.bib`,
 `docs/references-qh.bib`, the active Typst thesis,

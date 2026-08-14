@@ -43,7 +43,7 @@ metadata:
     - "docs/typst/shared/equations.typ"
     - "docs/notation.yml"
     - ".graphifyignore"
-    - "docs/literature/README.md#optional-graphify-projection"
+    - "docs/literature/README.md#graphify-projection"
   literature_refs:
     - "docs/contents/literature/index.qmd"
     - "docs/literature/sources.jsonl"

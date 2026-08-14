@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hermetic contract tests for the optional Graphify Markdown projection."""
+"""Hermetic contract tests for the required Graphify Markdown projection."""
 
 from __future__ import annotations
 

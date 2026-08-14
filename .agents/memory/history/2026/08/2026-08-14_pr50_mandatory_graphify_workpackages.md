@@ -43,6 +43,12 @@ cache-preparation mode before directory creation and again immediately before
 linking only the `semantic` and `semantic-deep` cache leaves. This remediation
 also does not constitute final review approval.
 
+The user-directed G008 follow-up added Graphify 0.9.31's generated always-on
+`## graphify` section to the agents-DB guide, followed by the mandatory ARIA
+freshness and exact-source reconciliation. It also removed stale active wording
+that called the required projection optional. G008 created no backlog record and
+does not assert final review approval.
+
 ## Verification
 Focused seed/setup, freshness, upstream-identity, CI-impact, Ruff, Python
 compile, `git diff --check`, agent-memory, agent-DB, and scaffold-audit gates
@@ -52,10 +58,14 @@ freshness regressions.
 G007 expanded the seed suite to eleven regressions and added setup coverage for
 existing and dangling external targets in bootstrap, idempotent, and `--check`
 paths; the live setup `--check` also passed.
+G008 passed agents-DB validation/listing, agent-memory validation, twelve G002
+governance tests, forty-two projection tests, scaffold audit/self-test, upstream
+skill identity, Ruff, Python compilation, and whitespace validation.
 
-Focused local commits `f01a6f8f`, `ea41f079`, `3ac503e5`, and `15a5c134`
-were created during the completed workpackages. No push or other external
-publication was performed. Existing concurrent worktree changes were preserved.
+Focused local commits `f01a6f8f`, `ea41f079`, `3ac503e5`, `15a5c134`,
+`e98e3027`, `2c902989`, and `a30d64c4` were created during the completed
+workpackages. No push or other external publication was performed. Existing
+concurrent worktree changes were preserved.
 
 ## Canonical State Impact
 None. The durable behavior is owned by source, tests, configuration, and the
