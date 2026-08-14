@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from itertools import combinations, pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -40,6 +40,11 @@ from .zarr_store import (
     ROLLOUT_ZARR_SCHEMA_VERSION,
     RolloutZarrStoreReader,
     _required_groups,
+)
+
+CandidateGroupField = Literal["position", "strategy", "mixture", "invalid_reason", "policy"]
+CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
+    "position", "strategy", "mixture", "invalid_reason", "policy"
 )
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
@@ -794,7 +799,7 @@ def store_invariant_rows(
 def candidate_group_summary_rows(
     reader: RolloutZarrStoreReader,
     *,
-    group_by: str,
+    group_by: CandidateGroupField,
     audit_rows: Iterable[dict[str, object]] | None = None,
 ) -> list[dict[str, object]]:
     """Summarize candidate validity and labels by a decoded categorical field.
@@ -807,6 +812,8 @@ def candidate_group_summary_rows(
             needs several groupings.
     """
 
+    if group_by not in CANDIDATE_GROUP_FIELDS:
+        raise ValueError(f"Unsupported candidate group field: {group_by}")
     rows = candidate_audit_rows(reader) if audit_rows is None else audit_rows
     groups: dict[str, dict[str, float]] = {}
     for row in rows:
