@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TERMS = ROOT / "docs/typst/shared/glossary.typ"
@@ -110,7 +110,12 @@ def _normalize_queried_term(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise GlossaryError(
+            f"cannot load notation metadata from {path}: {exc}"
+        ) from exc
     if not isinstance(data, dict):
         raise GlossaryError(f"{path} must contain a YAML mapping")
     notation: dict[str, dict[str, dict[str, Any]]] = {}
@@ -144,15 +149,25 @@ def _load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
                 entry["description"] = description.strip()
             thesis_list = raw_entry.get("thesis_list", False)
             if not isinstance(thesis_list, bool):
-                raise GlossaryError(f"{path}: {group}.{key}.thesis_list must be a boolean")
+                raise GlossaryError(
+                    f"{path}: {group}.{key}.thesis_list must be a boolean"
+                )
             entry["thesis_list"] = thesis_list
             order = raw_entry.get("order")
             if order is not None:
                 if isinstance(order, bool) or not isinstance(order, int):
-                    raise GlossaryError(f"{path}: {group}.{key}.order must be an integer")
+                    raise GlossaryError(
+                        f"{path}: {group}.{key}.order must be an integer"
+                    )
                 entry["order"] = order
             notation[group][key] = entry
     return notation
+
+
+def load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
+    """Load and validate the canonical shared notation registry."""
+
+    return _load_notation(path)
 
 
 def _validate_terms(terms: list[dict[str, Any]]) -> None:
@@ -222,6 +237,17 @@ def _validate_terms(terms: list[dict[str, Any]]) -> None:
                 raise GlossaryError(
                     f"{term_id}: formulae[{idx}].tex must be a non-empty string"
                 )
+    for term in terms:
+        term_id = _expect_string(term, "id")
+        parent = term.get("parent")
+        if parent is not None and (
+            not isinstance(parent, str)
+            or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", parent)
+        ):
+            raise GlossaryError(f"{term_id}: parent must be a taxonomy slug")
+        for related in _as_list(term, "related"):
+            if related not in ids:
+                raise GlossaryError(f"{term_id}: unknown related {related!r}")
 
 
 def _validate_lookup_refs(
@@ -247,6 +273,18 @@ def _validate_notation_metadata(
                     f"docs/notation.yml: {group}.{key} has thesis_list: true "
                     "but no description"
                 )
+
+
+def normalize_and_validate_metadata(
+    terms: list[dict[str, Any]], notation: dict[str, dict[str, dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    """Normalize queried glossary rows and validate their shared metadata."""
+
+    normalized = [_normalize_queried_term(term) for term in terms]
+    _validate_terms(normalized)
+    _validate_lookup_refs(normalized, notation)
+    _validate_notation_metadata(notation)
+    return normalized
 
 
 def _validate_typst_notation_expressions(
@@ -472,9 +510,9 @@ def _render_qmd(
         '<a class="glossary-chip glossary-category-chip" href="#glossary-core-math-lookup">'
         "Math lookup</a>",
         *[
-        f'<a class="glossary-chip glossary-category-chip" href="#glossary-category-{_slug(group)}">'
-        f"{_html_text(_category_label(group))} <span>{len(group_terms)}</span></a>"
-        for group, group_terms in grouped.items()
+            f'<a class="glossary-chip glossary-category-chip" href="#glossary-category-{_slug(group)}">'
+            f"{_html_text(_category_label(group))} <span>{len(group_terms)}</span></a>"
+            for group, group_terms in grouped.items()
         ],
     ]
     lines = [
@@ -575,9 +613,7 @@ def _render_core_lookup(
         "<tbody>",
     ]
     for term in core_terms:
-        term_link = (
-            f'<a href="#{_html_attr(term["anchor"])}">{_html_text(_term_title(term))}</a>'
-        )
+        term_link = f'<a href="#{_html_attr(term["anchor"])}">{_html_text(_term_title(term))}</a>'
         symbols = _render_notation_refs(
             _as_list(term, "symbol_refs"), notation["symbols"], "symbol"
         )
@@ -588,7 +624,7 @@ def _render_core_lookup(
         lines += [
             "<tr>",
             f"<td>{term_link}</td>",
-            f'<td>{_html_text(str(term["definition_short"]).strip())}</td>',
+            f"<td>{_html_text(str(term['definition_short']).strip())}</td>",
             f"<td>{symbols or empty}</td>",
             f"<td>{equations or empty}</td>",
             "</tr>",
@@ -609,7 +645,7 @@ def _render_notation_refs(
         items.append(
             '<span class="glossary-notation-item">'
             f'<span class="glossary-notation-math">${tex}$</span>'
-            f'<code>{_html_text(ref)}</code>'
+            f"<code>{_html_text(ref)}</code>"
             "</span>"
         )
     if not items:
@@ -701,10 +737,6 @@ def _render_metadata_details(
             related.append(
                 f'<a class="glossary-chip" href="#{_html_attr(related_term["anchor"])}">'
                 f"{_html_text(str(related_term.get('short') or related_term['label']))}</a>"
-            )
-        else:
-            related.append(
-                f'<a class="glossary-chip" href="#term-{_html_attr(_slug(related_id))}">{_html_text(related_id)}</a>'
             )
     docs = [
         _qmd_link(link, css_class="glossary-chip")
