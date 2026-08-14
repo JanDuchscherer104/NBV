@@ -11,9 +11,11 @@ import json
 import math
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
+import sys
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
@@ -25,7 +27,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field, model_validator
 
 from ...utils import TargetConfig
-from ...utils.fingerprints import stable_msgspec_hash
+from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 
 class CampaignOutcome(StrEnum):
@@ -35,6 +37,8 @@ class CampaignOutcome(StrEnum):
     INSUFFICIENT_SUPPORT = "insufficient_support"
     TIMED_OUT = "timed_out"
     PENDING = "pending"
+    BLOCKED = "blocked"
+    CONFLICTED = "conflicted"
 
 
 class CampaignProfileConfig(BaseModel):
@@ -136,8 +140,6 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
         for p in self.profiles:
             if p.device != "cuda" or p.components != _PROFILE_COMPONENTS[p.name] or p.total_count != 60:
                 raise ValueError(f"invalid reviewed profile {p.name}")
-            if not p.recipes:
-                p.recipes = expected_recipes.copy()
             if p.recipes != expected_recipes:
                 raise ValueError(f"invalid recipe suite for {p.name}")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", self.campaign_id):
@@ -194,6 +196,9 @@ class CampaignPlan:
     plan_hash: str
     config_hash: str = ""
     writer_config_hash: str = ""
+    admission_audit_hash: str = ""
+    admission_counts: dict[str, int] | None = None
+    admission_reason_counts: dict[str, int] | None = None
 
     def to_jsonable(self) -> dict[str, Any]:
         return {
@@ -205,6 +210,9 @@ class CampaignPlan:
             "plan_hash": self.plan_hash,
             "config_hash": self.config_hash,
             "writer_config_hash": self.writer_config_hash,
+            "admission_audit_hash": self.admission_audit_hash,
+            "admission_counts": self.admission_counts or {},
+            "admission_reason_counts": self.admission_reason_counts or {},
         }
 
     @classmethod
@@ -219,6 +227,9 @@ class CampaignPlan:
             str(payload["plan_hash"]),
             str(payload.get("config_hash", "")),
             str(payload.get("writer_config_hash", "")),
+            str(payload.get("admission_audit_hash", "")),
+            payload.get("admission_counts") or {},
+            payload.get("admission_reason_counts") or {},
         )
         expected_payload = {
             "campaign_id": plan.campaign_id,
@@ -227,6 +238,9 @@ class CampaignPlan:
             "profile_hash": plan.profile_hash,
             "config_hash": plan.config_hash,
             "writer_config_hash": plan.writer_config_hash,
+            "admission_audit_hash": plan.admission_audit_hash,
+            "admission_counts": plan.admission_counts or {},
+            "admission_reason_counts": plan.admission_reason_counts or {},
             "work_units": [asdict(u) for u in units],
         }
         expected = stable_msgspec_hash(json.loads(json.dumps(expected_payload, sort_keys=True, default=str)))
@@ -255,6 +269,13 @@ class CampaignEvent:
     writer_config_hash: str | None = None
     source_manifest_hash: str | None = None
     elapsed_seconds: float | None = None
+    schema_version: str = "campaign-event-v1"
+    pid: int | None = None
+    process_group: int | None = None
+    tmux_session: str | None = None
+    timeout_disposition: str | None = None
+    stderr_tail: str | None = None
+    campaign_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,12 +290,24 @@ class CampaignStatus:
     current_stage: str | None = None
     elapsed_seconds: float = 0.0
     latest_failure_reason: str | None = None
+    schema_version: str = "campaign-status-v2"
+    campaign_id: str = ""
+    config_hash: str = ""
+    smoke_evidence_hash: str = ""
+    smoke_evidence_summary: dict[str, Any] | None = None
+    last_work_unit: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    bounded_error: str | None = None
+    last_timeout: dict[str, Any] | None = None
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignStatus":
         required = {"state", "counts", "plan_hash", "updated_at"}
         if not required.issubset(payload):
             raise ValueError("status is missing required fields")
+        if payload.get("schema_version", "campaign-status-v1") not in {"campaign-status-v1", "campaign-status-v2"}:
+            raise ValueError("unsupported campaign status schema version")
         return cls(
             str(payload["state"]),
             {str(k): int(v) for k, v in payload["counts"].items()},
@@ -286,6 +319,16 @@ class CampaignStatus:
             payload.get("current_stage"),
             float(payload.get("elapsed_seconds", 0.0)),
             payload.get("latest_failure_reason"),
+            str(payload.get("schema_version", "campaign-status-v1")),
+            str(payload.get("campaign_id", "")),
+            str(payload.get("config_hash", "")),
+            str(payload.get("smoke_evidence_hash", "")),
+            payload.get("smoke_evidence_summary"),
+            payload.get("last_work_unit"),
+            payload.get("started_at"),
+            payload.get("finished_at"),
+            payload.get("bounded_error"),
+            payload.get("last_timeout"),
         )
 
 
@@ -340,6 +383,27 @@ class CampaignProcess(Protocol):
 
     def poll(self) -> int | None: ...
     def wait(self, timeout: float | None = None) -> int: ...
+    def communicate(self, timeout: float | None = None) -> tuple[Any, Any]: ...
+
+
+class CampaignTimeoutError(TimeoutError):
+    """Bounded child timeout carrying reproducible process evidence."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        pid: int,
+        process_group: int | None,
+        elapsed_seconds: float,
+        stderr_tail: str = "",
+        disposition: str = "term-grace-kill",
+        tmux_session: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.pid, self.process_group = pid, process_group
+        self.elapsed_seconds, self.stderr_tail = elapsed_seconds, stderr_tail[-2000:]
+        self.disposition, self.tmux_session = disposition, tmux_session
 
 
 class CampaignProcessRunner:
@@ -370,28 +434,50 @@ class CampaignProcessRunner:
         stderr: Any = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> tuple[int, str, str]:
-        """Run one opaque child, terminating its process group at the boundary."""
+        """Run one opaque child while draining pipes and enforcing its watchdog."""
         process = self.start(argv, stdout=stdout, stderr=stderr)
         started = clock()
-        while process.poll() is None:
-            if clock() - started >= timeout:
-                self.terminate_group(process, grace_seconds=10)
-                raise TimeoutError(f"process timed out after {timeout:g}s")
-            time.sleep(min(0.01, max(0.0, timeout - (clock() - started))))
-        returncode = process.wait()
-        out = process.stdout.read() if hasattr(process.stdout, "read") else ""
-        err = process.stderr.read() if hasattr(process.stderr, "read") else ""
-        return returncode, out, err
+        try:
+            out, err = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            elapsed = clock() - started
+            try:
+                process_group = os.getpgid(process.pid)
+            except ProcessLookupError:
+                process_group = None
+            if process_group is not None:
+                try:
+                    os.killpg(process_group, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+            disposition = "term-grace"
+            try:
+                out, err = process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                disposition = "term-grace-kill"
+                if process_group is not None:
+                    try:
+                        os.killpg(process_group, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                out, err = process.communicate()
+            if isinstance(err, bytes):
+                err = err.decode(errors="replace")
+            raise CampaignTimeoutError(
+                f"process timed out after {timeout:g}s",
+                pid=process.pid,
+                process_group=process_group,
+                elapsed_seconds=elapsed,
+                stderr_tail=err or "",
+                disposition=disposition,
+            ) from None
+        return process.returncode, out or "", err or ""
 
     def run_stage(
         self, argv: Sequence[str], *, timeout: float = 120, stdout: Any = None, stderr: Any = None
     ) -> tuple[int, str, str]:
         """Run a bounded setup/render stage using the same process-group policy."""
         return self.run(argv, timeout=timeout, stdout=stdout, stderr=stderr)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class CudaRolloutCampaign:
@@ -408,6 +494,14 @@ class CudaRolloutCampaign:
         self.config, self.clock, self.utc_now = config, clock, utc_now
         self.process_runner = process_runner or CampaignProcessRunner()
 
+    @staticmethod
+    def _disk_usage_path(path: Path) -> Path:
+        """Return the nearest existing ancestor without creating output state."""
+        candidate = path
+        while not candidate.exists() and candidate != candidate.parent:
+            candidate = candidate.parent
+        return candidate
+
     def plan(
         self, source_rows: Iterable[Any], *, source_manifest_hash: str = "", writer_config_hash: str = ""
     ) -> CampaignPlan:
@@ -420,9 +514,27 @@ class CudaRolloutCampaign:
                 return getattr(row, key)
             return row.get(key, "") if hasattr(row, "get") else ""
 
-        scenes = sorted({str(val(r, "scene_id")) for r in rows})
+        def is_strictly_eligible(row: Any) -> bool:
+            if val(row, "admitted") is not True:
+                return False
+            iou = val(row, "oriented_iou")
+            try:
+                return (
+                    iou not in ("", None)
+                    and math.isfinite(float(iou))
+                    and float(iou) > self.config.observed_target_iou_threshold
+                )
+            except (TypeError, ValueError):
+                return False
+
         if not rows or any(not str(val(r, "scene_id")) for r in rows):
             raise ValueError("source rows require non-empty scene_id")
+        invalid_admissions = [row for row in rows if val(row, "admitted") is True and not is_strictly_eligible(row)]
+        if invalid_admissions:
+            raise ValueError("admitted source rows require finite oriented_iou strictly above the threshold")
+        scenes = sorted({str(val(row, "scene_id")) for row in rows if is_strictly_eligible(row)})
+        if not scenes:
+            raise ValueError("source rows contain no eligible admitted scenes")
         identities = [
             (str(val(r, "scene_id")), str(val(r, "sample_key")), str(val(r, "target_id") or val(r, "task_id")))
             for r in rows
@@ -432,6 +544,22 @@ class CudaRolloutCampaign:
         if len(scenes) != self.config.expected_scene_count:
             raise ValueError(f"expected {self.config.expected_scene_count} scenes, found {len(scenes)}")
         profiles = self.config.profiles
+        rank_ch = sorted(
+            scenes,
+            key=lambda s: (
+                hashlib.sha256(
+                    json.dumps([self.config.seed, "challenger", s], separators=(",", ":")).encode()
+                ).hexdigest(),
+                s,
+            ),
+        )
+        rank_panel = sorted(
+            scenes,
+            key=lambda s: (
+                hashlib.sha256(json.dumps([self.config.seed, "panel", s], separators=(",", ":")).encode()).hexdigest(),
+                s,
+            ),
+        )
         units: list[CampaignWorkUnit] = []
         for row_index, row in enumerate(rows):
             sample = str(val(row, "sample_key"))
@@ -442,12 +570,7 @@ class CudaRolloutCampaign:
             # assigned by scene and the first panel scenes receive all profiles.
             scene = str(val(row, "scene_id"))
             iou = val(row, "oriented_iou")
-            if (
-                val(row, "admitted") is not True
-                or iou in ("", None)
-                or not math.isfinite(float(iou))
-                or not float(iou) > self.config.observed_target_iou_threshold
-            ):
+            if not is_strictly_eligible(row):
                 continue
             explicit_payload = val(row, "explicit_target_config")
             if not explicit_payload:
@@ -490,28 +613,6 @@ class CudaRolloutCampaign:
                 or (explicit_payload.get("explicit_target_hash", "") if isinstance(explicit_payload, dict) else "")
             ):
                 raise ValueError("admitted campaign rows require explicit_target_hash")
-            if iou not in ("", None) and float(iou) <= self.config.observed_target_iou_threshold:
-                continue
-            if val(row, "admitted") is False:
-                continue
-            rank_ch = sorted(
-                scenes,
-                key=lambda s: (
-                    hashlib.sha256(
-                        json.dumps([self.config.seed, "challenger", s], separators=(",", ":")).encode()
-                    ).hexdigest(),
-                    s,
-                ),
-            )
-            rank_panel = sorted(
-                scenes,
-                key=lambda s: (
-                    hashlib.sha256(
-                        json.dumps([self.config.seed, "panel", s], separators=(",", ":")).encode()
-                    ).hexdigest(),
-                    s,
-                ),
-            )
             selected = [profiles[0]]
             if scene in rank_panel[: self.config.paired_panel_scene_count]:
                 selected = profiles
@@ -583,6 +684,33 @@ class CudaRolloutCampaign:
             for unit in units
         ]
         units = [replace(unit, work_unit_hash=_work_unit_identity(unit, seed=self.config.seed)) for unit in units]
+        admission_counts = {
+            "admitted": sum(1 for row in rows if val(row, "admitted") is True),
+            "rejected": sum(1 for row in rows if val(row, "admitted") is not True),
+        }
+        reason_counts: dict[str, int] = {}
+        for row in rows:
+            reason = str(
+                val(row, "reason")
+                or val(row, "admission_reason")
+                or ("admitted" if val(row, "admitted") is True else "unspecified")
+            )
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        audit_rows = [
+            json.loads(
+                json.dumps(
+                    row
+                    if isinstance(row, dict)
+                    else row.model_dump(mode="json")
+                    if hasattr(row, "model_dump")
+                    else vars(row),
+                    sort_keys=True,
+                    default=str,
+                )
+            )
+            for row in rows
+        ]
+        admission_audit_hash = stable_msgspec_hash(audit_rows)
         payload = {
             "campaign_id": self.config.campaign_id,
             "seed": self.config.seed,
@@ -590,6 +718,9 @@ class CudaRolloutCampaign:
             "profile_hash": profile_hash,
             "config_hash": config_hash,
             "writer_config_hash": writer_config_hash,
+            "admission_audit_hash": admission_audit_hash,
+            "admission_counts": admission_counts,
+            "admission_reason_counts": reason_counts,
             "work_units": [asdict(u) for u in units],
         }
         plan_hash = stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
@@ -602,15 +733,134 @@ class CudaRolloutCampaign:
             plan_hash,
             config_hash,
             writer_config_hash,
+            admission_audit_hash,
+            admission_counts,
+            reason_counts,
         )
 
-    def preflight(self, cuda_probe: Callable[[], Any] | None = None, *, nested_configs: Iterable[Any] = ()) -> Any:
+    def audit_source_manifest(self, writer_config: Any, source_manifest: Any) -> list[dict[str, Any]]:
+        """Enumerate every observed target and attach privileged admission evidence."""
+        from ...targets.selection import observed_target_descriptors
+        from ..target_selection import OracleTargetTaskSampler, match_observed_target_descriptors
+        from .rollout_dataset import ExplicitRolloutTargetConfig, RolloutDatasetWriter
+
+        dataset = writer_config.source.setup_target()
+        if dataset is None:
+            raise RuntimeError("campaign source audit requires a VIN offline dataset")
+        RolloutDatasetWriter._apply_source_manifest(
+            dataset,
+            source_manifest,
+            sample_keys=writer_config.sample_keys,
+        )
+        source_rows = writer_config.selected_source_manifest_rows(source_manifest)
+        if len(dataset) != len(source_rows):
+            raise ValueError("campaign source audit dataset/manifest row count mismatch")
+        sampler = OracleTargetTaskSampler(writer_config.oracle_target_task_sampler)
+        audited: list[dict[str, Any]] = []
+        for source_row, sample in zip(source_rows, dataset, strict=True):
+            if str(sample.sample_key) != source_row.sample_key:
+                raise ValueError("campaign source audit sample identity mismatch")
+            observed = observed_target_descriptors(sample)
+            gt_rows = sampler.sample(sample).rows
+            matches = match_observed_target_descriptors(
+                observed,
+                list(gt_rows),
+                threshold=self.config.observed_target_iou_threshold,
+            )
+            for match in matches:
+                actor = match.descriptor
+                row = {
+                    **source_row.to_jsonable(),
+                    "target_id": actor.target_id,
+                    "detected_source_row": actor.source_row,
+                    "gt_match_row": match.gt_match_row,
+                    "gt_match_id": match.gt_match_id,
+                    "gt_match_count": match.qualified_gt_match_count,
+                    "qualified_gt_match_count": match.qualified_gt_match_count,
+                    "oriented_iou": match.oriented_iou,
+                    "admitted": match.admitted,
+                    "reason": match.reason.value,
+                    "descriptor_hash": actor.descriptor_hash,
+                }
+                if match.admitted:
+                    if actor.descriptor is None or match.gt_match_row is None or match.gt_match_id is None:
+                        raise ValueError("admitted target is missing descriptor or GT audit identity")
+                    identity = {
+                        "sample_key": actor.sample_key,
+                        "target_id": actor.target_id,
+                        "detected_source_row": actor.source_row,
+                        "gt_match_row": match.gt_match_row,
+                        "gt_match_id": match.gt_match_id,
+                        "oriented_iou": match.oriented_iou,
+                        "descriptor_hash": actor.descriptor_hash,
+                    }
+                    explicit_hash = stable_msgspec_hash(identity)
+                    explicit = ExplicitRolloutTargetConfig.model_validate(
+                        {
+                            **{key: value for key, value in identity.items() if key != "descriptor_hash"},
+                            "actor_descriptor": actor,
+                            "status": "admitted",
+                            "reason": "admitted",
+                            "explicit_target_hash": explicit_hash,
+                        }
+                    )
+                    row["explicit_target_hash"] = explicit_hash
+                    row["explicit_target_config"] = explicit.model_dump(mode="json")
+                audited.append(row)
+        return audited
+
+    def write_admission_audit(
+        self,
+        rows: Sequence[dict[str, Any]],
+        *,
+        source_manifest_hash: str,
+        expected_hash: str,
+        path: Path | None = None,
+    ) -> Path:
+        """Persist the complete immutable target-admission audit before plan publication."""
+        audit_hash = stable_msgspec_hash(list(rows))
+        if audit_hash != expected_hash:
+            raise ValueError("admission audit hash does not match campaign plan")
+        target = path or (self.config.output_root / "admission-audit.json")
+        payload = {
+            "schema_version": "campaign-admission-audit-v1",
+            "campaign_id": self.config.campaign_id,
+            "source_manifest_hash": source_manifest_hash,
+            "admission_audit_hash": audit_hash,
+            "rows": list(rows),
+        }
+        encoded = json.dumps(payload, sort_keys=True, indent=2) + "\n"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists() and target.read_text(encoding="utf-8") != encoded:
+            raise ValueError("canonical admission audit already exists with different content")
+        if not target.exists():
+            tmp = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+            tmp.write_text(encoded, encoding="utf-8")
+            os.replace(tmp, target)
+        return target
+
+    def preflight(
+        self,
+        cuda_probe: Callable[[], Any] | None = None,
+        *,
+        nested_configs: Iterable[Any] = (),
+        plan_path: Path | None = None,
+        writer_config_path: Path | None = None,
+    ) -> Any:
         # This gate intentionally runs before plan/status/evidence writes in
         # production entry points.  Nested writer and renderer configs are
         # part of the CUDA contract, not optional leaf hints.
         validate_cuda_contract(self.config)
         for nested in nested_configs:
             validate_cuda_contract(nested)
+        output_root = self.config.output_root
+        if output_root.exists() and not output_root.is_dir():
+            raise RuntimeError("campaign output_root exists but is not a directory")
+        writable_parent = self._disk_usage_path(output_root)
+        if not writable_parent.is_dir() or not os.access(writable_parent, os.W_OK):
+            raise RuntimeError("campaign output_root has no writable existing ancestor")
+        if shutil.disk_usage(writable_parent).free <= 0:
+            raise RuntimeError("campaign output filesystem reports no free space")
         result = cuda_probe() if cuda_probe else None
         if cuda_probe:
             validate_cuda_contract(result)
@@ -635,7 +885,65 @@ class CudaRolloutCampaign:
 
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA is required for campaign execution")
-        return {"ok": True, "device": torch.cuda.get_device_name(0)}
+        # The actual rasterizer operation runs in the named watchdog child
+        # below; keep the parent gate to cheap availability checks only.
+        # Keep the two heavyweight gates in separate, named subprocesses.  In
+        # particular, do not use an empty ``python -c pass`` placeholder: the
+        # child must execute the repository-owned internal probe mode and is
+        # subject to the same process-group watchdog as every other stage.
+        python = os.environ.get("PYTHON", sys.executable)
+        for stage_name in ("cuda-rasterizer-preflight", "source-target-preflight"):
+            stage_argv = [python, "-m", "aria_nbv.oracle.pipelines.cli", "--internal-preflight", stage_name]
+            if plan_path is not None:
+                stage_argv.extend(("--plan-path", str(plan_path)))
+            if writer_config_path is not None:
+                stage_argv.extend(("--writer-config-path", str(writer_config_path)))
+            stage_argv.extend(("--expected-scene-count", str(self.config.expected_scene_count)))
+            self.run_preflight_stage(
+                tuple(stage_argv),
+                stage_name=stage_name,
+            )
+        return {
+            "ok": True,
+            "cuda_available": True,
+            "pytorch3d_available": True,
+            "device": torch.cuda.get_device_name(0),
+        }
+
+    def run_preflight_stage(
+        self, argv: Sequence[str], *, plan: CampaignPlan | None = None, stage_name: str = "preflight"
+    ) -> tuple[int, str, str]:
+        """Run the named 120-second setup stage through the process-group watchdog."""
+        result = self.process_runner.run_stage(
+            argv,
+            timeout=self.config.stage_timeout_seconds,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if plan is not None:
+            self.append_event(
+                self._event(
+                    plan,
+                    "preflight_stage_completed" if result[0] == 0 else "preflight_stage_failed",
+                    stage=stage_name,
+                    detail=(result[2] or result[1])[-2000:],
+                )
+            )
+        if result[0] != 0:
+            raw_detail = result[2] or result[1] or f"preflight stage exited {result[0]}"
+            if isinstance(raw_detail, bytes):
+                raw_detail = raw_detail.decode(errors="replace")
+            detail = raw_detail.strip()
+            # Internal probes run with normal Python exception reporting.  The
+            # public CLI should expose the terminal reason, not embed a child
+            # traceback inside Click's validation error.
+            terminal_line = detail.splitlines()[-1] if detail else f"preflight stage exited {result[0]}"
+            if ": " in terminal_line:
+                exception_name, message = terminal_line.split(": ", 1)
+                if exception_name.endswith(("Error", "Exception")):
+                    terminal_line = message
+            raise RuntimeError(terminal_line)
+        return result
 
     def smoke(
         self,
@@ -667,12 +975,21 @@ class CudaRolloutCampaign:
                 raise RuntimeError("worker did not emit typed validated JSON") from exc
         else:
             result = self.run_with_watchdog(unit, worker, timeout=self.config.work_unit_timeout_seconds)
+        result = self.parse_worker_json(result)
+        if result.get("outcome") == CampaignOutcome.SKIPPED.value and result.get("validated") is True:
+            try:
+                self.smoke_evidence(plan)
+            except RuntimeError as exc:
+                raise RuntimeError("smoke evidence requires a structured succeeded+validated worker result") from exc
+            return result
+        if result.get("outcome") != CampaignOutcome.SUCCEEDED.value or result.get("validated") is not True:
+            raise RuntimeError("smoke evidence requires a structured succeeded+validated worker result")
         evidence = {
             "campaign_id": self.config.campaign_id,
             "plan_hash": plan.plan_hash,
             "work_unit_hash": unit.work_unit_hash,
             "config_hash": plan.config_hash,
-            "result": str(result),
+            "result": result,
         }
         (self.config.output_root / "smoke-evidence.json").parent.mkdir(parents=True, exist_ok=True)
         (self.config.output_root / "smoke-evidence.json").write_text(json.dumps(evidence, sort_keys=True) + "\n")
@@ -681,7 +998,21 @@ class CudaRolloutCampaign:
     @staticmethod
     def parse_worker_json(payload: str | bytes | dict[str, Any]) -> dict[str, Any]:
         """Parse worker JSON and preserve skipped as a distinct outcome."""
-        value = json.loads(payload) if isinstance(payload, (str, bytes)) else payload
+        if isinstance(payload, bytes):
+            payload = payload.decode(errors="replace")
+        if isinstance(payload, str):
+            candidates = [line.strip() for line in payload.splitlines() if line.strip()]
+            value = None
+            for candidate in reversed(candidates):
+                try:
+                    value = json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+                break
+            if value is None:
+                raise ValueError("worker output contains no JSON result")
+        else:
+            value = payload
         if not isinstance(value, dict) or value.get("outcome") not in {"succeeded", "skipped", "insufficient_support"}:
             raise ValueError("worker JSON requires succeeded, skipped, or insufficient_support outcome")
         if value["outcome"] == "succeeded" and not value.get("validated"):
@@ -700,6 +1031,23 @@ class CudaRolloutCampaign:
             raise RuntimeError("smoke evidence is stale for this campaign plan")
         if not evidence.get("work_unit_hash") or evidence.get("config_hash") != plan.config_hash:
             raise RuntimeError("smoke evidence hash mismatch")
+        result = evidence.get("result")
+        if not isinstance(result, dict) or result.get("outcome") != CampaignOutcome.SUCCEEDED.value:
+            raise RuntimeError("smoke evidence result must be succeeded")
+        if result.get("validated") is not True:
+            raise RuntimeError("smoke evidence result must be validated")
+        unit = next((u for u in plan.work_units if u.profile == "realistic_core_60"), None)
+        if unit is None or evidence.get("work_unit_hash") != unit.work_unit_hash:
+            raise RuntimeError("smoke evidence work-unit identity mismatch")
+        for key in ("plan_hash", "work_unit_hash", "config_hash"):
+            if key in result and result[key] != (
+                plan.plan_hash
+                if key == "plan_hash"
+                else unit.work_unit_hash
+                if key == "work_unit_hash"
+                else plan.config_hash
+            ):
+                raise RuntimeError(f"smoke evidence {key} mismatch")
         return evidence
 
     def run_work_unit(
@@ -745,8 +1093,29 @@ class CudaRolloutCampaign:
         from ...rollouts.shard_manifest import RolloutShardCampaignBinding
 
         cfg = writer_config.model_copy(deep=True) if hasattr(writer_config, "model_copy") else writer_config
+        if hasattr(shard_entry, "rows"):
+            rows = tuple(shard_entry.rows)
+            if len(rows) != 1 or getattr(rows[0], "sample_key", None) != unit.sample_key:
+                raise ValueError("campaign work unit must bind exactly one matching source row")
         if hasattr(cfg, "sample_keys"):
-            cfg = cfg.model_copy(update={"sample_keys": None, "source_manifest_path": None})
+            # Each campaign work unit is exactly one immutable source row.
+            source_manifest_path = getattr(cfg, "source_manifest_path", None)
+            if source_manifest_path is not None:
+                from ...rollouts.shard_manifest import read_rollout_source_manifest
+
+                manifest_keys = {row.sample_key for row in read_rollout_source_manifest(source_manifest_path).rows}
+                if unit.sample_key not in manifest_keys:
+                    raise ValueError("campaign work unit sample is absent from the canonical source manifest")
+                cfg = cfg.model_copy(
+                    update={
+                        "sample_keys": [unit.sample_key],
+                        "max_samples": 1,
+                    }
+                )
+            else:
+                # Legacy in-memory adapters have no manifest to constrain;
+                # production configs always carry one and take the strict path.
+                cfg = cfg.model_copy(update={"sample_keys": None})
         target_payload = explicit_target or unit.explicit_target_config
         if target_payload is not None and hasattr(cfg, "explicit_target"):
             from .rollout_dataset import ExplicitRolloutTargetConfig
@@ -836,6 +1205,29 @@ class CudaRolloutCampaign:
             )
         if hasattr(cfg, "model_dump"):
             cfg = type(cfg).model_validate({**cfg.model_dump(), "explicit_target": target_payload})
+        if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
+            cfg = cfg.model_copy(
+                update={"store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})}
+            )
+        # Canonical source/split/writer lineage is mandatory for production
+        # shard entries.  Legacy unit tests may adapt a config without a real
+        # shard envelope; those remain an in-memory construction seam only.
+        if (
+            hasattr(shard_entry, "rows")
+            and getattr(cfg, "source_manifest_path", None) is not None
+            and Path(cfg.source_manifest_path).exists()
+        ):
+            from .shards import plan_rollout_shards
+
+            planned_entries = plan_rollout_shards(cfg, rows_per_shard=1)
+            planned_entries = [entry for entry in planned_entries if entry.rows[0].sample_key == unit.sample_key]
+            if len(planned_entries) != 1:
+                raise ValueError("campaign work unit must plan exactly one canonical source row")
+            shard_entry = planned_entries[0]
+            if not shard_entry.rows or shard_entry.rows[0].sample_key != unit.sample_key:
+                raise ValueError("campaign source row does not match canonical VIN manifest")
+            if getattr(shard_entry, "writer_config_hash", "") != stable_config_hash(cfg):
+                raise ValueError("campaign writer config hash does not match canonical shard lineage")
         binding = RolloutShardCampaignBinding(
             campaign_id=self.config.campaign_id,
             plan_hash=plan_hash
@@ -932,6 +1324,9 @@ class CudaRolloutCampaign:
         cuda_probe: Callable[[], Any] | None = None,
         nested_configs: Iterable[Any] = (),
         current_writer_config_hash: str = "",
+        max_new_units: int | None = None,
+        time_budget_seconds: float | None = None,
+        free_disk_floor_gb: float | None = None,
     ) -> list[Any]:
         """Run a claimed campaign and always release its claim."""
         if plan is None:
@@ -945,12 +1340,42 @@ class CudaRolloutCampaign:
             raise ValueError("campaign config hash does not match plan")
         if plan.writer_config_hash and plan.writer_config_hash != current_writer_config_hash:
             raise ValueError("writer config hash does not match plan")
-        self.preflight(cuda_probe, nested_configs=nested_configs)
-        if worker is None:
-            self.smoke_evidence(plan)
+        if max_new_units is not None and not 1 <= max_new_units <= 100:
+            raise ValueError("max_new_units must be between 1 and 100")
+        if time_budget_seconds is not None and time_budget_seconds <= 0:
+            raise ValueError("time_budget_seconds must be positive")
+        if free_disk_floor_gb is not None and free_disk_floor_gb <= 0:
+            raise ValueError("free_disk_floor_gb must be positive")
+        if free_disk_floor_gb is not None:
+            free_bytes = shutil.disk_usage(self._disk_usage_path(self.config.output_root)).free
+            if free_bytes < free_disk_floor_gb * 1024**3:
+                raise RuntimeError("free disk floor is not satisfied")
+        # Exclusive ownership precedes every status/event mutation so a
+        # competing start cannot clobber the active campaign's evidence.
         claim = self.acquire_claim(plan)
         try:
-            return self._run_claimed(plan, worker=worker, plan_path=plan_path, config_path=config_path, claim=claim)
+            self.preflight(
+                cuda_probe,
+                nested_configs=nested_configs,
+                plan_path=plan_path,
+                writer_config_path=self.config.writer_config_path,
+            )
+            self.write_status(self.status(plan, stage="preflight_passed"))
+            # An injected worker remains subject to the same current smoke gate;
+            # injection changes execution mechanics, not campaign admission.
+            self.smoke_evidence(plan)
+            self.write_status(self.status(plan, stage="smoke_passed"))
+            self.write_status(self.status(plan, stage="running"))
+            return self._run_claimed(
+                plan,
+                worker=worker,
+                plan_path=plan_path,
+                config_path=config_path,
+                claim=claim,
+                max_new_units=max_new_units,
+                time_budget_seconds=time_budget_seconds,
+                free_disk_floor_gb=free_disk_floor_gb,
+            )
         finally:
             self.release_claim(plan, claim_hash=claim["claim_hash"])
 
@@ -962,15 +1387,72 @@ class CudaRolloutCampaign:
         plan_path: Path | None = None,
         config_path: Path | None = None,
         claim: dict[str, Any],
+        max_new_units: int | None = None,
+        time_budget_seconds: float | None = None,
+        free_disk_floor_gb: float | None = None,
     ) -> list[Any]:
         if plan is None:
             raise ValueError("an immutable CampaignPlan is required")
         results = []
         started_at = self.clock()
+        started_at_iso = self.utc_now().isoformat()
+        new_units = 0
+        blocked = False
+        last_timeout: dict[str, Any] | None = None
         self.append_event(self._event(plan, "campaign_started"))
         for unit in plan.work_units:
+            reason = None
+            if max_new_units is not None and new_units >= max_new_units:
+                reason = "max_new_units reached"
+            elif time_budget_seconds is not None and self.clock() - started_at >= time_budget_seconds:
+                reason = "time budget exhausted"
+            elif (
+                free_disk_floor_gb is not None
+                and shutil.disk_usage(self._disk_usage_path(self.config.output_root)).free
+                < free_disk_floor_gb * 1024**3
+            ):
+                reason = "free disk floor reached"
+            if reason:
+                blocked = True
+                self.append_event(
+                    self._event(plan, "campaign_blocked", outcome=CampaignOutcome.BLOCKED.value, detail=reason)
+                )
+                self.write_status(
+                    self.status(
+                        plan,
+                        results,
+                        stage=CampaignOutcome.BLOCKED.value,
+                        elapsed_seconds=self.clock() - started_at,
+                        bounded_error=reason,
+                        last_timeout=last_timeout,
+                        started_at=started_at_iso,
+                    )
+                )
+                break
             self.append_event(self._event(plan, "target_profile", unit=unit, stage=unit.profile))
+            self.write_status(
+                self.status(
+                    plan,
+                    results,
+                    current_unit=unit,
+                    stage=unit.profile,
+                    elapsed_seconds=self.clock() - started_at,
+                    last_timeout=last_timeout,
+                    started_at=started_at_iso,
+                )
+            )
             self.append_event(self._event(plan, "root_preflight", unit=unit, stage="preflight"))
+            self.write_status(
+                self.status(
+                    plan,
+                    results,
+                    current_unit=unit,
+                    stage="preflight",
+                    elapsed_seconds=self.clock() - started_at,
+                    last_timeout=last_timeout,
+                    started_at=started_at_iso,
+                )
+            )
             self.append_event(self._event(plan, "unit_started", unit=unit, stage="worker"))
             self.write_status(
                 self.status(
@@ -979,12 +1461,17 @@ class CudaRolloutCampaign:
                     current_unit=unit,
                     stage="worker",
                     elapsed_seconds=self.clock() - started_at,
+                    last_timeout=last_timeout,
+                    started_at=started_at_iso,
                 )
             )
             try:
                 if worker is not None:
                     self.append_event(self._event(plan, "recipe_worker", unit=unit, stage=unit.profile))
                     result = self.run_with_watchdog(unit, worker)
+                    # Injected workers are a test seam, not a bypass around
+                    # the typed worker contract used by the subprocess path.
+                    result = self.parse_worker_json(result)
                 else:
                     argv = self.worker_argv(
                         plan_path or (self.config.output_root / "plan.json"), unit, config_path=config_path
@@ -1005,6 +1492,8 @@ class CudaRolloutCampaign:
                     if isinstance(result, dict)
                     else CampaignOutcome.SUCCEEDED.value
                 )
+                if outcome != CampaignOutcome.SKIPPED.value:
+                    new_units += 1
                 elapsed = self.clock() - started_at
                 if outcome == CampaignOutcome.INSUFFICIENT_SUPPORT.value:
                     detail = str(result.get("reason", "")) if isinstance(result, dict) else ""
@@ -1019,6 +1508,17 @@ class CudaRolloutCampaign:
                             elapsed_seconds=elapsed,
                         )
                     )
+                    self.write_status(
+                        self.status(
+                            plan,
+                            results,
+                            current_unit=unit,
+                            stage="preflight",
+                            elapsed_seconds=elapsed,
+                            last_timeout=last_timeout,
+                            started_at=started_at_iso,
+                        )
+                    )
                 elif outcome in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}:
                     self.append_event(
                         self._event(
@@ -1028,6 +1528,17 @@ class CudaRolloutCampaign:
                             outcome=outcome,
                             stage="preflight",
                             elapsed_seconds=elapsed,
+                        )
+                    )
+                    self.write_status(
+                        self.status(
+                            plan,
+                            results,
+                            current_unit=unit,
+                            stage="preflight",
+                            elapsed_seconds=elapsed,
+                            last_timeout=last_timeout,
+                            started_at=started_at_iso,
                         )
                     )
                     self.append_event(
@@ -1040,6 +1551,17 @@ class CudaRolloutCampaign:
                             elapsed_seconds=elapsed,
                         )
                     )
+                    self.write_status(
+                        self.status(
+                            plan,
+                            results,
+                            current_unit=unit,
+                            stage=unit.profile,
+                            elapsed_seconds=elapsed,
+                            last_timeout=last_timeout,
+                            started_at=started_at_iso,
+                        )
+                    )
                     self.append_event(
                         self._event(
                             plan,
@@ -1048,6 +1570,17 @@ class CudaRolloutCampaign:
                             outcome=outcome,
                             stage="promotion",
                             elapsed_seconds=elapsed,
+                        )
+                    )
+                    self.write_status(
+                        self.status(
+                            plan,
+                            results,
+                            current_unit=unit,
+                            stage="promotion",
+                            elapsed_seconds=elapsed,
+                            last_timeout=last_timeout,
+                            started_at=started_at_iso,
                         )
                     )
                 self.append_event(
@@ -1067,6 +1600,18 @@ class CudaRolloutCampaign:
                 )
                 result = {"outcome": outcome, "error": str(exc)[-2000:], "work_unit_hash": unit.work_unit_hash}
                 results.append(result)
+                if isinstance(exc, CampaignTimeoutError):
+                    last_timeout = {
+                        "work_unit_hash": unit.work_unit_hash,
+                        "stage": "worker",
+                        "pid": exc.pid,
+                        "process_group": exc.process_group,
+                        "tmux_session": exc.tmux_session
+                        or (claim.get("tmux_session") if isinstance(claim, dict) else None),
+                        "disposition": exc.disposition,
+                        "stderr_tail": exc.stderr_tail,
+                        "elapsed_seconds": exc.elapsed_seconds,
+                    }
                 self.append_event(
                     self._event(
                         plan,
@@ -1079,15 +1624,36 @@ class CudaRolloutCampaign:
                             else str(exc)[-2000:]
                         ),
                         elapsed_seconds=self.clock() - started_at,
+                        pid=getattr(exc, "pid", None),
+                        process_group=getattr(exc, "process_group", None),
+                        tmux_session=claim.get("tmux_session") if isinstance(claim, dict) else None,
+                        timeout_disposition=getattr(exc, "disposition", None),
+                        stderr_tail=getattr(exc, "stderr_tail", None),
                     )
                 )
             self.write_status(
                 self.status(
-                    plan, results, current_unit=unit, stage=str(outcome), elapsed_seconds=self.clock() - started_at
+                    plan,
+                    results,
+                    current_unit=unit,
+                    stage=str(outcome),
+                    elapsed_seconds=self.clock() - started_at,
+                    last_timeout=last_timeout,
+                    started_at=started_at_iso,
                 )
             )
-        self.append_event(self._event(plan, "campaign_finished"))
-        self.write_status(self.status(plan, results))
+        if not blocked:
+            self.append_event(self._event(plan, "campaign_finished"))
+            self.write_status(
+                self.status(
+                    plan,
+                    results,
+                    stage="terminal",
+                    last_timeout=last_timeout,
+                    started_at=started_at_iso,
+                    finished_at=self.utc_now().isoformat(),
+                )
+            )
         return results
 
     def _event(
@@ -1100,6 +1666,11 @@ class CudaRolloutCampaign:
         detail: str = "",
         stage: str | None = None,
         elapsed_seconds: float | None = None,
+        pid: int | None = None,
+        process_group: int | None = None,
+        tmux_session: str | None = None,
+        timeout_disposition: str | None = None,
+        stderr_tail: str | None = None,
     ) -> CampaignEvent:
         """Build a fully bound progress event for a plan or work unit."""
         return CampaignEvent(
@@ -1118,6 +1689,12 @@ class CudaRolloutCampaign:
             writer_config_hash=plan.writer_config_hash,
             source_manifest_hash=plan.source_manifest_hash,
             elapsed_seconds=elapsed_seconds,
+            pid=pid,
+            process_group=process_group,
+            tmux_session=tmux_session,
+            timeout_disposition=timeout_disposition,
+            stderr_tail=stderr_tail,
+            campaign_id=self.config.campaign_id,
         )
 
     def quarantine_staging(self, unit: CampaignWorkUnit) -> Path | None:
@@ -1135,6 +1712,10 @@ class CudaRolloutCampaign:
         current_unit: CampaignWorkUnit | None = None,
         stage: str | None = None,
         elapsed_seconds: float = 0.0,
+        bounded_error: str | None = None,
+        last_timeout: dict[str, Any] | None = None,
+        started_at: str | None = None,
+        finished_at: str | None = None,
     ) -> CampaignStatus:
         counts = {o.value: 0 for o in CampaignOutcome}
         for result in results:
@@ -1146,7 +1727,7 @@ class CudaRolloutCampaign:
                 else CampaignOutcome.SUCCEEDED.value
             )
             counts[key] = counts.get(key, 0) + 1
-        terminal_outcomes = {"succeeded", "skipped", "failed", "timed_out", "insufficient_support"}
+        terminal_outcomes = {"succeeded", "skipped", "failed", "timed_out", "insufficient_support", "conflicted"}
         terminal = sum(
             1
             for result in results
@@ -1160,24 +1741,57 @@ class CudaRolloutCampaign:
             in terminal_outcomes
         )
         state = "not_started" if not results else ("completed" if terminal >= len(plan.work_units) else "running")
+        if stage in {"planned", "preflight_passed", "smoke_passed"}:
+            state = stage
+        elif stage in {"running", "worker", "preflight", "promotion"} or stage in {
+            p.name for p in self.config.profiles
+        }:
+            state = "running"
+        elif stage in {CampaignOutcome.BLOCKED.value, CampaignOutcome.CONFLICTED.value}:
+            state = stage
+        elif stage == "terminal":
+            state = (
+                "completed_with_failures"
+                if any(counts[k] for k in (CampaignOutcome.FAILED.value, CampaignOutcome.TIMED_OUT.value))
+                else "completed"
+            )
         counts["pending"] = max(0, len(plan.work_units) - terminal)
+        if stage in {CampaignOutcome.BLOCKED.value, CampaignOutcome.CONFLICTED.value}:
+            counts[stage] = counts.get(stage, 0) + 1
         if (
             any(counts[k] for k in (CampaignOutcome.FAILED.value, CampaignOutcome.TIMED_OUT.value))
             and state == "completed"
         ):
             state = "completed_with_failures"
-        latest_failure = next(
-            (
-                str(result.get("error") or result.get("reason"))
-                for result in reversed(results)
-                if (
-                    isinstance(result, dict)
-                    and result.get("outcome") in {"failed", "timed_out", "insufficient_support"}
-                    and (result.get("error") or result.get("reason"))
-                )
-            ),
-            None,
+        latest_failure = (
+            next(
+                (
+                    str(result.get("error") or result.get("reason"))
+                    for result in reversed(results)
+                    if (
+                        isinstance(result, dict)
+                        and result.get("outcome") in {"failed", "timed_out", "insufficient_support"}
+                        and (result.get("error") or result.get("reason"))
+                    )
+                ),
+                None,
+            )
+            or bounded_error
         )
+        smoke_hash = ""
+        smoke_summary = None
+        smoke_path = self.config.output_root / "smoke-evidence.json"
+        if smoke_path.exists():
+            try:
+                smoke_raw = smoke_path.read_bytes()
+                smoke_hash = hashlib.sha256(smoke_raw).hexdigest()
+                smoke_payload = json.loads(smoke_raw)
+                smoke_result = smoke_payload.get("result")
+                if isinstance(smoke_result, dict):
+                    smoke_summary = {"outcome": smoke_result.get("outcome"), "validated": smoke_result.get("validated")}
+            except (OSError, ValueError, json.JSONDecodeError):
+                smoke_summary = {"outcome": "invalid", "validated": False}
+                latest_failure = latest_failure or "invalid_smoke_evidence"
         return CampaignStatus(
             state,
             counts,
@@ -1189,6 +1803,15 @@ class CudaRolloutCampaign:
             stage,
             float(elapsed_seconds),
             latest_failure,
+            campaign_id=self.config.campaign_id,
+            config_hash=plan.config_hash,
+            last_work_unit=current_unit.work_unit_hash if current_unit else None,
+            bounded_error=bounded_error,
+            smoke_evidence_hash=smoke_hash,
+            smoke_evidence_summary=smoke_summary,
+            last_timeout=last_timeout,
+            started_at=started_at,
+            finished_at=finished_at,
         )
 
     def run_with_watchdog(
@@ -1238,13 +1861,42 @@ class CudaRolloutCampaign:
             claim_path.unlink()
 
     @staticmethod
-    def claim_is_stale(path: Path) -> bool:
+    def claim_is_stale(
+        path: Path,
+        *,
+        tmux_probe: Callable[[str], bool] | None = None,
+        pid_probe: Callable[[int], bool] | None = None,
+        process_group_probe: Callable[[int], bool] | None = None,
+        owner_probe: Callable[[str], bool] | None = None,
+    ) -> bool:
         """Diagnose a vanished local owner without deleting its evidence."""
         if not path.exists():
             return False
         try:
             payload = json.loads(path.read_text())
-            os.kill(int(payload["pid"]), 0)
+            if payload.get("hostname") and payload["hostname"] != socket.gethostname():
+                return True
+            if payload.get("tmux_session"):
+                probe = tmux_probe or (
+                    lambda session: (
+                        subprocess.run(("tmux", "has-session", "-t", session), capture_output=True).returncode == 0
+                    )
+                )
+                if probe(str(payload["tmux_session"])):
+                    return False
+                return True
+            pid = int(payload["pid"])
+            alive = (pid_probe or (lambda p: os.kill(p, 0) is None))(pid)
+            if not alive:
+                return True
+            if (
+                payload.get("process_group")
+                and process_group_probe is not None
+                and not process_group_probe(int(payload["process_group"]))
+            ):
+                return True
+            if payload.get("owner") and owner_probe is not None and not owner_probe(str(payload["owner"])):
+                return True
             return False
         except (OSError, KeyError, ValueError, json.JSONDecodeError):
             return True
@@ -1285,7 +1937,7 @@ class CudaRolloutCampaign:
             os.fsync(f.fileno())
         return target
 
-    def read_events(self, path: Path | None = None) -> list[CampaignEvent]:
+    def read_events(self, path: Path | None = None, plan: CampaignPlan | None = None) -> list[CampaignEvent]:
         target = path or (self.config.output_root / "progress.jsonl")
         if not target.exists():
             return []
@@ -1297,19 +1949,53 @@ class CudaRolloutCampaign:
             try:
                 payload = json.loads(line)
             except json.JSONDecodeError as exc:
-                if index == len(lines) - 1:
+                if index == len(lines) - 1 and not target.read_bytes().endswith(b"\n"):
                     break
                 raise ValueError(f"malformed event line {index + 1}") from exc
             allowed = set(CampaignEvent.__dataclass_fields__)
-            events.append(CampaignEvent(**{key: value for key, value in payload.items() if key in allowed}))
+            is_legacy = "schema_version" not in payload
+            if payload.get("schema_version", "campaign-event-v1") != "campaign-event-v1":
+                raise ValueError(f"unsupported campaign event schema version at line {index + 1}")
+            event = CampaignEvent(**{key: value for key, value in payload.items() if key in allowed})
+            if not is_legacy and (not event.campaign_id or not event.plan_hash or not event.config_hash):
+                raise ValueError("campaign event v1 requires campaign, plan, and config identity")
+            if event.campaign_id and event.campaign_id != self.config.campaign_id:
+                raise ValueError("campaign event campaign_id mismatch")
+            current_config_hash = stable_msgspec_hash(self.config.model_dump_jsonable())
+            if event.config_hash and event.config_hash != current_config_hash:
+                raise ValueError("campaign event config_hash mismatch")
+            if plan is not None and (
+                (event.plan_hash and event.plan_hash != plan.plan_hash)
+                or (event.config_hash and event.config_hash != plan.config_hash)
+            ):
+                raise ValueError("campaign event identity mismatch")
+            events.append(event)
         return events
 
-    def read_status(self, path: Path | None = None) -> CampaignStatus:
+    def read_status(self, path: Path | None = None, plan: CampaignPlan | None = None) -> CampaignStatus:
         target = path or (self.config.output_root / "status.json")
         if not target.exists():
             return CampaignStatus("not_started", {o.value: 0 for o in CampaignOutcome}, "", self.utc_now().isoformat())
         try:
-            return CampaignStatus.from_jsonable(json.loads(target.read_text(encoding="utf-8")))
+            status = CampaignStatus.from_jsonable(json.loads(target.read_text(encoding="utf-8")))
+            if status.campaign_id and status.campaign_id != self.config.campaign_id:
+                raise ValueError("campaign status campaign_id mismatch")
+            if (
+                status.schema_version == "campaign-status-v2"
+                and status.plan_hash
+                and (not status.campaign_id or not status.config_hash)
+            ):
+                raise ValueError("campaign status v2 requires campaign and config identity")
+            current_config_hash = stable_msgspec_hash(self.config.model_dump_jsonable())
+            if status.schema_version == "campaign-status-v2" and status.config_hash:
+                if status.config_hash != current_config_hash:
+                    raise ValueError("campaign status config_hash mismatch")
+            if plan is not None and (
+                (status.plan_hash and status.plan_hash != plan.plan_hash)
+                or (status.config_hash and status.config_hash != plan.config_hash)
+            ):
+                raise ValueError("campaign status plan identity mismatch")
+            return status
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             raise ValueError("invalid campaign status") from exc
 
@@ -1318,11 +2004,8 @@ class CudaRolloutCampaign:
         if plan is None:
             plan_path = self.config.output_root / "plan.json"
             if plan_path.exists():
-                try:
-                    plan = self.load_plan(plan_path)
-                except (OSError, ValueError, KeyError, json.JSONDecodeError):
-                    plan = None
-        status = self.read_status()
+                plan = self.load_plan(plan_path)
+        status = self.read_status(plan=plan)
         payload = asdict(status)
         payload["campaign_id"] = self.config.campaign_id
         raw = status.counts
@@ -1356,6 +2039,7 @@ __all__ = [
     "CampaignPlan",
     "CampaignProfileConfig",
     "CampaignProcessRunner",
+    "CampaignTimeoutError",
     "CampaignStatus",
     "CampaignWorkUnit",
     "CudaRolloutCampaign",

@@ -15,17 +15,15 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import torch
-from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
 from efm3d.aria.obb import ObbTW, obb_iou3d
 from efm3d.aria.pose import PoseTW
 from pydantic import Field
 from torch import Tensor
 
-from ..data_handling.ase_efm.views import EfmSnippetView
 from ..data_handling.vin_store.batch import CompactObbBlock
-from ..data_handling.vin_store.views import VinSnippetView
 from ..targets import ObservedTargetDescriptor, TargetDescriptor
 from ..targets.protocol import ORACLE_GT_TARGET_SOURCE
+from ..targets.selection import snippet_t_world_snippet
 from ..utils import TargetConfig
 from ..utils.semantic_names import SemanticNameMap, normalize_semantic_name_map, semantic_class_name
 
@@ -89,6 +87,9 @@ class OracleMatchedTargetTask:
     reason: OracleMatchReason
     """Explicit admission/rejection reason."""
 
+    qualified_gt_match_count: int = 0
+    """Number of strict-threshold GT matches retained for ambiguity audit."""
+
     @property
     def admission_status(self) -> str:
         """Serialized admission status for manifest consumers."""
@@ -120,6 +121,11 @@ def match_observed_target_descriptors(
         raise ValueError("threshold must be in [0, 1).")
     output: list[OracleMatchedTargetTask] = []
     for descriptor in sorted(descriptors, key=lambda value: (value.source_row, value.target_id)):
+        if descriptor.descriptor is None:
+            output.append(
+                OracleMatchedTargetTask(descriptor, None, None, None, False, OracleMatchReason.INVALID_GEOMETRY, 0)
+            )
+            continue
         candidates: list[tuple[float, int, object]] = []
         saw_wrong_class = False
         saw_invalid_geometry = False
@@ -136,15 +142,16 @@ def match_observed_target_descriptors(
                     right = getattr(row, "obb_data", None)
                     if left is None or right is None:
                         raise ValueError("OBB payloads required when iou_fn is omitted")
-                    iou = float(obb_iou3d(ObbTW(torch.tensor(left)), ObbTW(torch.tensor(right))).reshape(-1)[0].item())
+                    left_obb = ObbTW(torch.tensor(left, dtype=torch.float32).reshape(1, -1))
+                    right_obb = ObbTW(torch.tensor(right, dtype=torch.float32).reshape(1, -1))
+                    iou = float(obb_iou3d(left_obb, right_obb).reshape(-1)[0].item())
             except (TypeError, ValueError, RuntimeError, FloatingPointError):
                 saw_invalid_geometry = True
                 continue
-            if iou != iou or not 0.0 <= iou <= 1.0:
+            if not 0.0 <= iou <= 1.0:
                 saw_invalid_geometry = True
                 continue
-            if iou == iou and iou >= 0.0:
-                candidates.append((iou, index, row))
+            candidates.append((iou, index, row))
         candidates.sort(key=lambda item: (-item[0], item[1]))
         if not candidates:
             reason = (
@@ -154,7 +161,7 @@ def match_observed_target_descriptors(
                 if saw_wrong_class
                 else OracleMatchReason.NO_MATCH
             )
-            output.append(OracleMatchedTargetTask(descriptor, None, None, None, False, reason))
+            output.append(OracleMatchedTargetTask(descriptor, None, None, None, False, reason, 0))
             continue
         best_iou, best_index, best_row = candidates[0]
         qualified = [item for item in candidates if item[0] > float(threshold)]
@@ -168,9 +175,16 @@ def match_observed_target_descriptors(
             reason = OracleMatchReason.ADMITTED
             admitted = True
         gt_id = getattr(best_row, "target_id", getattr(best_row, "gt_match_id", None))
+        gt_source_index = int(getattr(best_row, "source_index", best_index))
         output.append(
             OracleMatchedTargetTask(
-                descriptor, best_index, None if gt_id is None else str(gt_id), best_iou, admitted, reason
+                descriptor,
+                gt_source_index,
+                None if gt_id is None else str(gt_id),
+                best_iou,
+                admitted,
+                reason,
+                len(qualified),
             )
         )
     return tuple(output)
@@ -240,6 +254,9 @@ class OracleTargetTask:
 
     selection_probability: float | None = None
     """Inclusion probability under uniform capped sampling, when selected."""
+
+    obb_data: tuple[float, ...] | None = None
+    """Flattened world-frame GT OBB retained only for privileged admission IoU."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -432,6 +449,7 @@ class OracleTargetTaskSampler:
                     inst_id=inst_id,
                     confidence=confidence,
                     identity_status=identity_status.value,
+                    obb_data=tuple(float(value) for value in gt_obbs._data[row_index].reshape(-1).tolist()),
                 )
             )
         return tuple(rows)
@@ -473,7 +491,7 @@ def _compact_obb_block(value: CompactObbBlock | ObbTW | Tensor | None) -> tuple[
 
 def _world_obbs_for_sample(obbs: ObbTW, sample: "VinOfflineSample") -> ObbTW:
     selected = _latest_valid_obb_slice(obbs)
-    transform = _snippet_t_world_snippet(sample)
+    transform = snippet_t_world_snippet(sample)
     if transform is None:
         return selected
     return selected.transform(transform)
@@ -502,25 +520,6 @@ def _valid_obb_data_with_source_indices(obbs: ObbTW) -> tuple[Tensor, list[int]]
     valid = (~flat_obbs.get_padding_mask()).reshape(-1)
     source_indices = torch.nonzero(valid, as_tuple=False).reshape(-1).tolist()
     return flat[valid], [int(index) for index in source_indices]
-
-
-def _sample_snippet_view(sample: "VinOfflineSample") -> EfmSnippetView | VinSnippetView:
-    return sample.efm_snippet_view if sample.efm_snippet_view is not None else sample.vin_snippet
-
-
-def _snippet_t_world_snippet(sample: "VinOfflineSample") -> PoseTW | None:
-    snippet = _sample_snippet_view(sample)
-    if isinstance(snippet, EfmSnippetView):
-        value = snippet.efm.get(ARIA_SNIPPET_T_WORLD_SNIPPET)
-        if isinstance(value, PoseTW):
-            return PoseTW(value.tensor().reshape(-1, 12)[:1])
-        if torch.is_tensor(value):
-            return PoseTW(value.reshape(-1, 12)[:1])
-    if isinstance(snippet, VinSnippetView):
-        poses = snippet.t_world_rig.tensor().reshape(-1, 12)
-        if poses.shape[0] > 0:
-            return PoseTW(poses[:1])
-    return None
 
 
 def _reference_pose_world_rig(sample: "VinOfflineSample") -> PoseTW:

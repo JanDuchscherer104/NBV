@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import re
 import shlex
 import shutil
@@ -20,10 +21,20 @@ from aria_nbv.utils.config_paths import resolve_config_toml_path
 
 _DEFAULT_CONFIG = ".configs/build_rollouts_v1_cuda_campaign.toml"
 _SAFE_SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+_MAX_NEW_UNITS = 100
+_MAX_TIME_BUDGET_MINUTES = 24 * 60
+_MAX_FREE_DISK_FLOOR_GB = 1024
 
 
 def build_campaign_argv(
-    action: str, *, config_path: Path, plan_path: Path | None = None, source_manifest: Path | None = None
+    action: str,
+    *,
+    config_path: Path,
+    plan_path: Path | None = None,
+    source_manifest: Path | None = None,
+    max_new_units: int | None = None,
+    time_budget_minutes: int | None = None,
+    free_disk_floor_gb: int | None = None,
 ) -> list[str]:
     """Build the exact argv delegated to ``nbv-rollout-campaign``."""
     if action not in {"preflight", "plan", "smoke", "run", "resume", "status"}:
@@ -32,6 +43,17 @@ def build_campaign_argv(
     if action in {"run", "resume"}:
         if plan_path is None:
             raise ValueError("plan path is required")
+        controls = {
+            "max_new_units": (max_new_units, _MAX_NEW_UNITS, "--max-new-units"),
+            "time_budget_minutes": (time_budget_minutes, _MAX_TIME_BUDGET_MINUTES, "--time-budget-minutes"),
+            "free_disk_floor_gb": (free_disk_floor_gb, _MAX_FREE_DISK_FLOOR_GB, "--free-disk-floor-gb"),
+        }
+        for name, (value, maximum, flag) in controls.items():
+            if value is None:
+                continue
+            if not _valid_integer_control(value, minimum=1, maximum=maximum):
+                raise ValueError(f"{name} must be a whole number between 1 and {maximum}")
+            argv += [flag, str(int(value))]
         argv += ["--plan-path", str(plan_path)]
     if action == "plan" and source_manifest is not None:
         argv += ["--source-manifest", str(source_manifest)]
@@ -105,6 +127,25 @@ def _launch_ready(campaign: Any, plan_path: Path) -> bool:
         return False
 
 
+def _valid_integer_control(value: Any, *, minimum: int, maximum: int) -> bool:
+    """Return whether a UI control value is a finite integer in its safe range."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and int(value) == value
+        and minimum <= value <= maximum
+    )
+
+
+def _disk_usage_path(path: Path) -> Path:
+    """Return the nearest existing ancestor for a not-yet-created output root."""
+    candidate = path
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    return candidate
+
+
 def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit presentation
     """Render controls and typed status without owning campaign semantics."""
     st.header("Campaign Generation")
@@ -120,8 +161,62 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
         return
     cfg = campaign.config
     plan_path = cfg.output_root / "plan.json"
+    number_input = getattr(st, "number_input", lambda _label, **_kwargs: 1)
+    max_new_units = number_input(
+        "Max new work units",
+        min_value=1,
+        max_value=_MAX_NEW_UNITS,
+        value=1,
+        step=1,
+        key="campaign_max_units",
+    )
+    time_budget_minutes = number_input(
+        "Time budget (minutes)",
+        min_value=1,
+        max_value=_MAX_TIME_BUDGET_MINUTES,
+        value=120,
+        step=1,
+        key="campaign_time_budget",
+    )
+    free_disk_floor_gb = number_input(
+        "Free-disk floor (GB)",
+        min_value=1,
+        max_value=_MAX_FREE_DISK_FLOOR_GB,
+        value=10,
+        step=1,
+        key="campaign_free_disk_floor",
+    )
+    free_disk_gb = shutil.disk_usage(_disk_usage_path(cfg.output_root)).free / (1024**3)
+    controls_valid = all(
+        (
+            _valid_integer_control(max_new_units, minimum=1, maximum=_MAX_NEW_UNITS),
+            _valid_integer_control(time_budget_minutes, minimum=1, maximum=_MAX_TIME_BUDGET_MINUTES),
+            _valid_integer_control(free_disk_floor_gb, minimum=1, maximum=_MAX_FREE_DISK_FLOOR_GB),
+        )
+    )
+    if not controls_valid:
+        st.warning("Operational controls must be finite whole numbers within their displayed bounds.")
+    if free_disk_gb < free_disk_floor_gb:
+        st.warning(f"Free disk {free_disk_gb:.1f} GB is below the configured floor.")
     manifest_text = st.text_input("Source manifest (plan only)", "", key="campaign_source_manifest")
     source_manifest = Path(manifest_text).expanduser() if manifest_text else None
+    if source_manifest is not None and source_manifest.exists():
+        try:
+            from aria_nbv.rollouts.shard_manifest import read_rollout_source_manifest
+
+            reviewed_source = read_rollout_source_manifest(source_manifest)
+            st.json(
+                {
+                    "source_manifest": str(source_manifest),
+                    "rows": len(reviewed_source.rows),
+                    "scenes": len({row.scene_id for row in reviewed_source.rows}),
+                    "split": reviewed_source.split,
+                    "split_manifest_hash": reviewed_source.split_manifest_hash,
+                    "selection": "all actor-visible detections are audited; only strict unambiguous matches are planned",
+                }
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            st.warning(f"Source manifest unavailable: {exc}")
     session = st.text_input("Named tmux session", f"{cfg.campaign_id}-campaign", key="campaign_tmux_session")
     st.caption(
         "CUDA / PyTorch3D required · 60 candidates · branch 2 · beam 2 · support gate 10 · watchdog 120s / 3600s"
@@ -170,7 +265,9 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
     tmux_available = shutil.which("tmux") is not None
     ready = _launch_ready(campaign, plan_path)
     for col, (label, value) in zip(cols, labels, strict=True):
-        disabled = value in {"run", "resume"} and (not ready or not tmux_available)
+        disabled = value in {"run", "resume"} and (
+            not ready or not tmux_available or not controls_valid or free_disk_gb < free_disk_floor_gb
+        )
         if col.button(label, key=f"campaign_{value}", disabled=disabled):
             action = value
     if action:
@@ -178,7 +275,13 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
             if action == "plan" and source_manifest is None:
                 raise ValueError("source manifest is required for plan")
             command = build_campaign_argv(
-                action, config_path=config_path, plan_path=plan_path, source_manifest=source_manifest
+                action,
+                config_path=config_path,
+                plan_path=plan_path,
+                source_manifest=source_manifest,
+                max_new_units=int(max_new_units),
+                time_budget_minutes=int(time_budget_minutes),
+                free_disk_floor_gb=int(free_disk_floor_gb),
             )
             st.code(shlex.join(command), language="shell")
             if action in {"run", "resume"}:
@@ -204,9 +307,18 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                 }
         except Exception as exc:
             st.error(str(exc))
-    st.caption(
-        f"Foreground preview: {shlex.join(build_campaign_argv('run', config_path=config_path, plan_path=plan_path))}"
-    )
+    if controls_valid:
+        preview = build_campaign_argv(
+            "run",
+            config_path=config_path,
+            plan_path=plan_path,
+            max_new_units=int(max_new_units),
+            time_budget_minutes=int(time_budget_minutes),
+            free_disk_floor_gb=int(free_disk_floor_gb),
+        )
+        st.caption(f"Foreground preview: {shlex.join(preview)}")
+    else:
+        st.caption("Foreground preview unavailable until operational controls are valid.")
     if not tmux_available:
         st.info("tmux unavailable; launch/resume disabled. Run the foreground command above manually after validation.")
     last_action = st.session_state.get("campaign_generation_last_action")
@@ -234,11 +346,17 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                     for k in (
                         "state",
                         "counts",
+                        "current_work_unit",
                         "current_target_id",
                         "current_profile",
                         "current_stage",
                         "elapsed_seconds",
                         "latest_failure_reason",
+                        "last_work_unit",
+                        "last_timeout",
+                        "bounded_error",
+                        "started_at",
+                        "finished_at",
                     )
                 }
             )

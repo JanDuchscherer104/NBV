@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -36,6 +37,44 @@ def test_campaign_argv_uses_one_canonical_cli_and_action(action: str, tmp_path: 
         assert argv[-2:] == ["--plan-path", str(kwargs["plan_path"])]
     if action == "status":
         assert argv[-1] == "--json"
+
+
+def test_campaign_argv_carries_operational_guards_only_for_execution(tmp_path: Path) -> None:
+    argv = panel.build_campaign_argv(
+        "run",
+        config_path=tmp_path / "campaign.toml",
+        plan_path=tmp_path / "plan.json",
+        max_new_units=3,
+        time_budget_minutes=45,
+        free_disk_floor_gb=20,
+    )
+    assert argv == [
+        "nbv-rollout-campaign",
+        "run",
+        "--config-path",
+        str(tmp_path / "campaign.toml"),
+        "--max-new-units",
+        "3",
+        "--time-budget-minutes",
+        "45",
+        "--free-disk-floor-gb",
+        "20",
+        "--plan-path",
+        str(tmp_path / "plan.json"),
+    ]
+    plan_argv = panel.build_campaign_argv(
+        "plan", config_path=tmp_path / "campaign.toml", source_manifest=tmp_path / "source.json"
+    )
+    assert not any(flag in plan_argv for flag in ("--max-new-units", "--time-budget-minutes", "--free-disk-floor-gb"))
+
+
+@pytest.mark.parametrize("name,value", [("max_new_units", 0), ("time_budget_minutes", 1441), ("free_disk_floor_gb", 0)])
+def test_campaign_argv_rejects_out_of_bounds_operational_guards(tmp_path: Path, name: str, value: int) -> None:
+    kwargs = {name: value}
+    with pytest.raises(ValueError):
+        panel.build_campaign_argv(
+            "run", config_path=tmp_path / "campaign.toml", plan_path=tmp_path / "plan.json", **kwargs
+        )
 
 
 @dataclass
@@ -229,15 +268,18 @@ class _FakeColumn:
         self.buttons = buttons
 
     def button(self, label: str, **kwargs) -> bool:
-        return label in self.buttons
+        return label in self.buttons and not kwargs.get("disabled", False)
 
 
 class _FakeStreamlit:
-    def __init__(self, buttons: set[str] | None = None) -> None:
+    def __init__(self, buttons: set[str] | None = None, controls: dict[str, object] | None = None) -> None:
         self.session_state: dict[str, object] = {}
         self.buttons = buttons or set()
+        self.controls = controls or {}
+        self.number_inputs: dict[str, dict[str, object]] = {}
         self.json_payloads: list[object] = []
         self.messages: list[str] = []
+        self.warnings: list[str] = []
         self.captions: list[str] = []
         self.codes: list[str] = []
 
@@ -249,6 +291,10 @@ class _FakeStreamlit:
 
     def text_input(self, label, value="", **kwargs):
         return value
+
+    def number_input(self, label, value=0, **kwargs):
+        self.number_inputs[kwargs.get("key", label)] = {"label": label, **kwargs}
+        return self.controls.get(kwargs.get("key", label), value)
 
     def caption(self, *args, **kwargs):
         self.captions.extend(str(value) for value in args)
@@ -273,7 +319,7 @@ class _FakeStreamlit:
         self.messages.extend(str(value) for value in args)
 
     def warning(self, *args, **kwargs):
-        pass
+        self.warnings.extend(str(value) for value in args)
 
     def error(self, *args, **kwargs):
         self.messages.extend(str(value) for value in args)
@@ -282,7 +328,13 @@ class _FakeStreamlit:
         pass
 
 
-def _patch_fake_page(monkeypatch, tmp_path: Path, *, buttons: set[str] | None = None):
+def _patch_fake_page(
+    monkeypatch,
+    tmp_path: Path,
+    *,
+    buttons: set[str] | None = None,
+    controls: dict[str, object] | None = None,
+):
     plan_path = tmp_path / "plan.json"
     plan_path.write_text("{}", encoding="utf-8")
     campaign = _FakeCampaign(tmp_path, evidence={"result": {"outcome": "succeeded", "validated": True}})
@@ -309,9 +361,54 @@ def _patch_fake_page(monkeypatch, tmp_path: Path, *, buttons: set[str] | None = 
     monkeypatch.setattr(panel, "resolve_config_toml_path", lambda _: tmp_path / "cfg.toml")
     monkeypatch.setattr(panel, "_campaign", lambda _: campaign)
     monkeypatch.setattr(panel.shutil, "which", lambda _: "/usr/bin/tmux")
-    fake_st = _FakeStreamlit(buttons)
+    monkeypatch.setattr(panel.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * 1024**3))
+    fake_st = _FakeStreamlit(buttons, controls)
     monkeypatch.setattr(panel, "st", fake_st)
     return campaign, fake_st, plan_path
+
+
+def test_page_exposes_bounded_operational_controls(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
+    panel.render_campaign_generation_page()
+    assert fake_st.number_inputs["campaign_max_units"]["max_value"] == 100
+    assert fake_st.number_inputs["campaign_time_budget"]["max_value"] == 1440
+    assert fake_st.number_inputs["campaign_free_disk_floor"]["max_value"] == 1024
+
+
+def test_page_disables_launch_for_invalid_operational_control(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(
+        monkeypatch,
+        tmp_path,
+        buttons={"Launch in tmux"},
+        controls={"campaign_max_units": 101},
+    )
+    panel.render_campaign_generation_page()
+    assert fake_st.messages == []
+    assert any("within their displayed bounds" in warning for warning in fake_st.warnings)
+
+
+def test_page_warns_and_disables_launch_below_free_disk_floor(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Launch in tmux"})
+    monkeypatch.setattr(panel.shutil, "disk_usage", lambda _: SimpleNamespace(free=2 * 1024**3))
+    panel.render_campaign_generation_page()
+    assert any("below the configured floor" in warning for warning in fake_st.warnings)
+    assert fake_st.messages == []
+
+
+def test_page_checks_nearest_existing_ancestor_for_fresh_output_root(monkeypatch, tmp_path: Path) -> None:
+    campaign, _, _ = _patch_fake_page(monkeypatch, tmp_path)
+    output_root = tmp_path / "fresh" / "campaign-output"
+    campaign.config.output_root = output_root
+    monkeypatch.setattr(panel, "_launch_ready", lambda *_args: False)
+    usage_paths: list[Path] = []
+    monkeypatch.setattr(
+        panel.shutil,
+        "disk_usage",
+        lambda path: usage_paths.append(Path(path)) or SimpleNamespace(free=100 * 1024**3),
+    )
+    panel.render_campaign_generation_page()
+    assert usage_paths == [tmp_path]
+    assert not output_root.exists()
 
 
 def test_page_does_not_read_progress_until_explicit_refresh(monkeypatch, tmp_path: Path) -> None:

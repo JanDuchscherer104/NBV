@@ -13,9 +13,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
+from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
 from efm3d.aria.obb import ObbTW
+from efm3d.aria.pose import PoseTW
 
+from ..data_handling.ase_efm.views import EfmSnippetView
 from ..data_handling.vin_store.batch import CompactObbBlock
+from ..data_handling.vin_store.views import VinSnippetView
 from .descriptor import TargetDescriptor
 
 if TYPE_CHECKING:
@@ -42,8 +46,8 @@ class ObservedTargetDescriptor:
     target_id: str
     """Stable identity for this detected source row."""
 
-    descriptor: TargetDescriptor
-    """Sanitized actor instruction; contains no GT fields."""
+    descriptor: TargetDescriptor | None
+    """Sanitized actor instruction, or ``None`` for retained invalid geometry."""
 
     confidence: float
     """Detector confidence retained for audit."""
@@ -63,16 +67,36 @@ class ObservedTargetDescriptor:
             "source": self.source,
             "source_row": self.source_row,
             "target_id": self.target_id,
-            "descriptor": {
-                "sem_id": self.descriptor.sem_id,
-                "class_name": self.descriptor.class_name,
-                "pose_world_object": self.descriptor.pose_world_object,
-                "extents_m": self.descriptor.extents_m,
-                "relative_pose_reference_object": self.descriptor.relative_pose_reference_object,
-            },
+            "descriptor": (
+                None
+                if self.descriptor is None
+                else {
+                    "sem_id": self.descriptor.sem_id,
+                    "class_name": self.descriptor.class_name,
+                    "pose_world_object": self.descriptor.pose_world_object,
+                    "extents_m": self.descriptor.extents_m,
+                    "relative_pose_reference_object": self.descriptor.relative_pose_reference_object,
+                }
+            ),
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
+
+
+def snippet_t_world_snippet(sample: "VinOfflineSample") -> PoseTW | None:
+    """Return the canonical world-from-snippet transform for OBB normalization."""
+    snippet = sample.efm_snippet_view if sample.efm_snippet_view is not None else sample.vin_snippet
+    if isinstance(snippet, EfmSnippetView):
+        value = snippet.efm.get(ARIA_SNIPPET_T_WORLD_SNIPPET)
+        if isinstance(value, PoseTW):
+            return PoseTW(value.tensor().reshape(-1, 12)[:1])
+        if torch.is_tensor(value):
+            return PoseTW(value.reshape(-1, 12)[:1])
+    if isinstance(snippet, VinSnippetView):
+        poses = snippet.t_world_rig.tensor().reshape(-1, 12)
+        if poses.shape[0] > 0:
+            return PoseTW(poses[:1])
+    return None
 
 
 def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTargetDescriptor, ...]:
@@ -94,10 +118,16 @@ def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTar
         data = data.unsqueeze(0)
     if data.ndim > 2:
         data = data.reshape(-1, data.shape[-1])
-    flat = ObbTW(data)
+    t_world_snippet = snippet_t_world_snippet(sample)
+    if t_world_snippet is None:
+        raise ValueError("observed target extraction requires T_world_snippet")
+    t_world_snippet = t_world_snippet.to(device=data.device)
+    flat = ObbTW(data).transform(t_world_snippet)
+    data = flat.tensor().detach().cpu().to(dtype=torch.float32)
     valid = (~flat.get_padding_mask()).reshape(-1)
     names = getattr(block, "sem_id_to_name", None) if isinstance(block, CompactObbBlock) else None
     sample_key = str(getattr(sample, "sample_key", ""))
+    reference_pose = sample.oracle.reference_pose_world_rig.to(device=data.device)
     result: list[ObservedTargetDescriptor] = []
     for source_row in torch.nonzero(valid, as_tuple=False).reshape(-1).tolist():
         obb = ObbTW(data[source_row])
@@ -106,13 +136,19 @@ def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTar
         class_name = str(names.get(sem_id, f"class_{sem_id}") if isinstance(names, dict) else f"class_{sem_id}")
         pose = tuple(float(v) for v in obb.T_world_object.tensor().reshape(-1).tolist())
         extent = tuple(float(v) for v in obb.bb3_diagonal.reshape(-1).tolist())
-        descriptor = TargetDescriptor(
-            sem_id=sem_id,
-            class_name=class_name,
-            pose_world_object=pose,
-            extents_m=extent,  # type: ignore[arg-type]
-            relative_pose_reference_object=pose,
+        relative_pose = tuple(
+            float(v) for v in (reference_pose.inverse() @ obb.T_world_object).tensor().reshape(-1).tolist()
         )
+        try:
+            descriptor = TargetDescriptor(
+                sem_id=sem_id,
+                class_name=class_name,
+                pose_world_object=pose,
+                extents_m=extent,  # type: ignore[arg-type]
+                relative_pose_reference_object=relative_pose,
+            )
+        except ValueError:
+            descriptor = None
         target_id = f"{sample_key}:detected:{source_row}:{inst_id}"
         result.append(
             ObservedTargetDescriptor(
@@ -131,4 +167,9 @@ def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTar
 
 select_observed_target_descriptors = observed_target_descriptors
 
-__all__ = ["ObservedTargetDescriptor", "observed_target_descriptors", "select_observed_target_descriptors"]
+__all__ = [
+    "ObservedTargetDescriptor",
+    "observed_target_descriptors",
+    "select_observed_target_descriptors",
+    "snippet_t_world_snippet",
+]

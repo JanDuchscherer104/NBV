@@ -19,13 +19,13 @@ import click
 import typer
 
 from ...rollouts.manifest import RolloutStoreInvocation
-from ...rollouts.shard_manifest import load_rollout_shard_entry
+from ...rollouts.shard_manifest import load_rollout_shard_entry, read_rollout_source_manifest
 from ...utils.cli_format import cli_console, key_value_panel
 from ...utils.config_paths import resolve_config_toml_path
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CampaignEvent, CampaignStatus, CudaRolloutCampaignConfig
+from .campaign import CampaignEvent, CampaignOutcome, CampaignStatus, CudaRolloutCampaignConfig
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
@@ -33,6 +33,7 @@ from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_r
 campaign_app = typer.Typer(
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
     help="Plan and run CUDA rollout campaigns.",
 )
 
@@ -70,6 +71,15 @@ def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
     return current_writer_hash
 
 
+def _require_smoke_evidence(campaign, plan) -> dict[str, Any]:
+    """Require the structured, validated smoke result before execution."""
+    try:
+        evidence = campaign.smoke_evidence(plan)
+    except (RuntimeError, ValueError, OSError, json.JSONDecodeError, AttributeError) as exc:
+        raise typer.BadParameter("current passing smoke evidence is required") from exc
+    return evidence
+
+
 @campaign_app.command("plan")
 def campaign_plan(
     config_path: Annotated[Path, typer.Option("--config-path")],
@@ -81,16 +91,38 @@ def campaign_plan(
     cfg = _campaign(config_path)
     campaign = cfg
     writer_cfg = _writer_config(campaign)
-    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
+    try:
+        campaign.preflight(
+            nested_configs=(writer_cfg,) if writer_cfg is not None else (),
+            writer_config_path=getattr(campaign.config, "writer_config_path", None),
+        )
+    except (RuntimeError, ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from None
     if source_manifest is not None:
         raw = source_manifest.read_bytes()
+        if writer_cfg is None:
+            raise typer.BadParameter("campaign planning requires the canonical writer config")
+        reviewed_manifest = read_rollout_source_manifest(source_manifest)
+        canonical_manifest_path = getattr(writer_cfg, "source_manifest_path", None)
+        if canonical_manifest_path is None:
+            raise typer.BadParameter("canonical writer config requires source_manifest_path")
+        canonical_manifest = read_rollout_source_manifest(canonical_manifest_path)
+        if reviewed_manifest.to_jsonable() != canonical_manifest.to_jsonable():
+            raise typer.BadParameter("selected source manifest does not match the canonical writer manifest")
+        source_rows = campaign.audit_source_manifest(writer_cfg, reviewed_manifest)
         planned = campaign.plan(
-            json.loads(raw),
+            source_rows,
             source_manifest_hash=hashlib.sha256(raw).hexdigest(),
             writer_config_hash=stable_config_hash(writer_cfg) if writer_cfg is not None else "",
         )
+        campaign.write_admission_audit(
+            source_rows,
+            source_manifest_hash=planned.source_manifest_hash,
+            expected_hash=planned.admission_audit_hash,
+        )
         campaign.write_plan(planned, output_json if output_json is not None else None)
         event_identity = {
+            "campaign_id": campaign.config.campaign_id,
             "plan_hash": planned.plan_hash,
             "config_hash": planned.config_hash,
             "writer_config_hash": planned.writer_config_hash,
@@ -103,10 +135,12 @@ def campaign_plan(
         campaign.write_status(
             CampaignStatus(
                 "planned",
-                {"pending": len(planned.work_units)},
+                {**{outcome.value: 0 for outcome in CampaignOutcome}, "pending": len(planned.work_units)},
                 planned.plan_hash,
                 campaign.utc_now().isoformat(),
                 current_stage="source_selection",
+                campaign_id=campaign.config.campaign_id,
+                config_hash=planned.config_hash,
             )
         )
         payload = planned.to_jsonable()
@@ -122,7 +156,13 @@ def campaign_preflight(config_path: Annotated[Path, typer.Option("--config-path"
     """Run the CUDA availability gate."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
-    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
+    try:
+        campaign.preflight(
+            nested_configs=(writer_cfg,) if writer_cfg is not None else (),
+            writer_config_path=getattr(campaign.config, "writer_config_path", None),
+        )
+    except (RuntimeError, ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from None
     typer.echo("cuda preflight passed")
 
 
@@ -165,15 +205,36 @@ def campaign_status(
         )
 
 
+@campaign_app.command("acknowledge-stale-claim")
+def campaign_acknowledge_stale_claim(
+    claim_path: Annotated[Path, typer.Option("--claim-path")],
+    claim_hash: Annotated[str, typer.Option("--claim-hash")],
+) -> None:
+    """Archive one explicitly identified stale claim for safe reacquisition."""
+    from .campaign import CudaRolloutCampaign
+
+    if not claim_path.exists() or not CudaRolloutCampaign.claim_is_stale(claim_path):
+        raise typer.BadParameter("claim is missing or its owner is still live")
+    try:
+        archive = CudaRolloutCampaign.acknowledge_stale_claim(claim_path, claim_hash)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(str(archive))
+
+
 @campaign_app.command("smoke")
 def campaign_smoke(config_path: Annotated[Path, typer.Option("--config-path")]) -> None:
     """Validate CUDA preflight before a smoke worker is launched."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
-    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     plan_path = campaign.config.output_root / "plan.json"
     if not plan_path.exists():
         raise typer.BadParameter("plan.json is required before smoke")
+    campaign.preflight(
+        nested_configs=(writer_cfg,) if writer_cfg is not None else (),
+        plan_path=plan_path,
+        writer_config_path=getattr(campaign.config, "writer_config_path", None),
+    )
     plan = campaign.load_plan(plan_path)
     _validate_plan_digests(campaign, plan, writer_cfg)
     campaign.smoke(plan, config_path=resolve_config_toml_path(config_path), plan_path=plan_path)
@@ -184,17 +245,30 @@ def campaign_smoke(config_path: Annotated[Path, typer.Option("--config-path")]) 
 def campaign_run(
     config_path: Annotated[Path, typer.Option("--config-path")],
     plan_path: Annotated[Path, typer.Option("--plan-path")],
+    max_new_units: Annotated[int | None, typer.Option("--max-new-units", min=1, max=100)] = None,
+    time_budget_minutes: Annotated[float | None, typer.Option("--time-budget-minutes", min=0.000001)] = None,
+    free_disk_floor_gb: Annotated[float | None, typer.Option("--free-disk-floor-gb", min=0.000001)] = None,
 ) -> None:
     """Start a foreground campaign after preflight (planning is supplied by API callers)."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
-    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     plan = campaign.load_plan(plan_path)
+    campaign.preflight(
+        nested_configs=(writer_cfg,) if writer_cfg is not None else (),
+        plan_path=plan_path,
+        writer_config_path=getattr(campaign.config, "writer_config_path", None),
+    )
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
-    evidence = campaign.config.output_root / "smoke-evidence.json"
-    if not evidence.exists() or json.loads(evidence.read_text()).get("plan_hash") != plan.plan_hash:
-        raise typer.BadParameter("current passing smoke evidence is required")
-    campaign.run(plan, plan_path=plan_path, config_path=config_path, current_writer_config_hash=writer_hash)
+    _require_smoke_evidence(campaign, plan)
+    campaign.run(
+        plan,
+        plan_path=plan_path,
+        config_path=config_path,
+        current_writer_config_hash=writer_hash,
+        max_new_units=max_new_units,
+        time_budget_seconds=time_budget_minutes * 60 if time_budget_minutes else None,
+        free_disk_floor_gb=free_disk_floor_gb,
+    )
     typer.echo("campaign run complete")
 
 
@@ -202,17 +276,30 @@ def campaign_run(
 def campaign_resume(
     config_path: Annotated[Path, typer.Option("--config-path")],
     plan_path: Annotated[Path, typer.Option("--plan-path")],
+    max_new_units: Annotated[int | None, typer.Option("--max-new-units", min=1, max=100)] = None,
+    time_budget_minutes: Annotated[float | None, typer.Option("--time-budget-minutes", min=0.000001)] = None,
+    free_disk_floor_gb: Annotated[float | None, typer.Option("--free-disk-floor-gb", min=0.000001)] = None,
 ) -> None:
     """Resume a campaign through the Python campaign API."""
     campaign = _campaign(config_path)
     writer_cfg = _writer_config(campaign)
-    campaign.preflight(nested_configs=(writer_cfg,) if writer_cfg is not None else ())
     plan = campaign.load_plan(plan_path)
+    campaign.preflight(
+        nested_configs=(writer_cfg,) if writer_cfg is not None else (),
+        plan_path=plan_path,
+        writer_config_path=getattr(campaign.config, "writer_config_path", None),
+    )
     writer_hash = _validate_plan_digests(campaign, plan, writer_cfg)
-    evidence = campaign.config.output_root / "smoke-evidence.json"
-    if not evidence.exists() or json.loads(evidence.read_text()).get("plan_hash") != plan.plan_hash:
-        raise typer.BadParameter("current passing smoke evidence is required")
-    campaign.run(plan, plan_path=plan_path, config_path=config_path, current_writer_config_hash=writer_hash)
+    _require_smoke_evidence(campaign, plan)
+    campaign.run(
+        plan,
+        plan_path=plan_path,
+        config_path=config_path,
+        current_writer_config_hash=writer_hash,
+        max_new_units=max_new_units,
+        time_budget_seconds=time_budget_minutes * 60 if time_budget_minutes else None,
+        free_disk_floor_gb=free_disk_floor_gb,
+    )
     typer.echo("campaign resume complete")
 
 
@@ -263,7 +350,11 @@ def campaign_worker(
     entry = replace(entry, writer_config_hash=stable_config_hash(writer_cfg))
     # Validate every nested source/candidate/renderer/scorer/depth device
     # before the shard owner creates its staging directory.
-    campaign.preflight(nested_configs=(writer_cfg,))
+    campaign.preflight(
+        nested_configs=(writer_cfg,),
+        writer_config_path=writer_path,
+        plan_path=plan_path,
+    )
     result = run_rollout_shard(
         writer_cfg,
         shard_entry=entry,
@@ -273,11 +364,9 @@ def campaign_worker(
     typer.echo(
         json.dumps(
             {
-                "outcome": result.outcome
-                if hasattr(result, "outcome")
-                else ("skipped" if result.skipped else "succeeded"),
+                "outcome": "skipped" if getattr(result, "skipped", False) else getattr(result, "outcome", "succeeded"),
                 "reason": getattr(result, "reason", None),
-                "validated": not result.skipped,
+                "validated": True,
                 "plan_hash": plan_hash,
                 "work_unit_hash": unit.work_unit_hash,
                 "leaf_evidence": {"success_path": str(result.success_path), "owner_path": str(result.owner_path)},
@@ -636,6 +725,69 @@ def _raw_argv(ctx: typer.Context) -> list[str]:
     return []
 
 
+def _internal_preflight(
+    stage: str,
+    *,
+    plan_path: Path | None = None,
+    writer_config_path: Path | None = None,
+    expected_scene_count: int | None = None,
+) -> int:
+    """Run one named repository-owned preflight subprocess mode."""
+    if stage == "cuda-rasterizer-preflight":
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA is unavailable")
+        from pytorch3d.renderer import MeshRasterizer, PerspectiveCameras, RasterizationSettings
+        from pytorch3d.structures import Meshes
+
+        device = torch.device("cuda:0")
+        verts = torch.tensor([[-0.5, -0.5, 2.0], [0.5, -0.5, 2.0], [0.0, 0.5, 2.0]], device=device)
+        faces = torch.tensor([[0, 1, 2]], dtype=torch.int64, device=device)
+        fragments = MeshRasterizer(
+            cameras=PerspectiveCameras(device=device),
+            raster_settings=RasterizationSettings(image_size=2, blur_radius=0.0, faces_per_pixel=1),
+        )(Meshes([verts], [faces]))
+        if fragments.pix_to_face.numel() == 0:
+            raise RuntimeError("rasterizer returned no pixels")
+    elif stage == "source-target-preflight":
+        # Importing and validating the canonical target-task source verifies
+        # source/target protocol wiring in the child process.
+        from ...targets.protocol import TargetInputProtocol
+        from ..target_selection import ORACLE_TARGET_TASK_SOURCE
+
+        if not ORACLE_TARGET_TASK_SOURCE:
+            raise RuntimeError("source-target task source is empty")
+        if TargetInputProtocol.V1_OBSERVED.value != "v1_observed":
+            raise RuntimeError("observed target protocol contract drifted")
+        if writer_config_path is not None:
+            writer_path = resolve_config_toml_path(writer_config_path)
+            writer_cfg = RolloutDatasetWriterConfig.from_toml(writer_path)
+            if writer_cfg.source_manifest_path is None:
+                raise RuntimeError("source-target preflight requires a canonical source manifest")
+            from ...rollouts.shard_manifest import read_rollout_source_manifest
+
+            manifest_path = Path(writer_cfg.source_manifest_path)
+            manifest = read_rollout_source_manifest(manifest_path)
+            if not manifest.rows:
+                raise RuntimeError("source-target preflight found no source rows")
+            if expected_scene_count is not None:
+                scene_count = len({row.scene_id for row in manifest.rows})
+                if scene_count != expected_scene_count:
+                    raise RuntimeError(
+                        f"source-target preflight requires {expected_scene_count} scenes; found {scene_count}"
+                    )
+            if not Path(manifest.source_store_dir).exists():
+                raise RuntimeError("source-target preflight source store is missing")
+            if plan_path is not None:
+                from .campaign import CampaignPlan
+
+                CampaignPlan.from_jsonable(json.loads(Path(plan_path).read_text(encoding="utf-8")))
+    else:
+        raise ValueError(f"unknown internal preflight stage: {stage}")
+    return 0
+
+
 __all__ = [
     "build_app",
     "main",
@@ -646,3 +798,26 @@ __all__ = [
     "status_app",
     "status_main",
 ]
+
+
+if __name__ == "__main__":
+    if len(sys.argv) >= 3 and sys.argv[1] == "--internal-preflight":
+        stage = sys.argv[2]
+        plan_arg = Path(sys.argv[sys.argv.index("--plan-path") + 1]) if "--plan-path" in sys.argv else None
+        writer_arg = (
+            Path(sys.argv[sys.argv.index("--writer-config-path") + 1]) if "--writer-config-path" in sys.argv else None
+        )
+        expected_arg = (
+            int(sys.argv[sys.argv.index("--expected-scene-count") + 1])
+            if "--expected-scene-count" in sys.argv
+            else None
+        )
+        raise SystemExit(
+            _internal_preflight(
+                stage,
+                plan_path=plan_arg,
+                writer_config_path=writer_arg,
+                expected_scene_count=expected_arg,
+            )
+        )
+    main()

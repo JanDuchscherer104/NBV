@@ -12,13 +12,17 @@ import torch
 
 pytest.importorskip("efm3d")
 
+from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
 from efm3d.aria.obb import ObbTW
 from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import VinSnippetView
+from aria_nbv.data_handling.ase_efm.views import EfmSnippetView
 from aria_nbv.data_handling.vin_store.batch import CompactObbBlock
 from aria_nbv.data_handling.vin_store.dataset import VinOfflineOracleBlock, VinOfflineSample
+from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutCampaignConfig
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriter
 from aria_nbv.oracle.target_selection import (
     ORACLE_TARGET_TASK_SOURCE,
     OracleMatchReason,
@@ -190,6 +194,7 @@ def test_oracle_target_task_contains_only_domain_fields() -> None:
         "identity_status",
         "selected_rank",
         "selection_probability",
+        "obb_data",
     }
     assert row.identity_status == TargetTaskIdentityStatus.MATCHED.value
     assert row.confidence == pytest.approx(0.05)
@@ -222,6 +227,82 @@ def test_observed_descriptor_extraction_is_actor_only_and_deterministic() -> Non
     ]
     assert all(descriptor.descriptor_hash for descriptor in first)
     assert all(not hasattr(descriptor, "gt_match_row") for descriptor in first)
+
+
+def test_observed_descriptor_transforms_snippet_obb_to_world_and_reference_frame() -> None:
+    sample = _sample(detected_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]), gt_obbs=None)
+    sample.vin_snippet.t_world_rig = _poses([[10.0, 0.0, 0.0]])
+    sample.oracle.reference_pose_world_rig = _poses([[11.0, 0.0, 0.0]])
+
+    observed = observed_target_descriptors(sample)[0]
+
+    assert observed.descriptor is not None
+    assert observed.descriptor.center_world == pytest.approx((12.0, 0.0, 0.0))
+    assert observed.descriptor.relative_pose_reference_object[9:12] == pytest.approx((1.0, 0.0, 0.0))
+    assert observed.obb_data is not None
+    assert ObbTW(torch.tensor(observed.obb_data)).T_world_object.t.reshape(-1).tolist() == pytest.approx(
+        [12.0, 0.0, 0.0]
+    )
+
+
+def test_observed_descriptor_prefers_exact_efm_snippet_transform_over_trajectory() -> None:
+    sample = _sample(detected_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]), gt_obbs=None)
+    sample.vin_snippet.t_world_rig = _poses([[10.0, 0.0, 0.0]])
+    sample.efm_snippet_view = EfmSnippetView(
+        efm={ARIA_SNIPPET_T_WORLD_SNIPPET: _poses([[20.0, 0.0, 0.0]])},
+        scene_id=sample.scene_id,
+        snippet_id=sample.snippet_id,
+    )
+    sample.oracle.reference_pose_world_rig = _poses([[21.0, 0.0, 0.0]])
+
+    observed = observed_target_descriptors(sample)[0]
+
+    assert observed.descriptor is not None
+    assert observed.descriptor.center_world == pytest.approx((22.0, 0.0, 0.0))
+    assert observed.descriptor.relative_pose_reference_object[9:12] == pytest.approx((1.0, 0.0, 0.0))
+
+
+def test_invalid_observed_geometry_is_retained_with_explicit_match_reason() -> None:
+    detected = _obb_block([[2.0, 0.0, 0.0]], sem_ids=[1])
+    detected.obbs[0, 0:2] = 0.0
+    observed = observed_target_descriptors(_sample(detected_obbs=detected, gt_obbs=None))
+
+    assert len(observed) == 1
+    assert observed[0].descriptor is None
+    matched = match_observed_target_descriptors(list(observed), [])
+    assert matched[0].admitted is False
+    assert matched[0].reason is OracleMatchReason.INVALID_GEOMETRY
+
+
+def test_campaign_source_audit_enumerates_admitted_and_rejected_observed_targets(tmp_path, monkeypatch) -> None:
+    sample = _sample(
+        detected_obbs=_obb_block([[2.0, 0.0, 0.0], [4.0, 0.0, 0.0]], sem_ids=[1, 2]),
+        gt_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]),
+    )
+    source_row = SimpleNamespace(sample_key=sample.sample_key, to_jsonable=lambda: {"scene_id": sample.scene_id})
+    manifest = SimpleNamespace(rows=(source_row,))
+    writer_config = SimpleNamespace(
+        source=SimpleNamespace(setup_target=lambda: [sample]),
+        sample_keys=None,
+        oracle_target_task_sampler=OracleTargetTaskSamplerConfig(max_targets_per_sample=1),
+        selected_source_manifest_rows=lambda _manifest: (source_row,),
+    )
+    monkeypatch.setattr(RolloutDatasetWriter, "_apply_source_manifest", staticmethod(lambda *_args, **_kwargs: None))
+    campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig(output_root=tmp_path))
+
+    audited = campaign.audit_source_manifest(writer_config, manifest)
+
+    assert len(audited) == 2
+    assert [row["target_id"] for row in audited] == [
+        "scene/snippet/0:detected:0:0",
+        "scene/snippet/0:detected:1:1",
+    ]
+    assert audited[0]["admitted"] is True
+    assert audited[0]["gt_match_count"] == 1
+    assert audited[0]["explicit_target_config"]["explicit_target_hash"] == audited[0]["explicit_target_hash"]
+    assert audited[1]["admitted"] is False
+    assert audited[1]["reason"] == OracleMatchReason.WRONG_CLASS.value
+    assert "explicit_target_config" not in audited[1]
 
 
 def _observed_descriptor(*, source_row: int, sem_id: int = 1) -> ObservedTargetDescriptor:
@@ -261,6 +342,16 @@ def test_observed_gt_matching_uses_strict_iou_threshold(iou: float, admitted: bo
     assert result.admitted is admitted
     assert result.reason is reason
     assert result.oriented_iou == pytest.approx(iou)
+
+
+def test_observed_gt_matching_preserves_gt_source_row_identity() -> None:
+    descriptor = _observed_descriptor(source_row=0)
+    gt_row = SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt-7", source_index=7)
+
+    result = match_observed_target_descriptors([descriptor], [gt_row], iou_fn=lambda *_args: 0.8)[0]
+
+    assert result.admitted is True
+    assert result.gt_match_row == 7
 
 
 @pytest.mark.parametrize(

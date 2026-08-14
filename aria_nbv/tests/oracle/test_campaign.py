@@ -3,15 +3,17 @@
 import json
 import signal
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from aria_nbv.oracle.pipelines.campaign import (
-    CampaignEvent,
     CampaignOutcome,
     CampaignProcessRunner,
+    CampaignStatus,
+    CampaignTimeoutError,
     CampaignWorkUnit,
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
@@ -73,6 +75,9 @@ def test_reviewed_profile_components_and_worker_json(tmp_path):
 def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
     campaign = _campaign(tmp_path)
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_realistic.toml")
+    # This test exercises the legacy in-memory adapter seam. Production worker
+    # tests retain the canonical manifest and verify exact sample binding.
+    writer = writer.model_copy(update={"source_manifest_path": None})
     expected_modes = {
         "forward_local": "forward_rig",
         "target_bearing_local": "target_point",
@@ -207,8 +212,8 @@ def test_explicit_target_iou_equal_threshold_is_not_admitted(tmp_path):
     row = _row("s0", "k", "t")
     row.oriented_iou = 0.20
     row.admitted = False
-    plan = campaign.plan([row, _row("s1", "k1", "t1")], source_manifest_hash="source")
-    assert all(unit.target_id != "t" for unit in plan.work_units)
+    with pytest.raises(ValueError, match="expected 2 scenes"):
+        campaign.plan([row, _row("s1", "k1", "t1")], source_manifest_hash="source")
 
 
 def test_nested_cuda_device_one_is_rejected_for_serial_worker(tmp_path):
@@ -262,6 +267,14 @@ def test_recipe_suite_rejects_farthest_policy_and_order_drift():
         CudaRolloutCampaignConfig(profiles=profiles)
 
 
+@pytest.mark.parametrize("recipe_mutation", [lambda recipes: [], lambda recipes: recipes[:-1]])
+def test_recipe_suite_rejects_missing_or_empty_recipe_suite(recipe_mutation):
+    profiles = [p.model_dump() for p in CudaRolloutCampaignConfig().profiles]
+    profiles[0]["recipes"] = recipe_mutation(profiles[0]["recipes"])
+    with pytest.raises(ValueError, match="recipe"):
+        CudaRolloutCampaignConfig(profiles=profiles)
+
+
 def test_recipe_suite_has_exact_policy_horizon_branch_beam_and_temperature():
     expected = [
         ("random_valid", 5, 2, 2, 1.0),
@@ -275,6 +288,101 @@ def test_recipe_suite_has_exact_policy_horizon_branch_beam_and_temperature():
         assert [
             (r["policy"], r["horizon"], r["branch"], r["beam"], r.get("temperature", 1.0)) for r in profile.recipes
         ] == expected
+
+
+def test_worker_json_rejects_unvalidated_success_and_preserves_non_success():
+    assert CudaRolloutCampaign.parse_worker_json('{"outcome":"skipped"}')["outcome"] == "skipped"
+    assert (
+        CudaRolloutCampaign.parse_worker_json('{"outcome":"insufficient_support"}')["outcome"] == "insufficient_support"
+    )
+    with pytest.raises(ValueError, match="validated"):
+        CudaRolloutCampaign.parse_worker_json('{"outcome":"succeeded","validated":false}')
+    assert (
+        CudaRolloutCampaign.parse_worker_json(
+            'writer progress\nrenderer progress\n{"outcome":"succeeded","validated":true}\n'
+        )["validated"]
+        is True
+    )
+
+
+@pytest.mark.parametrize("outcome", ["skipped", "insufficient_support"])
+def test_smoke_rejects_non_success_worker_outcomes(tmp_path, outcome):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    with pytest.raises(RuntimeError, match="structured succeeded"):
+        campaign.smoke(plan, worker=lambda _unit: {"outcome": outcome})
+    assert not (tmp_path / "smoke-evidence.json").exists()
+
+
+def test_smoke_writes_structured_succeeded_evidence(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    result = campaign.smoke(plan, worker=lambda _unit: {"outcome": "succeeded", "validated": True})
+    evidence = json.loads((tmp_path / "smoke-evidence.json").read_text())
+    assert result["validated"] is True
+    assert evidence["plan_hash"] == plan.plan_hash
+    assert evidence["result"] == result
+
+
+def test_campaign_status_round_trip_and_schema_rejection():
+    from dataclasses import asdict
+
+    status = CampaignStatus("running", {"pending": 2}, "plan", "now", current_stage="worker")
+    payload = json.loads(json.dumps(asdict(status)))
+    assert CampaignStatus.from_jsonable(payload) == status
+    payload["schema_version"] = "campaign-status-v0"
+    with pytest.raises(ValueError, match="schema version"):
+        CampaignStatus.from_jsonable(payload)
+
+
+def test_read_status_rejects_stale_config_and_plan_identity(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    status = campaign.status(plan, [])
+    path = campaign.write_status(status)
+    payload = json.loads(path.read_text())
+    payload["config_hash"] = "stale"
+    path.write_text(json.dumps(payload) + "\n")
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+    path = campaign.write_status(status)
+    other_plan = replace(plan, plan_hash="other")
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=other_plan)
+
+
+def test_preflight_stage_uses_named_internal_subprocess(monkeypatch, tmp_path):
+    calls = []
+
+    class Runner:
+        def run_stage(self, argv, **kwargs):
+            calls.append((tuple(argv), kwargs["timeout"]))
+            return 0, "", ""
+
+    campaign = _campaign(tmp_path)
+    campaign.process_runner = Runner()
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.campaign.sys.executable", "/python")
+    campaign.preflight = lambda *args, **kwargs: None
+    for stage in ("cuda-rasterizer-preflight", "source-target-preflight"):
+        campaign.run_preflight_stage(
+            ("/python", "-m", "aria_nbv.oracle.pipelines.cli", "--internal-preflight", stage), stage_name=stage
+        )
+    assert [call[0][-1] for call in calls] == ["cuda-rasterizer-preflight", "source-target-preflight"]
+    assert all(timeout == 120 for _, timeout in calls)
+
+
+def test_preflight_stage_reports_terminal_child_reason_without_traceback(tmp_path):
+    class Runner:
+        def run_stage(self, argv, **kwargs):
+            del argv, kwargs
+            return 1, b"", b"Traceback (most recent call last):\n  child frame\nRuntimeError: found only 5 scenes\n"
+
+    campaign = _campaign(tmp_path)
+    campaign.process_runner = Runner()
+
+    with pytest.raises(RuntimeError, match="^found only 5 scenes$"):
+        campaign.run_preflight_stage(("python", "probe"), stage_name="source-target-preflight")
 
 
 def test_status_exposes_current_unit_profile_stage_and_failure_reason(tmp_path):
@@ -311,6 +419,37 @@ def test_process_group_timeout_sends_term_waits_grace_then_kills(monkeypatch):
     assert calls == [("kill", 42, signal.SIGTERM), ("wait", 10), ("kill", 42, signal.SIGKILL)]
 
 
+def test_process_runner_drains_binary_pipes_and_records_timeout_identity(monkeypatch):
+    calls = []
+    communicate_calls = 0
+
+    class Process:
+        pid = 42
+        returncode = None
+
+        def communicate(self, timeout=None):
+            nonlocal communicate_calls
+            communicate_calls += 1
+            calls.append(("communicate", timeout))
+            if communicate_calls < 3:
+                raise subprocess.TimeoutExpired("worker", timeout)
+            return b"partial stdout", b"bounded stderr"
+
+    runner = CampaignProcessRunner()
+    runner.start = lambda *args, **kwargs: Process()
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.campaign.os.getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.os.killpg", lambda pgid, sig: calls.append(("kill", pgid, sig))
+    )
+    with pytest.raises(CampaignTimeoutError) as raised:
+        runner.run(("worker",), timeout=1, stdout=subprocess.PIPE, stderr=subprocess.PIPE, clock=lambda: 1.0)
+    assert raised.value.process_group == 42
+    assert raised.value.stderr_tail == "bounded stderr"
+    assert raised.value.disposition == "term-grace-kill"
+    assert ("kill", 42, signal.SIGTERM) in calls
+    assert ("kill", 42, signal.SIGKILL) in calls
+
+
 def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -340,6 +479,38 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path):
     assert kinds.count("unit_started") == len(plan.work_units)
 
 
+def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    calls = []
+
+    def worker(unit):
+        calls.append(unit.work_unit_hash)
+        if len(calls) == 1:
+            raise CampaignTimeoutError(
+                "timed out",
+                pid=42,
+                process_group=42,
+                elapsed_seconds=3600.0,
+                stderr_tail="bounded stderr",
+            )
+        return {"outcome": "skipped"}
+
+    campaign._run_claimed(plan, worker=worker, claim={"claim_hash": "test", "tmux_session": "campaign"})
+    status = campaign.read_status(plan=plan)
+    assert len(calls) == len(plan.work_units)
+    assert status.last_timeout == {
+        "work_unit_hash": plan.work_units[0].work_unit_hash,
+        "stage": "worker",
+        "pid": 42,
+        "process_group": 42,
+        "tmux_session": "campaign",
+        "disposition": "term-grace-kill",
+        "stderr_tail": "bounded stderr",
+        "elapsed_seconds": 3600.0,
+    }
+
+
 def test_quarantine_staging_atomically_moves_timeout_and_is_collision_safe(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -356,13 +527,24 @@ def test_quarantine_staging_atomically_moves_timeout_and_is_collision_safe(tmp_p
 
 def test_event_reader_allows_only_truncated_final_line(tmp_path):
     campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     path = tmp_path / "progress.jsonl"
-    campaign.append_event(CampaignEvent("planned", timestamp="now"), path)
+    campaign.append_event(campaign._event(plan, "planned"), path)
     path.write_text(path.read_text() + '{"kind":"unit_started"', encoding="utf-8")
     assert [event.kind for event in campaign.read_events(path)] == ["planned"]
     path.write_text('{"kind":"planned"\n{"kind":', encoding="utf-8")
     with pytest.raises(ValueError, match="malformed event line"):
         campaign.read_events(path)
+
+
+def test_event_reader_requires_identity_for_current_schema_but_accepts_legacy(tmp_path):
+    campaign = _campaign(tmp_path)
+    path = tmp_path / "progress.jsonl"
+    path.write_text('{"kind":"planned","timestamp":"now","schema_version":"campaign-event-v1"}\n')
+    with pytest.raises(ValueError, match="requires campaign, plan, and config identity"):
+        campaign.read_events(path)
+    path.write_text('{"kind":"planned","timestamp":"now"}\n')
+    assert campaign.read_events(path)[0].kind == "planned"
 
 
 def test_stale_smoke_evidence_is_rejected_without_overwriting(tmp_path):
@@ -451,19 +633,30 @@ def test_status_reports_each_terminal_and_active_state(tmp_path, results, state)
     assert campaign.status(plan, results).state == state
 
 
+@pytest.mark.parametrize(
+    ("stage", "state"), [("worker", "running"), ("blocked", "blocked"), ("conflicted", "conflicted")]
+)
+def test_status_reports_active_and_bounded_states(tmp_path, stage, state):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    status = campaign.status(plan, stage=stage, bounded_error="bounded")
+    assert status.state == state
+    assert status.latest_failure_reason == "bounded"
+
+
 def test_partial_status_counts_pending_units_and_typed_event_identity(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     status = campaign.status(plan, [{"outcome": "pending"}])
     assert status.state == "running"
     assert status.counts["pending"] == len(plan.work_units)
-    event = CampaignEvent(
+    event = campaign._event(
+        plan,
         "root_preflight_insufficient",
-        plan.work_units[0].work_unit_hash,
-        "insufficient_support",
-        "now",
-        "9 valid candidates",
-        "preflight",
+        unit=plan.work_units[0],
+        outcome="insufficient_support",
+        detail="9 valid candidates",
+        stage="preflight",
         elapsed_seconds=1.5,
     )
     path = campaign.append_event(event)
@@ -534,6 +727,42 @@ def test_plan_is_stable_and_assigns_profiles(tmp_path):
         "radial_backtrack_60",
         "free_shell_upper_bound_60",
     }
+
+
+def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path):
+    campaign = _campaign(tmp_path)
+    rows = [
+        {
+            "scene_id": "s0",
+            "sample_key": "k0",
+            "target_id": "t0",
+            "descriptor_hash": "descriptor",
+            "gt_match_row": 7,
+            "gt_match_id": "gt-7",
+            "gt_match_count": 1,
+            "oriented_iou": 0.8,
+            "admitted": True,
+            "reason": "admitted",
+        }
+    ]
+    expected_hash = stable_msgspec_hash(rows)
+
+    path = campaign.write_admission_audit(
+        rows,
+        source_manifest_hash="source",
+        expected_hash=expected_hash,
+    )
+
+    payload = json.loads(path.read_text())
+    assert payload["admission_audit_hash"] == expected_hash
+    assert payload["rows"] == rows
+    stale = [{**rows[0], "target_id": "other"}]
+    with pytest.raises(ValueError, match="different content"):
+        campaign.write_admission_audit(
+            stale,
+            source_manifest_hash="source",
+            expected_hash=stable_msgspec_hash(stale),
+        )
 
 
 def test_plan_hash_and_allocation_are_stable_and_source_change_rehashes(tmp_path):
@@ -653,13 +882,121 @@ def test_run_rejects_plan_writer_digest_before_claim_or_events(tmp_path):
     assert not (tmp_path / "progress.jsonl").exists()
 
 
+def test_run_requires_smoke_evidence_even_for_injected_worker(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    called = []
+
+    def smoke_evidence(_plan):
+        called.append(True)
+        raise RuntimeError("current passing smoke evidence is required")
+
+    monkeypatch.setattr(campaign, "smoke_evidence", smoke_evidence)
+    with pytest.raises(RuntimeError, match="smoke evidence"):
+        campaign.run(
+            plan,
+            worker=lambda _unit: {"outcome": "skipped"},
+            cuda_probe=lambda: SimpleNamespace(ok=True, cuda_available=True, pytorch3d_available=True, device="cuda:0"),
+        )
+    assert called == [True]
+
+
+def test_direct_run_forwards_plan_and_writer_to_source_preflight(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    config = campaign.config.model_copy(update={"writer_config_path": tmp_path / "writer.toml"})
+    campaign = CudaRolloutCampaign(config)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    captured = {}
+
+    def preflight(*args, **kwargs):
+        captured.update(args=args, kwargs=kwargs)
+        return None
+
+    monkeypatch.setattr(campaign, "preflight", preflight)
+    monkeypatch.setattr(
+        campaign,
+        "smoke_evidence",
+        lambda _plan: (_ for _ in ()).throw(RuntimeError("current passing smoke evidence is required")),
+    )
+    plan_path = tmp_path / "plan.json"
+    with pytest.raises(RuntimeError, match="smoke evidence"):
+        campaign.run(plan, worker=lambda _unit: {"outcome": "skipped"}, plan_path=plan_path)
+
+    assert captured["kwargs"]["plan_path"] == plan_path
+    assert captured["kwargs"]["writer_config_path"] == tmp_path / "writer.toml"
+
+
+def test_competing_run_does_not_mutate_active_owner_status_or_events(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    owner_status = campaign.status(plan, stage="running")
+    status_path = campaign.write_status(owner_status)
+    before = status_path.read_bytes()
+    claim = campaign.acquire_claim(plan)
+
+    with pytest.raises(RuntimeError, match="run claim exists"):
+        campaign.run(
+            plan,
+            worker=lambda _unit: {"outcome": "skipped"},
+            cuda_probe=lambda: {"cuda_available": True, "pytorch3d_available": True},
+        )
+
+    assert status_path.read_bytes() == before
+    assert not (tmp_path / "progress.jsonl").exists()
+    campaign.release_claim(plan, claim_hash=claim["claim_hash"])
+
+
+def test_preflight_rejects_output_root_that_is_not_a_directory(tmp_path):
+    output_root = tmp_path / "output"
+    output_root.write_text("not a directory")
+    config = _campaign(tmp_path).config.model_copy(update={"output_root": output_root})
+    campaign = CudaRolloutCampaign(config)
+
+    with pytest.raises(RuntimeError, match="not a directory"):
+        campaign.preflight(lambda: {"cuda_available": True, "pytorch3d_available": True})
+
+
+def test_stale_claim_requires_exact_hash_and_archives_acknowledged_claim(tmp_path, monkeypatch):
+    path = tmp_path / "run-claim.json"
+    path.write_text(json.dumps({"pid": 99999999, "claim_hash": "abc"}))
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.os.kill", lambda *_args: (_ for _ in ()).throw(ProcessLookupError)
+    )
+    assert CudaRolloutCampaign.claim_is_stale(path)
+    with pytest.raises(ValueError, match="hash mismatch"):
+        CudaRolloutCampaign.acknowledge_stale_claim(path, "wrong")
+    archive = CudaRolloutCampaign.acknowledge_stale_claim(path, "abc")
+    assert archive.name == "run-claim.json.stale-abc"
+    assert archive.exists() and not path.exists()
+
+
+@pytest.mark.parametrize("scene_count", [99, 100, 101])
+def test_plan_enforces_canonical_one_hundred_scene_gate(tmp_path, scene_count):
+    campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig(output_root=tmp_path))
+    rows = [_row(f"scene-{i}", f"sample-{i}", f"target-{i}") for i in range(scene_count)]
+    if scene_count == 100:
+        assert campaign.plan(rows, source_manifest_hash="source").work_units
+    else:
+        with pytest.raises(ValueError, match="expected 100 scenes"):
+            campaign.plan(rows, source_manifest_hash="source")
+
+
+@pytest.mark.parametrize("iou", [float("nan"), float("inf"), float("-inf")])
+def test_plan_rejects_nonfinite_iou_marked_admitted(tmp_path, iou):
+    campaign = _campaign(tmp_path)
+    rows = [_row("s0", "k", "t"), _row("s1", "k1", "t1")]
+    rows[0].oriented_iou = iou
+    with pytest.raises(ValueError, match="finite oriented_iou"):
+        campaign.plan(rows, source_manifest_hash="source")
+
+
 def test_events_flush_status_atomic_and_claim_release(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan(
         [_row(f"s{i}", f"k{i}", f"t{i}") for i in range(2)],
         source_manifest_hash="source",
     )
-    campaign.append_event(CampaignEvent("planned", timestamp="now"))
+    campaign.append_event(campaign._event(plan, "planned"))
     status = campaign.status(plan, [CampaignOutcome.SUCCEEDED] * len(plan.work_units))
     assert campaign.write_status(status).exists()
     claim = campaign.acquire_claim(plan)

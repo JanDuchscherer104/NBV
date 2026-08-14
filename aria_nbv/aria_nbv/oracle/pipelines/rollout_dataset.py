@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 import torch
 from pydantic import Field, field_validator, model_validator
@@ -74,9 +74,6 @@ from .evaluated_rollout import (
     OracleReplayAdapter,
     OracleReplayInvalidityError,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass(slots=True)

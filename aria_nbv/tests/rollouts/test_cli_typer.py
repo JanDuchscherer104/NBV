@@ -132,6 +132,23 @@ def test_campaign_preflight_delegates_once(tmp_path, monkeypatch) -> None:
     assert calls == ["preflight"]
 
 
+def test_campaign_plan_reports_preflight_failure_without_traceback(tmp_path, monkeypatch) -> None:
+    class Campaign:
+        config = SimpleNamespace(writer_config_path=None)
+
+        def preflight(self, **_kwargs):
+            raise RuntimeError("source-target preflight requires 100 scenes; found 5")
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: Campaign())
+    monkeypatch.setattr(rollout_cli, "_writer_config", lambda _campaign: None)
+
+    result = runner.invoke(rollout_cli.campaign_app, ["plan", "--config-path", str(tmp_path / "cfg.toml")])
+
+    assert result.exit_code == 2
+    assert "source-target preflight requires 100 scenes; found 5" in result.output
+    assert "Traceback" not in result.output
+
+
 @pytest.mark.parametrize(
     ("command", "message"), [("run", "campaign run complete"), ("resume", "campaign resume complete")]
 )
@@ -150,6 +167,9 @@ def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, m
         def preflight(self, *args, **kwargs):
             return SimpleNamespace(ok=True)
 
+        def smoke_evidence(self, plan):
+            return {"plan_hash": plan.plan_hash, "result": {"outcome": "succeeded", "validated": True}}
+
         def run(self, plan, **kwargs):
             calls.append((plan.plan_hash, kwargs))
 
@@ -160,7 +180,7 @@ def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, m
     assert len(calls) == 1
 
 
-def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch) -> None:
+def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch, capsys) -> None:
     @dataclass(frozen=True)
     class _Entry:
         profile_hash: str = ""
@@ -212,8 +232,8 @@ def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch)
 
     @dataclass(frozen=True)
     class _Result:
-        outcome: str = "succeeded"
-        skipped: bool = False
+        outcome: str = "skipped"
+        skipped: bool = True
         success_path: Path = Path("success")
         owner_path: Path = Path("owner")
 
@@ -239,3 +259,73 @@ def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch)
     )
 
     assert seen == {"profile_hash": selected_profile_hash, "shard_profile_hash": selected_profile_hash}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["outcome"] == "skipped"
+    assert payload["validated"] is True
+    assert payload["leaf_evidence"]["success_path"] == "success"
+
+
+def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "source.json"
+    source.write_text("{}\n")
+    captured = {}
+    reviewed_manifest = SimpleNamespace(to_jsonable=lambda: {"manifest": "canonical"})
+    writer = SimpleNamespace(source_manifest_path=source, model_dump_jsonable=lambda: {"writer": "canonical"})
+
+    class _Campaign:
+        config = SimpleNamespace(campaign_id="campaign")
+
+        def preflight(self, **_kwargs):
+            return None
+
+        def plan(self, rows, **kwargs):
+            captured.update(rows=rows, kwargs=kwargs)
+            return SimpleNamespace(
+                plan_hash="plan",
+                config_hash="config",
+                writer_config_hash="writer",
+                source_manifest_hash="source",
+                admission_audit_hash="audit",
+                work_units=(SimpleNamespace(),),
+                to_jsonable=lambda: {"plan_hash": "plan"},
+            )
+
+        def audit_source_manifest(self, writer_config, manifest):
+            captured.update(writer_config=writer_config, manifest=manifest)
+            return [{"scene_id": "s0"}]
+
+        def write_plan(self, plan, path=None):
+            return path
+
+        def write_admission_audit(self, rows, **kwargs):
+            captured.update(admission_rows=rows, admission_kwargs=kwargs)
+            return source
+
+        def append_event(self, _event):
+            return None
+
+        def write_status(self, status):
+            captured["status"] = status
+            return None
+
+        def model_dump_jsonable(self):
+            return {}
+
+        utc_now = staticmethod(lambda: SimpleNamespace(isoformat=lambda: "now"))
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+    monkeypatch.setattr(rollout_cli, "_writer_config", lambda _campaign: writer)
+    monkeypatch.setattr(rollout_cli, "read_rollout_source_manifest", lambda _path: reviewed_manifest)
+    result = runner.invoke(
+        rollout_cli.campaign_app, ["plan", "--config-path", "cfg.toml", "--source-manifest", str(source)]
+    )
+    assert result.exit_code == 0
+    assert captured["rows"] == [{"scene_id": "s0"}]
+    assert captured["writer_config"] is writer
+    assert captured["manifest"] is reviewed_manifest
+    assert captured["admission_rows"] == [{"scene_id": "s0"}]
+    assert captured["admission_kwargs"]["expected_hash"] == "audit"
+    assert captured["status"].campaign_id == "campaign"
+    assert captured["status"].config_hash == "config"
+    assert captured["status"].counts["pending"] == 1
+    assert set(captured["status"].counts) == {outcome.value for outcome in rollout_cli.CampaignOutcome}
