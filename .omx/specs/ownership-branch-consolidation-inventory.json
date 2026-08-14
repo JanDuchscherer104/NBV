@@ -694,8 +694,8 @@
   "theory_qmd_matrix": [
     {
       "path": "docs/contents/theory/candidate_sampling_target_selection.qmd",
-      "classification": "keep",
-      "unique_role": "external/background candidate sampling references",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/background dossier; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -714,12 +714,13 @@
         ".agents/memory/history/2026/06/2026-06-18_target_selection_rework_autoresearch.md",
         "README.md"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "cd3e01db6d7196ad798241cd2ee1c4f76752e8b48a39667749a1d9f83ce95bff"
     },
     {
       "path": "docs/contents/theory/candidate_view_dependence.qmd",
-      "classification": "keep",
-      "unique_role": "external evidence/example",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/background dossier; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/04-method/04-04-architecture-contract.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -743,12 +744,13 @@
         "docs/typst/thesis/sections/04-method/04-04-architecture-contract.typ",
         "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "c7155cdb141c38c328cad508f198b4b5c6c1d203db14d540cd18fb138c840718"
     },
     {
       "path": "docs/contents/theory/efm3d_scene_embeddings.qmd",
-      "classification": "keep",
-      "unique_role": "literature/background dossier",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/background dossier; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -768,12 +770,13 @@
         "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ",
         "docs/typst/thesis/sections/04-method/04-03-candidate-and-replay-contract.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "76d223c17bc4a1241376ee4923c16808bc01d81c527abc7c82a65713c90f3081"
     },
     {
       "path": "docs/contents/theory/nbv_background.qmd",
-      "classification": "keep",
-      "unique_role": "external NBV background",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/navigation page; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/01-introduction.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -781,12 +784,13 @@
         "docs/contents/glossary.qmd",
         "docs/typst/shared/glossary.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "d0175e90e097031216c00eeedde406cf39848b305e824653104f65ed54be7607"
     },
     {
       "path": "docs/contents/theory/rl_planning.qmd",
-      "classification": "thin",
-      "unique_role": "stable RL planning navigation only; normative theory must move to Typst",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/navigation page; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -817,12 +821,13 @@
         "docs/typst/shared/glossary.typ",
         "docs/typst/thesis/glossary-overrides.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "5a33699db88d79451059794f95f5f576ba26725429dcdb12035183abf8429306"
     },
     {
       "path": "docs/contents/theory/rri_theory.qmd",
-      "classification": "thin",
-      "unique_role": "stable metric background only; thesis synthesis owns claims",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/background dossier; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -835,24 +840,26 @@
         "docs/contents/glossary.qmd",
         "docs/typst/shared/glossary.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "0f76ca1848c5e1664e57432efed2ffd65205dd7c6565fe97a0e120fc47ee74f1"
     },
     {
       "path": "docs/contents/theory/semi-dense-pc.qmd",
-      "classification": "keep",
-      "unique_role": "external representation background",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/background dossier; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ",
       "destination_verified": true,
       "inbound_links": [
         "docs/contents/glossary.qmd",
         "docs/typst/shared/glossary.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "de3a68dba7c7fa96862a6978d7315401e3cb90210dfb7cd50e1320dd75f3d5fd"
     },
     {
       "path": "docs/contents/theory/surface_metrics.qmd",
-      "classification": "keep",
-      "unique_role": "external metric evidence",
+      "classification": "deprecated",
+      "unique_role": "deprecated archive/background dossier; external citations only",
       "canonical_destination": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ",
       "destination_verified": true,
       "inbound_links": [
@@ -861,7 +868,8 @@
         "docs/contents/glossary.qmd",
         "docs/typst/shared/glossary.typ"
       ],
-      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD"
+      "citation_disposition": "retain source citations in literature dossier; remove normative synthesis from QMD",
+      "content_sha256": "0a74a5626d80fe53cf10f66f0aece8357a2837eb5c24912ffbc5b238edadf4b9"
     }
   ],
   "consumer_inventory": {
