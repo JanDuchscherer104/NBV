@@ -1,4 +1,10 @@
-"""Immutable VIN offline dataset source configuration."""
+"""Config-as-factory access to the immutable VIN training store.
+
+The source selects file-backed train/validation/test membership from the
+canonical :class:`VinOfflineDataset`.  It exposes optional diagnostic blocks
+explicitly; the default path remains the compact actor-visible VIN batch and
+never repairs or mutates stale store artifacts.
+"""
 
 from __future__ import annotations
 

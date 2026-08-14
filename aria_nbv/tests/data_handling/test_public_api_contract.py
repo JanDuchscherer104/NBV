@@ -101,6 +101,19 @@ def test_qh_surfaces_remain_importable_from_owner_leaves() -> None:
     assert all(hasattr(module, name) and not hasattr(lightning_root, name) for module, name in lightning_symbols)  # noqa: S101
 
 
+def test_storage_and_training_contracts_are_documented_at_their_owners() -> None:
+    """Keep retired lifecycle and failure guidance attached to defining APIs."""
+
+    source = importlib.import_module("aria_nbv.data_handling.vin_store.source")
+    qh_data = importlib.import_module("aria_nbv.lightning.qh_datamodule")
+    trace = importlib.import_module("aria_nbv.rollouts.trace")
+
+    assert "file-backed train/validation/test" in (source.__doc__ or "")  # noqa: S101
+    assert "nonempty" in (qh_data.__doc__ or "") and "disjoint scene" in (qh_data.__doc__ or "")  # noqa: S101
+    assert "incomplete_rollout" in (trace.termination_reason.__doc__ or "")  # noqa: S101
+    assert "stable persisted policy label" in (trace.policy_name.__doc__ or "")  # noqa: S101
+
+
 def test_obsolete_qh_module_path_is_unavailable() -> None:
     """Keep the package move honest instead of retaining a compatibility facade."""
 
