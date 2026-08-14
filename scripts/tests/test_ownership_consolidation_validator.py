@@ -195,6 +195,21 @@ class OwnershipValidatorTests(unittest.TestCase):
             digest = sha256(page.read_bytes()).hexdigest()
             assert validate_theory_topology([{"path": "page.qmd", "content_sha256": digest}], root) == []
 
+    def test_binary_theory_page_fails_closed(self) -> None:
+        from ownership_consolidation_validator import validate_theory_topology
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); page = root / "binary.qmd"
+            page.write_bytes(b"---\nphase: archive\n\xff\xfe")
+            errors = validate_theory_topology([{"path": "binary.qmd", "content_sha256": "0" * 64}], root)
+        assert any("not valid UTF-8" in str(error) for error in errors)
+
+    def test_binary_provenance_candidate_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); path = root / ".agents/memory/transcripts/2099/binary.jsonl"
+            path.parent.mkdir(parents=True); path.write_bytes(b"\xff\xfe")
+            errors = validate_repository_sinks(root, [{"path": ".agents/memory/transcripts/2099/binary.jsonl"}])
+        assert any("not valid UTF-8" in str(error) for error in errors)
+
 
     def test_expected_page_manifest_is_exact(self) -> None:
         manifest = {"expected_pages": ["index.html", "api.html"]}
