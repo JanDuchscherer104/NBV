@@ -1,4 +1,4 @@
-# Ownership and branch-consolidation inventory (S1 provisional)
+# Ownership and branch-consolidation inventory (S1 complete)
 
 Generated 2026-08-14 from the clean `codex/ownership-branch-consolidation`
 worktree. This is a receipt and pointer ledger, not a replacement owner: it
