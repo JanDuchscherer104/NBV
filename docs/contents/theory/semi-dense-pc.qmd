@@ -1,93 +1,20 @@
 ---
-title: "Semi-Dense Point Clouds"
-phase: thesis
+title: "Semi-Dense Point Clouds (background)"
 audience: public
-status: current
-owner: jan
+phase: archive
+status: deprecated
+owner: docs
 format: html
 bibliography: ../../references.bib
-author: "OpenAI ChatGPT, Deep Research & GPT-5"
 ---
 
-## What are semi-dense points?
+# Semi-Dense Point Clouds {#semi-dense-point-clouds}
 
-[**Direct Quote as per Project Aria Docs**](https://facebookresearch.github.io/projectaria_tools/docs/data_formats/mps/slam/mps_pointcloud): Semi-dense points are the 3D points associated with tracks from our semi-dense tracking pipeline. Semi-dense tracks are continually created in pixel locations of input frames that lie in regions of high image gradient, and are then successively tracked in the following frames. Each track is associated with a 3D point, parameterized as an inverse distance along a ray originating from the track's first initial observation, as well as its uncertainty in inverse distance and distance. These points are transformed from their original camera coordinate spaces to the same coordinate frame associated with the closed loop trajectory of the sequence.
+Project Aria's documentation and LSD-SLAM literature describe semi-dense
+tracks, inverse-distance parameterization, and world-frame points
+[@Engel2014LSD]. This compact page preserves that external background only.
 
-**Idea.** Semi-dense SLAM reconstructs 3D only at **high-gradient** pixels, tracking them across frames and estimating one 3D point per **temporal track** (multi-frame 2D correspondences) [@Engel2014LSD]. Points are stored in the **world frame** of the closed-loop trajectory.
-
-### Inverse-Distance parameterization
-For the first (anchor) observation of a track at pixel $(u_0,v_0)$ with intrinsics $K$:
-$$
-\hat{\mathbf r}_0=\frac{K^{-1}[u_0,v_0,1]^\top}{\lVert K^{-1}[u_0,v_0,1]^\top\rVert},\qquad
-X_{c_0}(\rho)=\frac{1}{\rho}\,\hat{\mathbf r}_0,\qquad
-X_{w} = T_{w\leftarrow c_0}\,X_{c_0}(\rho).
-$$
-Using **inverse distance** $\rho=1/d$ stabilizes optimization and handles far points gracefully [@Engel2014LSD; @HartleyZisserman].
-
-#### Symbol definitions (notation)
-
-- $K \in \mathbb R^{3\times 3}$: camera intrinsics with $f_x,f_y,c_x,c_y$.
-- $[u_0,v_0]$: pixel coordinates (in pixels) of the anchor observation.
-- $\hat{\mathbf r}_0$: unit back-projection ray in the anchor camera frame; the hat denotes normalization to unit length.
-- $\rho=1/d$: inverse distance (m$^{-1}$); $d$ is metric distance along $\hat{\mathbf r}_0$.
-- $X_{c_0}(\rho) \in \mathbb R^3$: 3D point in the anchor camera frame at inverse distance $\rho$.
-- $T_{w\leftarrow c_0} = (R_{w\leftarrow c_0}, t_{w\leftarrow c_0}) \in \mathrm{SE}(3)$: rigid transform mapping anchor camera coordinates to world.
-- $X_w \in \mathbb R^3$: the same 3D point expressed in the world (closed-loop) frame.
-- $\sigma_\rho,\sigma_d$: standard deviations of inverse distance and distance, respectively.
-All 3D points are column vectors; $\propto$ indicates equality up to a non-zero scale (homogeneous projection).
-
-**Uncertainty.**
-
-Each point's depth $d$ is treated probabilistically. Typically the system represents $\rho ~ \mathcal N(\mu_\rho,\sigma_\rho^2)$ with a Gaussian $\mathcal{N}(\mu_\rho, \sigma_\rho^2)$, reflecting measurement noise and triangulation uncertainty. From this, the distance $d=1/\rho$ has (approximate) standard deviation
-
-$$
-\sigma_d \;\approx\; \frac{\sigma_\rho}{\rho^2},
-$$
-
-so the published fields `inv_dist_std` and `dist_std` are simply $\sigma_\rho$ and $\sigma_d$ respectively. Large $\sigma_\rho$ means the depth is poorly constrained (e.g. from small parallax or noise), while small $\sigma_\rho$ means a confident estimate. In practice, one often filters the semi-dense cloud by uncertainty: for example, only keeping points with $\sigma_\rho$ below a threshold (or equivalently $\sigma_d$ small). Note that a "semi-dense reconstruction" typically shows only points with small inverse-depth uncertainty.
-In other words, high-uncertainty tracks are often discarded or downweighted, since they contribute geometric outliers.
-
-### Multi-view constraints & visibility
-Given world point $X_w$ and camera $j$ with pose $(R_j,t_j)$:
-$$
-X_j = T_{j\leftarrow w} X_w,\qquad
-\begin{bmatrix}u\\ v\\ 1\end{bmatrix} \propto K\,X_j,\quad
-u = f_x X_{j,x}/X_{j,z}+c_x,\; v = f_y X_{j,y}/X_{j,z}+c_y.
-$$
-Per-frame 2D observations $(u,v)$ form the **track**; BA/direct methods minimize reprojection/photometric error over all visible frames [@HartleyZisserman].
-
-### What the Aria files mean
-
-- **`semidense_points.csv.gz`** (world frame):
-  `uid`, `graph_uid`, `p{x,y,z}_world`, `inv_dist_std`, `dist_std`.
-  $\rightarrow$ One row **per 3D landmark** (from a track) in the closed-loop world frame.
-
-- **`semidense_observations.csv.gz`** (image frame):
-  `uid`, `frame_tracking_timestamp_us`, `camera_serial`, `u`, `v`.
-  $\rightarrow$ All **2D sightings** of each landmark; this is the **visibility set**.
-
-  Importantly, visibility refers to the subset of frames in which a given point is actually seen (i.e. projects into the image bounds and is not occluded). The observations file encodes this - each line lists a frame timestamp and camera for which $(u,v)$ was recorded. A longer track (more observations) generally means the point had more parallax and a more reliable depth estimate. Conversely, if a point appears in only two frames with small baseline, its depth will be very uncertain (large $\sigma$). By examining the 2D tracks, one can reconstruct the camera trajectory and scene geometry: this is the classical structure-from-motion problem. In summary, semi-dense visibility information is simply the collection of 2D measurements $(u,v)$ for each world point in all frames it was tracked, establishing the 3D-2D correspondences that underpin the SLAM solution.
-
-### EVL/EFM3D context (for NBV)
-**EVL** (Egocentric Voxel Lifting) [@EFM3D-straub2024, Sec. 4] lifts 2-D features into a **gravity-aligned voxel volume**.  It makes explicit use of the semi-dense SLAM tracks:
-
-* **Point mask:** voxels containing semi-dense surface points.  These provide evidence of observed surfaces.
-* **Free-space mask:** voxels along the camera → surface rays (between the camera and the first surface point) that are known to be empty.  These define free space and help avoid collisions.
-
-The point and free-space masks are concatenated with lifted image features and fed into 3-D convolutional heads for occupancy prediction and oriented bounding box (OBB) regression.  In essence, the semi-dense cloud provides **geometry** (where surfaces exist) and **visibility** (where free space exists), enabling the model to reason about both seen and unseen regions.  This volumetric representation is a core building block of our NBV system because it informs where new views can contribute most.
-
-### Practical guidance
-
-- Keep points with small `inv_dist_std` / `dist_std`; down-weight or drop large-uncertainty landmarks.
-- Longer tracks (more parallax) $\implies$ smaller $\sigma_\rho$. Small baselines/low texture $\implies$ large $\sigma_\rho$.
-- Use observation lists to reconstruct per-point **visibility** and to validate projections against intrinsics/extrinsics.
-
-### Semi-dense vs. dense ground truth in RRI
-
-Semi-dense point clouds differ from dense ground-truth meshes not just in density but also in sampling **bias**: semi-dense reconstructions concentrate on edges and textured regions, leaving textureless surfaces underrepresented.  When computing **Relative Reconstruction Improvement (RRI)**, this mismatch can skew metrics like Chamfer distance.  To address this:
-
-* Prefer **point-to-mesh distances** (see [Surface Metrics](surface_metrics.qmd)) instead of point-to-point Chamfer when comparing a semi-dense prediction to a dense mesh.
-* Optionally **down-sample** or **up-sample** the mesh to match the average point density of the semi-dense cloud, ensuring the RRI numerator and denominator are comparable【603805067285655†L23-L27】.
-* Use the uncertainty fields (`inv_dist_std`, `dist_std`) to filter out unreliable semi-dense points before evaluating quality.  This reduces noise and helps the NBV system focus on meaningful improvements.
-
-These considerations are important for training RRI predictors that generalise from synthetic to real data and from semi-dense to dense reconstructions.
+ARIA-NBV's geometry, notation, data shape, and validation are owned by the
+[Typst thesis](../../typst/thesis/main.typ) plus the relevant Python
+docstrings/tests. For neighboring background see [ASE](../ase_dataset.qmd) and
+[EFM3D embeddings](efm3d_scene_embeddings.qmd).

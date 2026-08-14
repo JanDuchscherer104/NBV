@@ -1,35 +1,26 @@
 ---
-title: "NBV Background"
-phase: thesis
+title: "NBV Background (reading guide)"
 audience: public
-status: current
-owner: jan
+phase: archive
+status: deprecated
+owner: docs
+format: html
 ---
 
-# Classical Methods: Geometric Heuristics
-Hand-crafted criteria include:
+# NBV Background {#nbv-background}
 
-- **Volumetric uncertainty** (unseen voxels)
-- **Information gain** (entropy reduction)
-- **Surface coverage** [@VIN-NBV-frahm2025]
+This page is a short literature-oriented entry point. It does not own ARIA-NBV
+theory, research questions, equations, or implementation contracts. The
+canonical synthesis is in the [Typst thesis](../../typst/thesis/main.typ),
+especially its foundations and method sections.
 
-# Coverage-Based Learning: GenNBV
-[**GenNBV (literature-review)**](../literature/gen_nbv.qmd) [@GenNBV-chen2024] introduced learning-based NBV with:
+Classical next-best-view work uses geometric uncertainty, information gain, or
+surface coverage. Learning-based work such as [GenNBV](../literature/gen_nbv.qmd)
+[@GenNBV-chen2024] and [VIN-NBV](../literature/vin_nbv.qmd)
+[@VIN-NBV-frahm2025] illustrates the transition from coverage heuristics to
+quality-oriented view selection. These citations are background evidence only;
+ARIA-specific claims and the current RRI formulation belong to the thesis.
 
-- RL-based training with continuous 5DoF actions
-- Coverage-focused rewards for geometric completeness
-
-**Limitation**: Still optimizes geometric coverage, not reconstruction quality. Primitive non-pre-trained architecture.
-
-# Direct Quality Optimization: VIN-NBV
-
-[**VIN-NBV (literature-review)**](../literature/vin_nbv.qmd) [@VIN-NBV-frahm2025] directly optimizes **Relative Reconstruction Improvement (RRI)**:
-
-$$\text{RRI}(v) = \frac{\text{Quality}(R_{t+1}) - \text{Quality}(R_t)}{\text{Quality}(R_{\text{complete}})}$$
-
-- Predicts actual reconstruction quality improvement
-- Trained via imitation learning on oracle RRI values using CORAL loss
-- Uses surface metrics (Chamfer distance, F-score) as quality measures
-- Demonstrates ≈30% improvement over coverage-based methods
-
-**Limitation**: Custom CNN backbone limits generalization to complex scenes, doesn't leverage ego-centric priors / modalities. Greedy selection of randomly sampled views based on predicted RRI.
+For the current implementation boundary, see the Python module docstrings and
+the contract tests under `tests/`. For the project research questions, use
+`docs/typst/thesis/sections/01-research-questions.typ`.
