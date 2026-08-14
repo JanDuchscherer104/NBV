@@ -58,8 +58,8 @@ canonical_updates_needed: []
 ## Verification
 <commands; pass/fail; blockers>
 
-## Canonical State Impact
-<list .agents/memory/state/*.md updates, or say "none" explicitly>
+## Canonical Owner Impact
+<list exact Typst/Python/configuration/test/setup/guidance owner updates, or say "none" explicitly>
 """
     return file_path, body
 
