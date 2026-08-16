@@ -1,17 +1,21 @@
 ---
 kind: spec
-status: accepted
+status: superseded
 ---
 
 # Ownership and branch-consolidation successor spec
 
-Status: compact accepted-scope pointer for S1/S2 execution; it is not a
-scientific, implementation, or canonical-memory owner.
+Status: superseded on 2026-08-16 by the human-approved reconciliation in
+`.omx/plans/prd-aria-nbv-ownership-branch-consolidation.md`. This file remains
+historical planning evidence; it is not a scientific, implementation, or
+canonical-memory owner.
 
 ## Ownership contract
 
 - Active Typst include graph (`docs/typst/thesis/main.typ`) owns thesis theory,
-  RQ1-RQ4, definitions, hypotheses, interpretation, and scientific claims.
+  the six-tier RQ1--RQ6 scope, definitions, hypotheses, interpretation, and
+  scientific claims. RQ1--RQ4 are evaluated core, RQ5 is conditional, and RQ6
+  is lower priority.
 - Python/config/types/docstrings plus focused tests own executable behavior,
   schemas, lifecycle, frames, failure modes, and implementation details.
 - Quarto owns only role-disjoint public setup/commands, generated API,
@@ -25,7 +29,7 @@ scientific, implementation, or canonical-memory owner.
 
 | lane | reserved destination | owner | proof before deletion |
 |---|---|---|---|
-| RQ | `docs/typst/thesis/sections/01-research-questions.typ` and reserved introduction include | leader/RQ lane | exactly four active RQs; no QMD duplicate |
+| RQ | `docs/typst/thesis/sections/01-research-questions.typ` and introduction include | leader/RQ lane | six tiered RQs; no QMD duplicate |
 | roadmap | `docs/typst/thesis/development/roadmap.typ` | roadmap lane | development-only render; pointer-only entries |
 | M1 | `docs/typst/thesis/development/m1-contract-report.typ` | M1 lane | status/evidence links resolve; contracts remain code/test-owned |
 | state migration | Typst/Python/config/tests/guidance owners | migration lane | every unique row destination_verified=true |

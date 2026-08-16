@@ -231,7 +231,8 @@
   - metrics.spearman
   - metrics.topk_acc
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/reference/vin.models.scene_myopic.qmd
   - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   citations:
@@ -262,7 +263,7 @@
     confidence, projected area, and semidense or EVL support. Ground-truth target annotations
     are not visible to the selector in the main thesis protocol.
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/typst/thesis/sections/01-research-questions.typ#rq-objectives
   citations:
   - EFM3D-straub2024
@@ -301,8 +302,8 @@
   - rl.q_h
   internal_links:
   - docs/typst/thesis/sections/01-research-questions.typ#rq2
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
+  - docs/typst/thesis/sections/01-research-questions.typ#rq5
   citations:
   - VIN-NBV-frahm2025
   - DoubleDQN-vanHasselt2015
@@ -336,7 +337,7 @@
   symbol_refs:
   - ase.mesh_target
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/typst/thesis/sections/01-research-questions.typ#rq1
   - docs/contents/theory/rri_theory.qmd
   citations:
@@ -385,7 +386,7 @@
   - rl.nbv_mdp
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
   - docs/typst/thesis/development/roadmap.typ#milestones
   citations:
   - VIN-NBV-frahm2025
@@ -671,7 +672,8 @@
   equation_refs:
   - rl.finite_action_set
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq3
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
   - docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd
   related:
@@ -713,7 +715,7 @@
   - rl.counterfactual_transition
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
   - docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd
   related:
   - rollout-state
@@ -801,7 +803,7 @@
   - rl.finite_horizon_return
   internal_links:
   - docs/contents/theory/rl_planning.qmd#rl-planning-theory
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
   related:
   - target-rri-reward
   - finite-horizon-q-function
@@ -854,7 +856,7 @@
   - rl.q_h
   - rl.q_backup
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
   - docs/typst/thesis/development/roadmap.typ#milestones
   - docs/contents/theory/rl_planning.qmd#q-h-training-contract
   - docs/contents/literature/rl_planning.qmd#q-h-and-dqn
@@ -1047,7 +1049,7 @@
     provide center, extent, orientation, semantic class, and confidence signals.
   internal_links:
   - docs/contents/ase_dataset.qmd#oriented-bounding-boxes
-  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/reference/vin.types.qmd
   citations:
   - EFM3D-straub2024
@@ -1459,7 +1461,7 @@
   - oracle.candidates_t
   - oracle.candidate_qti
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq3
+  - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/contents/theory/rri_theory.qmd
   - docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd
   citations:
