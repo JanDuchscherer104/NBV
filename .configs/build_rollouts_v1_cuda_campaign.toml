@@ -1,6 +1,6 @@
 campaign_id = "cuda-rollouts-v1"
 mode = "broad"
-frozen_profile = "rich_local_60"
+frozen_profile = "realistic_core_60"
 pilot_scene_count = 5
 temperatures = [0.5, 1.0, 2.0, 4.0]
 writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
