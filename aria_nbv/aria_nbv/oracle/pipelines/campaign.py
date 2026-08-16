@@ -1111,9 +1111,7 @@ class CudaRolloutCampaign:
         config_path: Path | None = None,
         plan_path: Path | None = None,
     ) -> Any:
-        unit = next((u for u in plan.work_units if u.profile == "realistic_core_60"), None)
-        if unit is None:
-            raise ValueError("plan has no realistic_core_60 work unit")
+        unit = self._smoke_unit(plan)
         if worker is None:
             if config_path is None or plan_path is None:
                 raise ValueError("production smoke requires canonical config_path and plan_path")
@@ -1194,8 +1192,8 @@ class CudaRolloutCampaign:
             raise RuntimeError("smoke evidence result must be succeeded")
         if result.get("validated") is not True:
             raise RuntimeError("smoke evidence result must be validated")
-        unit = next((u for u in plan.work_units if u.profile == "realistic_core_60"), None)
-        if unit is None or evidence.get("work_unit_hash") != unit.work_unit_hash:
+        unit = self._smoke_unit(plan)
+        if evidence.get("work_unit_hash") != unit.work_unit_hash:
             raise RuntimeError("smoke evidence work-unit identity mismatch")
         for key in ("plan_hash", "work_unit_hash", "config_hash"):
             if key in result and result[key] != (
@@ -1207,6 +1205,23 @@ class CudaRolloutCampaign:
             ):
                 raise RuntimeError(f"smoke evidence {key} mismatch")
         return evidence
+
+    def _smoke_unit(self, plan: CampaignPlan) -> CampaignWorkUnit:
+        """Return the first deterministically planned unit used for smoke proof."""
+        if not plan.work_units:
+            raise ValueError("plan has no work units")
+        unit = plan.work_units[0]
+        if plan.campaign_id != self.config.campaign_id or unit.campaign_id != plan.campaign_id:
+            raise ValueError("smoke unit campaign identity does not match the plan")
+        if _work_unit_identity(unit, seed=plan.seed) != unit.work_unit_hash:
+            raise ValueError("smoke unit hash does not match the plan")
+        if unit.profile not in {profile.name for profile in self.config.profiles}:
+            raise ValueError("smoke unit profile is not in the reviewed campaign config")
+        if unit.config_hash != plan.config_hash:
+            raise ValueError("smoke unit config binding does not match the plan")
+        if unit.writer_config_hash != plan.writer_config_hash:
+            raise ValueError("smoke unit writer binding does not match the plan")
+        return unit
 
     def run_work_unit(
         self,

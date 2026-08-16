@@ -214,14 +214,21 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
             )
         except (OSError, TypeError, ValueError) as exc:
             st.warning(f"Source manifest unavailable: {exc}")
-    session = st.text_input("Named tmux session", f"{cfg.campaign_id}-campaign", key="campaign_tmux_session")
-    st.caption(
-        "CUDA / PyTorch3D required · 60 candidates · branch 2 · beam 2 · support gate 10 · watchdog 120s / 3600s"
-    )
     profile_name = st.selectbox(
         "Inspect reviewed profile", [p.name for p in cfg.profiles], key="campaign_profile_inspect"
     )
     profile = next(p for p in cfg.profiles if p.name == profile_name)
+    if len(profile.recipes) != 1:
+        st.warning("Reviewed profile must expose exactly one current campaign recipe.")
+    recipe = profile.recipes[0] if len(profile.recipes) == 1 else {}
+    session = st.text_input("Named tmux session", f"{cfg.campaign_id}-campaign", key="campaign_tmux_session")
+    st.caption(
+        "CUDA / PyTorch3D required · "
+        f"{recipe.get('policy', 'invalid')} H={recipe.get('horizon', '?')} "
+        f"branch {recipe.get('branch', '?')} / beam {recipe.get('beam', '?')} · "
+        f"60 candidates · balanced temperatures {list(cfg.temperatures)} · "
+        "support gate 10 · watchdog 120s / 3600s"
+    )
     st.json(
         {
             "campaign_id": cfg.campaign_id,
@@ -235,7 +242,14 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                 "total_candidates": profile.total_count,
                 "device": profile.device,
                 "recipes": [
-                    (r["name"], r["horizon"], r["branch"], r["beam"], r.get("temperature", 1.0))
+                    {
+                        "name": r["name"],
+                        "policy": r["policy"],
+                        "horizon": r["horizon"],
+                        "branch": r["branch"],
+                        "beam": r["beam"],
+                        "temperatures": list(cfg.temperatures),
+                    }
                     for r in profile.recipes
                 ],
                 "strict_iou": f"> {cfg.observed_target_iou_threshold} (equality rejected)",

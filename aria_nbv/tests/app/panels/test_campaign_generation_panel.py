@@ -207,6 +207,7 @@ class _FakeCampaign:
                 "output_root": output_root,
                 "writer_config_path": None,
                 "profiles": [],
+                "temperatures": (0.5, 1.0, 2.0, 4.0),
                 "observed_target_iou_threshold": 0.2,
                 "seed": 20260728,
                 "expected_scene_count": 100,
@@ -337,12 +338,7 @@ def _patch_fake_page(
     plan_path.write_text("{}", encoding="utf-8")
     campaign = _FakeCampaign(tmp_path, evidence={"result": {"outcome": "succeeded", "validated": True}})
     recipes = [
-        {"name": "random_valid_h5", "horizon": 5, "branch": 2, "beam": 2},
-        {"name": "random_valid_h8", "horizon": 8, "branch": 2, "beam": 2},
-        {"name": "oracle_greedy_h5", "horizon": 5, "branch": 2, "beam": 2},
-        {"name": "oracle_greedy_h8", "horizon": 8, "branch": 2, "beam": 2},
-        {"name": "temperature_softmax_h5_t2", "horizon": 5, "branch": 2, "beam": 2, "temperature": 2.0},
-        {"name": "temperature_softmax_h8_t2", "horizon": 8, "branch": 2, "beam": 2, "temperature": 2.0},
+        {"name": "temperature_softmax_h8", "policy": "temperature_softmax", "horizon": 8, "branch": 1, "beam": 1}
     ]
     profile = type(
         "Profile",
@@ -452,13 +448,15 @@ def test_page_renders_full_read_only_scientific_recipe_summary(monkeypatch, tmp_
     scientific = next(
         payload["scientific_contract"] for payload in fake_st.json_payloads if "scientific_contract" in payload
     )
-    assert [row[0] for row in scientific["recipes"]] == [
-        "random_valid_h5",
-        "random_valid_h8",
-        "oracle_greedy_h5",
-        "oracle_greedy_h8",
-        "temperature_softmax_h5_t2",
-        "temperature_softmax_h8_t2",
+    assert scientific["recipes"] == [
+        {
+            "name": "temperature_softmax_h8",
+            "policy": "temperature_softmax",
+            "horizon": 8,
+            "branch": 1,
+            "beam": 1,
+            "temperatures": [0.5, 1.0, 2.0, 4.0],
+        }
     ]
     assert scientific["device"] == "cuda"
     assert scientific["total_candidates"] == 60

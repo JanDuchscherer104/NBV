@@ -334,11 +334,45 @@ def test_smoke_rejects_non_success_worker_outcomes(tmp_path, outcome):
 def test_smoke_writes_structured_succeeded_evidence(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    result = campaign.smoke(plan, worker=lambda _unit: {"outcome": "succeeded", "validated": True})
+    selected = []
+    result = campaign.smoke(
+        plan,
+        worker=lambda unit: selected.append(unit) or {"outcome": "succeeded", "validated": True},
+    )
     evidence = json.loads((tmp_path / "smoke-evidence.json").read_text())
     assert result["validated"] is True
+    assert selected == [plan.work_units[0]]
     assert evidence["plan_hash"] == plan.plan_hash
     assert evidence["result"] == result
+
+
+def test_time_budget_blocks_after_promotion_and_resume_skips_completed_unit(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda *_args: {"validation": "passed"})
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
+    ticks = iter([0.0, 0.0, 0.0, 2.0, 2.0, 2.0])
+    campaign.clock = lambda: next(ticks, 2.0)
+    calls = []
+    first = campaign._run_claimed(
+        plan,
+        worker=lambda unit: calls.append(unit.work_unit_hash) or {"outcome": "succeeded", "validated": True},
+        claim={"claim_hash": "first"},
+        time_budget_seconds=1.0,
+    )
+    assert calls == [plan.work_units[0].work_unit_hash]
+    assert first[0]["outcome"] == "succeeded"
+    assert campaign.read_status(plan=plan).state == "blocked"
+    assert campaign.read_status(plan=plan).bounded_error == "time budget exhausted"
+
+    campaign.clock = lambda: 10.0
+    resumed = campaign._run_claimed(
+        plan,
+        worker=lambda unit: calls.append(unit.work_unit_hash) or {"outcome": "succeeded", "validated": True},
+        claim={"claim_hash": "second"},
+    )
+    assert calls == [plan.work_units[0].work_unit_hash, plan.work_units[1].work_unit_hash]
+    assert [result["outcome"] for result in resumed] == ["succeeded", "succeeded"]
 
 
 def test_campaign_status_round_trip_and_schema_rejection():
