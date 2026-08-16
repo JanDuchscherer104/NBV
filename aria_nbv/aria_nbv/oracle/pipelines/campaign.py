@@ -554,6 +554,18 @@ class CampaignProcessRunner:
 class CudaRolloutCampaign:
     """Plan and execute one campaign serially through the shard leaf."""
 
+    _STATUS_TRANSITIONS: ClassVar[dict[str, frozenset[str]]] = {
+        "not_started": CampaignStatus._VALID_STATES,
+        "planned": frozenset({"planned", "preflight_passed", "running", "blocked", "conflicted"}),
+        "preflight_passed": frozenset({"preflight_passed", "smoke_passed", "running", "blocked", "conflicted"}),
+        "smoke_passed": frozenset({"smoke_passed", "running", "blocked", "conflicted"}),
+        "running": frozenset({"running", "blocked", "conflicted", "completed", "completed_with_failures"}),
+        "blocked": frozenset({"blocked", "running"}),
+        "conflicted": frozenset({"conflicted"}),
+        "completed": frozenset({"completed"}),
+        "completed_with_failures": frozenset({"completed_with_failures"}),
+    }
+
     def __init__(
         self,
         config: CudaRolloutCampaignConfig,
@@ -1458,11 +1470,13 @@ class CudaRolloutCampaign:
                 writer_config_path=self.config.writer_config_path,
             )
             if not resuming_blocked_campaign:
+                self.append_event(self._event(plan, "preflight_passed"))
                 self.write_status(self.status(plan, prior_results, stage="preflight_passed"))
             # An injected worker remains subject to the same current smoke gate;
             # injection changes execution mechanics, not campaign admission.
             self.smoke_evidence(plan)
             if not resuming_blocked_campaign:
+                self.append_event(self._event(plan, "smoke_passed"))
                 self.write_status(self.status(plan, prior_results, stage="smoke_passed"))
             return self._run_claimed(
                 plan,
@@ -1508,7 +1522,13 @@ class CudaRolloutCampaign:
         new_units = 0
         blocked = False
         last_timeout: dict[str, Any] | None = None
-        self.append_event(self._event(plan, "campaign_started"))
+        prior_events = self.read_events(plan=plan)
+        attempt_kind = (
+            "campaign_resumed"
+            if any(event.kind in {"campaign_started", "campaign_resumed"} for event in prior_events)
+            else "campaign_started"
+        )
+        self.append_event(self._event(plan, attempt_kind))
         self.write_status(self.status(plan, results, stage="running", started_at=started_at_iso))
         for unit in plan.work_units:
             if unit.work_unit_hash in results_by_unit:
@@ -1789,9 +1809,14 @@ class CudaRolloutCampaign:
         if not events:
             return []
         progress = self._validate_event_lifecycle(events, plan)
-        if progress["allowed_states"] <= {"completed", "completed_with_failures"}:
-            raise ValueError("completed campaign cannot be resumed")
         outcomes = progress["terminal_outcomes"]
+        resumable_outcomes = {
+            outcome
+            for outcome in outcomes.values()
+            if outcome not in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+        }
+        if progress["allowed_states"] <= {"completed", "completed_with_failures"} and not resumable_outcomes:
+            raise ValueError("completed campaign cannot be resumed")
         for unit in plan.work_units:
             if outcomes.get(unit.work_unit_hash) in {
                 CampaignOutcome.SUCCEEDED.value,
@@ -1801,7 +1826,7 @@ class CudaRolloutCampaign:
         return [
             {"outcome": outcomes[unit.work_unit_hash], "work_unit_hash": unit.work_unit_hash}
             for unit in plan.work_units
-            if unit.work_unit_hash in outcomes
+            if outcomes.get(unit.work_unit_hash) in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
         ]
 
     def _event(
@@ -2160,6 +2185,8 @@ class CudaRolloutCampaign:
                 if index == len(lines) - 1 and not target.read_bytes().endswith(b"\n"):
                     break
                 raise ValueError(f"malformed event line {index + 1}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError(f"campaign event line {index + 1} must be a JSON object")
             allowed = set(CampaignEvent.__dataclass_fields__)
             is_legacy = "schema_version" not in payload
             if payload.get("schema_version", "campaign-event-v1") != "campaign-event-v1":
@@ -2177,12 +2204,42 @@ class CudaRolloutCampaign:
                 or (event.config_hash and event.config_hash != plan.config_hash)
             ):
                 raise ValueError("campaign event identity mismatch")
+            if plan is not None:
+                if event.writer_config_hash != plan.writer_config_hash:
+                    raise ValueError("campaign event writer_config_hash mismatch")
+                if event.source_manifest_hash != plan.source_manifest_hash:
+                    raise ValueError("campaign event source_manifest_hash mismatch")
+                if event.work_unit_hash is not None:
+                    unit = next(
+                        (item for item in plan.work_units if item.work_unit_hash == event.work_unit_hash),
+                        None,
+                    )
+                    if unit is None:
+                        raise ValueError("campaign event references unknown work unit")
+                    bindings = {
+                        "source_identity_hash": unit.source_identity_hash,
+                        "target_id": unit.target_id,
+                        "profile": unit.profile,
+                        "profile_hash": unit.profile_hash,
+                    }
+                    for field, expected in bindings.items():
+                        if getattr(event, field) != expected:
+                            raise ValueError(f"campaign event {field} mismatch")
             events.append(event)
         return events
 
     def read_status(self, path: Path | None = None, plan: CampaignPlan | None = None) -> CampaignStatus:
         target = path or (self.config.output_root / "status.json")
         if not target.exists():
+            if plan is not None:
+                try:
+                    events = self.read_events(plan=plan)
+                    if events:
+                        status = self._rebuild_status_from_events(events, plan)
+                        self._cross_check_status_evidence(status, plan)
+                        return status
+                except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                    raise ValueError("invalid campaign status") from exc
             return CampaignStatus("not_started", {o.value: 0 for o in CampaignOutcome}, "", self.utc_now().isoformat())
         try:
             status = CampaignStatus.from_jsonable(json.loads(target.read_text(encoding="utf-8")))
@@ -2252,6 +2309,46 @@ class CudaRolloutCampaign:
                 continue
             self._require_validated_terminal_shard(plan, unit)
 
+    def _rebuild_status_from_events(self, events: Sequence[CampaignEvent], plan: CampaignPlan) -> CampaignStatus:
+        """Rebuild the persisted read model when its canonical projection is missing."""
+        progress = self._validate_event_lifecycle(events, plan)
+        if len(progress["allowed_states"]) != 1:
+            raise ValueError("canonical events do not identify one campaign state")
+        state = next(iter(progress["allowed_states"]))
+        outcomes = progress["terminal_outcomes"]
+        results = [
+            {"outcome": outcomes[unit.work_unit_hash], "work_unit_hash": unit.work_unit_hash}
+            for unit in plan.work_units
+            if unit.work_unit_hash in outcomes
+        ]
+        current_unit = next(
+            (unit for unit in plan.work_units if unit.work_unit_hash == progress["current_work_unit"]),
+            None,
+        )
+        last_unit = next(
+            (unit for unit in plan.work_units if unit.work_unit_hash == progress["last_work_unit"]),
+            None,
+        )
+        stage = "terminal" if state.startswith("completed") else state
+        started_at = next(
+            (event.timestamp for event in events if event.kind == "campaign_started"),
+            None,
+        )
+        finished_at = next(
+            (event.timestamp for event in reversed(events) if event.kind == "campaign_finished"),
+            None,
+        )
+        rebuilt = self.status(
+            plan,
+            results,
+            current_unit=current_unit,
+            stage=stage,
+            last_unit=last_unit,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+        return replace(rebuilt, updated_at=events[-1].timestamp or rebuilt.updated_at)
+
     def _require_validated_terminal_shard(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> dict[str, Any]:
         """Return the plan-bound promoted shard or reject terminal success/skip."""
         from .shards import read_validated_completed_shard
@@ -2272,6 +2369,7 @@ class CudaRolloutCampaign:
     def _validate_event_lifecycle(events: Sequence[CampaignEvent], plan: CampaignPlan) -> dict[str, Any]:
         """Validate the ordered event stream and return its canonical progress."""
         run_state = "prefix"
+        pre_run_state = "not_started"
         finished = False
         saw_source_selection = False
         saw_plan_ready = False
@@ -2290,7 +2388,7 @@ class CudaRolloutCampaign:
         }
         known_units = {unit.work_unit_hash for unit in plan.work_units}
         for event in events:
-            if finished:
+            if finished and event.kind != "campaign_resumed":
                 raise ValueError("events follow campaign_finished")
             if event.work_unit_hash is not None and event.work_unit_hash not in known_units:
                 raise ValueError("event references unknown work unit")
@@ -2303,6 +2401,22 @@ class CudaRolloutCampaign:
                 if run_state != "prefix" or not saw_source_selection or saw_plan_ready or event.work_unit_hash:
                     raise ValueError("invalid plan_ready transition")
                 saw_plan_ready = True
+                pre_run_state = "planned"
+                continue
+            if event.kind == "preflight_passed":
+                if (
+                    run_state != "prefix"
+                    or event.work_unit_hash is not None
+                    or saw_source_selection != saw_plan_ready
+                    or pre_run_state not in {"not_started", "planned"}
+                ):
+                    raise ValueError("invalid preflight_passed transition")
+                pre_run_state = "preflight_passed"
+                continue
+            if event.kind == "smoke_passed":
+                if run_state != "prefix" or event.work_unit_hash is not None or pre_run_state != "preflight_passed":
+                    raise ValueError("invalid smoke_passed transition")
+                pre_run_state = "smoke_passed"
                 continue
             if event.kind == "campaign_started":
                 if run_state not in {"prefix", "blocked"}:
@@ -2312,6 +2426,29 @@ class CudaRolloutCampaign:
                 run_state = "running"
                 current_work_unit = None
                 unit_phases = {}
+                continue
+            if event.kind == "campaign_resumed":
+                retryable = {
+                    outcome
+                    for outcome in terminal_outcomes.values()
+                    if outcome not in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+                }
+                if (
+                    run_state not in {"running", "blocked", "finished"}
+                    or event.work_unit_hash is not None
+                    or (run_state == "finished" and not retryable)
+                ):
+                    raise ValueError("invalid campaign_resumed transition")
+                terminal_outcomes = {
+                    work_unit_hash: outcome
+                    for work_unit_hash, outcome in terminal_outcomes.items()
+                    if outcome in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+                }
+                last_work_unit = next(reversed(terminal_outcomes), None)
+                current_work_unit = None
+                unit_phases = dict.fromkeys(terminal_outcomes, "terminal")
+                run_state = "running"
+                finished = False
                 continue
             if event.kind == "campaign_finished":
                 if run_state != "running" or current_work_unit is not None:
@@ -2408,8 +2545,8 @@ class CudaRolloutCampaign:
             allowed_states = {"blocked"}
         elif run_state == "running":
             allowed_states = {"running"}
-        elif saw_plan_ready:
-            allowed_states = {"planned", "preflight_passed", "smoke_passed"}
+        elif pre_run_state != "not_started":
+            allowed_states = {pre_run_state}
         else:
             allowed_states = {"not_started"}
         return {
@@ -2496,6 +2633,65 @@ class CudaRolloutCampaign:
 
     def write_status(self, status: CampaignStatus, path: Path | None = None) -> Path:
         target = path or (self.config.output_root / "status.json")
+        event_path = target.with_name("progress.jsonl")
+        previous: CampaignStatus | None = None
+        if target.exists():
+            try:
+                previous = CampaignStatus.from_jsonable(json.loads(target.read_text(encoding="utf-8")))
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise ValueError("existing campaign status is invalid") from exc
+
+        canonical_state: str | None = None
+        events = self.read_events(event_path)
+        for event in events:
+            if (
+                (event.campaign_id and event.campaign_id != status.campaign_id)
+                or (event.plan_hash and event.plan_hash != status.plan_hash)
+                or (event.config_hash and event.config_hash != status.config_hash)
+            ):
+                raise ValueError("campaign status transition diverges from canonical event identity")
+            if event.kind == "plan_ready":
+                canonical_state = "planned"
+            elif event.kind in {"preflight_passed", "smoke_passed"}:
+                canonical_state = event.kind
+            elif event.kind == "campaign_started":
+                canonical_state = "running"
+            elif event.kind == "campaign_resumed":
+                canonical_state = "running"
+            elif event.kind == "campaign_blocked":
+                canonical_state = "blocked"
+
+        prior_state = previous.state if previous is not None else canonical_state
+        if prior_state in {"planned", "preflight_passed", "smoke_passed"} and canonical_state in {
+            "planned",
+            "preflight_passed",
+            "smoke_passed",
+        }:
+            order = {"planned": 0, "preflight_passed": 1, "smoke_passed": 2}
+            prior_state = max((prior_state, canonical_state), key=order.__getitem__)
+        elif canonical_state in {"running", "blocked"}:
+            prior_state = canonical_state
+        if prior_state is not None and status.state not in self._STATUS_TRANSITIONS[prior_state]:
+            raise ValueError(f"invalid campaign status transition: {prior_state} -> {status.state}")
+
+        if status.state in {"preflight_passed", "smoke_passed"} and canonical_state != status.state:
+            if not status.campaign_id or not status.plan_hash or not status.config_hash:
+                raise ValueError("pre-run campaign status transition requires campaign, plan, and config identity")
+            if not events:
+                raise ValueError("pre-run campaign status transition requires canonical plan event evidence")
+            binding_event = events[-1]
+            self.append_event(
+                CampaignEvent(
+                    status.state,
+                    timestamp=status.updated_at,
+                    plan_hash=status.plan_hash,
+                    config_hash=status.config_hash,
+                    writer_config_hash=binding_event.writer_config_hash,
+                    source_manifest_hash=binding_event.source_manifest_hash,
+                    campaign_id=status.campaign_id,
+                ),
+                event_path,
+            )
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(f".{target.name}.tmp-{os.getpid()}")
         tmp.write_text(json.dumps(asdict(status), sort_keys=True) + "\n")
