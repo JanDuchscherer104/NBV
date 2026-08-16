@@ -2458,16 +2458,57 @@ class CudaRolloutCampaign:
         from .shards import read_validated_completed_shard
 
         try:
+            effective_writer, effective_entry = self._effective_writer_and_shard_entry(plan, unit)
             evidence = read_validated_completed_shard(
                 self.config.output_root / "shards" / unit.work_unit_hash,
-                shard_entry=self.shard_entry_for_unit(plan, unit),
-                writer_config_hash=plan.writer_config_hash,
+                shard_entry=effective_entry,
+                writer_config_hash=(
+                    plan.writer_config_hash
+                    if effective_writer is None
+                    else stable_config_hash(effective_writer)
+                ),
             )
         except (OSError, TypeError, ValueError, KeyError) as exc:
             raise ValueError("terminal success/skip lacks validated shard evidence") from exc
         if evidence is None:
             raise ValueError("terminal success/skip lacks validated shard evidence")
         return evidence
+
+    def _effective_writer_config_hash(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> str:
+        """Derive the per-unit writer digest bound by the campaign adapter.
+
+        The plan digest identifies the unbound base writer. Promoted shards are
+        bound after source, target, profile, recipe, and split adaptation, so
+        terminal validation must compare the effective adapted configuration.
+        """
+        writer_path = getattr(self.config, "writer_config_path", None)
+        if writer_path is None:
+            return plan.writer_config_hash
+        writer, _ = self._effective_writer_and_shard_entry(plan, unit)
+        return stable_config_hash(writer)
+
+    def _effective_writer_and_shard_entry(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> tuple[Any, Any]:
+        """Adapt the writer and canonical shard entry as one validation unit."""
+        writer_path = getattr(self.config, "writer_config_path", None)
+        if writer_path is None:
+            return (None, self.shard_entry_for_unit(plan, unit))
+        path = Path(writer_path)
+        if not path.is_absolute():
+            candidates = (Path.cwd() / path, Path(__file__).resolve().parents[4] / path)
+            path = next((candidate for candidate in candidates if candidate.exists()), path)
+        if not path.exists():
+            raise ValueError(f"campaign writer config is missing: {path}")
+        from .rollout_dataset import RolloutDatasetWriterConfig
+
+        base_writer = RolloutDatasetWriterConfig.from_toml(path)
+        adapted, adapted_entry = self.adapt_work_unit(
+            unit,
+            writer_config=base_writer,
+            shard_entry=self.shard_entry_for_unit(plan, unit),
+            plan_hash=plan.plan_hash,
+            profile_hash=unit.profile_hash,
+        )
+        return adapted, adapted_entry
 
     @staticmethod
     def _validate_event_lifecycle(events: Sequence[CampaignEvent], plan: CampaignPlan) -> dict[str, Any]:
@@ -2747,12 +2788,18 @@ class CudaRolloutCampaign:
 
             for unit in plan.work_units:
                 try:
-                    entry = replace(self.shard_entry_for_unit(plan, unit), writer_config_hash=plan.writer_config_hash)
+                    effective_writer, entry = self._effective_writer_and_shard_entry(plan, unit)
+                    effective_writer_hash = (
+                        plan.writer_config_hash
+                        if effective_writer is None
+                        else stable_config_hash(effective_writer)
+                    )
+                    entry = replace(entry, writer_config_hash=effective_writer_hash)
                 except (TypeError, ValueError, KeyError):
                     continue
                 path = shards_root / unit.work_unit_hash
                 evidence = read_validated_completed_shard(
-                    path, shard_entry=entry, writer_config_hash=plan.writer_config_hash
+                    path, shard_entry=entry, writer_config_hash=effective_writer_hash
                 )
                 if evidence is None:
                     continue

@@ -31,7 +31,7 @@ from aria_nbv.rollouts.zarr_store import (
 )
 from aria_nbv.targets.descriptor import TargetDescriptor
 from aria_nbv.targets.selection import ObservedTargetDescriptor
-from aria_nbv.utils.fingerprints import stable_msgspec_hash
+from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -1486,6 +1486,13 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
     from aria_nbv.oracle.pipelines import shards as shard_module
 
     seen_writer_hashes = []
+    effective_writer = RolloutDatasetWriterConfig()
+    effective_hash = stable_config_hash(effective_writer)
+    monkeypatch.setattr(
+        campaign,
+        "_effective_writer_and_shard_entry",
+        lambda _plan, unit: (effective_writer, entries[unit.work_unit_hash]),
+    )
 
     def read(path, *, shard_entry, writer_config_hash=""):
         seen_writer_hashes.append(writer_config_hash)
@@ -1493,7 +1500,7 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
             return None
         return {
             "store_path": str(path.resolve()),
-            "owner_evidence": {"writer_config_hash": "effective"},
+            "owner_evidence": {"writer_config_hash": effective_hash},
             "success_evidence": {"owner_sha256": "owner", "rollout_manifest_sha256": "manifest"},
             "validation": "passed",
         }
@@ -1503,10 +1510,36 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
     artifacts = summary["validated_artifacts"]
     assert [row["work_unit_hash"] for row in artifacts] == [plan.work_units[0].work_unit_hash]
     assert artifacts[0]["store_path"] == str((shards / plan.work_units[0].work_unit_hash).resolve())
-    assert artifacts[0]["effective_writer_config_hash"] == "effective"
-    assert seen_writer_hashes == [plan.writer_config_hash] * len(plan.work_units)
+    assert artifacts[0]["effective_writer_config_hash"] == effective_hash
+    assert seen_writer_hashes == [effective_hash] * len(plan.work_units)
     assert "owner_evidence" not in artifacts[0]
     assert not any(row["work_unit_hash"] == "unrelated" for row in artifacts)
+
+
+def test_effective_writer_hash_rebinds_base_writer_before_terminal_validation(tmp_path, monkeypatch):
+    base_campaign = _campaign(tmp_path)
+    config_values = base_campaign.config.model_dump()
+    config_values["writer_config_path"] = REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
+    config_values["profiles"] = base_campaign.config.profiles
+    config = CudaRolloutCampaignConfig.model_construct(**config_values)
+    campaign = CudaRolloutCampaign(config)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    unit = replace(unit, source_row_payload={"source_manifest_hash": "source", "split": "train"})
+    adapted = RolloutDatasetWriterConfig()
+    adapted = adapted.model_copy(update={"log_timing": True})
+    base_entry = campaign.shard_entry_for_unit(plan, unit)
+    effective_entry = replace(base_entry, split_manifest_hash="canonical", writer_config_hash=stable_config_hash(adapted))
+    monkeypatch.setattr(RolloutDatasetWriterConfig, "from_toml", classmethod(lambda cls, _path: RolloutDatasetWriterConfig()))
+    monkeypatch.setattr(campaign, "shard_entry_for_unit", lambda _plan, _unit: base_entry)
+    monkeypatch.setattr(campaign, "adapt_work_unit", lambda *_args, **_kwargs: (adapted, effective_entry))
+
+    effective, entry = campaign._effective_writer_and_shard_entry(plan, unit)
+
+    assert stable_config_hash(effective) == stable_config_hash(adapted)
+    assert stable_config_hash(effective) != plan.writer_config_hash
+    assert entry.split_manifest_hash == "canonical"
+    assert entry.writer_config_hash == stable_config_hash(adapted)
 
 
 def _row(scene: str, sample: str, target: str) -> SimpleNamespace:
