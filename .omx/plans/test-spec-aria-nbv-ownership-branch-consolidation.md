@@ -12,6 +12,10 @@ committed as substitute owners.
 
 ## Gates
 
+- The dated migration receipt records the one-PR exception, six-tier RQ
+  supersession, and one row per retired source with immutable provenance,
+  destination, disposition, and verification.
+
 - All seven retired QMD/state paths remain absent.
 - `.agents/references/source_order.md` links the research-question, roadmap,
   and M1 Typst owners.

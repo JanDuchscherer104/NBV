@@ -37,7 +37,12 @@ def test_new_or_nonlegacy_records_cannot_target_retired_paths() -> None:
 
 def test_generated_omx_outputs_cannot_be_tracked() -> None:
     assert check_tracked_omx_records([".omx/plans/current.md"]) == []
+    assert check_tracked_omx_records([".omx/specs/inventory.json", ".omx/specs/report.html"]) == []
     errors = check_tracked_omx_records(
-        [".omx/specs/inventory.json", ".omx/specs/report.html", ".omx/state/runtime.md"]
+        [
+            ".omx/specs/ownership-branch-consolidation-inventory.json",
+            ".omx/specs/ownership-branch-consolidation-inventory.html",
+            ".omx/state/runtime.md",
+        ]
     )
     assert len(errors) == 3

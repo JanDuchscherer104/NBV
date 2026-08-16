@@ -17,6 +17,16 @@ status: accepted
 
 ## 1. Outcome
 
+### Human-approved review reconciliation (2026-08-16)
+
+Human review explicitly approves one intentional PR (#59) for this ownership
+consolidation. Focused commits remain rollback boundaries; the follow-up
+transcript-access work is excluded from this PR. The active RQ owner uses six
+tiered questions: RQ1--RQ4 are the evaluated core, RQ5 is a conditional online
+bridge, and RQ6 is a lower-priority continuous/simulator escalation. This
+supersedes the earlier four-question extraction scope without copying its
+unreviewed QMD roadmap material into the active owner.
+
 Consolidate scientific and implementation authority without replaying stale pull
 request stacks:
 

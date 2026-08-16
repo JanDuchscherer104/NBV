@@ -6,7 +6,9 @@ Use this reference when a task needs current project truth or sources disagree.
 
 - Thesis narrative and research questions: `docs/typst/thesis/main.typ` and
   `docs/typst/thesis/sections/01-research-questions.typ` own current prose,
-  objectives, boundaries, and RQ1--RQ4.
+  objectives, boundaries, and the six-tier RQ scope. RQ1--RQ4 are the
+  evaluated core; RQ5 is a conditional online bridge and RQ6 is a lower-
+  priority continuous/simulator escalation.
   Development-only planning and gate views are owned by
   `docs/typst/thesis/development/roadmap.typ` and
   `docs/typst/thesis/development/m1-contract-report.typ`, guarded by

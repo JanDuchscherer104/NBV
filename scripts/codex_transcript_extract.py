@@ -3,9 +3,8 @@
 
 The extractor keeps full raw Codex runtime transcripts out of repo memory. It
 writes chat-only user/assistant transcript records, high-signal user-authored
-records, and candidate distillates for human review. Candidate records are
-evidence-only until ordinary review assigns an exact canonical owner or an
-agents-DB action record.
+records, and candidate distillates for human review and durable repository
+memory.
 """
 
 from __future__ import annotations
@@ -656,7 +655,7 @@ def promotion_target_for(category: str) -> str | None:
         "technical decision",
         "working project decision",
     }:
-        return "exact-source-owner-review"
+        return ".agents/memory/state/DECISIONS.md"
     if category == "human-owner preference":
         return ".agents/references/human_owner_intent.md"
     if category == "backlog/action item":
@@ -724,8 +723,8 @@ def review_distillates(
     """Mark candidate distillates with a conservative promotion review status.
 
     The review pass is intentionally lexical and conservative: it can identify
-    candidates already reflected in the indexed owner set and candidates that
-    still need human/agent review, but it does not auto-promote transcript evidence.
+    candidates already reflected in canonical memory and candidates that still
+    need human/agent review, but it does not auto-promote transcript evidence.
     """
 
     canonical_chunks = indexed_doc_chunks(canonical_text)
@@ -771,11 +770,11 @@ def review_distillates(
                     "review_reason": "lexical overlap with the owning canonical surface is high enough for evidence-only indexing",
                 }
             )
-        elif candidate.get("promotion_target") == "exact-source-owner-review":
+        elif candidate.get("promotion_target") == ".agents/memory/state/DECISIONS.md":
             candidate.update(
                 {
                     "review_status": "needs_canonical_review",
-                    "review_reason": "not clearly reflected in the indexed owner set; inspect source order and update only the exact owner",
+                    "review_reason": "not clearly reflected in DECISIONS.md; inspect against current source order before promotion",
                 }
             )
         elif (
@@ -892,10 +891,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Output root for raw, user, and distilled transcript JSONL.",
     )
     parser.add_argument(
-        "--owner-file",
-        action="append",
+        "--decisions-file",
         type=Path,
-        help="Exact canonical owner file used for review indexing. May be repeated.",
+        default=REPO_ROOT / ".agents" / "memory" / "state" / "DECISIONS.md",
+        help="Canonical decisions file used to mark already-reflected candidates.",
     )
     parser.add_argument(
         "--preferences-file",
@@ -931,14 +930,10 @@ def main(argv: list[str] | None = None) -> int:
         roots, project_root
     )
     distillates = distill_records(user_messages, plan_answers)
-    owner_files = args.owner_file or [
-        REPO_ROOT / "AGENTS.md",
-        REPO_ROOT / ".agents" / "references" / "source_order.md",
-        REPO_ROOT / "docs" / "typst" / "thesis" / "main.typ",
-        REPO_ROOT / "aria_nbv" / "AGENTS.md",
-    ]
-    canonical_text = "\n".join(
-        path.read_text(encoding="utf-8") for path in owner_files if path.exists()
+    canonical_text = (
+        args.decisions_file.read_text(encoding="utf-8")
+        if args.decisions_file.exists()
+        else ""
     )
     preference_text = (
         args.preferences_file.read_text(encoding="utf-8")
