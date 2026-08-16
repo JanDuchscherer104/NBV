@@ -25,7 +25,7 @@ from ...utils.config_paths import resolve_config_toml_path
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CampaignEvent, CampaignOutcome, CampaignStatus, CudaRolloutCampaignConfig
+from .campaign import CampaignEvent, CudaRolloutCampaignConfig
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
@@ -132,17 +132,7 @@ def campaign_plan(
             CampaignEvent("source_selection", timestamp=campaign.utc_now().isoformat(), **event_identity)
         )
         campaign.append_event(CampaignEvent("plan_ready", timestamp=campaign.utc_now().isoformat(), **event_identity))
-        campaign.write_status(
-            CampaignStatus(
-                "planned",
-                {**{outcome.value: 0 for outcome in CampaignOutcome}, "pending": len(planned.work_units)},
-                planned.plan_hash,
-                campaign.utc_now().isoformat(),
-                current_stage="source_selection",
-                campaign_id=campaign.config.campaign_id,
-                config_hash=planned.config_hash,
-            )
-        )
+        campaign.write_status(campaign.status(planned, stage="planned"))
         payload = planned.to_jsonable()
     else:
         payload = campaign.config.model_dump_jsonable()

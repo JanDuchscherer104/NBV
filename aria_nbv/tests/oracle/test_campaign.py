@@ -1777,6 +1777,24 @@ def test_run_rejects_plan_writer_digest_before_claim_or_events(tmp_path):
     assert not (tmp_path / "progress.jsonl").exists()
 
 
+def test_run_rejects_source_selection_only_without_mutating_evidence(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    events_path = campaign.append_event(campaign._event(plan, "source_selection"))
+    status_path = campaign.write_status(campaign.status(plan))
+    events_before = events_path.read_bytes()
+    status_before = status_path.read_bytes()
+    monkeypatch.setattr(campaign, "preflight", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: {"validated": True})
+
+    with pytest.raises(ValueError, match="incomplete planning event prefix"):
+        campaign.run(plan, worker=lambda _unit: {"outcome": "failed"})
+
+    assert events_path.read_bytes() == events_before
+    assert status_path.read_bytes() == status_before
+    assert not (tmp_path / "run-claim.json").exists()
+
+
 def test_run_requires_smoke_evidence_even_for_injected_worker(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")

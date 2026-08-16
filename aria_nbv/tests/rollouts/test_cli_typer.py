@@ -13,6 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from aria_nbv.oracle.pipelines import cli as rollout_cli
+from aria_nbv.oracle.pipelines.campaign import CampaignOutcome
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 runner = CliRunner()
@@ -316,9 +317,32 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
         def append_event(self, _event):
             return None
 
+        def status(self, plan, *, stage):
+            captured.update(status_plan=plan, status_stage=stage)
+            return SimpleNamespace(
+                state=stage,
+                counts={**{outcome.value: 0 for outcome in CampaignOutcome}, "pending": 1},
+                plan_hash=plan.plan_hash,
+                updated_at="now",
+                current_work_unit=None,
+                current_target_id=None,
+                current_profile=None,
+                current_stage=stage,
+                elapsed_seconds=0.0,
+                latest_failure_reason=None,
+                active_pid=None,
+                active_process_group=None,
+                validated_artifacts=[],
+                campaign_id="campaign",
+                config_hash="config",
+            )
+
         def write_status(self, status):
             captured["status"] = status
             return None
+
+        def progress_summary(self):
+            return vars(captured["status"])
 
         def model_dump_jsonable(self):
             return {}
@@ -337,7 +361,17 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
     assert captured["manifest"] is reviewed_manifest
     assert captured["admission_rows"] == [{"scene_id": "s0"}]
     assert captured["admission_kwargs"]["expected_hash"] == "audit"
+    assert captured["status_plan"].plan_hash == "plan"
+    assert captured["status_stage"] == "planned"
+    assert captured["status"].state == "planned"
+    assert captured["status"].current_stage == "planned"
     assert captured["status"].campaign_id == "campaign"
     assert captured["status"].config_hash == "config"
     assert captured["status"].counts["pending"] == 1
-    assert set(captured["status"].counts) == {outcome.value for outcome in rollout_cli.CampaignOutcome}
+    assert set(captured["status"].counts) == {outcome.value for outcome in CampaignOutcome}
+
+    status_result = runner.invoke(rollout_cli.campaign_app, ["status", "--config-path", "cfg.toml", "--json"])
+    assert status_result.exit_code == 0
+    status_payload = json.loads(status_result.stdout)
+    assert status_payload["state"] == "planned"
+    assert status_payload["current_stage"] == "planned"

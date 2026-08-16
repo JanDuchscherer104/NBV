@@ -1460,6 +1460,8 @@ class CudaRolloutCampaign:
         prior_events = self.read_events(plan=plan)
         prior_progress = self._validate_event_lifecycle(prior_events, plan)
         prior_state = next(iter(prior_progress["allowed_states"]))
+        if prior_events and prior_state == "not_started":
+            raise ValueError("incomplete planning event prefix")
         resuming_campaign = any(event.kind in {"campaign_started", "campaign_resumed"} for event in prior_events)
         # Exclusive ownership precedes every status/event mutation so a
         # competing start cannot clobber the active campaign's evidence.
