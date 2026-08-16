@@ -83,7 +83,7 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
         "forward_local": "forward_rig",
         "target_bearing_local": "target_point",
         "lateral_target_bypass": "target_point",
-        "local_refinement": "radial_towards",
+        "local_refinement": "target_point",
         "revisit_backtrack": "forward_rig",
         "radial_towards_target_bearing": "radial_towards",
         "radial_away_target_bearing": "radial_away",
@@ -119,6 +119,13 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
         )
         adapted, _ = campaign.adapt_work_unit(unit, writer_config=writer, shard_entry=SimpleNamespace())
         components = adapted.candidate_mixture.components
+        assert adapted.candidate_mixture.base.max_backward_step_m == pytest.approx(0.25)
+        assert adapted.candidate_mixture.base.max_yaw_delta_deg == pytest.approx(70.0)
+        component_by_name = {component.name: component for component in components}
+        if "local_refinement" in component_by_name:
+            assert component_by_name["local_refinement"].view_mode.value == "target_point"
+        if "revisit_backtrack" in component_by_name:
+            assert component_by_name["revisit_backtrack"].max_radius <= 0.25
         assert [(c.name, c.count, c.view_mode.value, c.position_mode.value) for c in components] == [
             (name, count, expected_modes[name], expected_positions[name]) for name, count in profile.components
         ]
@@ -1742,6 +1749,8 @@ def test_plan_hash_and_allocation_are_stable_and_source_change_rehashes(tmp_path
     changed = campaign.plan(rows, source_manifest_hash="changed")
     assert first.plan_hash == second.plan_hash
     assert first.work_units == second.work_units
+    assert [unit.work_unit_hash for unit in first.work_units] == [unit.work_unit_hash for unit in second.work_units]
+    assert [unit.profile_hash for unit in first.work_units] == [unit.profile_hash for unit in second.work_units]
     assert first.plan_hash != changed.plan_hash
     assert first.profile_hash == second.profile_hash
 

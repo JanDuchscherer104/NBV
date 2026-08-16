@@ -197,6 +197,37 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
         return sum(component.count for component in self.components)
 
     @classmethod
+    def reviewed_component_templates(
+        cls, components: list[tuple[str, int]] | tuple[tuple[str, int], ...]
+    ) -> list[CandidateMixtureComponentConfig]:
+        """Return typed templates for a reviewed campaign component schedule.
+
+        Campaign orchestration supplies the reviewed names and counts; this
+        method supplies the existing typed component fields.  Counts are the
+        campaign allocation, while radii, bounds, modes, and sampler controls
+        remain owned by the candidate-generation presets.
+        """
+
+        names = tuple(name for name, _count in components)
+        templates = {
+            tuple(component.name for component in preset.components): preset.components
+            for preset in (
+                cls(),
+                cls.rich_local_five_family(),
+                cls.radial_target_backtrack_family(),
+                cls.upper_bound_free_shell(),
+            )
+        }
+        try:
+            typed = templates[names]
+        except KeyError as exc:
+            raise ValueError(f"unsupported reviewed candidate component schedule: {names}") from exc
+        return [
+            component.model_copy(update={"count": count})
+            for component, (_name, count) in zip(typed, components, strict=True)
+        ]
+
+    @classmethod
     def upper_bound_free_shell(cls, *, count: int = 60) -> "CandidateMixtureViewGeneratorConfig":
         """Build the explicit legacy free-shell upper-bound ablation config."""
 
@@ -231,6 +262,8 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     count=18,
                     view_mode=ViewDirectionMode.TARGET_POINT,
                     position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+                    min_radius=0.4,
+                    max_radius=1.1,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
                 ),
@@ -253,9 +286,9 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
                     count=6,
-                    view_mode=ViewDirectionMode.RADIAL_TOWARDS,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
                     position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
-                    min_radius=0.2,
+                    min_radius=0.25,
                     max_radius=0.7,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
@@ -266,7 +299,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     view_mode=ViewDirectionMode.FORWARD_RIG,
                     position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
                     min_radius=0.25,
-                    max_radius=0.9,
+                    max_radius=0.25,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
                 ),
@@ -347,7 +380,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     view_mode=ViewDirectionMode.FORWARD_RIG,
                     position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
                     min_radius=0.25,
-                    max_radius=0.9,
+                    max_radius=0.25,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
                 ),

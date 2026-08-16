@@ -198,6 +198,33 @@ def test_rich_local_five_family_is_named_ablation() -> None:
     assert [component.count for component in cfg.components] == [18, 18, 12, 6, 6]
 
 
+def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
+    components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
+        (
+            ("target_bearing_local", 18),
+            ("forward_local", 18),
+            ("lateral_target_bypass", 12),
+            ("local_refinement", 6),
+            ("revisit_backtrack", 6),
+        )
+    )
+
+    assert sum(component.count for component in components) == 60
+    by_name = {component.name: component for component in components}
+    assert by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
+    assert by_name["local_refinement"].view_mode is ViewDirectionMode.TARGET_POINT
+    assert by_name["local_refinement"].min_radius == pytest.approx(0.25)
+    assert by_name["local_refinement"].max_radius == pytest.approx(0.7)
+    assert by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
+    assert by_name["revisit_backtrack"].min_radius == pytest.approx(0.25)
+    assert by_name["revisit_backtrack"].max_radius == pytest.approx(0.25)
+    assert all(component.view_max_azimuth_deg == 0.0 for component in components)
+    assert all(component.view_max_elevation_deg == 0.0 for component in components)
+
+    with pytest.raises(ValueError, match="unsupported reviewed candidate component schedule"):
+        CandidateMixtureViewGeneratorConfig.reviewed_component_templates((("new_family", 60),))
+
+
 def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:
     cfg = CandidateMixtureViewGeneratorConfig.radial_target_backtrack_family()
 
@@ -226,6 +253,7 @@ def test_radial_target_backtrack_family_is_diverse_rollout_profile() -> None:
     assert component_by_name["radial_away_target_bearing"].position_mode is CandidatePositionMode.TARGET_BEARING_LOCAL
     assert component_by_name["revisit_backtrack"].view_mode is ViewDirectionMode.FORWARD_RIG
     assert component_by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
+    assert component_by_name["revisit_backtrack"].max_radius == pytest.approx(0.25)
     assert component_by_name["target_point_anchor"].view_mode is ViewDirectionMode.TARGET_POINT
 
 

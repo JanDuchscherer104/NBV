@@ -1321,40 +1321,15 @@ class CudaRolloutCampaign:
                     cfg.components = list(profile.components)
             mixture = getattr(cfg, "candidate_mixture", None)
             if mixture is not None and hasattr(mixture, "components"):
-                from ...pose_generation.types import CandidatePositionMode, ViewDirectionMode
-
-                modes = {
-                    "forward_local": (ViewDirectionMode.FORWARD_RIG, CandidatePositionMode.FORWARD_LOCAL),
-                    "target_bearing_local": (
-                        ViewDirectionMode.TARGET_POINT,
-                        CandidatePositionMode.TARGET_BEARING_LOCAL,
-                    ),
-                    "lateral_target_bypass": (
-                        ViewDirectionMode.TARGET_POINT,
-                        CandidatePositionMode.LATERAL_TARGET_BYPASS,
-                    ),
-                    "local_refinement": (ViewDirectionMode.RADIAL_TOWARDS, CandidatePositionMode.LOCAL_REFINEMENT),
-                    "revisit_backtrack": (ViewDirectionMode.FORWARD_RIG, CandidatePositionMode.REVISIT_BACKTRACK),
-                    "radial_towards_target_bearing": (
-                        ViewDirectionMode.RADIAL_TOWARDS,
-                        CandidatePositionMode.TARGET_BEARING_LOCAL,
-                    ),
-                    "radial_away_target_bearing": (
-                        ViewDirectionMode.RADIAL_AWAY,
-                        CandidatePositionMode.TARGET_BEARING_LOCAL,
-                    ),
-                    "target_point_anchor": (ViewDirectionMode.TARGET_POINT, CandidatePositionMode.TARGET_BEARING_LOCAL),
-                    "upper_bound_free_shell": (
-                        ViewDirectionMode.RADIAL_AWAY,
-                        CandidatePositionMode.UPPER_BOUND_FREE_SHELL,
-                    ),
-                }
                 component_type = type(mixture.components[0]) if mixture.components else None
-                values = [
-                    {"name": name, "count": count, "view_mode": modes[name][0], "position_mode": modes[name][1]}
-                    for name, count in profile.components
-                ]
-                mixture.components = [component_type.model_validate(v) for v in values] if component_type else values
+                from ...pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
+
+                typed_components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(profile.components)
+                mixture.components = (
+                    [component_type.model_validate(component.model_dump()) for component in typed_components]
+                    if component_type
+                    else typed_components
+                )
             from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
             from .rollout_dataset import RolloutRecipeConfig
 

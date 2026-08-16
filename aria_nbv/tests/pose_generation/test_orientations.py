@@ -71,6 +71,31 @@ def test_view_sampling_disabled_when_jitter_zero() -> None:
     assert torch.allclose(poses.R[0], torch.eye(3), atol=1e-6)
 
 
+def test_target_point_gaze_is_clamped_to_motion_envelope() -> None:
+    reference = PoseTW.from_Rt(
+        torch.tensor([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]]),
+        torch.zeros(3),
+    )
+    cfg = CandidateViewGeneratorConfig(
+        num_samples=1,
+        view_direction_mode=ViewDirectionMode.TARGET_POINT,
+        view_target_point_world=torch.tensor([10.0, 10.0, 0.0]),
+        max_yaw_delta_deg=30.0,
+        min_elev_deg=-12.0,
+        max_elev_deg=18.0,
+        view_max_azimuth_deg=0.0,
+        view_max_elevation_deg=0.0,
+    )
+    poses, _ = OrientationBuilder(cfg).build(reference, torch.tensor([[1.0, 0.0, 0.0]]))
+
+    forward = poses.R[:, :, 2] @ reference.R
+    azimuth = torch.atan2(forward[:, 0], forward[:, 2])
+    elevation = torch.atan2(forward[:, 1], torch.linalg.norm(forward[:, (0, 2)], dim=-1))
+    assert torch.max(azimuth.abs()) <= torch.deg2rad(torch.tensor(30.0)) + 1e-5
+    assert torch.min(elevation) >= torch.deg2rad(torch.tensor(-12.0)) - 1e-5
+    assert torch.max(elevation) <= torch.deg2rad(torch.tensor(18.0)) + 1e-5
+
+
 def test_view_jitter_respects_az_el_limits() -> None:
     max_az, max_el = 10.0, 5.0
     cfg = CandidateViewGeneratorConfig(

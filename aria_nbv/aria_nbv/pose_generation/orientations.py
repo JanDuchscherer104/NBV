@@ -164,6 +164,7 @@ class OrientationBuilder:
                 target = cfg.view_target_point_world.to(device=device, dtype=dtype).view(1, 3)
                 wup = world_up_tensor(device=device, dtype=dtype)
                 v = target - centers_world
+                v = self._clamp_target_gaze(reference_pose_dev, v)
                 z_world = v / v.norm(dim=-1, keepdim=True).clamp_min(1e-6)
                 dot_up = (z_world * wup.view(1, 3)).sum(dim=-1, keepdim=True)
                 y_world = wup.view(1, 3) - dot_up * z_world
@@ -199,6 +200,39 @@ class OrientationBuilder:
 
         delta_poses = PoseTW.from_Rt(r_delta, torch.zeros_like(centers_world))
         return base_poses.compose(delta_poses), delta_poses
+
+    def _clamp_target_gaze(self, reference_pose: PoseTW, directions_world: torch.Tensor) -> torch.Tensor:
+        """Keep target-point gaze inside the configured accepted envelope."""
+
+        reference_rotation = reference_pose.R
+        if reference_rotation.ndim == 3:
+            reference_rotation = reference_rotation[0]
+        directions_ref = directions_world @ reference_rotation
+        azimuth = torch.atan2(directions_ref[:, 0], directions_ref[:, 2])
+        horizontal = torch.linalg.norm(directions_ref[:, (0, 2)], dim=-1).clamp_min(1e-8)
+        elevation = torch.atan2(directions_ref[:, 1], horizontal)
+        yaw_limit = (
+            torch.deg2rad(
+                torch.tensor(
+                    float(self.cfg.max_yaw_delta_deg), device=directions_world.device, dtype=directions_world.dtype
+                )
+            )
+            if self.cfg.max_yaw_delta_deg is not None
+            else torch.pi
+        )
+        min_elevation = torch.deg2rad(
+            torch.tensor(float(self.cfg.min_elev_deg), device=directions_world.device, dtype=directions_world.dtype)
+        )
+        max_elevation = torch.deg2rad(
+            torch.tensor(float(self.cfg.max_elev_deg), device=directions_world.device, dtype=directions_world.dtype)
+        )
+        azimuth = azimuth.clamp(-yaw_limit, yaw_limit)
+        elevation = elevation.clamp(min_elevation, max_elevation)
+        cos_elevation = torch.cos(elevation)
+        clamped_ref = torch.stack(
+            [cos_elevation * torch.sin(azimuth), torch.sin(elevation), cos_elevation * torch.cos(azimuth)], dim=-1
+        )
+        return clamped_ref @ reference_rotation.transpose(0, 1)
 
 
 def _yaw_pitch_rotation(yaw: torch.Tensor, pitch: torch.Tensor) -> torch.Tensor:
