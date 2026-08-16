@@ -48,7 +48,24 @@ MIGRATION_TEST_PATHS = {
     "scripts/tests/test_ownership_consolidation_contract.py",
     "scripts/tests/test_validate_agent_memory_retired.py",
     "scripts/validate_agent_memory.py",
+    "scripts/codex_transcript_extract.py",
+    "aria_nbv/tests/agent_memory/test_codex_transcript_extract.py",
 }
+
+RETIRED_REFERENCE_PROVENANCE = {
+    ".omx/plans/prd-aria-nbv-ownership-branch-consolidation.md",
+    ".omx/plans/test-spec-thin-root-nested-agents-rewrite.md",
+    ".omx/specs/autoresearch-agent-scaffold-rework-20260729/report.md",
+    ".omx/specs/ownership-branch-consolidation-successor-spec.md",
+}
+
+REFERENCE_EXCLUDED_PREFIXES = (
+    ".agents/archive/",
+    ".agents/memory/transcripts/",
+    ".omx/context/",
+    ".omx/interviews/",
+    "docs/contents/archive/",
+)
 
 TEXT_SUFFIXES = {
     ".bib",
@@ -136,8 +153,35 @@ def test_generated_omx_inventory_is_not_tracked() -> None:
     tracked = _tracked_paths()
     assert ".omx/specs/ownership-branch-consolidation-inventory.json" not in tracked
     assert ".omx/specs/ownership-branch-consolidation-inventory.md" not in tracked
-    assert not [
-        path
-        for path in tracked
-        if path.startswith(".omx/") and not path.endswith(".md")
-    ]
+
+
+def _retired_reference_aliases() -> set[str]:
+    aliases: set[str] = set()
+    for retired in RETIRED_SOURCES:
+        path = Path(retired)
+        aliases.update({retired, path.name, path.as_posix()})
+        aliases.add(path.parent.as_posix() + "/")
+        aliases.add((ROOT / path).as_posix())
+    return aliases
+
+
+def test_active_omx_and_maintained_slides_scope_retired_references() -> None:
+    """Scan active planning/slides with path aliases, allowing only provenance."""
+    prefixes = (".omx/plans/", ".omx/specs/", "docs/typst/thesis_slides/")
+    aliases = _retired_reference_aliases()
+    violations: list[str] = []
+    for relative in sorted(_tracked_paths()):
+        if not relative.startswith(prefixes):
+            continue
+        path = ROOT / relative
+        if path.suffix.lower() not in {".md", ".typ", ".json", ".html"}:
+            continue
+        if relative in RETIRED_REFERENCE_PROVENANCE or relative.startswith(
+            REFERENCE_EXCLUDED_PREFIXES
+        ):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for alias in aliases:
+            if alias in text:
+                violations.append(f"{relative}: {alias}")
+    assert not violations

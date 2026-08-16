@@ -13,18 +13,24 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
+MIGRATION_RECEIPT = (
+    HISTORY_ROOT / "2026" / "08" / "2026-08-16_ownership_migration_receipt.md"
+)
 OMX_DURABLE_PATHS = (
     ".omx/context/",
     ".omx/interviews/",
     ".omx/specs/",
     ".omx/plans/",
 )
-OMX_DURABLE_SUFFIXES = (".md",)
+OMX_DURABLE_SUFFIXES = (".md", ".json", ".html")
+OWNERSHIP_INVENTORY_PREFIX = ".omx/specs/ownership-branch-consolidation-inventory."
+OMX_GENERATED_MARKERS = ("/cache/", "/logs/", "/state/", "/tmp/", "/runtime/")
 FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
@@ -50,6 +56,22 @@ RETIRED_SOURCE_PATHS = {
 }
 LEGACY_RECEIPT_CUTOFF = date(2026, 8, 13)
 LEGACY_RECEIPT_STATUSES = {"done", "legacy-imported", "archived"}
+RECEIPT_DISPOSITIONS = {
+    "historical",
+    "removed",
+    "deferred-action",
+    "code-owned",
+    "test-owned",
+}
+RECEIPT_SOURCE_COUNTS = {
+    "docs/contents/thesis/roadmap.qmd": 10,
+    "docs/contents/thesis/questions.qmd": 13,
+    "docs/contents/thesis/m1_contract_report.qmd": 6,
+    ".agents/memory/state/PROJECT_STATE.md": 5,
+    ".agents/memory/state/DECISIONS.md": 4,
+    ".agents/memory/state/GOTCHAS.md": 3,
+    ".agents/memory/state/OPEN_QUESTIONS.md": 6,
+}
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -171,11 +193,38 @@ def check_tracked_omx_records(tracked_paths: list[str]) -> list[str]:
         if not tracked_path.startswith(".omx/"):
             continue
 
-        if not tracked_path.startswith(OMX_DURABLE_PATHS):
+        if is_forbidden_tracked_runtime_path(tracked_path):
+            errors.append(f"OMX runtime state must not be tracked: {tracked_path}")
+        elif not tracked_path.startswith(OMX_DURABLE_PATHS):
             errors.append(f"OMX runtime state must not be tracked: {tracked_path}")
         elif not tracked_path.endswith(OMX_DURABLE_SUFFIXES):
             errors.append(f"unsupported tracked OMX artifact: {tracked_path}")
     return errors
+
+
+def is_forbidden_tracked_runtime_path(tracked_path: str) -> bool:
+    """Return whether an OMX path is a known generated/runtime artifact.
+
+    Durable Markdown, JSON, and HTML records remain valid under the explicit
+    context/interviews/specs/plans roots. This predicate only identifies the
+    narrow set of known generated names and runtime/cache/transient directories;
+    callers still enforce the durable-root and suffix allowlist.
+    """
+    if tracked_path == ".omx" or not tracked_path.startswith(".omx/"):
+        return tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS
+    if tracked_path in FORBIDDEN_TRACKED_RUNTIME_PATHS:
+        return True
+    if tracked_path.startswith(OWNERSHIP_INVENTORY_PREFIX):
+        return True
+    normalized = "/" + tracked_path.removeprefix(".omx/")
+    return (
+        any(marker in normalized for marker in OMX_GENERATED_MARKERS)
+        or tracked_path.startswith(".omx/ultragoal/")
+        or (
+            tracked_path.startswith(".omx/goals/")
+            and tracked_path != ".omx/goals/autoresearch/task.json"
+        )
+    )
 
 
 def check_history_records() -> list[str]:
@@ -229,6 +278,69 @@ def check_history_records() -> list[str]:
     return errors
 
 
+def check_migration_receipt() -> list[str]:
+    """Validate the compact 47-row immutable ownership migration receipt."""
+    if not MIGRATION_RECEIPT.exists():
+        return [
+            f"missing migration receipt: {MIGRATION_RECEIPT.relative_to(REPO_ROOT)}"
+        ]
+    rows = []
+    in_table = False
+    for line in MIGRATION_RECEIPT.read_text(encoding="utf-8").splitlines():
+        if line.startswith("| Row ID |"):
+            in_table = True
+            continue
+        if not in_table or not line.startswith("|") or line.startswith("|---"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == 6:
+            rows.append(cells)
+    errors: list[str] = []
+    if len(rows) != 47:
+        errors.append(f"migration receipt must contain 47 rows, found {len(rows)}")
+        return errors
+    if len({row[0] for row in rows}) != 47:
+        errors.append("migration receipt row IDs must be unique")
+    source_counts = Counter()
+    immutable = re.compile(
+        r"8fcabeffed7c898b6c7d0ec02c65e24097ea68d8\s*/\s*[0-9a-f]{40}\s*/\s*[^|]+\s+\([^)]*\)"
+    )
+    for row in rows:
+        source_parts = [
+            part.strip().replace("`", "") for part in row[1].split(" / ", 1)
+        ]
+        source = source_parts[0] if source_parts else ""
+        if source not in RECEIPT_SOURCE_COUNTS:
+            errors.append(f"{row[0]}: unknown retired source path: {source!r}")
+            continue
+        if source:
+            source_counts[source] += 1
+        if not immutable.search(" / ".join(source_parts[1:])):
+            errors.append(f"{row[0]}: missing full immutable commit/blob/source anchor")
+        if row[3] not in RECEIPT_DISPOSITIONS:
+            errors.append(f"{row[0]}: unsupported disposition {row[3]!r}")
+        if (
+            "verified:" not in row[5]
+            or "unverified" in row[5].lower()
+            or "unresolved" in row[5].lower()
+        ):
+            errors.append(
+                f"{row[0]}: destination verification is missing or unresolved"
+            )
+        destination = row[4].split("#", 1)[0].strip("`")
+        if row[3] == "removed" and destination.startswith(
+            "Git history/debrief provenance"
+        ):
+            continue
+        if not (REPO_ROOT / destination).exists() or "#" not in row[4]:
+            errors.append(f"{row[0]}: destination path/anchor is missing: {row[4]}")
+    if source_counts != Counter(RECEIPT_SOURCE_COUNTS):
+        errors.append(
+            f"migration receipt source counts mismatch: {dict(source_counts)}"
+        )
+    return errors
+
+
 def check_scaffold_alignment() -> list[str]:
     errors: list[str] = []
 
@@ -263,6 +375,7 @@ def main() -> int:
     errors = [
         *check_codex_notes(),
         *check_history_records(),
+        *check_migration_receipt(),
         *check_scaffold_alignment(),
     ]
     if not errors:

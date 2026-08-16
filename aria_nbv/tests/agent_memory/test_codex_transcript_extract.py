@@ -314,9 +314,9 @@ def test_default_main_writes_raw_chat_manifest(tmp_path: Path) -> None:
     session_path = sessions_root / "2026" / "06" / "18" / "rollout.jsonl"
     project_root = tmp_path / "ARIA-NBV"
     output_root = tmp_path / "transcripts"
-    owner_file = tmp_path / "source_order.md"
+    decisions_file = tmp_path / "DECISIONS.md"
     preferences_file = tmp_path / "human_owner_intent.md"
-    owner_file.write_text("- Existing source-owned decision.\n", encoding="utf-8")
+    decisions_file.write_text("- Existing decision.\n", encoding="utf-8")
     preferences_file.write_text("- Existing preference.\n", encoding="utf-8")
     write_jsonl(
         session_path,
@@ -346,8 +346,8 @@ def test_default_main_writes_raw_chat_manifest(tmp_path: Path) -> None:
             project_root.as_posix(),
             "--output-root",
             output_root.as_posix(),
-            "--owner-file",
-            owner_file.as_posix(),
+            "--decisions-file",
+            decisions_file.as_posix(),
             "--preferences-file",
             preferences_file.as_posix(),
             "--date",
@@ -382,7 +382,7 @@ def test_distillates_route_promotion_targets() -> None:
 
     assert len(distillates) == 1
     assert distillates[0]["summary"] == "Plan-mode answer `raw_policy` selected: User plus plans only"
-    assert distillates[0]["promotion_target"] == "exact-source-owner-review"
+    assert distillates[0]["promotion_target"] == ".agents/memory/state/DECISIONS.md"
 
 
 def test_review_marks_already_reflected_decisions() -> None:
@@ -392,7 +392,7 @@ def test_review_marks_already_reflected_decisions() -> None:
             "category": "durable repo decision",
             "summary": "Transcript mining must not check in full raw Codex transcripts.",
             "prompt": None,
-            "promotion_target": "exact-source-owner-review",
+            "promotion_target": ".agents/memory/state/DECISIONS.md",
         }
     ]
     canonical_text = """
@@ -417,7 +417,7 @@ def test_review_marks_unreflected_decisions_for_canonical_review() -> None:
             "category": "technical decision",
             "summary": "Plan-mode answer `new_schema` selected: Store typed artifact manifests.",
             "prompt": "How should the new schema be stored?",
-            "promotion_target": "exact-source-owner-review",
+            "promotion_target": ".agents/memory/state/DECISIONS.md",
         }
     ]
 
@@ -428,4 +428,3 @@ def test_review_marks_unreflected_decisions_for_canonical_review() -> None:
     )
 
     assert reviewed[0]["review_status"] == "needs_canonical_review"
-    assert reviewed[0]["promotion_target"] == "exact-source-owner-review"
