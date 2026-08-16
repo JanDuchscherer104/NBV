@@ -169,6 +169,7 @@ class CampaignWorkUnit:
     source_identity_hash: str = ""
     writer_config_hash: str = ""
     temperature: float = 0.5
+    temperatures: tuple[float, ...] = (0.5,)
     scene_split: str = "train"
 
 
@@ -185,7 +186,7 @@ def _work_unit_identity(unit: CampaignWorkUnit, *, seed: int) -> str:
         "profile_hash": unit.profile_hash,
         "config_hash": unit.config_hash,
         "writer_config_hash": unit.writer_config_hash,
-        "temperature": unit.temperature,
+        "temperatures": unit.temperatures,
         "scene_split": unit.scene_split,
     }
     return stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
@@ -240,7 +241,15 @@ class CampaignPlan:
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignPlan":
-        units = tuple(CampaignWorkUnit(**item) for item in payload.get("work_units", ()))
+        units = tuple(
+            CampaignWorkUnit(
+                **{
+                    **item,
+                    "temperatures": tuple(item.get("temperatures", (item.get("temperature", 0.5),))),
+                }
+            )
+            for item in payload.get("work_units", ())
+        )
         plan = cls(
             str(payload["campaign_id"]),
             int(payload["seed"]),
@@ -748,59 +757,60 @@ class CudaRolloutCampaign:
                 temperatures = (
                     self.config.temperatures
                     if mode is CampaignMode.PILOT
-                    else ((self.config.temperatures[eligible_index % len(self.config.temperatures)],))
+                    else (self.config.temperatures[eligible_index % len(self.config.temperatures)],)
                 )
-                for temperature in temperatures:
-                    payload = [
-                        self.config.campaign_id,
-                        sample,
-                        target,
-                        profile.name,
-                        str(val(row, "explicit_target_hash")),
-                        self.config.seed,
-                        stable_msgspec_hash(profile.model_dump()),
-                        temperature,
-                        split_by_scene[scene],
-                    ]
-                    units.append(
-                        CampaignWorkUnit(
-                            campaign_id=self.config.campaign_id,
-                            sample_key=sample,
-                            target_id=target,
-                            profile=profile.name,
-                            work_unit_hash=stable_msgspec_hash(payload),
-                            explicit_target_hash=str(val(row, "explicit_target_hash")),
-                            target_audit_hash=stable_msgspec_hash(
-                                {
-                                    "explicit": explicit_payload
-                                    or {"scene_id": scene, "target_id": target, "oriented_iou": iou},
-                                    "admission_reason": reasons,
-                                    "gt_match_count": val(row, "gt_match_count")
-                                    or val(row, "qualified_gt_match_count")
-                                    or 1,
-                                }
-                            ),
-                            source_row_index=row_index,
-                            explicit_target_config=explicit_payload,
-                            source_row_payload={
-                                k: val(row, k)
-                                for k in (
-                                    "sample_index",
-                                    "scene_id",
-                                    "snippet_id",
-                                    "split",
-                                    "source_shard_id",
-                                    "source_shard_row",
-                                    "source_store_dir",
-                                    "source_cache_version",
-                                    "source_manifest_hash",
-                                )
-                                if val(row, k) not in ("", None)
-                            },
-                            temperature=temperature,
-                            scene_split=split_by_scene[scene],
-                        )
+                temperature = temperatures[0]
+                payload = [
+                    self.config.campaign_id,
+                    sample,
+                    target,
+                    profile.name,
+                    str(val(row, "explicit_target_hash")),
+                    self.config.seed,
+                    stable_msgspec_hash(profile.model_dump()),
+                    temperatures,
+                    split_by_scene[scene],
+                ]
+                units.append(
+                    CampaignWorkUnit(
+                        campaign_id=self.config.campaign_id,
+                        sample_key=sample,
+                        target_id=target,
+                        profile=profile.name,
+                        work_unit_hash=stable_msgspec_hash(payload),
+                        explicit_target_hash=str(val(row, "explicit_target_hash")),
+                        target_audit_hash=stable_msgspec_hash(
+                            {
+                                "explicit": explicit_payload
+                                or {"scene_id": scene, "target_id": target, "oriented_iou": iou},
+                                "admission_reason": reasons,
+                                "gt_match_count": val(row, "gt_match_count")
+                                or val(row, "qualified_gt_match_count")
+                                or 1,
+                            }
+                        ),
+                        source_row_index=row_index,
+                        explicit_target_config=explicit_payload,
+                        source_row_payload={
+                            k: val(row, k)
+                            for k in (
+                                "sample_index",
+                                "scene_id",
+                                "snippet_id",
+                                "split",
+                                "source_shard_id",
+                                "source_shard_row",
+                                "source_store_dir",
+                                "source_cache_version",
+                                "source_manifest_hash",
+                            )
+                            if val(row, k) not in ("", None)
+                        },
+                        temperature=temperature,
+                        temperatures=tuple(temperatures),
+                        scene_split=split_by_scene[scene],
                     )
+                )
             eligible_index += 1
         profile_hash = stable_msgspec_hash([p.model_dump() for p in profiles])
         config_hash = stable_msgspec_hash(self.config.model_dump_jsonable())
@@ -1333,20 +1343,22 @@ class CudaRolloutCampaign:
             from ...rollouts.replay.policy import CounterfactualSelectionPolicy, RolloutPolicySpec
             from .rollout_dataset import RolloutRecipeConfig
 
+            temperatures = tuple(unit.temperatures or (unit.temperature,))
             cfg = cfg.model_copy(
                 update={
                     "recipes": [
                         RolloutRecipeConfig(
-                            name=f"{recipe['name']}_t{unit.temperature:g}",
+                            name=f"{recipe['name']}_t{temperature:g}",
                             policy=RolloutPolicySpec(
                                 selection_policy=CounterfactualSelectionPolicy(recipe["policy"]),
                                 horizon=recipe["horizon"],
                                 branch_factor=recipe["branch"],
                                 beam_width=recipe["beam"],
-                                selection_temperature=unit.temperature,
+                                selection_temperature=temperature,
                                 seed=self.config.seed,
                             ),
                         )
+                        for temperature in temperatures
                         for recipe in profile.recipes
                     ]
                 }
@@ -2463,9 +2475,7 @@ class CudaRolloutCampaign:
                 self.config.output_root / "shards" / unit.work_unit_hash,
                 shard_entry=effective_entry,
                 writer_config_hash=(
-                    plan.writer_config_hash
-                    if effective_writer is None
-                    else stable_config_hash(effective_writer)
+                    plan.writer_config_hash if effective_writer is None else stable_config_hash(effective_writer)
                 ),
             )
         except (OSError, TypeError, ValueError, KeyError) as exc:
@@ -2790,9 +2800,7 @@ class CudaRolloutCampaign:
                 try:
                     effective_writer, entry = self._effective_writer_and_shard_entry(plan, unit)
                     effective_writer_hash = (
-                        plan.writer_config_hash
-                        if effective_writer is None
-                        else stable_config_hash(effective_writer)
+                        plan.writer_config_hash if effective_writer is None else stable_config_hash(effective_writer)
                     )
                     entry = replace(entry, writer_config_hash=effective_writer_hash)
                 except (TypeError, ValueError, KeyError):

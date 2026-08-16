@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import torch
 from pydantic import Field, field_validator, model_validator
@@ -744,6 +744,19 @@ class RolloutDatasetWriter:
             return reason
         return None
 
+    def _require_campaign_recipe_completeness(self, records: Sequence[object], shard_entry: Any) -> None:
+        """Reject partial multi-recipe campaign targets before store creation."""
+        if (
+            shard_entry is not None
+            and shard_entry.campaign_binding is not None
+            and len(self.config.recipes) > 1
+            and len(records) != len(self.config.recipes)
+        ):
+            raise RuntimeError(
+                "campaign rollout requires one validated record per configured recipe; "
+                f"got {len(records)} of {len(self.config.recipes)}"
+            )
+
     def run(
         self,
         *,
@@ -833,6 +846,7 @@ class RolloutDatasetWriter:
                     target_rank=target_rank,
                     source_lineage=source_lineage,
                 )
+                self._require_campaign_recipe_completeness(target_records, shard_entry)
                 if target_records:
                     rolled_targets_for_sample += 1
                     records.extend(target_records)

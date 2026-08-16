@@ -691,6 +691,17 @@ def test_rollout_target_probe_is_disposable_and_recipes_regenerate(
     assert calls == expected_calls
 
 
+def test_campaign_writer_rejects_partial_multi_recipe_target_before_store() -> None:
+    writer = RolloutDatasetWriter.__new__(RolloutDatasetWriter)
+    writer.config = SimpleNamespace(recipes=[object(), object(), object(), object()])
+    entry = SimpleNamespace(campaign_binding=object())
+
+    with pytest.raises(RuntimeError, match="one validated record per configured recipe"):
+        writer._require_campaign_recipe_completeness([object()], entry)
+
+    writer._require_campaign_recipe_completeness([object(), object(), object(), object()], entry)
+
+
 def test_rollout_shard_without_campaign_binding_preserves_legacy_evidence(tmp_path: Path) -> None:
     config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
     entry = plan_rollout_shards(config, rows_per_shard=1)[0]

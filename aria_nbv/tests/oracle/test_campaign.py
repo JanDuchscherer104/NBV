@@ -1529,8 +1529,12 @@ def test_effective_writer_hash_rebinds_base_writer_before_terminal_validation(tm
     adapted = RolloutDatasetWriterConfig()
     adapted = adapted.model_copy(update={"log_timing": True})
     base_entry = campaign.shard_entry_for_unit(plan, unit)
-    effective_entry = replace(base_entry, split_manifest_hash="canonical", writer_config_hash=stable_config_hash(adapted))
-    monkeypatch.setattr(RolloutDatasetWriterConfig, "from_toml", classmethod(lambda cls, _path: RolloutDatasetWriterConfig()))
+    effective_entry = replace(
+        base_entry, split_manifest_hash="canonical", writer_config_hash=stable_config_hash(adapted)
+    )
+    monkeypatch.setattr(
+        RolloutDatasetWriterConfig, "from_toml", classmethod(lambda cls, _path: RolloutDatasetWriterConfig())
+    )
     monkeypatch.setattr(campaign, "shard_entry_for_unit", lambda _plan, _unit: base_entry)
     monkeypatch.setattr(campaign, "adapt_work_unit", lambda *_args, **_kwargs: (adapted, effective_entry))
 
@@ -1596,10 +1600,43 @@ def test_pilot_plan_has_two_profiles_and_four_temperatures(tmp_path):
     campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig.model_construct(**values))
     rows = [_row(f"s{i}", f"k{i}", f"t{i}") for i in range(6)]
     plan = campaign.plan(rows, source_manifest_hash="source")
-    assert len(plan.work_units) == 40
+    assert len(plan.work_units) == 10
     assert {u.profile for u in plan.work_units} == {"realistic_core_60", "rich_local_60"}
-    assert {u.temperature for u in plan.work_units} == {0.5, 1.0, 2.0, 4.0}
-    assert len({u.work_unit_hash for u in plan.work_units}) == 40
+    assert {u.temperatures for u in plan.work_units} == {(0.5, 1.0, 2.0, 4.0)}
+    assert len({u.work_unit_hash for u in plan.work_units}) == 10
+
+
+def test_pilot_adaptation_emits_four_ordered_myopic_recipes(tmp_path):
+    base = _campaign(tmp_path)
+    values = base.config.model_dump()
+    values.update(mode="pilot", profiles=base.config.profiles)
+    pilot = CudaRolloutCampaign(CudaRolloutCampaignConfig.model_construct(**values))
+    plan = pilot.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})
+    adapted, _ = pilot.adapt_work_unit(
+        plan.work_units[0],
+        writer_config=writer,
+        shard_entry=SimpleNamespace(),
+        plan_hash=plan.plan_hash,
+        profile_hash=plan.work_units[0].profile_hash,
+    )
+    assert [recipe.policy.selection_temperature for recipe in adapted.recipes] == [0.5, 1.0, 2.0, 4.0]
+    assert [
+        (recipe.policy.horizon, recipe.policy.branch_factor, recipe.policy.beam_width) for recipe in adapted.recipes
+    ] == [
+        (8, 1, 1),
+    ] * 4
+    broad = _campaign(tmp_path / "broad")
+    broad_plan = broad.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    broad_writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})
+    broad_adapted, _ = broad.adapt_work_unit(
+        broad_plan.work_units[0],
+        writer_config=broad_writer,
+        shard_entry=SimpleNamespace(),
+        plan_hash=broad_plan.plan_hash,
+        profile_hash=broad_plan.work_units[0].profile_hash,
+    )
+    assert [recipe.policy.selection_temperature for recipe in broad_adapted.recipes] == [0.5]
 
 
 def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path):
