@@ -371,6 +371,44 @@ def test_read_status_rejects_stale_config_and_plan_identity(tmp_path):
         campaign.read_status(plan=other_plan)
 
 
+@pytest.mark.parametrize(
+    ("field", "tampered"),
+    [
+        ("current_target_id", "other-target"),
+        ("current_profile", "other-profile"),
+        ("current_stage", "promotion"),
+        ("active_pid", 9999),
+        ("active_process_group", 9999),
+        ("active_started_at", "2099-01-01T00:00:00+00:00"),
+    ],
+)
+def test_read_status_rejects_tampered_active_event_projection(tmp_path, field, tampered):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
+    campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
+    started = campaign._event(plan, "unit_started", unit=unit, stage="worker", pid=4321, process_group=4321)
+    campaign.append_event(started)
+    path = campaign.write_status(
+        campaign.status(
+            plan,
+            current_unit=unit,
+            stage="worker",
+            active_pid=started.pid,
+            active_process_group=started.process_group,
+            active_started_at=started.timestamp,
+        )
+    )
+    payload = json.loads(path.read_text())
+    payload[field] = tampered
+    path.write_text(json.dumps(payload) + "\n")
+
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
 def test_preflight_stage_uses_named_internal_subprocess(monkeypatch, tmp_path):
     calls = []
 
@@ -758,6 +796,30 @@ def test_process_runner_reports_child_identity_before_communicate(monkeypatch):
     assert started == [(4321, 9876)]
 
 
+def test_child_start_event_and_status_share_active_timestamp(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
+    campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
+
+    campaign._child_started_callback(
+        plan,
+        [],
+        unit,
+        started_at=0.0,
+        started_at_iso="campaign-start",
+        last_timeout=None,
+    )(4321, 9876)
+
+    started = campaign.read_events(plan=plan)[-1]
+    status = campaign.read_status(plan=plan)
+    assert status.active_pid == started.pid == 4321
+    assert status.active_process_group == started.process_group == 9876
+    assert status.active_started_at == started.timestamp
+
+
 def test_process_runner_reports_missing_process_group(monkeypatch):
     class Process:
         pid = 4321
@@ -950,6 +1012,41 @@ def test_run_claimed_resume_retries_every_nonvalidated_terminal_outcome(tmp_path
     assert [event.kind for event in campaign.read_events(plan=plan)].count("campaign_resumed") == 1
 
 
+def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, "failed")
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+    campaign.write_status(
+        campaign.status(
+            plan,
+            [{"outcome": "failed"}] * len(plan.work_units),
+            stage="terminal",
+            last_unit=plan.work_units[-1],
+        )
+    )
+    assert campaign.read_status(plan=plan).state == "completed_with_failures"
+    monkeypatch.setattr(campaign, "preflight", lambda *args, **kwargs: None)
+    monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: None)
+    active = []
+
+    def retry_worker(unit):
+        status = campaign.read_status(plan=plan)
+        active.append((unit, status))
+        raise RuntimeError("retry still fails")
+
+    results = campaign.run(plan, worker=retry_worker)
+
+    first_retry, first_status = active[0]
+    assert first_status.state == "running"
+    assert first_status.current_work_unit == first_retry.work_unit_hash
+    assert first_status.last_work_unit == plan.work_units[-1].work_unit_hash
+    assert {result["outcome"] for result in results} == {"failed"}
+    assert campaign.read_status(plan=plan).state == "completed_with_failures"
+
+
 def test_run_claimed_rejects_restart_when_every_terminal_unit_is_validated(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -1128,15 +1225,20 @@ def test_read_status_rebuilds_running_stage_when_projection_is_missing(tmp_path)
     campaign.append_event(campaign._event(plan, "campaign_started"))
     campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
     campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
-    campaign.append_event(campaign._event(plan, "unit_started", unit=unit, stage="worker"))
+    started = campaign._event(plan, "unit_started", unit=unit, stage="worker", pid=4321, process_group=4321)
+    campaign.append_event(started)
 
     status = campaign.read_status(plan=plan)
 
     assert status.state == "running"
     assert status.plan_hash == plan.plan_hash
     assert status.current_work_unit == unit.work_unit_hash
+    assert status.current_target_id == unit.target_id
     assert status.current_profile == unit.profile
     assert status.current_stage == "worker"
+    assert status.active_pid == 4321
+    assert status.active_process_group == 4321
+    assert status.active_started_at == started.timestamp
     assert status.counts["pending"] == len(plan.work_units)
 
 

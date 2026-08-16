@@ -1586,7 +1586,8 @@ class CudaRolloutCampaign:
                 )
             )
             if worker is not None:
-                self.append_event(self._event(plan, "unit_started", unit=unit, stage="worker"))
+                started = self._event(plan, "unit_started", unit=unit, stage="worker")
+                self.append_event(started)
                 self.write_status(
                     self.status(
                         plan,
@@ -1596,6 +1597,7 @@ class CudaRolloutCampaign:
                         elapsed_seconds=self.clock() - started_at,
                         last_timeout=last_timeout,
                         started_at=started_at_iso,
+                        active_started_at=started.timestamp,
                     )
                 )
             try:
@@ -2043,10 +2045,15 @@ class CudaRolloutCampaign:
         """Persist child identity immediately after subprocess creation."""
 
         def callback(pid: int, process_group: int | None) -> None:
-            now = self.utc_now().isoformat()
-            self.append_event(
-                self._event(plan, "unit_started", unit=unit, stage="worker", pid=pid, process_group=process_group)
+            started = self._event(
+                plan,
+                "unit_started",
+                unit=unit,
+                stage="worker",
+                pid=pid,
+                process_group=process_group,
             )
+            self.append_event(started)
             self.write_status(
                 self.status(
                     plan,
@@ -2058,7 +2065,7 @@ class CudaRolloutCampaign:
                     started_at=started_at_iso,
                     active_pid=pid,
                     active_process_group=process_group,
-                    active_started_at=now,
+                    active_started_at=started.timestamp,
                 )
             )
 
@@ -2304,6 +2311,16 @@ class CudaRolloutCampaign:
             raise ValueError("campaign status current work unit diverges from canonical events")
         if status.last_work_unit != progress["last_work_unit"]:
             raise ValueError("campaign status last work unit diverges from canonical events")
+        evidence_fields = (
+            "current_target_id",
+            "current_profile",
+            "current_stage",
+            "active_pid",
+            "active_process_group",
+            "active_started_at",
+        )
+        if any(getattr(status, field) != progress[field] for field in evidence_fields):
+            raise ValueError("campaign status active projection diverges from canonical events")
         for work_unit_hash, outcome in latest.items():
             unit = next((item for item in plan.work_units if item.work_unit_hash == work_unit_hash), None)
             if unit is None:
@@ -2334,16 +2351,7 @@ class CudaRolloutCampaign:
             (unit for unit in plan.work_units if unit.work_unit_hash == progress["last_work_unit"]),
             None,
         )
-        stage = "terminal" if state.startswith("completed") else state
-        if current_unit is not None:
-            stage = next(
-                (
-                    event.stage
-                    for event in reversed(events)
-                    if event.work_unit_hash == current_unit.work_unit_hash and event.stage is not None
-                ),
-                stage,
-            )
+        stage = progress["current_stage"]
         started_at = next(
             (event.timestamp for event in events if event.kind == "campaign_started"),
             None,
@@ -2358,6 +2366,9 @@ class CudaRolloutCampaign:
             current_unit=current_unit,
             stage=stage,
             last_unit=last_unit,
+            active_pid=progress["active_pid"],
+            active_process_group=progress["active_process_group"],
+            active_started_at=progress["active_started_at"],
             started_at=started_at,
             finished_at=finished_at,
         )
@@ -2388,7 +2399,13 @@ class CudaRolloutCampaign:
         saw_source_selection = False
         saw_plan_ready = False
         current_work_unit: str | None = None
+        current_target_id: str | None = None
+        current_profile: str | None = None
+        current_stage: str | None = None
         last_work_unit: str | None = None
+        active_pid: int | None = None
+        active_process_group: int | None = None
+        active_started_at: str | None = None
         unit_phases: dict[str, str] = {}
         terminal_outcomes: dict[str, str] = {}
         terminal_kinds = {
@@ -2416,6 +2433,7 @@ class CudaRolloutCampaign:
                     raise ValueError("invalid plan_ready transition")
                 saw_plan_ready = True
                 pre_run_state = "planned"
+                current_stage = "planned"
                 continue
             if event.kind == "preflight_passed":
                 if (
@@ -2426,11 +2444,13 @@ class CudaRolloutCampaign:
                 ):
                     raise ValueError("invalid preflight_passed transition")
                 pre_run_state = "preflight_passed"
+                current_stage = "preflight_passed"
                 continue
             if event.kind == "smoke_passed":
                 if run_state != "prefix" or event.work_unit_hash is not None or pre_run_state != "preflight_passed":
                     raise ValueError("invalid smoke_passed transition")
                 pre_run_state = "smoke_passed"
+                current_stage = "smoke_passed"
                 continue
             if event.kind == "campaign_started":
                 if run_state not in {"prefix", "blocked"}:
@@ -2439,6 +2459,12 @@ class CudaRolloutCampaign:
                     raise ValueError("incomplete planning event prefix")
                 run_state = "running"
                 current_work_unit = None
+                current_target_id = None
+                current_profile = None
+                current_stage = "running"
+                active_pid = None
+                active_process_group = None
+                active_started_at = None
                 unit_phases = {}
                 continue
             if event.kind == "campaign_resumed":
@@ -2458,8 +2484,13 @@ class CudaRolloutCampaign:
                     for work_unit_hash, outcome in terminal_outcomes.items()
                     if outcome in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
                 }
-                last_work_unit = next(reversed(terminal_outcomes), None)
                 current_work_unit = None
+                current_target_id = None
+                current_profile = None
+                current_stage = "running"
+                active_pid = None
+                active_process_group = None
+                active_started_at = None
                 unit_phases = dict.fromkeys(terminal_outcomes, "terminal")
                 run_state = "running"
                 finished = False
@@ -2471,6 +2502,7 @@ class CudaRolloutCampaign:
                     raise ValueError("campaign_finished precedes terminal work units")
                 run_state = "finished"
                 finished = True
+                current_stage = "terminal"
                 continue
             if run_state != "running":
                 raise ValueError("event precedes campaign_started")
@@ -2478,6 +2510,7 @@ class CudaRolloutCampaign:
                 if current_work_unit is not None or event.work_unit_hash is not None:
                     raise ValueError("campaign_blocked while a work unit is active")
                 run_state = "blocked"
+                current_stage = CampaignOutcome.BLOCKED.value
                 continue
             unit_hash = event.work_unit_hash
             if unit_hash is None:
@@ -2489,19 +2522,28 @@ class CudaRolloutCampaign:
                 if current_work_unit is not None or unit_hash in terminal_outcomes:
                     raise ValueError("target_profile overlaps an active work unit")
                 current_work_unit = unit_hash
+                current_target_id = event.target_id
+                current_profile = event.profile
+                current_stage = event.stage
                 unit_phases[unit_hash] = "target_profile"
             elif event.kind == "root_preflight":
                 if current_work_unit != unit_hash or phase != "target_profile":
                     raise ValueError("invalid root_preflight transition")
                 unit_phases[unit_hash] = "root_preflight"
+                current_stage = event.stage
             elif event.kind == "unit_started":
                 if current_work_unit != unit_hash or phase != "root_preflight":
                     raise ValueError("invalid unit_started transition")
                 unit_phases[unit_hash] = "unit_started"
+                current_stage = event.stage
+                active_pid = event.pid
+                active_process_group = event.process_group
+                active_started_at = event.timestamp
             elif event.kind == "recipe_worker":
                 if current_work_unit != unit_hash or phase != "unit_started":
                     raise ValueError("invalid recipe_worker transition")
                 unit_phases[unit_hash] = "recipe_worker"
+                current_stage = "worker"
             elif event.kind in {"root_preflight_completed", "root_preflight_insufficient"}:
                 if current_work_unit != unit_hash or phase not in {"unit_started", "recipe_worker"}:
                     raise ValueError(f"invalid {event.kind} transition")
@@ -2513,10 +2555,15 @@ class CudaRolloutCampaign:
                 if event.outcome not in allowed_outcomes:
                     raise ValueError(f"invalid {event.kind} outcome")
                 unit_phases[unit_hash] = event.kind
+                current_stage = event.stage
+                active_pid = None
+                active_process_group = None
+                active_started_at = None
             elif event.kind == "recipe_stage_completed":
                 if current_work_unit != unit_hash or phase != "root_preflight_completed":
                     raise ValueError("invalid recipe_stage_completed transition")
                 unit_phases[unit_hash] = "recipe_stage_completed"
+                current_stage = event.stage
             elif event.kind in {"unit_promoted", "unit_validated_skip"}:
                 expected_outcome = (
                     CampaignOutcome.SUCCEEDED.value if event.kind == "unit_promoted" else CampaignOutcome.SKIPPED.value
@@ -2528,6 +2575,7 @@ class CudaRolloutCampaign:
                 ):
                     raise ValueError(f"invalid {event.kind} transition")
                 unit_phases[unit_hash] = event.kind
+                current_stage = event.stage
             elif event.kind in terminal_kinds:
                 expected_outcome = event.kind.removeprefix("unit_")
                 valid_phase = {
@@ -2546,6 +2594,12 @@ class CudaRolloutCampaign:
                 terminal_outcomes[unit_hash] = expected_outcome
                 last_work_unit = unit_hash
                 current_work_unit = None
+                current_target_id = None
+                current_profile = None
+                current_stage = expected_outcome
+                active_pid = None
+                active_process_group = None
+                active_started_at = None
                 unit_phases[unit_hash] = "terminal"
             else:
                 raise ValueError(f"unsupported campaign event kind: {event.kind}")
@@ -2567,7 +2621,13 @@ class CudaRolloutCampaign:
             "allowed_states": allowed_states,
             "blocked": run_state == "blocked",
             "current_work_unit": current_work_unit,
+            "current_target_id": current_target_id,
+            "current_profile": current_profile,
+            "current_stage": current_stage,
             "last_work_unit": last_work_unit,
+            "active_pid": active_pid,
+            "active_process_group": active_process_group,
+            "active_started_at": active_started_at,
             "terminal_outcomes": terminal_outcomes,
         }
 
