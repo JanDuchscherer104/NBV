@@ -1150,6 +1150,45 @@ def test_public_run_rechecks_admission_before_resuming_interrupted_attempt(tmp_p
     assert len(results) == len(plan.work_units)
 
 
+@pytest.mark.parametrize(
+    "prior_gates",
+    [
+        (),
+        ("preflight_passed",),
+        ("preflight_passed", "smoke_passed"),
+    ],
+)
+def test_public_run_reuses_valid_pre_run_prefix(tmp_path, monkeypatch, prior_gates):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    for kind in ("source_selection", "plan_ready", *prior_gates):
+        campaign.append_event(campaign._event(plan, kind))
+    prior_state = prior_gates[-1] if prior_gates else "planned"
+    campaign.write_status(campaign.status(plan, stage=prior_state))
+    admission_checks = []
+    monkeypatch.setattr(campaign, "preflight", lambda *args, **kwargs: admission_checks.append("preflight"))
+    monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: admission_checks.append("smoke"))
+
+    results = campaign.run(
+        plan,
+        worker=lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"},
+    )
+
+    events = campaign.read_events(plan=plan)
+    assert admission_checks == ["preflight", "smoke"]
+    assert [event.kind for event in events[:5]] == [
+        "source_selection",
+        "plan_ready",
+        "preflight_passed",
+        "smoke_passed",
+        "campaign_started",
+    ]
+    assert [event.kind for event in events].count("preflight_passed") == 1
+    assert [event.kind for event in events].count("smoke_passed") == 1
+    assert [event.kind for event in events].count("campaign_started") == 1
+    assert len(results) == len(plan.work_units)
+
+
 def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -1284,6 +1323,20 @@ def test_read_status_fails_closed_when_missing_projection_rebuilds_as_not_starte
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     campaign.append_event(campaign._event(plan, "source_selection"))
+
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+@pytest.mark.parametrize(
+    "state",
+    ["planned", "preflight_passed", "smoke_passed", "running", "blocked", "conflicted"],
+)
+def test_read_status_rejects_eventless_nonterminal_projection(tmp_path, state):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    status_path = tmp_path / "status.json"
+    status_path.write_text(json.dumps(asdict(campaign.status(plan, stage=state))) + "\n")
 
     with pytest.raises(ValueError, match="invalid campaign status"):
         campaign.read_status(plan=plan)

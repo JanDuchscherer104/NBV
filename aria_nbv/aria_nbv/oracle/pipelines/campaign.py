@@ -1458,6 +1458,8 @@ class CudaRolloutCampaign:
                 raise RuntimeError("free disk floor is not satisfied")
         prior_results = self._resumable_event_results(plan)
         prior_events = self.read_events(plan=plan)
+        prior_progress = self._validate_event_lifecycle(prior_events, plan)
+        prior_state = next(iter(prior_progress["allowed_states"]))
         resuming_campaign = any(event.kind in {"campaign_started", "campaign_resumed"} for event in prior_events)
         # Exclusive ownership precedes every status/event mutation so a
         # competing start cannot clobber the active campaign's evidence.
@@ -1469,13 +1471,13 @@ class CudaRolloutCampaign:
                 plan_path=plan_path,
                 writer_config_path=self.config.writer_config_path,
             )
-            if not resuming_campaign:
+            if not resuming_campaign and prior_state not in {"preflight_passed", "smoke_passed"}:
                 self.append_event(self._event(plan, "preflight_passed"))
                 self.write_status(self.status(plan, prior_results, stage="preflight_passed"))
             # An injected worker remains subject to the same current smoke gate;
             # injection changes execution mechanics, not campaign admission.
             self.smoke_evidence(plan)
-            if not resuming_campaign:
+            if not resuming_campaign and prior_state != "smoke_passed":
                 self.append_event(self._event(plan, "smoke_passed"))
                 self.write_status(self.status(plan, prior_results, stage="smoke_passed"))
             return self._run_claimed(
@@ -2285,8 +2287,29 @@ class CudaRolloutCampaign:
         """Reject stale or divergent status when canonical progress exists."""
         events = self.read_events(plan=plan)
         if not events:
-            if status.state in {"completed", "completed_with_failures"}:
-                raise ValueError("terminal status lacks canonical event evidence")
+            expected = self.status(plan)
+            projected_fields = (
+                "current_work_unit",
+                "current_target_id",
+                "current_profile",
+                "current_stage",
+                "latest_failure_reason",
+                "last_work_unit",
+                "started_at",
+                "finished_at",
+                "bounded_error",
+                "last_timeout",
+                "active_pid",
+                "active_process_group",
+                "active_started_at",
+            )
+            if (
+                status.state != "not_started"
+                or status.counts != expected.counts
+                or status.elapsed_seconds != 0.0
+                or any(getattr(status, field) is not None for field in projected_fields)
+            ):
+                raise ValueError("campaign status lacks canonical event evidence")
             return
         progress = self._validate_event_lifecycle(events, plan)
         if status.state in {"completed", "completed_with_failures"} and not any(
