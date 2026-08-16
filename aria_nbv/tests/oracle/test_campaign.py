@@ -141,6 +141,16 @@ def _campaign(tmp_path):
     return CudaRolloutCampaign(config)
 
 
+def _append_pre_run_prefix(campaign, plan):
+    for kind in ("source_selection", "plan_ready", "preflight_passed", "smoke_passed"):
+        campaign.append_event(campaign._event(plan, kind))
+
+
+def _append_campaign_started(campaign, plan):
+    _append_pre_run_prefix(campaign, plan)
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+
+
 def test_canonical_worker_argv_carries_writer_config_path():
     config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
     campaign = config.setup_target()
@@ -386,7 +396,7 @@ def test_read_status_rejects_tampered_active_event_projection(tmp_path, field, t
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     unit = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
     campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
     started = campaign._event(plan, "unit_started", unit=unit, stage="worker", pid=4321, process_group=4321)
@@ -478,7 +488,7 @@ def test_status_preserves_last_terminal_identity_across_resume_and_completion(tm
     assert prestart.current_work_unit is None
     assert prestart.last_work_unit is None
 
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.write_status(campaign.status(plan, [{"outcome": "failed"}], current_unit=first, stage="failed"))
     resumed = campaign.status(plan, [{"outcome": "failed"}], current_unit=second, stage="worker")
     assert resumed.current_work_unit == second.work_unit_hash
@@ -509,7 +519,7 @@ def test_status_rejects_negative_counts_and_divergent_event_counts(tmp_path):
     payload["counts"]["pending"] = -1
     with pytest.raises(ValueError, match="non-negative"):
         CampaignStatus.from_jsonable(payload)
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, "unit_failed", unit=plan.work_units[0], outcome="failed"))
     payload = asdict(status)
     payload["counts"]["pending"] = 0
@@ -555,9 +565,7 @@ def _append_unit_events(campaign, plan, unit, outcome):
 def test_read_status_accepts_planning_prefix_and_blocked_resume_lifecycle(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "source_selection"))
-    campaign.append_event(campaign._event(plan, "plan_ready"))
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     _append_unit_events(campaign, plan, plan.work_units[0], "failed")
     campaign.append_event(campaign._event(plan, "campaign_blocked", outcome="blocked"))
     campaign.append_event(campaign._event(plan, "campaign_resumed"))
@@ -650,6 +658,34 @@ def test_read_status_rebuilds_exact_pre_run_state_when_projection_is_missing(tmp
 
 
 @pytest.mark.parametrize(
+    "event_kinds",
+    [
+        ("campaign_started",),
+        ("source_selection", "preflight_passed"),
+        ("source_selection", "plan_ready", "smoke_passed"),
+        ("source_selection", "plan_ready", "campaign_started"),
+        ("source_selection", "plan_ready", "preflight_passed", "campaign_started"),
+    ],
+)
+def test_read_status_rejects_incomplete_or_out_of_order_pre_run_prefix(tmp_path, event_kinds):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    for kind in event_kinds:
+        campaign.append_event(campaign._event(plan, kind))
+
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_read_status_accepts_complete_pre_run_prefix(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_campaign_started(campaign, plan)
+
+    assert campaign.read_status(plan=plan).state == "running"
+
+
+@pytest.mark.parametrize(
     "events",
     [
         ("plan_ready",),
@@ -676,7 +712,7 @@ def test_read_status_rejects_unknown_work_unit_for_every_outcome(tmp_path, outco
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     foreign = replace(plan.work_units[0], work_unit_hash="foreign")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, f"unit_{outcome}", unit=foreign, outcome=outcome))
     campaign.write_status(campaign.status(plan, stage="running"))
     with pytest.raises(ValueError, match="invalid campaign status"):
@@ -686,7 +722,7 @@ def test_read_status_rejects_unknown_work_unit_for_every_outcome(tmp_path, outco
 def test_read_status_rejects_events_after_campaign_finish(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     for unit in plan.work_units:
         _append_unit_events(campaign, plan, unit, "failed")
     campaign.append_event(campaign._event(plan, "campaign_finished"))
@@ -700,7 +736,7 @@ def test_read_status_rejects_duplicate_unit_terminal_boundary(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     unit = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     _append_unit_events(campaign, plan, unit, "failed")
     campaign.append_event(campaign._event(plan, "unit_failed", unit=unit, outcome="failed"))
     campaign.write_status(campaign.status(plan, [{"outcome": "failed"}], current_unit=unit, stage="failed"))
@@ -712,7 +748,7 @@ def test_read_status_rejects_duplicate_unit_terminal_boundary(tmp_path):
 def test_write_status_rejects_direct_terminal_state_without_finish_event(tmp_path, state):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     status = replace(campaign.status(plan), state=state)
 
     with pytest.raises(ValueError, match=rf"{state}.*canonical event evidence"):
@@ -724,7 +760,7 @@ def test_write_status_rejects_direct_terminal_state_without_finish_event(tmp_pat
 def test_read_status_rejects_nonblocked_state_after_campaign_blocked(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, "campaign_blocked", outcome="blocked"))
     with pytest.raises(ValueError, match="blocked.*preflight_passed"):
         campaign.write_status(campaign.status(plan, stage="preflight_passed"))
@@ -747,7 +783,7 @@ def test_write_status_rejects_direct_event_backed_state_without_events(tmp_path,
 def test_terminal_success_and_skip_require_validated_shard_leaves(tmp_path, monkeypatch, outcome):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     for unit in plan.work_units:
         _append_unit_events(campaign, plan, unit, outcome)
     campaign.append_event(campaign._event(plan, "campaign_finished"))
@@ -800,7 +836,7 @@ def test_child_start_event_and_status_share_active_timestamp(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     unit = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
     campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
 
@@ -914,6 +950,7 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkey
     campaign = _campaign(tmp_path)
     monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda _plan, _unit: {"validation": "passed"})
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
     claim = {"claim_hash": "test"}
     calls = []
 
@@ -928,7 +965,7 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkey
     assert results[0]["outcome"] == "timed_out"
     assert results[1]["outcome"] == "skipped"
     kinds = [event.kind for event in campaign.read_events()]
-    assert kinds[:6] == [
+    assert kinds[4:10] == [
         "campaign_started",
         "target_profile",
         "root_preflight",
@@ -943,6 +980,7 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkey
 def test_run_claimed_never_marks_unvalidated_skip_complete(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
 
     results = campaign._run_claimed(
         plan,
@@ -958,6 +996,7 @@ def test_run_claimed_never_marks_unvalidated_skip_complete(tmp_path):
 def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
     monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda _plan, _unit: {"validation": "passed"})
 
     first = campaign._run_claimed(
@@ -995,7 +1034,7 @@ def test_run_claimed_resume_retries_every_nonvalidated_terminal_outcome(tmp_path
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     first_unit = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     for unit in plan.work_units:
         _append_unit_events(campaign, plan, unit, retry_outcome)
     campaign.append_event(campaign._event(plan, "campaign_finished"))
@@ -1015,7 +1054,7 @@ def test_run_claimed_resume_retries_every_nonvalidated_terminal_outcome(tmp_path
 def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     for unit in plan.work_units:
         _append_unit_events(campaign, plan, unit, "failed")
     campaign.append_event(campaign._event(plan, "campaign_finished"))
@@ -1050,7 +1089,7 @@ def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker
 def test_run_claimed_rejects_restart_when_every_terminal_unit_is_validated(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     for unit in plan.work_units:
         _append_unit_events(campaign, plan, unit, "succeeded")
     campaign.append_event(campaign._event(plan, "campaign_finished"))
@@ -1068,7 +1107,7 @@ def test_run_claimed_reconciles_interrupted_active_attempt_before_retry(tmp_path
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     interrupted = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, "target_profile", unit=interrupted, stage=interrupted.profile))
     retried = []
 
@@ -1090,9 +1129,7 @@ def test_public_run_rechecks_admission_before_resuming_interrupted_attempt(tmp_p
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     interrupted = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "preflight_passed"))
-    campaign.append_event(campaign._event(plan, "smoke_passed"))
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     for _ in range(prior_resumes):
         campaign.append_event(campaign._event(plan, "campaign_resumed"))
     campaign.append_event(campaign._event(plan, "target_profile", unit=interrupted, stage=interrupted.profile))
@@ -1116,6 +1153,7 @@ def test_public_run_rechecks_admission_before_resuming_interrupted_attempt(tmp_p
 def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
     calls = []
 
     def worker(unit):
@@ -1222,7 +1260,7 @@ def test_read_status_rebuilds_running_stage_when_projection_is_missing(tmp_path)
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     unit = plan.work_units[0]
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
     campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
     started = campaign._event(plan, "unit_started", unit=unit, stage="worker", pid=4321, process_group=4321)
@@ -1377,7 +1415,7 @@ def test_progress_summary_distinguishes_planned_all_pending_and_partial(tmp_path
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     planned = campaign.progress_summary(plan)
     assert planned["counts"]["pending"] == len(plan.work_units)
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     unit = plan.work_units[0]
     _append_unit_events(campaign, plan, unit, "insufficient_support")
     campaign.write_status(
@@ -1733,7 +1771,7 @@ def test_direct_run_forwards_plan_and_writer_to_source_preflight(tmp_path, monke
 def test_competing_run_does_not_mutate_active_owner_status_or_events(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_campaign_started(campaign, plan)
     owner_status = campaign.status(plan, stage="running")
     status_path = campaign.write_status(owner_status)
     before = status_path.read_bytes()

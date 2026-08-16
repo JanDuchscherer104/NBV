@@ -556,8 +556,8 @@ class CudaRolloutCampaign:
 
     _STATUS_TRANSITIONS: ClassVar[dict[str, frozenset[str]]] = {
         "not_started": frozenset({"not_started", "planned"}),
-        "planned": frozenset({"planned", "preflight_passed", "running", "blocked", "conflicted"}),
-        "preflight_passed": frozenset({"preflight_passed", "smoke_passed", "running", "blocked", "conflicted"}),
+        "planned": frozenset({"planned", "preflight_passed", "blocked", "conflicted"}),
+        "preflight_passed": frozenset({"preflight_passed", "smoke_passed", "blocked", "conflicted"}),
         "smoke_passed": frozenset({"smoke_passed", "running", "blocked", "conflicted"}),
         "running": frozenset({"running", "blocked", "conflicted", "completed", "completed_with_failures"}),
         "blocked": frozenset({"blocked", "running"}),
@@ -2439,8 +2439,9 @@ class CudaRolloutCampaign:
                 if (
                     run_state != "prefix"
                     or event.work_unit_hash is not None
-                    or saw_source_selection != saw_plan_ready
-                    or pre_run_state not in {"not_started", "planned"}
+                    or not saw_source_selection
+                    or not saw_plan_ready
+                    or pre_run_state != "planned"
                 ):
                     raise ValueError("invalid preflight_passed transition")
                 pre_run_state = "preflight_passed"
@@ -2455,7 +2456,7 @@ class CudaRolloutCampaign:
             if event.kind == "campaign_started":
                 if run_state not in {"prefix", "blocked"}:
                     raise ValueError("duplicate campaign_started event")
-                if run_state == "prefix" and saw_source_selection != saw_plan_ready:
+                if run_state == "prefix" and pre_run_state != "smoke_passed":
                     raise ValueError("incomplete planning event prefix")
                 run_state = "running"
                 current_work_unit = None
