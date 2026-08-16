@@ -73,6 +73,11 @@ RECEIPT_SOURCE_COUNTS = {
     ".agents/memory/state/GOTCHAS.md": 3,
     ".agents/memory/state/OPEN_QUESTIONS.md": 6,
 }
+AGENTS_DB_PATHS = (
+    REPO_ROOT / ".agents" / "issues.toml",
+    REPO_ROOT / ".agents" / "todos.toml",
+    REPO_ROOT / ".agents" / "refactors.toml",
+)
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -279,23 +284,36 @@ def check_history_records() -> list[str]:
     return errors
 
 
+def _markdown_table_rows(text: str, header: str, columns: int) -> list[list[str]]:
+    """Return one named Markdown table without consuming later receipt tables."""
+    lines = text.splitlines()
+    try:
+        start = lines.index(header)
+    except ValueError:
+        return []
+
+    rows: list[list[str]] = []
+    for line in lines[start + 2 :]:
+        if not line.startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == columns:
+            rows.append(cells)
+    return rows
+
+
 def check_migration_receipt() -> list[str]:
     """Validate the compact 47-row immutable ownership migration receipt."""
     if not MIGRATION_RECEIPT.exists():
         return [
             f"missing migration receipt: {MIGRATION_RECEIPT.relative_to(REPO_ROOT)}"
         ]
-    rows = []
-    in_table = False
-    for line in MIGRATION_RECEIPT.read_text(encoding="utf-8").splitlines():
-        if line.startswith("| Row ID |"):
-            in_table = True
-            continue
-        if not in_table or not line.startswith("|") or line.startswith("|---"):
-            continue
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
-        if len(cells) == 6:
-            rows.append(cells)
+    receipt_text = MIGRATION_RECEIPT.read_text(encoding="utf-8")
+    rows = _markdown_table_rows(
+        receipt_text,
+        "| Row ID | Immutable source (commit/blob/heading or span) | Subject | Disposition | Exact destination path + anchor/symbol | Verification |",
+        6,
+    )
     errors: list[str] = []
     if len(rows) != 47:
         errors.append(f"migration receipt must contain 47 rows, found {len(rows)}")
@@ -347,6 +365,40 @@ def check_migration_receipt() -> list[str]:
         errors.append(
             f"migration receipt source counts mismatch: {dict(source_counts)}"
         )
+
+    deferred_rows = {row[0]: row for row in rows if row[3] == "deferred-action"}
+    qualifications = _markdown_table_rows(
+        receipt_text,
+        "| Receipt row | Materialized canonical owner | Backlog ID | Action owner | Acceptance | Gate |",
+        6,
+    )
+    qualification_by_id = {row[0]: row for row in qualifications}
+    if set(qualification_by_id) != set(deferred_rows):
+        errors.append(
+            "deferred-action qualification rows must exactly match receipt rows: "
+            f"expected {sorted(deferred_rows)}, found {sorted(qualification_by_id)}"
+        )
+
+    agents_db_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in AGENTS_DB_PATHS
+    )
+    for row_id, row in qualification_by_id.items():
+        if any(not cell or cell in {"-", "—"} for cell in row[1:]):
+            errors.append(f"{row_id}: deferred-action qualification is incomplete")
+            continue
+        canonical_owner = row[1].strip("`")
+        expected_owner = deferred_rows.get(row_id, ["", "", "", "", ""])[4].strip(
+            "`"
+        )
+        if canonical_owner != expected_owner:
+            errors.append(
+                f"{row_id}: qualified canonical owner does not match receipt destination"
+            )
+        backlog_id = row[2].strip("`")
+        if not re.fullmatch(r"(?:issue|todo|refactor)-\d{3}", backlog_id):
+            errors.append(f"{row_id}: invalid deferred backlog ID {backlog_id!r}")
+        elif f'id = "{backlog_id}"' not in agents_db_text:
+            errors.append(f"{row_id}: deferred backlog ID does not exist: {backlog_id}")
     return errors
 
 

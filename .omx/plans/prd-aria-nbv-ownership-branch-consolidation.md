@@ -63,11 +63,13 @@ then re-evaluates salvageable branch content against the consolidated baseline.
 1. Keep the current Typst thesis as the only owner of thesis-facing theory. The
    active root and include chain are visible at
    `docs/typst/thesis/main.typ:72-82`.
-2. Extract the four current RQs from
-   `docs/typst/thesis/sections/01-introduction.typ:15-25` into
-   `docs/typst/thesis/sections/01-research-questions.typ`, then include that file
-   from the introduction at the same narrative position. Do not import obsolete
-   QMD RQ5/RQ6 material as active questions.
+2. Maintain one canonical six-tier RQ statement in
+   `docs/typst/thesis/sections/01-research-questions.typ`, included from the
+   introduction at the same narrative position. RQ1--RQ4 are the evaluated
+   core, RQ5 is a conditional online bridge, and RQ6 is a lower-priority
+   continuous/simulator escalation. The reviewed Typst formulations supersede
+   the earlier four-question extraction and must not be replaced by verbatim
+   QMD roadmap text.
 3. Absorb and then delete these three QMDs atomically after destination proof:
    - `docs/contents/thesis/questions.qmd` ->
      `docs/typst/thesis/sections/01-research-questions.typ`;
@@ -364,23 +366,23 @@ or remote branch, record `merge`, `salvage`, `superseded`, `close`, `defer`, or
 
 ### Options considered
 
-#### A. Dependency spine plus owner-disjoint leaves — selected
+#### A. Dependency spine plus owner-disjoint leaves — originally selected, superseded
 
-Pin #50, freeze the owner map and tests, establish shared Typst marker contracts,
-then execute isolated leaf lanes and integrate them serially. This minimizes
-shared-file races and makes each deletion depend on destination proof.
+This was the original execution topology: pin #50, freeze the owner map and
+tests, establish shared Typst marker contracts, then execute isolated leaf lanes
+and integrate them serially. The 2026-08-16 human review superseded the
+multi-PR boundary while retaining focused commits and the same destination
+proofs as rollback and review units.
 
 **Invalidation condition:** if the final #50 handoff cannot provide an immutable
 baseline and released-path receipt, execution stops before creating worktrees.
 
-#### B. One atomic consolidation PR — rejected
+#### B. One intentional consolidation PR with focused commits — selected by human review
 
-This simplifies dependency ordering but combines theory migration, API cleanup,
-navigation, and branch reconciliation into an unreviewable destructive diff.
-
-**Would reconsider only if:** all parallel tooling is unavailable and a single
-clean-room owner can still produce independently reviewable commits with the same
-gates.
+Human review explicitly selected PR #59 as the single ownership-consolidation
+PR. Focused commits retain independent rollback boundaries, and the migration,
+owner, and verification gates remain mandatory. This is a scoped exception to
+the original split-PR preference, not authorization to add unrelated work.
 
 #### C. Independent parallel PRs without a shared spine — rejected
 
@@ -631,7 +633,7 @@ Create each branch/worktree from the leader foundation SHA:
 
 | Lane | Branch | Suggested worktree | Owned surface | Deliverable |
 |---|---|---|---|---|
-| RQ | `codex/consolidation-rq` | `/home/jd/.codex/worktrees/aria-consolidation-rq` | `sections/01-research-questions.typ` and the reserved RQ portion of `01-introduction.typ` | Canonical four-RQ extraction plus source-block disposition evidence. |
+| RQ | `codex/consolidation-rq` | `/home/jd/.codex/worktrees/aria-consolidation-rq` | `sections/01-research-questions.typ` and the reserved RQ portion of `01-introduction.typ` | Canonical six-tier RQ owner plus source-block disposition evidence. |
 | Roadmap | `codex/consolidation-roadmap` | `/home/jd/.codex/worktrees/aria-consolidation-roadmap` | `development/roadmap.typ` | Development-only schedule/gate/status view with promotion pointers; no duplicated theory. |
 | M1 | `codex/consolidation-m1` | `/home/jd/.codex/worktrees/aria-consolidation-m1` | `development/m1-contract-report.typ` | Development-only evidence/status view linking code/tests/artifacts; no copied implementation contracts. |
 | Typst theory | `codex/consolidation-typst-theory` | `/home/jd/.codex/worktrees/aria-consolidation-typst-theory` | Leader-assigned, disjoint thesis section files only | Promote selected unique scientific content and citations into canonical thesis sections. |

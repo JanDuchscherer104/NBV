@@ -749,6 +749,23 @@ acceptance = ["Broken repo paths and bibliography keys fail validation with the 
 verification = ["make agents-db AGENTS_ARGS='validate'", "python3 -m unittest discover -s scripts/tests -p 'test_agents_db*.py'"]
 
 [[todo]]
+id = "todo-095"
+title = "Evaluate the conditional online discrete Q_H bridge"
+description = "Evaluate online interaction over the existing finite-candidate Q_H contract only after the offline headroom, replay-support, and M1 evidence gates close."
+priority = "low"
+status = "todo"
+labels = ["q-learning", "online", "finite-candidate", "thesis", "rq5"]
+issue_ids = ["issue-028", "issue-007"]
+loc_min = 120
+loc_expected = 360
+loc_max = 900
+context = ["RQ5 is a conditional experiment, not part of the evaluated RQ1--RQ4 core.", "The online bridge must reuse the actor-visible state, target protocol, finite candidate table, hard action mask, horizon, and oracle endpoint evaluation established by the offline Q_H path.", "No online result is admissible until offline Q_H shows measurable headroom and the replay-support and M1 evidence gates are stable."]
+references = ["repo:docs/typst/thesis/sections/01-research-questions.typ#rq5", "repo:docs/typst/thesis/development/roadmap.typ#milestones", "repo:.agents/issues.toml#issue-028", "repo:.agents/todos.toml#todo-052", "repo:.agents/todos.toml#todo-007"]
+implementation_notes = ["Reuse the existing finite-candidate environment and masks; do not expand to continuous poses or change the target protocol.", "Compare against the frozen offline Q_H policy under the same acquisition budget and independent oracle endpoint evaluation.", "Keep simulator or continuous-control work in todo-006 and todo-038 rather than absorbing it into this discrete bridge."]
+acceptance = ["Offline Q_H headroom, replay support, and M1 evidence gates are recorded as passing before online training starts.", "The online policy uses the unchanged finite-candidate action, target, mask, horizon, and evaluation contracts.", "A reproducible comparison reports endpoint target gain, calibration, acquisition budget, support, and failures against the offline Q_H baseline without implying a continuous-control result."]
+verification = ["make agents-db AGENTS_ARGS='validate'", "cd aria_nbv && uv run pytest tests/rl tests/lightning tests/rollouts", "rg -n \"RQ5|online discrete|finite-candidate\" docs/typst/thesis .agents"]
+
+[[todo]]
 id = "todo-044"
 title = "Define a source-backed memory consolidation proposal workflow"
 description = "Provide a bounded proposal-only route from debrief and backlog evidence to reviewed exact-owner updates without reviving LitKG."
