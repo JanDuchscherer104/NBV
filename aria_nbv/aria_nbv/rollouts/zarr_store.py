@@ -1925,9 +1925,7 @@ def _write_targets(
         ),
     )
     default_target_reason = (
-        0
-        if target_protocol_version == TargetInputProtocol.V1_OBSERVED
-        else 1 << INVALID_REASON_CODES["VALID"]
+        0 if target_protocol_version == TargetInputProtocol.V1_OBSERVED else 1 << INVALID_REASON_CODES["VALID"]
     )
     target_reason = np.asarray(
         [
@@ -3305,10 +3303,7 @@ def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
             gt_match_iou=lineage.target.gt_match_iou,
             target_valid=(
                 (target_bitset is None and protocol == TargetInputProtocol.V0_GT_INPUT)
-                or (
-                    target_bitset is not None
-                    and int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])
-                )
+                or (target_bitset is not None and int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"]))
             ),
         )
     )
@@ -3346,8 +3341,7 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
                     matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
                     gt_match_iou=float(iou),
                     target_valid=bool(
-                        target_valid[row]
-                        and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
+                        target_valid[row] and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
                     ),
                 )
             )
