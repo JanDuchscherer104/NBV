@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -43,6 +44,24 @@ def _compile(
         )
 
 
+def _query_metadata(
+    fixture: str,
+    selector: str,
+    *,
+    mode: str | None = None,
+) -> list[str]:
+    command = [os.environ.get("TYPST", "typst"), "query", "--root", "docs"]
+    if mode is not None:
+        command.extend(["--input", f"aria-thesis-mode={mode}"])
+    command.extend([str(TEST_ROOT / f"{fixture}.typ"), selector, "--field", "value"])
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    if result.returncode != 0:
+        output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        raise AssertionError(f"metadata query failed for {fixture}:\n{output}")
+    values = json.loads(result.stdout)
+    return values if isinstance(values, list) else [values]
+
+
 def main() -> None:
     positive = (("marker-development", None), ("marker-submission", "submission"))
     invalid = (
@@ -66,6 +85,29 @@ def main() -> None:
             mode="submission",
             expect_success=False,
         )
+        assert _query_metadata("marker-development", "<marker-development>") == [
+            "development-present"
+        ]
+        for disposition in ("candidate", "blocked", "deferred", "rejected"):
+            selector = f"<marker-promotion-{disposition}>"
+            assert _query_metadata("marker-development", selector) == [
+                f"promotion-{disposition}-present"
+            ]
+        assert (
+            _query_metadata(
+                "marker-submission", "<marker-development>", mode="submission"
+            )
+            == []
+        )
+        for disposition in ("candidate", "blocked", "deferred", "rejected"):
+            assert (
+                _query_metadata(
+                    "marker-submission",
+                    f"<marker-promotion-{disposition}>",
+                    mode="submission",
+                )
+                == []
+            )
     print("thesis marker contract passed")
 
 
