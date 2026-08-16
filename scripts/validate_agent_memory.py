@@ -10,6 +10,7 @@ This checker intentionally stays narrow:
 
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 import sys
@@ -327,18 +328,60 @@ def check_migration_receipt() -> list[str]:
             errors.append(
                 f"{row[0]}: destination verification is missing or unresolved"
             )
-        destination = row[4].split("#", 1)[0].strip("`")
+        destination_ref = row[4].strip("`")
+        destination = destination_ref.split("#", 1)[0]
         if row[3] == "removed" and destination.startswith(
             "Git history/debrief provenance"
         ):
             continue
-        if not (REPO_ROOT / destination).exists() or "#" not in row[4]:
+        if "#" not in destination_ref:
+            errors.append(f"{row[0]}: destination path/anchor is missing: {row[4]}")
+            continue
+        anchor = destination_ref.split("#", 1)[1]
+        destination_path = REPO_ROOT / destination
+        if not destination_path.exists() or not destination_anchor_exists(
+            destination_path, anchor
+        ):
             errors.append(f"{row[0]}: destination path/anchor is missing: {row[4]}")
     if source_counts != Counter(RECEIPT_SOURCE_COUNTS):
         errors.append(
             f"migration receipt source counts mismatch: {dict(source_counts)}"
         )
     return errors
+
+
+def _heading_slug(value: str) -> str:
+    """Return the stable heading slug used by receipt Markdown pointers."""
+    value = re.sub(r"[`*_]", "", value).strip().lower()
+    value = re.sub(r"[^\w\s-]", "", value)
+    return re.sub(r"[-\s]+", "-", value).strip("-")
+
+
+def destination_anchor_exists(path: Path, anchor: str) -> bool:
+    """Resolve the narrow anchor forms used by the migration receipt."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".py":
+        tree = ast.parse(text, filename=path.as_posix())
+        return any(
+            isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == anchor
+            for node in ast.walk(tree)
+        )
+    if path.suffix in {".md", ".qmd"}:
+        expected = _heading_slug(anchor)
+        headings = re.findall(r"^#{1,6}\s+(.+?)\s*#*\s*$", text, flags=re.MULTILINE)
+        return expected in {_heading_slug(heading) for heading in headings}
+    if path.suffix in {".yml", ".yaml"} and anchor.startswith("workflow:name="):
+        expected = re.escape(anchor.removeprefix("workflow:name="))
+        return (
+            re.search(
+                rf"^\s*name:\s*['\"]?{expected}['\"]?\s*$", text, flags=re.MULTILINE
+            )
+            is not None
+        )
+    if path.suffix == ".typ":
+        return f"<{anchor}>" in text or anchor in text
+    return anchor in text
 
 
 def check_scaffold_alignment() -> list[str]:

@@ -185,3 +185,29 @@ def test_active_omx_and_maintained_slides_scope_retired_references() -> None:
             if alias in text:
                 violations.append(f"{relative}: {alias}")
     assert not violations
+
+
+def test_glossary_rq_links_match_the_six_tier_semantics() -> None:
+    """Keep term links aligned with objective, representation, and support tiers."""
+    text = (ROOT / "docs/typst/shared/glossary.typ").read_text(encoding="utf-8")
+    expected = {
+        "target-conditioned-scorer": {"rq2", "rq3"},
+        "observed-target-selection": {"rq3"},
+        "predicted-target-q": {"rq2", "rq3", "rq5"},
+        "ground-truth-target-evaluation": {"rq1", "rq3"},
+        "finite-candidate-action-set": {"rq2", "rq4"},
+        "finite-horizon-return": {"rq2"},
+        "finite-horizon-q-function": {"rq2"},
+        "oriented-bounding-box": {"rq3"},
+        "candidate-view": {"rq4"},
+    }
+    for term, expected_rqs in expected.items():
+        match = re.search(
+            rf'anchor: "term-{re.escape(term)}".*?internal_links: \((.*?)\),',
+            text,
+            flags=re.DOTALL,
+        )
+        assert match is not None, term
+        observed = re.findall(r"research-questions\.typ#(rq\d+)", match.group(1))
+        assert len(observed) == len(set(observed)), f"{term}: duplicate RQ links"
+        assert set(observed) == expected_rqs, term

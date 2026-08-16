@@ -9,6 +9,7 @@ from validate_agent_memory import (  # noqa: E402
     RETIRED_SOURCE_PATHS,
     allows_retired_canonical_update,
     check_tracked_omx_records,
+    destination_anchor_exists,
 )
 
 
@@ -37,7 +38,12 @@ def test_new_or_nonlegacy_records_cannot_target_retired_paths() -> None:
 
 def test_generated_omx_outputs_cannot_be_tracked() -> None:
     assert check_tracked_omx_records([".omx/plans/current.md"]) == []
-    assert check_tracked_omx_records([".omx/specs/inventory.json", ".omx/specs/report.html"]) == []
+    assert (
+        check_tracked_omx_records(
+            [".omx/specs/inventory.json", ".omx/specs/report.html"]
+        )
+        == []
+    )
     errors = check_tracked_omx_records(
         [
             ".omx/specs/ownership-branch-consolidation-inventory.json",
@@ -46,3 +52,25 @@ def test_generated_omx_outputs_cannot_be_tracked() -> None:
         ]
     )
     assert len(errors) == 3
+
+
+def test_receipt_destination_anchors_are_resolved_by_owner_format(
+    tmp_path: Path,
+) -> None:
+    markdown = tmp_path / "owner.md"
+    markdown.write_text("## Commands and owners\n", encoding="utf-8")
+    typst = tmp_path / "owner.typ"
+    typst.write_text(
+        "== Research <rq2>\n#eqs.rl.finite_horizon_return\n", encoding="utf-8"
+    )
+    python = tmp_path / "owner.py"
+    python.write_text("class OwnerSymbol:\n    pass\n", encoding="utf-8")
+    workflow = tmp_path / "owner.yml"
+    workflow.write_text("name: Root Verification\n", encoding="utf-8")
+
+    assert destination_anchor_exists(markdown, "Commands-and-owners")
+    assert destination_anchor_exists(typst, "rq2")
+    assert destination_anchor_exists(typst, "eqs.rl.finite_horizon_return")
+    assert destination_anchor_exists(python, "OwnerSymbol")
+    assert destination_anchor_exists(workflow, "workflow:name=Root Verification")
+    assert not destination_anchor_exists(markdown, "missing-heading")
