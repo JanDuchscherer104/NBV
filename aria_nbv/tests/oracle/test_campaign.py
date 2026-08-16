@@ -1701,7 +1701,7 @@ def test_events_flush_status_atomic_and_claim_release(tmp_path):
         [_row(f"s{i}", f"k{i}", f"t{i}") for i in range(2)],
         source_manifest_hash="source",
     )
-    campaign.append_event(campaign._event(plan, "planned"))
+    campaign.append_event(campaign._event(plan, "source_selection"))
     status = campaign.status(plan)
     assert campaign.write_status(status).exists()
     claim = campaign.acquire_claim(plan)
