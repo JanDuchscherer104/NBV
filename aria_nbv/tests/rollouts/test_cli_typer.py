@@ -13,7 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from aria_nbv.oracle.pipelines import cli as rollout_cli
-from aria_nbv.oracle.pipelines.campaign import CampaignOutcome
+from aria_nbv.oracle.pipelines.campaign import CampaignOutcome, CudaRolloutCampaignConfig
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 runner = CliRunner()
@@ -375,3 +375,41 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
     status_payload = json.loads(status_result.stdout)
     assert status_payload["state"] == "planned"
     assert status_payload["current_stage"] == "planned"
+
+
+def test_canonical_campaign_root_and_smoke_plan_resolution(tmp_path, monkeypatch) -> None:
+    config = CudaRolloutCampaignConfig.from_toml(
+        Path(__file__).resolve().parents[3] / ".configs/build_rollouts_v1_cuda_campaign.toml"
+    )
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1")
+
+    output_root = tmp_path / "cuda-rollouts-v1"
+    output_root.mkdir()
+    plan_path = output_root / "plan.json"
+    plan_path.write_text("{}\n", encoding="utf-8")
+    seen = {}
+
+    class _Campaign:
+        config = SimpleNamespace(output_root=output_root, writer_config_path=None)
+
+        def preflight(self, **kwargs):
+            seen["preflight_plan_path"] = kwargs["plan_path"]
+
+        def load_plan(self, path):
+            seen["load_plan_path"] = path
+            return SimpleNamespace()
+
+        def smoke(self, plan, **kwargs):
+            seen["smoke_plan_path"] = kwargs["plan_path"]
+
+    monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
+    config_path = tmp_path / "cfg.toml"
+    config_path.write_text("campaign_id = 'test'\n", encoding="utf-8")
+    result = runner.invoke(rollout_cli.campaign_app, ["smoke", "--config-path", str(config_path)])
+
+    assert result.exit_code == 0
+    assert seen == {
+        "preflight_plan_path": plan_path,
+        "load_plan_path": plan_path,
+        "smoke_plan_path": plan_path,
+    }

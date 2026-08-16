@@ -11,6 +11,7 @@ paired_panel_scene_count = 20
 min_valid_root_candidates = 10
 stage_timeout_seconds = 120
 work_unit_timeout_seconds = 3600
+output_root = ".campaign/cuda-rollouts-v1"
 
 [[profiles]]
 name = "realistic_core_60"
