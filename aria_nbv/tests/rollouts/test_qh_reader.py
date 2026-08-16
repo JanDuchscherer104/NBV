@@ -45,6 +45,7 @@ def _write_v1_store(path: Path) -> Path:
     target = records[0].lineage.target
     target.target_protocol_version = "v1_observed"
     target.target_source = "detected_obbs"
+    target.target_invalid_reason_bitset = 1
     target.gt_match_status = "admitted"
     target.gt_match_iou = 0.7
     return write_rollout_zarr_store(
@@ -90,6 +91,15 @@ def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -
     root["dictionaries/target_source"].resize((payload.size,))
     root["dictionaries/target_source"][:] = payload
     with pytest.raises(ValueError, match="actor-visible|canonical validation|target-source"):
+        QhRolloutReader((store,))
+
+
+def test_reader_rejects_v1_store_with_out_of_range_target_source_id(tmp_path: Path) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    root = zarr.open_group(store, mode="a")
+    root["targets/target_source_id"][0] = 99
+
+    with pytest.raises(ValueError, match="target_source_id|canonical validation"):
         QhRolloutReader((store,))
 
 

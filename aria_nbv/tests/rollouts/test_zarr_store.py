@@ -732,6 +732,49 @@ def test_rollout_zarr_blocks_q_training_for_target_invalid_records(tmp_path) -> 
     assert not q_h["q_train_mask"].any()
 
 
+def test_rollout_zarr_blocks_q_training_when_v1_target_reason_is_missing(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=26)[:1]
+    target = records[0].lineage.target
+    target.target_protocol_version = "v1_observed"
+    target.target_source = "detected_obbs"
+    target.target_invalid_reason_bitset = None
+    target.gt_match_status = "admitted"
+    target.gt_match_iou = 0.7
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        records,
+        target_protocol_version="v1_observed",
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    assert reader.array("targets/target_invalid_reason_bitset").tolist() == [0]
+    assert reader.array("targets/target_valid_mask").tolist() == [False]
+    assert reader.array("targets/gt_label_valid_mask").tolist() == [False]
+    assert not reader.array("candidates/q_train_mask").any()
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_preserves_v0_missing_target_reason_admission(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=27)[:1]
+    records[0].lineage.target.target_invalid_reason_bitset = None
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        records,
+        target_protocol_version="v0_gt_input",
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    assert reader.array("targets/target_invalid_reason_bitset").tolist() == [1]
+    assert reader.array("targets/target_valid_mask").tolist() == [True]
+    assert reader.array("targets/gt_label_valid_mask").tolist() == [True]
+    assert reader.array("candidates/q_train_mask").any()
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
 def test_rollout_zarr_rejects_missing_root_lineage(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=23)[:1]
 

@@ -243,18 +243,38 @@ def _validate_reader_admission(root: zarr.Group) -> None:
         # The fixed store schema persists the self-consistent actor-visible
         # source, while writer/config admission owns the stronger descriptor
         # provenance check before this artifact can exist.
-    _validate_target_labels(root, protocol, target_source[0])
+    _validate_target_labels(root, protocol, target_source)
     if root.attrs.get("return_semantics") != DEFAULT_RETURN_SEMANTICS:
         raise ValueError(f"Q_H rollout reader requires {DEFAULT_RETURN_SEMANTICS!r} return semantics.")
 
 
-def _validate_target_labels(root: zarr.Group, protocol: TargetInputProtocol, target_source: str) -> None:
+def _validate_target_labels(
+    root: zarr.Group,
+    protocol: TargetInputProtocol,
+    target_sources: tuple[str, ...],
+) -> None:
     """Reject stores whose persisted target mask disagrees with typed evidence."""
 
     target = root["targets"]
     target_ids = _decode_dictionary(root, "target")
     match_statuses = _decode_dictionary(root, "target_match_status")
+    source_ids = np.asarray(target["target_source_id"], dtype=np.int64).reshape(-1)
+    target_rows = np.asarray(target["target_row_id"]).reshape(-1)
+    target_valid = np.asarray(target["target_valid_mask"], dtype=np.bool_).reshape(-1)
+    target_reason = np.asarray(target["target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
+    if source_ids.shape != target_rows.shape:
+        raise ValueError("targets/target_source_id must have one value per target row.")
     for row, encoded_id in enumerate(np.asarray(target["matched_gt_target_id"]).reshape(-1)):
+        source_id = int(source_ids[row])
+        if source_id < 0 or source_id >= len(target_sources):
+            raise ValueError(f"targets/target_source_id row {row} is outside the target-source dictionary.")
+        target_source = target_sources[source_id]
+        if protocol is TargetInputProtocol.V0_GT_INPUT and target_source != ORACLE_GT_TARGET_SOURCE:
+            raise ValueError(f"targets/target_source_id row {row} is not the canonical Oracle GT source.")
+        if protocol is TargetInputProtocol.V1_OBSERVED and target_source not in {
+            source.value for source in ActorVisibleTargetSource
+        }:
+            raise ValueError(f"targets/target_source_id row {row} is not an actor-visible target source.")
         match_id = ""
         if 0 <= int(encoded_id) < len(target_ids):
             match_id = target_ids[int(encoded_id)]
@@ -268,7 +288,7 @@ def _validate_target_labels(root: zarr.Group, protocol: TargetInputProtocol, tar
                 matched_gt_target_row_id=int(np.asarray(target["matched_gt_target_row_id"]).reshape(-1)[row]),
                 matched_gt_target_id=match_id,
                 gt_match_iou=float(np.asarray(target["gt_match_iou"]).reshape(-1)[row]),
-                target_valid=bool(np.asarray(target["target_valid_mask"]).reshape(-1)[row]),
+                target_valid=bool(target_valid[row] and target_reason[row] == 1),
             )
         )
         actual = bool(np.asarray(target["gt_label_valid_mask"]).reshape(-1)[row])

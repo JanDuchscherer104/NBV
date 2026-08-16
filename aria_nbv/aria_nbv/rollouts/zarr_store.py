@@ -1132,6 +1132,19 @@ class _RolloutZarrValidator:
             self.errors.append("Rollout target_row_id contains ids not present in targets/target_row_id.")
         if np.unique(target_row_id).shape[0] != target_row_id.shape[0]:
             self.errors.append("targets/target_row_id must be unique within one rollout shard.")
+        target_source_ids = np.asarray(self.root["targets/target_source_id"], dtype=np.int64).reshape(-1)
+        target_sources = _read_string_array(self.root, "dictionaries/target_source")
+        if target_source_ids.shape != target_row_id.shape:
+            self.errors.append("targets/target_source_id must have one value per target row.")
+        elif np.any((target_source_ids < 0) | (target_source_ids >= len(target_sources))):
+            self.errors.append("targets/target_source_id contains an out-of-range dictionary id.")
+        target_reason = np.asarray(self.root["targets/target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
+        target_valid = np.asarray(self.root["targets/target_valid_mask"], dtype=np.bool_).reshape(-1)
+        expected_target_valid = target_reason == np.uint32(1 << INVALID_REASON_CODES["VALID"])
+        if target_valid.shape != target_row_id.shape or target_reason.shape != target_row_id.shape:
+            self.errors.append("Target validity arrays must have one value per target row.")
+        elif not np.array_equal(target_valid, expected_target_valid):
+            self.errors.append("targets/target_valid_mask does not match target_invalid_reason_bitset.")
         if "root_pose_world" not in self.root["rollouts"]:
             self.errors.append("Missing required rollout root_pose_world field.")
         else:
@@ -1911,11 +1924,16 @@ def _write_targets(
             dtype=np.float32,
         ),
     )
+    default_target_reason = (
+        0
+        if target_protocol_version == TargetInputProtocol.V1_OBSERVED
+        else 1 << INVALID_REASON_CODES["VALID"]
+    )
     target_reason = np.asarray(
         [
             _int_or_default(
                 target_rows[target_row_id].get("target_invalid_reason_bitset"),
-                default=1 << INVALID_REASON_CODES["VALID"],
+                default=default_target_reason,
             )
             for target_row_id in target_ids
         ],
@@ -2024,7 +2042,7 @@ def _write_targets(
                         target_valid=(
                             _int_or_default(
                                 target_rows[target_row_id].get("target_invalid_reason_bitset"),
-                                default=1 << INVALID_REASON_CODES["VALID"],
+                                default=default_target_reason,
                             )
                             == 1 << INVALID_REASON_CODES["VALID"]
                         ),
@@ -3275,16 +3293,23 @@ def _valid_vector_value(
 
 
 def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
+    protocol = lineage.target.target_protocol_version or TargetInputProtocol.V0_GT_INPUT
     target_bitset = lineage.target.target_invalid_reason_bitset
     return target_label_is_trainable(
         TargetLabelEvidence(
-            protocol=lineage.target.target_protocol_version or TargetInputProtocol.V0_GT_INPUT,
+            protocol=protocol,
             target_source=lineage.target.target_source,
             gt_match_status=lineage.target.gt_match_status,
             matched_gt_target_row_id=lineage.target.matched_gt_target_row_id,
             matched_gt_target_id=lineage.target.matched_gt_target_id,
             gt_match_iou=lineage.target.gt_match_iou,
-            target_valid=(target_bitset is None or int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])),
+            target_valid=(
+                (target_bitset is None and protocol == TargetInputProtocol.V0_GT_INPUT)
+                or (
+                    target_bitset is not None
+                    and int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])
+                )
+            ),
         )
     )
 
@@ -3294,8 +3319,11 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
 
     targets = root["targets"]
     protocol = str(root.attrs.get("target_protocol_version", ""))
-    target_sources = _read_string_array(root, "dictionaries/target_source")
-    target_source = target_sources[0] if len(target_sources) == 1 else None
+    target_sources = _encoded_values(
+        root,
+        dictionary_name="target_source",
+        array_path="targets/target_source_id",
+    )
     target_ids = _read_string_array(root, "dictionaries/target")
     statuses = _read_string_array(root, "dictionaries/target_match_status")
     matched_ids = np.asarray(targets["matched_gt_target_id"], dtype=np.int64).reshape(-1)
@@ -3303,6 +3331,7 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
     ious = np.asarray(targets["gt_match_iou"], dtype=np.float32).reshape(-1)
     status_ids = np.asarray(targets["gt_match_status_id"], dtype=np.int64).reshape(-1)
     target_valid = np.asarray(targets["target_valid_mask"], dtype=np.bool_).reshape(-1)
+    target_reason = np.asarray(targets["target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
     values: list[bool] = []
     for row, (match_id, match_row, iou, status_id) in enumerate(
         zip(matched_ids, matched_rows, ious, status_ids, strict=True)
@@ -3311,12 +3340,15 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
             target_label_is_trainable(
                 TargetLabelEvidence(
                     protocol=protocol,
-                    target_source=target_source,
+                    target_source=target_sources[row] if row < len(target_sources) else None,
                     gt_match_status=statuses[int(status_id)] if 0 <= int(status_id) < len(statuses) else None,
                     matched_gt_target_row_id=int(match_row),
                     matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
                     gt_match_iou=float(iou),
-                    target_valid=bool(target_valid[row]),
+                    target_valid=bool(
+                        target_valid[row]
+                        and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
+                    ),
                 )
             )
         )
