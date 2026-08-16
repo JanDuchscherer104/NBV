@@ -1,0 +1,10 @@
+# Five-scene paired pilot for the repaired myopic CUDA campaign.  Keep this
+# identity and destination separate from the diagnostic pilot so it cannot
+# resume or overwrite its artifacts.
+campaign_id = "cuda-rollouts-v1-pilot-corrected"
+mode = "pilot"
+frozen_profile = "realistic_core_60"
+pilot_scene_count = 5
+temperatures = [0.5, 1.0, 2.0, 4.0]
+writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
+output_root = ".campaign/cuda-rollouts-v1-pilot-corrected"
