@@ -8,9 +8,9 @@ VIN-NBV provides the closest objective precedent by supervising candidate rankin
 
 The current data-generation tasks are defined directly from geometry-valid @ground-truth:short oriented bounding boxes. They provide target identity, target crops, and oracle labels, but they do not implement actor-visible target discovery or identity matching. Consequently, deployable-input claims require a separate observed- or predicted-target protocol; the current target tasks support oracle supervision and controlled evaluation only.
 
-=== Objectives and boundary <objectives>
+== Objectives and boundary <objectives>
 
-==== Boundary <boundary>
+=== Boundary <boundary>
 
 The thesis objective is a finite-candidate, target-conditioned @next-best-view
 comparison with equal acquisition budgets and oracle re-evaluation. The boundary
