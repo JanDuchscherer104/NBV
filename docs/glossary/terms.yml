@@ -128,7 +128,7 @@
   - rl.target
   - ase.mesh_target
   internal_links:
-  - docs/typst/thesis/sections/01-research-questions.typ#rq2
+  - docs/typst/thesis/sections/01-research-questions.typ#rq3
   - docs/typst/thesis/sections/01-research-questions.typ#rq4
   - docs/reference/vin.types.qmd
   related:
@@ -168,7 +168,7 @@
   - rri.target_rri
   internal_links:
   - docs/typst/thesis/sections/01-research-questions.typ#rq1
-  - docs/typst/thesis/sections/01-research-questions.typ#rq4
+  - docs/typst/thesis/sections/01-research-questions.typ#rq2
   - docs/contents/theory/rri_theory.qmd
   citations:
   - VIN-NBV-frahm2025
@@ -884,10 +884,15 @@
   tier: core
   lookup_rank: 200
   definition_short: Hard mask that separates feasible candidate actions from invalid candidates.
-  definition_long: The mask m_{t,i} gates candidate actions, while invalid reason codes rho_{t,i}
-    preserve why a candidate was rejected. Collision, outside-bounds poses, no target visibility,
-    bad frusta, no depth hits, and outside-EVL-extent cases are constraints rather than low
-    target-RRI examples.
+  definition_long: The action mask m_{t,i} gates selectable candidate rows, while actor evidence/support,
+    target validity, oracle-label validity, and Q-training eligibility remain distinct fields.
+    Only physical or explicitly contracted admissibility failures clear action validity. No
+    target visibility or no depth hits clear action validity only when the executable feasibility
+    contract explicitly requires that gate; otherwise they remain support fields. Outside-EVL
+    extent and missing semidense or appearance support remain evidence fields unless the executable
+    feasibility contract says otherwise; failed oracle evaluation clears oracle_label_mask
+    and q_train_mask rather than action validity. Invalid reason codes rho_{t,i} preserve
+    physical rejection causes, and invalidity is not a low target-RRI class.
   notation:
     typst: $m_(t,i)$
   symbol_refs:
