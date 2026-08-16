@@ -1,3 +1,8 @@
+---
+kind: spec
+status: accepted
+---
+
 # Ownership and branch-consolidation successor spec
 
 Status: compact accepted-scope pointer for S1/S2 execution; it is not a

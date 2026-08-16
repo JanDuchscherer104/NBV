@@ -66,7 +66,6 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
-        self.assertIn('"scripts/ownership_consolidation_validator.py"', workflow)
         self.assertIn('"scripts/scaffold_audit.py"', workflow)
         self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
@@ -78,7 +77,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_worktree_seed.py"', workflow)
         self.assertIn(
-            '"scripts/tests/test_ownership_consolidation_validator.py"', workflow
+            '"scripts/tests/test_ownership_consolidation_contract.py"', workflow
         )
         self.assertIn('"scripts/tests/test_validate_agent_memory_retired.py"', workflow)
         self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)

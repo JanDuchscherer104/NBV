@@ -24,7 +24,7 @@ OMX_DURABLE_PATHS = (
     ".omx/specs/",
     ".omx/plans/",
 )
-OMX_DURABLE_SUFFIXES = (".md", ".json", ".html")
+OMX_DURABLE_SUFFIXES = (".md",)
 FORBIDDEN_TRACKED_RUNTIME_PATHS = {
     ".omx",
     ".codex/config.toml",
@@ -114,7 +114,9 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
     return data
 
 
-def allows_retired_canonical_update(frontmatter: dict[str, object], update_path: str) -> bool:
+def allows_retired_canonical_update(
+    frontmatter: dict[str, object], update_path: str
+) -> bool:
     """Allow only pre-cutoff, completed historical receipts for retired paths."""
     if update_path not in RETIRED_SOURCE_PATHS:
         return False
@@ -122,7 +124,10 @@ def allows_retired_canonical_update(frontmatter: dict[str, object], update_path:
         historical_date = date.fromisoformat(str(frontmatter.get("date")))
     except ValueError:
         return False
-    return historical_date <= LEGACY_RECEIPT_CUTOFF and str(frontmatter.get("status", "")) in LEGACY_RECEIPT_STATUSES
+    return (
+        historical_date <= LEGACY_RECEIPT_CUTOFF
+        and str(frontmatter.get("status", "")) in LEGACY_RECEIPT_STATUSES
+    )
 
 
 def check_codex_notes() -> list[str]:
@@ -213,7 +218,9 @@ def check_history_records() -> list[str]:
             if not resolved.exists() and update_text in RETIRED_SOURCE_PATHS:
                 if allows_retired_canonical_update(frontmatter, update_text):
                     continue
-                errors.append(f"{rel}: retired canonical update requires a pre-cutoff legacy record: {update_text}")
+                errors.append(
+                    f"{rel}: retired canonical update requires a pre-cutoff legacy record: {update_text}"
+                )
             elif not resolved.exists():
                 errors.append(
                     f"{rel}: canonical update path does not exist: {update_text}"
