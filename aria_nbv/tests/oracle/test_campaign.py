@@ -440,6 +440,7 @@ def test_status_preserves_last_terminal_identity_across_resume_and_completion(tm
     assert prestart.current_work_unit is None
     assert prestart.last_work_unit is None
 
+    campaign.append_event(campaign._event(plan, "campaign_started"))
     campaign.write_status(campaign.status(plan, [{"outcome": "failed"}], current_unit=first, stage="failed"))
     resumed = campaign.status(plan, [{"outcome": "failed"}], current_unit=second, stage="worker")
     assert resumed.current_work_unit == second.work_unit_hash
@@ -623,6 +624,10 @@ def test_read_status_rejects_impossible_or_duplicate_campaign_boundaries(tmp_pat
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     for kind in events:
         campaign.append_event(campaign._event(plan, kind))
+    if events == ("plan_ready",):
+        with pytest.raises(ValueError, match="running.*canonical event evidence"):
+            campaign.write_status(campaign.status(plan, stage="running"))
+        return
     campaign.write_status(campaign.status(plan, stage="running"))
     with pytest.raises(ValueError, match="invalid campaign status"):
         campaign.read_status(plan=plan)
@@ -665,12 +670,17 @@ def test_read_status_rejects_duplicate_unit_terminal_boundary(tmp_path):
         campaign.read_status(plan=plan)
 
 
-def test_read_status_rejects_terminal_state_without_event_ledger(tmp_path):
+@pytest.mark.parametrize("state", ["completed", "completed_with_failures"])
+def test_write_status_rejects_direct_terminal_state_without_finish_event(tmp_path, state):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    campaign.write_status(campaign.status(plan, [{"outcome": "failed"}] * len(plan.work_units), stage="terminal"))
-    with pytest.raises(ValueError, match="invalid campaign status"):
-        campaign.read_status(plan=plan)
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    status = replace(campaign.status(plan), state=state)
+
+    with pytest.raises(ValueError, match=rf"{state}.*canonical event evidence"):
+        campaign.write_status(status)
+
+    assert not (tmp_path / "status.json").exists()
 
 
 def test_read_status_rejects_nonblocked_state_after_campaign_blocked(tmp_path):
@@ -680,6 +690,18 @@ def test_read_status_rejects_nonblocked_state_after_campaign_blocked(tmp_path):
     campaign.append_event(campaign._event(plan, "campaign_blocked", outcome="blocked"))
     with pytest.raises(ValueError, match="blocked.*preflight_passed"):
         campaign.write_status(campaign.status(plan, stage="preflight_passed"))
+    assert not (tmp_path / "status.json").exists()
+
+
+@pytest.mark.parametrize("state", ["planned", "running", "blocked", "conflicted"])
+def test_write_status_rejects_direct_event_backed_state_without_events(tmp_path, state):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    status = replace(campaign.status(plan), state=state)
+
+    with pytest.raises(ValueError, match=rf"{state}.*canonical event evidence"):
+        campaign.write_status(status)
+
     assert not (tmp_path / "status.json").exists()
 
 
@@ -1253,7 +1275,12 @@ def test_progress_summary_distinguishes_planned_all_pending_and_partial(tmp_path
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     planned = campaign.progress_summary(plan)
     assert planned["counts"]["pending"] == len(plan.work_units)
-    campaign.write_status(campaign.status(plan, [{"outcome": "insufficient_support"}]))
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    unit = plan.work_units[0]
+    _append_unit_events(campaign, plan, unit, "insufficient_support")
+    campaign.write_status(
+        campaign.status(plan, [{"outcome": "insufficient_support"}], current_unit=unit, stage="insufficient_support")
+    )
     partial = campaign.progress_summary(plan)
     assert partial["counts"]["insufficient"] == 1
     assert partial["counts"]["pending"] == len(plan.work_units) - 1
@@ -1604,9 +1631,12 @@ def test_direct_run_forwards_plan_and_writer_to_source_preflight(tmp_path, monke
 def test_competing_run_does_not_mutate_active_owner_status_or_events(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "campaign_started"))
     owner_status = campaign.status(plan, stage="running")
     status_path = campaign.write_status(owner_status)
     before = status_path.read_bytes()
+    events_path = tmp_path / "progress.jsonl"
+    events_before = events_path.read_bytes()
     claim = campaign.acquire_claim(plan)
 
     with pytest.raises(RuntimeError, match="run claim exists"):
@@ -1617,7 +1647,7 @@ def test_competing_run_does_not_mutate_active_owner_status_or_events(tmp_path):
         )
 
     assert status_path.read_bytes() == before
-    assert not (tmp_path / "progress.jsonl").exists()
+    assert events_path.read_bytes() == events_before
     campaign.release_claim(plan, claim_hash=claim["claim_hash"])
 
 
@@ -1672,7 +1702,7 @@ def test_events_flush_status_atomic_and_claim_release(tmp_path):
         source_manifest_hash="source",
     )
     campaign.append_event(campaign._event(plan, "planned"))
-    status = campaign.status(plan, [CampaignOutcome.SUCCEEDED] * len(plan.work_units))
+    status = campaign.status(plan)
     assert campaign.write_status(status).exists()
     claim = campaign.acquire_claim(plan)
     campaign.release_claim(plan, claim_hash=claim["claim_hash"])

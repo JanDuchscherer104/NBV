@@ -555,7 +555,7 @@ class CudaRolloutCampaign:
     """Plan and execute one campaign serially through the shard leaf."""
 
     _STATUS_TRANSITIONS: ClassVar[dict[str, frozenset[str]]] = {
-        "not_started": CampaignStatus._VALID_STATES,
+        "not_started": frozenset({"not_started", "planned"}),
         "planned": frozenset({"planned", "preflight_passed", "running", "blocked", "conflicted"}),
         "preflight_passed": frozenset({"preflight_passed", "smoke_passed", "running", "blocked", "conflicted"}),
         "smoke_passed": frozenset({"smoke_passed", "running", "blocked", "conflicted"}),
@@ -1779,14 +1779,17 @@ class CudaRolloutCampaign:
                     )
                 )
             self.write_status(
-                self.status(
-                    plan,
-                    results,
-                    current_unit=unit,
-                    stage=str(outcome),
-                    elapsed_seconds=self.clock() - started_at,
-                    last_timeout=last_timeout,
-                    started_at=started_at_iso,
+                replace(
+                    self.status(
+                        plan,
+                        results,
+                        current_unit=unit,
+                        stage=str(outcome),
+                        elapsed_seconds=self.clock() - started_at,
+                        last_timeout=last_timeout,
+                        started_at=started_at_iso,
+                    ),
+                    state="running",
                 )
             )
         if not blocked:
@@ -2672,7 +2675,7 @@ class CudaRolloutCampaign:
             elif event.kind == "campaign_blocked":
                 canonical_state = "blocked"
 
-        prior_state = previous.state if previous is not None else canonical_state
+        prior_state = previous.state if previous is not None else canonical_state or "not_started"
         if prior_state in {"planned", "preflight_passed", "smoke_passed"} and canonical_state in {
             "planned",
             "preflight_passed",
@@ -2682,7 +2685,18 @@ class CudaRolloutCampaign:
             prior_state = max((prior_state, canonical_state), key=order.__getitem__)
         elif canonical_state in {"running", "blocked"}:
             prior_state = canonical_state
-        if prior_state is not None and status.state not in self._STATUS_TRANSITIONS[prior_state]:
+        required_event_kinds = {
+            "planned": {"plan_ready"},
+            "running": {"campaign_started", "campaign_resumed"},
+            "blocked": {"campaign_blocked"},
+            "conflicted": {"unit_conflicted"},
+            "completed": {"campaign_finished"},
+            "completed_with_failures": {"campaign_finished"},
+        }
+        if required := required_event_kinds.get(status.state):
+            if not any(event.kind in required for event in events):
+                raise ValueError(f"{status.state} campaign status transition requires canonical event evidence")
+        if status.state not in self._STATUS_TRANSITIONS[prior_state]:
             raise ValueError(f"invalid campaign status transition: {prior_state} -> {status.state}")
 
         if status.state in {"preflight_passed", "smoke_passed"} and canonical_state != status.state:
