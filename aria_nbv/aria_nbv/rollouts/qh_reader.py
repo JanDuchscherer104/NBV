@@ -18,6 +18,7 @@ from zarr.storage import LocalStore
 
 from ..targets.protocol import (
     ORACLE_GT_TARGET_SOURCE,
+    ActorVisibleTargetSource,
     TargetInputProtocol,
     TargetLabelEvidence,
     target_label_is_trainable,
@@ -230,7 +231,12 @@ def _validate_reader_admission(root: zarr.Group) -> None:
             )
         validate_target_protocol_admission(protocol, target_source=ORACLE_GT_TARGET_SOURCE)
     else:
-        if len(target_source) != 1 or not target_source[0] or target_source[0] == ORACLE_GT_TARGET_SOURCE:
+        if (
+            len(target_source) != 1
+            or not target_source[0]
+            or target_source[0] == ORACLE_GT_TARGET_SOURCE
+            or target_source[0] not in {source.value for source in ActorVisibleTargetSource}
+        ):
             raise ValueError(
                 f"v1_observed requires exactly one non-Oracle actor-visible target source; found {target_source!r}."
             )

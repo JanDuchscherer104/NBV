@@ -48,12 +48,20 @@ class TargetDescriptorProvenance(StrEnum):
     """Descriptor constructed from actor-visible predicted target state."""
 
 
+class ActorVisibleTargetSource(StrEnum):
+    """Canonical persisted source names admitted for observed targets."""
+
+    DETECTED_OBBS = "detected_obbs"
+    """Actor-visible OBB detections produced by the VIN source store."""
+
+
 _ACTOR_VISIBLE_PROVENANCE = frozenset(
     {
         TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
         TargetDescriptorProvenance.ACTOR_VISIBLE_PREDICTOR,
     }
 )
+_ACTOR_VISIBLE_TARGET_SOURCES = frozenset(source.value for source in ActorVisibleTargetSource)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +108,7 @@ def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
             # second provenance column.  Writer/config admission validates the
             # stronger typed provenance before persistence; readers still
             # require a non-Oracle, self-consistent source.
-            if not evidence.target_source or evidence.target_source == ORACLE_GT_TARGET_SOURCE:
+            if evidence.target_source not in _ACTOR_VISIBLE_TARGET_SOURCES:
                 return False
             if descriptor_source != evidence.target_source:
                 return False

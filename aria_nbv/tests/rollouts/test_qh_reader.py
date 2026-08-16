@@ -44,7 +44,7 @@ def _write_v1_store(path: Path) -> Path:
     records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
     target = records[0].lineage.target
     target.target_protocol_version = "v1_observed"
-    target.target_source = "vin_detected_obbs"
+    target.target_source = "detected_obbs"
     target.gt_match_status = "admitted"
     target.gt_match_iou = 0.7
     return write_rollout_zarr_store(
@@ -83,13 +83,13 @@ def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: 
     assert np.array_equal(q_train, actor & oracle)
 
 
-def test_reader_rejects_v1_store_with_tampered_target_source_binding(tmp_path: Path) -> None:
+def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
     root = zarr.open_group(store, mode="a")
-    payload = np.frombuffer(b'["gt_obbs_oracle"]', dtype=np.uint8)
+    payload = np.frombuffer(b'["fabricated_actor"]', dtype=np.uint8)
     root["dictionaries/target_source"].resize((payload.size,))
     root["dictionaries/target_source"][:] = payload
-    with pytest.raises(ValueError, match="actor-visible|canonical validation"):
+    with pytest.raises(ValueError, match="actor-visible|canonical validation|target-source"):
         QhRolloutReader((store,))
 
 

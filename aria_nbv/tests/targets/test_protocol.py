@@ -110,7 +110,7 @@ def test_v1_label_mapping_requires_strict_admitted_match() -> None:
     def evidence(**changes: object) -> TargetLabelEvidence:
         values: dict[str, object] = {
             "protocol": TargetInputProtocol.V1_OBSERVED,
-            "target_source": "vin_detected_obbs",
+            "target_source": "detected_obbs",
             "gt_match_status": "admitted",
             "matched_gt_target_row_id": 3,
             "matched_gt_target_id": "gt-3",
