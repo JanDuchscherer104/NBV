@@ -443,7 +443,7 @@
   - rl.s_cf_geom
   - rl.s_oracle
   internal_links:
-  - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
   - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
   - historic-snippet-state
@@ -484,7 +484,7 @@
   equation_refs:
   - rl.s_hist
   internal_links:
-  - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
   - docs/contents/literature/project_aria.qmd
   - docs/contents/literature/efm3d.qmd
   citations:
@@ -522,7 +522,7 @@
   equation_refs:
   - rl.s_off
   internal_links:
-  - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
   - docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd
   related:
   - historic-snippet-state
@@ -558,7 +558,7 @@
   equation_refs:
   - rl.s_cf0
   internal_links:
-  - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
   - docs/contents/theory/efm3d_scene_embeddings.qmd
   - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
@@ -594,7 +594,7 @@
   equation_refs:
   - rl.s_cf_geom
   internal_links:
-  - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
   - docs/typst/thesis/sections/01-research-questions.typ#rq4
   related:
   - minimal-counterfactual-state
@@ -628,7 +628,7 @@
   equation_refs:
   - rl.s_oracle
   internal_links:
-  - docs/contents/theory/rl_planning.qmd#state-and-action-space-contract
+  - docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation
   - docs/contents/theory/rri_theory.qmd
   citations:
   - ProjectAria-ASE-2025
@@ -858,7 +858,7 @@
   internal_links:
   - docs/typst/thesis/sections/01-research-questions.typ#rq2
   - docs/typst/thesis/development/roadmap.typ#milestones
-  - docs/contents/theory/rl_planning.qmd#q-h-training-contract
+  - docs/typst/thesis/sections/04-method/index.typ#sec:thesis-method
   - docs/contents/literature/rl_planning.qmd#q-h-and-dqn
   citations:
   - DBLP:journals/corr/MnihKSGAWR13

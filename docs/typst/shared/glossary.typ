@@ -576,7 +576,7 @@
       definition_short: "Rollout state family separating actor-visible state from oracle-only supervision.",
       definition_long: "ARIA-NBV distinguishes raw historic snippet state, persisted VIN offline sample state, minimal counterfactual actor state, geometry-rich counterfactual ablation state, and privileged oracle rollout state. The main Q_H actor input starts from the minimal counterfactual state; all-candidate GT renders, GT mesh crops, and oracle RRI labels remain outside the actor-visible state.",
       internal_links: (
-        "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (),
@@ -645,7 +645,7 @@
       definition_short: "Raw actor-visible state from the logged ASE/Project Aria snippet trajectory.",
       definition_long: "The historic snippet state is the richest non-privileged state because it comes from the original logged trajectory. It may contain calibrated camera streams, timestamps, trajectory and gravity estimates, semidense points with support fields, frozen EVL/EFM evidence, and observed or predicted OBBs. It must not contain the GT mesh or GT OBB crops as actor inputs.",
       internal_links: (
-        "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/contents/literature/project_aria.qmd",
         "docs/contents/literature/efm3d.qmd",
       ),
@@ -697,7 +697,7 @@
       definition_short: "Compact persisted state used by VIN training and offline diagnostics.",
       definition_long: "The persisted offline sample state is not the full raw snippet. It is the compact immutable training and diagnostic payload: VinSnippetView, candidate poses/cameras/counts, labels and oracle metrics, optional candidate depths, compact OBB fields, trajectory metadata, and selected EVL numeric tensors needed to reproduce scoring diagnostics.",
       internal_links: (
-        "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd",
       ),
       citations: (),
@@ -747,7 +747,7 @@
       definition_short: "Main Q_H actor state for mesh-supervised counterfactual rollouts.",
       definition_long: "The minimal counterfactual actor state is the default input to target-conditioned Q_H. It contains the accumulated counterfactual point proxy as broad scene state, optional lifted image-foundation point features, local root EVL evidence for target support and local reads, selected-action history, observed or predicted target descriptor, budget state, finite candidate table, validity masks, reason codes, and current-state candidate-query features. Synthetic observations update the state only after their candidate is selected.",
       internal_links: (
-        "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/contents/theory/efm3d_scene_embeddings.qmd",
         "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
@@ -797,7 +797,7 @@
       definition_short: "Counterfactual ablation state with selected synthetic geometry observations.",
       definition_long: "The geometry-rich counterfactual state adds only selected prior synthetic observations to the minimal state. It may include rendered depth, depth-valid masks, backprojected points, derived normals, and local support summaries for views that have already been selected. It does not include oracle renders for unselected candidates.",
       internal_links: (
-        "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/typst/thesis/sections/01-research-questions.typ#rq4",
       ),
       citations: (),
@@ -845,7 +845,7 @@
       definition_short: "Privileged rollout state for labels, upper bounds, and evaluation.",
       definition_long: "The oracle rollout state may contain GT mesh geometry, GT target crops, GT OBBs, all-candidate synthetic depth and point clouds, derived normals, mesh-face visibility, Chamfer/RRI terms, and oracle scores. These fields support label generation and diagnostics but are not actor-visible inputs for the main scorer or Q_H model.",
       internal_links: (
-        "docs/contents/theory/rl_planning.qmd#state-and-action-space-contract",
+        "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/contents/theory/rri_theory.qmd",
       ),
       citations: (
@@ -1129,7 +1129,7 @@
       internal_links: (
         "docs/typst/thesis/sections/01-research-questions.typ#rq2",
         "docs/typst/thesis/development/roadmap.typ#milestones",
-        "docs/contents/theory/rl_planning.qmd#q-h-training-contract",
+        "docs/typst/thesis/sections/04-method/index.typ#sec:thesis-method",
         "docs/contents/literature/rl_planning.qmd#q-h-and-dqn",
       ),
       citations: (

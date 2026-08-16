@@ -8,6 +8,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+MIGRATION_RECEIPT = (
+    ROOT
+    / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
+)
 
 RETIRED_SOURCES = (
     "docs/contents/thesis/roadmap.qmd",
@@ -34,6 +38,37 @@ THEORY_PAGES = {
     "rri_theory.qmd",
     "semi-dense-pc.qmd",
     "surface_metrics.qmd",
+}
+
+EXPECTED_QMD_PAGES = {
+    "archive/index.qmd",
+    "archive/main_seminar_findings.qmd",
+    "ase_dataset.qmd",
+    "diagrams.qmd",
+    "glossary.qmd",
+    "ideas.qmd",
+    "literature/3dgs_instance_nbv.qmd",
+    "literature/active_3dgs_nbv.qmd",
+    "literature/efm3d.qmd",
+    "literature/gen_nbv.qmd",
+    "literature/hestia.qmd",
+    "literature/index.qmd",
+    "literature/pb_nbv.qmd",
+    "literature/project_aria.qmd",
+    "literature/rl_planning.qmd",
+    "literature/scene_script.qmd",
+    "literature/scone_fisherrf.qmd",
+    "literature/vin_nbv.qmd",
+    "resources.qmd",
+    "setup.qmd",
+    "theory/candidate_sampling_target_selection.qmd",
+    "theory/candidate_view_dependence.qmd",
+    "theory/efm3d_scene_embeddings.qmd",
+    "theory/nbv_background.qmd",
+    "theory/rl_planning.qmd",
+    "theory/rri_theory.qmd",
+    "theory/semi-dense-pc.qmd",
+    "theory/surface_metrics.qmd",
 }
 
 HISTORICAL_PREFIXES = (
@@ -103,6 +138,17 @@ def _frontmatter(text: str) -> str:
     return parts[0].removeprefix("---\n")
 
 
+def _markdown_table_rows(text: str, header: str) -> list[list[str]]:
+    lines = text.splitlines()
+    start = lines.index(header)
+    rows: list[list[str]] = []
+    for line in lines[start + 2 :]:
+        if not line.startswith("|"):
+            break
+        rows.append([cell.strip() for cell in line.strip("|").split("|")])
+    return rows
+
+
 def test_retired_sources_are_absent() -> None:
     assert not [path for path in RETIRED_SOURCES if (ROOT / path).exists()]
 
@@ -130,6 +176,52 @@ def test_theory_pages_are_deprecated_navigation() -> None:
         assert re.search(r"(?m)^owner:\s*docs\s*$", frontmatter)
         assert "docs/typst/thesis" in text or "../../typst/thesis" in text
         assert forbidden_owner_claim.search(text) is None
+
+
+def test_expected_qmd_page_manifest_is_exact() -> None:
+    contents_root = ROOT / "docs/contents"
+    observed = {
+        path.relative_to(contents_root).as_posix()
+        for path in contents_root.rglob("*.qmd")
+    }
+    assert observed == EXPECTED_QMD_PAGES
+    assert not {
+        "thesis/questions.qmd",
+        "thesis/roadmap.qmd",
+        "thesis/m1_contract_report.qmd",
+    } & observed
+
+
+def test_theory_qmd_matrix_covers_every_thinned_page() -> None:
+    text = MIGRATION_RECEIPT.read_text(encoding="utf-8")
+    rows = _markdown_table_rows(
+        text,
+        "| Theory page | Disposition | Unique retained value | Canonical destination | Inbound links | Citation disposition |",
+    )
+    assert len(rows) == len(THEORY_PAGES)
+    assert {row[0].strip("`") for row in rows} == THEORY_PAGES
+    for row in rows:
+        assert len(row) == 6
+        assert row[1] == "thin"
+        assert all(cell and cell not in {"-", "—"} for cell in row[2:])
+        assert "docs/" in row[3]
+
+
+def test_conditional_rq_experiments_have_separate_backlog_records() -> None:
+    text = MIGRATION_RECEIPT.read_text(encoding="utf-8")
+    rows = _markdown_table_rows(
+        text,
+        "| Scope | Scientific owner | Active backlog record | Entry gate |",
+    )
+    observed = {row[0]: row for row in rows}
+    assert set(observed) == {
+        "RQ5 online discrete bridge",
+        "RQ6 continuous/simulator escalation",
+    }
+    assert "todo-095" in observed["RQ5 online discrete bridge"][2]
+    assert {"todo-006", "todo-038"} <= set(
+        re.findall(r"todo-\d{3}", observed["RQ6 continuous/simulator escalation"][2])
+    )
 
 
 def test_active_sources_do_not_reference_retired_paths() -> None:
@@ -211,3 +303,15 @@ def test_glossary_rq_links_match_the_six_tier_semantics() -> None:
         observed = re.findall(r"research-questions\.typ#(rq\d+)", match.group(1))
         assert len(observed) == len(set(observed)), f"{term}: duplicate RQ links"
         assert set(observed) == expected_rqs, term
+
+
+def test_glossary_theory_links_target_existing_anchors() -> None:
+    """Do not retain fragments removed when theory pages become thin navigation."""
+    text = (ROOT / "docs/typst/shared/glossary.typ").read_text(encoding="utf-8")
+    links = set(
+        re.findall(r'"(docs/contents/theory/[^"#]+\.qmd#[^"]+)"', text)
+    )
+    for link in links:
+        relative, anchor = link.split("#", 1)
+        target = (ROOT / relative).read_text(encoding="utf-8")
+        assert f"{{#{anchor}}}" in target, link

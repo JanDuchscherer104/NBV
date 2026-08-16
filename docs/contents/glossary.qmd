@@ -753,7 +753,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-historic-snippet-state">historic state</a> <a class="glossary-chip" href="#term-persisted-offline-state">offline state</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-geometry-rich-counterfactual-state">CF+ state</a> <a class="glossary-chip" href="#term-oracle-rollout-state">oracle state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-validity-mask">mask</a> <a class="glossary-chip" href="#term-observed-target-selection">OBS-SEL</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -787,7 +787,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-persisted-offline-state">offline state</a> <a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a> <a class="glossary-chip" href="#term-oriented-bounding-box">OBB</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="literature/project_aria.html" title="docs/contents/literature/project_aria.qmd">Project Aria</a> <a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="literature/project_aria.html" title="docs/contents/literature/project_aria.qmd">Project Aria</a> <a class="glossary-chip" href="literature/efm3d.html" title="docs/contents/literature/efm3d.qmd">EFM3D and EVL</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-projectaria-engel2023">&#64;projectaria-engel2023</a> <a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a></div></div>
 </div>
 </details>
@@ -822,7 +822,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-historic-snippet-state">historic state</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 </div>
 </details>
 
@@ -856,7 +856,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-geometry-rich-counterfactual-state">CF+ state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings (background)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings (background)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -890,7 +890,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-oracle-rollout-state">oracle state</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -924,7 +924,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-ground-truth-target-evaluation">GT-EVAL</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a> <a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#state-and-action-space-contract" title="docs/contents/theory/rl_planning.qmd#state-and-action-space-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-ProjectAria-ASE-2025">&#64;ProjectAria-ASE-2025</a></div></div>
 </div>
 </details>
@@ -1160,7 +1160,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a> <a class="glossary-chip" href="theory/rl_planning.html#q-h-training-contract" title="docs/contents/theory/rl_planning.qmd#q-h-training-contract">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="literature/rl_planning.html#q-h-and-dqn" title="docs/contents/literature/rl_planning.qmd#q-h-and-dqn">RL Sources For Rollout And Q_H</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a> <a class="glossary-chip" href="../typst/thesis/sections/04-method/index.typ#sec:thesis-method" title="docs/typst/thesis/sections/04-method/index.typ#sec:thesis-method">Index</a> <a class="glossary-chip" href="literature/rl_planning.html#q-h-and-dqn" title="docs/contents/literature/rl_planning.qmd#q-h-and-dqn">RL Sources For Rollout And Q_H</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-DBLP:journals/corr/MnihKSGAWR13">&#64;DBLP:journals/corr/MnihKSGAWR13</a> <a class="glossary-chip glossary-citation" href="#ref-DoubleDQN-vanHasselt2015">&#64;DoubleDQN-vanHasselt2015</a> <a class="glossary-chip glossary-citation" href="#ref-IQL-kostrikov2021">&#64;IQL-kostrikov2021</a></div></div>
 </div>
 </details>
