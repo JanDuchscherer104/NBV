@@ -1324,7 +1324,10 @@ class CudaRolloutCampaign:
                 component_type = type(mixture.components[0]) if mixture.components else None
                 from ...pose_generation.candidate_mixture import CandidateMixtureViewGeneratorConfig
 
-                typed_components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(profile.components)
+                typed_components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
+                    profile.components,
+                    existing_components=list(mixture.components),
+                )
                 mixture.components = (
                     [component_type.model_validate(component.model_dump()) for component in typed_components]
                     if component_type

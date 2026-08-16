@@ -79,6 +79,7 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
     # This test exercises the legacy in-memory adapter seam. Production worker
     # tests retain the canonical manifest and verify exact sample binding.
     writer = writer.model_copy(update={"source_manifest_path": None})
+    writer_components = {component.name: component for component in writer.candidate_mixture.components}
     expected_modes = {
         "forward_local": "forward_rig",
         "target_bearing_local": "target_point",
@@ -118,10 +119,22 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
             unit.source_row_payload,
         )
         adapted, _ = campaign.adapt_work_unit(unit, writer_config=writer, shard_entry=SimpleNamespace())
+        repeated, _ = campaign.adapt_work_unit(unit, writer_config=writer, shard_entry=SimpleNamespace())
         components = adapted.candidate_mixture.components
+        assert stable_config_hash(adapted) == stable_config_hash(repeated)
         assert adapted.candidate_mixture.base.max_backward_step_m == pytest.approx(0.25)
         assert adapted.candidate_mixture.base.max_yaw_delta_deg == pytest.approx(70.0)
         component_by_name = {component.name: component for component in components}
+        for name, reviewed_count in profile.components:
+            if name not in writer_components:
+                continue
+            assert component_by_name[name].model_dump(exclude={"count"}) == writer_components[name].model_dump(
+                exclude={"count"}
+            )
+            assert component_by_name[name].count == reviewed_count
+        if "target_bearing_local" in component_by_name:
+            assert component_by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
+            assert component_by_name["target_bearing_local"].max_radius == pytest.approx(1.1)
         if "local_refinement" in component_by_name:
             assert component_by_name["local_refinement"].view_mode.value == "target_point"
         if "revisit_backtrack" in component_by_name:

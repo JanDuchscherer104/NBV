@@ -198,14 +198,17 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
 
     @classmethod
     def reviewed_component_templates(
-        cls, components: list[tuple[str, int]] | tuple[tuple[str, int], ...]
+        cls,
+        components: list[tuple[str, int]] | tuple[tuple[str, int], ...],
+        *,
+        existing_components: list[CandidateMixtureComponentConfig] | None = None,
     ) -> list[CandidateMixtureComponentConfig]:
         """Return typed templates for a reviewed campaign component schedule.
 
         Campaign orchestration supplies the reviewed names and counts; this
-        method supplies the existing typed component fields.  Counts are the
-        campaign allocation, while radii, bounds, modes, and sampler controls
-        remain owned by the candidate-generation presets.
+        method reuses writer-owned components by name and supplies reviewed
+        presets only for absent families. Counts are the campaign allocation;
+        all other typed component fields remain owned by their source template.
         """
 
         names = tuple(name for name, _count in components)
@@ -219,12 +222,19 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
             )
         }
         try:
-            typed = templates[names]
+            preset_components = templates[names]
         except KeyError as exc:
             raise ValueError(f"unsupported reviewed candidate component schedule: {names}") from exc
+
+        existing_by_name: dict[str, CandidateMixtureComponentConfig] = {}
+        for component in existing_components or ():
+            if component.name in existing_by_name:
+                raise ValueError(f"duplicate existing candidate component: {component.name}")
+            existing_by_name[component.name] = component
+
         return [
-            component.model_copy(update={"count": count})
-            for component, (_name, count) in zip(typed, components, strict=True)
+            existing_by_name.get(name, preset).model_copy(update={"count": count})
+            for preset, (name, count) in zip(preset_components, components, strict=True)
         ]
 
     @classmethod

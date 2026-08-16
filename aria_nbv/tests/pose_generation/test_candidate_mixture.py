@@ -19,6 +19,7 @@ from aria_nbv.pose_generation import (
     CandidateMixtureViewGeneratorConfig,
     CandidatePositionMode,
     CandidateViewGeneratorConfig,
+    SamplingStrategy,
     ViewDirectionMode,
     candidate_position_id,
     candidate_strategy_id,
@@ -199,6 +200,25 @@ def test_rich_local_five_family_is_named_ablation() -> None:
 
 
 def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
+    writer_target_bearing = CandidateMixtureComponentConfig(
+        name="target_bearing_local",
+        count=24,
+        view_mode=ViewDirectionMode.TARGET_POINT,
+        position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+        sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
+        view_sampling_strategy=SamplingStrategy.FORWARD_POWERSPHERICAL,
+        min_radius=0.4,
+        max_radius=1.1,
+        min_elev_deg=-8.0,
+        max_elev_deg=14.0,
+        delta_azimuth_deg=90.0,
+        kappa=6.0,
+        view_kappa=12.0,
+        view_max_angle_deg=30.0,
+        view_max_azimuth_deg=20.0,
+        view_max_elevation_deg=10.0,
+        view_roll_jitter_deg=5.0,
+    )
     components = CandidateMixtureViewGeneratorConfig.reviewed_component_templates(
         (
             ("target_bearing_local", 18),
@@ -206,19 +226,30 @@ def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
             ("lateral_target_bypass", 12),
             ("local_refinement", 6),
             ("revisit_backtrack", 6),
-        )
+        ),
+        existing_components=[writer_target_bearing],
     )
 
     assert sum(component.count for component in components) == 60
     by_name = {component.name: component for component in components}
+    assert by_name["target_bearing_local"].model_dump(exclude={"count"}) == writer_target_bearing.model_dump(
+        exclude={"count"}
+    )
+    assert by_name["target_bearing_local"].count == 18
+    assert by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
+    assert by_name["target_bearing_local"].max_radius == pytest.approx(1.1)
     assert by_name["local_refinement"].view_mode is ViewDirectionMode.TARGET_POINT
     assert by_name["local_refinement"].min_radius == pytest.approx(0.25)
     assert by_name["local_refinement"].max_radius == pytest.approx(0.7)
     assert by_name["revisit_backtrack"].position_mode is CandidatePositionMode.REVISIT_BACKTRACK
     assert by_name["revisit_backtrack"].min_radius == pytest.approx(0.25)
     assert by_name["revisit_backtrack"].max_radius == pytest.approx(0.25)
-    assert all(component.view_max_azimuth_deg == 0.0 for component in components)
-    assert all(component.view_max_elevation_deg == 0.0 for component in components)
+    assert all(
+        component.view_max_azimuth_deg == 0.0 for name, component in by_name.items() if name != "target_bearing_local"
+    )
+    assert all(
+        component.view_max_elevation_deg == 0.0 for name, component in by_name.items() if name != "target_bearing_local"
+    )
 
     with pytest.raises(ValueError, match="unsupported reviewed candidate component schedule"):
         CandidateMixtureViewGeneratorConfig.reviewed_component_templates((("new_family", 60),))
