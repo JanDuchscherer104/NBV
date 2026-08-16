@@ -165,6 +165,14 @@ def test_canonical_worker_argv_carries_writer_config_path():
     } == {"cuda"}
 
 
+def test_canonical_campaign_freezes_accepted_rich_batch_profile():
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+    writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
+
+    assert config.frozen_profile == "rich_local_60"
+    assert writer.target_scorer.depth.renderer.max_views_per_batch == 4
+
+
 @pytest.mark.parametrize("device", ["cpu", "mps", "xpu", "meta"])
 def test_nested_non_cuda_device_is_rejected_before_campaign_files(tmp_path, device):
     campaign = _campaign(tmp_path)
