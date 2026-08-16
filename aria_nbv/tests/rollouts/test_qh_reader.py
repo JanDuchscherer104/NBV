@@ -40,6 +40,23 @@ def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_i
     ).store_dir
 
 
+def _write_v1_store(path: Path) -> Path:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    target = records[0].lineage.target
+    target.target_protocol_version = "v1_observed"
+    target.target_source = "vin_detected_obbs"
+    target.gt_match_status = "admitted"
+    target.gt_match_iou = 0.7
+    return write_rollout_zarr_store(
+        path,
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v1_observed",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    ).store_dir
+
+
 def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> None:
     reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr", records=2),))
     first = reader[0]
@@ -51,6 +68,29 @@ def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> Non
     assert first.source_ref in reader.source_refs
     with pytest.raises(IndexError, match="outside corpus length"):
         _ = reader[2]
+
+
+def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    reader = QhRolloutReader((store,))
+    root = reader._stores[0]  # noqa: SLF001
+    assert root.contract.target_protocol == "v1_observed"
+    zarr_root = zarr.open_group(store, mode="r")
+    actor = np.asarray(zarr_root["candidates/actor_action_mask"], dtype=np.bool_)
+    oracle = np.asarray(zarr_root["candidates/oracle_label_mask"], dtype=np.bool_)
+    q_train = np.asarray(zarr_root["candidates/q_train_mask"], dtype=np.bool_)
+    assert q_train.any()
+    assert np.array_equal(q_train, actor & oracle)
+
+
+def test_reader_rejects_v1_store_with_tampered_target_source_binding(tmp_path: Path) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    root = zarr.open_group(store, mode="a")
+    payload = np.frombuffer(b'["gt_obbs_oracle"]', dtype=np.uint8)
+    root["dictionaries/target_source"].resize((payload.size,))
+    root["dictionaries/target_source"][:] = payload
+    with pytest.raises(ValueError, match="actor-visible|canonical validation"):
+        QhRolloutReader((store,))
 
 
 @pytest.mark.parametrize("horizon", (1, 2, 4))

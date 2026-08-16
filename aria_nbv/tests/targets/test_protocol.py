@@ -8,6 +8,8 @@ from aria_nbv.targets.protocol import (
     ORACLE_GT_TARGET_SOURCE,
     TargetDescriptorProvenance,
     TargetInputProtocol,
+    TargetLabelEvidence,
+    target_label_is_trainable,
     validate_target_protocol_admission,
 )
 from tests.rollout_fixtures import build_rollout_records
@@ -102,3 +104,45 @@ def test_v1_rejects_missing_or_mismatched_descriptor_provenance(
             descriptor_source=descriptor_source,
             descriptor_provenance=descriptor_provenance,
         )
+
+
+def test_v1_label_mapping_requires_strict_admitted_match() -> None:
+    def evidence(**changes: object) -> TargetLabelEvidence:
+        values: dict[str, object] = {
+            "protocol": TargetInputProtocol.V1_OBSERVED,
+            "target_source": "vin_detected_obbs",
+            "gt_match_status": "admitted",
+            "matched_gt_target_row_id": 3,
+            "matched_gt_target_id": "gt-3",
+            "gt_match_iou": 0.21,
+            "target_valid": True,
+        }
+        values.update(changes)
+        return TargetLabelEvidence(**values)
+
+    assert target_label_is_trainable(evidence())
+    for changes in (
+        {"gt_match_status": "ambiguous"},
+        {"gt_match_status": "unmatched_gt"},
+        {"gt_match_status": "rejected"},
+        {"gt_match_iou": 0.20},
+        {"matched_gt_target_row_id": -1},
+        {"matched_gt_target_id": ""},
+        {"target_valid": False},
+        {"target_source": ORACLE_GT_TARGET_SOURCE},
+    ):
+        assert not target_label_is_trainable(evidence(**changes))
+
+
+def test_v0_label_mapping_preserves_legacy_row_admission() -> None:
+    assert target_label_is_trainable(
+        TargetLabelEvidence(
+            protocol=TargetInputProtocol.V0_GT_INPUT,
+            target_source=ORACLE_GT_TARGET_SOURCE,
+            gt_match_status="matched",
+            matched_gt_target_row_id=0,
+            matched_gt_target_id=None,
+            gt_match_iou=None,
+            target_valid=True,
+        )
+    )

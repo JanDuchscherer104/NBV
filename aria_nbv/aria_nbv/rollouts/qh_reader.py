@@ -16,7 +16,13 @@ import numpy as np
 import zarr
 from zarr.storage import LocalStore
 
-from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetInputProtocol, validate_target_protocol_admission
+from ..targets.protocol import (
+    ORACLE_GT_TARGET_SOURCE,
+    TargetInputProtocol,
+    TargetLabelEvidence,
+    target_label_is_trainable,
+    validate_target_protocol_admission,
+)
 from ..utils import Stage
 from .zarr_store import DEFAULT_RETURN_SEMANTICS, RolloutZarrStoreReader
 
@@ -215,19 +221,53 @@ def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
 
 def _validate_reader_admission(root: zarr.Group) -> None:
     target_source = _decode_dictionary(root, "target_source")
-    if set(target_source) != {ORACLE_GT_TARGET_SOURCE}:
-        raise ValueError(
-            "v0_gt_input requires the target-source dictionary to contain only the canonical Oracle GT source; "
-            f"found {sorted(target_source)}."
-        )
-    protocol = validate_target_protocol_admission(
-        root.attrs.get("target_protocol_version", ""),
-        target_source=ORACLE_GT_TARGET_SOURCE,
-    )
-    if protocol is not TargetInputProtocol.V0_GT_INPUT:
-        raise ValueError("Q_H rollout reader materializes only canonical v0_gt_input corpora.")
+    protocol = TargetInputProtocol(root.attrs.get("target_protocol_version", ""))
+    if protocol is TargetInputProtocol.V0_GT_INPUT:
+        if set(target_source) != {ORACLE_GT_TARGET_SOURCE}:
+            raise ValueError(
+                "v0_gt_input requires the target-source dictionary to contain only the canonical Oracle GT source; "
+                f"found {sorted(target_source)}."
+            )
+        validate_target_protocol_admission(protocol, target_source=ORACLE_GT_TARGET_SOURCE)
+    else:
+        if len(target_source) != 1 or not target_source[0] or target_source[0] == ORACLE_GT_TARGET_SOURCE:
+            raise ValueError(
+                f"v1_observed requires exactly one non-Oracle actor-visible target source; found {target_source!r}."
+            )
+        # The fixed store schema persists the self-consistent actor-visible
+        # source, while writer/config admission owns the stronger descriptor
+        # provenance check before this artifact can exist.
+    _validate_target_labels(root, protocol, target_source[0])
     if root.attrs.get("return_semantics") != DEFAULT_RETURN_SEMANTICS:
         raise ValueError(f"Q_H rollout reader requires {DEFAULT_RETURN_SEMANTICS!r} return semantics.")
+
+
+def _validate_target_labels(root: zarr.Group, protocol: TargetInputProtocol, target_source: str) -> None:
+    """Reject stores whose persisted target mask disagrees with typed evidence."""
+
+    target = root["targets"]
+    target_ids = _decode_dictionary(root, "target")
+    match_statuses = _decode_dictionary(root, "target_match_status")
+    for row, encoded_id in enumerate(np.asarray(target["matched_gt_target_id"]).reshape(-1)):
+        match_id = ""
+        if 0 <= int(encoded_id) < len(target_ids):
+            match_id = target_ids[int(encoded_id)]
+        status_id = int(np.asarray(target["gt_match_status_id"]).reshape(-1)[row])
+        status = match_statuses[status_id] if 0 <= status_id < len(match_statuses) else ""
+        expected = target_label_is_trainable(
+            TargetLabelEvidence(
+                protocol=protocol,
+                target_source=target_source,
+                gt_match_status=status,
+                matched_gt_target_row_id=int(np.asarray(target["matched_gt_target_row_id"]).reshape(-1)[row]),
+                matched_gt_target_id=match_id,
+                gt_match_iou=float(np.asarray(target["gt_match_iou"]).reshape(-1)[row]),
+                target_valid=bool(np.asarray(target["target_valid_mask"]).reshape(-1)[row]),
+            )
+        )
+        actual = bool(np.asarray(target["gt_label_valid_mask"]).reshape(-1)[row])
+        if actual != expected:
+            raise ValueError(f"targets/gt_label_valid_mask row {row} disagrees with canonical target evidence.")
 
 
 def _read_contract(root: zarr.Group) -> QhDataContract:

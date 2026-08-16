@@ -8,10 +8,15 @@ or training data.
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from enum import StrEnum
 
 ORACLE_GT_TARGET_SOURCE = "gt_obbs_oracle"
 """Canonical source label for descriptors constructed from Oracle GT OBBs."""
+
+STRICT_GT_IOU_THRESHOLD = 0.20
+"""Strict lower bound for an unambiguous observed-target GT match."""
 
 
 class TargetInputProtocol(StrEnum):
@@ -49,6 +54,73 @@ _ACTOR_VISIBLE_PROVENANCE = frozenset(
         TargetDescriptorProvenance.ACTOR_VISIBLE_PREDICTOR,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class TargetLabelEvidence:
+    """Persisted target facts used to admit oracle labels for training.
+
+    The mapping deliberately keeps target-task validity separate from store
+    provenance.  A caller must validate the latter independently before using
+    this predicate for a training view.
+    """
+
+    protocol: TargetInputProtocol | str
+    target_source: str | None
+    gt_match_status: str | None
+    matched_gt_target_row_id: int | None
+    matched_gt_target_id: str | None
+    gt_match_iou: float | None
+    target_valid: bool
+    descriptor_source: str | None = None
+    descriptor_provenance: TargetDescriptorProvenance | str | None = None
+
+
+def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
+    """Return whether one target's GT evidence is trainable.
+
+    V0 retains its historical row-based admission.  V1 requires the actor
+    visible protocol, an exact ``admitted`` match with both stable identifiers,
+    and a finite oriented IoU strictly above the campaign threshold.  Malformed
+    evidence is rejected rather than interpreted as a weak label.
+    """
+
+    try:
+        protocol = _canonical_protocol(evidence.protocol)
+        if not bool(evidence.target_valid):
+            return False
+        row_id = evidence.matched_gt_target_row_id
+        if row_id is None or int(row_id) < 0:
+            return False
+        if protocol is TargetInputProtocol.V0_GT_INPUT:
+            return evidence.gt_match_status in {"matched", "v0_gt_input"}
+        descriptor_source = evidence.descriptor_source or evidence.target_source
+        if evidence.descriptor_provenance is None:
+            # The fixed Zarr schema stores the actor-visible source but not a
+            # second provenance column.  Writer/config admission validates the
+            # stronger typed provenance before persistence; readers still
+            # require a non-Oracle, self-consistent source.
+            if not evidence.target_source or evidence.target_source == ORACLE_GT_TARGET_SOURCE:
+                return False
+            if descriptor_source != evidence.target_source:
+                return False
+        else:
+            validate_target_protocol_admission(
+                protocol,
+                target_source=evidence.target_source,
+                descriptor_source=descriptor_source,
+                descriptor_provenance=evidence.descriptor_provenance,
+            )
+        iou = evidence.gt_match_iou
+        return bool(
+            evidence.gt_match_status == "admitted"
+            and bool(evidence.matched_gt_target_id)
+            and iou is not None
+            and math.isfinite(float(iou))
+            and float(iou) > STRICT_GT_IOU_THRESHOLD
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def validate_target_protocol_admission(

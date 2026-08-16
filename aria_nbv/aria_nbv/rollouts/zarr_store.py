@@ -36,7 +36,7 @@ from zarr.storage import LocalStore
 
 from ..configs import PathConfig
 from ..data_handling.identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from ..targets.protocol import TargetInputProtocol
+from ..targets.protocol import TargetInputProtocol, TargetLabelEvidence, target_label_is_trainable
 from ..utils import BaseConfig
 from ..utils.config_paths import resolve_cache_artifact_dir
 from .manifest import (
@@ -1217,18 +1217,51 @@ class _RolloutZarrValidator:
         q_h = _q_h_arrays_for_validation(self.root)
         q_state_target_row_id = q_h["target_row_id"]
         q_train_mask = q_h["q_train_mask"]
+        expected_target_labels = _canonical_target_label_mask(self.root)
         target_valid_by_id = {
-            int(row_id): bool(valid and gt_valid)
-            for row_id, valid, gt_valid in zip(
-                target_row_id,
-                np.asarray(self.root["targets/target_valid_mask"]),
-                np.asarray(self.root["targets/gt_label_valid_mask"]),
-                strict=True,
+            int(row_id): bool(valid and expected_target_labels[index])
+            for index, (row_id, valid) in enumerate(
+                zip(
+                    target_row_id,
+                    np.asarray(self.root["targets/target_valid_mask"]),
+                    strict=True,
+                )
             )
         }
+        persisted_target_labels = np.asarray(self.root["targets/gt_label_valid_mask"], dtype=np.bool_).reshape(-1)
+        if not np.array_equal(persisted_target_labels, expected_target_labels):
+            self.errors.append("targets/gt_label_valid_mask does not match canonical target evidence.")
         q_target_valid = np.asarray([target_valid_by_id.get(int(row_id), False) for row_id in q_state_target_row_id])
         if q_train_mask.shape[0] == q_target_valid.shape[0] and np.any(q_train_mask & (~q_target_valid[:, None])):
             self.errors.append("Q_H q_train_mask is true for a target without valid task and GT label state.")
+        candidate_target_by_rollout = {
+            int(rollout_id): target_valid_by_id.get(int(target_id), False)
+            for rollout_id, target_id in zip(
+                np.asarray(self.root["rollouts/rollout_row_id"]),
+                np.asarray(self.root["rollouts/target_row_id"]),
+                strict=True,
+            )
+        }
+        step_target_valid = {
+            int(step_id): candidate_target_by_rollout.get(int(rollout_id), False)
+            for step_id, rollout_id in zip(
+                np.asarray(self.root["steps/step_row_id"]),
+                np.asarray(self.root["steps/rollout_row_id"]),
+                strict=True,
+            )
+        }
+        candidate_target_valid = np.asarray(
+            [step_target_valid.get(int(step_id), False) for step_id in np.asarray(self.root["candidates/step_row_id"])],
+            dtype=np.bool_,
+        )
+        actor = np.asarray(self.root["candidates/actor_action_mask"], dtype=np.bool_).reshape(-1)
+        oracle = np.asarray(self.root["candidates/oracle_label_mask"], dtype=np.bool_).reshape(-1)
+        candidate_q = np.asarray(self.root["candidates/q_train_mask"], dtype=np.bool_).reshape(-1)
+        expected_candidate_q = actor & oracle & candidate_target_valid
+        if not np.array_equal(candidate_q, expected_candidate_q):
+            self.errors.append(
+                "candidates/q_train_mask must equal actor_action_mask & oracle_label_mask for admitted targets."
+            )
         for attr_name in ("source_offline_store_version", "split_manifest_hash", "target_protocol_version"):
             if _missing_lineage_token(self.root.attrs.get(attr_name)):
                 self.errors.append(f"Rollout store is missing required root attr {attr_name!r}.")
@@ -1978,8 +2011,25 @@ def _write_targets(
         "gt_label_valid_mask",
         np.asarray(
             [
-                str(target_rows[target_row_id].get("gt_match_status") or "") in {"matched", "v0_gt_input"}
-                and _int_or_default(target_rows[target_row_id].get("matched_gt_target_row_id"), default=-1) >= 0
+                target_label_is_trainable(
+                    TargetLabelEvidence(
+                        protocol=target_protocol_version,
+                        target_source=target_rows[target_row_id].get("target_source"),
+                        gt_match_status=target_rows[target_row_id].get("gt_match_status"),
+                        matched_gt_target_row_id=_int_or_default(
+                            target_rows[target_row_id].get("matched_gt_target_row_id"), default=-1
+                        ),
+                        matched_gt_target_id=target_rows[target_row_id].get("matched_gt_target_id"),
+                        gt_match_iou=target_rows[target_row_id].get("gt_match_iou"),
+                        target_valid=(
+                            _int_or_default(
+                                target_rows[target_row_id].get("target_invalid_reason_bitset"),
+                                default=1 << INVALID_REASON_CODES["VALID"],
+                            )
+                            == 1 << INVALID_REASON_CODES["VALID"]
+                        ),
+                    )
+                )
                 for target_row_id in target_ids
             ],
             dtype=np.bool_,
@@ -3226,12 +3276,51 @@ def _valid_vector_value(
 
 def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
     target_bitset = lineage.target.target_invalid_reason_bitset
-    target_valid = target_bitset is None or int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])
-    gt_status = lineage.target.gt_match_status
-    gt_valid = gt_status in {"matched", "v0_gt_input"} and (
-        lineage.target.matched_gt_target_row_id is not None and int(lineage.target.matched_gt_target_row_id) >= 0
+    return target_label_is_trainable(
+        TargetLabelEvidence(
+            protocol=lineage.target.target_protocol_version or TargetInputProtocol.V0_GT_INPUT,
+            target_source=lineage.target.target_source,
+            gt_match_status=lineage.target.gt_match_status,
+            matched_gt_target_row_id=lineage.target.matched_gt_target_row_id,
+            matched_gt_target_id=lineage.target.matched_gt_target_id,
+            gt_match_iou=lineage.target.gt_match_iou,
+            target_valid=(target_bitset is None or int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])),
+        )
     )
-    return bool(target_valid and gt_valid)
+
+
+def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
+    """Materialize the one typed target-label mapping for persisted rows."""
+
+    targets = root["targets"]
+    protocol = str(root.attrs.get("target_protocol_version", ""))
+    target_sources = _read_string_array(root, "dictionaries/target_source")
+    target_source = target_sources[0] if len(target_sources) == 1 else None
+    target_ids = _read_string_array(root, "dictionaries/target")
+    statuses = _read_string_array(root, "dictionaries/target_match_status")
+    matched_ids = np.asarray(targets["matched_gt_target_id"], dtype=np.int64).reshape(-1)
+    matched_rows = np.asarray(targets["matched_gt_target_row_id"], dtype=np.int64).reshape(-1)
+    ious = np.asarray(targets["gt_match_iou"], dtype=np.float32).reshape(-1)
+    status_ids = np.asarray(targets["gt_match_status_id"], dtype=np.int64).reshape(-1)
+    target_valid = np.asarray(targets["target_valid_mask"], dtype=np.bool_).reshape(-1)
+    values: list[bool] = []
+    for row, (match_id, match_row, iou, status_id) in enumerate(
+        zip(matched_ids, matched_rows, ious, status_ids, strict=True)
+    ):
+        values.append(
+            target_label_is_trainable(
+                TargetLabelEvidence(
+                    protocol=protocol,
+                    target_source=target_source,
+                    gt_match_status=statuses[int(status_id)] if 0 <= int(status_id) < len(statuses) else None,
+                    matched_gt_target_row_id=int(match_row),
+                    matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
+                    gt_match_iou=float(iou),
+                    target_valid=bool(target_valid[row]),
+                )
+            )
+        )
+    return np.asarray(values, dtype=np.bool_)
 
 
 def _relative_pose_to_root(*, pose_world_cam: np.ndarray, root_pose_world: torch.Tensor) -> np.ndarray:
