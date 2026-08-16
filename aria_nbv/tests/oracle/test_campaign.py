@@ -966,6 +966,34 @@ def test_run_claimed_reconciles_interrupted_active_attempt_before_retry(tmp_path
     assert campaign.read_status(plan=plan).state == "completed"
 
 
+@pytest.mark.parametrize("prior_resumes", [0, 1])
+def test_public_run_rechecks_admission_before_resuming_interrupted_attempt(tmp_path, monkeypatch, prior_resumes):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    interrupted = plan.work_units[0]
+    campaign.append_event(campaign._event(plan, "preflight_passed"))
+    campaign.append_event(campaign._event(plan, "smoke_passed"))
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    for _ in range(prior_resumes):
+        campaign.append_event(campaign._event(plan, "campaign_resumed"))
+    campaign.append_event(campaign._event(plan, "target_profile", unit=interrupted, stage=interrupted.profile))
+    admission_checks = []
+    monkeypatch.setattr(campaign, "preflight", lambda *args, **kwargs: admission_checks.append("preflight"))
+    monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: admission_checks.append("smoke"))
+
+    results = campaign.run(
+        plan,
+        worker=lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"},
+    )
+
+    events = campaign.read_events(plan=plan)
+    assert admission_checks == ["preflight", "smoke"]
+    assert [event.kind for event in events].count("preflight_passed") == 1
+    assert [event.kind for event in events].count("smoke_passed") == 1
+    assert [event.kind for event in events].count("campaign_resumed") == prior_resumes + 1
+    assert len(results) == len(plan.work_units)
+
+
 def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -1071,16 +1099,32 @@ def test_event_reader_rejects_plan_binding_tampering(tmp_path, field, value):
         campaign.read_events(path, plan=plan)
 
 
-def test_read_status_rebuilds_running_state_when_projection_is_missing(tmp_path):
+def test_read_status_rebuilds_running_stage_when_projection_is_missing(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
     campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
+    campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
+    campaign.append_event(campaign._event(plan, "unit_started", unit=unit, stage="worker"))
 
     status = campaign.read_status(plan=plan)
 
     assert status.state == "running"
     assert status.plan_hash == plan.plan_hash
+    assert status.current_work_unit == unit.work_unit_hash
+    assert status.current_profile == unit.profile
+    assert status.current_stage == "worker"
     assert status.counts["pending"] == len(plan.work_units)
+
+
+def test_read_status_fails_closed_when_missing_projection_rebuilds_as_not_started(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "source_selection"))
+
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
 
 
 def test_stale_smoke_evidence_is_rejected_without_overwriting(tmp_path):

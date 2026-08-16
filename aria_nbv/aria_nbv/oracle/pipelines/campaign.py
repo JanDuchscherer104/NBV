@@ -1458,7 +1458,7 @@ class CudaRolloutCampaign:
                 raise RuntimeError("free disk floor is not satisfied")
         prior_results = self._resumable_event_results(plan)
         prior_events = self.read_events(plan=plan)
-        resuming_blocked_campaign = bool(prior_events and prior_events[-1].kind == "campaign_blocked")
+        resuming_campaign = any(event.kind in {"campaign_started", "campaign_resumed"} for event in prior_events)
         # Exclusive ownership precedes every status/event mutation so a
         # competing start cannot clobber the active campaign's evidence.
         claim = self.acquire_claim(plan)
@@ -1469,13 +1469,13 @@ class CudaRolloutCampaign:
                 plan_path=plan_path,
                 writer_config_path=self.config.writer_config_path,
             )
-            if not resuming_blocked_campaign:
+            if not resuming_campaign:
                 self.append_event(self._event(plan, "preflight_passed"))
                 self.write_status(self.status(plan, prior_results, stage="preflight_passed"))
             # An injected worker remains subject to the same current smoke gate;
             # injection changes execution mechanics, not campaign admission.
             self.smoke_evidence(plan)
-            if not resuming_blocked_campaign:
+            if not resuming_campaign:
                 self.append_event(self._event(plan, "smoke_passed"))
                 self.write_status(self.status(plan, prior_results, stage="smoke_passed"))
             return self._run_claimed(
@@ -2315,6 +2315,8 @@ class CudaRolloutCampaign:
         if len(progress["allowed_states"]) != 1:
             raise ValueError("canonical events do not identify one campaign state")
         state = next(iter(progress["allowed_states"]))
+        if state == "not_started":
+            raise ValueError("canonical events do not prove a started campaign state")
         outcomes = progress["terminal_outcomes"]
         results = [
             {"outcome": outcomes[unit.work_unit_hash], "work_unit_hash": unit.work_unit_hash}
@@ -2330,6 +2332,15 @@ class CudaRolloutCampaign:
             None,
         )
         stage = "terminal" if state.startswith("completed") else state
+        if current_unit is not None:
+            stage = next(
+                (
+                    event.stage
+                    for event in reversed(events)
+                    if event.work_unit_hash == current_unit.work_unit_hash and event.stage is not None
+                ),
+                stage,
+            )
         started_at = next(
             (event.timestamp for event in events if event.kind == "campaign_started"),
             None,
