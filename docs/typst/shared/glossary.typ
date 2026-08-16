@@ -170,7 +170,7 @@
       definition_short: "Selected entity, object crop, point, region, or surface-deficit hypothesis whose reconstruction quality should be improved.",
       definition_long: "Target-conditioned ARIA-NBV variants use this target as an explicit input to candidate scoring and planning instead of optimizing only scene-level RRI.",
       internal_links: (
-        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq3",
         "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/reference/vin.types.qmd",
       ),
@@ -215,7 +215,7 @@
       definition_long: "Target-specific RRI lets the thesis compare views by how much they improve a selected object or region, even when scene-level RRI would prefer large background surfaces.",
       internal_links: (
         "docs/typst/thesis/sections/01-research-questions.typ#rq1",
-        "docs/typst/thesis/sections/01-research-questions.typ#rq4",
+        "docs/typst/thesis/sections/01-research-questions.typ#rq2",
         "docs/contents/theory/rri_theory.qmd",
       ),
       citations: (
@@ -1196,7 +1196,7 @@
       category: "planning.constraints",
       parent: "finite-candidate-action-set",
       definition_short: "Hard mask that separates feasible candidate actions from invalid candidates.",
-      definition_long: "The mask m_{t,i} gates candidate actions, while invalid reason codes rho_{t,i} preserve why a candidate was rejected. Collision, outside-bounds poses, no target visibility, bad frusta, no depth hits, and outside-EVL-extent cases are constraints rather than low target-RRI examples.",
+      definition_long: "The action mask m_{t,i} gates selectable candidate rows, while actor evidence/support, target validity, oracle-label validity, and Q-training eligibility remain distinct fields. Only physical or explicitly contracted admissibility failures clear action validity. No target visibility or no depth hits clear action validity only when the executable feasibility contract explicitly requires that gate; otherwise they remain support fields. Outside-EVL extent and missing semidense or appearance support remain evidence fields unless the executable feasibility contract says otherwise; failed oracle evaluation clears oracle_label_mask and q_train_mask rather than action validity. Invalid reason codes rho_{t,i} preserve physical rejection causes, and invalidity is not a low target-RRI class.",
       internal_links: (
         "docs/typst/thesis/sections/01-research-questions.typ#rq4",
         "docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd",

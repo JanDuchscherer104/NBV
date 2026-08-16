@@ -1,6 +1,6 @@
 == Research Questions <sec:thesis-research-questions>
 
-#import "../draft_markers.typ": thesis_status
+#import "../draft_markers.typ": thesis_status, development_only
 #import "../../shared/equations.typ": eqs
 
 The thesis asks whether ARIA-NBV can perform target-conditioned, quality-driven
@@ -25,6 +25,20 @@ scene-level ASE evidence only while preserving mesh-supervised target RRI.
 Online discrete $Q_H$ is a deferred RQ5 bridge; continuous or simulator-backed
 actor--critic control is RQ6 and is not required for the finite-candidate thesis
 result. The active quantitative core is therefore RQ1--RQ4 below.
+
+#development_only[
+  *Development provenance and reconciliation.* The reviewed Quarto source
+  (the reviewed historical QMD at `origin/main`) supplied the six-tier
+  ordering: RQ1 objective, RQ2 offline finite-candidate planning, RQ3
+  actor-visible target representation, RQ4 candidate/rollout/scale support, RQ5
+  online discrete $Q_H$, and RQ6 continuous or simulator escalation. The base
+  Typst formulation on this branch had consolidated the first four questions
+  but omitted the two explicitly gated extensions. The current formulation
+  preserves the reviewed ordering, makes RQ1--RQ4 the evaluated core, and
+  states RQ5/RQ6 as conditional bridges. The Quarto page remains historical
+  review input; this section and the executable Python/configuration owners
+  define current terminology and implementation status.
+]
 
 #thesis_status(
   implementation: "planned",
@@ -92,20 +106,26 @@ support, and EVL support. A compact crop descriptor from actor-visible spatial
 evidence is the first ablation; entity tokens and appearance features are later
 ablations. V0 GT-OBB input is a sanity or upper-bound path only.
 
-If implemented, observed targets will be matched to GT targets by compatible class and a deterministic
-geometry-first 3D-IoU rule, with visibility, projected area, and semi-dense/EVL
-support reported as eligibility and audit fields. Unmatched, unsupported, or
-ambiguous targets are protocol-invalid cases, not low-RRI examples.
+The planned V1 matcher (not implemented) first requires compatible semantic
+class, then applies deterministic 3D IoU with an explicit threshold
+$tau_"IoU"$. If the best and second-best compatible matches are separated by
+less than the explicit ambiguity margin $tau_"gap"$, the proposal is rejected
+as ambiguous; below-threshold matches are unmatched. Visibility, projected
+area, and semi-dense/EVL support are audit-only evidence fields for this
+association rule, not association scores. Unmatched or ambiguous targets are
+protocol-invalid cases, not low-RRI examples.
 
 === RQ4 — Candidate, rollout, and scale support <rq4>
 
 Do mixed target-centric and default-exploration candidates, controlled rollout
-branching, and scale-aware replay evidence improve reliability over pure generic
-or pure target-point sampling? The thesis-core finite table combines target-point,
-radial-away, radial-towards, and forward-rig directions with bounded jitter and
-supported shell position samplers. Every row retains strategy provenance, a hard
-validity mask, and explicit invalid-reason codes. Branch, beam, and stochastic
-temperature controls widen data support; they do not replace the RRI objective.
+branching, and scale-aware replay evidence improve reliability over a narrower
+candidate family? The thesis-core finite table is the executable 60-row mixture:
+`forward_local` (24), `target_bearing_local` (24), and
+`lateral_target_bypass` (12). Legacy radial-away/radial-towards and unrestricted
+free-shell directions are explicit ablations, not thesis-core families. Every
+row retains strategy provenance, a hard validity mask, and explicit
+invalid-reason codes. Branch, beam, and stochastic temperature controls widen
+data support; they do not replace the RRI objective.
 
 Scale proceeds causally: a small trusted subset first establishes geometry,
 matching, invalidity, and replay correctness; a scene-level held-out or full
@@ -118,14 +138,48 @@ for final claims.
 
 === Shared evidence protocol <protocol>
 
-Invalidity is a shared constraint across all questions: collision, out-of-bounds,
-missing depth, bad frusta, outside-EVL extent, and impossible oracle evaluation
-are hard masks with reason codes. Report invalid fractions and reason distributions,
+Invalidity is a shared constraint across all questions. Only physical or
+explicit admissibility failures (for example collision, out-of-bounds pose,
+bad frustum, or a contract-defined motion violation) clear action validity;
+outside-EVL extent, missing semidense/appearance support, and similar evidence
+gaps remain support fields unless the executable feasibility contract says
+otherwise. A failed oracle evaluation does not make the action physically
+invalid: it clears `oracle_label_mask` and `q_train_mask` and is reported as a
+label/evaluation failure. Keep the mask taxonomy explicit: *action validity*
+(`valid_action_mask` / `actor_action_mask`) gates selectable candidate rows;
+*actor evidence/support* records whether observed target or local semidense/EVL
+evidence exists; *target validity* records whether the target task and identity
+state are admissible; *oracle-label validity* (`oracle_label_mask`) records
+whether GT evaluation produced a finite label; and *Q-training eligibility*
+(`q_train_mask`) is the strict intersection required by the learning contract.
+Report invalid fractions and reason distributions,
 target-visible fractions, masked and unmasked rank metrics, and selected-action
 oracle evaluation. Equal budget means equal horizon, candidate count, candidate
 distribution, and validity constraints; path length, runtime, and oracle calls
 are separate measurements. Coverage, calibration, stage shift, and storage
 lineage are evidence qualifiers rather than proxy objectives.
+
+=== RQ5 — Conditional online discrete $Q_H$ bridge <rq5>
+
+After offline finite-candidate evidence is stable, does online interaction over
+the same discrete candidate contract improve endpoint target gain or calibration
+over the offline $Q_H$ policy? RQ5 reuses the actor-visible state, candidate
+mixture, hard action mask, target protocol, horizon, and oracle re-evaluation of
+RQ1--RQ4. It is attempted only when offline headroom and replay support are
+positive; it is not required to establish the finite-candidate thesis result.
+Online training must not silently expand the action space, change the target
+protocol, or treat GT renders as actor evidence.
+
+=== RQ6 — Lower-priority continuous and simulator escalation <rq6>
+
+If the finite-candidate and online-discrete evidence is stable, does a
+continuous or hierarchical target-then-pose policy, potentially in a simulator,
+provide measurable headroom over the best finite-candidate policy under the same
+target-specific objective? RQ6 is a time-permitting escalation, not a substitute
+for the offline $Q_H$ result. Any comparison must preserve target conditioning,
+matched budgets or cost curves, explicit feasibility handling, and independent
+oracle endpoint evaluation; no continuous-control result is implied by the
+current finite-candidate implementation.
 
 === Research matrix <matrix>
 
@@ -138,6 +192,8 @@ lineage are evidence qualifiers rather than proxy objectives.
   [RQ2], [M4, M5], [One-step gate, oracle lookahead, rollout traces, endpoint gain, and recovered headroom.],
   [RQ3], [M3, M4], [Actor-visible target encoding and leakage-safe crop ablation.],
   [RQ4], [M2--M7], [Candidate mixtures, branching diversity, validity statistics, scale, and coverage reports.],
+  [RQ5], [M6, conditional], [Online discrete $Q_H$ under the unchanged finite-candidate contract.],
+  [RQ6], [M6, lower priority], [Continuous or simulator escalation against the best discrete policy.],
 )
 
 The matrix is a reporting map, not a second source of contracts: implementation
