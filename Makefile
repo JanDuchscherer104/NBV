@@ -297,10 +297,8 @@ qmd-frontmatter-check: _check_python ## 📖 Validate taxonomy frontmatter for r
 agents-db-validate: _check_python ## Validate the agents DB schema
 	@$(PYTHON_INTERPRETER) scripts/agents_db.py validate
 
-ownership-consolidation-contract: _check_python ## Validate the frozen ownership-consolidation migration proof
-	@$(PYTHON_INTERPRETER) scripts/ownership_consolidation_validator.py --mode schema .omx/specs/ownership-branch-consolidation-inventory.json
-	@$(PYTHON_INTERPRETER) scripts/ownership_consolidation_validator.py --mode deletion-ready .omx/specs/ownership-branch-consolidation-inventory.json
-	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_ownership_consolidation_validator.py scripts/tests/test_validate_agent_memory_retired.py
+ownership-consolidation-contract: _check_python ## Validate ownership boundaries against canonical sources
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_ownership_consolidation_contract.py scripts/tests/test_validate_agent_memory_retired.py
 
 #  ══════════════════════════════════════════════════════════════════════
 #  Offline / rollout inspection

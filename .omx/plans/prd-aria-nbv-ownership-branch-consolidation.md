@@ -1,3 +1,8 @@
+---
+kind: plan
+status: accepted
+---
+
 # PRD: ARIA-NBV Ownership and Branch Consolidation
 
 **Status:** consensus-approved plan; execution is gated by S0
