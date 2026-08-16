@@ -1,12 +1,14 @@
 # OMX Artifact Retention
 
 OMX runtime state is local by default. Git history is the archive for completed
-or superseded plans, reviews, logs, goals, sessions, generated reports, and
-machine-readable runtime output.
+or superseded durable records, while logs, goals, sessions, caches, and other
+machine runtime state remain untracked.
 
-The only tracked `.omx` records are current or accepted human-facing plans and
-specifications. They must be Markdown files under `.omx/plans/` or
-`.omx/specs/` with YAML frontmatter:
+Tracked `.omx` records must be durable, human-reviewable artifacts under
+`.omx/context/`, `.omx/interviews/`, `.omx/plans/`, or `.omx/specs/`. Markdown,
+JSON, and HTML are supported when the format is appropriate to the record.
+Human-facing Markdown plans and specifications should use lifecycle
+frontmatter, for example:
 
 ```yaml
 ---
@@ -15,7 +17,9 @@ status: current # or accepted
 ---
 ```
 
-`make check-agent-memory` rejects every other tracked `.omx` path and records
-without this metadata. Add a record only after it becomes current or accepted;
-force-add that validated record intentionally, and leave drafts and generated
-workflow output ignored locally.
+`make check-agent-memory` rejects paths outside those durable roots, unsupported
+formats, the generated `ownership-branch-consolidation-inventory.*` artifacts,
+and known runtime, cache, log, state, goal, temporary, and transient paths. It
+does not impose a blanket Markdown-only or frontmatter rule on durable JSON or
+HTML. Add a durable record intentionally; leave generated workflow output and
+user-local runtime state ignored.
