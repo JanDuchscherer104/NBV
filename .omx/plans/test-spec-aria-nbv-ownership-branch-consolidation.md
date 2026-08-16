@@ -23,8 +23,10 @@ committed as substitute owners.
   `owner: docs` and no canonical-owner claim.
 - Active tracked sources contain no reference to a retired owner. Dated history,
   transcripts, archives, and the accepted migration plan remain provenance.
-- Generated OMX inventories, HTML reports, and JSON runtime output are not
-  tracked.
+- Generated ownership inventories and known OMX runtime, cache, log, state,
+  goal, temporary, and transient outputs are not tracked. Durable Markdown,
+  JSON, and HTML records remain supported under the repository OMX artifact
+  policy.
 - Typst marker checks run through `make thesis-marker-contract`: development and
   submission fixtures must compile, while invalid promotion fixtures and the
   submission-mode TODO fixture must fail.

@@ -240,8 +240,9 @@ or remote branch, record `merge`, `salvage`, `superseded`, `close`, `defer`, or
 
 ### 3.1 Ownership and content
 
-- [ ] The active Typst include graph contains exactly one canonical statement of
-      RQ1-RQ4 in `sections/01-research-questions.typ`.
+- [ ] The active Typst include graph contains exactly one canonical six-tier
+      statement in `sections/01-research-questions.typ`: RQ1--RQ4 evaluated
+      core, RQ5 conditional online bridge, and RQ6 lower-priority escalation.
 - [ ] `01-introduction.typ` includes the RQ file and no longer embeds a second
       copy.
 - [ ] Roadmap and M1 content render only in development mode from their dedicated
