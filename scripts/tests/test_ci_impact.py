@@ -126,6 +126,11 @@ class SelectionTests(unittest.TestCase):
             ".agents/references/source_order.md": {"scaffold"},
             ".agents/example.qmd": {"scaffold"},
             "aria_nbv/aria_nbv/__init__.py": {"package"},
+            "aria_nbv/aria_nbv/pose_generation/candidate_generation.py": {"package"},
+            "aria_nbv/aria_nbv/pose_generation/geometry.py": {"package"},
+            "aria_nbv/tests/pose_generation/test_api_geometry_contracts.py": {
+                "package"
+            },
             ".configs/example.toml": {"package"},
             ".graphifyignore": {"docs"},
             "scripts/build_graphify_projection.py": {"docs"},
