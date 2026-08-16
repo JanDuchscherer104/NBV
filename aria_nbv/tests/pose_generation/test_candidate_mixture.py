@@ -211,7 +211,6 @@ def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
 
     assert sum(component.count for component in components) == 60
     by_name = {component.name: component for component in components}
-    assert by_name["target_bearing_local"].min_radius == pytest.approx(0.4)
     assert by_name["local_refinement"].view_mode is ViewDirectionMode.TARGET_POINT
     assert by_name["local_refinement"].min_radius == pytest.approx(0.25)
     assert by_name["local_refinement"].max_radius == pytest.approx(0.7)

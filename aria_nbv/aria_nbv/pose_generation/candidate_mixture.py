@@ -262,8 +262,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     count=18,
                     view_mode=ViewDirectionMode.TARGET_POINT,
                     position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
-                    min_radius=0.4,
-                    max_radius=1.1,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
                 ),
