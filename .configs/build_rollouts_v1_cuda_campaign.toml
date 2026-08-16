@@ -1,4 +1,8 @@
 campaign_id = "cuda-rollouts-v1"
+mode = "broad"
+frozen_profile = "realistic_core_60"
+pilot_scene_count = 5
+temperatures = [0.5, 1.0, 2.0, 4.0]
 writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
 seed = 20260728
 observed_target_iou_threshold = 0.20
@@ -12,22 +16,22 @@ work_unit_timeout_seconds = 3600
 name = "realistic_core_60"
 device = "cuda"
 components = [["forward_local", 24], ["target_bearing_local", 24], ["lateral_target_bypass", 12]]
-recipes = [{name="random_valid_h5", policy="random_valid", horizon=5, branch=2, beam=2}, {name="random_valid_h8", policy="random_valid", horizon=8, branch=2, beam=2}, {name="oracle_greedy_h5", policy="oracle_greedy", horizon=5, branch=2, beam=2}, {name="oracle_greedy_h8", policy="oracle_greedy", horizon=8, branch=2, beam=2}, {name="temperature_softmax_h5_t2", policy="temperature_softmax", horizon=5, branch=2, beam=2, temperature=2.0}, {name="temperature_softmax_h8_t2", policy="temperature_softmax", horizon=8, branch=2, beam=2, temperature=2.0}]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]
 
 [[profiles]]
 name = "rich_local_60"
 device = "cuda"
 components = [["target_bearing_local", 18], ["forward_local", 18], ["lateral_target_bypass", 12], ["local_refinement", 6], ["revisit_backtrack", 6]]
-recipes = [{name="random_valid_h5", policy="random_valid", horizon=5, branch=2, beam=2}, {name="random_valid_h8", policy="random_valid", horizon=8, branch=2, beam=2}, {name="oracle_greedy_h5", policy="oracle_greedy", horizon=5, branch=2, beam=2}, {name="oracle_greedy_h8", policy="oracle_greedy", horizon=8, branch=2, beam=2}, {name="temperature_softmax_h5_t2", policy="temperature_softmax", horizon=5, branch=2, beam=2, temperature=2.0}, {name="temperature_softmax_h8_t2", policy="temperature_softmax", horizon=8, branch=2, beam=2, temperature=2.0}]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]
 
 [[profiles]]
 name = "radial_backtrack_60"
 device = "cuda"
 components = [["radial_towards_target_bearing", 20], ["radial_away_target_bearing", 20], ["revisit_backtrack", 15], ["target_point_anchor", 5]]
-recipes = [{name="random_valid_h5", policy="random_valid", horizon=5, branch=2, beam=2}, {name="random_valid_h8", policy="random_valid", horizon=8, branch=2, beam=2}, {name="oracle_greedy_h5", policy="oracle_greedy", horizon=5, branch=2, beam=2}, {name="oracle_greedy_h8", policy="oracle_greedy", horizon=8, branch=2, beam=2}, {name="temperature_softmax_h5_t2", policy="temperature_softmax", horizon=5, branch=2, beam=2, temperature=2.0}, {name="temperature_softmax_h8_t2", policy="temperature_softmax", horizon=8, branch=2, beam=2, temperature=2.0}]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]
 
 [[profiles]]
 name = "free_shell_upper_bound_60"
 device = "cuda"
 components = [["upper_bound_free_shell", 60]]
-recipes = [{name="random_valid_h5", policy="random_valid", horizon=5, branch=2, beam=2}, {name="random_valid_h8", policy="random_valid", horizon=8, branch=2, beam=2}, {name="oracle_greedy_h5", policy="oracle_greedy", horizon=5, branch=2, beam=2}, {name="oracle_greedy_h8", policy="oracle_greedy", horizon=8, branch=2, beam=2}, {name="temperature_softmax_h5_t2", policy="temperature_softmax", horizon=5, branch=2, beam=2, temperature=2.0}, {name="temperature_softmax_h8_t2", policy="temperature_softmax", horizon=8, branch=2, beam=2, temperature=2.0}]
+recipes = [{name="temperature_softmax_h8", policy="temperature_softmax", horizon=8, branch=1, beam=1}]

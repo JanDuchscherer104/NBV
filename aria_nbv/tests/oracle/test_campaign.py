@@ -122,15 +122,8 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
         assert [(c.name, c.count, c.view_mode.value, c.position_mode.value) for c in components] == [
             (name, count, expected_modes[name], expected_positions[name]) for name, count in profile.components
         ]
-        assert [r.name for r in adapted.recipes] == [
-            "random_valid_h5",
-            "random_valid_h8",
-            "oracle_greedy_h5",
-            "oracle_greedy_h8",
-            "temperature_softmax_h5_t2",
-            "temperature_softmax_h8_t2",
-        ]
-        assert [r.policy.selection_temperature for r in adapted.recipes] == [1.0, 1.0, 1.0, 1.0, 2.0, 2.0]
+        assert [r.name for r in adapted.recipes] == ["temperature_softmax_h8_t0.5"]
+        assert [r.policy.selection_temperature for r in adapted.recipes] == [0.5]
 
 
 def _campaign(tmp_path):
@@ -299,14 +292,7 @@ def test_recipe_suite_rejects_missing_or_empty_recipe_suite(recipe_mutation):
 
 
 def test_recipe_suite_has_exact_policy_horizon_branch_beam_and_temperature():
-    expected = [
-        ("random_valid", 5, 2, 2, 1.0),
-        ("random_valid", 8, 2, 2, 1.0),
-        ("oracle_greedy", 5, 2, 2, 1.0),
-        ("oracle_greedy", 8, 2, 2, 1.0),
-        ("temperature_softmax", 5, 2, 2, 2.0),
-        ("temperature_softmax", 8, 2, 2, 2.0),
-    ]
+    expected = [("temperature_softmax", 8, 1, 1, 1.0)]
     for profile in CudaRolloutCampaignConfig().profiles:
         assert [
             (r["policy"], r["horizon"], r["branch"], r["beam"], r.get("temperature", 1.0)) for r in profile.recipes
@@ -498,8 +484,8 @@ def test_status_preserves_last_terminal_identity_across_resume_and_completion(tm
         campaign.status(
             plan,
             [{"outcome": "failed"}, {"outcome": "insufficient_support"}],
-            current_unit=second,
-            stage="insufficient_support",
+            last_unit=second,
+            stage="worker",
         )
     )
     completed = campaign.status(
@@ -1565,12 +1551,22 @@ def test_plan_is_stable_and_assigns_profiles(tmp_path):
     first = campaign.plan(rows, source_manifest_hash="source")
     second = campaign.plan(list(reversed(rows)), source_manifest_hash="source")
     assert first.plan_hash != second.plan_hash
-    assert {u.profile for u in first.work_units} == {
-        "realistic_core_60",
-        "rich_local_60",
-        "radial_backtrack_60",
-        "free_shell_upper_bound_60",
-    }
+    assert {u.profile for u in first.work_units} == {"realistic_core_60"}
+    assert [u.temperature for u in first.work_units] == [0.5, 1.0]
+    assert {u.scene_split for u in first.work_units} == {"train"}
+
+
+def test_pilot_plan_has_two_profiles_and_four_temperatures(tmp_path):
+    base = CudaRolloutCampaignConfig(output_root=tmp_path)
+    values = base.model_dump()
+    values.update(mode="pilot", expected_scene_count=6, pilot_scene_count=5, profiles=base.profiles)
+    campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig.model_construct(**values))
+    rows = [_row(f"s{i}", f"k{i}", f"t{i}") for i in range(6)]
+    plan = campaign.plan(rows, source_manifest_hash="source")
+    assert len(plan.work_units) == 40
+    assert {u.profile for u in plan.work_units} == {"realistic_core_60", "rich_local_60"}
+    assert {u.temperature for u in plan.work_units} == {0.5, 1.0, 2.0, 4.0}
+    assert len({u.work_unit_hash for u in plan.work_units}) == 40
 
 
 def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path):

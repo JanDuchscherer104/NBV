@@ -962,33 +962,16 @@ class RolloutDatasetWriter:
                 f"target={target.target_id}: {scorer.invalidity.message}",
             )
             return records
-        # Probe one fresh root shell solely for the hard support gate.  The
-        # probe result is discarded; every recipe below regenerates its own
-        # candidate root and therefore cannot accidentally reuse probe state.
+        # Probe one fresh root shell solely for the hard support gate.  This is
+        # deliberately candidate-generation-only: support must not pay for
+        # replay scoring or rendering, and the discarded shell is never reused.
         if getattr(self.config, "min_valid_root_candidates", 0) > 0 and self.config.recipes:
-            probe_recipe = self.config.recipes[0]
-            probe_cfg = CounterfactualPoseGeneratorConfig(
-                candidate_config=self.config.candidate_mixture,
-                policy=probe_recipe.policy,
-                log_timing=self.config.log_timing,
-                verbosity=self.config.verbosity,
-                is_debug=self.config.is_debug,
+            probe = self.config.candidate_mixture.setup_target().generate_from_typed_sample(
+                sample.efm_snippet_view,
+                runtime_context=runtime_context,
             )
-            try:
-                probe_result = probe_cfg.setup_target().generate_from_typed_sample(
-                    sample.efm_snippet_view,
-                    score_candidates=OracleReplayAdapter(scorer),
-                    candidate_runtime_context=runtime_context,
-                )
-                root_counts = [
-                    int(t.steps[0].candidates.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
-                    for t in probe_result.trajectories
-                    if t.steps
-                ]
-                support_reason = self.root_support_preflight(min(root_counts) if root_counts else 0)
-            except OracleReplayInvalidityError as exc:
-                support_reason = f"insufficient_root_support:invalid:{exc.invalidity.reason.value}"
-                self.stats.skip(support_reason)
+            valid_count = int(probe.mask_valid.detach().cpu().to(dtype=torch.bool).sum().item())
+            support_reason = self.root_support_preflight(valid_count)
             if support_reason is not None:
                 self.stats.rollout_invalid_skips += 1
                 raise InsufficientRootSupportError(support_reason)

@@ -619,6 +619,7 @@ def test_rollout_target_probe_is_disposable_and_recipes_regenerate(
 
     class _Result:
         trajectories = (_Trajectory(),)
+        mask_valid = torch.ones(10 if not raises else 9, dtype=torch.bool)
 
     calls = 0
 
@@ -651,6 +652,7 @@ def test_rollout_target_probe_is_disposable_and_recipes_regenerate(
     writer.stats = RolloutDatasetWriterStats()
     writer.console = SimpleNamespace(warn=lambda *_args, **_kwargs: None)
     monkeypatch.setattr(CounterfactualPoseGeneratorConfig, "setup_target", lambda self: _Generator())
+    monkeypatch.setattr(CandidateMixtureViewGeneratorConfig, "setup_target", lambda self: _Generator())
     monkeypatch.setattr(
         rollout_module,
         "OracleReplayAdapter",
