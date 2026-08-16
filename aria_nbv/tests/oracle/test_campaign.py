@@ -340,7 +340,13 @@ def test_smoke_writes_structured_succeeded_evidence(tmp_path):
 def test_campaign_status_round_trip_and_schema_rejection():
     from dataclasses import asdict
 
-    status = CampaignStatus("running", {"pending": 2}, "plan", "now", current_stage="worker")
+    status = CampaignStatus(
+        "running",
+        {**{outcome.value: 0 for outcome in CampaignOutcome}, "pending": 2},
+        "plan",
+        "now",
+        current_stage="worker",
+    )
     payload = json.loads(json.dumps(asdict(status)))
     assert CampaignStatus.from_jsonable(payload) == status
     payload["schema_version"] = "campaign-status-v0"
@@ -425,6 +431,37 @@ def test_status_separates_active_and_last_work_unit(tmp_path):
     assert terminal.last_work_unit == plan.work_units[0].work_unit_hash
 
 
+def test_status_preserves_last_terminal_identity_across_resume_and_completion(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    first, second = plan.work_units[:2]
+
+    prestart = campaign.status(plan, stage="planned")
+    assert prestart.current_work_unit is None
+    assert prestart.last_work_unit is None
+
+    campaign.write_status(campaign.status(plan, [{"outcome": "failed"}], current_unit=first, stage="failed"))
+    resumed = campaign.status(plan, [{"outcome": "failed"}], current_unit=second, stage="worker")
+    assert resumed.current_work_unit == second.work_unit_hash
+    assert resumed.last_work_unit == first.work_unit_hash
+
+    campaign.write_status(
+        campaign.status(
+            plan,
+            [{"outcome": "failed"}, {"outcome": "insufficient_support"}],
+            current_unit=second,
+            stage="insufficient_support",
+        )
+    )
+    completed = campaign.status(
+        plan,
+        [{"outcome": "failed"}] * (len(plan.work_units) - 1) + [{"outcome": "insufficient_support"}],
+        stage="terminal",
+    )
+    assert completed.current_work_unit is None
+    assert completed.last_work_unit == second.work_unit_hash
+
+
 def test_status_rejects_negative_counts_and_divergent_event_counts(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -434,14 +471,170 @@ def test_status_rejects_negative_counts_and_divergent_event_counts(tmp_path):
     with pytest.raises(ValueError, match="non-negative"):
         CampaignStatus.from_jsonable(payload)
     campaign.append_event(campaign._event(plan, "campaign_started"))
-    campaign.append_event(
-        campaign._event(plan, "unit_failed", unit=plan.work_units[0], outcome="failed")
-    )
+    campaign.append_event(campaign._event(plan, "unit_failed", unit=plan.work_units[0], outcome="failed"))
     payload = asdict(status)
     payload["counts"]["pending"] = 0
     campaign.write_status(CampaignStatus.from_jsonable(payload))
     with pytest.raises(ValueError, match="invalid campaign status"):
         campaign.read_status(plan=plan)
+
+
+def _append_unit_events(campaign, plan, unit, outcome):
+    campaign.append_event(campaign._event(plan, "target_profile", unit=unit, stage=unit.profile))
+    campaign.append_event(campaign._event(plan, "root_preflight", unit=unit, stage="preflight"))
+    campaign.append_event(campaign._event(plan, "unit_started", unit=unit, stage="worker"))
+    campaign.append_event(campaign._event(plan, "recipe_worker", unit=unit, stage=unit.profile))
+    if outcome == "insufficient_support":
+        campaign.append_event(
+            campaign._event(
+                plan,
+                "root_preflight_insufficient",
+                unit=unit,
+                outcome=outcome,
+                stage="preflight",
+            )
+        )
+    elif outcome in {"succeeded", "skipped"}:
+        campaign.append_event(
+            campaign._event(plan, "root_preflight_completed", unit=unit, outcome=outcome, stage="preflight")
+        )
+        campaign.append_event(
+            campaign._event(plan, "recipe_stage_completed", unit=unit, outcome=outcome, stage=unit.profile)
+        )
+        campaign.append_event(
+            campaign._event(
+                plan,
+                "unit_promoted" if outcome == "succeeded" else "unit_validated_skip",
+                unit=unit,
+                outcome=outcome,
+                stage="promotion",
+            )
+        )
+    campaign.append_event(campaign._event(plan, f"unit_{outcome}", unit=unit, outcome=outcome))
+
+
+def test_read_status_accepts_planning_prefix_and_blocked_resume_lifecycle(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "source_selection"))
+    campaign.append_event(campaign._event(plan, "plan_ready"))
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_unit_events(campaign, plan, plan.work_units[0], "failed")
+    campaign.append_event(campaign._event(plan, "campaign_blocked", outcome="blocked"))
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    results = [{"outcome": "failed"}]
+    for unit in plan.work_units[1:]:
+        outcome = "failed" if unit is not plan.work_units[-1] else "insufficient_support"
+        _append_unit_events(campaign, plan, unit, outcome)
+        results.append({"outcome": outcome})
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+    campaign.write_status(campaign.status(plan, results, stage="terminal", last_unit=plan.work_units[-1]))
+
+    status = campaign.read_status(plan=plan)
+    assert status.state == "completed_with_failures"
+    assert status.counts["pending"] == 0
+    assert status.last_work_unit == plan.work_units[-1].work_unit_hash
+
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        ("plan_ready",),
+        ("campaign_started", "campaign_started"),
+        ("campaign_started", "campaign_finished"),
+    ],
+)
+def test_read_status_rejects_impossible_or_duplicate_campaign_boundaries(tmp_path, events):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    for kind in events:
+        campaign.append_event(campaign._event(plan, kind))
+    campaign.write_status(campaign.status(plan, stage="running"))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+@pytest.mark.parametrize("outcome", [outcome.value for outcome in CampaignOutcome if outcome.value != "pending"])
+def test_read_status_rejects_unknown_work_unit_for_every_outcome(tmp_path, outcome):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    foreign = replace(plan.work_units[0], work_unit_hash="foreign")
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.append_event(campaign._event(plan, f"unit_{outcome}", unit=foreign, outcome=outcome))
+    campaign.write_status(campaign.status(plan, stage="running"))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_read_status_rejects_events_after_campaign_finish(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, "failed")
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.write_status(campaign.status(plan, [{"outcome": "failed"}] * len(plan.work_units), stage="terminal"))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_read_status_rejects_duplicate_unit_terminal_boundary(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    _append_unit_events(campaign, plan, unit, "failed")
+    campaign.append_event(campaign._event(plan, "unit_failed", unit=unit, outcome="failed"))
+    campaign.write_status(campaign.status(plan, [{"outcome": "failed"}], current_unit=unit, stage="failed"))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_read_status_rejects_terminal_state_without_event_ledger(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.write_status(campaign.status(plan, [{"outcome": "failed"}] * len(plan.work_units), stage="terminal"))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_read_status_rejects_nonblocked_state_after_campaign_blocked(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    campaign.append_event(campaign._event(plan, "campaign_blocked", outcome="blocked"))
+    campaign.write_status(campaign.status(plan, stage="preflight_passed"))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+@pytest.mark.parametrize("outcome", ["succeeded", "skipped"])
+def test_terminal_success_and_skip_require_validated_shard_leaves(tmp_path, monkeypatch, outcome):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    campaign.append_event(campaign._event(plan, "campaign_started"))
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, outcome)
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+    campaign.write_status(
+        campaign.status(
+            plan, [{"outcome": outcome}] * len(plan.work_units), stage="terminal", last_unit=plan.work_units[-1]
+        )
+    )
+    monkeypatch.setattr(campaign, "shard_entry_for_unit", lambda _plan, _unit: SimpleNamespace())
+    from aria_nbv.oracle.pipelines import shards as shard_module
+
+    monkeypatch.setattr(shard_module, "read_validated_completed_shard", lambda *args, **kwargs: None)
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+    monkeypatch.setattr(
+        shard_module,
+        "read_validated_completed_shard",
+        lambda *args, **kwargs: {"validation": "passed"},
+    )
+    assert campaign.read_status(plan=plan).state == "completed"
 
 
 def test_status_does_not_invent_coordinator_worker_identity(tmp_path):
@@ -559,8 +752,9 @@ def test_process_runner_drains_binary_pipes_and_records_timeout_identity(monkeyp
     assert ("kill", 42, signal.SIGKILL) in calls
 
 
-def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path):
+def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
+    monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda _plan, _unit: {"validation": "passed"})
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     claim = {"claim_hash": "test"}
     calls = []
@@ -588,6 +782,56 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path):
     assert kinds.count("unit_started") == len(plan.work_units)
 
 
+def test_run_claimed_never_marks_unvalidated_skip_complete(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+
+    results = campaign._run_claimed(
+        plan,
+        worker=lambda _unit: {"outcome": "skipped"},
+        claim={"claim_hash": "test"},
+    )
+
+    assert {result["outcome"] for result in results} == {"failed"}
+    assert "unit_skipped" not in [event.kind for event in campaign.read_events()]
+    assert campaign.read_status(plan=plan).state == "completed_with_failures"
+
+
+def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda _plan, _unit: {"validation": "passed"})
+
+    first = campaign._run_claimed(
+        plan,
+        worker=lambda _unit: {"outcome": "succeeded", "validated": True},
+        claim={"claim_hash": "first"},
+        max_new_units=1,
+    )
+    blocked = campaign.read_status(plan=plan)
+    assert len(first) == 1
+    assert blocked.state == "blocked"
+    assert blocked.counts["succeeded"] == 1
+    assert blocked.last_work_unit == plan.work_units[0].work_unit_hash
+
+    active = []
+
+    def resume_worker(unit):
+        status = campaign.read_status(plan=plan)
+        active.append((status.current_work_unit, status.last_work_unit))
+        return {"outcome": "insufficient_support", "reason": "synthetic support gap"}
+
+    resumed = campaign._run_claimed(plan, worker=resume_worker, claim={"claim_hash": "second"})
+    completed = campaign.read_status(plan=plan)
+    assert len(resumed) == len(plan.work_units)
+    assert completed.state == "completed"
+    assert completed.counts["succeeded"] == 1
+    assert completed.counts["insufficient_support"] == len(plan.work_units) - 1
+    assert completed.counts["pending"] == 0
+    assert len(active) == len(plan.work_units) - 1
+    assert active[0] == (plan.work_units[1].work_unit_hash, plan.work_units[0].work_unit_hash)
+
+
 def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -603,7 +847,7 @@ def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
                 elapsed_seconds=3600.0,
                 stderr_tail="bounded stderr",
             )
-        return {"outcome": "skipped"}
+        return {"outcome": "insufficient_support", "reason": "synthetic support gap"}
 
     campaign._run_claimed(plan, worker=worker, claim={"claim_hash": "test", "tmux_session": "campaign"})
     status = campaign.read_status(plan=plan)

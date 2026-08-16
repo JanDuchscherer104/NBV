@@ -335,6 +335,7 @@ class CampaignStatus:
             "conflicted",
         }
     )
+    _COUNT_KEYS: ClassVar[frozenset[str]] = frozenset(outcome.value for outcome in CampaignOutcome)
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignStatus":
@@ -349,12 +350,27 @@ class CampaignStatus:
         counts = payload["counts"]
         if not isinstance(counts, dict) or any(not isinstance(v, int) or v < 0 for v in counts.values()):
             raise ValueError("campaign status counts must be non-negative integers")
+        if not cls._COUNT_KEYS.issubset(counts):
+            raise ValueError("campaign status counts must include every outcome")
+        if state in {"completed", "completed_with_failures"} and counts[CampaignOutcome.PENDING.value] != 0:
+            raise ValueError("terminal campaign status cannot retain pending work")
+        failures = counts[CampaignOutcome.FAILED.value] + counts[CampaignOutcome.TIMED_OUT.value]
+        if state == "completed" and failures:
+            raise ValueError("completed campaign status cannot contain failures")
+        if state == "completed_with_failures" and not failures:
+            raise ValueError("completed_with_failures requires failure evidence")
+        current_work_unit = payload.get("current_work_unit")
+        if state != "running" and current_work_unit is not None:
+            raise ValueError("only running status may expose a current work unit")
+        if any(payload.get(key) is not None for key in ("active_pid", "active_process_group", "active_started_at")):
+            if current_work_unit is None:
+                raise ValueError("active process identity requires a current work unit")
         return cls(
             state,
             {str(k): int(v) for k, v in counts.items()},
             str(payload["plan_hash"]),
             str(payload["updated_at"]),
-            payload.get("current_work_unit"),
+            current_work_unit,
             payload.get("current_target_id"),
             payload.get("current_profile"),
             payload.get("current_stage"),
@@ -1428,6 +1444,9 @@ class CudaRolloutCampaign:
             free_bytes = shutil.disk_usage(self._disk_usage_path(self.config.output_root)).free
             if free_bytes < free_disk_floor_gb * 1024**3:
                 raise RuntimeError("free disk floor is not satisfied")
+        prior_results = self._resumable_event_results(plan)
+        prior_events = self.read_events(plan=plan)
+        resuming_blocked_campaign = bool(prior_events and prior_events[-1].kind == "campaign_blocked")
         # Exclusive ownership precedes every status/event mutation so a
         # competing start cannot clobber the active campaign's evidence.
         claim = self.acquire_claim(plan)
@@ -1438,12 +1457,13 @@ class CudaRolloutCampaign:
                 plan_path=plan_path,
                 writer_config_path=self.config.writer_config_path,
             )
-            self.write_status(self.status(plan, stage="preflight_passed"))
+            if not resuming_blocked_campaign:
+                self.write_status(self.status(plan, prior_results, stage="preflight_passed"))
             # An injected worker remains subject to the same current smoke gate;
             # injection changes execution mechanics, not campaign admission.
             self.smoke_evidence(plan)
-            self.write_status(self.status(plan, stage="smoke_passed"))
-            self.write_status(self.status(plan, stage="running"))
+            if not resuming_blocked_campaign:
+                self.write_status(self.status(plan, prior_results, stage="smoke_passed"))
             return self._run_claimed(
                 plan,
                 worker=worker,
@@ -1471,14 +1491,28 @@ class CudaRolloutCampaign:
     ) -> list[Any]:
         if plan is None:
             raise ValueError("an immutable CampaignPlan is required")
-        results = []
+        results_by_unit: dict[str, Any] = {
+            result["work_unit_hash"]: result for result in self._resumable_event_results(plan)
+        }
+
+        def ordered_results() -> list[Any]:
+            return [
+                results_by_unit[unit.work_unit_hash]
+                for unit in plan.work_units
+                if unit.work_unit_hash in results_by_unit
+            ]
+
+        results = ordered_results()
         started_at = self.clock()
         started_at_iso = self.utc_now().isoformat()
         new_units = 0
         blocked = False
         last_timeout: dict[str, Any] | None = None
         self.append_event(self._event(plan, "campaign_started"))
+        self.write_status(self.status(plan, results, stage="running", started_at=started_at_iso))
         for unit in plan.work_units:
+            if unit.work_unit_hash in results_by_unit:
+                continue
             reason = None
             if max_new_units is not None and new_units >= max_new_units:
                 reason = "max_new_units reached"
@@ -1573,7 +1607,6 @@ class CudaRolloutCampaign:
                     if returncode:
                         raise RuntimeError((stderr or stdout or f"worker exited {returncode}")[-2000:])
                     result = self.parse_worker_json(stdout)
-                results.append(result)
                 outcome = (
                     result.get("outcome", CampaignOutcome.SUCCEEDED.value)
                     if isinstance(result, dict)
@@ -1582,6 +1615,8 @@ class CudaRolloutCampaign:
                 if outcome != CampaignOutcome.SKIPPED.value:
                     new_units += 1
                 elapsed = self.clock() - started_at
+                if outcome in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}:
+                    self._require_validated_terminal_shard(plan, unit)
                 if outcome == CampaignOutcome.INSUFFICIENT_SUPPORT.value:
                     detail = str(result.get("reason", "")) if isinstance(result, dict) else ""
                     self.append_event(
@@ -1670,6 +1705,10 @@ class CudaRolloutCampaign:
                             started_at=started_at_iso,
                         )
                     )
+                if isinstance(result, dict):
+                    result = {**result, "work_unit_hash": unit.work_unit_hash}
+                results_by_unit[unit.work_unit_hash] = result
+                results = ordered_results()
                 self.append_event(
                     self._event(
                         plan,
@@ -1686,7 +1725,8 @@ class CudaRolloutCampaign:
                     CampaignOutcome.TIMED_OUT.value if isinstance(exc, TimeoutError) else CampaignOutcome.FAILED.value
                 )
                 result = {"outcome": outcome, "error": str(exc)[-2000:], "work_unit_hash": unit.work_unit_hash}
-                results.append(result)
+                results_by_unit[unit.work_unit_hash] = result
+                results = ordered_results()
                 if isinstance(exc, CampaignTimeoutError):
                     last_timeout = {
                         "work_unit_hash": unit.work_unit_hash,
@@ -1742,6 +1782,27 @@ class CudaRolloutCampaign:
                 )
             )
         return results
+
+    def _resumable_event_results(self, plan: CampaignPlan) -> list[dict[str, str]]:
+        """Rebuild plan-ordered terminal outcomes or reject a finished ledger."""
+        events = self.read_events(plan=plan)
+        if not events:
+            return []
+        progress = self._validate_event_lifecycle(events, plan)
+        if progress["allowed_states"] <= {"completed", "completed_with_failures"}:
+            raise ValueError("completed campaign cannot be resumed")
+        outcomes = progress["terminal_outcomes"]
+        for unit in plan.work_units:
+            if outcomes.get(unit.work_unit_hash) in {
+                CampaignOutcome.SUCCEEDED.value,
+                CampaignOutcome.SKIPPED.value,
+            }:
+                self._require_validated_terminal_shard(plan, unit)
+        return [
+            {"outcome": outcomes[unit.work_unit_hash], "work_unit_hash": unit.work_unit_hash}
+            for unit in plan.work_units
+            if unit.work_unit_hash in outcomes
+        ]
 
     def _event(
         self,
@@ -1887,7 +1948,7 @@ class CudaRolloutCampaign:
         if stage in {CampaignOutcome.BLOCKED.value, CampaignOutcome.CONFLICTED.value, "terminal"}:
             active = False
         retained_last = last_unit or self._persisted_last_unit(plan)
-        if retained_last is None and not active:
+        if not active and current_unit is not None:
             retained_last = current_unit
         return CampaignStatus(
             state,
@@ -2143,6 +2204,11 @@ class CudaRolloutCampaign:
             ):
                 raise ValueError("campaign status plan identity mismatch")
             if plan is not None:
+                known_units = {unit.work_unit_hash for unit in plan.work_units}
+                if status.current_work_unit is not None and status.current_work_unit not in known_units:
+                    raise ValueError("campaign status references unknown current work unit")
+                if status.last_work_unit is not None and status.last_work_unit not in known_units:
+                    raise ValueError("campaign status references unknown last work unit")
                 self._cross_check_status_evidence(status, plan)
             return status
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
@@ -2152,46 +2218,207 @@ class CudaRolloutCampaign:
         """Reject stale or divergent status when canonical progress exists."""
         events = self.read_events(plan=plan)
         if not events:
+            if status.state in {"completed", "completed_with_failures"}:
+                raise ValueError("terminal status lacks canonical event evidence")
             return
+        progress = self._validate_event_lifecycle(events, plan)
         if status.state in {"completed", "completed_with_failures"} and not any(
             event.kind == "campaign_finished" for event in events
         ):
             raise ValueError("terminal status lacks campaign_finished evidence")
         if status.state == "running" and not any(event.kind == "campaign_started" for event in events):
             raise ValueError("running status lacks campaign_started evidence")
-        latest: dict[str, str] = {}
-        for event in events:
-            if event.work_unit_hash and event.kind.startswith("unit_") and event.outcome:
-                latest[event.work_unit_hash] = event.outcome
-        if not latest:
-            return
+        latest = progress["terminal_outcomes"]
         counts = {outcome.value: 0 for outcome in CampaignOutcome}
         for outcome in latest.values():
             counts[outcome] = counts.get(outcome, 0) + 1
         counts["pending"] = max(0, len(plan.work_units) - len(latest))
+        if progress["blocked"] and status.state == "blocked":
+            counts[CampaignOutcome.BLOCKED.value] = 1
         for key, value in counts.items():
             if int(status.counts.get(key, 0)) != value:
                 raise ValueError("campaign status diverges from canonical events")
+        if status.state not in progress["allowed_states"]:
+            raise ValueError("campaign status state diverges from canonical events")
+        if status.current_work_unit != progress["current_work_unit"]:
+            raise ValueError("campaign status current work unit diverges from canonical events")
+        if status.last_work_unit != progress["last_work_unit"]:
+            raise ValueError("campaign status last work unit diverges from canonical events")
         for work_unit_hash, outcome in latest.items():
-            # A skipped unit may be produced by the injected resume seam before
-            # a shard path exists; successful promotions always require the
-            # canonical validated leaf below.
-            if outcome != CampaignOutcome.SUCCEEDED.value:
-                continue
             unit = next((item for item in plan.work_units if item.work_unit_hash == work_unit_hash), None)
             if unit is None:
                 raise ValueError("event references unknown work unit")
-            from .shards import read_validated_completed_shard
+            if outcome not in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}:
+                continue
+            self._require_validated_terminal_shard(plan, unit)
 
-            if (
-                read_validated_completed_shard(
-                    self.config.output_root / "shards" / work_unit_hash,
-                    shard_entry=self.shard_entry_for_unit(plan, unit),
-                    writer_config_hash=plan.writer_config_hash,
+    def _require_validated_terminal_shard(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> dict[str, Any]:
+        """Return the plan-bound promoted shard or reject terminal success/skip."""
+        from .shards import read_validated_completed_shard
+
+        try:
+            evidence = read_validated_completed_shard(
+                self.config.output_root / "shards" / unit.work_unit_hash,
+                shard_entry=self.shard_entry_for_unit(plan, unit),
+                writer_config_hash=plan.writer_config_hash,
+            )
+        except (OSError, TypeError, ValueError, KeyError) as exc:
+            raise ValueError("terminal success/skip lacks validated shard evidence") from exc
+        if evidence is None:
+            raise ValueError("terminal success/skip lacks validated shard evidence")
+        return evidence
+
+    @staticmethod
+    def _validate_event_lifecycle(events: Sequence[CampaignEvent], plan: CampaignPlan) -> dict[str, Any]:
+        """Validate the ordered event stream and return its canonical progress."""
+        run_state = "prefix"
+        finished = False
+        saw_source_selection = False
+        saw_plan_ready = False
+        current_work_unit: str | None = None
+        last_work_unit: str | None = None
+        unit_phases: dict[str, str] = {}
+        terminal_outcomes: dict[str, str] = {}
+        terminal_kinds = {
+            "unit_succeeded",
+            "unit_skipped",
+            "unit_failed",
+            "unit_timed_out",
+            "unit_insufficient_support",
+            "unit_blocked",
+            "unit_conflicted",
+        }
+        known_units = {unit.work_unit_hash for unit in plan.work_units}
+        for event in events:
+            if finished:
+                raise ValueError("events follow campaign_finished")
+            if event.work_unit_hash is not None and event.work_unit_hash not in known_units:
+                raise ValueError("event references unknown work unit")
+            if event.kind == "source_selection":
+                if run_state != "prefix" or saw_source_selection or saw_plan_ready or event.work_unit_hash:
+                    raise ValueError("invalid source_selection transition")
+                saw_source_selection = True
+                continue
+            if event.kind == "plan_ready":
+                if run_state != "prefix" or not saw_source_selection or saw_plan_ready or event.work_unit_hash:
+                    raise ValueError("invalid plan_ready transition")
+                saw_plan_ready = True
+                continue
+            if event.kind == "campaign_started":
+                if run_state not in {"prefix", "blocked"}:
+                    raise ValueError("duplicate campaign_started event")
+                if run_state == "prefix" and saw_source_selection != saw_plan_ready:
+                    raise ValueError("incomplete planning event prefix")
+                run_state = "running"
+                current_work_unit = None
+                unit_phases = {}
+                continue
+            if event.kind == "campaign_finished":
+                if run_state != "running" or current_work_unit is not None:
+                    raise ValueError("invalid campaign_finished transition")
+                if set(terminal_outcomes) != known_units:
+                    raise ValueError("campaign_finished precedes terminal work units")
+                run_state = "finished"
+                finished = True
+                continue
+            if run_state != "running":
+                raise ValueError("event precedes campaign_started")
+            if event.kind == "campaign_blocked":
+                if current_work_unit is not None or event.work_unit_hash is not None:
+                    raise ValueError("campaign_blocked while a work unit is active")
+                run_state = "blocked"
+                continue
+            unit_hash = event.work_unit_hash
+            if unit_hash is None:
+                if event.kind in {"preflight_stage_completed", "preflight_stage_failed"}:
+                    continue
+                raise ValueError("work-unit event lacks work-unit identity")
+            phase = unit_phases.get(unit_hash)
+            if event.kind == "target_profile":
+                if current_work_unit is not None or unit_hash in terminal_outcomes:
+                    raise ValueError("target_profile overlaps an active work unit")
+                current_work_unit = unit_hash
+                unit_phases[unit_hash] = "target_profile"
+            elif event.kind == "root_preflight":
+                if current_work_unit != unit_hash or phase != "target_profile":
+                    raise ValueError("invalid root_preflight transition")
+                unit_phases[unit_hash] = "root_preflight"
+            elif event.kind == "unit_started":
+                if current_work_unit != unit_hash or phase != "root_preflight":
+                    raise ValueError("invalid unit_started transition")
+                unit_phases[unit_hash] = "unit_started"
+            elif event.kind == "recipe_worker":
+                if current_work_unit != unit_hash or phase != "unit_started":
+                    raise ValueError("invalid recipe_worker transition")
+                unit_phases[unit_hash] = "recipe_worker"
+            elif event.kind in {"root_preflight_completed", "root_preflight_insufficient"}:
+                if current_work_unit != unit_hash or phase not in {"unit_started", "recipe_worker"}:
+                    raise ValueError(f"invalid {event.kind} transition")
+                allowed_outcomes = (
+                    {CampaignOutcome.INSUFFICIENT_SUPPORT.value}
+                    if event.kind == "root_preflight_insufficient"
+                    else {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
                 )
-                is None
-            ):
-                raise ValueError("successful status lacks validated shard evidence")
+                if event.outcome not in allowed_outcomes:
+                    raise ValueError(f"invalid {event.kind} outcome")
+                unit_phases[unit_hash] = event.kind
+            elif event.kind == "recipe_stage_completed":
+                if current_work_unit != unit_hash or phase != "root_preflight_completed":
+                    raise ValueError("invalid recipe_stage_completed transition")
+                unit_phases[unit_hash] = "recipe_stage_completed"
+            elif event.kind in {"unit_promoted", "unit_validated_skip"}:
+                expected_outcome = (
+                    CampaignOutcome.SUCCEEDED.value if event.kind == "unit_promoted" else CampaignOutcome.SKIPPED.value
+                )
+                if (
+                    current_work_unit != unit_hash
+                    or phase != "recipe_stage_completed"
+                    or event.outcome != expected_outcome
+                ):
+                    raise ValueError(f"invalid {event.kind} transition")
+                unit_phases[unit_hash] = event.kind
+            elif event.kind in terminal_kinds:
+                expected_outcome = event.kind.removeprefix("unit_")
+                valid_phase = {
+                    CampaignOutcome.SUCCEEDED.value: "unit_promoted",
+                    CampaignOutcome.SKIPPED.value: "unit_validated_skip",
+                    CampaignOutcome.INSUFFICIENT_SUPPORT.value: "root_preflight_insufficient",
+                }.get(expected_outcome)
+                if (
+                    current_work_unit != unit_hash
+                    or unit_hash in terminal_outcomes
+                    or event.outcome != expected_outcome
+                    or (valid_phase is not None and phase != valid_phase)
+                    or (valid_phase is None and phase not in {"root_preflight", "unit_started", "recipe_worker"})
+                ):
+                    raise ValueError("invalid unit terminal transition")
+                terminal_outcomes[unit_hash] = expected_outcome
+                last_work_unit = unit_hash
+                current_work_unit = None
+                unit_phases[unit_hash] = "terminal"
+            else:
+                raise ValueError(f"unsupported campaign event kind: {event.kind}")
+        if run_state == "finished":
+            has_failures = any(
+                outcome in {CampaignOutcome.FAILED.value, CampaignOutcome.TIMED_OUT.value}
+                for outcome in terminal_outcomes.values()
+            )
+            allowed_states = {"completed_with_failures" if has_failures else "completed"}
+        elif run_state == "blocked":
+            allowed_states = {"blocked"}
+        elif run_state == "running":
+            allowed_states = {"running"}
+        elif saw_plan_ready:
+            allowed_states = {"planned", "preflight_passed", "smoke_passed"}
+        else:
+            allowed_states = {"not_started"}
+        return {
+            "allowed_states": allowed_states,
+            "blocked": run_state == "blocked",
+            "current_work_unit": current_work_unit,
+            "last_work_unit": last_work_unit,
+            "terminal_outcomes": terminal_outcomes,
+        }
 
     def progress_summary(self, plan: CampaignPlan | None = None) -> dict[str, Any]:
         """Presentation-free status/events read model for CLI and UI adapters."""
