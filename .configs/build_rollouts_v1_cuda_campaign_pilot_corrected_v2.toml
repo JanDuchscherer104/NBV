@@ -1,0 +1,10 @@
+# Five-scene paired pilot after the final data-contract repairs. Keep this
+# identity and destination separate from every earlier diagnostic pilot so it
+# cannot resume or overwrite stale artifacts.
+campaign_id = "cuda-rollouts-v1-pilot-corrected-v2"
+mode = "pilot"
+frozen_profile = "realistic_core_60"
+pilot_scene_count = 5
+temperatures = [0.5, 1.0, 2.0, 4.0]
+writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
+output_root = ".campaign/cuda-rollouts-v1-pilot-corrected-v2"

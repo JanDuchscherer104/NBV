@@ -193,6 +193,42 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 4
 
 
+def test_corrected_v2_pilot_has_fresh_identity_and_unchanged_paired_contract():
+    config = CudaRolloutCampaignConfig.from_toml(
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml"
+    )
+    prior = CudaRolloutCampaignConfig.from_toml(
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml"
+    )
+    current_payload = config.model_dump_jsonable()
+    prior_payload = prior.model_dump_jsonable()
+    for identity_field in ("campaign_id", "output_root"):
+        current_payload.pop(identity_field)
+        prior_payload.pop(identity_field)
+
+    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v2"
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v2")
+    assert current_payload == prior_payload
+    assert config.mode.value == "pilot"
+    assert config.pilot_scene_count == 5
+    assert config.temperatures == (0.5, 1.0, 2.0, 4.0)
+    assert [profile.name for profile in config.profiles[:2]] == ["realistic_core_60", "rich_local_60"]
+    assert all(profile.total_count == 60 for profile in config.profiles[:2])
+    assert all(
+        [(recipe["horizon"], recipe["branch"], recipe["beam"]) for recipe in profile.recipes] == [(8, 1, 1)]
+        for profile in config.profiles[:2]
+    )
+
+    plan = config.setup_target().plan(
+        [_row(f"scene-{index}", f"sample-{index}", f"target-{index}") for index in range(100)],
+        source_manifest_hash="source",
+    )
+    assert len(plan.work_units) == 10
+    assert len({unit.sample_key for unit in plan.work_units}) == 5
+    assert {unit.profile for unit in plan.work_units} == {"realistic_core_60", "rich_local_60"}
+    assert {unit.temperatures for unit in plan.work_units} == {(0.5, 1.0, 2.0, 4.0)}
+
+
 @pytest.mark.parametrize("device", ["cpu", "mps", "xpu", "meta"])
 def test_nested_non_cuda_device_is_rejected_before_campaign_files(tmp_path, device):
     campaign = _campaign(tmp_path)
