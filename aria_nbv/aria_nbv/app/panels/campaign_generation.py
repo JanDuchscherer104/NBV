@@ -8,6 +8,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -35,10 +36,18 @@ def build_campaign_argv(
     time_budget_minutes: int | None = None,
     free_disk_floor_gb: int | None = None,
 ) -> list[str]:
-    """Build the exact argv delegated to ``nbv-rollout-campaign``."""
+    """Build the exact PATH-independent argv delegated to the campaign CLI."""
     if action not in {"preflight", "plan", "smoke", "run", "resume", "status"}:
         raise ValueError(f"unsupported campaign action: {action}")
-    argv = ["nbv-rollout-campaign", action, "--config-path", str(config_path)]
+    argv = [
+        sys.executable,
+        "-m",
+        "aria_nbv.oracle.pipelines.cli",
+        "--campaign",
+        action,
+        "--config-path",
+        str(config_path),
+    ]
     if action in {"run", "resume"}:
         if plan_path is None:
             raise ValueError("plan path is required")

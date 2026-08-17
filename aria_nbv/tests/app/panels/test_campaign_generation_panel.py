@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,7 +34,8 @@ def test_campaign_argv_uses_one_canonical_cli_and_action(action: str, tmp_path: 
     if action == "plan":
         kwargs["source_manifest"] = tmp_path / "source.json"
     argv = panel.build_campaign_argv(action, **kwargs)
-    assert argv[:3] == ["nbv-rollout-campaign", action, "--config-path"]
+    assert argv[:5] == [sys.executable, "-m", "aria_nbv.oracle.pipelines.cli", "--campaign", action]
+    assert Path(argv[0]).is_absolute()
     assert str(kwargs["config_path"]) in argv
     if action in {"run", "resume"}:
         assert argv[-2:] == ["--plan-path", str(kwargs["plan_path"])]
@@ -49,7 +53,10 @@ def test_campaign_argv_carries_operational_guards_only_for_execution(tmp_path: P
         free_disk_floor_gb=20,
     )
     assert argv == [
-        "nbv-rollout-campaign",
+        sys.executable,
+        "-m",
+        "aria_nbv.oracle.pipelines.cli",
+        "--campaign",
         "run",
         "--config-path",
         str(tmp_path / "campaign.toml"),
@@ -66,6 +73,20 @@ def test_campaign_argv_carries_operational_guards_only_for_execution(tmp_path: P
         "plan", config_path=tmp_path / "campaign.toml", source_manifest=tmp_path / "source.json"
     )
     assert not any(flag in plan_argv for flag in ("--max-new-units", "--time-budget-minutes", "--free-disk-floor-gb"))
+
+
+def test_campaign_module_entrypoint_survives_empty_path(tmp_path: Path) -> None:
+    """The UI's canonical module entrypoint must not depend on a console script in PATH."""
+    argv = panel.build_campaign_argv("status", config_path=tmp_path / "campaign.toml")
+    result = subprocess.run(
+        [*argv[:4], "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={"PATH": "", "HOME": os.environ.get("HOME", "")},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "campaign" in result.stdout.lower()
 
 
 @pytest.mark.parametrize("name,value", [("max_new_units", 0), ("time_budget_minutes", 1441), ("free_disk_floor_gb", 0)])
