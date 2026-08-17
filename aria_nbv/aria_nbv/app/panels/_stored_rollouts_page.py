@@ -31,13 +31,23 @@ from ...rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
+    candidate_collision_support_rows,
+    candidate_composition_rows,
     candidate_flow_rows,
     candidate_group_summary_rows,
+    candidate_proposal_calibration_rows,
     comparable_policy_cohorts,
+    deterministic_candidate_display_sample,
+    discounted_rollout_return_rows,
     discover_rollout_store_paths,
     mask_combination_rows,
+    oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    q_h_evidence_rows,
+    reconstruction_endpoint_summary_rows,
+    reconstruction_metric_summary_rows,
     rollout_endpoint_metric_summary,
+    rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
@@ -201,18 +211,35 @@ def _cached_projection(
     group_fields: tuple[str, ...] = (),
     policies: tuple[str, ...] | None = None,
     step_indices: tuple[int, ...] | None = None,
+    deep_count: bool = False,
 ) -> Any:
     """Cache serializable inspection projections for an immutable store."""
 
     reader, _, manifest_payload = _cached_store_bundle(store_path)
     if projection == "invariants":
         return store_invariant_rows(reader, manifest_payload=manifest_payload)
+    if projection == "header":
+        return rollout_header_summary(reader, manifest_payload=manifest_payload)
     if projection == "cohorts":
         return comparable_policy_cohorts(reader)
     if projection == "paired":
         return paired_policy_comparison_rows(reader)
     if projection == "steps":
         return rollout_step_objective_rows(reader, rollout_row_id=rollout_row_id)
+    if projection == "reconstruction_metrics":
+        return reconstruction_metric_summary_rows(reader)
+    if projection == "reconstruction_endpoints":
+        return reconstruction_endpoint_summary_rows(reader)
+    if projection == "discounted_returns":
+        root_attrs = manifest_payload.get("root_attrs", {})
+        root_attrs = root_attrs if isinstance(root_attrs, dict) else {}
+        return discounted_rollout_return_rows(
+            reader,
+            return_semantics=root_attrs.get("return_semantics"),
+            discount_gamma=root_attrs.get("discount_gamma"),
+        )
+    if projection == "headroom":
+        return oracle_headroom_evidence(reader)
     if projection == "temporal":
         if metric is None:
             raise ValueError("temporal projection requires metric")
@@ -237,6 +264,24 @@ def _cached_projection(
             raise ValueError("candidate_group projection requires group_by")
         audit_rows = _cached_projection(store_path, "candidates", limit=limit)
         return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
+    if projection in {"candidate_composition", "candidate_calibration"}:
+        if group_by is None:
+            raise ValueError(f"{projection} projection requires group_by")
+        audit_rows = _cached_projection(store_path, "candidates")
+        projector = (
+            candidate_composition_rows if projection == "candidate_composition" else candidate_proposal_calibration_rows
+        )
+        return projector(audit_rows, group_by=group_by)
+    if projection == "candidate_collision":
+        return candidate_collision_support_rows(_cached_projection(store_path, "candidates"))
+    if projection == "candidate_sample":
+        return deterministic_candidate_display_sample(
+            _cached_projection(store_path, "candidates"),
+            max_rows=500 if limit is None else limit,
+        )
+    if projection == "q_h":
+        _, validation, _ = _cached_store_bundle(store_path)
+        return q_h_evidence_rows(reader, deep_count=deep_count, validation_result=validation)
     if projection == "tree":
         return rollout_tree_summary_rows(reader)
     if projection == "root_geometry":
@@ -445,6 +490,8 @@ def _render_trust_and_topology(
     cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
     cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
+    _render_store_header_summary(reader.store_dir.as_posix())
+
     try:
         invariants = _cached_projection(reader.store_dir.as_posix(), "invariants")
     except Exception as exc:
@@ -529,9 +576,68 @@ def _render_trust_and_topology(
     )
 
 
+def _render_store_header_summary(store_path: str) -> None:
+    """Render reference coverage and physical cost without candidate projection."""
+
+    header = _cached_projection(store_path, "header")
+    st.markdown("#### Coverage and physical cost")
+    coverage_cols = st.columns(4)
+    coverage_cols[0].metric("Scenes", _format_count(header.get("scenes")))
+    coverage_cols[1].metric("Targets", _format_count(header.get("targets")))
+    coverage_cols[2].metric("Source rows", _format_count(header.get("source_rows")))
+    coverage_cols[3].metric("Store size", _format_bytes(header.get("physical_store_bytes")))
+    if header.get("reference_scene_count") is None and header.get("reference_source_row_count") is None:
+        st.caption(str(header.get("reference_coverage_reason") or "Reference coverage is unavailable."))
+    else:
+        st.caption(
+            "Reference coverage: "
+            f"scenes {_format_fraction(header.get('reference_scene_fraction'))}; "
+            f"source rows {_format_fraction(header.get('reference_source_row_fraction'))}. "
+            "Observed rows never define their own reference denominator."
+        )
+    cost = pd.DataFrame(
+        [
+            {
+                "bytes_per_rollout": header.get("physical_bytes_per_rollout"),
+                "bytes_per_candidate": header.get("physical_bytes_per_candidate"),
+                "return_semantics": header.get("return_semantics"),
+                "discount_gamma": header.get("discount_gamma"),
+            }
+        ]
+    )
+    st.dataframe(cost, hide_index=True, width="stretch")
+    _download_json("Download coverage and cost JSON", "rollout-coverage-cost.json", header)
+
+
+def _format_count(value: object) -> str:
+    """Format an optional integral count without inventing a zero."""
+
+    return "n/a" if value is None else f"{int(value):,}"
+
+
+def _format_bytes(value: object) -> str:
+    """Format an optional byte count using compact binary units."""
+
+    if value is None:
+        return "n/a"
+    size = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if abs(size) < 1024.0 or unit == "TiB":
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    raise AssertionError("unreachable byte unit")
+
+
+def _format_fraction(value: object) -> str:
+    """Format an optional coverage fraction without deriving a denominator."""
+
+    return "n/a" if value is None else f"{float(value):.1%}"
+
+
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
     st.subheader("Scientific Evidence")
     store_path = reader.store_dir.as_posix()
+    _render_reconstruction_summary(store_path)
     cohort = _cached_projection(store_path, "cohorts")
     eligibility = bool(cohort.get("eligible"))
     st.metric("Matched comparison eligible", "YES" if eligibility else "NO")
@@ -601,6 +707,53 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
         ):
             _render_branching_evidence(steps, pd.DataFrame(_cached_projection(store_path, "tree")))
             _render_selected_rank_and_geometry(store_path)
+
+
+def _render_reconstruction_summary(store_path: str) -> None:
+    """Render frozen reconstruction, return, and headroom rows on demand."""
+
+    if not st.toggle(
+        "Load reconstruction endpoints, discounted returns, and oracle headroom",
+        value=False,
+        help="Materializes only frozen inspection projections after this explicit request.",
+    ):
+        return
+
+    metric_rows = pd.DataFrame(_cached_projection(store_path, "reconstruction_metrics"))
+    endpoint_rows = pd.DataFrame(_cached_projection(store_path, "reconstruction_endpoints"))
+    discounted = _cached_projection(store_path, "discounted_returns")
+    headroom = _cached_projection(store_path, "headroom")
+
+    st.markdown("#### Reconstruction and selection metric plan")
+    if metric_rows.empty:
+        st.info("No factual reconstruction metric rows are available.")
+    else:
+        st.dataframe(metric_rows, hide_index=True, width="stretch")
+        _download_frame("Download reconstruction metric CSV", "reconstruction-metrics.csv", metric_rows)
+    if not endpoint_rows.empty:
+        st.dataframe(endpoint_rows, hide_index=True, width="stretch")
+        _download_frame("Download endpoint summary CSV", "reconstruction-endpoints.csv", endpoint_rows)
+
+    st.markdown("#### Discounted factual selected gain")
+    discounted_rows = pd.DataFrame(discounted.get("rows", []))
+    if bool(discounted.get("available")) and not discounted_rows.empty:
+        st.caption(str(discounted.get("reason")))
+        st.dataframe(discounted_rows, hide_index=True, width="stretch")
+        _download_frame("Download discounted return CSV", "discounted-returns.csv", discounted_rows)
+    else:
+        st.info(f"Discounted return unavailable: {discounted.get('reason', 'no factual rows')}")
+
+    st.markdown("#### Exact-role oracle headroom diagnostics")
+    st.caption("These are diagnostic contrasts, not causal policy comparisons. Exclusions remain explicit.")
+    headroom_rows = pd.DataFrame(headroom.get("contrast_rows", []))
+    headroom_summary = pd.DataFrame(headroom.get("summary_rows", []))
+    if headroom_rows.empty:
+        st.info("No exact-role headroom contrasts are available.")
+    else:
+        st.dataframe(headroom_rows, hide_index=True, width="stretch")
+        _download_frame("Download headroom contrasts CSV", "oracle-headroom-contrasts.csv", headroom_rows)
+    if not headroom_summary.empty:
+        st.dataframe(headroom_summary, hide_index=True, width="stretch")
 
 
 def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
@@ -1037,6 +1190,13 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
         _render_candidate_aggregate_breakdowns(store_path)
 
     if st.toggle(
+        "Load cohort composition, proposal calibration, and collision support",
+        value=False,
+        help="Materializes the complete candidate audit only after this explicit request and reuses its cached rows.",
+    ):
+        _render_candidate_population_evidence(store_path)
+
+    if st.toggle(
         "Load bounded candidate geometry and reward plots",
         value=False,
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
@@ -1047,6 +1207,38 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             pd.DataFrame(candidate_rows),
             total_candidates=int(reader.array("candidates/candidate_row_id").size),
         )
+
+
+def _render_candidate_population_evidence(store_path: str) -> None:
+    """Render complete candidate aggregates and a deterministic display-only sample."""
+
+    group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
+    composition = pd.DataFrame(_cached_projection(store_path, "candidate_composition", group_by=group_by))
+    calibration = pd.DataFrame(_cached_projection(store_path, "candidate_calibration", group_by=group_by))
+    collision = pd.DataFrame(_cached_projection(store_path, "candidate_collision"))
+    sample = _cached_projection(store_path, "candidate_sample", limit=500)
+
+    st.markdown("#### Candidate composition")
+    st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
+    st.dataframe(composition, hide_index=True, width="stretch")
+    _download_frame("Download candidate composition CSV", "candidate-composition.csv", composition)
+
+    st.markdown("#### Proposal calibration")
+    st.caption("Empirical frequency, proposal mass, and selection enrichment remain descriptive within cohort.")
+    st.dataframe(calibration, hide_index=True, width="stretch")
+    _download_frame("Download proposal calibration CSV", "candidate-proposal-calibration.csv", calibration)
+
+    st.markdown("#### Collision support")
+    st.dataframe(collision, hide_index=True, width="stretch")
+    _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
+
+    sample_rows = pd.DataFrame(sample.get("rows", []))
+    st.markdown("#### Deterministic display sample")
+    st.caption(
+        f"Showing {int(sample.get('display_count', 0)):,} of {int(sample.get('population_count', 0)):,} rows. "
+        "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
+    )
+    st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
 def _render_candidate_provenance_flow(store_path: str) -> None:
@@ -2250,8 +2442,25 @@ def _render_inspect_export_rerun(
         st.json(manifest_payload, expanded=False)
         st.dataframe(steps, hide_index=True, width="stretch")
     _download_json("Download selected metadata JSON", f"rollout-{rollout_id}-metadata.json", manifest_payload)
+    _render_q_h_evidence(store_path_key)
     _render_evidence_bundle_download(store_path)
     _render_rerun_launcher(store_path=store_path, rollout_id=rollout_id, paths=paths)
+
+
+def _render_q_h_evidence(store_path: str) -> None:
+    """Render metadata-only Q_H facts and gate mask counts behind an explicit toggle."""
+
+    st.markdown("#### Store-local Q_H evidence")
+    deep_count = st.toggle(
+        "Count current-store Q_H masks",
+        value=False,
+        help="Off reads metadata only. On performs the bounded current-store mask projection.",
+    )
+    rows = pd.DataFrame(_cached_projection(store_path, "q_h", deep_count=deep_count))
+    st.dataframe(rows, hide_index=True, width="stretch")
+    if not rows.empty and not bool(rows.iloc[0].get("available", False)):
+        st.info(f"Q_H evidence unavailable: {rows.iloc[0].get('blocking_reason', 'unknown reason')}")
+    _download_frame("Download Q_H evidence CSV", "q-h-evidence.csv", rows)
 
 
 def _render_evidence_bundle_download(store_path: Path) -> None:
