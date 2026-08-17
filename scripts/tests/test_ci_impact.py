@@ -59,6 +59,7 @@ class SelectionTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("TYPST_VERSION: 0.14.2", workflow)
+        self.assertIn("TYPST_EXPECTED_VERSION: typst 0.14.2 (b33de9de)", workflow)
         self.assertIn(
             "https://github.com/typst/typst/releases/download/"
             "v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz",
@@ -72,7 +73,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("sha256sum --check --strict", workflow)
         self.assertIn('echo "${install_root}" >> "${GITHUB_PATH}"', workflow)
         self.assertIn(
-            'test "$(typst --version)" = "typst ${TYPST_VERSION}"', workflow
+            'test "$(typst --version)" = "${TYPST_EXPECTED_VERSION}"', workflow
         )
         self.assertNotIn("typst-community/setup-typst", workflow)
         self.assertNotIn("typst-version:", workflow)
