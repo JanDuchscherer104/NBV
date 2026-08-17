@@ -59,6 +59,7 @@ class SelectionTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("typst-version: 0.14.2", workflow)
+        self.assertIn('token: ""', workflow)
         self.assertIn(
             "make agents-db-validate check-agent-memory scaffold-audit", workflow
         )
