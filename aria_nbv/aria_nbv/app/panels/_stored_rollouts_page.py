@@ -177,8 +177,10 @@ class ScientificExplanation:
 
 
 @st.cache_resource(show_spinner=False)
-def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
-    """Open and validate one immutable rollout store once per Streamlit process."""
+def _cached_store_bundle_cached(
+    store_path: str, *, store_identity: str = ""
+) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
+    """Open and validate one replacement-sensitive rollout store identity."""
 
     reader = RolloutZarrStoreReader(Path(store_path))
     validation = reader.validate()
@@ -187,6 +189,13 @@ def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, 
     except Exception:
         manifest_payload = {"root_attrs": {}, "manifest": {}}
     return reader, validation, manifest_payload
+
+
+@wraps(_cached_store_bundle_cached.__wrapped__)
+def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
+    """Open one store through a cache key that changes when its manifest is replaced."""
+
+    return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
 
 
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
@@ -360,11 +369,22 @@ def _cached_failures(
 
 
 @st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
-def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
-    """Build one deterministic bundle only after the operator requests it."""
+def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, store_identity: str = "") -> bytes:
+    """Build one deterministic bundle for a replacement-sensitive store identity."""
 
     frames = build_thesis_report_frames([Path(store_path)], evidence_status=evidence_status)
     return serialize_thesis_report_bundle(frames)
+
+
+@wraps(_cached_evidence_bundle_cached.__wrapped__)
+def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
+    """Build a report bundle through the replacement-sensitive store cache key."""
+
+    return _cached_evidence_bundle_cached(
+        store_path,
+        evidence_status,
+        store_identity=_store_projection_identity(store_path),
+    )
 
 
 def _clear_stored_rollout_caches() -> None:
@@ -374,8 +394,8 @@ def _clear_stored_rollout_caches() -> None:
     _cached_projection_cached.clear()
     _cached_topology.clear()
     _cached_failures.clear()
-    _cached_evidence_bundle.clear()
-    _cached_store_bundle.clear()
+    _cached_evidence_bundle_cached.clear()
+    _cached_store_bundle_cached.clear()
 
 
 def render_stored_rollouts_page() -> None:

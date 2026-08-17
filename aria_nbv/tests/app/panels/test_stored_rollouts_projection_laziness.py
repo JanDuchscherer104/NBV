@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from aria_nbv.app.panels import _stored_rollouts_page as page
+from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from tests.rollout_fixtures import build_rollout_records
 
 
 @pytest.mark.parametrize(
@@ -135,6 +137,44 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
 
     assert identities[0] == identities[1]
     assert identities[2] != identities[0]
+
+
+def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: Path) -> None:
+    """Readers, projections, and requested report bundles must not retain replaced-store evidence."""
+
+    first = write_rollout_zarr_store(
+        tmp_path / "first.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=101)[:1],
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "second.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=102)[:2],
+    )
+    selected = tmp_path / "selected.zarr"
+    selected.symlink_to(first.store_dir, target_is_directory=True)
+
+    path = selected.as_posix()
+    first_reader, first_validation, first_manifest = page._cached_store_bundle(path)
+    first_steps = page._cached_projection(path, "steps")
+    first_bundle = page._cached_evidence_bundle(path, "pilot")
+    assert first_validation.ok
+    assert first_reader.store_dir == selected.resolve()
+    assert first_manifest == first_reader.manifest()
+    assert len(first_steps) > 0
+
+    replacement = tmp_path / "replacement-link.zarr"
+    replacement.symlink_to(second.store_dir, target_is_directory=True)
+    replacement.replace(selected)
+
+    second_reader, second_validation, second_manifest = page._cached_store_bundle(path)
+    second_steps = page._cached_projection(path, "steps")
+    second_bundle = page._cached_evidence_bundle(path, "pilot")
+    assert second_validation.ok
+    assert second_reader.store_dir == selected.resolve()
+    assert second_manifest == second_reader.manifest()
+    assert len(second_steps) > len(first_steps)
+    assert second_manifest != first_manifest
+    assert second_bundle != first_bundle
 
 
 def _owner_stub(result: object) -> Callable[..., object]:
