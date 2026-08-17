@@ -710,6 +710,10 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     assert calibration_side["state_count"] == 3
     assert calibration_side["scene_count"] == 2
     assert calibration_side["empirical_frequency"] == pytest.approx(5 / 24)
+    assert calibration_side["proposal_mass"] == pytest.approx(5 / 24)
+    assert calibration_side["empirical_denominator"] == 8
+    assert calibration_side["proposal_denominator"] == 8
+    assert calibration_side["selected_denominator"] == 2
 
     collision = candidate_collision_support_rows(rows)[0]
     assert collision["available"] is True

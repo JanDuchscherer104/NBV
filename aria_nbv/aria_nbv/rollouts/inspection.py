@@ -1329,11 +1329,7 @@ def _candidate_state_family_rows(
             value for value in (_finite_or_none(row.get("sampler_probability")) for row in state) if value is not None
         ]
         empirical = _safe_fraction(len(family), len(state))
-        proposal = (
-            None
-            if not finite_family or not finite_all or sum(finite_all) <= 0
-            else float(sum(finite_family) / sum(finite_all))
-        )
+        proposal = None if not finite_all or sum(finite_all) <= 0 else float(sum(finite_family) / sum(finite_all))
         selected_total = sum(bool(row.get("selected")) for row in state)
         selected_family = sum(bool(row.get("selected")) for row in family)
         selected_share = _safe_fraction(selected_family, selected_total)
