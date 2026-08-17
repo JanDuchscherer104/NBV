@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -175,6 +176,55 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     assert len(second_steps) > len(first_steps)
     assert second_manifest != first_manifest
     assert second_bundle != first_bundle
+
+
+def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Topology and failure owners recompute replacement data, not just their dispatch keys."""
+
+    first = write_rollout_zarr_store(
+        tmp_path / "topology-first.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=111)[:1],
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "topology-second.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=112)[:2],
+    )
+    selected = tmp_path / "selected.zarr"
+    selected.symlink_to(first.store_dir, target_is_directory=True)
+    topology_calls: list[str] = []
+    failure_calls: list[str] = []
+
+    def topology(*, rollout_store_dir: Path, **_kwargs: object) -> dict[str, str]:
+        manifest = page._cached_store_bundle(rollout_store_dir.as_posix())[2]
+        marker = json.dumps(manifest, sort_keys=True)
+        topology_calls.append(marker)
+        return {"manifest": marker}
+
+    def failures(reader: object, *, config: object) -> list[dict[str, str]]:
+        marker = page._cached_store_bundle(reader.store_dir.as_posix())[2]  # type: ignore[attr-defined]
+        value = json.dumps(marker, sort_keys=True)
+        failure_calls.append(value)
+        return [{"manifest": value}]
+
+    monkeypatch.setattr(page, "build_dataset_topology", topology)
+    monkeypatch.setattr(page, "suspicious_rollout_rows", failures)
+    path = selected.as_posix()
+    topology_first = page._cached_topology(path, (), None)
+    failure_first = page._cached_failures(path, 1, 0.5, 1.0)
+
+    replacement = tmp_path / "replacement-link.zarr"
+    replacement.symlink_to(second.store_dir, target_is_directory=True)
+    replacement.replace(selected)
+
+    topology_second = page._cached_topology(path, (), None)
+    failure_second = page._cached_failures(path, 1, 0.5, 1.0)
+
+    assert topology_first != topology_second
+    assert failure_first != failure_second
+    assert len(topology_calls) == 2
+    assert len(failure_calls) == 2
 
 
 def _owner_stub(result: object) -> Callable[..., object]:

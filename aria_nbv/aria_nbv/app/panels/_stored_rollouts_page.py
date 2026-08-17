@@ -334,13 +334,15 @@ def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
 
 
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
-def _cached_topology(
+def _cached_topology_cached(
     store_path: str,
     vin_store_dirs: tuple[str, ...],
     paths: PathConfig,
     selected_source_row_id: int | None = None,
+    *,
+    store_identity: str = "",
 ) -> Any:
-    """Resolve one immutable cross-store topology and reuse its Rich tree."""
+    """Resolve one replacement-sensitive cross-store topology and reuse its Rich tree."""
 
     return build_dataset_topology(
         rollout_store_dir=Path(store_path),
@@ -350,14 +352,34 @@ def _cached_topology(
     )
 
 
+@wraps(_cached_topology_cached.__wrapped__)
+def _cached_topology(
+    store_path: str,
+    vin_store_dirs: tuple[str, ...],
+    paths: PathConfig,
+    selected_source_row_id: int | None = None,
+) -> Any:
+    """Resolve topology through a cache key bound to the selected store identity."""
+
+    return _cached_topology_cached(
+        store_path,
+        vin_store_dirs,
+        paths,
+        selected_source_row_id,
+        store_identity=_store_projection_identity(store_path),
+    )
+
+
 @st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
-def _cached_failures(
+def _cached_failures_cached(
     store_path: str,
     min_valid_candidates: int,
     dominant_invalid_fraction: float,
     max_step_distance_m: float,
+    *,
+    store_identity: str = "",
 ) -> list[dict[str, object]]:
-    """Cache failure triage for one immutable store and threshold tuple."""
+    """Cache failure triage for one replacement-sensitive store and threshold tuple."""
 
     reader, _, _ = _cached_store_bundle(store_path)
     config = RolloutSuspiciousQueryConfig(
@@ -366,6 +388,24 @@ def _cached_failures(
         max_step_distance_m=max_step_distance_m,
     )
     return suspicious_rollout_rows(reader, config=config)
+
+
+@wraps(_cached_failures_cached.__wrapped__)
+def _cached_failures(
+    store_path: str,
+    min_valid_candidates: int,
+    dominant_invalid_fraction: float,
+    max_step_distance_m: float,
+) -> list[dict[str, object]]:
+    """Evaluate failure triage through a cache key bound to the selected store identity."""
+
+    return _cached_failures_cached(
+        store_path,
+        min_valid_candidates,
+        dominant_invalid_fraction,
+        max_step_distance_m,
+        store_identity=_store_projection_identity(store_path),
+    )
 
 
 @st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
@@ -392,8 +432,8 @@ def _clear_stored_rollout_caches() -> None:
 
     _cached_inventory.clear()
     _cached_projection_cached.clear()
-    _cached_topology.clear()
-    _cached_failures.clear()
+    _cached_topology_cached.clear()
+    _cached_failures_cached.clear()
     _cached_evidence_bundle_cached.clear()
     _cached_store_bundle_cached.clear()
 
