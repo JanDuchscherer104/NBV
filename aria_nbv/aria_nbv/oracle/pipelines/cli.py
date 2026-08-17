@@ -787,7 +787,9 @@ __all__ = [
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 3 and sys.argv[1] == "--internal-preflight":
+    if len(sys.argv) >= 2 and sys.argv[1] == "--campaign":
+        campaign_main(sys.argv[2:])
+    elif len(sys.argv) >= 3 and sys.argv[1] == "--internal-preflight":
         stage = sys.argv[2]
         plan_arg = Path(sys.argv[sys.argv.index("--plan-path") + 1]) if "--plan-path" in sys.argv else None
         writer_arg = (
@@ -806,4 +808,5 @@ if __name__ == "__main__":
                 expected_scene_count=expected_arg,
             )
         )
-    main()
+    else:
+        main()

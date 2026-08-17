@@ -164,11 +164,19 @@ def _append_campaign_started(campaign, plan):
     campaign.append_event(campaign._event(plan, "campaign_started"))
 
 
-def test_canonical_worker_argv_carries_writer_config_path():
+def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_config_path(monkeypatch):
+    monkeypatch.setattr("aria_nbv.oracle.pipelines.campaign.sys.executable", "/stable/venv/bin/python")
     config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
     campaign = config.setup_target()
     unit = CampaignWorkUnit("cuda-rollouts-v1", "sample", "target", "realistic_core_60", "unit")
     argv = campaign.worker_argv(Path("plan.json"), unit)
+    assert argv[:5] == (
+        "/stable/venv/bin/python",
+        "-m",
+        "aria_nbv.oracle.pipelines.cli",
+        "--campaign",
+        "worker",
+    )
     assert "--writer-config-path" in argv
     assert ".configs/build_rollouts_v1_cuda_campaign_writer.toml" in argv
 

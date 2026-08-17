@@ -1465,7 +1465,10 @@ class CudaRolloutCampaign:
     ) -> tuple[str, ...]:
         """Build the only subprocess argv used for an opaque work unit."""
         argv = (
-            "nbv-rollout-campaign",
+            sys.executable,
+            "-m",
+            "aria_nbv.oracle.pipelines.cli",
+            "--campaign",
             "worker",
             "--config-path",
             str(config_path or self.config.output_root),

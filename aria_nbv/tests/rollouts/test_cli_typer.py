@@ -5,6 +5,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -71,6 +74,22 @@ def test_rollout_cli_help_exits_cleanly() -> None:
     assert runner.invoke(rollout_cli.build_app, ["--help"]).exit_code == 0
     assert runner.invoke(rollout_cli.plan_app, ["--help"]).exit_code == 0
     assert runner.invoke(rollout_cli.status_app, ["--help"]).exit_code == 0
+
+
+def test_campaign_module_entrypoint_survives_missing_console_script() -> None:
+    environment = os.environ.copy()
+    environment["PATH"] = ""
+
+    result = subprocess.run(
+        [sys.executable, "-m", "aria_nbv.oracle.pipelines.cli", "--campaign", "--help"],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "nbv-rollout-campaign" in result.stdout
 
 
 def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, monkeypatch) -> None:
