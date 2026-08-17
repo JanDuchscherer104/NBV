@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -97,6 +98,31 @@ def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_ro
     assert recursive_calls == [("candidates", 25)]
     assert summary_calls == [(reader, "mixture", candidate_rows)]
     assert result == [{"family": "fixture", "candidate_count": 2}]
+
+
+def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Invalid or tampered stores keep diagnostics but never render coverage projections."""
+
+    messages: list[str] = []
+    monkeypatch.setattr(page.st, "info", messages.append)
+    monkeypatch.setattr(page, "_render_store_header_summary", lambda _path: pytest.fail("header was rendered"))
+
+    page._render_validated_store_header("/tampered.zarr", validation_ok=False)
+
+    assert messages == ["Coverage and physical-cost projections are withheld until store validation succeeds."]
+
+
+def test_store_manifest_identity_changes_for_same_path_replacement(tmp_path: Path) -> None:
+    """Replacing a manifest at one path produces a distinct heavy-projection cache identity."""
+
+    store = tmp_path / "replacement.zarr"
+    store.mkdir()
+    manifest = store / "manifest.json"
+    manifest.write_text('{"generation": "first"}', encoding="utf-8")
+    first = page._store_projection_identity(store.as_posix())
+    manifest.write_text('{"generation": "second"}', encoding="utf-8")
+
+    assert page._store_projection_identity(store.as_posix()) != first
 
 
 def _owner_stub(result: object) -> Callable[..., object]:

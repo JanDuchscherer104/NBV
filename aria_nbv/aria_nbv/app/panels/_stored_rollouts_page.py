@@ -199,7 +199,7 @@ def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
 
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-def _cached_projection(
+def _cached_projection_cached(
     store_path: str,
     projection: str,
     *,
@@ -212,8 +212,9 @@ def _cached_projection(
     policies: tuple[str, ...] | None = None,
     step_indices: tuple[int, ...] | None = None,
     deep_count: bool = False,
+    store_identity: str = "",
 ) -> Any:
-    """Cache serializable inspection projections for an immutable store."""
+    """Cache serializable inspection projections for one validated store identity."""
 
     reader, _, manifest_payload = _cached_store_bundle(store_path)
     if projection == "invariants":
@@ -292,6 +293,39 @@ def _cached_projection(
     raise ValueError(f"Unknown cached rollout projection: {projection}")
 
 
+def _store_projection_identity(store_path: str) -> str:
+    """Return a lightweight identity that changes when a store manifest is replaced."""
+
+    path = Path(store_path)
+    manifest_path = path / "manifest.json"
+    try:
+        payload = manifest_path.read_bytes()
+        stat = manifest_path.stat()
+        identity = f"manifest:{stat.st_size}:{stat.st_mtime_ns}:{hashlib.sha256(payload).hexdigest()}"
+    except OSError:
+        try:
+            stat = path.stat()
+            identity = f"store:{stat.st_size}:{stat.st_mtime_ns}"
+        except OSError:
+            identity = "missing"
+    return identity
+
+
+def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
+    """Dispatch through the projection cache with a replacement-sensitive store key."""
+
+    return _cached_projection_cached(
+        store_path,
+        projection,
+        store_identity=_store_projection_identity(store_path),
+        **kwargs,
+    )
+
+
+# Preserve the focused dispatch-test seam exposed by Streamlit's cache decorator.
+_cached_projection.__wrapped__ = _cached_projection_cached.__wrapped__
+
+
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
 def _cached_topology(
     store_path: str,
@@ -339,7 +373,7 @@ def _clear_stored_rollout_caches() -> None:
     """Clear only the inspector caches after stores are created or replaced."""
 
     _cached_inventory.clear()
-    _cached_projection.clear()
+    _cached_projection_cached.clear()
     _cached_topology.clear()
     _cached_failures.clear()
     _cached_evidence_bundle.clear()
@@ -490,7 +524,7 @@ def _render_trust_and_topology(
     cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
     cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
-    _render_store_header_summary(reader.store_dir.as_posix())
+    _render_validated_store_header(reader.store_dir.as_posix(), validation_ok=validation_ok)
 
     try:
         invariants = _cached_projection(reader.store_dir.as_posix(), "invariants")
@@ -607,6 +641,15 @@ def _render_store_header_summary(store_path: str) -> None:
     )
     st.dataframe(cost, hide_index=True, width="stretch")
     _download_json("Download coverage and cost JSON", "rollout-coverage-cost.json", header)
+
+
+def _render_validated_store_header(store_path: str, *, validation_ok: bool) -> None:
+    """Render scientific coverage only for a store that passed validation."""
+
+    if not validation_ok:
+        st.info("Coverage and physical-cost projections are withheld until store validation succeeds.")
+        return
+    _render_store_header_summary(store_path)
 
 
 def _format_count(value: object) -> str:
