@@ -714,6 +714,16 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     assert calibration_side["empirical_denominator"] == 8
     assert calibration_side["proposal_denominator"] == 8
     assert calibration_side["selected_denominator"] == 2
+    malformed = [
+        row(20, cohort="c", scene="s1", state=0, actor=True, selected=True, probability=0.5),
+        row(21, cohort="c", scene="s1", state=0, actor=True, selected=False, probability=None, mixture="side"),
+    ]
+    malformed_side = next(
+        candidate for candidate in candidate_proposal_calibration_rows(malformed) if candidate["family"] == "side"
+    )
+    assert malformed_side["population_proposal_mass"] is None
+    assert malformed_side["proposal_mass"] is None
+    assert malformed_side["calibration_gap"] is None
 
     collision = candidate_collision_support_rows(rows)[0]
     assert collision["available"] is True
