@@ -13,6 +13,7 @@ import json
 from collections import Counter
 from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass
+from functools import wraps
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
@@ -311,6 +312,7 @@ def _store_projection_identity(store_path: str) -> str:
     return identity
 
 
+@wraps(_cached_projection_cached.__wrapped__)
 def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
     """Dispatch through the projection cache with a replacement-sensitive store key."""
 
@@ -320,10 +322,6 @@ def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
         store_identity=_store_projection_identity(store_path),
         **kwargs,
     )
-
-
-# Preserve the focused dispatch-test seam exposed by Streamlit's cache decorator.
-_cached_projection.__wrapped__ = _cached_projection_cached.__wrapped__
 
 
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
