@@ -15,7 +15,6 @@ import re
 import subprocess
 import sys
 from collections import Counter
-from datetime import date
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -55,8 +54,10 @@ RETIRED_SOURCE_PATHS = {
     ".agents/memory/state/GOTCHAS.md",
     ".agents/memory/state/OPEN_QUESTIONS.md",
 }
-LEGACY_RECEIPT_CUTOFF = date(2026, 8, 13)
-LEGACY_RECEIPT_STATUSES = {"done", "legacy-imported", "archived"}
+# This commit is the immutable source tree immediately before the retired
+# owners were removed. CI fetches full history so these object lookups remain
+# available in clean checkouts.
+RETIREMENT_CUTOVER_COMMIT = "4748c4dd01e77bae5bdb2ff6932e8980a9416b4c"
 RECEIPT_DISPOSITIONS = {
     "historical",
     "removed",
@@ -143,18 +144,44 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
 
 
 def allows_retired_canonical_update(
-    frontmatter: dict[str, object], update_path: str
+    frontmatter: dict[str, object], update_path: str, record_path: Path | None = None
 ) -> bool:
-    """Allow only pre-cutoff, completed historical receipts for retired paths."""
+    """Allow only an unchanged tracked record from the retirement cutover."""
     if update_path not in RETIRED_SOURCE_PATHS:
         return False
+    if record_path is None:
+        return False
     try:
-        historical_date = date.fromisoformat(str(frontmatter.get("date")))
+        relative_path = record_path.resolve().relative_to(REPO_ROOT).as_posix()
     except ValueError:
         return False
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", relative_path],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    )
+    if tracked.returncode != 0:
+        return False
+    cutover_blob = subprocess.run(
+        ["git", "rev-parse", f"{RETIREMENT_CUTOVER_COMMIT}:{relative_path}"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if cutover_blob.returncode != 0:
+        return False
+    current_blob = subprocess.run(
+        ["git", "hash-object", "--", relative_path],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
     return (
-        historical_date <= LEGACY_RECEIPT_CUTOFF
-        and str(frontmatter.get("status", "")) in LEGACY_RECEIPT_STATUSES
+        current_blob.returncode == 0
+        and current_blob.stdout.strip() == cutover_blob.stdout.strip()
     )
 
 
@@ -249,7 +276,20 @@ def check_history_records() -> list[str]:
             continue
 
         status = str(frontmatter.get("status", "")).strip()
+        canonical_updates = frontmatter.get("canonical_updates_needed")
         if status == "legacy-imported":
+            if isinstance(canonical_updates, list):
+                for update_path in canonical_updates:
+                    update_text = str(update_path).strip()
+                    if (
+                        update_text in RETIRED_SOURCE_PATHS
+                        and not allows_retired_canonical_update(
+                            frontmatter, update_text, path
+                        )
+                    ):
+                        errors.append(
+                            f"{rel}: retired canonical update requires an unchanged cutover record: {update_text}"
+                        )
             continue
 
         missing_keys = sorted(REQUIRED_NATIVE_KEYS - frontmatter.keys())
@@ -259,7 +299,6 @@ def check_history_records() -> list[str]:
             )
             continue
 
-        canonical_updates = frontmatter.get("canonical_updates_needed")
         if not isinstance(canonical_updates, list):
             errors.append(f"{rel}: `canonical_updates_needed` must be a list or []")
             continue
@@ -271,10 +310,10 @@ def check_history_records() -> list[str]:
                 continue
             resolved = REPO_ROOT / update_text
             if not resolved.exists() and update_text in RETIRED_SOURCE_PATHS:
-                if allows_retired_canonical_update(frontmatter, update_text):
+                if allows_retired_canonical_update(frontmatter, update_text, path):
                     continue
                 errors.append(
-                    f"{rel}: retired canonical update requires a pre-cutoff legacy record: {update_text}"
+                    f"{rel}: retired canonical update requires an allowlisted historical record: {update_text}"
                 )
             elif not resolved.exists():
                 errors.append(
