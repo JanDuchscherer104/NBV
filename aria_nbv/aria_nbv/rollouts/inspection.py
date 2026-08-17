@@ -852,11 +852,15 @@ def oracle_headroom_evidence(
             )
     malformed_cohorts: dict[str, dict[str, object]] = {}
     for malformed in malformed_rows:
-        missing = tuple(field for field in _HEADROOM_INVARIANT_FIELDS[:10] if _missing_identity(malformed.get(field)))
-        partial = {field: malformed.get(field) for field in _HEADROOM_INVARIANT_FIELDS if field not in missing}
+        missing_fields = tuple(
+            field for field in _HEADROOM_INVARIANT_FIELDS[:10] if _missing_identity(malformed.get(field))
+        )
+        partial = {field: malformed.get(field) for field in _HEADROOM_INVARIANT_FIELDS if field not in missing_fields}
         partial_key = json.dumps(partial, sort_keys=True, separators=(",", ":"))
         if any(
-            all(row.get(field) == malformed.get(field) for field in partial) for row in grouped.values() for row in row
+            all(existing_row.get(field) == malformed.get(field) for field in partial)
+            for existing_rows in grouped.values()
+            for existing_row in existing_rows
         ):
             continue
         malformed_cohorts.setdefault(partial_key, malformed)
