@@ -112,17 +112,29 @@ def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytes
     assert messages == ["Coverage and physical-cost projections are withheld until store validation succeeds."]
 
 
-def test_store_manifest_identity_changes_for_same_path_replacement(tmp_path: Path) -> None:
-    """Replacing a manifest at one path produces a distinct heavy-projection cache identity."""
+def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The validated page boundary forwards a stable, replacement-sensitive cache identity."""
 
     store = tmp_path / "replacement.zarr"
     store.mkdir()
     manifest = store / "manifest.json"
     manifest.write_text('{"generation": "first"}', encoding="utf-8")
-    first = page._store_projection_identity(store.as_posix())
-    manifest.write_text('{"generation": "second"}', encoding="utf-8")
+    identities: list[str] = []
 
-    assert page._store_projection_identity(store.as_posix()) != first
+    def cached_projection(_path: str, _projection: str, *, store_identity: str, **_kwargs: object) -> object:
+        identities.append(store_identity)
+        return []
+
+    monkeypatch.setattr(page, "_cached_projection_cached", cached_projection)
+    page._cached_projection(store.as_posix(), "header")
+    page._cached_projection(store.as_posix(), "header")
+    manifest.write_text('{"generation": "second"}', encoding="utf-8")
+    page._cached_projection(store.as_posix(), "header")
+
+    assert identities[0] == identities[1]
+    assert identities[2] != identities[0]
 
 
 def _owner_stub(result: object) -> Callable[..., object]:
