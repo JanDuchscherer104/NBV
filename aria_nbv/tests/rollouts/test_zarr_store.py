@@ -648,6 +648,23 @@ def test_rollout_zarr_rejects_in_range_v1_target_source_even_when_masks_are_fals
     assert any("incompatible with v1_observed" in error for error in validation.errors)
 
 
+def test_rollout_zarr_rejects_in_range_empty_v0_target_source_even_when_masks_are_false(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=41)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v0_gt_input")
+
+    root = zarr.open_group(result.store_dir, mode="a")
+    encoded = np.frombuffer(json.dumps([""]).encode("utf-8"), dtype=np.uint8)
+    root["dictionaries/target_source"].resize((encoded.size,))
+    root["dictionaries/target_source"][...] = encoded
+    root["targets/target_valid_mask"][...] = False
+    root["targets/target_invalid_reason_bitset"][...] = 0
+    root["candidates/q_train_mask"][...] = False
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert not validation.ok
+    assert any("incompatible with v0_gt_input" in error for error in validation.errors)
+
+
 def test_rollout_zarr_accepts_admitted_v1_target_source(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=39)[:1]
     records[0].lineage.target.target_protocol_version = "v1-observed"

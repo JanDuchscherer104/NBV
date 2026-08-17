@@ -1159,7 +1159,7 @@ class _RolloutZarrValidator:
                 for source_id in target_source_ids.tolist():
                     target_source = target_sources[int(source_id)]
                     if target_protocol is TargetInputProtocol.V0_GT_INPUT:
-                        admitted = target_source in {"", ORACLE_GT_TARGET_SOURCE}
+                        admitted = target_source == ORACLE_GT_TARGET_SOURCE
                     else:
                         admitted = target_source in actor_visible_sources
                     if not admitted:
@@ -1171,8 +1171,8 @@ class _RolloutZarrValidator:
                     try:
                         validate_target_protocol_admission(
                             target_protocol,
-                            target_source=target_source or ORACLE_GT_TARGET_SOURCE,
-                            descriptor_source=target_source or ORACLE_GT_TARGET_SOURCE,
+                            target_source=target_source,
+                            descriptor_source=target_source,
                             descriptor_provenance=(
                                 "actor_visible_detector"
                                 if target_protocol is TargetInputProtocol.V1_OBSERVED
