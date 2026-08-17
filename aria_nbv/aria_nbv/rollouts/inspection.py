@@ -850,7 +850,17 @@ def oracle_headroom_evidence(
                     },
                 }
             )
+    malformed_cohorts: dict[str, dict[str, object]] = {}
     for malformed in malformed_rows:
+        missing = tuple(field for field in _HEADROOM_INVARIANT_FIELDS[:10] if _missing_identity(malformed.get(field)))
+        partial = {field: malformed.get(field) for field in _HEADROOM_INVARIANT_FIELDS if field not in missing}
+        partial_key = json.dumps(partial, sort_keys=True, separators=(",", ":"))
+        if any(
+            all(row.get(field) == malformed.get(field) for field in partial) for row in grouped.values() for row in row
+        ):
+            continue
+        malformed_cohorts.setdefault(partial_key, malformed)
+    for malformed in malformed_cohorts.values():
         for contrast in contrast_specs:
             contrast_rows.append(
                 {
@@ -1274,13 +1284,13 @@ def _candidate_state_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str
 def _candidate_state_family_rows(
     family_rows: Iterable[Mapping[str, object]], cohort_rows: Iterable[Mapping[str, object]]
 ) -> list[dict[str, object]]:
-    family_keys = {
+    state_keys = {
         (
             str(row.get("scene", "unknown")),
             str(row.get("rollout_row_id", "unknown")),
             str(row.get("step_row_id", "unknown")),
         )
-        for row in family_rows
+        for row in cohort_rows
     }
     grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
     for source_row in cohort_rows:
@@ -1305,9 +1315,9 @@ def _candidate_state_family_rows(
             [],
         ).append(row)
     output: list[dict[str, object]] = []
-    for key in sorted(family_keys):
+    for key in sorted(state_keys):
         state = grouped[key]
-        family = family_grouped[key]
+        family = family_grouped.get(key, [])
         finite_family = [
             value for value in (_finite_or_none(row.get("sampler_probability")) for row in family) if value is not None
         ]
@@ -3365,6 +3375,12 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
             "beam_width": int(beam_widths[index]),
             "temperature": _finite_or_none(temperatures[index]),
             "random_seed": int(random_seeds[index]),
+            "temperature_applicable": _condition_applicable(
+                field="temperature", policy=policies[index], recipe=rollout_configs[index]
+            ),
+            "random_seed_applicable": _condition_applicable(
+                field="random_seed", policy=policies[index], recipe=rollout_configs[index]
+            ),
             "candidate_config": candidate_configs[index],
             "oracle_config": oracle_configs[index],
             "branch_schedule": schedules[index],
@@ -3398,6 +3414,18 @@ def _decoded_array(reader: RolloutZarrStoreReader, path: str, dictionary: str) -
     ids = np.asarray(reader.array(path), dtype=np.int64).reshape(-1)
     values = _read_string_array(reader, f"dictionaries/{dictionary}")
     return [values[int(value)] if 0 <= int(value) < len(values) else "" for value in ids.tolist()]
+
+
+def _condition_applicable(*, field: str, policy: object, recipe: object) -> bool:
+    """Derive stochastic-condition applicability from the frozen policy names."""
+
+    policy_name = str(policy)
+    recipe_name = str(recipe)
+    if field == "temperature":
+        return policy_name == "temperature_softmax" or "temperature_softmax" in recipe_name
+    if field == "random_seed":
+        return policy_name in {"random", "random_valid", "temperature_softmax"} or "random" in recipe_name
+    raise ValueError(f"Unsupported headroom condition field {field!r}.")
 
 
 def _cohort_ineligibility_reason(labels: tuple[str, ...], duplicates: tuple[str, ...]) -> str:

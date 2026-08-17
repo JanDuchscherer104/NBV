@@ -702,6 +702,14 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     assert calibration_a["selected_share"] == pytest.approx(1.0)
     assert calibration_a["state_count"] == 3
     assert calibration_a["scene_count"] == 2
+    calibration_side = next(
+        candidate
+        for candidate in calibration
+        if candidate["generation_cohort_id"] == "a" and candidate["family"] == "side"
+    )
+    assert calibration_side["state_count"] == 3
+    assert calibration_side["scene_count"] == 2
+    assert calibration_side["empirical_frequency"] == pytest.approx(5 / 24)
 
     collision = candidate_collision_support_rows(rows)[0]
     assert collision["available"] is True
@@ -723,6 +731,51 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     assert first["display_only"] is True
     with pytest.raises(ValueError, match="Unsupported candidate group field"):
         candidate_composition_rows(rows, group_by=cast(Any, "unsupported"))
+
+
+def test_headroom_condition_applicability_fails_closed_only_when_applicable() -> None:
+    common = {
+        "source_sample_key": "sample-a",
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "campaign_id": "campaign",
+        "plan_hash": "plan",
+        "work_unit_hash": "unit",
+        "profile_hash": "profile",
+        "explicit_target_hash": "target-hash",
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "oracle",
+        "final_cumulative_target_root_gain": 1.0,
+        "temperature": np.nan,
+        "random_seed": -1,
+    }
+    rows = [
+        {
+            **common,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_greedy",
+            "temperature_applicable": False,
+            "random_seed_applicable": False,
+        },
+        {
+            **common,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_lookahead",
+            "temperature_applicable": True,
+            "random_seed_applicable": False,
+        },
+    ]
+    evidence = oracle_headroom_evidence(rows)
+    assert evidence["contrast_rows"][0]["status"] == "excluded"
+    assert evidence["contrast_rows"][0]["exclusion_reason"] == "unsupported_semantics"
 
 
 class _NarrowCandidateFlowReader:
