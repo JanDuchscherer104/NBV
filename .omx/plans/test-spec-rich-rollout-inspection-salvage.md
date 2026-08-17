@@ -1,6 +1,6 @@
 # Test specification: Selective rich rollout inspection salvage
 
-PRD: `.omx/plans/prd-rich-rollout-inspection-salvage.md`  
+PRD: `.omx/plans/prd-rich-rollout-inspection-salvage.md`
 Baseline: `823a945da19852e4ac2b6ac8750ca9c5abfe0263`
 
 ## Test principles

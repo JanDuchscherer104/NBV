@@ -1,8 +1,8 @@
 # PRD: Selective rich rollout inspection salvage
 
 Status: locally approved by Ralplan Architect and Critic; execution authorized by the user's explicit 2026-08-17 Ultragoal and Team launch receipt
-Context: `.omx/context/rich-rollout-inspection-salvage-20260817T130157Z.md`  
-Historical evidence: PR #32 `70fc7fcb`, PR #38 `a8ff3d6b`  
+Context: `.omx/context/rich-rollout-inspection-salvage-20260817T130157Z.md`
+Historical evidence: PR #32 `70fc7fcb`, PR #38 `a8ff3d6b`
 Current implementation baseline: `823a945da19852e4ac2b6ac8750ca9c5abfe0263`
 
 ## Outcome

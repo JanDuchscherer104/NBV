@@ -1,7 +1,7 @@
 # Ralplan handoff: selective rich rollout inspection salvage
 
-Date: 2026-08-17  
-Planning baseline: `823a945da19852e4ac2b6ac8750ca9c5abfe0263`  
+Date: 2026-08-17
+Planning baseline: `823a945da19852e4ac2b6ac8750ca9c5abfe0263`
 Historical evidence: PR #32 `70fc7fcbe5969927de322cf42a5cff782de80687`; PR #38 `a8ff3d6bd134f500badc515959400185a4cf8fba`
 
 ## Durable planning artifacts
