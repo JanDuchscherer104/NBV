@@ -16,9 +16,9 @@
   gate: [retain actor/oracle provenance checks and name the admitted state protocol in every run],
 )[The replay carrier, actor/supervision separation, and scorer-independent fitted-Q adapter are implemented. No production finite-horizon scorer or task-sufficient dynamic reconstruction memory is implemented, and frozen scientific validation remains pending.]
 
-The implemented one-step scorer consumes an actor-visible snippet view, a row-aligned candidate table, a reference rig pose, calibrated candidate cameras, and optionally cached @egocentric-voxel-lifting:short output. Oracle @relative-reconstruction-improvement:short labels enter the loss after prediction and are not scorer inputs. The V0 target descriptor contains semantic identity, pose, positive metric extents, and reference-relative pose in an actor-safe shape, but its current values are derived from privileged @ground-truth:short target tasks. A deployable claim therefore still requires observed or predicted target fields with explicit provenance.
+The implemented one-step scorer consumes an actor-visible snippet view, a row-aligned candidate table, a reference rig pose, calibrated candidate cameras, and optionally cached @egocentric-voxel-lifting:short output. Oracle @relative-reconstruction-improvement:short labels enter the loss after prediction and are not scorer inputs. The current oracle target descriptor contains semantic identity, pose, positive metric extents, and reference-relative pose in an actor-safe shape, but its values are derived from privileged @ground-truth:short target tasks. A deployable claim therefore still requires observed or predicted target fields with explicit provenance.
 
-The implemented `QhActorTensors` contract can carry root semidense evidence, GT-derived V0 target geometry, root-relative candidate poses, selected-pose history, and remaining budget to an injected scorer. This is an information boundary, not an implemented model architecture. Candidate regeneration changes pose, history, budget, and the finite action table; a future scorer must still define how causal selected observations update its scene representation.
+The implemented `QhActorTensors` contract can carry root semidense evidence, oracle-derived target geometry, root-relative candidate poses, selected-pose history, and remaining budget to an injected scorer. This is an information boundary, not an implemented model architecture. Candidate regeneration changes pose, history, budget, and the finite action table; a future scorer must still define how causal selected observations update its scene representation.
 
 Three boundaries are invariant. Invalidity is a hard mask with versioned reason codes, not a small value. GT meshes, target crops, current all-candidate renders, associations, and returns remain oracle or audit fields. Previously selected GT-mesh depth may enter a later state only under an explicitly privileged `CF-GT` protocol; the corresponding sensor-like or observed variants must use distinct provenance. Candidate rows remain tied to stable shell identities and documented coordinate frames.
 
@@ -38,13 +38,16 @@ $
   #eqs.scene.actor_state_read
 $
 
-For architectural and DTO purposes, the scene state is decomposed as
+For architectural and DTO purposes, the resulting scene memory is represented
+as the state consumed by the value model,
 
-$
-  Phi_t^"scene" = (Phi_0^"static", M_t^"dynamic")
-$
+#eqs.scene.qh_scene_memory
 
-where $Phi_0^"static"$ contains immutable logged evidence such as root semidense geometry and supported local EVL features, while $M_t^"dynamic"$ contains only evidence causally produced by selected observations, support/free/unknown state, recency, and directional history. The target is external task context in $Q(s_t,e,a)$ and is represented by a separate `TargetState`; it is not duplicated inside target-independent scene memory.
+The immutable root evidence and causally updated dynamic memory remain separate
+conceptually: root semidense geometry and supported local EVL features are not
+silently replaced by selected-observation evidence. The target is external task
+context in $Q(s_t,e,a)$ and is represented by a separate target state; it is not
+duplicated inside target-independent scene memory.
 
 The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory is demonstrated to be a sufficient statistic for it. Raw selected depth is an observation consumed by the memory update; it need not remain a direct scorer input once its surface, free-space, support, source, and recency information have been fused.
 
@@ -57,7 +60,7 @@ The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory 
     [`S0-pose`], [selected poses only], [Planned first scorer baseline over the implemented replay tensors; not a complete reconstruction state.],
     [`S1-points`], [causally fused selected surface points], [Minimum geometry-updated counterfactual state; does not distinguish observed free from unknown space.],
     [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
-    [`CF-GT` / `CF-sensor` / V1], [source tag on selected observations], [Orthogonal information protocol: privileged GT depth, declared sensor-like simulation, or actor-visible observation.],
+    [Privileged / sensor-like / actor-visible], [source tag on selected observations], [Orthogonal information protocol: privileged mesh depth, declared sensor-like simulation, or actor-visible observation.],
     bottomrule(),
   )),
   caption: [Counterfactual state and source protocols. Scene carrier, information source, interaction architecture, and learning objective are orthogonal experimental choices.],

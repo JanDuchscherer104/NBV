@@ -15,7 +15,7 @@
   gate: [preserve row identity, masks, provenance, and source roles in every tensor reader],
 )[The factual replay schema, lazy reader, framework-neutral dataset seam, and dense `q_h/` view are implemented and unit-tested. Frozen scientific replay evidence remains pending. The schema is a storage contract; readability from the store does not make a field actor-visible.]
 
-The rollout store preserves source, target, rollout, step, candidate, diagnostic, and lineage tables. Its derived `q_h/` arrays provide a padded state--candidate view without changing factual identities or labels. Target pose and extents in the V0 task remain privileged GT-derived instructions. Candidate geometry, selected history, remaining budget, and hard masks are actor-side fields in the implemented DTO seam; target gains, GT associations, mesh diagnostics, crops, and current all-candidate renders remain label or audit fields. No production finite-horizon scorer currently consumes these tensors. Previously selected depth becomes a later actor input only under a named counterfactual-observation protocol.
+The rollout store preserves source, target, rollout, step, candidate, diagnostic, and lineage tables. Its derived `q_h/` arrays provide a padded state--candidate view without changing factual identities or labels. Target pose and extents in the current oracle task remain privileged ground-truth-derived instructions. Candidate geometry, selected history, remaining budget, and hard masks are actor-side fields in the implemented DTO seam; target gains, ground-truth associations, mesh diagnostics, crops, and current all-candidate renders remain label or audit fields. No production finite-horizon scorer currently consumes these tensors. Previously selected depth becomes a later actor input only under a named counterfactual-observation protocol.
 
 #figure(
   text(size: 8.3pt, table(
@@ -23,10 +23,10 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
     toprule(),
     table.header([*Carrier*], [*Persisted content*], [*Learning role*]),
     midrule(),
-    [Target], [identity, class, pose, extents, reference-relative pose, source and validity provenance], [privileged V0 task instruction; learned actors need observed or predicted equivalents],
+    [Target], [identity, class, pose, extents, reference-relative pose, source and validity provenance], [privileged oracle-task instruction; learned actors need observed or predicted equivalents],
     [Candidate], [stable row identities, world/root-relative pose, masks, reasons, sampler provenance, support fields], [finite action row; privileged diagnostics remain source-gated],
     [Selected chain], [selected row, shell index, step order, policy, seed, successor link, terminal state], [history and temporal-difference linkage],
-    [Selected observation], [selected depth, valid mask, calibration, pose and source], [later dynamic-state input only under `CF-GT`, `CF-sensor`, or V1; never an all-candidate student input],
+    [Selected observation], [selected depth, valid mask, calibration, pose and source], [later dynamic-state input only under a declared privileged, sensor-like, or actor-visible protocol; never an all-candidate student input],
     [Oracle labels], [target RRI, target root gain, errors, optional crops and candidate renders], [supervision, evaluation, and audit only],
     bottomrule(),
   )),
@@ -40,7 +40,7 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
   evidence: "pending",
   citation: [@GeometricDeepLearning-bronstein2021 @zhou2023query @FixedHorizonTD-deAsis2020 @UVFA-schaul2015],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/lightning/qh_module.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [fixed-H versus requested-horizon source-owner decision, typed selected-observation state, positive-width V1 target path, source masks, and leakage tests],
+  gate: [fixed-H versus requested-horizon source-owner decision, typed selected-observation state, positive-width actor-visible target path, source masks, and leakage tests],
 )[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The production scorer DTO remains planned. Static scene context, dynamic selected-observation state, target state, and candidate rows are common requirements; an explicit requested-horizon value query is an alternative pending the source-owner decision.]
 
 The intended input for target $e$ at step $t$ is
@@ -59,7 +59,7 @@ This equation is an information contract rather than one flat tensor. The corres
     midrule(),
     [`StaticSceneContext`], [root semidense evidence, supported EVL tokens, root frame and EVL extent], [actor input; immutable within one rollout],
     [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
-    [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [V0 instruction or V1 actor-visible target],
+    [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [oracle-task instruction or actor-visible target],
     [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
     [`ValueQuery`], [optional requested residual horizon $h$ and its availability mask], [proposed model-visible query if the explicit-horizon design is selected],
     [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
@@ -88,7 +88,7 @@ $
   #eqs.model.qh_target_token
 $
 
-In the current V0 data, target geometry is GT-derived and several generic descriptor fields are unmeasured placeholders. The model contract should therefore use protocol-specific variants such as `V0GtTargetState` and `V1ObservedTargetState`, or carry an explicit availability mask per optional field. The same numerical zero cannot simultaneously mean absent support and measured zero support.
+In the current oracle-task data, target geometry is ground-truth-derived and several generic descriptor fields are unmeasured placeholders. The model contract should therefore use protocol-specific target-state variants, or carry an explicit availability mask per optional field. The same numerical zero cannot simultaneously mean absent support and measured zero support.
 
 Target-independent static scene encodings may be reused across several target tasks. The candidate table, however, is not generally shared: target-bearing, lateral-bypass, and target-looking candidates depend on the selected target. Multi-target evaluation must therefore either carry one candidate table per target or construct a union table with a target--candidate availability mask; only physically identical rows may share candidate encodings.
 

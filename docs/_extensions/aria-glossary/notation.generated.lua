@@ -634,6 +634,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["model.qh_candidate_state_cross_attention"] = {
+      tex = "\\boldsymbol{u}_{t,i}=\\operatorname{CrossAttn}_{\\theta}(\\boldsymbol{x}_{t,i},\\{\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\operatorname{Emb}(t),\\operatorname{Emb}(H),\\boldsymbol{b}_t\\})",
+      typst = "#eqs.model.qh_candidate_state_cross_attention",
+      description = "",
+      thesis_list = false,
+    },
     ["model.qh_input_contract"] = {
       tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\boldsymbol{b}_t,t,H,\\{\\boldsymbol{x}_{t,i},\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}},m_{t,i},\\boldsymbol{\\rho}_{t,i}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_input_contract",
@@ -730,6 +736,18 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.qh_doubleq_index"] = {
+      tex = "B_t^{(h,e)}=Q_{h-1,\\theta^-}(s_{t+1},\\operatorname*{argmax}_{i:m_{t+1,i}=1}Q_{h-1,\\theta}(s_{t+1},i))",
+      typst = "#eqs.rl.qh_doubleq_index",
+      description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_doubleq_target"] = {
+      tex = "y_t^{(h,e)}=r_t^e+\\gamma B_t^{(h,e)}",
+      typst = "#eqs.rl.qh_doubleq_target",
+      description = "",
+      thesis_list = false,
+    },
     ["rl.qh_masked_argmax"] = {
       tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}=1}Q_{H,\\theta,i}",
       typst = "#eqs.rl.qh_masked_argmax",
@@ -817,6 +835,12 @@ return {
     ["rri.greedy"] = {
       tex = "q^*=\\operatorname*{argmax}_{q\\in\\mathcal{Q}}\\mathrm{RRI}(q)",
       typst = "#eqs.rri.greedy",
+      description = "",
+      thesis_list = false,
+    },
+    ["rri.point_sampled_chamfer"] = {
+      tex = "D_{\\mathrm{PS-Chamfer}}(\\mathcal{P},\\mathcal{Q})=\\frac{1}{|\\mathcal{P}|}\\sum_{\\boldsymbol{p}\\in\\mathcal{P}}\\min_{\\boldsymbol{q}\\in\\mathcal{Q}}\\lVert\\boldsymbol{p}-\\boldsymbol{q}\\rVert_2^2+\\frac{1}{|\\mathcal{Q}|}\\sum_{\\boldsymbol{q}\\in\\mathcal{Q}}\\min_{\\boldsymbol{p}\\in\\mathcal{P}}\\lVert\\boldsymbol{q}-\\boldsymbol{p}\\rVert_2^2",
+      typst = "#eqs.rri.point_sampled_chamfer",
       description = "",
       thesis_list = false,
     },

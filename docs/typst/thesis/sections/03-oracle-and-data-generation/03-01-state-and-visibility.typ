@@ -14,7 +14,7 @@ The learned component in this thesis is a masked finite-horizon candidate-value 
   caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, masks, and reason codes. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
 ) <fig:qh-actor-oracle-contract>
 
-The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: `CF-GT` for privileged mesh-rendered depth, `CF-sensor` for a declared sensor simulation, or V1 for an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
+The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: privileged mesh-rendered depth, a declared sensor simulation, or an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
 
 === ASE/EFM Logged Observation State
 
@@ -34,7 +34,7 @@ Each component of this tuple has a distinct information role:
 
 *Derived EVL field and heads.* EVL concatenates the lifted image features with the semi-dense surface and free-space masks, processes the volume with a 3D U-Net, and applies task heads for occupancy and 3D OBB detection. The paper's detection head predicts voxel centerness, class scores, and gravity-aligned box geometry; its surface head predicts occupancy and is supervised from @ground-truth:short depth samples labelled as free, surface, or occupied @EFM3D-straub2024. The resulting #symb.vin.field_v is therefore a learned, locally supported statistic of the logged snippet, not another raw sensor modality. The reported EFM3D configuration uses a finite $4 "m" times 4 "m" times 4 "m"$ grid anchored at the latest rig pose, so an out-of-extent target or candidate has missing EVL support rather than a measured zero or an invalid pose @EFM3D-straub2024.
 
-The remaining tuple elements are decision context rather than ASE/EFM sensing modalities. #symb.rl.target identifies the entity whose reconstruction is valued, and #symb.rl.budget conditions the return on the remaining acquisition budget. The current V0 target values are derived from a selected @ground-truth:short box; a V1 target must instead come from EVL predictions or another actor-visible association path. This provenance distinction is consistent with `EfmSnippetView`, which exposes camera/calibration, trajectory, and semi-dense fields as actor observations while keeping `ARIA_OBB_PADDED`, nested `gt_data`, and attached ASE meshes on the oracle/evaluation side.
+The remaining tuple elements are decision context rather than ASE/EFM sensing modalities. #symb.rl.target identifies the entity whose reconstruction is valued, and #symb.rl.budget conditions the return on the remaining acquisition budget. The current oracle target values are derived from a selected @ground-truth:short box; a deployable target must instead come from EVL predictions or another actor-visible association path. This provenance distinction is consistent with `EfmSnippetView`, which exposes camera/calibration, trajectory, and semi-dense fields as actor observations while keeping `ARIA_OBB_PADDED`, nested `gt_data`, and attached ASE meshes on the oracle/evaluation side.
 
 === Counterfactual Actor State
 
@@ -46,9 +46,7 @@ $
 
 For the canonical model, this compact tuple is read together with the explicit ordered selected-view history:
 
-$
-  s_t^"actor" = (s_t^"cf0", bold(H)_t)
-$
+#eqs.scene.actor_state_read
 
 In #symb.rl.s_cf0, the root EVL field remains fixed, whereas the accumulated point set $cal(P)_t$ may grow with selected observations. The finite candidate table #symb.oracle.candidates_t contains poses and generator provenance, not observations from those poses. #symb.rl.validity_mask defines the admissible action set, #symb.rl.invalid_reason records constraint failures, and the ordered history $bold(H)_t$ retains the selected approach sequence.
 
@@ -80,7 +78,7 @@ ASE provides per-frame metric @ground-truth:short depth aligned with RGB, per-pi
 
 For ARIA-NBV, #symb.ase.mesh is the privileged reference surface used for candidate rendering and reconstruction evaluation, while #symb.ase.mesh_target fixes the selected entity's evaluation support. All-candidate depth #symb.oracle.depth_q and backprojected point sets #symb.oracle.points_q answer counterfactual queries for unselected rows. #symb.oracle.rri then compares target reconstruction error before and after adding that candidate evidence. Depth, points, crops, and RRI are legal for label generation, oracle search, diagnostics, and named upper bounds; none is a contemporaneous input to the student value model.
 
-A @ground-truth:short OBB may define V0 identity, pose, extent, crop, and target-bearing instruction. It does not show that the actor detected or associated that object. V1 must obtain the target hypothesis from EVL predictions or another observation-derived path, retaining ASE identity, segmentation, OBBs, and meshes only for matching and evaluation.
+A @ground-truth:short OBB may define the current oracle identity, pose, extent, crop, and target-bearing instruction. It does not show that the actor detected or associated that object. A deployable protocol must obtain the target hypothesis from EVL predictions or another observation-derived path, retaining ASE identity, segmentation, OBBs, and meshes only for matching and evaluation.
 
 The state hierarchy therefore separates *what was logged*, *what a selected counterfactual history may causally add*, and *what only the oracle can know*. Its layers are related by controlled information projections, not by freely copying arrays between stores. In particular, an oracle tensor may be persisted beside actor tensors for efficient replay without becoming part of the actor state.
 
@@ -88,4 +86,4 @@ The state hierarchy therefore separates *what was logged*, *what a selected coun
 
 Visibility answers whether a modality contains evidence for a spatial element from a particular view; feasibility answers whether an action is admissible; utility answers how beneficial an admissible action is for the target. These concepts must not be collapsed. A target can be weakly visible from a geometrically valid candidate, a candidate can lie outside EVL support while remaining physically reachable, and an oracle render can fail even though the candidate pose itself is feasible.
 
-Invalidity is a constraint rather than a reward value. Geometry-invalid candidates receive a hard action mask and a persisted candidate reason code before policy selection, stochastic normalization, loss construction, and bootstrap maximization. A geometrically feasible candidate may still have low or negative target gain. Failure of the separate oracle evaluation does not create a candidate reason code: depending on the configured recipe, the affected row or table is skipped, or its `oracle_label_mask` and `q_train_mask` are cleared and the oracle failure is reported separately. Oracle-derived feasibility must be distinguished from a deployable validity estimate whenever policy claims cross from V0 to V1.
+Invalidity is a constraint rather than a reward value. Geometry-invalid candidates receive a hard action mask and a persisted candidate reason code before policy selection, stochastic normalization, loss construction, and bootstrap maximization. A geometrically feasible candidate may still have low or negative target gain. Failure of the separate oracle evaluation does not create a candidate reason code: depending on the configured recipe, the affected row or table is skipped, or its oracle-label validity and Q-training eligibility are cleared and the oracle failure is reported separately. Oracle-derived feasibility must be distinguished from a deployable validity estimate when a policy moves from privileged target tasks to an actor-visible target protocol.

@@ -6,7 +6,7 @@
 
 == Replay Eligibility and Finite-Horizon Learning Gate
 
-The factual rollout tables determine which records may supervise each learning problem. `valid_action_mask` defines actions selectable under the admitted V0 geometry contract. The stricter `q_train_mask` additionally requires a valid target/GT label state and finite target-root-gain and diagnostic target-RRI labels. Padding, actor validity, one-step training eligibility, transition eligibility, modality presence, source role, and horizon availability remain separate masks. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
+The factual rollout tables determine which records may supervise each learning problem. The action-validity mask defines actions selectable under the admitted oracle geometry contract. The stricter Q-training eligibility additionally requires a valid target/ground-truth label state and finite target-root-gain and diagnostic target-RRI labels. Padding, actor validity, one-step training eligibility, transition eligibility, modality presence, source role, and horizon availability remain separate masks. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
 
 All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and a valid successor step whose candidate table exposes at least one finite one-step root-gain label. General recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, a defined training horizon, and—when nonterminal—a reproducible successor state and hard mask. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
 
@@ -57,7 +57,7 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
   gate: [fixed-H versus requested-horizon source-owner decision, production scorer, exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
-)[A masked selected-transition Double-Q learner for an injected scorer is implemented. No H=2 V0 pose-history scorer, shared requested-horizon scorer, task-sufficient dynamic state, or policy evidence is implemented.]
+)[A masked selected-transition Double-Q learner for an injected scorer is implemented. No H=2 oracle-task pose-history scorer, shared requested-horizon scorer, task-sufficient dynamic state, or policy evidence is available.]
 
 The finite-candidate value model decodes actions only over valid candidate rows:
 
@@ -75,21 +75,11 @@ The masked argmax is already the discrete decision rule. A separate actor networ
 
 If the source-owner decision selects an explicit requested-horizon interface, one candidate model is $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H$. The boundary target is
 
-$
-  y_t^((1,e)) = r_t^e
-$
+#eqs.rl.target_rri_reward
 
 and the recursive target is
 
-$
-  y_t^((h,e))
-  =
-  cases(
-    r_t^e & "if " h=1 " or " d_t=1,
-    r_t^e + gamma op("max", limits: #true)_(j : m_(t+1,j)=1)
-      Q_(bar(theta))(s_(t+1),e,j,h-1) & "if " h>1 " and " d_t=0
-  )
-$
+#eqs.rl.qh_doubleq_target
 
 The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. For this candidate, the defining recursion is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
 
@@ -105,15 +95,7 @@ This schedule preserves one inference interface and shared encoders while making
 
 For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
 
-$
-  y_t^((2,e), "exact")
-  =
-  r_t^e
-  +
-  gamma
-  op("max", limits: #true)_(j : m_(t+1,j)^"train"=1)
-  r_(t+1,j)^e
-$
+#eqs.rl.finite_horizon_return
 
 This target uses no learned successor value or target network. Agreement between fitted $Q_2$ and this exact control is a required base-case test before interpreting longer-horizon results under either scorer interface.
 
@@ -121,22 +103,13 @@ This target uses no learned successor value or target network. Agreement between
 
 Double Q changes how a noisy learned successor maximum is estimated; it does not decide between fixed-H and requested-horizon scorer interfaces. In the requested-horizon candidate, the online path selects
 
-$
-  j^star
-  =
-  op("argmax", limits: #true)_(j : m_(t+1,j)=1)
-  Q_theta(s_(t+1),e,j,h-1)
-$
+#eqs.rl.qh_doubleq_index
 
 and the delayed path evaluates $Q_(bar(theta))(s_(t+1),e,j^star,h-1)$. This selector/evaluator split can reduce overestimation caused by maximizing noisy action values @DoubleDQN-vanHasselt2015. It remains an ablation against the simpler frozen lower-horizon maximum. It is relevant in an offline setting only because a learned maximum is present, not because online learning is planned.
 
 A retained chain also yields the truncated Monte-Carlo target
 
-$
-  G_(t,e)^((h),mu)
-  =
-  sum_(k=0)^(h-1) gamma^k r_(t+k)^e
-$
+#eqs.rl.finite_horizon_return
 
 for its behavior policy $mu$. Regression to this fixed target is a useful policy-conditioned control, but it estimates $Q^mu$, not the greedy finite-support value $Q^star$, unless $mu$ is explicitly the target continuation policy. Behavior returns from random-valid, greedy, softmax, and oracle-lookahead chains must therefore remain identified rather than pooled as if they represented one optimal value function.
 
@@ -161,6 +134,6 @@ Every run reports, separately for each $h$:
 
 A single scalar validation loss is insufficient for model selection unless its horizon aggregation is frozen in advance. Cross-stage corpus admission must also require the same maximum horizon, reward and return semantics, discount, state/source protocol, candidate/reason vocabulary, and horizon-weighting rule.
 
-The optimality claim remains bounded under either interface. A learned finite-horizon value can approximate the best continuation only within the sampled finite candidate generator, hard-validity regime, represented actor state, and offline transition support. The same checkpoint cannot silently mix an `S0-pose` state with `CF-GT`, sensor-like, or V1 dynamic states. Longer horizons increase—not decrease—the need for selected-observation geometry and a sufficiently Markov scene state.
+The optimality claim remains bounded under either interface. A learned finite-horizon value can approximate the best continuation only within the sampled finite candidate generator, hard-validity regime, represented actor state, and offline transition support. The same checkpoint cannot silently mix a pose-only state with privileged selected-depth, sensor-like, or actor-visible dynamic states. Longer horizons increase—not decrease—the need for selected-observation geometry and a sufficiently Markov scene state.
 
-The current scorer-independent learner establishes infrastructure readiness only. Confirmatory interpretation requires the source-owner scorer decision, a canonical V0 corpus, dense-Q1 and exact-Q2 controls, supported targets for every claimed horizon, cross-stage learning-contract equality, checkpoint compatibility, a frozen actor-state protocol, horizon-specific support diagnostics, and matched held-out endpoint oracle re-evaluation. A dynamic-state claim additionally requires selected-observation fusion and no-future-observation leakage tests.
+The current scorer-independent learner establishes infrastructure readiness only. Confirmatory interpretation requires the source-owner scorer decision, a canonical oracle-task corpus, dense-Q1 and exact-Q2 controls, supported targets for every claimed horizon, cross-stage learning-contract equality, checkpoint compatibility, a frozen actor-state protocol, horizon-specific support diagnostics, and matched held-out endpoint oracle re-evaluation. A dynamic-state claim additionally requires selected-observation fusion and no-future-observation leakage tests.

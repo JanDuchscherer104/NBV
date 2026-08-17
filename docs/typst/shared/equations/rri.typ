@@ -38,6 +38,18 @@
       sum_(bold(f) in #symb.ase.faces)
       min_(bold(p) in #symb.oracle.points) d(bold(p), bold(f))^2
     $,
+    // Conventional bidirectional Chamfer distance between two point samples.
+    // This is an alternative to ARIA-NBV's fixed ASE mesh point-to-face error;
+    // the point sets' sampling densities therefore remain part of its meaning.
+    point_sampled_chamfer: $
+      D_"PS-Chamfer"(cal(P), cal(Q))
+      =
+      (1)/(||cal(P)||) sum_(bold(p) in cal(P))
+        min_(bold(q) in cal(Q)) ||bold(p) - bold(q)||_2^2
+      +
+      (1)/(||cal(Q)||) sum_(bold(q) in cal(Q))
+        min_(bold(p) in cal(P)) ||bold(q) - bold(p)||_2^2
+    $,
     union: $
       #(symb.oracle.points) _(t union q) = #(symb.oracle.points) _t union #symb.oracle.points_q
     $,

@@ -256,7 +256,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-candidate-view">candidate</a> <a class="glossary-chip" href="#term-relative-reconstruction-improvement">RRI</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/nbv_background.html" title="docs/contents/theory/nbv_background.qmd">NBV Background (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#roadmap" title="docs/typst/thesis/development/roadmap.typ#roadmap">Roadmap</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#sec:thesis-research-questions" title="docs/typst/thesis/sections/01-research-questions.typ#sec:thesis-research-questions">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/nbv_background.html" title="docs/contents/theory/nbv_background.qmd">NBV Background (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ch:roadmap" title="docs/typst/thesis/development/roadmap.typ#ch:roadmap">Roadmap</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#sec:thesis-research-questions" title="docs/typst/thesis/sections/01-research-questions.typ#sec:thesis-research-questions">01 Research Questions</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a> <a class="glossary-chip glossary-citation" href="#ref-GenNBV-chen2024">&#64;GenNBV-chen2024</a></div></div>
 </div>
 </details>
@@ -373,7 +373,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-relative-reconstruction-improvement">RRI</a> <a class="glossary-chip" href="#term-target-of-interest">target</a> <a class="glossary-chip" href="#term-acquisition-cost">cost</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq1" title="docs/typst/thesis/sections/01-research-questions.typ#rq1">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq1" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq1">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>
@@ -407,7 +407,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-target-conditioned-scorer">target-conditioned scorer</a> <a class="glossary-chip" href="#term-oriented-bounding-box">OBB</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq3" title="docs/typst/thesis/sections/01-research-questions.typ#rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a> <a class="glossary-chip" href="../reference/vin.types.html" title="docs/reference/vin.types.qmd">types</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq3" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a> <a class="glossary-chip" href="../reference/vin.types.html" title="docs/reference/vin.types.qmd">types</a></div></div>
 </div>
 </details>
 
@@ -473,7 +473,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-next-best-view">NBV</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a> <a class="glossary-chip" href="#term-target-conditioned-scorer">target-conditioned scorer</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateViewGenerator.html" title="docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd">CandidateViewGenerator</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateViewGenerator.html" title="docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd">CandidateViewGenerator</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>
@@ -508,7 +508,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-relative-reconstruction-improvement">RRI</a> <a class="glossary-chip" href="#term-candidate-view">candidate</a> <a class="glossary-chip" href="#term-aria-synthetic-environments">ASE</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a> <a class="glossary-chip" href="ase_dataset.html" title="docs/contents/ase_dataset.qmd">Aria Synthetic Environments (ASE) Dataset</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a> <a class="glossary-chip" href="ase_dataset.html" title="docs/contents/ase_dataset.qmd">Aria Synthetic Environments (ASE) Dataset</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a> <a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a></div></div>
 </div>
 </details>
@@ -543,7 +543,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-of-interest">target</a> <a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-view-introspection-network">VIN</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq3" title="docs/typst/thesis/sections/01-research-questions.typ#rq3">01 Research Questions</a> <a class="glossary-chip" href="../reference/vin.models.scene_myopic.html" title="docs/reference/vin.models.scene_myopic.qmd">scene_myopic</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq3" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3">01 Research Questions</a> <a class="glossary-chip" href="../reference/vin.models.scene_myopic.html" title="docs/reference/vin.models.scene_myopic.qmd">scene_myopic</a> <a class="glossary-chip" href="../reference/aria_nbv.vin.models.scene_myopic.VinModelV3.html" title="docs/reference/aria_nbv.vin.models.scene_myopic.VinModelV3.qmd">VinModelV3</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>
@@ -573,7 +573,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-of-interest">target</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a> <a class="glossary-chip" href="#term-ground-truth-target-evaluation">GT-EVAL</a> <a class="glossary-chip" href="#term-oriented-bounding-box">OBB</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq3" title="docs/typst/thesis/sections/01-research-questions.typ#rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq-objectives" title="docs/typst/thesis/sections/01-research-questions.typ#rq-objectives">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq3" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq-objectives" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq-objectives">01 Research Questions</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a> <a class="glossary-chip glossary-citation" href="#ref-ProjectAria-ASE-2025">&#64;ProjectAria-ASE-2025</a></div></div>
 </div>
 </details>
@@ -608,7 +608,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-observed-target-selection">OBS-SEL</a> <a class="glossary-chip" href="#term-ground-truth-target-evaluation">GT-EVAL</a> <a class="glossary-chip" href="#term-target-conditioned-scorer">target-conditioned scorer</a> <a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq3" title="docs/typst/thesis/sections/01-research-questions.typ#rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq5" title="docs/typst/thesis/sections/01-research-questions.typ#rq5">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq3" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq5" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq5">01 Research Questions</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a> <a class="glossary-chip glossary-citation" href="#ref-DoubleDQN-vanHasselt2015">&#64;DoubleDQN-vanHasselt2015</a></div></div>
 </div>
 </details>
@@ -642,7 +642,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-ground-truth">GT</a> <a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-observed-target-selection">OBS-SEL</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq3" title="docs/typst/thesis/sections/01-research-questions.typ#rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq1" title="docs/typst/thesis/sections/01-research-questions.typ#rq1">01 Research Questions</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq3" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq1" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq1">01 Research Questions</a> <a class="glossary-chip" href="theory/rri_theory.html" title="docs/contents/theory/rri_theory.qmd">RRI Background and Navigation</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-ProjectAria-ASE-2025">&#64;ProjectAria-ASE-2025</a></div></div>
 </div>
 </details>
@@ -676,7 +676,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-candidate-view">candidate</a> <a class="glossary-chip" href="#term-next-best-view">NBV</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq1" title="docs/typst/thesis/sections/01-research-questions.typ#rq1">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq1" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq1">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a></div></div>
 </div>
 </details>
 
@@ -718,7 +718,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-rollout-state">state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-target-rri-reward">reward</a> <a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a> <a class="glossary-chip glossary-citation" href="#ref-DoubleDQN-vanHasselt2015">&#64;DoubleDQN-vanHasselt2015</a></div></div>
 </div>
 </details>
@@ -753,7 +753,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-historic-snippet-state">historic state</a> <a class="glossary-chip" href="#term-persisted-offline-state">offline state</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-geometry-rich-counterfactual-state">CF+ state</a> <a class="glossary-chip" href="#term-oracle-rollout-state">oracle state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-validity-mask">mask</a> <a class="glossary-chip" href="#term-observed-target-selection">OBS-SEL</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -856,7 +856,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-geometry-rich-counterfactual-state">CF+ state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings (background)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="theory/efm3d_scene_embeddings.html" title="docs/contents/theory/efm3d_scene_embeddings.qmd">EFM3D Scene Embeddings (background)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -890,7 +890,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-oracle-rollout-state">oracle state</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation" title="docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation">04 01 Scene Representation Requirements</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -967,7 +967,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-candidate-view">candidate</a> <a class="glossary-chip" href="#term-validity-mask">mask</a> <a class="glossary-chip" href="#term-rollout-state">state</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a> <a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateViewGenerator.html" title="docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd">CandidateViewGenerator</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a> <a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateViewGenerator.html" title="docs/reference/aria_nbv.pose_generation.CandidateViewGenerator.qmd">CandidateViewGenerator</a></div></div>
 </div>
 </details>
 
@@ -1009,7 +1009,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-rollout-state">state</a> <a class="glossary-chip" href="#term-point-cloud">PC</a> <a class="glossary-chip" href="#term-oracle-rri">oracle RRI</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.rollouts.CounterfactualPoseGenerator.html" title="docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd">CounterfactualPoseGenerator</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.rollouts.CounterfactualPoseGenerator.html" title="docs/reference/aria_nbv.rollouts.CounterfactualPoseGenerator.qmd">CounterfactualPoseGenerator</a></div></div>
 </div>
 </details>
 
@@ -1059,7 +1059,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-specific-rri">target RRI</a> <a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-acquisition-cost">cost</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq1" title="docs/typst/thesis/sections/01-research-questions.typ#rq1">01 Research Questions</a> <a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq1" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq1">01 Research Questions</a> <a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a></div></div>
 </div>
 </details>
@@ -1102,7 +1102,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-rri-reward">reward</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a></div></div>
 </div>
 </details>
 
@@ -1160,7 +1160,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-minimal-counterfactual-state">CF0 state</a> <a class="glossary-chip" href="#term-predicted-target-q">PRED-Q</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq2" title="docs/typst/thesis/sections/01-research-questions.typ#rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#milestones" title="docs/typst/thesis/development/roadmap.typ#milestones">Roadmap</a> <a class="glossary-chip" href="../typst/thesis/sections/04-method/index.typ#sec:thesis-method" title="docs/typst/thesis/sections/04-method/index.typ#sec:thesis-method">Index</a> <a class="glossary-chip" href="literature/rl_planning.html#q-h-and-dqn" title="docs/contents/literature/rl_planning.qmd#q-h-and-dqn">RL Sources For Rollout And Q_H</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a> <a class="glossary-chip" href="../typst/thesis/sections/04-method/index.typ#sec:thesis-method" title="docs/typst/thesis/sections/04-method/index.typ#sec:thesis-method">Index</a> <a class="glossary-chip" href="literature/rl_planning.html#q-h-and-dqn" title="docs/contents/literature/rl_planning.qmd#q-h-and-dqn">RL Sources For Rollout And Q_H</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-DBLP:journals/corr/MnihKSGAWR13">&#64;DBLP:journals/corr/MnihKSGAWR13</a> <a class="glossary-chip glossary-citation" href="#ref-DoubleDQN-vanHasselt2015">&#64;DoubleDQN-vanHasselt2015</a> <a class="glossary-chip glossary-citation" href="#ref-IQL-kostrikov2021">&#64;IQL-kostrikov2021</a></div></div>
 </div>
 </details>
@@ -1189,13 +1189,13 @@ $$
 
 <p class="glossary-definition">Hard mask that separates feasible candidate actions from invalid candidates.</p>
 
-<p class="glossary-detail-text">The action mask m_{t,i} gates selectable candidate rows, while actor evidence/support, target validity, oracle-label validity, and Q-training eligibility remain distinct fields. Only physical or explicitly contracted admissibility failures clear action validity. No target visibility or no depth hits clear action validity only when the executable feasibility contract explicitly requires that gate; otherwise they remain support fields. Outside-EVL extent and missing semidense or appearance support remain evidence fields unless the executable feasibility contract says otherwise; failed oracle evaluation clears oracle_label_mask and q_train_mask rather than action validity. Invalid reason codes rho_{t,i} preserve physical rejection causes, and invalidity is not a low target-RRI class.</p>
+<p class="glossary-detail-text">The action mask $m_{t,i}$ gates selectable candidate rows, while actor evidence/support, target validity, oracle-label validity, and Q-training eligibility remain distinct fields. Only physical or explicitly contracted admissibility failures clear action validity. No target visibility or no depth hits clear action validity only when the executable feasibility contract explicitly requires that gate; otherwise they remain support fields. Outside-EVL extent and missing semidense or appearance support remain evidence fields unless the executable feasibility contract says otherwise; failed oracle evaluation clears oracle_label_mask and q_train_mask rather than action validity. Invalid reason codes $\rho_{t,i}$ preserve physical rejection causes, and invalidity is not a low target-RRI class.</p>
 
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-target-rri-reward">reward</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq4" title="docs/typst/thesis/sections/01-research-questions.typ#rq4">01 Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateSamplingResult.html" title="docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd">CandidateSamplingResult</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateSamplingResult.html" title="docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd">CandidateSamplingResult</a></div></div>
 </div>
 </details>
 
@@ -1595,7 +1595,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-of-interest">target</a> <a class="glossary-chip" href="#term-target-conditioned-scorer">target-conditioned scorer</a> <a class="glossary-chip" href="#term-egocentric-voxel-lifting">EVL</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="ase_dataset.html#oriented-bounding-boxes" title="docs/contents/ase_dataset.qmd#oriented-bounding-boxes">Aria Synthetic Environments (ASE) Dataset</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#rq3" title="docs/typst/thesis/sections/01-research-questions.typ#rq3">01 Research Questions</a> <a class="glossary-chip" href="../reference/vin.types.html" title="docs/reference/vin.types.qmd">types</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="ase_dataset.html#oriented-bounding-boxes" title="docs/contents/ase_dataset.qmd#oriented-bounding-boxes">Aria Synthetic Environments (ASE) Dataset</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq3" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3">01 Research Questions</a> <a class="glossary-chip" href="../reference/vin.types.html" title="docs/reference/vin.types.qmd">types</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-EFM3D-straub2024">&#64;EFM3D-straub2024</a></div></div>
 </div>
 </details>
@@ -1939,7 +1939,7 @@ $$
 <summary>Links and references</summary>
 <div class="glossary-metadata">
 <div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-candidate-view">candidate</a> <a class="glossary-chip" href="#term-next-best-view">NBV</a> <a class="glossary-chip" href="#term-degrees-of-freedom">DoF</a></div></div>
-<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#roadmap" title="docs/typst/thesis/development/roadmap.typ#roadmap">Roadmap</a> <a class="glossary-chip" href="../typst/seminar_paper/sections/10a-extensions.typ" title="docs/typst/seminar_paper/sections/10a-extensions.typ">10A Extensions</a></div></div>
+<div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ch:roadmap" title="docs/typst/thesis/development/roadmap.typ#ch:roadmap">Roadmap</a> <a class="glossary-chip" href="../typst/seminar_paper/sections/10a-extensions.typ" title="docs/typst/seminar_paper/sections/10a-extensions.typ">10A Extensions</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-GenNBV-chen2024">&#64;GenNBV-chen2024</a></div></div>
 </div>
 </details>

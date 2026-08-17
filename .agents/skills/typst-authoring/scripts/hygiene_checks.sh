@@ -53,9 +53,16 @@ echo "== Typst authoring hygiene checks =="
 echo "Mode: $mode"
 echo "Targets: ${targets[*]}"
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../" && pwd)"
+authoring_test="$repo_root/scripts/tests/test_typst_authoring_hygiene.py"
+
 if ! command -v rg >/dev/null 2>&1; then
   echo "ripgrep (rg) not available; skipping pattern checks" >&2
   exit 0
+fi
+
+if [[ "$mode" == "strict" && -f "$authoring_test" ]]; then
+  python3 "$authoring_test" --scan "${targets[@]}"
 fi
 
 exclude_args=()

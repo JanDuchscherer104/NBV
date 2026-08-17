@@ -44,13 +44,15 @@ The persisted factual tables retain source and target identity, lineage hashes, 
   gate: [typed selected-observation reader, deterministic fusion, source masks, and no-future-observation tests],
 )[A task-sufficient successor state must update only evidence produced by the selected observation. Current GT-mesh selected depth is privileged counterfactual evidence and requires an explicit `CF-GT` state protocol.]
 
-A selected observation is the typed tuple
+A selected observation is a typed tuple containing depth, validity mask,
+calibration, root-relative camera pose, and an explicit source role. The
+geometry successor state consumes this selected evidence:
 
-$
-  o_(t+1)^"sel" = (D_(t,a_t), V_(t,a_t), K_(t,a_t), T_("root" <- "cam",t,a_t), ell_(t,a_t)^"src")
-$
+#eqs.rl.s_cf_geom
 
-containing depth, valid mask, calibration, root-relative camera pose, and a source role. The source role distinguishes privileged GT-mesh depth, declared sensor-like simulation, and an actor-visible sensor observation. Unselected candidate renders at step $t$ are never elements of the student state.
+The source role distinguishes privileged mesh depth, declared sensor-like
+simulation, and an actor-visible sensor observation. Unselected candidate
+renders at step $t$ are never elements of the student state.
 
 The existing geometry-level counterfactual uses a set union of retained points,
 

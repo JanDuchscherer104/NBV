@@ -57,8 +57,15 @@ def select_families(paths: list[str]) -> set[str]:
             return set(FAMILIES)
 
         matched = False
-        if path.startswith(".agents/") or path in SCAFFOLD_PATHS:
+        if path.startswith(".agents/") and not path.startswith(
+            ".agents/skills/typst-authoring/"
+        ) or path in SCAFFOLD_PATHS:
             selected.add("scaffold")
+            matched = True
+        if path.startswith(".agents/skills/typst-authoring/"):
+            # Authoring guidance changes can alter docs behavior even though
+            # the skill itself lives under the scaffold namespace.
+            selected.add("docs")
             matched = True
         if path.startswith("aria_nbv/") or path.startswith(".configs/"):
             selected.add("package")

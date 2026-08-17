@@ -4,9 +4,9 @@
 // configuration, and immutable artifacts remain the owners of implementation
 // contracts and measurements.
 #development_only[
-  #heading(level: 1, numbering: none)[M1 Contract Report] <m1-contract-report>
+  #heading(level: 1, numbering: none)[M1 Contract Report] <ch:m1-contract-report>
 
-  #heading(level: 2, numbering: none)[Status] <m1-status>
+  #heading(level: 2, numbering: none)[Status] <ssec:m1-status>
 
   #thesis_status(
     implementation: "partial",
@@ -50,7 +50,7 @@
     ],
   )
 
-  #heading(level: 2, numbering: none)[Evidence] <m1-evidence>
+  #heading(level: 2, numbering: none)[Evidence] <ssec:m1-evidence>
 
   The current evidence view is intentionally pointer-only.  The defining
   Python modules, tests, active configuration, and generated artifacts remain
@@ -64,7 +64,7 @@
   - Rerun evidence: absent in the current worktree; the normal/boundary/failure
     recording gate remains open.
 
-  #heading(level: 2, numbering: none)[Blockers] <m1-blockers>
+  #heading(level: 2, numbering: none)[Blockers] <ssec:m1-blockers>
 
   #promotion_entry(
     [Refresh the configured-store evidence and report coverage status.],

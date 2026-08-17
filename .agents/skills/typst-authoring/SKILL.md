@@ -63,6 +63,7 @@ metadata:
   verification:
     - "skill quick_validate.py when available for skill edits"
     - "make check-agent-memory when agent guidance changes"
+    - "make typst-authoring-contract for thesis-wide authoring hygiene"
     - "focused Typst compile plus PNG render for document edits"
 ---
 
@@ -124,6 +125,10 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 1. Choose the task mode and read only its required references.
 2. If notation changes, check `docs/typst/shared` and update the shared module
    before using the symbol in thesis text.
+   The repository contract rejects authored display blocks that bypass
+   `#eqs.*`, and checks recurring symbols against the shared facades. Equation
+   binders and other local dummy variables remain local; they are not global
+   notation obligations.
 3. If thesis prose links to implementation code, classify the link with
    `docs/typst/shared/style.typ`: use `#gh` for final-worthy pinned
    anchors and `#gh-wip` / `#gh-symbol` for removable drafting aids.
@@ -137,7 +142,12 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
    Mermaid assets locally before inclusion.
 7. Compile the document or fixture, render affected pages to PNG, inspect
    visually, then fix and repeat.
-8. Report exact compile/render/check commands and any skipped checks.
+8. Run `make typst-authoring-contract` for thesis changes. It checks the
+   approved structural-label prefixes and exact authored-label scope, keeps
+   generated/query and fixture labels excluded, and rejects implementation
+   keys or status markers in ordinary submission prose. Explicit code spans
+   and guarded development material are allowed contexts.
+9. Report exact compile/render/check commands and any skipped checks.
 
 ## References And Commands
 
