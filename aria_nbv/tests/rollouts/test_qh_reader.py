@@ -14,6 +14,7 @@ import zarr
 
 pytest.importorskip("efm3d")
 
+from aria_nbv.rollouts.inspection import q_h_evidence_rows
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.zarr_store import (
@@ -285,6 +286,50 @@ def test_reader_rejects_well_shaped_tampered_v1_target_hash(
     assert any("canonical target evidence" in error for error in validation.errors)
     with pytest.raises(ValueError, match="canonical validation"):
         QhRolloutReader((store,))
+
+
+def test_q_h_evidence_is_metadata_first_and_deep_counts_are_explicit(tmp_path: Path, monkeypatch) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    reader = RolloutZarrStoreReader(store)
+    validation = reader.validate()
+    assert validation.ok
+    monkeypatch.setattr(reader, "validate", lambda: pytest.fail("accepted validation should be reused"))
+
+    shallow = q_h_evidence_rows(reader, validation_result=validation)[0]
+    assert shallow["available"] is True
+    assert shallow["deep_count"] is False
+    assert shallow["actor_valid_count"] is None
+    assert shallow["oracle_valid_count"] is None
+    assert shallow["trainable_count"] is None
+    assert shallow["count_reason"] == "metadata does not prove mask counts; request deep_count"
+
+    deep = q_h_evidence_rows(reader, deep_count=True, validation_result=validation)[0]
+    root = zarr.open_group(store, mode="r")
+    candidate_ids = np.asarray(root["q_h/candidate_row_id"], dtype=np.int64)
+    valid = np.asarray(root["q_h/valid_action_mask"], dtype=np.bool_)
+    trainable = np.asarray(root["q_h/q_train_mask"], dtype=np.bool_)
+    factual_ids = np.asarray(root["candidates/candidate_row_id"], dtype=np.int64)
+    factual_oracle = np.asarray(root["candidates/oracle_label_mask"], dtype=np.bool_)
+    oracle_by_id = dict(zip(factual_ids.tolist(), factual_oracle.tolist(), strict=True))
+    expected_oracle = sum(oracle_by_id.get(int(candidate_id), False) for candidate_id in candidate_ids.reshape(-1))
+    assert deep["actor_valid_count"] == int(valid.sum())
+    assert deep["oracle_valid_count"] == expected_oracle
+    assert deep["trainable_count"] == int(trainable.sum())
+    assert deep["padding_count"] == int((candidate_ids < 0).sum())
+    assert deep["count_reason"] == "explicit bounded current-store mask projection"
+
+
+def test_q_h_evidence_blocks_invalid_store_before_projection(tmp_path: Path) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    root = zarr.open_group(store, mode="a")
+    root["targets/target_source_id"][0] = 99
+    reader = RolloutZarrStoreReader(store)
+
+    row = q_h_evidence_rows(reader, deep_count=True)[0]
+
+    assert row["available"] is False
+    assert row["deep_count"] is True
+    assert row["blocking_reason"]
 
 
 def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -> None:
