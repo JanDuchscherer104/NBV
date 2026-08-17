@@ -58,8 +58,25 @@ class SelectionTests(unittest.TestCase):
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"',
             workflow,
         )
-        self.assertIn("typst-version: 0.14.2", workflow)
-        self.assertIn('token: ""', workflow)
+        self.assertIn("TYPST_VERSION: 0.14.2", workflow)
+        self.assertIn(
+            "https://github.com/typst/typst/releases/download/"
+            "v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz",
+            workflow,
+        )
+        self.assertIn(
+            "a6044cbad2a954deb921167e257e120ac0a16b20339ec01121194ff9d394996d",
+            workflow,
+        )
+        self.assertIn("curl --fail --location --retry 5", workflow)
+        self.assertIn("sha256sum --check --strict", workflow)
+        self.assertIn('echo "${install_root}" >> "${GITHUB_PATH}"', workflow)
+        self.assertIn(
+            'test "$(typst --version)" = "typst ${TYPST_VERSION}"', workflow
+        )
+        self.assertNotIn("typst-community/setup-typst", workflow)
+        self.assertNotIn("typst-version:", workflow)
+        self.assertNotIn('token: ""', workflow)
         self.assertIn(
             "make agents-db-validate check-agent-memory scaffold-audit", workflow
         )
