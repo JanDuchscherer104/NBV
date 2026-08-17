@@ -58,6 +58,7 @@ class SelectionTests(unittest.TestCase):
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"',
             workflow,
         )
+        self.assertIn("typst-version: 0.14.2", workflow)
         self.assertIn(
             "make agents-db-validate check-agent-memory scaffold-audit", workflow
         )
