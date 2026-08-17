@@ -640,6 +640,7 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
         actor: bool,
         selected: bool,
         probability: float,
+        mixture: str = "forward",
     ) -> dict[str, object]:
         return {
             "candidate_row_id": candidate_row_id,
@@ -648,7 +649,7 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
             "scene": scene,
             "rollout_row_id": state,
             "step_row_id": state,
-            "mixture": "forward",
+            "mixture": mixture,
             "actor_action": actor,
             "oracle_label": actor,
             "q_train": actor,
@@ -665,26 +666,49 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
         row(3, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=0.25),
         row(4, cohort="a", scene="s2", state=2, actor=True, selected=True, probability=1.0),
         row(5, cohort="b", scene="s3", state=3, actor=False, selected=False, probability=1.0),
+        row(6, cohort="a", scene="s1", state=0, actor=False, selected=False, probability=0.25, mixture="side"),
+        row(7, cohort="a", scene="s1", state=0, actor=False, selected=False, probability=0.25, mixture="side"),
+        row(8, cohort="a", scene="s1", state=1, actor=True, selected=False, probability=0.25, mixture="side"),
     ]
 
     composition = candidate_composition_rows(rows)
-    assert [candidate["generation_cohort_id"] for candidate in composition] == ["a", "b"]
-    cohort_a = composition[0]
+    assert {(candidate["generation_cohort_id"], candidate["family"]) for candidate in composition} == {
+        ("a", "forward"),
+        ("a", "side"),
+        ("b", "forward"),
+    }
+    cohort_a = next(
+        candidate
+        for candidate in composition
+        if candidate["generation_cohort_id"] == "a" and candidate["family"] == "forward"
+    )
     assert cohort_a["allocated_count"] == 5
     assert cohort_a["actor_valid_count"] == 3
     assert cohort_a["macro_actor_valid_rate"] == pytest.approx(0.75)
     assert cohort_a["aggregation"] == "state_then_scene_macro"
 
     calibration = candidate_proposal_calibration_rows(rows)
-    assert [candidate["generation_cohort_id"] for candidate in calibration] == ["a", "b"]
-    assert calibration[0]["empirical_frequency"] == pytest.approx(1.0)
-    assert calibration[0]["proposal_mass"] == pytest.approx(1.0)
-    assert calibration[0]["selected_share"] == pytest.approx(1.0)
-    assert calibration[0]["selection_enrichment"] == pytest.approx(1.0)
+    calibration_a = next(
+        candidate
+        for candidate in calibration
+        if candidate["generation_cohort_id"] == "a" and candidate["family"] == "forward"
+    )
+    assert calibration_a["population_empirical_frequency"] == pytest.approx(5 / 8)
+    assert calibration_a["population_proposal_mass"] == pytest.approx(8 / 11)
+    assert calibration_a["empirical_frequency"] == pytest.approx(19 / 24)
+    assert calibration_a["proposal_mass"] == pytest.approx(19 / 24)
+    assert calibration_a["calibration_gap"] == pytest.approx(0.0)
+    assert calibration_a["population_selected_share"] == pytest.approx(1.0)
+    assert calibration_a["selected_share"] == pytest.approx(1.0)
+    assert calibration_a["state_count"] == 3
+    assert calibration_a["scene_count"] == 2
 
     collision = candidate_collision_support_rows(rows)[0]
     assert collision["available"] is True
     assert collision["collision_rate"] == pytest.approx(0.0)
+    assert len(candidate_collision_support_rows(rows)) == 2
+    assert collision["generation_cohort_id"] == "a"
+    assert collision["candidate_count"] == 8
     unavailable = candidate_collision_support_rows([{**rows[0], "path_collision": None, "path_min_clearance_m": None}])[
         0
     ]
@@ -694,7 +718,7 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     first = deterministic_candidate_display_sample(rows, max_rows=3)
     second = deterministic_candidate_display_sample(reversed(rows), max_rows=3)
     assert [item["candidate_row_id"] for item in first["rows"]] == [item["candidate_row_id"] for item in second["rows"]]
-    assert first["population_count"] == 6
+    assert first["population_count"] == 9
     assert first["display_count"] == 3
     assert first["display_only"] is True
     with pytest.raises(ValueError, match="Unsupported candidate group field"):

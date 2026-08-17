@@ -1161,19 +1161,26 @@ def candidate_proposal_calibration_rows(
                 "family": summary["family"],
                 "candidate_count": summary["allocated_count"],
                 "finite_probability_count": len(finite),
-                "empirical_frequency": empirical,
-                "proposal_mass": proposal_mass,
-                "calibration_gap": None if proposal_mass is None or empirical is None else empirical - proposal_mass,
-                "selected_share": selected_share,
-                "selection_enrichment": None
+                "population_empirical_frequency": empirical,
+                "population_proposal_mass": proposal_mass,
+                "population_calibration_gap": None
+                if proposal_mass is None or empirical is None
+                else empirical - proposal_mass,
+                "population_selected_share": selected_share,
+                "population_selection_enrichment": None
                 if empirical in (None, 0.0) or selected_share is None
                 else selected_share / empirical,
                 "state_count": len(state_rows),
                 "scene_count": len(scene_rows),
-                "macro_empirical_frequency": macro["empirical_frequency"],
-                "macro_proposal_mass": macro["proposal_mass"],
-                "macro_selected_share": macro["selected_share"],
-                "macro_selection_enrichment": macro["selection_enrichment"],
+                "empirical_frequency": macro["empirical_frequency"],
+                "proposal_mass": macro["proposal_mass"],
+                "calibration_gap": (
+                    None
+                    if macro["proposal_mass"] is None or macro["empirical_frequency"] is None
+                    else macro["empirical_frequency"] - macro["proposal_mass"]
+                ),
+                "selected_share": macro["selected_share"],
+                "selection_enrichment": macro["selection_enrichment"],
                 "empirical_denominator": len(cohort_rows),
                 "proposal_denominator": sum(
                     1 for row in cohort_rows if _finite_or_none(row.get("sampler_probability")) is not None
@@ -1211,13 +1218,13 @@ def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]])
                 "candidate_count": len(cohort_rows),
                 "collision_available_count": len(collision_available),
                 "collision_count": collision_count,
-                "collision_rate": _safe_fraction(collision_count, len(collision_available)),
+                "population_collision_rate": _safe_fraction(collision_count, len(collision_available)),
                 "clearance_finite_count": len(finite_clearance),
-                "clearance_mean_m": None if not finite_clearance else float(np.mean(finite_clearance)),
+                "population_clearance_mean_m": None if not finite_clearance else float(np.mean(finite_clearance)),
                 "state_count": len(state_rows),
                 "scene_count": len(scene_rows),
-                "macro_collision_rate": _macro_mean(scene_rows, "collision_rate"),
-                "macro_clearance_mean_m": _macro_mean(scene_rows, "clearance_mean_m"),
+                "collision_rate": _macro_mean(scene_rows, "collision_rate"),
+                "clearance_mean_m": _macro_mean(scene_rows, "clearance_mean_m"),
                 "collision_denominator": len(collision_available),
                 "clearance_denominator": len(finite_clearance),
                 "available": bool(cohort_rows) and bool(collision_available) and bool(finite_clearance),
