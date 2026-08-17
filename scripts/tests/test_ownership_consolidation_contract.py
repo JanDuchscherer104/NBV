@@ -300,7 +300,15 @@ def test_glossary_rq_links_match_the_six_tier_semantics() -> None:
             flags=re.DOTALL,
         )
         assert match is not None, term
-        observed = re.findall(r"research-questions\.typ#(rq\d+)", match.group(1))
+        # RQ section labels are canonical Typst anchors.  Do not silently
+        # accept the retired bare ``#rqN`` fragments: that would let glossary
+        # links drift back to the pre-migration owner.
+        observed = [
+            anchor.removeprefix("ssec:")
+            for anchor in re.findall(
+                r"research-questions\.typ#(ssec:rq\d+)", match.group(1)
+            )
+        ]
         assert len(observed) == len(set(observed)), f"{term}: duplicate RQ links"
         assert set(observed) == expected_rqs, term
 

@@ -10,11 +10,11 @@ every learned action is re-evaluated with the oracle under the same candidate
 support, validity rules, and acquisition budget. @ground-truth:short (GT) geometry
 defines target tasks, labels, and evaluation; it is not an ordinary actor input.
 
-=== Objectives and scope <rq-objectives>
+=== Objectives and scope <ssec:rq-objectives>
 
 The work has six linked objectives. First, validate the geometry, candidate-label,
 invalidity, split, and oracle-RRI contracts on a trusted ASE subset before scale-up.
-Second, define the V1 observed-target-selection / predicted-target-$Q$ /
+Second, define the observed-target-selection / predicted-target-$Q$ /
 GT-evaluation protocol. Third, establish a learned one-step target-conditioned
 scorer as the required myopic control. Fourth, validate mixed candidate sets and
 rollout support before training a finite-horizon value model. Fifth, train
@@ -43,11 +43,11 @@ result. The active quantitative core is therefore RQ1--RQ4 below.
 #thesis_status(
   implementation: "planned",
   evidence: "pending",
-  gate: [V1 observed/predicted target matching and target-conditioned scoring are not yet implemented; current V0 GT tasks remain the only available protocol],
-)[The V1 descriptor and deterministic 3D-IoU matching below are a planned
+  gate: [Observed/predicted target matching and target-conditioned scoring remain future work; the current oracle-task protocol is the available baseline],
+)[The actor-visible descriptor and deterministic 3D-IoU matching below are a planned
 hypothesis and acceptance protocol, not an implemented result.]
 
-=== RQ1 — Objective and endpoint contract <rq1>
+=== RQ1 — Objective and endpoint contract <ssec:rq1>
 
 Can target-conditioned, finite-candidate NBV improve endpoint quality for a
 selected target under a fixed acquisition budget while keeping training return,
@@ -55,18 +55,13 @@ endpoint evaluation, and acquisition cost separate? For a rollout rooted at
 $s_0$ with target $e$, let $cal(P)_t$ be the accumulated fused points and
 $cal(M)_e^"GT"$ the matched target surface. The oracle-only target crop gives
 
-$$
-  Δ_t^e = D_(P → M,t)^e + D_(M → P,t)^e;
-  J_H^e = (Δ_0^e - Δ_H^e)/(Δ_0^e + ε).
-$$
+#eqs.entity.endpoint_gain
 
 The primary fixed-budget metric is endpoint gain $J_H^e$. The default
 multi-step reward is root-normalized target gain,
 
-$$
-  r_(t,"root")^e = (Δ_t^e - Δ_(t+1)^e)/(Δ_0^e + ε);
-  G_0^(H) = ∑_(t=0)^(H-1) γ^t r_(t,"root")^e.
-$$
+#eqs.rl.target_rri_reward
+#eqs.rl.finite_horizon_return
 
 State-relative target RRI remains a diagnostic and VIN-compatible one-step
 label; log-error gain and motion or feasibility costs are explicit ablations.
@@ -74,16 +69,14 @@ Invalid candidates are hard constraints, never the lowest-RRI class. Report
 endpoint gain, cumulative root gain, diagnostic target RRI, scene RRI, view count,
 path length, invalid-action rate, and runtime at matched budgets.
 
-=== RQ2 — Offline finite-candidate planning <rq2>
+=== RQ2 — Offline finite-candidate planning <ssec:rq2>
 
 Does bounded oracle lookahead have positive endpoint-quality headroom over
 one-step oracle-greedy selection, and can an offline $Q_(H, theta)$ policy recover
 a measurable fraction of it? The first comparison fixes target tasks, roots,
 candidate support, validity, horizon, and budget. Define
 
-$$
-  #eqs.entity.lookahead_headroom
-$$
+#eqs.entity.lookahead_headroom
 
 If this headroom is indistinguishable from zero for the evaluated support, the
 result is a setup-specific negative finding, not a claim that target RRI is
@@ -94,19 +87,20 @@ traces. The learned model emits one masked bounded-horizon value per finite
 candidate; GT meshes, crops, and oracle values remain supervision/evaluation only.
 Gumbel-Top-$k$ is later diversity evidence, not a prerequisite for the first run.
 
-=== RQ3 — Actor-visible target representation <rq3>
+=== RQ3 — Actor-visible target representation <ssec:rq3>
 
 Which actor-visible target descriptor and matching protocol support one-step and
 finite-horizon scoring without privileged target geometry or all-candidate oracle
-renders at decision time? The proposed V1 protocol is observed or predicted
-target selection, predicted-target conditioning, and GT target-crop evaluation.
-The first descriptor contains observed/predicted OBB centre, extents,
+renders at decision time? The proposed protocol separates observed or predicted
+target selection, predicted-target conditioning, and ground-truth target-crop evaluation.
+The first descriptor contains observed/predicted @oriented-bounding-box centre, extents,
 orientation, class, confidence, projected area, relative pose, semi-dense point
 support, and EVL support. A compact crop descriptor from actor-visible spatial
 evidence is the first ablation; entity tokens and appearance features are later
-ablations. V0 GT-OBB input is a sanity or upper-bound path only.
+ablations. A ground-truth target box is retained only as a privileged sanity or
+upper-bound path, not as an actor-visible deployment input.
 
-The planned V1 matcher (not implemented) first requires compatible semantic
+The planned matcher first requires compatible semantic
 class, then applies deterministic 3D IoU with an explicit threshold
 $tau_"IoU"$. If the best and second-best compatible matches are separated by
 less than the explicit ambiguity margin $tau_"gap"$, the proposal is rejected
@@ -115,13 +109,13 @@ area, and semi-dense/EVL support are audit-only evidence fields for this
 association rule, not association scores. Unmatched or ambiguous targets are
 protocol-invalid cases, not low-RRI examples.
 
-=== RQ4 — Candidate, rollout, and scale support <rq4>
+=== RQ4 — Candidate, rollout, and scale support <ssec:rq4>
 
 Do mixed target-centric and default-exploration candidates, controlled rollout
 branching, and scale-aware replay evidence improve reliability over a narrower
 candidate family? The thesis-core finite table is the executable 60-row mixture:
-`forward_local` (24), `target_bearing_local` (24), and
-`lateral_target_bypass` (12). Legacy radial-away/radial-towards and unrestricted
+  forward-local (24), target-bearing-local (24), and
+  lateral-target-bypass (12). Legacy radial-away/radial-towards and unrestricted
 free-shell directions are explicit ablations, not thesis-core families. Every
 row retains strategy provenance, a hard validity mask, and explicit
 invalid-reason codes. Branch, beam, and stochastic temperature controls widen
@@ -136,7 +130,7 @@ rollout seeds, transitions, split boundaries, invalid gaps, and missing coverage
 separately. Sample-level splits across snippets from one scene are not sufficient
 for final claims.
 
-=== Shared evidence protocol <protocol>
+=== Shared evidence protocol <ssec:protocol>
 
 Invalidity is a shared constraint across all questions. Only physical or
 explicit admissibility failures (for example collision, out-of-bounds pose,
@@ -144,14 +138,14 @@ bad frustum, or a contract-defined motion violation) clear action validity;
 outside-EVL extent, missing semidense/appearance support, and similar evidence
 gaps remain support fields unless the executable feasibility contract says
 otherwise. A failed oracle evaluation does not make the action physically
-invalid: it clears `oracle_label_mask` and `q_train_mask` and is reported as a
-label/evaluation failure. Keep the mask taxonomy explicit: *action validity*
-(`valid_action_mask` / `actor_action_mask`) gates selectable candidate rows;
+invalid: it clears oracle-label validity and Q-training eligibility and is
+reported as a label/evaluation failure. Keep the mask taxonomy explicit:
+*action validity* gates selectable candidate rows;
 *actor evidence/support* records whether observed target or local semidense/EVL
 evidence exists; *target validity* records whether the target task and identity
-state are admissible; *oracle-label validity* (`oracle_label_mask`) records
-whether GT evaluation produced a finite label; and *Q-training eligibility*
-(`q_train_mask`) is the strict intersection required by the learning contract.
+state are admissible; *oracle-label validity* records whether ground-truth
+evaluation produced a finite label; and *Q-training eligibility* is the strict
+intersection required by the learning contract.
 Report invalid fractions and reason distributions,
 target-visible fractions, masked and unmasked rank metrics, and selected-action
 oracle evaluation. Equal budget means equal horizon, candidate count, candidate
@@ -159,7 +153,7 @@ distribution, and validity constraints; path length, runtime, and oracle calls
 are separate measurements. Coverage, calibration, stage shift, and storage
 lineage are evidence qualifiers rather than proxy objectives.
 
-=== RQ5 — Conditional online discrete $Q_H$ bridge <rq5>
+=== RQ5 — Conditional online discrete $Q_H$ bridge <ssec:rq5>
 
 After offline finite-candidate evidence is stable, does online interaction over
 the same discrete candidate contract improve endpoint target gain or calibration
@@ -170,7 +164,7 @@ positive; it is not required to establish the finite-candidate thesis result.
 Online training must not silently expand the action space, change the target
 protocol, or treat GT renders as actor evidence.
 
-=== RQ6 — Lower-priority continuous and simulator escalation <rq6>
+=== RQ6 — Lower-priority continuous and simulator escalation <ssec:rq6>
 
 If the finite-candidate and online-discrete evidence is stable, does a
 continuous or hierarchical target-then-pose policy, potentially in a simulator,
@@ -181,7 +175,7 @@ matched budgets or cost curves, explicit feasibility handling, and independent
 oracle endpoint evaluation; no continuous-control result is implied by the
 current finite-candidate implementation.
 
-=== Research matrix <matrix>
+=== Research matrix <ssec:matrix>
 
 #table(
   columns: (1.1fr, 0.8fr, 2.5fr),

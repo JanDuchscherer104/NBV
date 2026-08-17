@@ -95,13 +95,19 @@ $
   #eqs.action.candidate_center_world
 $
 
-`forward_local` keeps the reference rig orientation. Target-looking families orient the camera toward the supplied target center $bold(p)_e$:
+The forward-local family keeps the reference rig orientation. Target-looking families orient the camera toward the supplied target center $bold(p)_e$:
 
 $
   #eqs.action.target_lookat_frame
 $
 
-These equations describe the sampler, not an optimal proposal distribution. `forward_local` preserves egocentric continuity, `target_bearing_local` moves along the target ray, and `lateral_target_bypass` introduces side-step views; the optional challenger families test smaller corrections and reversals. Candidate-profile utility must be judged after pruning. A store in which target-aware families rarely survive cannot support a target-conditioned planning claim.
+These equations describe the sampler, not an optimal proposal distribution. The
+forward-local family preserves egocentric continuity, the target-bearing-local
+family moves along the target ray, and the lateral-target-bypass family
+introduces side-step views; optional challenger families test smaller corrections
+and reversals. Candidate-profile utility must be judged after pruning. A store in
+which target-aware families rarely survive cannot support a target-conditioned
+planning claim.
 
 Pruning converts the full shell into a compact valid-action table. A row remains valid only if it lies in the snippet occupancy support, stays clear of the @ground-truth:short mesh, avoids straight-line path collision, and satisfies local egocentric motion limits:
 
@@ -150,23 +156,11 @@ Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated evalua
 
 Writing $P=C_e (#symb.obs.points_t)$ and $M=cal(M)_e^"GT"$ for the target-cropped point set and mesh, the selected directional accuracy is the mean squared distance from each reconstructed point to its closest @ground-truth:short triangle,
 
-$
-  D_(P -> M)(P, M)
-  =
-  (1)/(||P||)
-  sum_(bold(p) in P)
-  min_(bold(f) in cal(F)(M)) d(bold(p), bold(f))^2
-$
+#eqs.rri.acc
 
 It penalizes reconstructed points that lie away from the target surface and therefore exposes extra, noisy, or misregistered geometry. The reverse term is the mean squared distance from each @ground-truth:short face to its closest reconstructed point,
 
-$
-  D_(M -> P)(P, M)
-  =
-  (1)/(||cal(F)(M)||)
-  sum_(bold(f) in cal(F)(M))
-  min_(bold(p) in P) d(bold(p), bold(f))^2
-$
+#eqs.rri.comp
 
 It penalizes target faces without nearby reconstructed evidence and therefore exposes missing support. Their sum is the bidirectional point--mesh error,
 
@@ -217,17 +211,18 @@ The completeness reduction gives every mesh face equal weight. It is deliberatel
 
 For comparison, a common squared point-sampled Chamfer convention draws a reference set $Q_e$ from the mesh and averages nearest-neighbour distances in both directions,
 
-$
-  op("CD") (P, Q_e)
-  =
-  (1)/(||P||) sum_(bold(p) in P) min_(bold(q) in Q_e) ||bold(p)-bold(q)||_2^2
-  +
-  (1)/(||Q_e||) sum_(bold(q) in Q_e) min_(bold(p) in P) ||bold(q)-bold(p)||_2^2.
-$
+#eqs.rri.point_sampled_chamfer
 
-Its apparent symmetry does not remove sampling-density dependence: changing the number or distribution of samples changes the finite approximation. Some benchmarks also use unsquared distances, so the norm and squaring convention are part of the metric contract rather than an interchangeable naming detail. At tolerance $tau$, precision counts reconstructed samples with a reference neighbour closer than $tau$, recall counts reference samples with a reconstructed neighbour closer than $tau$, and $F_(1,tau)=2 op("Prec")_tau op("Rec")_tau/(op("Prec")_tau+op("Rec")_tau)$. These scores are physically interpretable but can change with the selected threshold and discard error magnitude on either side of it. Volumetric coverage and information gain are valuable for exploration and mapping, yet they measure discovered space or uncertainty reduction rather than the target reconstruction-quality change defined here.
+Its apparent symmetry does not remove sampling-density dependence: changing the number or distribution of samples changes the finite approximation. Some benchmarks also use unsquared distances, so the norm and squaring convention are part of the metric contract rather than an interchangeable naming detail. At tolerance $tau$, precision counts reconstructed samples with a reference neighbour closer than $tau$, recall counts reference samples with a reconstructed neighbour closer than $tau$, and $F_(1,tau)=2 "Prec"_tau "Rec"_tau/("Prec"_tau+"Rec"_tau)$. These scores are physically interpretable but can change with the selected threshold and discard error magnitude on either side of it. Volumetric coverage and information gain are valuable for exploration and mapping, yet they measure discovered space or uncertainty reduction rather than the target reconstruction-quality change defined here.
 
-The implementation crops mesh faces when any vertex lies inside the oriented target OBB and evaluates the selected point--mesh scorer. Geometry-invalid candidates are removed by the hard action mask and retain persisted candidate reason codes. Empty mesh crops, insufficient current support, or unusable renders instead invalidate the separate oracle evaluation: the recipe either skips the affected row or table, or clears `oracle_label_mask` and `q_train_mask`, while reporting the oracle failure independently rather than assigning a candidate reason code.
+The implementation crops mesh faces when any vertex lies inside the oriented
+target @oriented-bounding-box and evaluates the selected point--mesh scorer.
+Geometry-invalid candidates are removed by the hard action mask and retain
+persisted candidate reason codes. Empty mesh crops, insufficient current
+support, or unusable renders instead invalidate the separate oracle evaluation:
+the recipe either skips the affected row or table, or clears oracle-label
+validity and Q-training eligibility, while reporting the oracle failure
+independently rather than assigning a candidate reason code.
 
 This thesis therefore treats the metric as an operational estimand over a frozen evaluation pipeline, not as a representation-independent surface quantity. Every compared policy must share the same target mesh and crop, ASE-depth source, renderer and backprojection, fusion and point cap, and metric configuration. A future real-data evaluation that replaces ASE depth with MPS semi-dense evidence must separately quantify its texture-, gradient-, and uncertainty-dependent sampling effects; those concerns are not properties of the current oracle cloud.
 

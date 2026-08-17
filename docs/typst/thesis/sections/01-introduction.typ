@@ -1,6 +1,6 @@
 #import "../../shared/macros.typ": *
 
-= Introduction <introduction>
+= Introduction <ch:introduction>
 
 Active reconstruction couples sensing and inference: after a fixed acquisition budget, reconstruction quality depends not only on the surface estimator but also on which feasible viewpoints were acquired. Classical active perception therefore treats sensing actions as part of perception, and view-planning work formalizes the recurring generate--score--select loop for three-dimensional inspection @ActivePerception-bajcsy1988 @ActiveVision-aloimonos1988 @ViewPlanningSurvey-scott2003. This thesis studies a deliberately bounded instance of that problem: target-conditioned view selection from a finite admissible candidate table for egocentric indoor reconstruction.
 
@@ -8,7 +8,7 @@ VIN-NBV provides the closest objective precedent by supervising candidate rankin
 
 The current data-generation tasks are defined directly from geometry-valid @ground-truth:short oriented bounding boxes. They provide target identity, target crops, and oracle labels, but they do not implement actor-visible target discovery or identity matching. Consequently, deployable-input claims require a separate observed- or predicted-target protocol; the current target tasks support oracle supervision and controlled evaluation only.
 
-== Objectives and boundary <boundary>
+== Objectives and boundary <ssec:boundary>
 
 The thesis objective is a finite-candidate, target-conditioned @next-best-view
 comparison with equal acquisition budgets and oracle re-evaluation. The boundary

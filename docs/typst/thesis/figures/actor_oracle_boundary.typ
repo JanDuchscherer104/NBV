@@ -56,7 +56,7 @@
 
   note((2.6, 0), [Legal actor interface], tint: model, width: 38mm),
   block((2.6, 1.45), [Counterfactual actor state], [
-    $bold(s)_t^"cf0"$ \
+    $s_t^"cf0"$ \
     no hidden target labels \
     no future visual features
   ], tint: model, width: 43mm),

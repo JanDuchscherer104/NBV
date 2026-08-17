@@ -53,6 +53,19 @@ Check attachment scope after `_` / `^`, bolding and symbol consistency, line
 breaks and equation overflow, figure scale/cropping, caption clarity, table
 alignment, cross-reference output, and awkward page breaks.
 
+For the thesis-wide authoring contract, also run:
+
+```bash
+make typst-authoring-contract
+```
+
+This static source check requires shared display-equation consumers, checks
+recurring notation without globalising local binders, scopes structural labels
+to the authored thesis inventory, and keeps raw implementation keys and
+status vocabulary out of ordinary submission prose. Generated labels, metadata
+query labels, fixtures, explicit code spans, and guarded development material
+are deliberate exclusions.
+
 ## 6. Fix And Repeat
 
 A clean compile alone is insufficient when the change affects rendering. Repeat

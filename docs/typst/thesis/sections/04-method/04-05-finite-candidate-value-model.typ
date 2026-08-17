@@ -43,23 +43,13 @@ $
 
 The notation $Q_H$ names a bounded finite-horizon family. If the explicit requested-horizon design is selected, one model query would be
 
-$
-  Q_theta(s_t, e, i, h) = Q_(h,e)^theta(s_t, i),
-  quad 1 <= h <= b_t <= H
-$
+#eqs.rl.q_h
 
 rather than a value from a separately configured fixed-H model. The maximum $H$ is a dataset contract and later a model/checkpoint contract. In this candidate design, requested residual horizon $h$ is a model input and remaining budget $b_t$ determines whether the query is admissible. In the fixed-H alternative, $h$ is implicit and $b_t$ remains state context. The step index $t$ stays lineage unless a named non-stationarity ablation uses it.
 
 In the requested-horizon candidate design, one candidate row is one geometric query. Candidate pose, candidate--target relation, and candidate-local support are encoded once, and a lightweight horizon embedding turns that candidate into a horizon--candidate query:
 
-$
-  u_(t,e,h,i)
-  =
-  op("CrossAttn")_theta(
-    x_(t,e,i) + op("Emb")_h(h),
-    {h_e^"tgt", Phi_t^"scene", bold(H)_t, b_t}
-  )
-$
+#eqs.model.qh_candidate_state_cross_attention
 
 followed by one shared per-row value head. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Fixed-H models and separate $Q_1,dots,Q_H$ heads remain competing designs until the source-owner decision is complete.
 
@@ -73,46 +63,23 @@ The value family is defined relative to a frozen state and source protocol. An `
 
 Batch fitted Q iteration learns a greedy action-value function from a fixed transition collection through successive supervised regression problems; it does not require online interaction @FittedQIteration-ernst2005. If the requested-horizon design is selected, one candidate lower-horizon recursion is
 
-$
-  y_t^((1,e)) = r_t^e
-$
+#eqs.rl.target_rri_reward
 
 and, for $h>1$,
 
-$
-  y_t^((h,e))
-  =
-  r_t^e
-  +
-  gamma (1-d_t)
-  op("max", limits: #true)_(j : m_(t+1,j)=1)
-  Q_(bar(theta))(s_(t+1), e, j, h-1)
-$
+#eqs.rl.qh_doubleq_target
 
 where the lower-horizon prediction is detached, frozen, or supplied by a delayed target copy. The essential structural rule for this candidate is $Q_h arrow.l Q_(h-1)$: no horizon value bootstraps from itself. Fixed-horizon TD motivates this recursion and shows that horizon-indexed values can share parameters and be updated in parallel, although a staged $h=1$ to $H$ schedule remains the clearest initial control @FixedHorizonTD-deAsis2020.
 
 The stored evidence gives a particularly strong base case. Every candidate admitted by `q_train_mask` can supervise continuous one-step root-normalized gain. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
 
-$
-  y_t^((2,e), "exact")
-  =
-  r_t^e
-  +
-  gamma
-  op("max", limits: #true)_(j : m_(t+1,j)^"train"=1)
-  r_(t+1,j)^e
-$
+#eqs.rl.finite_horizon_return
 
 This exact target is a useful recursion check and H=2 control. Whether the production learner is one requested-horizon scorer or a fixed-H family remains open at the source-owner gate.
 
 Double Q is an optional estimator for the learned successor maximum. It uses the online scorer to select
 
-$
-  j^star
-  =
-  op("argmax", limits: #true)_(j : m_(t+1,j)=1)
-  Q_theta(s_(t+1),e,j,h-1)
-$
+#eqs.rl.qh_doubleq_index
 
 and a delayed scorer to evaluate that row. This may reduce overestimation from maximizing noisy learned values @DoubleDQN-vanHasselt2015. It is neither a requirement for offline learning nor the definition of the requested-horizon design candidate. It cannot repair unsupported long-horizon actions, an aliased actor state, or missing selected-observation evidence.
 
@@ -147,9 +114,7 @@ $
 
 The base $b_(psi,i)$ must predict continuous one-step target root gain
 
-$
-  (Delta_t^e - Delta_(t+1)^e) / (Delta_0^e + epsilon)
-$
+#eqs.rl.target_rri_reward
 
 in the same additive units as the finite-horizon return. Historical state-relative RRI or an ordinal CORAL score may remain auxiliary ranking and calibration outputs, but they are not interchangeable with this additive base unless an explicit calibrated conversion is learned and validated. The residual captures candidate regeneration, selected-observation state changes, occlusion, support, and the requested residual horizon.
 

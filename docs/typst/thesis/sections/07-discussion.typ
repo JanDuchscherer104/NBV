@@ -7,7 +7,7 @@ The current evidence supports a narrow implementation conclusion. ARIA-NBV has a
 
 The rollout attempts also expose a systems limitation. Counterfactual scoring repeatedly renders a large mesh for a candidate set, so renderer memory and latency constrain feasible branch factor and rollout volume before statistical efficiency becomes relevant. An out-of-memory observation is evidence for batching and resource measurement, not for or against the candidate distribution or planning objective. Completed validated stores are required before throughput, storage, or failure rates are generalized.
 
-The scientific limitations are more restrictive. Current attempts use training sources, no held-out paired policy table supports the endpoint estimand, metric repeatability and meaningful oracle-lookahead headroom remain unestablished, and the target-conditioned finite-horizon comparison is not implemented. The present evidence therefore cannot distinguish negligible non-myopic structure from inadequate candidate support, target observability, replay coverage, representation support, or model failure.
+The scientific limitations are more restrictive. Current attempts use training sources, no held-out paired policy table supports the endpoint estimand, metric repeatability and meaningful oracle-lookahead headroom remain unestablished, and the target-conditioned finite-horizon comparison has not yet been demonstrated. The present evidence therefore cannot distinguish negligible non-myopic structure from inadequate candidate support, target observability, replay coverage, representation support, or model failure.
 
 == Evidence-conditioned architecture bridges
 

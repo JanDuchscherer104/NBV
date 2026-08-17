@@ -126,6 +126,13 @@ proposal/thesis math should use `D` and the shared equations.
 
 ## Adding Missing Notation
 
+The authoring contract is intentionally scope-aware. A symbol belongs in a
+shared facade when it recurs as domain notation across thesis consumers; an
+equation-local binder, summation index, set member, or table index does not.
+Use `make typst-authoring-contract` after notation edits. Its fixtures include
+both a recurring raw symbol that must be promoted and local binders that must
+remain legal.
+
 ARIA-NBV has three coupled notation stores:
 
 - `symbols.typ` / `equations.typ` provide autocomplete-friendly Typst APIs

@@ -125,6 +125,8 @@ class SelectionTests(unittest.TestCase):
             "docs/index.qmd": {"docs"},
             ".agents/references/source_order.md": {"scaffold"},
             ".agents/example.qmd": {"scaffold"},
+            ".agents/skills/typst-authoring/SKILL.md": {"docs"},
+            ".agents/skills/typst-authoring/references/workflow.md": {"docs"},
             "aria_nbv/aria_nbv/__init__.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/candidate_generation.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/geometry.py": {"package"},

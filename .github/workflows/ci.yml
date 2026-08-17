@@ -30,6 +30,7 @@ on:
       - "scripts/templates/lrz/**"
       - "scripts/tests/test_build_graphify_projection.py"
       - "scripts/tests/test_ci_impact.py"
+      - "scripts/tests/test_typst_authoring_hygiene.py"
       - "scripts/tests/test_agent_governance_g002.py"
       - "scripts/tests/test_graphify_freshness.py"
       - "scripts/tests/test_graphify_upstream_skill.py"
