@@ -594,6 +594,42 @@ def test_oracle_headroom_excludes_duplicate_roles_and_weak_eta_only() -> None:
     assert duplicate_by_contrast["delta_look"]["exclusion_reason"] == "duplicate_role:oracle_lookahead"
 
 
+def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> None:
+    row = {
+        "source_sample_key": None,
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "campaign_id": "campaign",
+        "plan_hash": "plan",
+        "work_unit_hash": "unit",
+        "profile_hash": "profile",
+        "explicit_target_hash": "target-hash",
+        "policy": "oracle_greedy",
+        "branch_schedule": "oracle_greedy",
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "recipe",
+        "final_cumulative_target_root_gain": 1.0,
+        "scene": "scene-a",
+        "temperature": np.nan,
+        "random_seed": -1,
+    }
+    evidence = oracle_headroom_evidence([row])
+    assert len(evidence["malformed_role_rows"]) == 1
+    assert all(item["status"] == "excluded" for item in evidence["contrast_rows"])
+    assert all(
+        item["eligible_count"] == item["included_count"] + item["excluded_count"] for item in evidence["summary_rows"]
+    )
+    assert all(item["excluded_count"] == 1 for item in evidence["summary_rows"])
+
+
 def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> None:
     def row(
         candidate_row_id: int,

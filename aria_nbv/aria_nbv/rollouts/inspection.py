@@ -850,6 +850,21 @@ def oracle_headroom_evidence(
                     },
                 }
             )
+    for malformed in malformed_rows:
+        for contrast in contrast_specs:
+            contrast_rows.append(
+                {
+                    "contrast": contrast,
+                    "status": "excluded",
+                    "exclusion_reason": malformed["exclusion_reason"],
+                    "value": None,
+                    "headroom_denominator": None,
+                    "headroom_invariant_key": None,
+                    "scene": malformed.get("scene"),
+                    "normalized_conditions": {},
+                    "role_treatments": {},
+                }
+            )
     summary_rows: list[dict[str, object]] = []
     for contrast in contrast_specs:
         rows = [row for row in contrast_rows if row["contrast"] == contrast]
@@ -1132,6 +1147,12 @@ def candidate_proposal_calibration_rows(
         selected_share = _safe_fraction(
             int(summary["selected_count"]), sum(bool(row.get("selected")) for row in cohort_rows)
         )
+        state_rows = _candidate_state_family_rows(family_rows, cohort_rows)
+        scene_rows = _candidate_scene_macro_rows(state_rows)
+        macro = {
+            metric: _macro_mean(scene_rows, metric)
+            for metric in ("empirical_frequency", "proposal_mass", "selected_share", "selection_enrichment")
+        }
         output.append(
             {
                 "group_by": group_by,
@@ -1147,6 +1168,17 @@ def candidate_proposal_calibration_rows(
                 "selection_enrichment": None
                 if empirical in (None, 0.0) or selected_share is None
                 else selected_share / empirical,
+                "state_count": len(state_rows),
+                "scene_count": len(scene_rows),
+                "macro_empirical_frequency": macro["empirical_frequency"],
+                "macro_proposal_mass": macro["proposal_mass"],
+                "macro_selected_share": macro["selected_share"],
+                "macro_selection_enrichment": macro["selection_enrichment"],
+                "empirical_denominator": len(cohort_rows),
+                "proposal_denominator": sum(
+                    1 for row in cohort_rows if _finite_or_none(row.get("sampler_probability")) is not None
+                ),
+                "selected_denominator": sum(bool(row.get("selected")) for row in cohort_rows),
                 "aggregation": "exact_store_population; descriptive family comparison",
             }
         )
@@ -1154,27 +1186,174 @@ def candidate_proposal_calibration_rows(
 
 
 def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    """Expose collision and clearance availability; absent geometry stays unavailable."""
+    """Expose cohort-preserving collision and clearance availability.
+
+    Counts remain exact populations. Rates are additionally reported as a
+    state-then-scene macro so uneven candidate fan-out cannot dominate the
+    descriptive comparison.
+    """
     rows = [dict(row) for row in audit_rows]
-    collision_available = [row for row in rows if row.get("path_collision") is not None]
-    clearance = [_finite_or_none(row.get("path_min_clearance_m")) for row in rows]
-    finite_clearance = [value for value in clearance if value is not None]
-    return [
-        {
-            "candidate_count": len(rows),
-            "collision_available_count": len(collision_available),
-            "collision_count": sum(bool(row.get("path_collision")) for row in collision_available),
-            "collision_rate": _safe_fraction(
-                sum(bool(row.get("path_collision")) for row in collision_available), len(collision_available)
+    by_cohort: dict[str, list[dict[str, object]]] = {}
+    for row in rows:
+        by_cohort.setdefault(str(row.get("generation_cohort_id", "unknown")), []).append(row)
+    output: list[dict[str, object]] = []
+    for cohort_id, cohort_rows in sorted(by_cohort.items()):
+        collision_available = [row for row in cohort_rows if row.get("path_collision") is not None]
+        clearance = [_finite_or_none(row.get("path_min_clearance_m")) for row in cohort_rows]
+        finite_clearance = [value for value in clearance if value is not None]
+        state_rows = _candidate_state_rows(cohort_rows)
+        scene_rows = _candidate_scene_macro_rows(state_rows)
+        collision_count = sum(bool(row.get("path_collision")) for row in collision_available)
+        output.append(
+            {
+                "generation_cohort_id": cohort_id,
+                "generation_cohort": cohort_rows[0].get("generation_cohort"),
+                "candidate_count": len(cohort_rows),
+                "collision_available_count": len(collision_available),
+                "collision_count": collision_count,
+                "collision_rate": _safe_fraction(collision_count, len(collision_available)),
+                "clearance_finite_count": len(finite_clearance),
+                "clearance_mean_m": None if not finite_clearance else float(np.mean(finite_clearance)),
+                "state_count": len(state_rows),
+                "scene_count": len(scene_rows),
+                "macro_collision_rate": _macro_mean(scene_rows, "collision_rate"),
+                "macro_clearance_mean_m": _macro_mean(scene_rows, "clearance_mean_m"),
+                "collision_denominator": len(collision_available),
+                "clearance_denominator": len(finite_clearance),
+                "available": bool(cohort_rows) and bool(collision_available) and bool(finite_clearance),
+                "reason": None
+                if cohort_rows and collision_available and finite_clearance
+                else "collision or clearance evidence is unavailable",
+            }
+        )
+    return output
+
+
+def _candidate_state_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for source_row in rows:
+        row = dict(source_row)
+        key = (
+            str(row.get("scene", "unknown")),
+            str(row.get("rollout_row_id", "unknown")),
+            str(row.get("step_row_id", "unknown")),
+        )
+        grouped.setdefault(key, []).append(row)
+    output: list[dict[str, object]] = []
+    for (scene, _rollout, _step), state_rows in sorted(grouped.items()):
+        available = [row for row in state_rows if row.get("path_collision") is not None]
+        finite_clearance = [
+            value
+            for value in (_finite_or_none(row.get("path_min_clearance_m")) for row in state_rows)
+            if value is not None
+        ]
+        output.append(
+            {
+                "scene": scene,
+                "allocated_count": len(state_rows),
+                "empirical_frequency": None,
+                "proposal_mass": None,
+                "selected_share": None,
+                "selection_enrichment": None,
+                "collision_rate": _safe_fraction(
+                    sum(bool(row.get("path_collision")) for row in available), len(available)
+                ),
+                "clearance_mean_m": None if not finite_clearance else float(np.mean(finite_clearance)),
+            }
+        )
+    return output
+
+
+def _candidate_state_family_rows(
+    family_rows: Iterable[Mapping[str, object]], cohort_rows: Iterable[Mapping[str, object]]
+) -> list[dict[str, object]]:
+    family_keys = {
+        (
+            str(row.get("scene", "unknown")),
+            str(row.get("rollout_row_id", "unknown")),
+            str(row.get("step_row_id", "unknown")),
+        )
+        for row in family_rows
+    }
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for source_row in cohort_rows:
+        row = dict(source_row)
+        grouped.setdefault(
+            (
+                str(row.get("scene", "unknown")),
+                str(row.get("rollout_row_id", "unknown")),
+                str(row.get("step_row_id", "unknown")),
             ),
-            "clearance_finite_count": len(finite_clearance),
-            "clearance_mean_m": None if not finite_clearance else float(np.mean(finite_clearance)),
-            "available": bool(rows) and bool(collision_available) and bool(finite_clearance),
-            "reason": None
-            if rows and collision_available and finite_clearance
-            else "collision or clearance evidence is unavailable",
-        }
+            [],
+        ).append(row)
+    family_grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for source_row in family_rows:
+        row = dict(source_row)
+        family_grouped.setdefault(
+            (
+                str(row.get("scene", "unknown")),
+                str(row.get("rollout_row_id", "unknown")),
+                str(row.get("step_row_id", "unknown")),
+            ),
+            [],
+        ).append(row)
+    output: list[dict[str, object]] = []
+    for key in sorted(family_keys):
+        state = grouped[key]
+        family = family_grouped[key]
+        finite_family = [
+            value for value in (_finite_or_none(row.get("sampler_probability")) for row in family) if value is not None
+        ]
+        finite_all = [
+            value for value in (_finite_or_none(row.get("sampler_probability")) for row in state) if value is not None
+        ]
+        empirical = _safe_fraction(len(family), len(state))
+        proposal = (
+            None
+            if not finite_family or not finite_all or sum(finite_all) <= 0
+            else float(sum(finite_family) / sum(finite_all))
+        )
+        selected_total = sum(bool(row.get("selected")) for row in state)
+        selected_family = sum(bool(row.get("selected")) for row in family)
+        selected_share = _safe_fraction(selected_family, selected_total)
+        output.append(
+            {
+                "scene": key[0],
+                "empirical_frequency": empirical,
+                "proposal_mass": proposal,
+                "selected_share": selected_share,
+                "selection_enrichment": (
+                    None if empirical in (None, 0.0) or selected_share is None else selected_share / empirical
+                ),
+            }
+        )
+    return output
+
+
+def _candidate_scene_macro_rows(state_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for row in state_rows:
+        grouped.setdefault(str(row.get("scene", "unknown")), []).append(dict(row))
+    return [
+        {"scene": scene, **{metric: _macro_mean(rows, metric) for metric in _MACRO_RATE_FIELDS}}
+        for scene, rows in sorted(grouped.items())
     ]
+
+
+_MACRO_RATE_FIELDS = (
+    "empirical_frequency",
+    "proposal_mass",
+    "selected_share",
+    "selection_enrichment",
+    "collision_rate",
+    "clearance_mean_m",
+)
+
+
+def _macro_mean(rows: Iterable[Mapping[str, object]], field: str) -> float | None:
+    values = [_finite_or_none(row.get(field)) for row in rows]
+    finite = [value for value in values if value is not None]
+    return None if not finite else float(np.mean(finite))
 
 
 def deterministic_candidate_display_sample(
@@ -3147,6 +3326,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
     chain_ids = np.asarray(reader.array("rollouts/chain_id"), dtype=np.int64).reshape(-1)
     final_rri = np.asarray(reader.array("rollouts/final_cumulative_target_rri"), dtype=np.float64).reshape(-1)
     final_gain = np.asarray(reader.array("rollouts/final_cumulative_target_root_gain"), dtype=np.float64).reshape(-1)
+    scenes = [rollout_at(reader, index).scene for index in range(rollout_ids.size)]
     manifest_payload = reader.manifest()
     root_attrs = manifest_payload.get("root_attrs")
     manifest = manifest_payload.get("manifest")
@@ -3170,6 +3350,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
             "source_sample_key": source_key,
             "target_row_id": int(target_ids[index]),
             "target_id": target_by_id.get(int(target_ids[index]), f"target_row:{target_ids[index]}"),
+            "scene": scenes[index],
             "target_protocol": protocols[index],
             "horizon": int(horizons[index]),
             "acquisition_budget_steps": int(horizons[index]),
