@@ -105,6 +105,7 @@ jobs:
         uses: typst-community/setup-typst@v5.1.0
         with:
           typst-version: 0.14.2
+          token: ""
 
       - name: Validate agent scaffold and memory
         if: steps.impact.outputs.scaffold == 'true'
