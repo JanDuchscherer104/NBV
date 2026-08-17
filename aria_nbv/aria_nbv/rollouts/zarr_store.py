@@ -36,7 +36,14 @@ from zarr.storage import LocalStore
 
 from ..configs import PathConfig
 from ..data_handling.identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from ..targets.protocol import TargetInputProtocol, TargetLabelEvidence, target_label_is_trainable
+from ..targets.protocol import (
+    ORACLE_GT_TARGET_SOURCE,
+    ActorVisibleTargetSource,
+    TargetInputProtocol,
+    TargetLabelEvidence,
+    target_label_is_trainable,
+    validate_target_protocol_admission,
+)
 from ..utils import BaseConfig
 from ..utils.config_paths import resolve_cache_artifact_dir
 from .manifest import (
@@ -1138,6 +1145,43 @@ class _RolloutZarrValidator:
             self.errors.append("targets/target_source_id must have one value per target row.")
         elif np.any((target_source_ids < 0) | (target_source_ids >= len(target_sources))):
             self.errors.append("targets/target_source_id contains an out-of-range dictionary id.")
+        else:
+            try:
+                target_protocol = TargetInputProtocol(
+                    str(self.root.attrs.get("target_protocol_version", "")).replace("-", "_")
+                )
+            except (TypeError, ValueError):
+                target_protocol = None
+            if target_protocol is None:
+                self.errors.append("Rollout store declares an unsupported target protocol version.")
+            else:
+                actor_visible_sources = {source.value for source in ActorVisibleTargetSource}
+                for source_id in target_source_ids.tolist():
+                    target_source = target_sources[int(source_id)]
+                    if target_protocol is TargetInputProtocol.V0_GT_INPUT:
+                        admitted = target_source in {"", ORACLE_GT_TARGET_SOURCE}
+                    else:
+                        admitted = target_source in actor_visible_sources
+                    if not admitted:
+                        self.errors.append(
+                            f"targets/target_source_id contains source {target_source!r} incompatible with "
+                            f"{target_protocol.value}."
+                        )
+                        break
+                    try:
+                        validate_target_protocol_admission(
+                            target_protocol,
+                            target_source=target_source or ORACLE_GT_TARGET_SOURCE,
+                            descriptor_source=target_source or ORACLE_GT_TARGET_SOURCE,
+                            descriptor_provenance=(
+                                "actor_visible_detector"
+                                if target_protocol is TargetInputProtocol.V1_OBSERVED
+                                else "oracle_gt"
+                            ),
+                        )
+                    except ValueError as exc:
+                        self.errors.append(f"Invalid target source admission: {exc}")
+                        break
         target_reason = np.asarray(self.root["targets/target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
         target_valid = np.asarray(self.root["targets/target_valid_mask"], dtype=np.bool_).reshape(-1)
         expected_target_valid = target_reason == np.uint32(1 << INVALID_REASON_CODES["VALID"])

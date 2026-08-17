@@ -572,6 +572,7 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     lineage.policy.reason_code_version = INVALID_REASON_VERSION
     lineage.policy.selection_rng_state_hash = "rng-state"
     lineage.target.target_protocol_version = "v1-observed"
+    lineage.target.target_source = "detected_obbs"
     lineage.target.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
     lineage.target.target_row_id = 5
     lineage.target.target_id = "target"
@@ -629,6 +630,42 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     assert validation.ok, validation.errors
 
 
+def test_rollout_zarr_rejects_in_range_v1_target_source_even_when_masks_are_false(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=38)[:1]
+    records[0].lineage.target.target_protocol_version = "v1-observed"
+    records[0].lineage.target.target_source = "detected_obbs"
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v1-observed")
+
+    root = zarr.open_group(result.store_dir, mode="a")
+    encoded = np.frombuffer(json.dumps(["fabricated_actor"]).encode("utf-8"), dtype=np.uint8)
+    root["dictionaries/target_source"].resize((encoded.size,))
+    root["dictionaries/target_source"][...] = encoded
+    root["targets/target_valid_mask"][...] = False
+    root["targets/target_invalid_reason_bitset"][...] = 0
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert not validation.ok
+    assert any("incompatible with v1_observed" in error for error in validation.errors)
+
+
+def test_rollout_zarr_accepts_admitted_v1_target_source(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=39)[:1]
+    records[0].lineage.target.target_protocol_version = "v1-observed"
+    records[0].lineage.target.target_source = "detected_obbs"
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v1-observed")
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_preserves_v0_oracle_compatible_target_source(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=40)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v0_gt_input")
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
 def test_rollout_zarr_rejects_mixed_split_shards(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=20)[:2]
     records[0].lineage.source.split = "train"
@@ -679,6 +716,7 @@ def test_rollout_zarr_preserves_candidate_mixture_provenance_for_real_stores(tmp
     lineage.policy.reason_code_version = INVALID_REASON_VERSION
     lineage.policy.selection_rng_state_hash = "rng-state"
     lineage.target.target_protocol_version = "v1-observed"
+    lineage.target.target_source = "detected_obbs"
     lineage.target.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
     lineage.target.target_row_id = 3
     lineage.target.target_id = "target"
