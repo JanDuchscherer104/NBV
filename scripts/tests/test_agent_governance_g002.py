@@ -354,6 +354,29 @@ def test_capture_and_routing_contracts() -> None:
         "configured, installed, initialized, healthy, fresh,\n   and successful",
     ):
         assert contract in agent_behavior
+    assert len(agent_behavior.splitlines()) <= 100
+    assert "establish the smallest red reproducer" not in agent_behavior
+    assert "production-quality tracer slice" not in agent_behavior
+
+    execution_branches = _read(
+        agent_behavior_path.parent / "references" / "execution-branches.md"
+    )
+    for contract in (
+        "Establish the smallest red reproducer before editing.",
+        "production-quality tracer slice",
+        "retained, promoted, discarded, or deferred",
+    ):
+        assert contract in execution_branches
+
+    external_actions = _read(
+        agent_behavior_path.parent / "references" / "external-actions.md"
+    )
+    for contract in (
+        "After each completed workpackage or self-contained task",
+        "explicitly authorizes both push and pull-request",
+        "Every currently authorized publication has a pushed branch and pull request.",
+    ):
+        assert contract in external_actions
 
     root_guidance = _read(ROOT / "AGENTS.md")
     assert "Failure-first diagnosis uses `agent-behavior`" in root_guidance

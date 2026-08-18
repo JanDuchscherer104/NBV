@@ -7,6 +7,9 @@ or another action that changes external state.
 ## Local Git Scope
 
 - Stage only request-owned paths. Preserve unrelated dirty and generated state.
+- After each completed workpackage or self-contained task, make a focused local
+  commit before starting unrelated work. A local commit is a rollback boundary,
+  not authorization for an external action.
 - Make the commit message describe the actual responsibility change, retained
   contract, and verification rather than an implementation chronology.
 - Keep one reviewable concern and an independent rollback boundary per commit or
@@ -19,6 +22,10 @@ or another action that changes external state.
   retarget, or release does not silently authorize another.
 - Confirm the live branch, remote, target, diff, and verification immediately
   before acting.
+- When the current user explicitly authorizes both push and pull-request
+  publication for a durable implementation or fix, complete both in the same
+  task after verification. Without that authorization, stop at the focused
+  local commit and name the publication boundary.
 - Report the resulting URL, identifier, or exact blocker. Do not describe a
   local draft or successful command preparation as a completed external action.
 
@@ -26,5 +33,6 @@ or another action that changes external state.
 
 - Only request-owned paths entered the change.
 - The external action, if any, matches the authorized repository and operation.
+- Every currently authorized publication has a pushed branch and pull request.
 - The handoff states retained behavior, verification, exclusions, and unresolved
   risk.
