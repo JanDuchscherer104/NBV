@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -53,6 +54,11 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(pull_request_block.strip(), "")
         self.assertIn("permissions:\n  contents: read\n", workflow)
         self.assertIn("jobs:\n  ci:\n", workflow)
+        jobs_block = workflow.split("jobs:\n", 1)[1]
+        self.assertEqual(
+            re.findall(r"^  [A-Za-z0-9_-]+:$", jobs_block, re.MULTILINE),
+            ["  ci:"],
+        )
         self.assertNotIn("ci-gate", workflow)
         self.assertIn(
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"',
@@ -63,6 +69,8 @@ class SelectionTests(unittest.TestCase):
             workflow,
         )
         self.assertEqual(workflow.count("astral-sh/setup-uv@"), 1)
+        self.assertEqual(workflow.count("enable-cache: true"), 1)
+        self.assertNotIn("uses: actions/cache@", workflow)
         self.assertIn('version: "0.12.5"', workflow)
         self.assertIn("enable-cache: true", workflow)
         self.assertIn("prune-cache: false", workflow)
@@ -70,12 +78,23 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("aria_nbv/pyproject.toml", workflow)
         self.assertIn("aria_nbv/uv.lock", workflow)
         self.assertEqual(workflow.count("cache-dependency-glob:"), 1)
+        setup_uv = workflow.split("      - name: Set up uv\n", 1)[1].split(
+            "      - name: Sync package validation environment\n", 1
+        )[0]
+        self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
+        self.assertEqual(workflow.count("uv sync --locked --extra dev"), 1)
+        sync = workflow.split(
+            "      - name: Sync package validation environment\n", 1
+        )[1].split("      - name: Set up Quarto\n", 1)[0]
+        self.assertIn("if: steps.impact.outputs.package == 'true'", sync)
         self.assertIn("run: uv sync --locked --extra dev", workflow)
         self.assertNotIn("pip install --upgrade pip uv", workflow)
         package_validation = workflow.split(
             "      - name: Validate package contracts\n", 1
         )[1].split("      - name: Validate documentation\n", 1)[0]
         self.assertIn('UV_NO_SYNC: "1"', package_validation)
+        self.assertEqual(workflow.count('UV_NO_SYNC: "1"'), 1)
+        self.assertEqual(package_validation.count('UV_NO_SYNC: "1"'), 1)
         self.assertIn("make package-smoke PYTEST_ARGS=", package_validation)
         self.assertNotIn("aria_nbv/.venv", workflow)
         self.assertIn("TYPST_VERSION: 0.14.2", workflow)
