@@ -58,6 +58,26 @@ class SelectionTests(unittest.TestCase):
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"',
             workflow,
         )
+        self.assertIn(
+            "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0",
+            workflow,
+        )
+        self.assertEqual(workflow.count("astral-sh/setup-uv@"), 1)
+        self.assertIn('version: "0.12.5"', workflow)
+        self.assertIn("enable-cache: true", workflow)
+        self.assertIn("prune-cache: true", workflow)
+        self.assertIn("cache-suffix: uv-0.12.5", workflow)
+        self.assertIn("aria_nbv/pyproject.toml", workflow)
+        self.assertIn("aria_nbv/uv.lock", workflow)
+        self.assertEqual(workflow.count("cache-dependency-glob:"), 1)
+        self.assertIn("run: uv sync --locked --extra dev", workflow)
+        self.assertNotIn("pip install --upgrade pip uv", workflow)
+        package_validation = workflow.split(
+            "      - name: Validate package contracts\n", 1
+        )[1].split("      - name: Validate documentation\n", 1)[0]
+        self.assertIn('UV_NO_SYNC: "1"', package_validation)
+        self.assertIn("make package-smoke PYTEST_ARGS=", package_validation)
+        self.assertNotIn("aria_nbv/.venv", workflow)
         self.assertIn("TYPST_VERSION: 0.14.2", workflow)
         self.assertIn("TYPST_EXPECTED_VERSION: typst 0.14.2 (b33de9de)", workflow)
         self.assertIn(
