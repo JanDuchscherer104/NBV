@@ -341,7 +341,24 @@ def test_route_only_domain_skill_contract() -> None:
 
 
 def test_capture_and_routing_contracts() -> None:
-    assert (ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md").is_file()
+    agent_behavior_path = (
+        ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md"
+    )
+    assert agent_behavior_path.is_file()
+    agent_behavior = _read(agent_behavior_path)
+    for contract in (
+        "earliest failed assumption or\n   contract that stops or redirects the lane",
+        "current owner's smallest interface",
+        "**Failure-first diagnosis:**",
+        "**Reversible learning:**",
+        "configured, installed, initialized, healthy, fresh,\n   and successful",
+    ):
+        assert contract in agent_behavior
+
+    root_guidance = _read(ROOT / "AGENTS.md")
+    assert "Failure-first diagnosis uses `agent-behavior`" in root_guidance
+    assert "establish the smallest red reproducer" not in root_guidance
+
     manifest = tomllib.loads(
         _read(ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml")
     )

@@ -41,21 +41,26 @@ read-only command output do not need this preflight.
    when the exact owner is named or the ownership ambiguity is explicit.
 2. **Define the result.** Surface conflicting interpretations, terminology, and
    tradeoffs before editing. State the intended behavior, success evidence,
-   material assumptions, and exclusions. This step is complete when another
+   material assumptions, exclusions, and the earliest failed assumption or
+   contract that stops or redirects the lane. This step is complete when another
    agent could distinguish done, deferred, and out of scope.
 3. **Choose the simplest lane.** Prefer existing or native behavior over a local
    abstraction, adapter, option, or feature that the request does not require.
-   Use one purpose, one owner, and one proof; hand off if evidence disproves the
-   lane. This step is complete when every planned edit maps to the request, its
-   owner, or required verification.
+   Keep likely change local behind the current owner's smallest interface and
+   verify through that interface; add a seam, adapter, or abstraction only for
+   demonstrated variation. Use one purpose, one owner, and one proof; hand off
+   if evidence disproves the lane. This step is complete when every planned edit
+   maps to the request, its owner, or required verification.
 4. **Make a surgical change.** Inspect the live worktree, touch only what the
    request requires, and remove only debris created by this change. Adapt around
    unrelated user or agent work and report pre-existing cleanup separately. This
    step is complete when every changed line is request-traceable and no unrelated
    change is treated as progress.
 5. **Verify literally.** Run the smallest surface-specific proof and report
-   unresolved, blocked, stale, or unverified states as such. This step is
-   complete when each completion claim has fresh evidence or an explicit gap.
+   the exact state proved: configured, installed, initialized, healthy, fresh,
+   and successful are distinct. Report unresolved, blocked, stale, or unverified
+   states as such. This step is complete when each completion claim has fresh
+   evidence or an explicit gap.
 6. **Persist once.** Route any durable delta to its smallest authoritative owner
    and use stable owner-defined pointers elsewhere. This step is complete when no
    second source of truth was introduced.
@@ -71,6 +76,16 @@ read-only command output do not need this preflight.
 - **Git or external action:** before staging, committing, pushing, opening or
   changing a pull request, publishing review comments, retargeting, or releasing,
   read [`references/external-actions.md`](references/external-actions.md).
+- **Failure-first diagnosis:** for a bug, regression, suspicious metric, or
+  failing check, establish the smallest red reproducer before editing. Inspect
+  the exact semantic owner and focused tests, then map the proposed change to the
+  verified cause. Complete the branch when the same proof is green after the fix
+  or its remaining gap is explicit.
+- **Reversible learning:** when uncertainty blocks the lane, choose either a
+  production-quality tracer slice that can be retained or a disposable prototype
+  that answers one question. Treat prototype output as evidence until an owner
+  adopts the conclusion. Complete the branch when the uncertainty is answered
+  and the artifact is explicitly retained, promoted, discarded, or deferred.
 - **Commit cadence:** after each completed workpackage or self-contained task,
   make a focused local commit before starting unrelated work. Stage only
   request-owned paths, preserve concurrent edits, and keep each commit an
