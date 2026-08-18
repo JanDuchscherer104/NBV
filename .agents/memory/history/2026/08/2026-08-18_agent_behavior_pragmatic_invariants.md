@@ -9,6 +9,8 @@ canonical_updates_needed: []
 files_touched:
   - AGENTS.md
   - .agents/skills/agent-behavior/SKILL.md
+  - .agents/skills/agent-behavior/references/execution-branches.md
+  - .agents/skills/agent-behavior/references/external-actions.md
   - scripts/tests/test_agent_governance_g002.py
 ---
 
@@ -37,6 +39,9 @@ procedure plus its root pointer.
   proof, and evidence before adding seams, adapters, or abstractions.
 - Uncertain work needs an explicit retained tracer-slice versus disposable
   prototype choice and an artifact disposition.
+- The compact router keeps its six universal steps inline. Failure-first and
+  reversible-learning details are disclosed by branch, while Git cadence and
+  publication remain consolidated under the existing external-action owner.
 
 ## Verification
 
