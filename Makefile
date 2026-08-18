@@ -4,7 +4,7 @@
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
-.PHONY: context-literature-index context-literature-search migrate-codex-memory codex-transcripts
+.PHONY: context-literature-index context-literature-search codex-transcripts
 .PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
 .PHONY: agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
@@ -40,9 +40,6 @@ SLIDES_PDF ?= $(SLIDES_SRC:.typ=.pdf)
 # Python interpreter (uv-managed .venv by default)
 VENV_PYTHON ?= $(CURDIR)/aria_nbv/.venv/bin/python
 PYTHON_INTERPRETER ?= $(VENV_PYTHON)
-FORCE_ACTIV_CONDA_ENV ?= 0  # set to 1 only if you insist on the old conda env check
-CONDA_ENV_NAME ?= aria-nbv       # legacy: expected conda env name
-QMD_FORMATTER := scripts/format_qmd_lists.py
 CONTEXT_DIR ?= docs/_generated/context
 CONTEXT_OUT ?= $(CONTEXT_DIR)/context_snapshot.md
 CONTEXT_INDEX_OUT ?= $(CONTEXT_DIR)/source_index.md
@@ -60,7 +57,6 @@ QMD_OUTLINE_ARGS ?= --compact
 TYPST_OUTLINE_ARGS ?= --thesis --mode outline
 TYPST_INCLUDES_ARGS ?= --thesis --mode includes
 LITERATURE_SEARCH_QUERY ?=
-MIGRATE_CODEX_MEMORY_ARGS ?=
 CODEX_TRANSCRIPT_ARGS ?=
 MERMAID_RENDER ?= tools/mermaid/scripts/render_mermaid.sh
 MMD_DIR ?= external/mmdc-examples
@@ -222,9 +218,6 @@ context-literature-search: ## 🗺️ Search literature sources (set LITERATURE_
 		exit 2; \
 	fi
 	@./scripts/nbv_literature_search.sh "$(LITERATURE_SEARCH_QUERY)"
-
-migrate-codex-memory: _check_python ## 🗺️ Migrate legacy .codex notes into .agents/memory
-	@$(PYTHON_INTERPRETER) scripts/migrate_codex_memory.py $(MIGRATE_CODEX_MEMORY_ARGS)
 
 codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
@@ -634,11 +627,6 @@ context-qmd-tree: ## 🗺️ Print docs/ .qmd structure (ignore __pycache__)
 #  📊 Diagrams
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: vin-v2-arch
-VIN_V2_ARCH_ARGS ?=
-vin-v2-arch: _check_python ## 📊 Generate VIN v2 architecture DOT/SVG/PNG (+ VDX via --drawio)
-	@$(PYTHON_INTERPRETER) aria_nbv/scripts/generate_vin_v2_arch.py $(VIN_V2_ARCH_ARGS)
-
 .PHONY: mmdc-render
 mmdc-render: ## 📊 Render all .mmd files in a folder (MMD_DIR=..., MMD_OUT=..., MMD_FORMAT=png|svg, MMD_SCALE=4)
 	@bash -lc 'set -euo pipefail; \
@@ -670,7 +658,7 @@ mermaid-lint: _check_python ## 📊 Lint tracked Mermaid .mmd files (MERMAID_LIN
 #  📚 Documentation hygiene
 #  ═══════════════════════════════════════════════════════════════════════
 
-.PHONY: api-docs api-docs-filter api-docs-watch api-docs-refresh docs-lint
+.PHONY: api-docs api-docs-filter api-docs-watch api-docs-refresh
 api-docs: ## Generate API reference pages via Quartodoc (hard alias failures fail, warnings are non-blocking)
 	@./scripts/quarto_generate_api_docs.sh
 
@@ -690,13 +678,6 @@ api-docs-watch: ## Watch and incrementally regenerate API reference pages matchi
 
 api-docs-refresh: ## Incrementally regenerate API docs and render API_PAGES with --no-clean --no-execute
 	@API_FILTER="$(API_FILTER)" API_PAGES="$(API_PAGES)" ./scripts/quarto_refresh_api_docs.sh
-
-.PHONY: docs-lint
-docs-lint: _check_python ## Format QMD lists, then run Quarto checks
-	@echo "$(BLUE)Formatting QMD list spacing…$(NC)"
-	@$(PYTHON_INTERPRETER) $(QMD_FORMATTER) $(DOCS_DIR)
-	@echo "$(BLUE)Running Quarto check…$(NC)"
-	@quarto check
 
 .PHONY: quarto-docs quarto-preview
 quarto-docs: ## Render the Quarto website into docs/_site
