@@ -65,7 +65,7 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(workflow.count("astral-sh/setup-uv@"), 1)
         self.assertIn('version: "0.12.5"', workflow)
         self.assertIn("enable-cache: true", workflow)
-        self.assertIn("prune-cache: true", workflow)
+        self.assertIn("prune-cache: false", workflow)
         self.assertIn("cache-suffix: uv-0.12.5", workflow)
         self.assertIn("aria_nbv/pyproject.toml", workflow)
         self.assertIn("aria_nbv/uv.lock", workflow)
