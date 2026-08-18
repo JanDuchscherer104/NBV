@@ -98,7 +98,7 @@ jobs:
         with:
           version: "0.12.5"
           enable-cache: true
-          prune-cache: true
+          prune-cache: false
           cache-suffix: uv-0.12.5
           cache-dependency-glob: |
             aria_nbv/pyproject.toml
