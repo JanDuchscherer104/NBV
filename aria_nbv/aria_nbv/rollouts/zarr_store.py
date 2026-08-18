@@ -2983,9 +2983,14 @@ def _write_string_array(group: zarr.Group, name: str, values: list[str]) -> None
     _write_array(group, name, encoded)
 
 
+def _decode_string_array(value: Any) -> list[str]:
+    encoded = np.asarray(value, dtype=np.uint8)
+    return json.loads(encoded.tobytes().decode("utf-8"))
+
+
 def _read_string_array(root: Any, path: str) -> list[str]:
-    encoded = np.asarray(root[path], dtype=np.uint8)
-    return json.loads(bytes(encoded.tolist()).decode("utf-8"))
+    """Read a required JSON-encoded string array from the store."""
+    return _decode_string_array(root[path])
 
 
 def _default_chunks(array: np.ndarray) -> tuple[int, ...] | None:
@@ -3260,7 +3265,7 @@ def _encoded_values(root: Any, *, dictionary_name: str, array_path: str) -> list
         encoded = np.asarray(root[array_path])
     except KeyError:
         return []
-    dictionary = _read_string_array(root, f"dictionaries/{dictionary_name}")
+    dictionary = _read_optional_string_array(root, f"dictionaries/{dictionary_name}")
     values: list[str] = []
     for index in encoded.reshape(-1):
         index_int = int(index)
@@ -3271,12 +3276,12 @@ def _encoded_values(root: Any, *, dictionary_name: str, array_path: str) -> list
     return values
 
 
-def _read_string_array(root: Any, path: str) -> list[str]:
+def _read_optional_string_array(root: Any, path: str) -> list[str]:
+    """Read an optional JSON-encoded string array, returning empty when absent."""
     try:
-        encoded = np.asarray(root[path])
+        return _decode_string_array(root[path])
     except KeyError:
         return []
-    return json.loads(encoded.tobytes().decode("utf-8"))
 
 
 __all__ = [

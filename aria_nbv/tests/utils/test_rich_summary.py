@@ -6,7 +6,6 @@ import torch
 
 from aria_nbv.utils import rich_summary, summarize, summarize_shape
 from aria_nbv.utils.rich_summary import capture_tree
-from aria_nbv.utils.summary import summarize as legacy_summarize
 
 
 def test_summarize_preserves_public_tensor_contract() -> None:
@@ -32,10 +31,6 @@ def test_summarize_preserves_collection_and_shape_contracts() -> None:
     assert summarize([1, 2, 3]) == {"len": 3}
     assert summarize_shape(torch.zeros(2, 3)) == "(2, 3) float32 cpu"
     assert summarize_shape([1, 2]) == "list(len=2)"
-
-
-def test_legacy_summary_module_reexports_canonical_implementation() -> None:
-    assert legacy_summarize is summarize
 
 
 def test_capture_tree_is_ansi_free_for_web_and_log_renderers() -> None:
