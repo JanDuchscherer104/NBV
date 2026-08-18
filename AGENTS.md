@@ -25,13 +25,9 @@ tests, configuration, and Typst own behavior and scientific claims.
   P0-P2 PR findings as resolvable GitHub review threads and resolve them only
   after exact-head evidence; report local-only reviews locally. Architect and
   critic review outputs stay session-local; persist only accepted decisions in
-  their canonical owner. Failure-first diagnosis is the
-  repository-wide invariant for bugs, regressions, suspicious metrics, and
-  failing checks; `agent-behavior` owns the repeatable procedure, while the
-  nearest semantic guide owns behavior. Reproduce the smallest failure, inspect
-  exact source and focused tests, and verify the cause before changing behavior.
-  Backlog or memory changes use `agents-db`; cleanup uses `simplification`; LRZ
-  work uses `lrz-ai-systems`.
+  their canonical owner. Failure-first diagnosis uses `agent-behavior`; the
+  nearest semantic guide owns behavior. Backlog or memory changes use
+  `agents-db`; cleanup uses `simplification`; LRZ work uses `lrz-ai-systems`.
 - Rerun SDK, entity, sink, blueprint, `.rrd`, camera/depth logging, and offline/
   rollout inspection work uses `rerun-nbv-inspector`. It provides the current
   official-reference and Context7 route; package README files, code,
