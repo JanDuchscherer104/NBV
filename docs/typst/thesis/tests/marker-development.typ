@@ -1,6 +1,9 @@
-#import "../draft_markers.typ": development_only, promotion_entry, thesis_status
+#import "../draft_markers.typ": development_only, submission_only, promotion_entry, thesis_status
 
-#development_only[
+// The excluded branch must remain lazy: evaluating this body would fail.
+#submission_only(() => panic("submission-only body evaluated in development mode"))
+
+#development_only(() => [
   #metadata("development-present") <marker-development>
   [Development-only roadmap content.]
   #promotion_entry(
@@ -31,7 +34,7 @@
     gate: [advisor decision],
     disposition: "rejected",
   )
-]
+])
 
 #thesis_status(
   implementation: "planned",

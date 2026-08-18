@@ -1,6 +1,13 @@
 = Results <sec:thesis-results>
 
 #import "../experiment_data.typ": thesis-report-settings, load-thesis-report, short-store-label, format-report-value
+#import "../draft_markers.typ": validation_todo
+
+#validation_todo(
+  [Replace fixture- and readiness-oriented output with confirmatory results that answer each research question using matched endpoint evaluation, denominators, exclusions, aggregation units, independent-run uncertainty, and immutable artifact provenance.],
+  source: [confirmatory report bundle and analysis manifest],
+  gate: [submission evidence bundle passes all report assertions and every stated result resolves to raw and derived artifacts],
+)
 
 #let report-settings = thesis-report-settings()
 #let thesis_evidence_status = report-settings.evidence-status

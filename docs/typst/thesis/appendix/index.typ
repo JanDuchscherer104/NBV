@@ -105,6 +105,6 @@ The report bundle is the single numerical interface between validated rollout ar
   This pilot evidence bundle preserves provenance but is not confirmatory. Its numerical parameter rows are not rendered or interpreted as thesis results.
 ]
 
-#development_only[
+#development_only(() => [
   #include "../sections/06-draft-open-work.typ"
-]
+])

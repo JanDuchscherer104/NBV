@@ -26,6 +26,32 @@ If a claim cannot be classified, it is probably filler.
 - Do not use a citation as a substitute for explaining the connection to
   ARIA-NBV.
 
+## Claim-Level Source Locators
+
+For claim-bearing thesis paragraphs, keep a non-rendered evidence block beside
+the paragraph. Use one block per paragraph, figure, table, or equation whose
+support differs; do not maintain one distant file-wide list.
+
+```typst
+// evidence:
+// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:82-92 (RRI definition)
+// - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:122-129 (oracle labels)
+```
+
+The bibliography key remains the citation identity. The locator records which
+local primary-source passage was actually checked for this claim. Prefer exact
+line ranges in `docs/literature/tex-src/`; otherwise record a PDF page, section,
+figure, or table. A missing local source is an explicit provenance gap, not a
+reason to invent a locator.
+
+Use comments as the canonical authoring form because they cannot leak into the
+submission render and are easy to audit with repository tools. A development
+macro may display parsed provenance, but it must remain a derived view rather
+than a second source of truth. Projection tooling may parse these blocks into
+derived Graphify edges after resolving the bibliography key through
+`docs/references.bib`, `docs/references-qh.bib`, and
+`docs/literature/sources.jsonl`.
+
 ## Evidence Gate
 
 For each non-obvious claim, verify at least one evidence path:
@@ -52,6 +78,10 @@ For non-trivial sections, build a scratch claim ledger before final prose. Use
 `assets/templates/claim-ledger.md` to track paragraph, claim type, evidence
 path, citation/result, and status. The ledger is an authoring artifact, not a
 required final thesis table.
+
+For empirical claims, also apply
+`empirical-reporting-and-reproducibility.md`; a citation does not substitute for
+run-level result provenance.
 
 ## Hedging
 

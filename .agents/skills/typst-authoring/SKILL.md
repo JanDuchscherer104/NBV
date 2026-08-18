@@ -41,6 +41,7 @@ metadata:
     - "docs/notation.yml"
     - "docs/typst/shared/style.typ"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
+    - ".agents/skills/typst-authoring/references/empirical-reporting-and-reproducibility.md"
     - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
     - ".agents/skills/typst-authoring/references/figures-tables.md"
     - ".agents/skills/typst-authoring/references/scientific-visualizations.md"
@@ -69,10 +70,6 @@ metadata:
 
 # ARIA-NBV Typst + Thesis Authoring
 
-This is the repo-local guardrail for ARIA-NBV proposal and thesis writing in
-Typst. Treat Typst correctness, shared notation, scientific prose, citations,
-figures, tables, Mermaid inclusion, and visual QA as one workflow.
-
 ## Use When
 
 - Editing `.typ` proposal, paper, thesis, or slide sources.
@@ -83,13 +80,6 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
 - Fixing ordinary Typst syntax, math attachment, import, citation, figure,
   table, label, or rendered-page issues.
 
-## Do Not Use When
-
-- The task is only Quarto navigation/frontmatter; use the nearest docs guide.
-- A failure is systemic, CI-specific, multi-surface, or persists after the
-  compile/render loop; use the nearest build owner.
-- The research contract or thesis scope is still ambiguous; use `aria-grill`.
-
 ## Task Modes
 
 - `notation-edit`: update shared modules before document-local use; read
@@ -99,6 +89,8 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
   modes only when useful; preserve claim strength and citations.
 - `claim-check`: classify advisor-facing literature or thesis claims and use the
   direct-source checklist in `references/claim-citation-discipline.md`.
+- `empirical-results`: read the empirical-reporting reference; require a frozen
+  analysis contract, uncertainty, fair controls, and immutable provenance.
 - `figure-table` / `visual-qa`: read figures/tables and workflow references;
   scientific, geometric, or 3D work also reads `scientific-visualizations.md`
   and the selected renderer/package reference.
@@ -136,7 +128,9 @@ figures, tables, Mermaid inclusion, and visual QA as one workflow.
    read `references/aria-nbv-notation.md`; for package-backed layouts or
    slide templates, also read `references/packages/index.md` and
    `references/slides.md` as relevant.
-5. If prose changes, draft claims/evidence first, then convert to paragraphs.
+5. If prose changes, draft claims/evidence first, then convert to paragraphs;
+   empirical sentences must resolve scope, evidence, uncertainty, and artifact
+   provenance or remain explicitly hypothetical.
 6. For scientific figures, choose the renderer by scientific role and preserve
    reproducible source plus fixed view/export metadata; render other figure or
    Mermaid assets locally before inclusion.

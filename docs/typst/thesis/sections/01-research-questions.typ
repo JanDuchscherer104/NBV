@@ -26,7 +26,7 @@ Online discrete $Q_H$ is a deferred RQ5 bridge; continuous or simulator-backed
 actor--critic control is RQ6 and is not required for the finite-candidate thesis
 result. The active quantitative core is therefore RQ1--RQ4 below.
 
-#development_only[
+#development_only(() => [
   *Development provenance and reconciliation.* The reviewed Quarto source
   (the reviewed historical QMD at `origin/main`) supplied the six-tier
   ordering: RQ1 objective, RQ2 offline finite-candidate planning, RQ3
@@ -38,7 +38,7 @@ result. The active quantitative core is therefore RQ1--RQ4 below.
   states RQ5/RQ6 as conditional bridges. The Quarto page remains historical
   review input; this section and the executable Python/configuration owners
   define current terminology and implementation status.
-]
+])
 
 #thesis_status(
   implementation: "planned",

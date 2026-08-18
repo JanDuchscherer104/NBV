@@ -1,10 +1,16 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status
+#import "../../draft_markers.typ": thesis_status, prune_todo
 #import "@preview/booktabs:0.0.4": *
 
 == Geometric and Mask Acceptance Tests <sec:thesis-method-geometry-contract>
+
+#prune_todo(
+  [Retain acceptance properties only for the architecture that is actually implemented and evaluated. Proposed architecture alternatives belong in development notes until a measured failure motivates them.],
+  source: [this section; scorer implementation and tests],
+  gate: [one production scorer passes the stated permutation, masking, frame, and horizon tests],
+)
 
 #thesis_status(
   implementation: "partial",

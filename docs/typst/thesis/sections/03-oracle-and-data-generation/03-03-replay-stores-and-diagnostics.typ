@@ -1,8 +1,15 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
+#import "../../draft_markers.typ": prune_todo
 #import "@preview/booktabs:0.0.4": *
 
 == Replay Stores and Diagnostic Evidence
+
+#prune_todo(
+  [Move schema names, directory names, joins, codecs, and DTO-level mechanics that do not change the scientific protocol to the implementation appendix. Keep lineage, missingness, leakage prevention, and reproducibility guarantees in the main text.],
+  source: [this section; aria_nbv/aria_nbv/rollouts/zarr_store.py],
+  gate: [every remaining implementation term is necessary to reproduce or interpret the experiment],
+)
 
 The pipeline materializes two stores with different ownership. Immutable `vin_offline/` caches logged snippet evidence and expensive one-step oracle products. Standalone `rollouts.zarr/` references those source rows and stores target tasks, retained rollout chains, per-step finite candidate shells, masks, reason codes, selected-action successor evidence, and a derived #symb.rl.qh view. This separation prevents counterfactual experiments from mutating the source substrate and prevents one-step candidate labels from being mistaken for multi-step replay.
 

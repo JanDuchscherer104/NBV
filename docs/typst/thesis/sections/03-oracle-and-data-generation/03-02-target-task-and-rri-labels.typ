@@ -2,8 +2,15 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "@preview/booktabs:0.0.4": *
+#import "../../draft_markers.typ": validation_todo
 
 == Data Generation and Target-Specific @relative-reconstruction-improvement:short Labels
+
+#validation_todo(
+  [Validate the target-cropped error, root normalization, repeatability, failure handling, and endpoint estimand before describing RRI as a reliable study objective. Cite the exact VIN-NBV source lines for inherited definitions and distinguish every ARIA-NBV modification.],
+  source: [docs/literature/tex-src/arXiv-VIN-NBV; metric-validation artifacts],
+  gate: [frozen metric protocol, repeatability table, and claim-level source locators],
+)
 
 An oracle target task fixes the entity identity and @ground-truth:short evaluation crop. A deployable target descriptor would instead be predicted from actor-visible observations. The current rollout generator has only the first contract: it projects a selected @ground-truth:short box into a compact instruction for candidate generation. Consequently, the present target descriptor denotes the requested object and its geometry; it does not establish actor-visible target discovery.
 

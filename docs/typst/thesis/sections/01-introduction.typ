@@ -1,4 +1,5 @@
 #import "../../shared/macros.typ": *
+#import "../draft_markers.typ": validation_todo
 
 = Introduction <ch:introduction>
 

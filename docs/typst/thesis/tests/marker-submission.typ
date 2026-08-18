@@ -1,9 +1,14 @@
-#import "../draft_markers.typ": development_only, promotion_entry, thesis_status
+#import "../draft_markers.typ": development_only, submission_only, promotion_entry
 
-#development_only[
+#development_only(() => [
   #metadata("development-should-be-absent") <marker-development>
-  [This must not appear in submission output.]
-]
+  #panic("development-only body evaluated in submission mode")
+])
+
+#submission_only(() => [
+  #metadata("submission-present") <marker-submission>
+  [Submission-only content.]
+])
 
 #promotion_entry(
   [#metadata("promotion-candidate-should-be-absent") <marker-promotion-candidate> Submission queue entry is omitted.],
@@ -34,7 +39,9 @@
   disposition: "rejected",
 )
 
-#thesis_status(
-  implementation: "planned",
-  evidence: "pending",
-)[Descriptive status remains valid in submission mode.]
+// Invalid promotion fields are guarded by the development-only thunk and must
+// therefore neither validate nor render in submission mode.
+#promotion_entry(
+  [#metadata("invalid-promotion-should-be-absent") <marker-promotion-invalid> Invalid queue entry is omitted.],
+  disposition: "not-a-live-disposition",
+)
