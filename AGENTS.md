@@ -25,17 +25,15 @@ tests, configuration, and Typst own behavior and scientific claims.
   P0-P2 PR findings as resolvable GitHub review threads and resolve them only
   after exact-head evidence; report local-only reviews locally. Architect and
   critic review outputs stay session-local; persist only accepted decisions in
-  their canonical owner. Failure-first diagnosis is the
-  repository-wide invariant for bugs, regressions, suspicious metrics, and
-  failing checks; `agent-behavior` owns the repeatable procedure, while the
-  nearest semantic guide owns behavior. Reproduce the smallest failure, inspect
-  exact source and focused tests, and verify the cause before changing behavior.
-  Backlog or memory changes use `agents-db`; cleanup uses `simplification`; LRZ
-  work uses `lrz-ai-systems`.
+  their canonical owner. Failure-first diagnosis is the repository-wide
+  invariant: `agent-behavior` owns reproduction of the smallest failure,
+  focused evidence inspection, and evidence-backed root-cause verification
+  before behavior changes; the nearest semantic guide owns behavior.
+  Backlog or memory maintenance uses `agents-db`; behavior-preserving cleanup
+  uses `simplification`; LRZ remote compute uses `lrz-ai-systems`.
 - Rerun SDK, entity, sink, blueprint, `.rrd`, camera/depth logging, and offline/
-  rollout inspection work uses `rerun-nbv-inspector`. It provides the current
-  official-reference and Context7 route; package README files, code,
-  configuration, and tests remain behavioral owners.
+  rollout inspection work uses `rerun-nbv-inspector`. Package README files,
+  code, configuration, and tests remain behavioral owners.
 
 ## Graphify
 
@@ -60,12 +58,9 @@ tests, configuration, and Typst own behavior and scientific claims.
 - External skills, OMX, MCP, MemPalace, memory, and autoresearch provide
   optional evidence or orchestration, never ARIA truth ownership. Route durable
   changes through the source-order owner.
-- Use `aria-nbv-context` for semantic recall only when it materially improves
-  the task; unavailable optional retrieval falls back to exact sources.
-- The source-order capture rule selects the smallest owner. `agent-behavior`
-  owns angle-bracket eligibility and the capture procedure. A read-only capture
-  route still names each selected owner's verification; guidance, state, memory,
-  and debrief owners use `make check-agent-memory`.
+- Unavailable optional retrieval falls back to exact sources. The source-order
+  capture rule selects the smallest owner; guidance, state, memory, and debrief
+  owners use `make check-agent-memory`.
 
 ## Verification And Debriefs
 

@@ -17,10 +17,12 @@ owners conflict.
   claims. `typst/shared/style.typ` owns thesis-to-code link behavior.
 - Keep public docs aligned with these owners. Do not expose agent guidance,
   generated context, OMX state, or rendered artifacts as public source content.
-- Do not present V0 GT actor-visible-target runs as main V1 performance. The
-  advisor-facing RQ5 bridge is online discrete `Q_H` over the existing
-  finite-candidate ASE mesh/oracle loop, only after offline `Q_H` evidence is
-  stable.
+- For the Q_H actor/oracle contract, use
+  `docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ#fig:qh-actor-oracle-contract`.
+  For the conditional online bridge, use
+  `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq5`; for the
+  development gate, use
+  `docs/typst/thesis/development/roadmap.typ#ssec:milestones` (M5 entry).
 
 ## Procedure And Proof
 

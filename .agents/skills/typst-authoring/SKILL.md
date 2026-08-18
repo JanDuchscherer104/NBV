@@ -106,7 +106,8 @@ metadata:
 4. Classify advisor-facing claims and complete the direct-source evidence check
    when evidence matters.
 5. Use Glossarium-native `@term` / `@term:short` references for durable terms.
-6. Write final thesis/proposal prose as paragraphs unless the template asks for lists.
+6. Write final thesis/proposal prose as paragraphs unless the template asks for
+   lists.
 7. Compile and inspect rendered pages for equations, figures, tables, captions,
    layout changes, and multi-paragraph thesis prose.
 

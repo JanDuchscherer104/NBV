@@ -30,11 +30,6 @@ metadata:
   must_read:
     - "aria_nbv/AGENTS.md"
     - ".agents/skills/python-standards/references/general_conventions.md"
-    - ".agents/skills/python-standards/references/tensor-shapes.md"
-    - ".agents/skills/python-standards/references/theory-rich-docstrings.md"
-    - ".agents/skills/python-standards/references/config-datamodel-fields.md"
-    - ".agents/skills/python-standards/references/quartodoc-contract.md"
-    - ".agents/skills/python-standards/references/cross-references.md"
   canonical_sources:
     - "aria_nbv/AGENTS.md#completion-criteria"
     - "aria_nbv/pyproject.toml"
@@ -77,10 +72,15 @@ formatter, linter, and type configuration; domain semantics remain with the pack
 
 ## Docstring Overview
 
-Write or refactor Python docstrings as API contracts. Prefer concise, high-information
-explanations of behavior, invariants, units, shapes, ownership, sequencing, theory,
-and boundaries. This skill owns field docs, tensor-shape display, examples,
-cross-references, equations, and Quartodoc rendering constraints.
+Write or refactor Python docstrings as API contracts. Prefer concise,
+high-information docstrings that explain behavior, invariants, units, shapes,
+ownership, sequencing, theory, and boundary semantics instead of paraphrasing
+type hints. This skill owns all ARIA-NBV docstring preferences, including
+field docs, tensor-shape display, examples,
+cross-references, equations, and Quartodoc rendering constraints. Load the
+focused reference only for the active contract: tensor shapes, theory-rich
+docs, config fields, Quartodoc, and cross-references are branch-specific
+extensions to the general conventions.
 
 ## Docstring Workflow
 

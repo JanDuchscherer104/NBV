@@ -7,8 +7,8 @@ import json
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -352,12 +352,68 @@ def test_capture_and_routing_contracts() -> None:
     assert deprecated_route["aria_owner"] == "codebase-design"
 
 
+def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
+    docs_guidance = _read(ROOT / "docs" / "AGENTS.md")
+    typst_references = (
+        (
+            "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ",
+            "<fig:qh-actor-oracle-contract>",
+        ),
+        (
+            "docs/typst/thesis/sections/01-research-questions.typ",
+            "<ssec:rq5>",
+        ),
+        ("docs/typst/thesis/development/roadmap.typ", "<ssec:milestones>"),
+    )
+    for relative_path, label in typst_references:
+        source = ROOT / relative_path
+        assert source.is_file()
+        assert f"{relative_path}#" in docs_guidance
+        assert label in _read(source)
+    assert "V0 GT actor-visible-target runs as main V1 performance" not in docs_guidance
+    assert "only after offline `Q_H` evidence is stable" not in docs_guidance
+
+    source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
+    capture_rule = source_order.split("## Capture Rule", maxsplit=1)[1]
+    for destination in (
+        "root or nearest nested `AGENTS.md`",
+        "`.agents/skills/*/SKILL.md`",
+        "Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or",
+        "Public narrative: Quarto or Typst docs.",
+    ):
+        assert destination in capture_rule
+
+
 def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     root_guidance = _read(ROOT / "AGENTS.md")
     assert "severity-ranked, line-referenced findings" in root_guidance
     assert "P0-P2 PR findings as resolvable GitHub review threads" in root_guidance
     assert "resolve them only\n  after exact-head evidence" in root_guidance
     assert "Architect and\n  critic review outputs stay session-local" in root_guidance
+
+    for route in (
+        "Mermaid and thesis-diagram work uses `aria-nbv-mermaid`",
+        "Backlog or memory maintenance uses `agents-db`",
+        "behavior-preserving cleanup\n  uses `simplification`",
+        "LRZ remote compute uses `lrz-ai-systems`",
+        "offline/\n  rollout inspection work uses `rerun-nbv-inspector`",
+    ):
+        assert route in root_guidance
+    routed_skill_targets = {
+        "agent-behavior": ".agents/skills/agent-behavior/SKILL.md",
+        "aria-nbv-context": ".agents/skills/aria-nbv-context/SKILL.md",
+        "aria-grill": ".agents/skills/aria-grill/SKILL.md",
+        "aria-nbv-mermaid": ".agents/skills/aria-nbv-mermaid/SKILL.md",
+        "agents-db": ".agents/skills/agents-db/SKILL.md",
+        "simplification": ".agents/skills/simplification/SKILL.md",
+        "lrz-ai-systems": ".agents/skills/lrz-ai-systems/SKILL.md",
+        "rerun-nbv-inspector": ".agents/skills/rerun-nbv-inspector/SKILL.md",
+    }
+    for skill_name, relative_path in routed_skill_targets.items():
+        assert f"`{skill_name}`" in root_guidance
+        assert (ROOT / relative_path).is_file()
+    assert "Standard Workflow" not in root_guidance
+    assert "## Commands" not in root_guidance
 
     tracked = subprocess.run(
         ["git", "ls-files", "-z"],
