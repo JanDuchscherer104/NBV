@@ -123,6 +123,26 @@ def _write_v1_store(path: Path) -> Path:
     ).store_dir
 
 
+def _write_packed_early_terminal_store(path: Path) -> Path:
+    records = build_rollout_records(horizon=4, num_samples=6, seed=7)[:3]
+    factual_lengths = (3, 1, 2)
+    for record, factual_length in zip(records, factual_lengths, strict=True):
+        trajectory = record.evaluated.result.trajectories[0]
+        trajectory.steps[:] = trajectory.steps[:factual_length]
+        trajectory.terminated_early = True
+        record.evaluated.steps = {
+            key: value for key, value in record.evaluated.steps.items() if key[1] < factual_length
+        }
+    return write_rollout_zarr_store(
+        path,
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    ).store_dir
+
+
 def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> None:
     reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr", records=2),))
     first = reader[0]
@@ -421,6 +441,38 @@ def test_q_h_evidence_blocks_invalid_store_before_projection(tmp_path: Path) -> 
     assert row["deep_count"] is True
     assert row["blocking_reason"]
 
+
+def test_reader_indexes_packed_early_terminal_chains_by_factual_steps(tmp_path: Path) -> None:
+    reader = QhRolloutReader((_write_packed_early_terminal_store(tmp_path / "early.zarr"),))
+
+    chains = [reader[index] for index in range(len(reader))]
+    assert len(reader) == 3
+    assert [len(chain.candidate_pose_relative_root) for chain in chains] == [3, 1, 2]
+    assert [chain.rollout_row_id for chain in chains] == [0, 1, 2]
+    assert [chain.horizon_remaining.tolist() for chain in chains] == [[4, 3, 2], [4], [4, 3]]
+    assert reader.max_horizon == 3
+
+
+@pytest.mark.parametrize(
+    "step_rollout_ids",
+    (
+        (99, 0, 0, 1, 2, 2),  # missing first rollout run
+        (0, 0, 1, 0, 2, 2),  # interleaved first rollout run
+        (0, 0, 0, 1, 2, 99),  # orphaned final step
+    ),
+)
+def test_reader_rejects_invalid_factual_rollout_partition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    step_rollout_ids: tuple[int, ...],
+) -> None:
+    store = _write_packed_early_terminal_store(tmp_path / "early.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    zarr.open_group(store, mode="a")["steps/rollout_row_id"][:] = np.asarray(step_rollout_ids, dtype=np.int64)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+
+    with pytest.raises(ValueError, match="ordered factual step run|non-contiguous factual|orphaned factual steps"):
+        QhRolloutReader((store,))
 
 def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
