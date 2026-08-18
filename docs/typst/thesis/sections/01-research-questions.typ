@@ -1,6 +1,6 @@
 == Research Questions <sec:thesis-research-questions>
 
-#import "../draft_markers.typ": thesis_status, development_only
+#import "../draft_markers.typ": thesis_status, development_only, validation_todo
 #import "../../shared/equations.typ": eqs
 
 The thesis asks whether ARIA-NBV can perform target-conditioned, quality-driven
@@ -174,6 +174,12 @@ for the offline $Q_H$ result. Any comparison must preserve target conditioning,
 matched budgets or cost curves, explicit feasibility handling, and independent
 oracle endpoint evaluation; no continuous-control result is implied by the
 current finite-candidate implementation.
+
+#validation_todo(
+  [Freeze one claim-level contribution statement for each research question and link it to the exact estimand, evidence artifact, and decision rule that can answer it. Until those links exist, the questions define intended scope rather than validated contributions.],
+  source: [@sec:thesis-experimental-design; @sec:thesis-results],
+  gate: [a complete RQ-to-estimand-to-result ledger backed by confirmatory artifacts],
+)
 
 === Research matrix <ssec:matrix>
 

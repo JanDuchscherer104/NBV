@@ -73,17 +73,15 @@ metadata:
 ## Use When
 
 - Editing `.typ` proposal, paper, thesis, or slide sources.
-- Adding or revising equations, symbols, glossary-backed terms, citations,
-  figures, tables, captions, labels, or Mermaid-derived figures.
-- Polishing advisor-facing thesis prose into evidence-backed paragraphs.
-- Updating this skill's fixtures, references, or helper scripts.
-- Fixing ordinary Typst syntax, math attachment, import, citation, figure,
-  table, label, or rendered-page issues.
+- Adding or revising equations, symbols, glossary terms, citations, figures,
+  tables, labels, or Mermaid-derived figures.
+- Polishing scientific prose into evidence-backed paragraphs.
+- Fixing Typst syntax, math attachment, import, citation, figure, table, label, or rendered-page issues.
 
 ## Task Modes
 
-- `notation-edit`: update shared modules before document-local use; read
-  notation, math-attachment, and migration references.
+- `notation-edit`: update shared modules before document-local use; read notation,
+  math-attachment, and migration references.
 - `prose-draft` / `prose-polish`: read thesis-writing, section-contract, and
   claim-discipline references; use the nested fragment, shape, or beat writing
   modes only when useful; preserve claim strength and citations.
@@ -98,8 +96,7 @@ metadata:
 ## Rules
 
 1. Inspect nearest docs guidance, target imports, adjacent sections,
-   bibliography style, labels, thesis-to-code link tier, and
-   `docs/typst/shared/`.
+   bibliography style, labels, thesis-to-code link tier, and `docs/typst/shared/`.
 2. Use shared notation, glossary, and equations before inventing local symbols;
    add recurring terms or equations to shared modules first.
 3. Keep notation policy, math-attachment details, claim discipline, figure/table
@@ -107,8 +104,7 @@ metadata:
 4. Classify advisor-facing claims and complete the direct-source evidence check
    when evidence matters.
 5. Use Glossarium-native `@term` / `@term:short` references for durable terms.
-6. Write final thesis/proposal prose as paragraphs unless the template asks for
-   lists.
+6. Write final thesis/proposal prose as paragraphs unless the template asks for lists.
 7. Compile and inspect rendered pages for equations, figures, tables, captions,
    layout changes, and multi-paragraph thesis prose.
 
@@ -132,12 +128,11 @@ metadata:
    empirical sentences must resolve scope, evidence, uncertainty, and artifact
    provenance or remain explicitly hypothetical.
 6. For scientific figures, choose the renderer by scientific role and preserve
-   reproducible source plus fixed view/export metadata; render other figure or
-   Mermaid assets locally before inclusion.
+   reproducible source plus fixed view/export metadata; render assets locally.
 7. Compile the document or fixture, render affected pages to PNG, inspect
    visually, then fix and repeat.
-8. Run `make typst-authoring-contract` for thesis changes. It checks the
-   approved structural-label prefixes and exact authored-label scope, keeps
+8. Run `make typst-authoring-contract` for thesis changes. It checks approved
+   structural-label prefixes and exact authored-label scope, keeps
    generated/query and fixture labels excluded, and rejects implementation
    keys or status markers in ordinary submission prose. Explicit code spans
    and guarded development material are allowed contexts.

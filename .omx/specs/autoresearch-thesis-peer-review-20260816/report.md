@@ -1,6 +1,7 @@
 # Comprehensive Peer Review Of The Current ARIA-NBV Thesis
 
 Date: 2026-08-16
+Reviewed commit: `efa56f62ee09eaafa8d82afb25d693eec3e9302c` (the original PR #60 head before rebasing onto the ownership consolidation)
 Reviewed surface: `docs/typst/thesis/main.typ` and every included file under
 `docs/typst/thesis/sections/`
 Verdict: **major revision; scientifically promising development draft, not a
@@ -433,7 +434,7 @@ Primary references consulted:
 
 Targeted Dashy-derived markers now identify the actionable issues in context:
 
-- RQ-to-evidence alignment in the Introduction;
+- RQ-to-evidence alignment in the canonical Research Questions section;
 - catalogue pruning and claim-level citation provenance in Related Work;
 - speculative-theory pruning in Geometric Learning;
 - terminology and source provenance in the actor/oracle chapter;
