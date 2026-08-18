@@ -33,9 +33,6 @@ metadata:
     - "literature-grounded plan"
   must_read:
     - ".agents/references/source_order.md"
-    - "docs/typst/thesis/main.typ"
-    - "docs/typst/thesis/development/roadmap.typ"
-    - "docs/typst/thesis/sections/01-research-questions.typ"
     - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
   canonical_sources:
     - ".agents/references/source_order.md#role-split"
@@ -69,6 +66,10 @@ Before asking the user, resolve discoverable facts from
 `.agents/references/source_order.md` and the owning source for the decision.
 Use `docs/typst/shared/glossary.typ` for overloaded terms and the nearest
 `AGENTS.md` for touched code or docs.
+
+For thesis-scope decisions, read the thesis owner, roadmap, and research
+questions in `canonical_sources`; non-thesis branches skip them. Theory-rich or
+elaborate modifiers additionally load `references/plan-mode-theory-patterns.md`.
 
 For optional upstream questioning patterns, see
 `references/upstream-mattpocock.md`; keep ARIA source-order owners canonical.

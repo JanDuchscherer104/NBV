@@ -50,28 +50,23 @@ Use this reference when a task needs current project truth or sources disagree.
   when stale.
 - Operator aids and long conventions: `.agents/references/`.
 - Agent skills: `.agents/skills/*/SKILL.md` own activation, routing,
-  read-first, evidence, and verification loops only. They must point to
-  canonical sources through `metadata.canonical_sources` instead of restating
-  thesis claims, formulas, package contracts, or planned implementation detail.
-  A byte-identical, separately pinned upstream skill is exempt from ARIA
-  metadata; its ARIA activation and safety boundary belongs in a companion
-  repository skill instead of an upstream-file overlay.
-  Optional `metadata.context7_refs`, `metadata.literature_refs`, and
-  `metadata.tool_refs` are horizontal evidence-routing hints; they do not
-  override the owner ladder in this file.
-  Semantic-drift warnings from `make scaffold-audit` are source-order review
-  prompts: move durable truth to the owner above, or justify the text as a
-  compact routing/evidence cue.
+  read-first, evidence, and verification loops only. They point to canonical
+  sources instead of restating thesis claims, formulas, package contracts, or
+  planned implementation detail. Semantic-drift warnings from
+  `make scaffold-audit` are source-order review prompts.
+- Exception: the byte-identical pinned upstream `.agents/skills/graphify/SKILL.md`
+  bundle is exempt from local thin-skill metadata/prose rules;
+  `.agents/skills/aria-nbv-context/SKILL.md` owns ARIA-specific Graphify
+  activation, freshness, degradation, and safety boundaries.
 - Graphify is mandatory navigation in Codex worktrees but remains derived
-  evidence, not truth; its executable route and degradation contract belong to
-  `aria-nbv-context`. Other optional tools and adapters provide evidence, not
-  truth. Tool-specific operating details remain with the retained tool owner.
-  - External research and automation propose source-linked changes; ordinary
-    repository lanes review and apply durable mutations.
-  - Prefer bounded typed interfaces over exposing unrestricted shell access to
-    an adapter.
-  - Screenshots, rendered pages, and UI diagnostics are advisory evidence until
-    the owning source, test, or accepted record is updated.
+  evidence, not truth; `aria-nbv-context` owns its route and degradation
+  behavior. Other optional tools and adapters provide evidence, not truth; the
+  owning source remains authoritative.
+- Prefer bounded typed interfaces over unrestricted adapter shell access.
+- External research and automation propose source-linked changes; repository
+  lanes apply durable mutations.
+- Screenshots, rendered pages, and UI diagnostics are advisory until the
+  owning source, test, or accepted record changes.
 - Thesis-to-code links: `docs/typst/shared/style.typ` defines the
   horizontal link convention for Typst implementation anchors and removable
   agent/draft navigation links. These links help humans and agents traverse
