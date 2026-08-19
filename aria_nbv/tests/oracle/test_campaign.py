@@ -310,8 +310,10 @@ def test_explicit_target_iou_equal_threshold_is_not_admitted(tmp_path):
     row = _row("s0", "k", "t")
     row.oriented_iou = 0.20
     row.admitted = False
-    with pytest.raises(ValueError, match="expected 2 scenes"):
-        campaign.plan([row, _row("s1", "k1", "t1")], source_manifest_hash="source")
+    plan = campaign.plan([row, _row("s1", "k1", "t1")], source_manifest_hash="source")
+    assert all(unit.sample_key != "k" for unit in plan.work_units)
+    assert plan.zero_admission_scene_ids == ("s0",)
+    assert plan.zero_admission_scene_count == 1
 
 
 def test_nested_cuda_device_one_is_rejected_for_serial_worker(tmp_path):
