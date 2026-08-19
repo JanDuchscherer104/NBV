@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from itertools import combinations, pairwise
 from pathlib import Path
@@ -370,27 +370,25 @@ def candidate_audit_rows(
     rollout_row_id: int | None = None,
     step_row_id: int | None = None,
     limit: int | None = None,
+    row_callback: Callable[[dict[str, object]], None] | None = None,
 ) -> list[dict[str, object]]:
-    """Return candidate rows joined with candidate-generation diagnostics."""
+    """Return candidate rows, or stream them to ``row_callback`` without retention."""
     rows: list[dict[str, object]] = []
-    oracle_label_mask = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_)
-    q_train_mask = np.asarray(reader.array("candidates/q_train_mask"), dtype=np.bool_)
-    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64)
-    target_log_error_gain = np.asarray(reader.array("candidates/target_log_error_gain"))
-    target_pm_dist_before = np.asarray(reader.array("candidates/target_pm_dist_before"))
-    target_pm_dist_after = np.asarray(reader.array("candidates/target_pm_dist_after"))
-    path_collision_mask = np.asarray(reader.array("candidate_diagnostics/path_collision_mask"), dtype=np.bool_)
-    path_collision_applicable = np.asarray(
-        reader.array("candidate_diagnostics/path_collision_applicable_mask"), dtype=np.bool_
-    )
-    path_collision_evaluated = np.asarray(
-        reader.array("candidate_diagnostics/path_collision_evaluated_mask"), dtype=np.bool_
-    )
-    free_space_margin_m = np.asarray(reader.array("candidate_diagnostics/free_space_margin_m"))
-    motion_height_delta_m = np.asarray(reader.array("candidate_diagnostics/motion_height_delta_m"))
-    motion_backward_step_m = np.asarray(reader.array("candidate_diagnostics/motion_backward_step_m"))
-    motion_yaw_delta_deg = np.asarray(reader.array("candidate_diagnostics/motion_yaw_delta_deg"))
-    target_bearing_yaw_deg = np.asarray(reader.array("candidate_diagnostics/target_bearing_yaw_deg"))
+    emitted = 0
+    oracle_label_mask = reader.array("candidates/oracle_label_mask")
+    q_train_mask = reader.array("candidates/q_train_mask")
+    strategy_ids = reader.array("candidates/strategy_id")
+    target_log_error_gain = reader.array("candidates/target_log_error_gain")
+    target_pm_dist_before = reader.array("candidates/target_pm_dist_before")
+    target_pm_dist_after = reader.array("candidates/target_pm_dist_after")
+    path_collision_mask = reader.array("candidate_diagnostics/path_collision_mask")
+    path_collision_applicable = reader.array("candidate_diagnostics/path_collision_applicable_mask")
+    path_collision_evaluated = reader.array("candidate_diagnostics/path_collision_evaluated_mask")
+    free_space_margin_m = reader.array("candidate_diagnostics/free_space_margin_m")
+    motion_height_delta_m = reader.array("candidate_diagnostics/motion_height_delta_m")
+    motion_backward_step_m = reader.array("candidate_diagnostics/motion_backward_step_m")
+    motion_yaw_delta_deg = reader.array("candidate_diagnostics/motion_yaw_delta_deg")
+    target_bearing_yaw_deg = reader.array("candidate_diagnostics/target_bearing_yaw_deg")
     candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
     branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
@@ -417,75 +415,78 @@ def candidate_audit_rows(
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
             for local, row in enumerate(step.candidate_row_positions.tolist()):
-                if limit is not None and len(rows) >= max(0, int(limit)):
+                if limit is not None and emitted >= max(0, int(limit)):
                     return rows
                 strategy_id = int(strategy_ids[row])
                 pose = step.pose_world_cam[local]
                 relative = np.asarray(pose[9:12], dtype=np.float64) - root_center
-                rows.append(
-                    {
-                        "candidate_row_id": int(step.candidate_row_ids[local]),
-                        "rollout_row_id": rollout.rollout_row_id,
-                        "step_row_id": step.step_row_id,
-                        "step_index": step.step_index,
-                        "shell_index": int(step.shell_indices[local]),
-                        "compact_valid_index": int(step.compact_valid_indices[local]),
-                        "scene": rollout.scene,
-                        "split": rollout.split,
-                        "policy": rollout.policy,
-                        "horizon": rollout.horizon,
-                        "branch_factor": rollout.branch_factor,
-                        "beam_width": rollout.beam_width,
-                        "temperature": _finite_or_none(rollout.temperature),
-                        "candidate_config": candidate_configs[rollout_position],
-                        "rollout_config": rollout_configs[rollout_position],
-                        "branch_schedule": branch_schedules[rollout_position],
-                        "generation_cohort_id": generation_cohort_id,
-                        "generation_cohort": cohort_json,
-                        "target_row_id": rollout.target_row_id,
-                        "selected": bool(step.selected_mask[local]),
-                        "actor_action": bool(step.actor_action_mask[local]),
-                        "oracle_label": bool(oracle_label_mask[row]),
-                        "q_train": bool(q_train_mask[row]),
-                        "strategy_id": strategy_id,
-                        "strategy": decode_strategy_id(strategy_id),
-                        "position_id": int(step.position_ids[local]),
-                        "position": str(step.position_names[local]),
-                        "mixture_id": int(step.mixture_ids[local]),
-                        "mixture": str(step.mixture_names[local]),
-                        "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
-                        "invalid_reason": str(step.primary_invalid_reason_names[local]),
-                        "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
-                        "target_rri": _finite_or_none(step.target_rri[local]),
-                        "target_root_gain": _finite_or_none(step.target_root_gain[local]),
-                        "target_log_error_gain": _finite_or_none(target_log_error_gain[row]),
-                        "target_pm_dist_before": _finite_or_none(target_pm_dist_before[row]),
-                        "target_pm_dist_after": _finite_or_none(target_pm_dist_after[row]),
-                        "scene_rri": _finite_or_none(step.scene_rri[local]),
-                        "selection_probability": _finite_or_none(step.selection_probabilities[local]),
-                        "center_x": float(pose[9]),
-                        "center_y": float(pose[10]),
-                        "center_z": float(pose[11]),
-                        "root_relative_x_m": float(relative[0]),
-                        "root_relative_y_m": float(relative[1]),
-                        "root_relative_z_m": float(relative[2]),
-                        "root_distance_m": float(np.linalg.norm(relative)),
-                        "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
-                        "units": "m",
-                        "mesh_distance_m": _finite_or_none(step.mesh_distance_m[local]),
-                        "path_min_clearance_m": _finite_or_none(step.path_min_clearance_m[local]),
-                        "path_collision": bool(path_collision_mask[row]) if path_collision_evaluated[row] else None,
-                        "path_collision_applicable": bool(path_collision_applicable[row]),
-                        "path_collision_evaluated": bool(path_collision_evaluated[row]),
-                        "free_space_margin_m": _finite_or_none(free_space_margin_m[row]),
-                        "motion_step_length_m": _finite_or_none(step.motion_step_length_m[local]),
-                        "motion_height_delta_m": _finite_or_none(motion_height_delta_m[row]),
-                        "motion_backward_step_m": _finite_or_none(motion_backward_step_m[row]),
-                        "motion_yaw_delta_deg": _finite_or_none(motion_yaw_delta_deg[row]),
-                        "target_distance_m": _finite_or_none(step.target_distance_m[local]),
-                        "target_bearing_yaw_deg": _finite_or_none(target_bearing_yaw_deg[row]),
-                    }
-                )
+                candidate_row = {
+                    "candidate_row_id": int(step.candidate_row_ids[local]),
+                    "rollout_row_id": rollout.rollout_row_id,
+                    "step_row_id": step.step_row_id,
+                    "step_index": step.step_index,
+                    "shell_index": int(step.shell_indices[local]),
+                    "compact_valid_index": int(step.compact_valid_indices[local]),
+                    "scene": rollout.scene,
+                    "split": rollout.split,
+                    "policy": rollout.policy,
+                    "horizon": rollout.horizon,
+                    "branch_factor": rollout.branch_factor,
+                    "beam_width": rollout.beam_width,
+                    "temperature": _finite_or_none(rollout.temperature),
+                    "candidate_config": candidate_configs[rollout_position],
+                    "rollout_config": rollout_configs[rollout_position],
+                    "branch_schedule": branch_schedules[rollout_position],
+                    "generation_cohort_id": generation_cohort_id,
+                    "generation_cohort": cohort_json,
+                    "target_row_id": rollout.target_row_id,
+                    "selected": bool(step.selected_mask[local]),
+                    "actor_action": bool(step.actor_action_mask[local]),
+                    "oracle_label": bool(oracle_label_mask[row]),
+                    "q_train": bool(q_train_mask[row]),
+                    "strategy_id": strategy_id,
+                    "strategy": decode_strategy_id(strategy_id),
+                    "position_id": int(step.position_ids[local]),
+                    "position": str(step.position_names[local]),
+                    "mixture_id": int(step.mixture_ids[local]),
+                    "mixture": str(step.mixture_names[local]),
+                    "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
+                    "invalid_reason": str(step.primary_invalid_reason_names[local]),
+                    "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
+                    "target_rri": _finite_or_none(step.target_rri[local]),
+                    "target_root_gain": _finite_or_none(step.target_root_gain[local]),
+                    "target_log_error_gain": _finite_or_none(target_log_error_gain[row]),
+                    "target_pm_dist_before": _finite_or_none(target_pm_dist_before[row]),
+                    "target_pm_dist_after": _finite_or_none(target_pm_dist_after[row]),
+                    "scene_rri": _finite_or_none(step.scene_rri[local]),
+                    "selection_probability": _finite_or_none(step.selection_probabilities[local]),
+                    "center_x": float(pose[9]),
+                    "center_y": float(pose[10]),
+                    "center_z": float(pose[11]),
+                    "root_relative_x_m": float(relative[0]),
+                    "root_relative_y_m": float(relative[1]),
+                    "root_relative_z_m": float(relative[2]),
+                    "root_distance_m": float(np.linalg.norm(relative)),
+                    "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                    "units": "m",
+                    "mesh_distance_m": _finite_or_none(step.mesh_distance_m[local]),
+                    "path_min_clearance_m": _finite_or_none(step.path_min_clearance_m[local]),
+                    "path_collision": bool(path_collision_mask[row]) if path_collision_evaluated[row] else None,
+                    "path_collision_applicable": bool(path_collision_applicable[row]),
+                    "path_collision_evaluated": bool(path_collision_evaluated[row]),
+                    "free_space_margin_m": _finite_or_none(free_space_margin_m[row]),
+                    "motion_step_length_m": _finite_or_none(step.motion_step_length_m[local]),
+                    "motion_height_delta_m": _finite_or_none(motion_height_delta_m[row]),
+                    "motion_backward_step_m": _finite_or_none(motion_backward_step_m[row]),
+                    "motion_yaw_delta_deg": _finite_or_none(motion_yaw_delta_deg[row]),
+                    "target_distance_m": _finite_or_none(step.target_distance_m[local]),
+                    "target_bearing_yaw_deg": _finite_or_none(target_bearing_yaw_deg[row]),
+                }
+                if row_callback is not None:
+                    row_callback(candidate_row)
+                else:
+                    rows.append(candidate_row)
+                emitted += 1
     return rows
 
 
