@@ -124,6 +124,17 @@ def test_vin_snippet_view_exposes_canonical_t_world_snippet_pose() -> None:
     torch.testing.assert_close(snippet.t_world_snippet.tensor(), _pose(7.0).tensor())
 
 
+def test_vin_snippet_view_requires_explicit_canonical_gauge() -> None:
+    """VIN DTO construction must not silently create an empty gauge pose."""
+
+    with pytest.raises(TypeError, match="t_world_snippet"):
+        VinSnippetView(
+            points_world=torch.zeros((1, 4), dtype=torch.float32),
+            lengths=torch.ones((1,), dtype=torch.int64),
+            t_world_rig=_pose(99.0),
+        )
+
+
 def test_public_vin_snippet_api_declares_canonical_gauge_field() -> None:
     """Public DTO and owner-leaf exports include the new canonical field."""
 
@@ -144,6 +155,7 @@ def test_raw_efm_snippet_gauge_is_preserved_by_vin_adapter() -> None:
         max_points=None,
     )
 
+    assert tuple(view.t_world_snippet.tensor().shape) == (1, 12)
     torch.testing.assert_close(view.t_world_snippet.tensor(), _pose(7.0).tensor())
 
 
