@@ -8,12 +8,52 @@ pipeline recipes.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from enum import StrEnum
 
 from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
 from ...utils import BaseConfig
+
+SEED_DERIVATION_RULE = "sha256-json-v1"
+
+
+def derive_rollout_seed(*parts: object) -> int:
+    """Derive one reproducible unsigned 32-bit seed from a lineage path.
+
+    All stochastic rollout consumers use this pure helper instead of sharing
+    mutable RNG state.  Callers include their semantic path (recipe, step,
+    branch, or component) in ``parts``.
+    """
+
+    payload = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
+
+
+def derive_recipe_seed(campaign_id: str, work_unit_hash: str, recipe_name: str, temperature: float) -> int:
+    """Derive the root seed for one campaign recipe instance."""
+
+    return derive_rollout_seed("recipe", campaign_id, work_unit_hash, recipe_name, float(temperature))
+
+
+def derive_candidate_seed(recipe_seed: int, step_index: int, branch_path: tuple[int, ...] = ()) -> int:
+    """Derive candidate-generation seed for one replay node."""
+
+    return derive_rollout_seed("candidate", int(recipe_seed), int(step_index), tuple(branch_path))
+
+
+def derive_selection_seed(recipe_seed: int, step_index: int, branch_path: tuple[int, ...] = ()) -> int:
+    """Derive selection seed for one replay node."""
+
+    return derive_rollout_seed("selection", int(recipe_seed), int(step_index), tuple(branch_path))
+
+
+def derive_component_seed(node_seed: int, component_identity: str) -> int:
+    """Derive a component-local seed without coupling sibling components."""
+
+    return derive_rollout_seed("component", int(node_seed), str(component_identity))
 
 
 class CounterfactualSelectionPolicy(StrEnum):
@@ -103,4 +143,13 @@ class RolloutPolicySpec(BaseConfig):
         return self
 
 
-__all__ = ["CounterfactualSelectionPolicy", "RolloutPolicySpec"]
+__all__ = [
+    "CounterfactualSelectionPolicy",
+    "RolloutPolicySpec",
+    "SEED_DERIVATION_RULE",
+    "derive_rollout_seed",
+    "derive_recipe_seed",
+    "derive_candidate_seed",
+    "derive_selection_seed",
+    "derive_component_seed",
+]

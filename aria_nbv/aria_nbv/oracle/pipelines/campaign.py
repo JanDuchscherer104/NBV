@@ -31,6 +31,66 @@ from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 CAMPAIGN_PLAN_SCHEMA_VERSION = "campaign-plan-v2"
 CAMPAIGN_ADMISSION_AUDIT_SCHEMA_VERSION = "campaign-admission-audit-v2"
+GENERATION_REVISION_SCHEMA_VERSION = "campaign-generation-revision-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationRevision:
+    """Reproducibility identity required before campaign planning/output."""
+
+    contract_revision: str
+    clean_commit: str
+    head_tree: str
+    uv_lock_sha256: str
+    content_bundle_hash: str
+    revision_hash: str
+
+    def to_jsonable(self) -> dict[str, str]:
+        return {"schema_version": GENERATION_REVISION_SCHEMA_VERSION, **asdict(self)}
+
+
+def current_generation_revision(
+    *, repo_root: Path | None = None, contract_revision: str = "g003-v1"
+) -> GenerationRevision:
+    """Capture clean Git and reviewed-generator content identity."""
+
+    root = repo_root
+    if root is None:
+        root = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
+    status = subprocess.check_output(
+        ["git", "status", "--porcelain", "--untracked-files=no"], cwd=root, text=True
+    ).strip()
+    if status:
+        raise ValueError("campaign generation revision requires a clean worktree")
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True).strip()
+    lock = root / "aria_nbv" / "uv.lock"
+    if not lock.is_file():
+        raise ValueError("campaign generation revision requires aria_nbv/uv.lock")
+    lock_hash = hashlib.sha256(lock.read_bytes()).hexdigest()
+    bundle_roots = (
+        root / "aria_nbv" / "aria_nbv" / "oracle" / "pipelines",
+        root / "aria_nbv" / "aria_nbv" / "rollouts",
+        root / "aria_nbv" / "aria_nbv" / "pose_generation",
+    )
+    files = sorted(path for bundle_root in bundle_roots for path in bundle_root.rglob("*.py"))
+    if not files:
+        raise ValueError("campaign reviewed-generator content bundle is empty")
+    bundle = hashlib.sha256()
+    for path in files:
+        bundle.update(path.relative_to(root).as_posix().encode())
+        bundle.update(path.read_bytes())
+    content_hash = bundle.hexdigest()
+    revision_hash = stable_msgspec_hash(
+        {
+            "contract_revision": contract_revision,
+            "clean_commit": commit,
+            "head_tree": tree,
+            "uv_lock_sha256": lock_hash,
+            "content_bundle_hash": content_hash,
+        }
+    )
+    return GenerationRevision(contract_revision, commit, tree, lock_hash, content_hash, revision_hash)
 
 
 class CampaignOutcome(StrEnum):
@@ -236,6 +296,7 @@ class CampaignPlan:
     admission_audit_hash: str = ""
     admission_counts: dict[str, int] | None = None
     admission_reason_counts: dict[str, int] | None = None
+    generation_revision: GenerationRevision | None = None
 
     def to_jsonable(self) -> dict[str, Any]:
         return {
@@ -251,6 +312,7 @@ class CampaignPlan:
             "admission_audit_hash": self.admission_audit_hash,
             "admission_counts": self.admission_counts or {},
             "admission_reason_counts": self.admission_reason_counts or {},
+            "generation_revision": None if self.generation_revision is None else self.generation_revision.to_jsonable(),
         }
 
     @classmethod
@@ -278,6 +340,21 @@ class CampaignPlan:
             str(payload.get("admission_audit_hash", "")),
             payload.get("admission_counts") or {},
             payload.get("admission_reason_counts") or {},
+            None
+            if payload.get("generation_revision") is None
+            else GenerationRevision(
+                **{
+                    k: str(payload["generation_revision"][k])
+                    for k in (
+                        "contract_revision",
+                        "clean_commit",
+                        "head_tree",
+                        "uv_lock_sha256",
+                        "content_bundle_hash",
+                        "revision_hash",
+                    )
+                }
+            ),
         )
         expected_payload = {
             "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
@@ -290,6 +367,7 @@ class CampaignPlan:
             "admission_audit_hash": plan.admission_audit_hash,
             "admission_counts": plan.admission_counts or {},
             "admission_reason_counts": plan.admission_reason_counts or {},
+            "generation_revision": None if plan.generation_revision is None else plan.generation_revision.to_jsonable(),
             "work_units": [asdict(u) for u in units],
         }
         expected = stable_msgspec_hash(json.loads(json.dumps(expected_payload, sort_keys=True, default=str)))
@@ -622,6 +700,7 @@ class CudaRolloutCampaign:
         rows = list(source_rows)
         if not source_manifest_hash:
             raise ValueError("source_manifest_hash is required and must be non-empty")
+        generation_revision = current_generation_revision()
 
         def val(row: Any, key: str) -> Any:
             if hasattr(row, key):
@@ -646,9 +725,7 @@ class CudaRolloutCampaign:
         invalid_admissions = [row for row in rows if val(row, "admitted") is True and not is_strictly_eligible(row)]
         if invalid_admissions:
             raise ValueError("admitted source rows require finite oriented_iou strictly above the threshold")
-        scenes = sorted({str(val(row, "scene_id")) for row in rows if is_strictly_eligible(row)})
-        if not scenes:
-            raise ValueError("source rows contain no eligible admitted scenes")
+        scenes = sorted({str(val(row, "scene_id")) for row in rows})
         identities = [
             (str(val(r, "scene_id")), str(val(r, "sample_key")), str(val(r, "target_id") or val(r, "task_id")))
             for r in rows
@@ -719,12 +796,14 @@ class CudaRolloutCampaign:
         for row_index, row in enumerate(rows):
             sample = str(val(row, "sample_key"))
             target = str(val(row, "target_id") or val(row, "task_id"))
-            if not sample or not target:
-                raise ValueError("source rows require sample_key and target_id")
+            if not sample:
+                raise ValueError("source rows require sample_key")
             scene = str(val(row, "scene_id"))
             iou = val(row, "oriented_iou")
             if not is_strictly_eligible(row):
                 continue
+            if not target:
+                raise ValueError("admitted source rows require target_id")
             explicit_payload = val(row, "explicit_target_config")
             if not explicit_payload:
                 raise ValueError("admitted campaign rows require full explicit_target_config")
@@ -809,19 +888,23 @@ class CudaRolloutCampaign:
                         source_row_index=row_index,
                         explicit_target_config=explicit_payload,
                         source_row_payload={
-                            k: val(row, k)
-                            for k in (
-                                "sample_index",
-                                "scene_id",
-                                "snippet_id",
-                                "split",
-                                "source_shard_id",
-                                "source_shard_row",
-                                "source_store_dir",
-                                "source_cache_version",
-                                "source_manifest_hash",
-                            )
-                            if val(row, k) not in ("", None)
+                            **{
+                                k: val(row, k)
+                                for k in (
+                                    "sample_index",
+                                    "scene_id",
+                                    "snippet_id",
+                                    "split",
+                                    "source_shard_id",
+                                    "source_shard_row",
+                                    "source_store_dir",
+                                    "source_cache_version",
+                                    "source_manifest_hash",
+                                    "campaign_split",
+                                )
+                                if val(row, k) not in ("", None)
+                            },
+                            "campaign_split": split_by_scene[scene],
                         },
                         temperature=temperature,
                         temperatures=tuple(temperatures),
@@ -879,6 +962,7 @@ class CudaRolloutCampaign:
             "admission_audit_hash": admission_audit_hash,
             "admission_counts": admission_counts,
             "admission_reason_counts": reason_counts,
+            "generation_revision": generation_revision.to_jsonable(),
             "work_units": [asdict(u) for u in units],
         }
         plan_hash = stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
@@ -894,6 +978,7 @@ class CudaRolloutCampaign:
             admission_audit_hash,
             admission_counts,
             reason_counts,
+            generation_revision,
         )
 
     def audit_source_manifest(self, writer_config: Any, source_manifest: Any) -> list[dict[str, Any]]:
@@ -946,6 +1031,19 @@ class CudaRolloutCampaign:
                 list(gt_rows),
                 threshold=self.config.observed_target_iou_threshold,
             )
+            if not matches:
+                audited.append(
+                    {
+                        **source_row.to_jsonable(),
+                        **source_lineage,
+                        "target_id": "",
+                        "observed_target_count": len(observed),
+                        "gt_match_count": 0,
+                        "qualified_gt_match_count": 0,
+                        "admitted": False,
+                        "reason": "excluded_no_observed_target" if not observed else "excluded_no_gt_match",
+                    }
+                )
             for match in matches:
                 actor = match.descriptor
                 row = {
