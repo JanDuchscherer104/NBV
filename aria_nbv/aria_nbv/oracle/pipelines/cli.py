@@ -355,7 +355,7 @@ def campaign_worker(
                 "validated": getattr(result, "outcome", "succeeded") in {"succeeded", "skipped"},
                 "plan_hash": plan_hash,
                 "work_unit_hash": unit.work_unit_hash,
-                "campaign_id": getattr(campaign.config, "campaign_id", plan.campaign_id),
+                "campaign_id": getattr(campaign.config, "campaign_id", getattr(plan, "campaign_id", "")),
                 "config_hash": plan.config_hash,
                 "source_identity_hash": getattr(unit, "source_identity_hash", ""),
                 "target_id": getattr(unit, "target_id", ""),
