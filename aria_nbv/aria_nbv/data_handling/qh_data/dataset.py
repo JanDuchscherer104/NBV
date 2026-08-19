@@ -111,7 +111,13 @@ class QhDataset(Dataset[QhChain]):
 
         self.rollout_reader = rollout_reader
         self.actor_reader = actor_reader
-        self.split = split
+        reader_split = getattr(rollout_reader, "campaign_split", None)
+        if split is not None and reader_split != split:
+            raise ValueError(
+                "Q_H dataset split must match rollout_reader.campaign_split; "
+                f"received split={split!r}, reader campaign_split={reader_split!r}."
+            )
+        self.split = reader_split
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
         # ``split`` selects campaign chains above; actor rows are loaded from
         # the complete immutable index so source_ref.split can validate the

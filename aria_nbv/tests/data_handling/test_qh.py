@@ -257,10 +257,11 @@ class _RolloutReader:
     contract = QhDataContract("8", "v0_gt_input", "gain", "return", "td", 0.95, "reason", "7")
     provenance = {"stores": []}
 
-    def __init__(self, source_ref: _QhSourceRef) -> None:
+    def __init__(self, source_ref: _QhSourceRef, campaign_split: Stage | None = None) -> None:
         self.source_refs = (source_ref,)
         self.scenes = frozenset({source_ref.scene_id})
         self.stored = _stored(source_ref)
+        self.campaign_split = campaign_split
 
     def __len__(self) -> int:
         return 1
@@ -282,15 +283,13 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert chain.actor.horizon_remaining.tolist() == [2, 1]
 
 
-def test_dataset_learning_split_does_not_filter_physical_actor_rows() -> None:
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()),
-        actor_reader=_ActorReader(),
-        split=Stage.VAL,
-    )
-
-    assert len(dataset) == 1
-    assert dataset[0].key.source_sample_index == 0
+def test_dataset_rejects_split_inconsistent_with_unfiltered_reader() -> None:
+    with pytest.raises(ValueError, match="must match rollout_reader.campaign_split"):
+        QhDataset(  # type: ignore[arg-type]
+            rollout_reader=_RolloutReader(_source_ref()),
+            actor_reader=_ActorReader(),
+            split=Stage.VAL,
+        )
 
 
 def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path: Path, monkeypatch) -> None:
