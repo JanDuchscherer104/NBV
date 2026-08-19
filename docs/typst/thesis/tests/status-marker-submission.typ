@@ -6,4 +6,4 @@
   citation: [Example citation],
   source: [development-only/source.typ:10],
   gate: [implementation and held-out evaluation],
-)[A proposal remains visible and explicitly classified in submission mode.]
+)[A development status block must be rejected in submission mode.]

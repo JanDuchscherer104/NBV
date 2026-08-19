@@ -1,7 +1,13 @@
 #import "../../shared/symbols.typ": symb
-#import "../draft_markers.typ": thesis_status, research_todo
+#import "../draft_markers.typ": thesis_status, research_todo, prune_todo
 
 = Discussion <sec:thesis-discussion>
+
+#prune_todo(
+  [Rewrite the discussion after confirmatory results exist. The present implementation-readiness narrative and architecture bridge registry are development material; the final chapter must interpret measured answers, alternative explanations, scope, limitations, and failure modes.],
+  source: [@sec:thesis-results and the frozen analysis plan],
+  gate: [every interpretation points to a reported result or is explicitly bounded as a limitation],
+)
 
 The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This establishes that the proposed experiment can be represented and audited; it does not establish that one candidate family, rollout policy, representation, or learned model performs better than another.
 

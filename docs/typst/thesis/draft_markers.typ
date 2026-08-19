@@ -11,45 +11,29 @@
 
 // Development-only material is omitted from submission output while retaining
 // a single, explicit guard at every draft-content boundary.
-#let development_only(body) = if thesis_mode == "development" { body } else { none }
+#let development_only(body) = if thesis_mode == "development" { body() }
+#let submission_only(body) = if thesis_mode == "submission" { body() }
 
 #let promotion_dispositions = ("candidate", "blocked", "deferred", "rejected")
 
 #let _required_promotion_field(name, value) = {
-  if value == none {
-    panic("promotion_entry requires a non-empty " + name)
-  }
-  if type(value) == str and value.trim().len() == 0 or repr(value) == "[]" {
-    panic("promotion_entry requires a non-empty " + name)
-  }
+  if value == none { panic("promotion_entry requires a non-empty " + name) }
+  if type(value) == str and value.trim().len() == 0 or repr(value) == "[]" { panic("promotion_entry requires a non-empty " + name) }
   value
 }
 
-// A concise development queue pointer. Promoted material is removed from this
-// queue; `promoted` is therefore intentionally not a live disposition.
-#let promotion_entry(
-  summary,
-  source: none,
-  target-section: none,
-  gate: none,
-  disposition: none,
-) = {
+#let promotion_entry(summary, source: none, target-section: none, gate: none, disposition: none) = development_only(() => {
   let summary = _required_promotion_field("summary", summary)
   let source = _required_promotion_field("source", source)
   let target = _required_promotion_field("target-section", target-section)
   let gate = _required_promotion_field("gate", gate)
   let disposition = _required_promotion_field("disposition", disposition)
-  if type(disposition) != str or disposition not in promotion_dispositions {
-    panic("Unknown promotion disposition: " + repr(disposition))
-  }
-
-  development_only(block(breakable: false)[
-    #text(size: 8.4pt)[
-      *Promotion queue — #disposition:* #summary \
-      #text(size: 7.6pt)[Source: #source; target: #target; gate: #gate]
-    ]
-  ])
-}
+  if type(disposition) != str or disposition not in promotion_dispositions { panic("Unknown promotion disposition: " + repr(disposition)) }
+  block(breakable: false)[
+    #text(size: 8.4pt)[*Promotion queue — #disposition:* #summary \
+      #text(size: 7.6pt)[Source: #source; target: #target; gate: #gate]]
+  ]
+})
 
 #let todo_marker(kind, body, stroke: orange, source: none, gate: none) = if thesis_mode == "submission" {
   panic("Unresolved thesis marker in submission mode: " + repr(kind))
@@ -98,9 +82,9 @@
   rgb("#5F6368")
 }
 
-// Descriptive epistemic status, not an action item. Unlike the TODO markers
-// above, this block is valid in submission mode so proposed scientific content
-// can remain visible without being mistaken for implemented or validated work.
+// Editorial status belongs only in the development render. Its scientific
+// substance must become ordinary limitation, method, or result prose before
+// submission rather than leaking a project-management box into the thesis.
 #let thesis_status(
   body,
   implementation: none,
@@ -109,6 +93,9 @@
   source: none,
   gate: none,
 ) = {
+  if thesis_mode == "submission" {
+    panic("Development-only thesis status block in submission mode")
+  }
   if implementation not in implementation_states {
     panic("Unknown thesis implementation state: " + repr(implementation))
   }
@@ -140,7 +127,7 @@
         \
         #text(size: 7.6pt)[Promotion gate: #gate]
       ]
-      #if source != none and thesis_mode == "development" [
+      #if source != none [
         \
         #text(size: 7.6pt, fill: gray)[Development source: #source]
       ]

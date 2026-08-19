@@ -85,6 +85,12 @@ def main() -> None:
             mode="submission",
             expect_success=False,
         )
+        _compile(
+            "status-marker-submission",
+            output_dir,
+            mode="submission",
+            expect_success=False,
+        )
         assert _query_metadata("marker-development", "<marker-development>") == [
             "development-present"
         ]
@@ -99,6 +105,9 @@ def main() -> None:
             )
             == []
         )
+        assert _query_metadata(
+            "marker-submission", "<marker-submission>", mode="submission"
+        ) == ["submission-present"]
         for disposition in ("candidate", "blocked", "deferred", "rejected"):
             assert (
                 _query_metadata(
@@ -108,6 +117,12 @@ def main() -> None:
                 )
                 == []
             )
+        assert (
+            _query_metadata(
+                "marker-submission", "<marker-promotion-invalid>", mode="submission"
+            )
+            == []
+        )
     print("thesis marker contract passed")
 
 

@@ -1,7 +1,14 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
+#import "../../draft_markers.typ": prune_todo
 
 = Method <sec:thesis-method>
+
+#prune_todo(
+  [Rewrite this chapter around one frozen, implemented, and evaluated method. Move rejected objectives, alternative carriers, architecture ladders, and unresolved scorer interfaces to development-only notes or a compact limitations/future-work account.],
+  source: [this chapter and its source-owner decision gates],
+  gate: [production scorer, frozen objective, matched controls, and end-to-end acceptance evidence],
+)
 
 ARIA-NBV is formulated as target-conditioned selection from a finite candidate table. The implemented substrate generates and evaluates masked multi-step pose rollouts, records selected transitions, exposes a dense training view, and provides scorer-independent fitted Double-Q optimization for an injected candidate-value model. It does not yet provide a production #symb.rl.qh scorer, checkpoint, or policy result. The existing myopic VIN scorer remains the historical one-step control, while the target-conditioned scene-memory scorer described in this chapter remains planned.
 

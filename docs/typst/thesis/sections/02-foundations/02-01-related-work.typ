@@ -1,6 +1,19 @@
 #import "../../../shared/macros.typ": *
+#import "../../draft_markers.typ": prune_todo, validation_todo
 
 == Related Work
+
+#prune_todo(
+  [Replace catalogue-style architecture paragraphs with a smaller claim-by-claim synthesis: what each work establishes, which assumption differs here, and which concrete ARIA-NBV design or comparison follows.],
+  source: [this section, especially the representation and architecture surveys],
+  gate: [every retained citation has a stated argumentative role rather than membership in a list],
+)
+
+#validation_todo(
+  [Add a structured evidence-comment block beside each claim-bearing paragraph, mapping every cited bibliography key to the exact local TeX or PDF locator used to support that claim.],
+  source: [docs/references.bib; docs/references-qh.bib; docs/literature/tex-src],
+  gate: [the citation-provenance audit reports no unsupported or unlocated literature claims],
+)
 
 Classical active perception establishes that sensing actions and inference must be designed jointly, while three-dimensional view planning supplies the finite generate--score--select abstraction used here @ActivePerception-bajcsy1988 @ActiveVision-aloimonos1988 @ViewPlanningSurvey-scott2003. Receding-horizon and submodular formulations explain why lookahead and greedy comparators can be informative under specific utility assumptions @RecedingHorizonNBV-bircher2016 @SubmodularNBV-lauri2020. They do not establish such guarantees for target-specific RRI, whose value depends on the evaluated target, current reconstruction support, and admissible candidates. This thesis therefore tests non-myopic headroom empirically under fixed support rather than assuming it from generic coverage objectives.
 

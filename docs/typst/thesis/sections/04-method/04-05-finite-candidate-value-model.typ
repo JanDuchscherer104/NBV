@@ -1,9 +1,15 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status, research_todo, decision_todo
+#import "../../draft_markers.typ": thesis_status, research_todo, decision_todo, prune_todo
 
 == Target-Conditioned Finite-Horizon Value Model
+
+#prune_todo(
+  [Choose and implement one horizon semantics and one primary learning objective before submission. The current fixed-budget, requested-horizon, exact-horizon-two, recursive fitted-value, and control variants cannot all read as the thesis method.],
+  source: [this section; aria_nbv/aria_nbv/lightning/qh_module.py],
+  gate: [a frozen scorer interface, training objective, checkpoint, and matched policy evaluation],
+)
 
 === Implemented training infrastructure and planned scorer
 

@@ -3,7 +3,7 @@
 // Development-only schedule and gate view. Scientific prose, equations, and
 // implementation contracts remain owned by the active thesis and package
 // sources named below.
-#development_only[
+#development_only(() => [
   #heading(level: 1, numbering: none)[Development roadmap] <ch:roadmap>
   #metadata("roadmap-outcome") <outcome>
   This page records schedule, status, evidence pointers, and promotion gates.
@@ -90,4 +90,4 @@
   - M1 store, scene split, Rerun, and throughput: `docs/typst/thesis/development/m1-contract-report.typ#m1-blockers`.
   - M5 support and headroom: `docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ`, `docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ`.
   - Actionable follow-up: `.agents/issues.toml` and `.agents/todos.toml`; these records do not replace canonical owners.
-]
+])

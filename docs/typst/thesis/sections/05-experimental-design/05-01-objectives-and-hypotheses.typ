@@ -1,9 +1,16 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
+#import "../../draft_markers.typ": validation_todo
 #import "@preview/booktabs:0.0.4": *
 
 == Study Population and Evidence Gates
+
+#validation_todo(
+  [Preregister the eligible population, exclusions, primary estimands, aggregation unit, number of independent runs, uncertainty interval, minimum meaningful effect, and multiplicity policy before inspecting confirmatory results.],
+  source: [experiment manifest and analysis specification],
+  gate: [immutable analysis plan plus matched held-out policy table],
+)
 
 The source population comprises ASE/ATEK snippet windows from scenes for which the configured @ground-truth:short mesh and object-box table resolve. A frozen manifest assigns entire scenes to train, validation, or test before model selection; no scene may cross these boundaries through another snippet. Each reported run records the manifest hash and the exact counts of scenes, snippets, admitted target tasks, rollout chains, transitions, and retained candidate rows. A capped train-only pilot is therefore a throughput and support probe, not a sample from which held-out policy performance can be estimated.
 

@@ -83,7 +83,7 @@
 #include "sections/08-conclusion.typ"
 
 // Development planning and gate reports are omitted from submission output.
-#development_only[
+#development_only(() => [
   #include "development/roadmap.typ"
   #include "development/m1-contract-report.typ"
-]
+])

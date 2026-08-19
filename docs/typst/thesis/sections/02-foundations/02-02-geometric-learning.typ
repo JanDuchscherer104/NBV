@@ -1,10 +1,16 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status, research_todo
+#import "../../draft_markers.typ": thesis_status, research_todo, prune_todo
 #import "@preview/booktabs:0.0.4": *
 
 == Geometric Learning and Candidate-Set Theory <sec:thesis-geometric-learning-theory>
+
+#prune_todo(
+  [Separate method-independent requirements that the final scorer must satisfy from speculative representation ladders and curricula. Retain only theory that is tested by the frozen method or needed to interpret its failures.],
+  source: [this section and @sec:thesis-method],
+  gate: [one implemented scorer contract and matching acceptance tests determine the surviving theory],
+)
 
 The learned object in ARIA-NBV is a typed finite-candidate decision map: given a target record, selected history, partial actor-visible geometry, and an unordered table of feasible candidate poses, assign one score to each candidate for selection under later oracle re-evaluation. The model must respect the symmetries and information boundary of this map before architectural capacity is interpreted @GeometricDeepLearning-bronstein2021.
 

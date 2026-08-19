@@ -1,4 +1,12 @@
+#import "../draft_markers.typ": validation_todo
+
 = Conclusion <sec:thesis-conclusion>
+
+#validation_todo(
+  [Rewrite the conclusion as direct, evidence-calibrated answers to RQ1--RQ4. The current conditional outcome tree is useful development guidance but is not a final scientific conclusion.],
+  source: [@sec:thesis-results; @sec:thesis-discussion],
+  gate: [confirmatory results and discussion support one concise answer per research question],
+)
 
 This thesis defines a leakage-auditable experiment for target-conditioned finite-candidate next-best-view planning. Its present contribution is the separation of actor-visible state from oracle supervision, the target-specific reconstruction objective, hard validity and replay contracts, and an artifact-driven reporting seam that keeps provenance and missingness attached to later results.
 

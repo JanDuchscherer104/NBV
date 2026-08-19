@@ -1,5 +1,4 @@
 #import "../../shared/macros.typ": *
-
 = Introduction <ch:introduction>
 
 Active reconstruction couples sensing and inference: after a fixed acquisition budget, reconstruction quality depends not only on the surface estimator but also on which feasible viewpoints were acquired. Classical active perception therefore treats sensing actions as part of perception, and view-planning work formalizes the recurring generate--score--select loop for three-dimensional inspection @ActivePerception-bajcsy1988 @ActiveVision-aloimonos1988 @ViewPlanningSurvey-scott2003. This thesis studies a deliberately bounded instance of that problem: target-conditioned view selection from a finite admissible candidate table for egocentric indoor reconstruction.

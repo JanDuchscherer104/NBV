@@ -13,6 +13,24 @@ make context-typst-outline TYPST_OUTLINE_ARGS='--paper --mode outline'
 Then read the target file, adjacent sections, and relevant files under
 `docs/typst/shared`.
 
+## Thesis Mode Contract
+
+- Unguarded thesis content is submission-facing by default.
+- Wrap drafting diaries, alternative-design registries, diagnostic prose, and
+  other development-only content lazily with `development_only(() => [...])`
+  from `draft_markers.typ`; the thunk prevents nested includes from evaluating
+  in submission mode.
+- Use `submission_only(() => [...])` only for genuinely mode-specific final
+  material.
+- TODO markers and editorial `thesis_status` blocks must fail submission
+  compilation. Rewrite their scientific substance as ordinary method,
+  limitation, result, or future-work prose before submission.
+- Mode applies to every rendered object: headings, prose, equations, figures,
+  tables, captions, footnotes, and includes. A surrounding wrapper owns all
+  nested content.
+- Validate both modes. A submission failure caused by unresolved evidence or
+  drafting markers is a successful gate, not a successful submission build.
+
 ## 2. Isolate Fragile Objects
 
 For a complex equation, table, or figure, create or update a small fixture

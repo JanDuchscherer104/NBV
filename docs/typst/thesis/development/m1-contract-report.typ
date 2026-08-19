@@ -3,7 +3,7 @@
 // This is a development-only evidence view.  Python modules, focused tests,
 // configuration, and immutable artifacts remain the owners of implementation
 // contracts and measurements.
-#development_only[
+#development_only(() => [
   #heading(level: 1, numbering: none)[M1 Contract Report] <ch:m1-contract-report>
 
   #heading(level: 2, numbering: none)[Status] <ssec:m1-status>
@@ -96,4 +96,4 @@
     gate: [representative timing receipt],
     disposition: "blocked",
   )
-]
+])
