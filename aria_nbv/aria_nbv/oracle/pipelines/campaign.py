@@ -1413,11 +1413,15 @@ class CudaRolloutCampaign:
         if not evidence.get("work_unit_hash") or evidence.get("config_hash") != plan.config_hash:
             raise RuntimeError("smoke evidence hash mismatch")
         result = evidence.get("result")
-        if not isinstance(result, dict) or result.get("outcome") != CampaignOutcome.SUCCEEDED.value:
-            raise RuntimeError("smoke evidence result must be succeeded")
-        if result.get("validated") is not True:
-            raise RuntimeError("smoke evidence result must be validated")
         unit = self._smoke_unit(plan)
+        if not isinstance(result, dict):
+            raise RuntimeError("smoke evidence result must be a typed worker result")
+        try:
+            typed_result = self.parse_worker_result(result, plan, unit)
+        except ValueError as exc:
+            raise RuntimeError("smoke evidence result identity is invalid") from exc
+        if typed_result.outcome != CampaignOutcome.SUCCEEDED.value or not typed_result.validated:
+            raise RuntimeError("smoke evidence result must be succeeded and validated")
         if evidence.get("work_unit_hash") != unit.work_unit_hash:
             raise RuntimeError("smoke evidence work-unit identity mismatch")
         for key in ("plan_hash", "work_unit_hash", "config_hash"):
