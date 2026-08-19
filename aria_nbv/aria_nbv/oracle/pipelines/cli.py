@@ -320,16 +320,10 @@ def campaign_worker(
     entry = campaign.shard_entry_for_unit(plan, unit)
     from dataclasses import replace
 
-    explicit_target = unit.explicit_target_config
-    if explicit_target is not None:
-        from .rollout_dataset import ExplicitRolloutTargetConfig
-
-        explicit_target = ExplicitRolloutTargetConfig.model_validate(explicit_target)
     writer_cfg, entry = campaign.adapt_work_unit(
         unit,
         writer_config=writer_cfg,
         shard_entry=entry,
-        explicit_target=explicit_target,
         plan_hash=plan.plan_hash,
         profile_hash=unit.profile_hash,
     )

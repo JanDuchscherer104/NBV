@@ -1352,7 +1352,7 @@ class CudaRolloutCampaign:
             if code:
                 raise RuntimeError((stderr or stdout or f"worker exited {code}")[-2000:])
             try:
-                result = self.parse_worker_json(stdout)
+                result = self.parse_worker_result(stdout, plan, unit).to_jsonable()
             except (TypeError, ValueError, json.JSONDecodeError) as exc:
                 raise RuntimeError("worker did not emit typed validated JSON") from exc
         else:
@@ -1541,9 +1541,13 @@ class CudaRolloutCampaign:
                 # production configs always carry one and take the strict path.
                 cfg = cfg.model_copy(update={"sample_keys": None})
         if explicit_target is not None and unit.explicit_target_config is not None:
-            if json.dumps(explicit_target, sort_keys=True, default=str) != json.dumps(
-                unit.explicit_target_config, sort_keys=True, default=str
-            ):
+            from .rollout_dataset import ExplicitRolloutTargetConfig
+
+            canonical_override = ExplicitRolloutTargetConfig.model_validate(explicit_target).model_dump(mode="json")
+            canonical_unit = ExplicitRolloutTargetConfig.model_validate(unit.explicit_target_config).model_dump(
+                mode="json"
+            )
+            if canonical_override != canonical_unit:
                 raise ValueError("explicit target override does not match immutable work-unit target")
         target_payload = unit.explicit_target_config if explicit_target is None else explicit_target
         if target_payload is not None and hasattr(cfg, "explicit_target"):
