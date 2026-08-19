@@ -215,6 +215,38 @@ def test_split_manifest_hash_tracks_source_rows_and_order() -> None:
     assert base != changed_source
 
 
+def test_campaign_split_is_serialized_but_excluded_from_source_hash() -> None:
+    row = RolloutShardRow(
+        order=0,
+        sample_index=1,
+        sample_key="sample",
+        scene_id="scene",
+        snippet_id="snippet",
+        split="train",
+        source_shard_id="shard-0",
+        source_shard_row=0,
+    )
+    campaign_row = replace(row, campaign_split="pilot")
+    assert row.hash_record() == campaign_row.hash_record()
+    assert row.to_jsonable() != campaign_row.to_jsonable()
+    assert _RolloutSourceLineageBuilder.build_split_manifest_hash(
+        source_manifest_hash="source", split="train", records=[row.hash_record()]
+    ) == _RolloutSourceLineageBuilder.build_split_manifest_hash(
+        source_manifest_hash="source", split="train", records=[campaign_row.hash_record()]
+    )
+
+
+def test_v2_campaign_split_hashes_fail_closed() -> None:
+    payload = {
+        "manifest_version": "rollout-shard-manifest-v2",
+        "shard_id": "shard-000000",
+        "split": "train",
+        "rows": [{"campaign_split": "pilot"}],
+    }
+    with pytest.raises(ValueError, match="incompatible; regenerate as v3"):
+        RolloutShardEntry.from_jsonable(payload)
+
+
 def test_selected_depth_renderer_config_sets_exact_size_atomically() -> None:
     base = CandidateDepthRendererConfig(output_width_px=None, output_height_px=None)
 

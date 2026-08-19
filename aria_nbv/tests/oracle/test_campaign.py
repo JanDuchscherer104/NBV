@@ -2093,6 +2093,28 @@ def test_pilot_adaptation_emits_four_ordered_myopic_recipes(tmp_path):
     assert [recipe.policy.selection_temperature for recipe in broad_adapted.recipes] == [0.5]
 
 
+def test_adaptation_preserves_campaign_split_and_revision_binding(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    entry = campaign.shard_entry_for_unit(plan, unit)
+    writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})
+
+    _, adapted_entry = campaign.adapt_work_unit(
+        unit,
+        writer_config=writer,
+        shard_entry=entry,
+        plan_hash=plan.plan_hash,
+        profile_hash=unit.profile_hash,
+    )
+
+    assert adapted_entry.campaign_split == unit.campaign_split
+    assert adapted_entry.rows[0].campaign_split == unit.campaign_split
+    assert adapted_entry.generation_revision_hash == unit.generation_revision_hash
+    assert adapted_entry.campaign_binding is not None
+    assert adapted_entry.campaign_binding.generation_revision_hash == unit.generation_revision_hash
+
+
 def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path):
     campaign = _campaign(tmp_path)
     rows = [
