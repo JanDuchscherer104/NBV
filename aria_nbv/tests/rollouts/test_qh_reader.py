@@ -93,6 +93,48 @@ def test_reader_normalizes_validation_campaign_split_without_changing_source_spl
     assert source.campaign_split is Stage.VAL
 
 
+def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)
+    for record, campaign_split in zip(records, ("train", "validation", "test"), strict=True):
+        record.lineage.source.campaign_split = campaign_split
+        record.lineage.source.scene_id = f"scene-{campaign_split}"
+    store = write_rollout_zarr_store(
+        tmp_path / "three-way.zarr",
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    ).store_dir
+
+    readers = {split: QhRolloutReader((store,), campaign_split=split) for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)}
+    assert [len(readers[split]) for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)] == [1, 1, 1]
+    assert [next(iter(readers[split].scenes)) for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)] == [
+        "scene-train",
+        "scene-validation",
+        "scene-test",
+    ]
+    assert all(len(reader.source_refs) == 1 for reader in readers.values())
+    assert all(reader.provenance["stores"][0]["state_count"] == 2 for reader in readers.values())
+    assert {readers[split][0].source_ref.source_sample_index for split in readers} == {0, 1, 2}
+
+
+def test_reader_campaign_filter_falls_back_to_legacy_physical_split(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    records[0].lineage.source.split = "train"
+    records[0].lineage.source.campaign_split = None
+    store = write_rollout_zarr_store(
+        tmp_path / "legacy-three-way.zarr",
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    ).store_dir
+
+    assert [len(QhRolloutReader((store,), campaign_split=split)) for split in Stage] == [1, 0, 0]
+
+
 def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
     reader = QhRolloutReader((store,))

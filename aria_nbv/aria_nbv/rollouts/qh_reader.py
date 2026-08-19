@@ -102,7 +102,20 @@ class _ChainRef:
 class QhRolloutReader:
     """Read compatible validated stores through bounded chain slices."""
 
-    def __init__(self, store_dirs: tuple[str | Path, ...]) -> None:
+    def __init__(
+        self,
+        store_dirs: tuple[str | Path, ...],
+        *,
+        campaign_split: Stage | str | None = None,
+    ) -> None:
+        """Open compatible stores, optionally selecting one learning split.
+
+        ``campaign_split`` selects the persisted campaign/learning assignment.
+        Legacy stores without that field fall back to their physical source
+        split for filtering; the physical split remains available on every
+        admitted source reference for immutable VIN lineage validation.
+        """
+        campaign_split = _normalize_campaign_split(campaign_split)
         paths = tuple(Path(path).expanduser().resolve() for path in store_dirs)
         if not paths:
             raise ValueError("Q_H rollout reader requires at least one store.")
@@ -110,10 +123,22 @@ class QhRolloutReader:
             raise ValueError("Q_H rollout store paths must be unique.")
 
         self.store_dirs = paths
+        self.campaign_split = campaign_split
         self._stores = tuple(_preflight_store(path, store_index) for store_index, path in enumerate(paths))
         _validate_homogeneous(self._stores)
-        self._chains = tuple(chain for store in self._stores for chain in store.chains)
-        self._source_ref_lookup = _merge_source_refs(self._stores)
+        source_ref_lookup = _merge_source_refs(self._stores)
+        self._chains = tuple(
+            chain
+            for store in self._stores
+            for chain in store.chains
+            if _matches_campaign_split(source_ref_lookup[chain.source_sample_index], campaign_split)
+        )
+        admitted_sample_indices = {chain.source_sample_index for chain in self._chains}
+        self._source_ref_lookup = {
+            sample_index: source_ref
+            for sample_index, source_ref in source_ref_lookup.items()
+            if sample_index in admitted_sample_indices
+        }
         self._source_refs = tuple(self._source_ref_lookup.values())
         self._scenes = frozenset(source.scene_id for source in self._source_refs)
         self._open_pid: int | None = None
@@ -148,8 +173,8 @@ class QhRolloutReader:
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest realized chain length across all stores."""
-        return max(store.max_horizon for store in self._stores)
+        """Return the largest realized chain length among admitted chains."""
+        return max((chain.state_stop - chain.state_start for chain in self._chains), default=0)
 
     @property
     def contract(self) -> QhDataContract:
@@ -164,9 +189,13 @@ class QhRolloutReader:
                 {
                     "path": str(store.path),
                     "manifest_sha256": store.manifest_hash,
-                    "state_count": store.state_count,
+                    "state_count": sum(
+                        chain.state_stop - chain.state_start
+                        for chain in self._chains
+                        if chain.store_index == store_index
+                    ),
                 }
-                for store in self._stores
+                for store_index, store in enumerate(self._stores)
             ],
             "contract": self.contract,
         }
@@ -219,6 +248,18 @@ def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
         chains=chains,
         source_refs=tuple(source_refs_by_row.values()),
     )
+
+
+def _normalize_campaign_split(value: Stage | str | None) -> Stage | None:
+    """Normalize a configured campaign split, treating ``all`` as unfiltered."""
+
+    return None if value is None or value == "all" else Stage.from_str(value)
+
+
+def _matches_campaign_split(source_ref: _QhSourceRef, campaign_split: Stage | None) -> bool:
+    """Return whether a source belongs to the requested campaign split."""
+
+    return campaign_split is None or (source_ref.campaign_split or source_ref.split) == campaign_split
 
 
 def _validate_reader_admission(root: zarr.Group) -> None:
