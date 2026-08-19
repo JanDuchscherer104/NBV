@@ -103,6 +103,7 @@ def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> Non
     assert all(Path(path).suffix == ".tar" for path in config["dataset"]["snippet_ids"])
     assert config["dataset"]["snippet_key_filter"] == sample_keys
     assert config["dataset"]["scene_ids"] == [row["scene_id"] for row in rows]
+    assert config["dataset"]["cache_meshes"] is False
     tar_paths = config["dataset"]["snippet_ids"]
     assert len(tar_paths) == len(sample_keys) == 100
     assert all(Path(tar).parts[-2] == row["scene_id"] for tar, row in zip(tar_paths, rows, strict=True))

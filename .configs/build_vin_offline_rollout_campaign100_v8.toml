@@ -31,6 +31,7 @@ store_dir = "vin_offline_rollout_campaign100_v8_rebuilt"
 
 [dataset]
 atek_variant = "efm"
+cache_meshes = false
 scene_ids = [
   "889", "8517", "8559", "8671", "8694", "8715", "8777", "8822", "8857", "8860",
   "8938", "81022", "81048", "81056", "81128", "81161", "81180", "81181", "81184", "81188",
