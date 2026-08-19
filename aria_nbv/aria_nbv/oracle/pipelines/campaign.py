@@ -1478,6 +1478,18 @@ class CudaRolloutCampaign:
             from .shards import run_rollout_shard
 
             shard_runner = run_rollout_shard
+        binding = getattr(shard_entry, "campaign_binding", None)
+        if binding is not None:
+            expected = {
+                "campaign_id": unit.campaign_id,
+                "work_unit_hash": unit.work_unit_hash,
+                "target_id": unit.target_id,
+                "profile_hash": unit.profile_hash,
+                "explicit_target_hash": unit.explicit_target_hash,
+                "generation_revision_hash": unit.generation_revision_hash,
+            }
+            if any(getattr(binding, field, None) != value for field, value in expected.items()):
+                raise ValueError("campaign work unit does not match shard campaign binding")
         return shard_runner(
             writer_config,
             shard_entry=shard_entry,
