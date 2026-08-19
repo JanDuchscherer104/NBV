@@ -1853,7 +1853,10 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
         "_effective_writer_and_shard_entry",
         lambda _plan, unit: (effective_writer, entries[unit.work_unit_hash]),
     )
-    prefix = [campaign._event(plan, kind) for kind in ("source_selection", "plan_ready", "campaign_started")]
+    prefix = [
+        campaign._event(plan, kind)
+        for kind in ("source_selection", "plan_ready", "preflight_passed", "smoke_passed", "campaign_started")
+    ]
     monkeypatch.setattr(
         campaign,
         "read_events",
@@ -1891,13 +1894,28 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
     (shards / plan.work_units[0].work_unit_hash / "_SUCCESS.json").write_text("{}")
     (shards / plan.work_units[1].work_unit_hash).mkdir()
     (shards / "orphan-store").mkdir()
-    prefix = [campaign._event(plan, kind) for kind in ("source_selection", "plan_ready", "campaign_started")]
+    prefix = [
+        campaign._event(plan, kind)
+        for kind in ("source_selection", "plan_ready", "preflight_passed", "smoke_passed", "campaign_started")
+    ]
     events = [
         *prefix,
         campaign._event(plan, "unit_skipped", unit=plan.work_units[0]),
         campaign._event(plan, "unit_failed", unit=plan.work_units[1]),
     ]
     monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
+    units = tuple(
+        replace(
+            unit,
+            source_row_payload={
+                "source_manifest_hash": "source",
+                "split": "train",
+                "source_store_dir": "/tmp/source",
+            },
+        )
+        for unit in plan.work_units
+    )
+    plan = replace(plan, work_units=units)
     entries = {unit.work_unit_hash: campaign.shard_entry_for_unit(plan, unit) for unit in plan.work_units}
     monkeypatch.setattr(
         campaign,
