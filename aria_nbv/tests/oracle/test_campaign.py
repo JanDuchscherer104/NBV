@@ -9,8 +9,11 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
 
+import msgspec
 import pytest
 
+from aria_nbv.data_handling.qh_data import QhDataset
+from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.oracle.pipelines.campaign import (
     CAMPAIGN_PLAN_SCHEMA_VERSION,
     CampaignOutcome,
@@ -46,6 +49,10 @@ from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+class _CampaignFixtureManifest(msgspec.Struct):
+    version: int = 7
 
 
 class _FakeCampaignProcessRunner(CampaignProcessRunner):
@@ -2199,7 +2206,9 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
         lambda: GenerationRevision("g003-v1", "commit", "tree", "lock", "bundle", "generation"),
     )
     campaign = _campaign(tmp_path)
-    plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    source_manifest = _CampaignFixtureManifest()
+    source_manifest_hash = stable_msgspec_hash(source_manifest)
+    plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash=source_manifest_hash)
     unit = plan.work_units[0]
     unit = replace(
         unit,
@@ -2210,8 +2219,8 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
             "split": "train",
             "source_shard_id": "shard-0",
             "source_shard_row": 0,
-            "source_manifest_hash": "source",
-            "source_cache_version": "campaign-v1",
+            "source_manifest_hash": source_manifest_hash,
+            "source_cache_version": "7",
             "source_store_dir": "vin_offline",
         },
     )
@@ -2225,13 +2234,34 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
         profile_hash=unit.profile_hash,
     )
 
-    source_lineage = _RolloutSourceLineageBuilder(
-        source_manifest_hash=adapted_entry.source_manifest_hash,
-        split_manifest_hash=adapted_entry.split_manifest_hash,
-        source_cache_version=adapted_entry.source_cache_version,
-        campaign_split=adapted_entry.campaign_split or adapted_entry.split,
+    dataset = SimpleNamespace(
+        manifest=source_manifest,
+        config=SimpleNamespace(split="train"),
+        _records=[
+            SimpleNamespace(
+                sample_index=adapted_entry.rows[0].sample_index,
+                sample_key=adapted_entry.rows[0].sample_key,
+                scene_id=adapted_entry.rows[0].scene_id,
+                snippet_id=adapted_entry.rows[0].snippet_id,
+                split=adapted_entry.rows[0].split,
+                shard_id=adapted_entry.rows[0].source_shard_id,
+                row=adapted_entry.rows[0].source_shard_row,
+            )
+        ],
+    )
+    source_lineage = _RolloutSourceLineageBuilder.from_dataset(
+        dataset,
+        max_samples=1,
+        campaign_split=adapted_entry.campaign_split,
     )
     RolloutDatasetWriter._validate_shard_lineage(source_lineage, adapted_entry)
+    omitted_campaign_split = _RolloutSourceLineageBuilder.from_dataset(dataset, max_samples=1)
+    with pytest.raises(ValueError, match="split manifest hash mismatch"):
+        RolloutDatasetWriter._validate_shard_lineage(omitted_campaign_split, adapted_entry)
+    alternate_unit = replace(unit, campaign_split="validation", scene_split="validation")
+    alternate_entry = campaign.shard_entry_for_unit(plan, alternate_unit)
+    assert alternate_entry.rows[0].campaign_split == "validation"
+    assert alternate_entry.split_manifest_hash != adapted_entry.split_manifest_hash
 
     records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
     source = records[0].lineage.source
@@ -2261,6 +2291,26 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
     assert reader.source_refs[0].source_sample_key == row.sample_key
     assert reader.source_refs[0].campaign_split is Stage.TRAIN
     assert reader[0].source_ref == reader.source_refs[0]
+    actor_record = VinOfflineIndexRecord(
+        sample_index=row.sample_index,
+        sample_key=row.sample_key,
+        scene_id=row.scene_id,
+        snippet_id=row.snippet_id,
+        split=row.split,
+        shard_id=row.source_shard_id,
+        row=row.source_shard_row,
+    )
+
+    class _ActorReader:
+        config = SimpleNamespace(store_dir=tmp_path / "vin_offline")
+        manifest = source_manifest
+
+        @staticmethod
+        def get_split_records(_split):
+            return [actor_record]
+
+    dataset = QhDataset(rollout_reader=reader, actor_reader=_ActorReader(), split=Stage.TRAIN)
+    assert len(dataset) == 1
     assert adapted.store.split_manifest_hash != adapted_entry.split_manifest_hash
 
 
@@ -2619,11 +2669,31 @@ def test_claim_dispositions_and_release_require_bound_hash(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("scene_count", [99, 100, 101])
-def test_plan_enforces_canonical_one_hundred_scene_gate(tmp_path, scene_count):
+def test_plan_enforces_canonical_one_hundred_scene_gate(tmp_path, scene_count, monkeypatch):
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.current_generation_revision",
+        lambda: GenerationRevision("g003-v1", "commit", "tree", "lock", "bundle", "generation"),
+    )
     campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig(output_root=tmp_path))
     rows = [_row(f"scene-{i}", f"sample-{i}", f"target-{i}") for i in range(scene_count)]
     if scene_count == 100:
-        assert campaign.plan(rows, source_manifest_hash="source").work_units
+        for row in rows:
+            row.sample_index = int(row.sample_key.removeprefix("sample-"))
+            row.snippet_id = row.sample_key
+            row.split = "train"
+            row.source_shard_id = "shard-0"
+            row.source_shard_row = row.sample_index
+            row.source_cache_version = "7"
+            row.source_manifest_hash = "source"
+            row.source_store_dir = "vin_offline"
+        plan = campaign.plan(rows, source_manifest_hash="source")
+        assert plan.work_units
+        for unit in plan.work_units:
+            entry = campaign.shard_entry_for_unit(plan, unit)
+            assert len(entry.rows) == 1
+            assert entry.rows[0].sample_key == unit.sample_key
+            assert entry.rows[0].campaign_split == unit.campaign_split
+            assert entry.campaign_split == unit.campaign_split
     else:
         with pytest.raises(ValueError, match="expected 100 scenes"):
             campaign.plan(rows, source_manifest_hash="source")
