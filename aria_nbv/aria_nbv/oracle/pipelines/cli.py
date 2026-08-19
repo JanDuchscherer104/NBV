@@ -357,11 +357,11 @@ def campaign_worker(
                 "work_unit_hash": unit.work_unit_hash,
                 "campaign_id": getattr(campaign.config, "campaign_id", plan.campaign_id),
                 "config_hash": plan.config_hash,
-                "source_identity_hash": unit.source_identity_hash,
-                "target_id": unit.target_id,
-                "profile": unit.profile,
+                "source_identity_hash": getattr(unit, "source_identity_hash", ""),
+                "target_id": getattr(unit, "target_id", ""),
+                "profile": getattr(unit, "profile", ""),
                 "profile_hash": unit.profile_hash,
-                "generation_revision_hash": unit.generation_revision_hash,
+                "generation_revision_hash": getattr(unit, "generation_revision_hash", ""),
                 "leaf_evidence": (
                     {"success_path": str(result.success_path), "owner_path": str(result.owner_path)}
                     if getattr(result, "outcome", "succeeded") in {"succeeded", "skipped"}

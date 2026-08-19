@@ -83,6 +83,54 @@ def test_reviewed_profile_components_and_worker_json(tmp_path):
         campaign.parse_worker_json('{"outcome":"succeeded"}')
 
 
+def test_typed_worker_result_rejects_missing_or_foreign_identity(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    payload = {
+        "campaign_id": plan.campaign_id,
+        "config_hash": plan.config_hash,
+        "plan_hash": plan.plan_hash,
+        "work_unit_hash": unit.work_unit_hash,
+        "source_identity_hash": unit.source_identity_hash,
+        "target_id": unit.target_id,
+        "profile": unit.profile,
+        "profile_hash": unit.profile_hash,
+        "generation_revision_hash": unit.generation_revision_hash,
+        "outcome": "succeeded",
+        "validated": True,
+        "leaf_evidence": {"success_path": "success"},
+    }
+    assert campaign.parse_worker_result(payload, plan, unit).work_unit_hash == unit.work_unit_hash
+    with pytest.raises(ValueError, match="missing immutable identity"):
+        campaign.parse_worker_result({"outcome": "succeeded", "validated": True}, plan, unit)
+    foreign = {**payload, "target_id": "foreign"}
+    with pytest.raises(ValueError, match="target_id binding mismatch"):
+        campaign.parse_worker_result(foreign, plan, unit)
+
+
+def test_typed_worker_result_rejects_validated_insufficient_support(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    payload = {
+        "campaign_id": plan.campaign_id,
+        "config_hash": plan.config_hash,
+        "plan_hash": plan.plan_hash,
+        "work_unit_hash": unit.work_unit_hash,
+        "source_identity_hash": unit.source_identity_hash,
+        "target_id": unit.target_id,
+        "profile": unit.profile,
+        "profile_hash": unit.profile_hash,
+        "generation_revision_hash": unit.generation_revision_hash,
+        "outcome": "insufficient_support",
+        "validated": True,
+        "leaf_evidence": {"success_path": "not-real"},
+    }
+    with pytest.raises(ValueError, match="cannot claim validated leaf evidence"):
+        campaign.parse_worker_result(payload, plan, unit)
+
+
 def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
     campaign = _campaign(tmp_path)
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_realistic.toml")
