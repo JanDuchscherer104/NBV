@@ -5,12 +5,7 @@ title: "G001 D1 V1 admission contract documentation"
 status: done
 topics: [target-matching, thesis, typst, memory]
 confidence: high
-canonical_updates_needed:
-  - .agents/memory/state/DECISIONS.md
-  - .agents/memory/state/OPEN_QUESTIONS.md
-  - docs/contents/thesis/questions.qmd
-  - docs/typst/shared/equations/entity.typ
-  - docs/notation.yml
+canonical_updates_needed: []
 files_touched:
   - .agents/memory/state/DECISIONS.md
   - .agents/memory/state/OPEN_QUESTIONS.md

@@ -5,9 +5,7 @@ title: "G001 PR62 admission and matching decisions"
 status: done
 topics: [cuda, rollout-campaign, target-matching, memory]
 confidence: high
-canonical_updates_needed:
-  - .agents/memory/state/DECISIONS.md
-  - .agents/memory/state/OPEN_QUESTIONS.md
+canonical_updates_needed: []
 files_touched:
   - .agents/memory/state/DECISIONS.md
   - .agents/memory/state/OPEN_QUESTIONS.md
