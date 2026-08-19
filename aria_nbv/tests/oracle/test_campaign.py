@@ -1926,6 +1926,7 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
         campaign._event(plan, "campaign_finished", outcome="completed_with_failures"),
     ]
     monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
+    monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda *_args: None)
     units = tuple(
         replace(
             unit,
