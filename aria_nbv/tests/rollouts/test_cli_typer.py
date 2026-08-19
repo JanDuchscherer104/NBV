@@ -132,6 +132,7 @@ def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, mo
                 "active_pid": 4321,
                 "active_process_group": 4321,
                 "validated_artifacts": [{"work_unit_hash": "unit"}],
+                "artifact_records": [{"work_unit_hash": "orphan", "status": "orphan"}],
             }
 
     campaign = _Campaign()
@@ -144,6 +145,7 @@ def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, mo
     assert payload["active_pid"] == 4321
     assert payload["active_process_group"] == 4321
     assert payload["validated_artifacts"] == [{"work_unit_hash": "unit"}]
+    assert payload["artifact_records"] == [{"work_unit_hash": "orphan", "status": "orphan"}]
     assert campaign.progress_calls == 1
 
 

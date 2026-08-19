@@ -193,6 +193,7 @@ def campaign_status(
         "active_pid": summary.get("active_pid"),
         "active_process_group": summary.get("active_process_group"),
         "validated_artifacts": summary.get("validated_artifacts", []),
+        "artifact_records": summary.get("artifact_records", []),
     }
     if json_output:
         typer.echo(json.dumps(payload, sort_keys=True))

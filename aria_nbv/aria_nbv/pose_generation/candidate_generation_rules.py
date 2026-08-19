@@ -186,7 +186,9 @@ class PathCollisionRule(RuleBase):
                 t_vals.view(1, -1, 1) * eligible_dists.view(-1, 1, 1)
             )
             pts_flat = pts.reshape(-1, 3)
-            dists_pts = point_mesh_distance(pts_flat, ctx.mesh_verts, ctx.mesh_faces).view(eligible_indices.shape[0], steps)
+            dists_pts = point_mesh_distance(pts_flat, ctx.mesh_verts, ctx.mesh_faces).view(
+                eligible_indices.shape[0], steps
+            )
             min_clearance = dists_pts.min(dim=1).values
             collide = (dists_pts < self.config.step_clearance).any(dim=1)
             if ctx.cfg.collect_debug_stats:

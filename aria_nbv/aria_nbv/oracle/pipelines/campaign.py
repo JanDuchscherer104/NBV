@@ -2056,6 +2056,7 @@ class CudaRolloutCampaign:
                             outcome=outcome,
                             stage="preflight",
                             elapsed_seconds=elapsed,
+                            unit_elapsed_seconds=unit_elapsed(),
                         )
                     )
                     self.write_status(
@@ -3231,7 +3232,7 @@ class CudaRolloutCampaign:
                             }
                         )
                     continue
-                if outcome != "succeeded":
+                if outcome not in {"succeeded", "skipped"}:
                     artifact_records.append(
                         {
                             "work_unit_hash": unit.work_unit_hash,

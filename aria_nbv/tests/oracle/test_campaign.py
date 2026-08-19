@@ -1210,6 +1210,7 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkey
     ]
     assert kinds[-1] == "campaign_finished"
     assert kinds.count("unit_started") == len(plan.work_units)
+    assert all(event.unit_elapsed_seconds is not None for event in campaign.read_events() if event.work_unit_hash)
 
 
 def test_run_claimed_never_marks_unvalidated_skip_complete(tmp_path):
@@ -1947,13 +1948,23 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
     )
     from aria_nbv.oracle.pipelines import shards as shard_module
 
-    monkeypatch.setattr(shard_module, "read_validated_completed_shard", lambda *_args, **_kwargs: None)
+    def read_validated(path, *, shard_entry, writer_config_hash):
+        if path.name == plan.work_units[0].work_unit_hash:
+            return {
+                "store_path": str(path.resolve()),
+                "owner_evidence": {"writer_config_hash": writer_config_hash},
+                "success_evidence": {"owner_sha256": "owner", "rollout_manifest_sha256": "manifest"},
+                "validation": "passed",
+            }
+        return None
+
+    monkeypatch.setattr(shard_module, "read_validated_completed_shard", read_validated)
     summary = campaign.progress_summary(plan)
     records = summary["artifact_records"]
-    assert any(record["status"] == "conflicting" and record["outcome"] == "skipped" for record in records)
     assert any(record["status"] == "invalid" and record["outcome"] == "failed" for record in records)
     assert any(record["status"] == "orphan" for record in records)
-    assert summary["validated_artifacts"] == []
+    assert summary["validated_artifacts"][0]["outcome"] == "skipped"
+    assert not any(record["status"] == "conflicting" for record in records)
 
 
 def test_effective_writer_hash_rebinds_base_writer_before_terminal_validation(tmp_path, monkeypatch):
