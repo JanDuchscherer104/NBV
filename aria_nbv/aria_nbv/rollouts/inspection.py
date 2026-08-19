@@ -1262,9 +1262,7 @@ def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]])
                 "collision_not_applicable_count": sum(
                     row.get("path_collision_applicable") is False for row in cohort_rows
                 ),
-                "collision_unavailable_count": sum(
-                    not _collision_evaluated(row) for row in cohort_rows
-                ),
+                "collision_unavailable_count": sum(not _collision_evaluated(row) for row in cohort_rows),
                 "collision_count": collision_count,
                 "population_collision_rate": _safe_fraction(collision_count, len(collision_available)),
                 "clearance_finite_count": len(finite_clearance),
@@ -1502,7 +1500,9 @@ def q_h_evidence_rows(
         trainable_array = q_h["q_train_mask"]
         factual_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
         factual_oracle = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_).reshape(-1)
-        oracle_by_id = {int(candidate_id): bool(factual_oracle[index]) for index, candidate_id in enumerate(factual_ids)}
+        oracle_by_id = {
+            int(candidate_id): bool(factual_oracle[index]) for index, candidate_id in enumerate(factual_ids)
+        }
         actor_count = oracle_count = trainable_count = padding_count = 0
         chunk_size = 1024
         for start in range(0, int(candidate_ids_array.shape[0]), chunk_size):

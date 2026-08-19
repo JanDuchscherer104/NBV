@@ -309,7 +309,9 @@ def _store_projection_identity(store_path: str) -> str:
     path = Path(store_path)
     try:
         digest = hashlib.sha256()
-        for child in sorted((candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()):
+        for child in sorted(
+            (candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()
+        ):
             relative = child.relative_to(path).as_posix().encode()
             payload = child.read_bytes()
             digest.update(len(relative).to_bytes(8, "big"))

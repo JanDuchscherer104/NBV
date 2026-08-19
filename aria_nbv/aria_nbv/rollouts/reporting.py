@@ -146,6 +146,8 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "empirical_denominator",
         "proposal_denominator",
         "selected_denominator",
+        "proposal_available",
+        "proposal_unavailable_reason",
         "population_empirical_frequency",
         "population_proposal_mass",
         "population_calibration_gap",
@@ -164,6 +166,9 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "generation_cohort",
         "candidate_count",
         "collision_available_count",
+        "collision_evaluated_count",
+        "collision_not_applicable_count",
+        "collision_unavailable_count",
         "collision_count",
         "collision_denominator",
         "population_collision_rate",
@@ -630,16 +635,18 @@ def _append_store_rows(
     )
     discounted_rows = list(discounted["rows"])
     if not discounted_rows:
-        discounted_rows = [{
-            "rollout_row_id": None,
-            "scene": None,
-            "policy": None,
-            "horizon": None,
-            "discount_gamma": root_attrs.get("discount_gamma"),
-            "discounted_return": None,
-            "available": False,
-            "reason": discounted.get("reason"),
-        }]
+        discounted_rows = [
+            {
+                "rollout_row_id": None,
+                "scene": None,
+                "policy": None,
+                "horizon": None,
+                "discount_gamma": root_attrs.get("discount_gamma"),
+                "discounted_return": None,
+                "available": False,
+                "reason": discounted.get("reason"),
+            }
+        ]
     rows["discounted_return"].extend(
         _with_store_id(
             store_id,
@@ -647,7 +654,9 @@ def _append_store_rows(
                 {
                     **row,
                     "contract_status": "available" if discounted.get("available") else "unavailable",
-                    "factual_rollout_count": len({r.get("rollout_row_id") for r in step_rows if r.get("rollout_row_id") is not None}),
+                    "factual_rollout_count": len(
+                        {r.get("rollout_row_id") for r in step_rows if r.get("rollout_row_id") is not None}
+                    ),
                 }
                 for row in discounted_rows
             ],
