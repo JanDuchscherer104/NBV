@@ -30,6 +30,7 @@ from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rollouts.inspection import discover_rollout_store_paths
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
+from .common import _offline_summary_rows
 
 _STATS_CACHE_KEY = "vin_offline_dataset_page_stats"
 _COVERAGE_CACHE_KEY = "vin_offline_dataset_page_coverage"
@@ -61,16 +62,6 @@ def _resolve_store(
             raise ValueError("Select an experiment config TOML.")
         return _load_offline_store_from_toml(paths.configs_dir / toml_choice)
     return VinOfflineStoreConfig(store_dir=Path(store_dir_text).expanduser())
-
-
-def _summary_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
-    """Return aggregate numeric summaries as table rows."""
-
-    return [
-        {"metric": "candidate_count", **asdict(stats.candidate_count)},
-        {"metric": "rri", **asdict(stats.rri)},
-        {"metric": "vin_points", **asdict(stats.vin_points)},
-    ]
 
 
 def _component_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
@@ -128,24 +119,6 @@ def _sample_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
             },
         )
     return rows
-
-
-def _memory_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
-    """Return memory diagnostic rows."""
-
-    return [asdict(row) for row in stats.memory_diagnostics]
-
-
-def _backbone_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
-    """Return backbone diagnostic rows."""
-
-    return [asdict(row) for row in stats.backbone_diagnostics]
-
-
-def _coverage_rows(coverage: VinOfflineCoverageStats) -> list[dict[str, object]]:
-    """Return per-scene coverage rows."""
-
-    return [asdict(row) for row in coverage.per_scene]
 
 
 def _render_histogram(
@@ -264,7 +237,7 @@ def _render_batch_memory(stats: VinOfflineDatasetStats, *, log_y: bool) -> None:
         st.info("No batch shape preview available.")
 
     st.subheader("Estimated Runtime Memory")
-    rows = _memory_rows(stats)
+    rows = [asdict(row) for row in stats.memory_diagnostics]
     if not rows:
         st.info("No memory diagnostics available.")
         return
@@ -284,7 +257,7 @@ def _render_batch_memory(stats: VinOfflineDatasetStats, *, log_y: bool) -> None:
 def _render_backbone(stats: VinOfflineDatasetStats, *, log_y: bool) -> None:
     """Render backbone numeric field diagnostics."""
 
-    rows = _backbone_rows(stats)
+    rows = [asdict(row) for row in stats.backbone_diagnostics]
     if not rows:
         st.info("No backbone numeric blocks available.")
         return
@@ -366,7 +339,7 @@ def _render_coverage(coverage: VinOfflineCoverageStats | None) -> None:
     st.caption(f"Tar shards scanned: {coverage.tar_shards_scanned}")
 
     if coverage.per_scene:
-        st.dataframe(_coverage_rows(coverage), width="stretch", hide_index=True)
+        st.dataframe([asdict(row) for row in coverage.per_scene], width="stretch", hide_index=True)
     if coverage.missing_examples:
         st.subheader("Missing in Store Examples")
         st.dataframe(
@@ -429,7 +402,7 @@ def _render_stats(
     )
 
     with tab_overview:
-        st.dataframe(_summary_rows(stats), width="stretch", hide_index=True)
+        st.dataframe(_offline_summary_rows(stats), width="stretch", hide_index=True)
         col_l, col_r = st.columns(2)
         col_l.json(stats.split_counts, expanded=True)
         col_r.json(stats.materialized_blocks, expanded=True)

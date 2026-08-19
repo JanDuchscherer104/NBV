@@ -15,7 +15,6 @@ import torch
 from matplotlib import colormaps
 
 from .data_plotting import FrameGridBuilder
-from .reporting import _pretty_label
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -178,7 +177,6 @@ def _plot_hist_counts_mpl(
 __all__ = [
     "_histogram_overlay",
     "_plot_hist_counts_mpl",
-    "_pretty_label",
     "_plot_slice_grid",
     "_scalar_to_rgb",
     "_to_numpy",

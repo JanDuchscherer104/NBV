@@ -338,12 +338,10 @@ def _finite_values(values: np.ndarray) -> list[float]:
     return [float(value) for value in finite]
 
 
-def _summary(values: list[float]) -> NumericSummary:
+def _numeric_summary(values: list[float] | np.ndarray) -> NumericSummary:
     """Summarize finite numeric values."""
 
-    if not values:
-        return NumericSummary(count=0, minimum=None, mean=None, maximum=None)
-    array = np.asarray(values, dtype=np.float64)
+    array = np.asarray(values, dtype=np.float64).reshape(-1)
     finite = array[np.isfinite(array)]
     if finite.size == 0:
         return NumericSummary(count=0, minimum=None, mean=None, maximum=None)
@@ -927,14 +925,14 @@ def collect_vin_offline_dataset_stats(
                 shard_id=record.shard_id,
                 row=int(record.row),
                 candidate_count=candidate_count,
-                rri=_summary(row_rri_values),
-                vin_points=_summary(row_vin_lengths),
+                rri=_numeric_summary(row_rri_values),
+                vin_points=_numeric_summary(row_vin_lengths),
             ),
         )
 
     numeric_bytes, block_shapes, block_diagnostics = _collect_block_diagnostics(reader)
-    component_summaries = {name: _summary(values) for name, values in component_values.items()}
-    pose_summaries = {name: _summary(values) for name, values in pose_values.items()}
+    component_summaries = {name: _numeric_summary(values) for name, values in component_values.items()}
+    pose_summaries = {name: _numeric_summary(values) for name, values in pose_values.items()}
     return VinOfflineDatasetStats(
         store_dir=store.store_dir.expanduser().resolve().as_posix(),
         version=int(reader.manifest.version),
@@ -948,9 +946,9 @@ def collect_vin_offline_dataset_stats(
             "depths": bool(reader.manifest.materialized_blocks.depths),
             "candidate_pcs": bool(reader.manifest.materialized_blocks.candidate_pcs),
         },
-        candidate_count=_summary(candidate_counts),
-        rri=_summary(rri_values),
-        vin_points=_summary(vin_lengths),
+        candidate_count=_numeric_summary(candidate_counts),
+        rri=_numeric_summary(rri_values),
+        vin_points=_numeric_summary(vin_lengths),
         numeric_bytes=int(numeric_bytes),
         block_shapes=block_shapes,
         block_diagnostics=block_diagnostics,

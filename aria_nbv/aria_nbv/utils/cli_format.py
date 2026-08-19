@@ -15,7 +15,6 @@ from typing import Any
 from rich import box
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
 from .console import Console
 
@@ -111,12 +110,6 @@ def rows_table(title: str, columns: Sequence[str], rows: Iterable[Sequence[Any]]
     return table
 
 
-def status_text(ok: bool) -> Text:
-    """Return a green `ok` or red `failed` Rich text token."""
-
-    return Text("ok", style="green") if ok else Text("failed", style="red")
-
-
 __all__ = [
     "cli_console",
     "counts_table",
@@ -124,6 +117,5 @@ __all__ = [
     "format_value",
     "key_value_panel",
     "rows_table",
-    "status_text",
     "summary_table",
 ]

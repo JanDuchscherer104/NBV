@@ -1,17 +1,15 @@
-"""Shared presentation and error-reporting helpers for Streamlit panels.
-
-The module provides ANSI cleanup, explanatory popovers, traceback rendering,
-and selected reporting utilities re-exported for consistent page behavior.
-"""
+"""Shared presentation and error-reporting helpers for Streamlit panels."""
 
 from __future__ import annotations
 
 import re
 import traceback
+from dataclasses import asdict
 
 import streamlit as st
 
-from ...utils.reporting import _linear_slope, _pretty_label, _segment_indices
+from ...data_handling.vin_store.diagnostics import VinOfflineDatasetStats
+from ...utils.reporting import _pretty_label
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -35,11 +33,20 @@ def _report_exception(exc: Exception, *, context: str) -> None:
         st.code(trace, language="text")
 
 
+def _offline_summary_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
+    """Return the shared aggregate rows for VIN offline diagnostics."""
+
+    return [
+        {"metric": "candidate_count", **asdict(stats.candidate_count)},
+        {"metric": "rri", **asdict(stats.rri)},
+        {"metric": "vin_points", **asdict(stats.vin_points)},
+    ]
+
+
 __all__ = [
     "_info_popover",
-    "_linear_slope",
+    "_offline_summary_rows",
     "_pretty_label",
     "_report_exception",
-    "_segment_indices",
     "_strip_ansi",
 ]

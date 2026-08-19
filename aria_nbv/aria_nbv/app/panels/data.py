@@ -25,15 +25,12 @@ from .common import _info_popover, _pretty_label
 
 def render_data_page(
     sample: EfmSnippetView,
-    *,
-    crop_margin: float | None = None,
 ) -> None:
     """Render modalities, poses, projections, and 3D context for one snippet.
 
     Args:
         sample: Selected EFM snippet whose source poses are world-from-rig and
             whose observed camera/semidense evidence is actor-visible.
-        crop_margin: Optional mesh crop margin in metres for display metadata.
     """
 
     st.header("Observed Snippet")

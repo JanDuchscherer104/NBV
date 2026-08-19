@@ -23,13 +23,6 @@ def ensure_unbatched_pose(pose: PoseTW) -> PoseTW:
     return pose
 
 
-def project_horizontal(v: torch.Tensor, wup: torch.Tensor) -> torch.Tensor:
-    """Project vectors `v` onto the horizontal plane defined by world up `wup`."""
-    dot = (v * wup).sum(dim=-1, keepdim=True)
-    v_h = v - dot * wup
-    return v_h / v_h.norm(dim=-1, keepdim=True).clamp_min(1e-6)
-
-
 def _axis_stats(x: torch.Tensor) -> dict[str, float]:
     return {
         "min": float(x.min()),

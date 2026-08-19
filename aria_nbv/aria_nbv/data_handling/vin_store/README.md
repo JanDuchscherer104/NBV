@@ -129,7 +129,7 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `VinOfflineCoverageStats` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
 | `VinOfflineDatasetStats` | `DTO` | `public` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
 | `_finite_values` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
-| `_summary` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
+| `_numeric_summary` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
 | `_component_key` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
 | `_collect_block_diagnostics` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
 | `_shards_by_id` | `function` | `private` | `data_handling._offline_diagnostics` | `data_handling.vin_store.diagnostics` | `data_handling.vin_store.diagnostics` | `moved` |
@@ -200,7 +200,6 @@ No top-level AST definitions; imported names and `__all__` are excluded.
 | `_path_entry` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
 | `_shard_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
 | `_block_payload` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
-| `_numeric_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
 | `_bytes_to_mib` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
 | `_print_summary` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
 | `_print_tree` | `function` | `private` | `data_handling.offline_info_cli` | `data_handling.vin_store.info_cli` | `data_handling.vin_store.info_cli` | `moved` |
