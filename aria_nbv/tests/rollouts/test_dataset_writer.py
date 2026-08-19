@@ -1078,6 +1078,8 @@ def test_rollout_source_manifest_is_profile_independent_and_roundtrips(tmp_path:
     restored = read_rollout_source_manifest(output_path)
 
     assert restored == manifest
+    assert restored.source_store_dir == config.source.store.store_dir.name
+    assert not Path(restored.source_store_dir).is_absolute()
     assert [row.sample_key for row in restored.rows] == [record.sample_key for record in records]
     assert restored.split_manifest_hash == _RolloutSourceLineageBuilder.build_split_manifest_hash(
         source_manifest_hash=restored.source_manifest_hash,

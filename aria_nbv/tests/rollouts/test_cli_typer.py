@@ -50,6 +50,34 @@ def test_build_rollouts_dry_run_parses_config_path(tmp_path, monkeypatch) -> Non
     assert "target cap" in result.output
 
 
+def test_source_manifest_command_builds_without_existing_manifest(tmp_path, monkeypatch) -> None:
+    config_path = tmp_path / "writer.toml"
+    config_path.write_text("max_samples = 1\n", encoding="utf-8")
+    output_path = tmp_path / "source.json"
+    source = object()
+    captured = {}
+    manifest = SimpleNamespace(rows=(1, 2), split="train", source_manifest_hash="hash")
+    monkeypatch.setattr(
+        rollout_cli,
+        "RolloutDatasetWriterConfig",
+        SimpleNamespace(from_toml=lambda path: SimpleNamespace(source=source)),
+    )
+    monkeypatch.setattr(
+        rollout_cli,
+        "write_rollout_source_manifest_from_config",
+        lambda value, **kwargs: captured.update(source=value, **kwargs) or manifest,
+    )
+
+    result = runner.invoke(
+        rollout_cli.plan_app,
+        ["source-manifest", "--config-path", str(config_path), "--output-manifest", str(output_path)],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {"source": source, "manifest_path": output_path}
+    assert "Planned Rollout Source Manifest" in result.output
+
+
 def test_build_rollouts_rejects_partial_shard_arguments(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "rollouts.toml"
     config_path.write_text("max_samples = 1\n", encoding="utf-8")

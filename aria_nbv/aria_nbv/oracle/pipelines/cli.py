@@ -30,9 +30,11 @@ from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import (
     RolloutShardOwnershipConflictError,
+    plan_rollout_source_manifest,
     run_rollout_shard,
     summarize_rollout_shard_campaign,
     write_rollout_shard_manifest_from_config,
+    write_rollout_source_manifest_from_config,
 )
 
 campaign_app = typer.Typer(
@@ -685,6 +687,44 @@ def plan_rollout_shards_command(
         console.print(f"Wrote rollout shard manifest: {output_manifest}")
 
 
+@plan_app.command("source-manifest")
+def plan_rollout_source_manifest_command(
+    config_path: Annotated[
+        Path,
+        typer.Option("--config-path", help="Path to a RolloutDatasetWriterConfig TOML file."),
+    ],
+    output_manifest: Annotated[
+        Path,
+        typer.Option("--output-manifest", help="Destination ordered source manifest path."),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Plan and print source rows without writing the manifest."),
+    ] = False,
+) -> None:
+    """Plan the profile-independent source manifest directly from a writer TOML."""
+
+    config_path = resolve_config_toml_path(config_path)
+    cfg = RolloutDatasetWriterConfig.from_toml(config_path)
+    if dry_run:
+        manifest = plan_rollout_source_manifest(cfg.source)
+    else:
+        manifest = write_rollout_source_manifest_from_config(cfg.source, manifest_path=output_manifest)
+    console = cli_console()
+    console.print(
+        key_value_panel(
+            "Planned Rollout Source Manifest",
+            [
+                ("rows", len(manifest.rows)),
+                ("split", manifest.split),
+                ("source manifest hash", manifest.source_manifest_hash),
+                ("output", output_manifest),
+                ("dry run", dry_run),
+            ],
+        )
+    )
+
+
 @status_app.command()
 def status_rollout_shards_command(
     shard_manifest: Annotated[
@@ -803,7 +843,8 @@ def _internal_preflight(
                     raise RuntimeError(
                         f"source-target preflight requires {expected_scene_count} scenes; found {scene_count}"
                     )
-            if not Path(manifest.source_store_dir).exists():
+            source_store = Path(writer_cfg.source.store.store_dir).expanduser().resolve()
+            if not source_store.exists():
                 raise RuntimeError("source-target preflight source store is missing")
             if plan_path is not None:
                 from .campaign import CampaignPlan

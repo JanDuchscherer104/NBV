@@ -213,7 +213,7 @@ def plan_rollout_source_manifest(source: VinOfflineDatasetConfig) -> RolloutSour
         dataset._records,
         source_manifest_hash=stable_msgspec_hash(dataset.manifest),
         source_cache_version=str(dataset.manifest.version),
-        source_store_dir=Path(source.store.store_dir).expanduser().resolve().as_posix(),
+        source_store_dir=Path(source.store.store_dir).expanduser().name,
     )
 
 
@@ -256,7 +256,7 @@ def plan_rollout_shards(
     source_manifest_hash = stable_msgspec_hash(dataset.manifest)
     writer_config_hash = stable_config_hash(config)
     source_cache_version = str(dataset.manifest.version)
-    source_store_dir = Path(config.source.store.store_dir).expanduser().resolve().as_posix()
+    source_store_dir = Path(config.source.store.store_dir).expanduser().name
 
     entries: list[RolloutShardEntry] = []
     for split, records in _records_by_split(dataset._records).items():
