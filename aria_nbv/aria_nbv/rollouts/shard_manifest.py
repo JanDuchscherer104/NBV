@@ -385,9 +385,7 @@ class RolloutShardEntry:
             payload.get("campaign_split") is not None
             or any(row.get("campaign_split") is not None for row in payload.get("rows", ()))
         ):
-            raise ValueError(
-                "rollout-shard-manifest-v2 campaign-split hashes are incompatible; regenerate as v3"
-            )
+            raise ValueError("rollout-shard-manifest-v2 campaign-split hashes are incompatible; regenerate as v3")
         return cls(
             manifest_version=str(payload["manifest_version"]),
             shard_id=canonical_rollout_shard_id(str(payload["shard_id"])),
