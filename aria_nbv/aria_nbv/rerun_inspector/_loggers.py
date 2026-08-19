@@ -369,7 +369,7 @@ def _snippet_t_world_snippet(sample: VinOfflineSample) -> PoseTW | None:
         if isinstance(value, Tensor):
             return PoseTW(value.reshape(-1, 12)[:1])
 
-    poses = getattr(sample.vin_snippet, "t_world_rig", None)
+    poses = getattr(sample.vin_snippet, "t_world_snippet", None)
     if isinstance(poses, PoseTW):
         data = poses._data.reshape(-1, 12)
         if data.shape[0] > 0:

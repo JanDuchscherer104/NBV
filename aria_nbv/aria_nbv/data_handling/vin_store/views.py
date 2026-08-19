@@ -7,7 +7,7 @@ views and persistence or batching behavior remain in their dedicated modules.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from inspect import getattr_static
 
 import torch
@@ -40,7 +40,7 @@ class VinSnippetView(_CompactReprMixin):
     t_world_rig: PoseTW
     """``PoseTW["F 12"]`` MPS/EFM world-from-rig trajectory; translation is metres."""
 
-    t_world_snippet: PoseTW = field(default_factory=lambda: PoseTW(torch.zeros((0, 12))))
+    t_world_snippet: PoseTW
     """``PoseTW["1 12"]`` persisted world-from-snippet gauge; translation is metres."""
 
     def to(self, device: str | torch.device, *, dtype: torch.dtype | None = None) -> VinSnippetView:
