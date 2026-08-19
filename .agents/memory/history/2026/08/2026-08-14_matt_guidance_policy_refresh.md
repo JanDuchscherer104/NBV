@@ -14,16 +14,25 @@ files_touched:
 
 ## Task
 
-Refresh ARIA-NBV's tracked policy for `mattpocock/skills` without importing
-generic programming principles into hot-path repository guidance.
+Review `mattpocock/skills` and *The Pragmatic Programmer* for general practices
+that improve ARIA-NBV guidance without creating another policy inventory.
 
 ## Method
 
-Compared the tracked manifest with all 35 skill entry points at upstream commit
-`8b78b531ab965735c5dc74f6f7a219e1e37326df`, checked the operator-local Codex
-installation, mapped the general engineering guidance in
-`docs/literature/pdf/the-pragmatic-programmer-20th-anniversary-edition_P3.0.pdf`,
-and retained ARIA's source-order owners for durable meaning.
+Compared the upstream skill entry points at commit
+`8b78b531ab965735c5dc74f6f7a219e1e37326df`, checked the official `skills` CLI
+selection flags, mapped the book's general engineering guidance, and retained
+ARIA's source-order owners for adopted behavior.
+
+## Literature Identity
+
+Thomas, David, and Andrew Hunt. *The Pragmatic Programmer: Your Journey to
+Mastery*, 20th Anniversary Edition. Pearson Education, 2020.
+ISBN-13 `978-0-13-595705-9`; ISBN-10 `0-13-595705-2`; P3.0 dated 2020-01-22.
+
+The untracked local PDF named in the task was inspected as local evidence for
+the printed-page crosswalk below. The bibliographic identity above, rather than
+that machine-local path, makes the reviewed edition independently identifiable.
 
 ## Pragmatic Programmer Invariants
 
@@ -55,25 +64,26 @@ preferences and procedures.
 ## Findings
 
 - `codebase-design` remains an explicit capability routed through `aria-grill`.
-- `human_owner_intent.md` now records changeability/locality and reversible
-  learning without duplicating package contracts or skill procedures.
-- `writing-for-agents` replaces `writing-great-skills` and is reference-only;
-  `.agents/references/source_order.md` remains the local guidance owner.
+- Change-locality and reversible-learning mechanics belong to the compact
+  `agent-behavior` workflow, not to unreviewed human-owner preferences.
+- External `writing-for-agents` advice remains optional evidence;
+  `.agents/skills/README.md` and its validator own ARIA skill-authoring rules.
 - `to-spec` and `to-tickets` replace the removed `to-prd` and `to-issues`
   surfaces without replacing OMX or Agents DB ownership.
 - Removed upstream skills and new Claude- or TypeScript-specific helpers do not
   become ARIA routing or truth surfaces.
-- The operator-local Codex installation already matched the selected current
-  skills, so no repository copy or wrapper was added.
+- No tracked upstream-skill inventory or install command was retained. The CLI
+  can select scope, agent, and skill, but those flags do not turn a mutable
+  upstream source into an immutable repository policy.
 
 ## Verification
 
-The manifest inventory and every `upstream_path` were compared with the pinned
-upstream tree. Focused governance tests and repository scaffold checks were run
-before publication.
+The reviewed upstream tree and official installer help were compared with the
+proposed policy. Focused governance tests and repository scaffold checks were
+run before publication.
 
 ## Canonical-State Impact
 
-The tracked external-skill policy is current at the reviewed commit. Human-owner
-intent now owns the two newly explicit cross-task preferences. Exact code, tests,
-configuration, Typst, and source order retain their existing authority.
+No external-skill inventory became repository truth. Adopted execution behavior
+lives in `agent-behavior`; exact code, tests, configuration, Typst, and source
+order retain their existing authority.
