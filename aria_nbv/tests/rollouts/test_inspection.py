@@ -428,6 +428,15 @@ def test_rollout_header_summary_requires_proven_reference_denominators(tmp_path)
     assert available["reference_source_row_gap"] == 3
     assert available["reference_source_row_fraction"] == pytest.approx(0.25)
 
+    overcovered = copy.deepcopy(payload)
+    overcovered["manifest"]["source_coverage"]["reference_scene_count"] = 0
+    overcovered["manifest"]["source_coverage"]["reference_source_row_count"] = 0
+    rejected = rollout_header_summary(reader, manifest_payload=overcovered)
+    assert rejected["reference_scene_covered"] is None
+    assert rejected["reference_scene_fraction"] is None
+    assert rejected["reference_source_rows_covered"] is None
+    assert rejected["reference_source_row_fraction"] is None
+
 
 def test_reconstruction_and_discounted_return_rows_use_factual_steps() -> None:
     rows = [

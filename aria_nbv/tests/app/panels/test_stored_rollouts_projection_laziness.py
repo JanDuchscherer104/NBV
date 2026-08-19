@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+import zarr
 
 from aria_nbv.app.panels import _stored_rollouts_page as page
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
@@ -138,6 +140,79 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
 
     assert identities[0] == identities[1]
     assert identities[2] != identities[0]
+
+
+def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "array-mutation.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=901)[:1],
+    )
+    manifest = result.store_dir / "manifest.json"
+    manifest_stat = manifest.stat()
+    identities: list[str] = []
+
+    def cached_projection(_path: str, _projection: str, *, store_identity: str, **_kwargs: object) -> object:
+        identities.append(store_identity)
+        return []
+
+    monkeypatch.setattr(page, "_cached_projection_cached", cached_projection)
+    page._cached_projection(result.store_dir.as_posix(), "header")
+    root = zarr.open_group(result.store_dir, mode="a")
+    candidate_ids = root["candidates/candidate_row_id"]
+    candidate_ids[0] = int(candidate_ids[0]) + 1
+    os.utime(manifest, ns=(manifest_stat.st_atime_ns, manifest_stat.st_mtime_ns))
+    page._cached_projection(result.store_dir.as_posix(), "header")
+
+    assert identities[1] != identities[0]
+
+
+def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Progress:
+        def __init__(self) -> None:
+            self.calls: list[tuple[float, str]] = []
+
+        def progress(self, fraction: float, *, text: str) -> None:
+            self.calls.append((fraction, text))
+
+    class Status:
+        def __init__(self) -> None:
+            self.captions: list[str] = []
+
+        def caption(self, value: str) -> None:
+            self.captions.append(value)
+
+    progress = Progress()
+    status = Status()
+    session_state: dict[str, object] = {}
+    monkeypatch.setattr(page.st, "session_state", session_state)
+    monkeypatch.setattr(page.st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(page.st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        page.st,
+        "number_input",
+        lambda label, **_kwargs: 2 if "chunk" in label else 0,
+    )
+    monkeypatch.setattr(page.st, "checkbox", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(page.st, "progress", lambda *_args, **_kwargs: progress)
+    monkeypatch.setattr(page.st, "empty", lambda: status)
+    monkeypatch.setattr(page.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(page, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(page, "_cached_store_bundle", lambda _path: (object(), object(), {}))
+    callback_results: list[bool] = []
+
+    def q_h(_reader, **kwargs):
+        callback = kwargs["progress_callback"]
+        callback_results.append(callback(2, 4))
+        return [{"available": True, "deep_count": True}]
+
+    monkeypatch.setattr(page, "q_h_evidence_rows", q_h)
+    page._render_q_h_evidence("/fixture.zarr")
+
+    assert callback_results == [True]
+    assert progress.calls == [(0.5, "Q_H count: 2/4 state rows")]
+    assert status.captions[-1] == "Q_H count stopped at a chunk boundary."
 
 
 def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: Path) -> None:

@@ -2602,15 +2602,41 @@ def _render_q_h_evidence(store_path: str) -> None:
         disabled=not deep_count,
         help="Optional bounded prefix for diagnostics; 0 counts all persisted Q_H states.",
     )
-    rows = pd.DataFrame(
-        _cached_projection(
-            store_path,
-            "q_h",
-            deep_count=deep_count,
-            q_h_chunk_size=chunk_size,
-            q_h_state_limit=None if int(state_limit_value) == 0 else int(state_limit_value),
+    state_limit = None if int(state_limit_value) == 0 else int(state_limit_value)
+    if not deep_count:
+        evidence_rows = _cached_projection(store_path, "q_h", deep_count=False)
+    else:
+        cancel_key = f"q_h_cancel:{Path(store_path).resolve().as_posix()}"
+        stop_requested = bool(
+            st.checkbox(
+                "Stop after the current Q_H chunk",
+                value=bool(st.session_state.get(cancel_key, False)),
+                key=cancel_key,
+                help="Cancellation is observed at the next bounded chunk boundary.",
+            )
         )
-    )
+        progress = st.progress(0.0, text="Preparing bounded Q_H count…")
+        status = st.empty()
+        reader, validation, _ = _cached_store_bundle(store_path)
+
+        def update_progress(completed: int, total: int) -> bool:
+            fraction = 1.0 if total <= 0 else min(1.0, float(completed) / float(total))
+            progress.progress(fraction, text=f"Q_H count: {completed:,}/{total:,} state rows")
+            status.caption(
+                "Stop requested; finishing the current chunk." if stop_requested else "Reading bounded Q_H slices…"
+            )
+            return stop_requested
+
+        evidence_rows = q_h_evidence_rows(
+            reader,
+            deep_count=True,
+            chunk_size=chunk_size,
+            state_row_limit=state_limit,
+            progress_callback=update_progress,
+            validation_result=validation,
+        )
+        status.caption("Q_H count stopped at a chunk boundary." if stop_requested else "Q_H count complete.")
+    rows = pd.DataFrame(evidence_rows)
     st.dataframe(rows, hide_index=True, width="stretch")
     if not rows.empty and not bool(rows.iloc[0].get("available", False)):
         st.info(f"Q_H evidence unavailable: {rows.iloc[0].get('blocking_reason', 'unknown reason')}")

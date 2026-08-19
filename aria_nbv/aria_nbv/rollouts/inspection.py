@@ -2007,6 +2007,17 @@ def q_h_evidence_rows(
         cancelled = False
         factual_ids_array = reader.array("candidates/candidate_row_id")
         factual_oracle_array = reader.array("candidates/oracle_label_mask")
+        try:
+            _validate_monotonic_array_chunks(factual_ids_array, chunk_size=chunk_size)
+        except ValueError as error:
+            row.update(
+                {
+                    "available": False,
+                    "blocking_reason": str(error),
+                    "count_reason": "factual candidate IDs are not monotonic",
+                }
+            )
+            return [row]
         total_state_rows = int(candidate_ids_array.shape[0])
         if state_row_limit is not None:
             total_state_rows = min(total_state_rows, int(state_row_limit))
@@ -2071,6 +2082,19 @@ def _bounded_candidate_oracle_matches(
             equal = factual_ids[valid_positions] == query[valid]
             matched += int(factual_oracle[valid_positions[equal]].sum())
     return matched
+
+
+def _validate_monotonic_array_chunks(array: Any, *, chunk_size: int) -> None:
+    """Reject factual candidate IDs that cannot be joined by bounded search."""
+
+    previous: int | None = None
+    for start in range(0, int(array.shape[0]), chunk_size):
+        values = np.asarray(array[start : min(start + chunk_size, int(array.shape[0]))], dtype=np.int64).reshape(-1)
+        if values.size == 0:
+            continue
+        if np.any(np.diff(values) < 0) or (previous is not None and int(values[0]) < previous):
+            raise ValueError("factual candidate IDs must be monotonic for bounded Q_H join")
+        previous = int(values[-1])
 
 
 def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:

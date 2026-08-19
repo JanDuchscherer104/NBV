@@ -323,6 +323,11 @@ def test_q_h_deep_count_uses_bounded_candidate_slices(tmp_path: Path, monkeypatc
     store = _write_v1_store(tmp_path / "v1.zarr")
     reader = RolloutZarrStoreReader(store)
     validation = reader.validate()
+
+    def reject_full_array(*_args, **_kwargs):
+        raise AssertionError("Q_H deep count must not convert a whole Zarr array")
+
+    monkeypatch.setattr(zarr.Array, "__array__", reject_full_array, raising=False)
     original_array = reader.array
     slice_keys: list[object] = []
 
@@ -341,10 +346,9 @@ def test_q_h_deep_count_uses_bounded_candidate_slices(tmp_path: Path, monkeypatc
             return self._array[key]
 
     def array(path: str):
-        value = original_array(path)
         if path in {"candidates/candidate_row_id", "candidates/oracle_label_mask"}:
-            return SliceOnlyArray(value)
-        return value
+            return SliceOnlyArray(reader.root[path])
+        return original_array(path)
 
     monkeypatch.setattr(reader, "array", array)
     row = q_h_evidence_rows(
@@ -375,6 +379,24 @@ def test_q_h_deep_count_supports_bounded_cancellation(tmp_path: Path) -> None:
     )[0]
     assert progress == [(1, int(reader.root["q_h/candidate_row_id"].shape[0]))]
     assert row["count_reason"] == "cancelled during bounded current-store mask projection"
+
+
+def test_q_h_deep_count_fails_closed_for_unsorted_factual_ids(tmp_path: Path, monkeypatch) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    reader = RolloutZarrStoreReader(store)
+    validation = reader.validate()
+    original_array = reader.array
+    factual_ids = np.asarray(original_array("candidates/candidate_row_id"), dtype=np.int64)
+
+    def array(path: str):
+        if path == "candidates/candidate_row_id":
+            return factual_ids[::-1]
+        return original_array(path)
+
+    monkeypatch.setattr(reader, "array", array)
+    row = q_h_evidence_rows(reader, deep_count=True, validation_result=validation)[0]
+    assert row["available"] is False
+    assert "must be monotonic" in row["blocking_reason"]
 
 
 def test_q_h_evidence_blocks_invalid_store_before_projection(tmp_path: Path) -> None:

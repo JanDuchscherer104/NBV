@@ -128,6 +128,24 @@ def test_serialized_facts_and_storage_match_cli_payload(tmp_path, capsys) -> Non
     }
 
 
+def test_report_bundle_round_trips_unavailable_discounted_return(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "discounted-unavailable.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=902)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    root.attrs["return_semantics"] = "unsupported"
+    root["q_h"].attrs["return_semantics"] = "unsupported"
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+    payload = json.loads(serialize_thesis_report_bundle(frames))
+    rows = payload["tables"]["discounted_return"]["rows"]
+    assert len(rows) == 1
+    assert rows[0]["available"] is False
+    assert rows[0]["contract_status"] == "unavailable"
+    assert rows[0]["reason"] == "unsupported return_semantics='unsupported'"
+
+
 def test_streamlit_inspection_rows_map_identically_into_bundle_frames(tmp_path) -> None:
     """Report tables should be exact projections of the row builders used by Streamlit."""
 
