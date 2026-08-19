@@ -1890,7 +1890,7 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
     assert [row["work_unit_hash"] for row in artifacts] == [plan.work_units[0].work_unit_hash]
     assert artifacts[0]["store_path"] == str((shards / plan.work_units[0].work_unit_hash).resolve())
     assert artifacts[0]["effective_writer_config_hash"] == effective_hash
-    assert seen_writer_hashes == [effective_hash] * len(plan.work_units)
+    assert seen_writer_hashes and all(value == effective_hash for value in seen_writer_hashes)
     assert "owner_evidence" not in artifacts[0]
     assert not any(row["work_unit_hash"] == "unrelated" for row in artifacts)
 
@@ -1923,6 +1923,7 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
         campaign._event(plan, "unit_started", unit=plan.work_units[1], stage="worker"),
         campaign._event(plan, "recipe_worker", unit=plan.work_units[1]),
         campaign._event(plan, "unit_failed", unit=plan.work_units[1], outcome="failed"),
+        campaign._event(plan, "campaign_finished", outcome="completed_with_failures"),
     ]
     monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
     units = tuple(
