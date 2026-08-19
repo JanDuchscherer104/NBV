@@ -419,6 +419,85 @@ class CampaignEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class CampaignWorkerResult:
+    """Immutable, plan-bound result emitted by a campaign worker."""
+
+    campaign_id: str
+    config_hash: str
+    plan_hash: str
+    work_unit_hash: str
+    source_identity_hash: str
+    target_id: str
+    profile: str
+    profile_hash: str
+    generation_revision_hash: str
+    outcome: str
+    validated: bool = False
+    reason: str | None = None
+    leaf_evidence: dict[str, Any] | None = None
+
+    def to_jsonable(self) -> dict[str, Any]:
+        """Return the complete worker contract without mutable aliases."""
+        return asdict(self)
+
+    @classmethod
+    def from_jsonable(
+        cls,
+        payload: dict[str, Any],
+        *,
+        campaign_id: str,
+        config_hash: str,
+        plan_hash: str,
+        unit: CampaignWorkUnit,
+    ) -> "CampaignWorkerResult":
+        """Validate one worker result against its immutable plan unit."""
+        required = {
+            "campaign_id",
+            "config_hash",
+            "plan_hash",
+            "work_unit_hash",
+            "source_identity_hash",
+            "target_id",
+            "profile",
+            "profile_hash",
+            "generation_revision_hash",
+            "outcome",
+        }
+        if not required.issubset(payload):
+            raise ValueError("worker result is missing immutable identity bindings")
+        bindings = {
+            "campaign_id": campaign_id,
+            "config_hash": config_hash,
+            "plan_hash": plan_hash,
+            "work_unit_hash": unit.work_unit_hash,
+            "source_identity_hash": unit.source_identity_hash,
+            "target_id": unit.target_id,
+            "profile": unit.profile,
+            "profile_hash": unit.profile_hash,
+            "generation_revision_hash": unit.generation_revision_hash,
+        }
+        for field, expected in bindings.items():
+            if str(payload.get(field, "")) != str(expected):
+                raise ValueError(f"worker result {field} binding mismatch")
+        outcome = str(payload["outcome"])
+        if outcome not in {"succeeded", "skipped", "insufficient_support"}:
+            raise ValueError("worker result has unsupported outcome")
+        validated = payload.get("validated") is True
+        evidence = payload.get("leaf_evidence")
+        if outcome in {"succeeded", "skipped"} and (not validated or not isinstance(evidence, dict)):
+            raise ValueError("successful worker result requires validated leaf evidence")
+        if outcome == "insufficient_support" and (validated or evidence not in (None, {})):
+            raise ValueError("insufficient-support result cannot claim validated leaf evidence")
+        return cls(
+            **{field: str(payload[field]) for field in bindings},
+            outcome=outcome,
+            validated=validated,
+            reason=None if payload.get("reason") is None else str(payload["reason"]),
+            leaf_evidence=None if evidence is None else dict(evidence),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CampaignStatus:
     state: str
     counts: dict[str, int]
@@ -1322,6 +1401,19 @@ class CudaRolloutCampaign:
             raise ValueError("succeeded worker result requires validated evidence")
         return value
 
+    def parse_worker_result(
+        self, payload: str | bytes | dict[str, Any], plan: CampaignPlan, unit: CampaignWorkUnit
+    ) -> CampaignWorkerResult:
+        """Parse and strictly bind a subprocess worker result to its unit."""
+        value = self.parse_worker_json(payload)
+        return CampaignWorkerResult.from_jsonable(
+            value,
+            campaign_id=self.config.campaign_id,
+            config_hash=plan.config_hash,
+            plan_hash=plan.plan_hash,
+            unit=unit,
+        )
+
     def smoke_evidence(self, plan: CampaignPlan) -> dict[str, Any]:
         path = self.config.output_root / "smoke-evidence.json"
         if not path.exists():
@@ -1436,7 +1528,12 @@ class CudaRolloutCampaign:
                 # Legacy in-memory adapters have no manifest to constrain;
                 # production configs always carry one and take the strict path.
                 cfg = cfg.model_copy(update={"sample_keys": None})
-        target_payload = explicit_target or unit.explicit_target_config
+        if explicit_target is not None and unit.explicit_target_config is not None:
+            if json.dumps(explicit_target, sort_keys=True, default=str) != json.dumps(
+                unit.explicit_target_config, sort_keys=True, default=str
+            ):
+                raise ValueError("explicit target override does not match immutable work-unit target")
+        target_payload = unit.explicit_target_config if explicit_target is None else explicit_target
         if target_payload is not None and hasattr(cfg, "explicit_target"):
             from .rollout_dataset import ExplicitRolloutTargetConfig
 
@@ -1851,7 +1948,7 @@ class CudaRolloutCampaign:
                     )
                     if returncode:
                         raise RuntimeError((stderr or stdout or f"worker exited {returncode}")[-2000:])
-                    result = self.parse_worker_json(stdout)
+                    result = self.parse_worker_result(stdout, plan, unit).to_jsonable()
                 outcome = (
                     result.get("outcome", CampaignOutcome.SUCCEEDED.value)
                     if isinstance(result, dict)

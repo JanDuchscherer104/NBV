@@ -352,10 +352,21 @@ def campaign_worker(
             {
                 "outcome": "skipped" if getattr(result, "skipped", False) else getattr(result, "outcome", "succeeded"),
                 "reason": getattr(result, "reason", None),
-                "validated": True,
+                "validated": getattr(result, "outcome", "succeeded") in {"succeeded", "skipped"},
                 "plan_hash": plan_hash,
                 "work_unit_hash": unit.work_unit_hash,
-                "leaf_evidence": {"success_path": str(result.success_path), "owner_path": str(result.owner_path)},
+                "campaign_id": campaign.config.campaign_id,
+                "config_hash": plan.config_hash,
+                "source_identity_hash": unit.source_identity_hash,
+                "target_id": unit.target_id,
+                "profile": unit.profile,
+                "profile_hash": unit.profile_hash,
+                "generation_revision_hash": unit.generation_revision_hash,
+                "leaf_evidence": (
+                    {"success_path": str(result.success_path), "owner_path": str(result.owner_path)}
+                    if getattr(result, "outcome", "succeeded") in {"succeeded", "skipped"}
+                    else None
+                ),
             },
             sort_keys=True,
         )
