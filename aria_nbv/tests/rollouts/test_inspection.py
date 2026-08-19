@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import copy
+import json
+from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
@@ -542,6 +544,68 @@ def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
 
     alias_only = [{**rows[0], "policy": "unsupported", "branch_schedule": "unsupported", "rollout_recipe": "q_h"}]
     assert exact_policy_role_rows(alias_only) == []
+
+
+def test_reader_policy_projection_excludes_incomplete_terminal_rollout(tmp_path, monkeypatch) -> None:
+    import aria_nbv.rollouts.inspection as inspection
+
+    store = zarr.open_group(tmp_path / "headroom-reader.zarr", mode="w")
+
+    def put(path: str, values: object) -> None:
+        store.create_array(path, data=np.asarray(values))
+
+    put("rollouts/rollout_row_id", [0, 1, 2])
+    put("rollouts/source_row_id", [0, 0, 0])
+    put("rollouts/target_row_id", [0, 0, 0])
+    put("rollouts/policy_id", [0, 0, 1])
+    put("rollouts/termination_reason", [0, 1, 0])
+    put("rollouts/horizon", [1, 1, 1])
+    put("rollouts/branch_factor", [1, 1, 1])
+    put("rollouts/beam_width", [1, 1, 1])
+    put("rollouts/temperature", [np.nan, np.nan, np.nan])
+    put("rollouts/random_seed", [-1, -1, -1])
+    put("rollouts/chain_id", [0, 1, 2])
+    put("rollouts/final_cumulative_target_rri", [1.0, 2.0, 3.0])
+    put("rollouts/final_cumulative_target_root_gain", [1.0, 2.0, 3.0])
+    put("sources/source_row_id", [0])
+    put("sources/sample_key_id", [0])
+    put("sources/sample_index", [0])
+    put("targets/target_row_id", [0])
+    put("targets/target_id", [0])
+    for path in (
+        "lineage/candidate_config_id",
+        "lineage/oracle_config_id",
+        "lineage/rollout_config_id",
+        "lineage/target_protocol_version_id",
+    ):
+        put(path, [0, 0, 0])
+    put("lineage/branch_schedule_id", [0, 1, 2])
+    for name, values in {
+        "policy": ["oracle_greedy", "q_h"],
+        "source_key": ["sample-a"],
+        "target": ["target-a"],
+        "config": ["oracle_greedy", "oracle_lookahead", "q_h"],
+        "termination_reason": ["completed", "incomplete_rollout"],
+    }.items():
+        payload = np.frombuffer(json.dumps(values).encode(), dtype=np.uint8)
+        put(f"dictionaries/{name}", payload)
+
+    monkeypatch.setattr(inspection, "rollout_at", lambda _reader, _index: SimpleNamespace(scene="scene-a"))
+    reader = SimpleNamespace(
+        root=store,
+        array=lambda path: store[path],
+        manifest=lambda: {
+            "root_attrs": {"manifest_sha256": "manifest"},
+            "manifest": {"generation": {"shard": {"writer_config_hash": "writer"}}},
+        },
+    )
+    evidence = inspection.oracle_headroom_evidence(reader)  # type: ignore[arg-type]
+    delta_look = next(row for row in evidence["contrast_rows"] if row["contrast"] == "delta_look")
+    assert delta_look["status"] == "excluded"
+    assert delta_look["exclusion_reason"] == "incomplete_rollout:oracle_lookahead"
+    assert all(
+        row["eligible_count"] == row["included_count"] + row["excluded_count"] for row in evidence["summary_rows"]
+    )
 
 
 def test_oracle_headroom_excludes_duplicate_roles_and_weak_eta_only() -> None:

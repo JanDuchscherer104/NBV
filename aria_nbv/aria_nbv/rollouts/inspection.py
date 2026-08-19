@@ -3958,6 +3958,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
     schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
     protocols = _decoded_array(reader, "lineage/target_protocol_version_id", "config")
+    termination_reasons = _decoded_array(reader, "rollouts/termination_reason", "termination_reason")
     horizons = np.asarray(reader.array("rollouts/horizon"), dtype=np.int64).reshape(-1)
     branch_factors = np.asarray(reader.array("rollouts/branch_factor"), dtype=np.int64).reshape(-1)
     beam_widths = np.asarray(reader.array("rollouts/beam_width"), dtype=np.int64).reshape(-1)
@@ -4009,6 +4010,7 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
             "branch_schedule": schedules[index],
             "policy": policies[index],
             "rollout_recipe": rollout_configs[index],
+            "termination_reason": termination_reasons[index],
             "manifest_sha256": root_attrs.get("manifest_sha256"),
             "writer_config_hash": shard.get("writer_config_hash") or "legacy_store_local",
             **{
