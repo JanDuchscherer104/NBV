@@ -724,7 +724,7 @@ def test_rollout_shard_without_campaign_binding_preserves_legacy_evidence(tmp_pa
     assert success["campaign_binding"] is None
 
 
-def test_rollout_shard_historical_evidence_without_binding_key_still_skips(tmp_path: Path) -> None:
+def test_rollout_shard_historical_evidence_without_binding_key_is_not_current(tmp_path: Path) -> None:
     config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
     entry = plan_rollout_shards(config, rows_per_shard=1)[0]
     final_dir = tmp_path / "final" / entry.shard_id
@@ -745,6 +745,7 @@ def test_rollout_shard_historical_evidence_without_binding_key_still_skips(tmp_p
     manifest_path = final_dir / result.store_result.manifest_path.name
     manifest = msgspec.json.decode(manifest_path.read_bytes())
     manifest["generation"]["shard"].pop("campaign_binding", None)
+    manifest["generation"]["shard"]["generation_revision_hash"] = "stale-generation-revision"
     manifest_path.write_bytes(msgspec.json.encode(manifest))
     manifest_digest = manifest_sha256(manifest)
     zarr.open_group(final_dir, mode="r+").attrs["manifest_sha256"] = manifest_digest
@@ -756,14 +757,13 @@ def test_rollout_shard_historical_evidence_without_binding_key_still_skips(tmp_p
     success["owner_sha256"] = manifest_sha256(owner)
     result.success_path.write_bytes(msgspec.json.encode(success))
 
-    resumed = run_rollout_shard(
-        config,
-        shard_entry=entry,
-        output_tmp=tmp_path / "tmp" / "retry.tmp",
-        output_final=final_dir,
-    )
-
-    assert resumed.skipped
+    with pytest.raises(RuntimeError, match="not a validated completed shard"):
+        run_rollout_shard(
+            config,
+            shard_entry=entry,
+            output_tmp=tmp_path / "tmp" / "retry.tmp",
+            output_final=final_dir,
+        )
 
 
 def test_rollout_writer_config_allows_unbounded_targets_per_sample() -> None:

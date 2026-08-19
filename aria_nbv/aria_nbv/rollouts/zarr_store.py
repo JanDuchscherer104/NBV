@@ -2724,17 +2724,10 @@ def _append_candidate_diagnostic_row(
         "path_collision_evaluated_mask",
     }
     missing_collision_debug = collision_debug_names.difference(step.candidates.extras)
-    if missing_collision_debug and missing_collision_debug not in (
-        collision_debug_names,
-        {"path_collision_applicable_mask", "path_collision_evaluated_mask"},
-    ):
+    if missing_collision_debug:
         raise ValueError(f"Missing required candidate diagnostics: {sorted(missing_collision_debug)}.")
-    legacy_collision = missing_collision_debug == {
-        "path_collision_applicable_mask",
-        "path_collision_evaluated_mask",
-    }
     rows["path_collision_mask"].append(
-        _candidate_extra_bool(step.candidates.extras, "path_collision_mask", shell_index, candidate_valid)
+        _candidate_extra_bool(step.candidates.extras, "path_collision_mask", shell_index, candidate_valid, required=True)
     )
     rows["path_collision_applicable_mask"].append(
         _candidate_extra_bool(
@@ -2742,8 +2735,7 @@ def _append_candidate_diagnostic_row(
             "path_collision_applicable_mask",
             shell_index,
             candidate_valid,
-            required=not missing_collision_debug,
-            legacy_default=legacy_collision,
+            required=True,
         )
     )
     rows["path_collision_evaluated_mask"].append(
@@ -2752,8 +2744,7 @@ def _append_candidate_diagnostic_row(
             "path_collision_evaluated_mask",
             shell_index,
             candidate_valid,
-            required=not missing_collision_debug,
-            legacy_default=legacy_collision,
+            required=True,
         )
     )
     rows["free_space_margin_m"].append(
@@ -3394,13 +3385,12 @@ def _candidate_extra_bool(
     shell_index: int,
     candidate_valid: torch.Tensor,
     required: bool = False,
-    legacy_default: bool = False,
 ) -> bool:
     value = extras.get(name)
     if value is None:
         if required:
             raise ValueError(f"Missing required candidate diagnostic {name!r}.")
-        return legacy_default
+        return False
     tensor = torch.as_tensor(value).detach().cpu().to(dtype=torch.bool)
     full = _full_shell_or_default(tensor, candidate_valid, fill_value=0)
     return bool(full[shell_index].item())

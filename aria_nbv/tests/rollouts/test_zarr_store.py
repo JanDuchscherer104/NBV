@@ -259,6 +259,14 @@ def test_rollout_zarr_validation_rejects_missing_hot_position_id(tmp_path) -> No
     for step in _steps(records[0]):
         step.transition.candidates.position_id = None
         step.transition.candidates.extras.clear()
+        n = int(step.transition.candidates.mask_valid.numel())
+        step.transition.candidates.extras.update(
+            {
+                "path_collision_mask": torch.zeros(n, dtype=torch.bool),
+                "path_collision_applicable_mask": torch.zeros(n, dtype=torch.bool),
+                "path_collision_evaluated_mask": torch.zeros(n, dtype=torch.bool),
+            }
+        )
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -299,6 +307,8 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
     path_mask[collision_shell_index] = True
     step.transition.candidates.masks["PathCollisionRule"] = ~path_mask
     step.transition.candidates.extras["path_collision_mask"] = path_mask
+    step.transition.candidates.extras["path_collision_applicable_mask"] = torch.ones_like(path_mask)
+    step.transition.candidates.extras["path_collision_evaluated_mask"] = torch.ones_like(path_mask)
     _mask_target_eval_candidate_rows(step)
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
@@ -317,6 +327,21 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
     validation = validate_rollout_zarr_store(result.store_dir)
     assert not validation.ok
     assert any("PATH_SEGMENT_COLLISION" in error for error in validation.errors)
+
+
+def test_rollout_zarr_writer_rejects_missing_collision_diagnostics(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=33)[:1]
+    step = _steps(records[0])[0]
+    for name in (
+        "path_collision_mask",
+        "path_collision_applicable_mask",
+        "path_collision_evaluated_mask",
+    ):
+        step.transition.candidates.extras.pop(name, None)
+    _mask_target_eval_candidate_rows(step)
+
+    with pytest.raises(ValueError, match="required candidate diagnostics"):
+        write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
 
 def test_rollout_zarr_validation_requires_selected_depth_when_enabled(tmp_path) -> None:
