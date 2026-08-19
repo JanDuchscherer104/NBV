@@ -31,7 +31,19 @@ uv run nbv-plan-rollout-source \
 The source-manifest command is a required post-build reconciliation step: it
 refreshes the source cache version, source-store basename, row hash, and split
 hash from the newly promoted immutable store. Do not launch a campaign using a
-pre-build copy of the tracked manifest.
+pre-build copy of the tracked manifest. The committed manifest is the reviewed
+baseline; after regeneration, update the writer's `source_offline_store_version`
+and `split_manifest_hash` fields before planning:
+
+```bash
+uv run python - <<'PY'
+import json
+from pathlib import Path
+m = json.loads(Path('../.configs/rollout_campaign100_source_manifest.json').read_text())
+print('source_offline_store_version =', repr(m['source_cache_version']))
+print('split_manifest_hash =', repr(m['split_manifest_hash']))
+PY
+```
 
 Plan the corrected paired pilot, run its smoke, launch at most ten new units,
 and inspect status:

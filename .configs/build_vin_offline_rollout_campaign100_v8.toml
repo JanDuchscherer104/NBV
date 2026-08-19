@@ -43,7 +43,7 @@ scene_ids = [
   "83730", "83746", "83780", "83803", "83833", "83836", "83998", "84001", "84003", "84009",
   "84052", "84074", "84080", "84171", "84185", "84186", "84230", "84271", "84309", "84320",
 ]
-tar_urls = [
+snippet_ids = [
   ".data/ase_efm/889/shards-0001.tar", ".data/ase_efm/8517/shards-0000.tar", ".data/ase_efm/8559/shards-0000.tar", ".data/ase_efm/8671/shards-0005.tar", ".data/ase_efm/8694/shards-0003.tar",
   ".data/ase_efm/8715/shards-0001.tar", ".data/ase_efm/8777/shards-0001.tar", ".data/ase_efm/8822/shards-0002.tar", ".data/ase_efm/8857/shards-0004.tar", ".data/ase_efm/8860/shards-0005.tar",
   ".data/ase_efm/8938/shards-0006.tar", ".data/ase_efm/81022/shards-0002.tar", ".data/ase_efm/81048/shards-0005.tar", ".data/ase_efm/81056/shards-0002.tar", ".data/ase_efm/81128/shards-0003.tar",
