@@ -63,6 +63,16 @@ def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
     )
 
 
+def _backticked_owner_anchors(text: str) -> list[tuple[str, str]]:
+    """Return repository file/anchor references that can be checked exactly."""
+    references: list[tuple[str, str]] = []
+    for value in re.findall(r"`([^`\n]+#[^`\n]+)`", text):
+        relative, anchor = value.rsplit("#", maxsplit=1)
+        if (ROOT / relative).is_file():
+            references.append((relative, anchor))
+    return references
+
+
 def test_plugin_boundary() -> None:
     assert not (ROOT / ".codex-plugin").exists()
     assert not (ROOT / "plugins" / "mempalace-aria-nbv").exists()
@@ -165,7 +175,7 @@ def test_mandatory_graphify_routing_scenarios() -> None:
         in fixtures["graphify-codebase-navigation"]["required_outcomes"]
     )
     assert (
-        "fresh Graphify is queried before direct search"
+        "Graphify query handles broad questions, path handles relationships, and explain handles focused concepts before raw search"
         in fixtures["graphify-codebase-navigation"]["required_outcomes"]
     )
     assert (
@@ -197,6 +207,10 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
     ]
     assert "supplied exact Context7 ID skips resolution" in fixture["required_outcomes"]
     assert (
+        "one focused seed query is issued per external concept"
+        in fixture["required_outcomes"]
+    )
+    assert (
         "Context7 is required for local owner lookup" in fixture["forbidden_outcomes"]
     )
 
@@ -212,12 +226,9 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
     provenance = _read(
         ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md"
     )
-    assert (
-        "supplied exact ID directly; otherwise resolve it, then get current docs"
-        in context
-    )
+    assert "Use a supplied exact ID directly. Otherwise resolve" in context
     assert "/graphify-labs/graphify" in registry
-    assert "pinned skill/source" in registry
+    assert "seed menu, not one broad query" in registry
     assert "exact resolved" in provenance
     assert "paired `repo:` anchors" in provenance
 
@@ -231,19 +242,23 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     )
     amendment = "### Accepted 2026-08-01 Graphify remediation amendment"
     supersession = "## Accepted 2026-08-14 Mandatory Graphify Supersession"
+    lifecycle = "## Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession"
     assert spec.index(amendment) < spec.index(supersession)
+    assert spec.index(supersession) < spec.index(lifecycle)
     assert "Graphify as a navigation prerequisite in every\nCodex worktree" in spec
     assert "Graphify chooses navigation context; it never settles behavior" in spec
+    assert "upstream Graphify `query`, `path`, or\n`explain` before raw search" in spec
 
     root_guidance = _read(ROOT / "AGENTS.md")
-    assert "## Graphify" in root_guidance
-    assert "query the byte-identical\n  upstream Graphify skill first" in root_guidance
+    assert "## Graphify And Context7" in root_guidance
+    assert "upstream Graphify `query`, `path`, and `explain`" in root_guidance
     optional_tools = root_guidance.split("## Optional Tools And Capture", maxsplit=1)[1]
     assert "Graphify" not in optional_tools
 
     source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
     intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
-    assert "Graphify is mandatory navigation in Codex worktrees" in source_order
+    assert "Graphify is the primary broad-context navigation map" in source_order
+    assert "Context7 is current external API/version evidence" in source_order
     assert (
         "Require the Graphify executable and usable graph artifacts as navigation"
         in intent
@@ -283,8 +298,8 @@ Rules:
         assert "optional Graphify" not in _read(owner)
 
     root_guidance = _read(ROOT / "AGENTS.md")
-    assert "## Graphify" in root_guidance
-    assert "Graph output is derived navigation, never authority." in root_guidance
+    assert "## Graphify And Context7" in root_guidance
+    assert "then opens exact owners before consequential" in root_guidance
 
 
 def test_route_only_domain_skill_contract() -> None:
@@ -344,6 +359,7 @@ def test_capture_and_routing_contracts() -> None:
     agent_behavior_path = ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md"
     assert agent_behavior_path.is_file()
     agent_behavior = _read(agent_behavior_path)
+    assert len(agent_behavior.splitlines()) <= 100
     assert "**Workpackage completion, Git, or external action:**" in agent_behavior
     reference_paths = {
         link.split("#", 1)[0]
@@ -403,35 +419,68 @@ def test_capture_and_routing_contracts() -> None:
         "a focused local commit creates a rollback boundary before unrelated work"
     ]
 
+    capture = fixtures["deliberate-angle-bracket-capture-read-only"]
+    assert capture["expected_owner_paths"] == [
+        "AGENTS.md",
+        ".agents/skills/agent-behavior/SKILL.md",
+        ".agents/skills/agent-behavior/references/durable-capture.md",
+        ".agents/references/source_order.md",
+    ]
+    assert (
+        "deliberate user-authored angle-bracket prose activates durable capture"
+        in (capture["required_outcomes"])
+    )
+    assert "read-only wording disables capture routing" in capture["forbidden_outcomes"]
+    assert "Deliberate user-authored `<...>` prose" in root_guidance
+    assert "including a read-only capture request" in root_guidance
+    assert "markup tags" in agent_behavior
+
 
 def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
     docs_guidance = _read(ROOT / "docs" / "AGENTS.md")
-    typst_references = (
-        (
-            "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ",
-            "<fig:qh-actor-oracle-contract>",
-        ),
-        (
-            "docs/typst/thesis/sections/01-research-questions.typ",
-            "<ssec:rq5>",
-        ),
-        ("docs/typst/thesis/development/roadmap.typ", "<ssec:milestones>"),
+    anchors = _backticked_owner_anchors(docs_guidance)
+    assert anchors == [
+        ("docs/typst/thesis/sections/01-research-questions.typ", "ssec:rq3"),
+        ("docs/typst/thesis/sections/01-research-questions.typ", "ssec:rq5"),
+        ("docs/typst/thesis/development/roadmap.typ", "ssec:promotion-queue"),
+    ]
+    for relative_path, anchor in anchors:
+        assert f"<{anchor}>" in _read(ROOT / relative_path)
+    assert "privileged V0/GT target path is only a sanity or upper-bound route" in (
+        docs_guidance
     )
-    for relative_path, label in typst_references:
-        source = ROOT / relative_path
-        assert source.is_file()
-        assert f"{relative_path}#" in docs_guidance
-        assert label in _read(source)
+    assert "conditional online bridge is RQ5" in docs_guidance
+    assert "M6 scope decision pending M5 evidence" in docs_guidance
     assert "V0 GT actor-visible-target runs as main V1 performance" not in docs_guidance
     assert "only after offline `Q_H` evidence is stable" not in docs_guidance
 
+    fixtures = {
+        fixture["id"]: fixture
+        for fixture in json.loads(
+            _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+        )["fixtures"]
+    }
+    hazard = fixtures["docs-qh-scientific-hazard-routing"]
+    assert _fixture_owner_paths_exist(ROOT, hazard)
+    assert (
+        "privileged V0/GT routes to RQ3 as a sanity or upper-bound path"
+        in (hazard["required_outcomes"])
+    )
+    assert (
+        "a stale milestone anchor substitutes for the promotion queue"
+        in (hazard["forbidden_outcomes"])
+    )
+
     source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
+    assert "## Compositional Owner Tree" in source_order
+    assert "Ubiquitous language" in source_order
+    assert "docs/typst/shared/glossary.typ" in source_order
     capture_rule = source_order.split("## Capture Rule", maxsplit=1)[1]
     for destination in (
-        "root or nearest nested `AGENTS.md`",
-        "`.agents/skills/*/SKILL.md`",
+        "Repo invariant: root or nearest nested `AGENTS.md`",
+        "Repeatable workflow: `.agents/skills/*/SKILL.md`",
         "Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or",
-        "Public narrative: Quarto or Typst docs.",
+        "Public narrative: active Quarto or Typst owner.",
     ):
         assert destination in capture_rule
 
@@ -445,9 +494,9 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
 
     for route in (
         "Mermaid and thesis-diagram work uses `aria-nbv-mermaid`",
-        "Backlog or memory maintenance uses `agents-db`",
-        "behavior-preserving cleanup\n  uses `simplification`",
-        "LRZ remote compute uses `lrz-ai-systems`",
+        "Backlog or memory changes use\n  `agents-db`",
+        "cleanup uses `simplification`",
+        "LRZ work uses `lrz-ai-systems`",
         "offline/\n  rollout inspection work uses `rerun-nbv-inspector`",
     ):
         assert route in root_guidance
@@ -535,6 +584,32 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     assert "`pyproject.toml` owns executable formatter/linter" in package_guidance
     assert "Binding short-form rules live in" not in conventions
     assert "This file owns the generic non-docstring Python" in conventions
+    python_skill = _read(ROOT / ".agents" / "skills" / "python-standards" / "SKILL.md")
+    examples_path = (
+        ROOT
+        / ".agents"
+        / "skills"
+        / "python-standards"
+        / "references"
+        / "canonical-examples.md"
+    )
+    examples = _read(examples_path)
+    assert "references/canonical-examples.md" in python_skill
+    for example in (
+        "## Module Docstring",
+        "## Theory-Rich Function Docstring",
+        "## Config Or Datamodel Field Docs",
+        "## Sequencing Example",
+    ):
+        assert example in examples
+    for implementation_snippet in (
+        "High-level oracle RRI computation orchestrator",
+        "def compute_rri(",
+        "class OracleRRIConfig(",
+        "def run(self, sample: EfmSnippetView)",
+    ):
+        assert implementation_snippet not in python_skill
+        assert implementation_snippet in examples
     for contract in (
         "targeted regression",
         "public\n  interface",
@@ -610,6 +685,13 @@ def test_thesis_context_and_context7_routing() -> None:
         "/zarr-developers/zarr-python",
     ):
         assert superseded_id not in context7_registry
+    assert "seed menu, not one broad query" in context7_registry
+    for graphify_seed in (
+        "query, path, and explain command selection and output contracts",
+        "post-commit and post-checkout hook installation behavior",
+        "incremental code refresh versus semantic invalidation for changed docs",
+    ):
+        assert graphify_seed in context7_registry
 
     typst_skill = _read(ROOT / ".agents" / "skills" / "typst-authoring" / "SKILL.md")
     for library_id in (

@@ -37,6 +37,20 @@ use `fork_turns="none"` and account for every dispatched file. Incomplete or
 unreconciled refreshes remain strict-gate stale, retain the last valid snapshot for
 navigation, and require direct verification of affected sources.
 
+## Upstream Lifecycle And Hooks
+
+- ARIA pins Graphify 0.9.47 and keeps the Codex skill byte-identical to upstream
+  commit `b14b52e94ec3d9840413d81777f4c134eac0a40d`.
+- `graphify hook install` is the upstream post-commit and post-checkout
+  accelerator. It refreshes changed code without semantic extraction and marks
+  changed documents, papers, or images for a later semantic update.
+- Upstream intentionally skips hook rebuilds inside linked Git worktrees. ARIA
+  therefore keeps worktree-local seeding, state classification, and repair in
+  this route; hook presence or success never proves worktree freshness.
+- `graphify codex install` supplies generic always-on guidance, but ARIA's root
+  dispatcher already owns the narrower source-order and exact-owner contract.
+  Do not install a second generated Graphify section over that owner.
+
 ## Corpus And Upstream Ownership
 
 - ARIA owns the freshness preflight, `.graphifyignore`, the ignored Markdown
@@ -62,8 +76,8 @@ navigation, and require direct verification of affected sources.
 
 ## Marker And Worktree Rules
 
-- Graphify 0.9.31 writes `graphify-out/needs_update`, while the host-agent
-  runbook clears the historical `.needs_update` spelling. Remove
+- Graphify 0.9.47 writes `graphify-out/needs_update`, while the host-agent
+  runbook also clears the historical `.needs_update` spelling. Remove
   `graphify-out/needs_update` only after refresh, coverage, and reconciliation
   all pass; leave it after partial, failed, or unverified work.
 - Every linked worktree runs `scripts/setup_worktree_env.sh`. Only the shared

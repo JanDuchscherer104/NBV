@@ -99,8 +99,8 @@ this operational detail, while root `AGENTS.md` remains a compact pointer.
 This amendment supersedes the two ownership sentences above that place an
 ARIA-NBV preflight or operational detail inside the project-installed Graphify
 skill. The complete skill bundle under `.agents/skills/graphify/` remains
-byte-identical to upstream Graphify 0.9.31 at commit
-`4fe11092ccbe9f543608f140c790f68d5d83cae4`; `aria-nbv-context` owns all
+byte-identical to upstream Graphify 0.9.47 at commit
+`b14b52e94ec3d9840413d81777f4c134eac0a40d`; `aria-nbv-context` owns all
 ARIA-NBV-specific eligibility, projection, freshness, exact-source fallback,
 and current-client compatibility instructions.
 
@@ -146,6 +146,31 @@ artifacts, not an alternative to querying a usable graph first. Graphify setup,
 freshness classification, and hosted contract validation are repository
 requirements; mutable graphs and semantic extraction remain worktree-local
 rather than authoritative shared state.
+
+## Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession
+
+The human owner now prioritizes intelligent Graphify and Context7 routing over
+flat direct-search guidance. For eligible architecture, ownership,
+relationship, or broad project-context questions, `aria-nbv-context` traverses
+the compositional owner tree and uses upstream Graphify `query`, `path`, or
+`explain` before raw search whenever the freshness gate reports a usable graph.
+It then opens the exact owner; Graphify remains navigation evidence, never the
+owner it locates.
+
+The project-installed bundle advances to byte-identical upstream Graphify
+0.9.47 at commit `b14b52e94ec3d9840413d81777f4c134eac0a40d`. Upstream Git hooks are the
+default local accelerator for primary-checkout post-commit and post-checkout
+code refresh. Hook presence or success does not prove semantic-document
+freshness, and upstream hooks intentionally skip linked worktrees; ARIA's
+worktree initialization, freshness classification, repair, and degraded route
+therefore remain behind `aria-nbv-context`.
+
+Context7 is selected only when a consequential decision depends on current
+external API or version behavior after the local owner and installed call site
+are known. Exact library IDs and focused one-concept seed queries live in the
+context reference instead of root guidance. Current external docs remain
+supporting evidence and cannot override installed behavior, focused tests, or
+ARIA's exact owner.
 
 ## Intent
 

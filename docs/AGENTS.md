@@ -17,12 +17,12 @@ owners conflict.
   claims. `typst/shared/style.typ` owns thesis-to-code link behavior.
 - Keep public docs aligned with these owners. Do not expose agent guidance,
   generated context, OMX state, or rendered artifacts as public source content.
-- For the Q_H actor/oracle contract, use
-  `docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ#fig:qh-actor-oracle-contract`.
-  For the conditional online bridge, use
-  `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq5`; for the
-  development gate, use
-  `docs/typst/thesis/development/roadmap.typ#ssec:milestones` (M5 entry).
+- The privileged V0/GT target path is only a sanity or upper-bound route; use
+  `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3`. The
+  conditional online bridge is RQ5 at
+  `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq5`. Its
+  development gate is the M6 scope decision pending M5 evidence at
+  `docs/typst/thesis/development/roadmap.typ#ssec:promotion-queue`.
 
 ## Procedure And Proof
 

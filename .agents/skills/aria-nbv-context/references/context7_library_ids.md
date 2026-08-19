@@ -1,69 +1,92 @@
-# Context7 Library IDs
+# Context7 Library IDs And Query Seeds
 
-This is the fallback inventory for external library documentation. Prefer the
-localized domain skill's smaller `metadata.context7_refs` list; use this file
-only when no retained skill owns the external API question.
+Use this fallback only when no narrower skill owns the external API question.
+Open the local owner and installed call site first. Use a supplied exact ID
+directly; otherwise resolve the library, then issue one focused query per
+concept. Each backticked list below is a seed menu, not one broad query: select
+only the API or behavior needed for the current decision. Verify consequential
+answers against the installed version, local source/tests, and exact ARIA
+owner.
 
-## Use order
+## Navigation And Publication
 
-1. Open the local package/docs owner and installed call site first.
-2. Use a supplied exact ID directly. Otherwise call
-   `mcp__MCP_DOCKER.resolve_library_id`, then pass its exact resolved ID to
-   `mcp__MCP_DOCKER.get_library_docs` for the smallest topic-specific slice.
-3. For consequential API or dependency changes, record the current-doc version
-   context and verify the answer against the installed version, local source, and
-   focused tests. Context7 evidence never replaces ARIA behavior or scientific
-   owners.
+- `/graphify-labs/graphify`
+  - `query, path, and explain command selection and output contracts`
+  - `post-commit and post-checkout hook installation behavior`
+  - `incremental code refresh versus semantic invalidation for changed docs`
+- `/websites/typst_app` — `labels, references, imports, context, show rules, and
+  compile behavior for the exact Typst construct in use`.
+- `/typst-community/glossarium` — `term registration, short forms, references,
+  grouping, and glossary printing`.
+- `/cetz-package/cetz` — `canvas coordinates, projections, transforms, anchors,
+  and drawing primitives for the selected figure`.
+- `/jollywatt/typst-fletcher` — `diagram nodes, edges, labels, layouts, and CeTZ
+  integration`.
+- `/touying-typ/touying` — `slide composition, sections, counters, pauses, and
+  reveal behavior`.
+- `/websites/quarto` — `cross-references, project navigation, filters, metadata,
+  and render behavior for the selected output format`.
+- `/mermaid-js/mermaid` — `syntax and renderer behavior for the selected diagram
+  type and installed Mermaid version`.
 
-## Graphify
+## Aria, Data, Geometry, And Learning
 
-- `/graphify-labs/graphify` - Current upstream Graphify API and lifecycle docs
-  for consequential or uncertain external-library behavior. The byte-identical
-  pinned skill/source, its focused identity tests, and the exact ARIA owner still
-  decide installed behavior and repository policy.
+- `/facebookresearch/atek` — `ASE snippet schema, field semantics, dataset
+  loading, and vendor-aligned sample conventions`.
+- `/websites/facebookresearch_github_io_projectaria_tools` — `camera calibration,
+  trajectories, coordinate frames, VRS access, and pose transforms`.
+- `/facebookresearch/efm3d` — `Aria snippet structures, tensor wrappers, camera
+  conventions, and EFM3D backbone outputs`.
+- `/pytorch/pytorch` — `tensor, DataLoader, serialization, device, dtype, and
+  execution semantics for the exact installed API`.
+- `/facebookresearch/pytorch3d` — `PerspectiveCameras, transforms, rasterization,
+  depth conventions, and camera coordinate systems`.
+- `/mikedh/trimesh` — `mesh loading, scene transforms, simplification, proximity,
+  and geometric query behavior`.
+- `/dfki-ric/pytransform3d` — `transform composition, inversion, quaternion or
+  matrix conversion, and frame conventions`.
+- `/isl-org/open3d` — `point-cloud, mesh, visualization, and geometry inspection
+  APIs`.
+- `/e3nn/e3nn` — `irreducible representations, spherical harmonics, equivariant
+  tensor products, and normalization conventions`.
+- `/farama-foundation/gymnasium` — `Env reset/step contracts, termination versus
+  truncation, spaces, wrappers, and environment checking`.
+- `/dlr-rm/stable-baselines3` — `PPO, Dict observations, MultiInputPolicy,
+  check_env, callbacks, save/load, and evaluation`.
+- `/dlr-rm/rl-baselines3-zoo` — `SB3 training recipes, evaluation protocol, and
+  hyperparameter conventions for the selected algorithm`.
 
-## Typst publication packages
+## Configuration, Storage, Training, And UI
 
-- `/websites/typst_app` - Typst language and standard-library documentation.
-- `/typst-community/glossarium` - Glossarium term registration, references, and
-  printing behavior used by the shared glossary.
-- `/cetz-package/cetz` - CeTZ canvas, coordinates, projections, and drawing APIs.
-- `/jollywatt/typst-fletcher` - Fletcher diagrams, nodes, edges, and CeTZ
-  integration.
-- `/touying-typ/touying` - Touying slide composition and reveal behavior.
-- `/websites/quarto` - Quarto documentation and publishing behavior.
+- `/websites/hydra_cc` — `configuration composition, defaults lists, overrides,
+  working directories, and multirun behavior`.
+- `/omry/omegaconf` — `structured configs, interpolation, merging, missing values,
+  and container conversion`.
+- `/pydantic/pydantic` — `BaseModel validation, Field constraints, serializers,
+  model validators, and settings for the installed major version`.
+- `/websites/jcristharif_msgspec` — `Struct definitions, JSON encoding/decoding,
+  tagged unions, validation, and schema evolution`.
+- `/websites/zarr_readthedocs_io_en_stable` — `array creation, chunking, codecs,
+  groups, stores, metadata, append/resize, and concurrency`.
+- `/websites/astral_sh_uv` — `workspace sync, lock files, tool installation,
+  dependency groups, environments, and command execution`.
+- `/lightning-ai/pytorch-lightning` — `Trainer and LightningModule lifecycle,
+  hooks, checkpointing, validation, callbacks, and distributed behavior`.
+- `/wandb/wandb` — `run lifecycle, metric logging, artifacts, resume, sweeps, and
+  Lightning integration`.
+- `/websites/optuna_readthedocs_io_en_stable` — `study and trial lifecycle,
+  samplers, pruners, storage, conditional search spaces, and distributed runs`.
+- `/plotly/plotly.py` — `figure traces, subplots, callbacks, serialization, and
+  interactive rendering`.
+- `/websites/streamlit_io` — `session state, caching, reruns, widgets, fragments,
+  and app execution semantics`.
+- `/rerun-io/rerun` — `recording streams, entity paths, timelines, transforms,
+  blueprints, sinks, and saved RRD artifacts`.
+- `/websites/mojolang` — `Python interop, importable Mojo modules, FFI, GPU
+  kernels, ownership, and packaging`.
 
-## Package, data, geometry, and operations
+## Local-First Exceptions
 
-- `/facebookresearch/atek` - Aria Training and Evaluation Kit. Used for raw ASE/ATEK snippet semantics, dataset field conventions, and vendor-aligned loader behavior.
-- `/websites/facebookresearch_github_io_projectaria_tools` - Project Aria Tools docs. Used for Aria calibration, trajectory, and VRS/pose tooling behavior that surfaces through our data and rendering stacks.
-- `/facebookresearch/efm3d` - Egocentric Foundation Models for 3D understanding. Used for the vendored EFM3D backbone, tensor wrappers, and Aria snippet structures that our training/data pipeline builds on.
-- `/websites/hydra_cc` - Hydra configuration composition and runtime behavior.
-- `/omry/omegaconf` - OmegaConf containers, interpolation, merging, and structured configuration behavior used beneath Hydra.
-- `/websites/mojolang` - Mojo language docs from Modular. Used for official guidance on Python interop, Python-importable Mojo modules, FFI, and GPU kernel primitives when evaluating targeted acceleration work for `aria_nbv`.
-- `/lightning-ai/pytorch-lightning` - PyTorch Lightning. Used for trainer/datamodule behavior, callback integration, and fit/validation loop semantics in the VIN training stack.
-- `/mikedh/trimesh` - Mesh processing and analysis. Used for processed ASE mesh loading, simplification, and geometric utilities in mesh-cache and rendering helpers.
-- `/wandb/wandb` - Weights & Biases. Used for experiment tracking, logging, and sweep integration in Lightning training workflows.
-- `/websites/optuna_readthedocs_io_en_stable` - Optuna. Used for hyperparameter search and trial orchestration around the Lightning training entrypoints.
-- `/pytorch/pytorch` - PyTorch. Used for tensor semantics, dataset/dataloader behavior, serialization compatibility, and model execution throughout the package.
-- `/facebookresearch/pytorch3d` - PyTorch3D. Used for candidate depth rendering, camera representations, and geometric transforms in oracle labeling and diagnostics.
-- `/plotly/plotly.py` - Plotly. Used for interactive diagnostics and visualization in app/reporting surfaces.
-- `/dfki-ric/pytransform3d` - pytransform3d. Used for transform conversions and pose utilities where projectaria/EFM wrappers are not sufficient.
-- `/isl-org/open3d` - Open3D. Used for point-cloud visualization and geometry inspection utilities.
-- `/farama-foundation/gymnasium` - Gymnasium. Used for custom RL environment interfaces, reset/step contracts, and observation/action-space definitions for sequential counterfactual pose selection.
-- `/dlr-rm/stable-baselines3` - Stable Baselines3. Used for PPO-ready training, environment validation (`check_env`), and Dict-observation `MultiInputPolicy` baselines over counterfactual candidate shells.
-- `/dlr-rm/rl-baselines3-zoo` - RL Baselines3 Zoo. Used as a reference surface for practical SB3 training/evaluation recipes and hyperparameter conventions when the repo adds larger RL experiments.
-- `/pydantic/pydantic` - Pydantic. Used for strongly typed configs, validation, and config-as-factory patterns across the runtime.
-- `/websites/jcristharif_msgspec` - msgspec. Used for typed manifest/index serialization and safe structured payload encoding in the new offline data stack.
-- `/websites/streamlit_io` - Streamlit. Used for the interactive dashboard/app surfaces that inspect cache, VIN, and attribution outputs.
-- `/rerun-io/rerun` - Rerun. Used for viewer/logging APIs, entity paths, timelines, frame transforms, and saved `.rrd` inspector artifacts.
-- `/mermaid-js/mermaid` - Mermaid. Used for diagram syntax and renderer behavior when local lint/render checks need external syntax confirmation.
-- `/websites/astral_sh_uv` - uv. Used for environment synchronization, dependency locking, and local command execution conventions in the Python workspace.
-- `/websites/zarr_readthedocs_io_en_stable` - Zarr Python. Used for dense numeric shard storage in the immutable VIN offline dataset format.
-- `/e3nn/e3nn` - e3nn. Used only when a plan explicitly touches equivariant or spherical-harmonic feature work.
-
-## Project-specific note
-
-For EFM3D, ATEK, and Project Aria tools, prefer the vendored source under
-`external/` and the owning package source, tests, and `AGENTS.md` before broad
-external lookup.
+For EFM3D, ATEK, and Project Aria tools, inspect `external/`, the nearest
+package source/tests, and its `AGENTS.md` before Context7. External docs explain
+the dependency; they do not own ARIA's wrapper behavior or scientific meaning.

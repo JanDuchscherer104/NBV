@@ -1,39 +1,36 @@
 ---
 name: aria-nbv-context
-description: Use for mandatory Graphify-first ARIA-NBV codebase discovery, deterministic owner localization, or optional semantic recall before handoff.
+description: Use for Graphify-first ARIA-NBV owner-tree traversal, broad project relationships, or current Context7 evidence before handing work to an exact owner.
 metadata:
   mode: router
   not_when:
-    - "exact file and owner are already known"
+    - "the exact local owner is already known and no external API/version uncertainty remains"
     - "a concrete failure command or traceback owns the task"
   handoff_to:
-    - "graphify for an existing usable graph"
+    - "graphify for a usable broad-context navigation graph"
     - "typst-authoring for thesis, glossary, shared-symbol, or shared-equation edits"
-    - "nearest owning guide for concrete failures"
-    - "nearest AGENTS.md or narrow skill after localization"
+    - "nearest owning guide for concrete implementation or documentation work"
+    - "nearest failure owner for a reproducer or traceback"
   evidence_required:
-    - "localized owning files or source family"
-    - "nearest applicable AGENTS.md"
-    - "targeted rg or generated context evidence"
-    - "freshness evidence before any Graphify-backed claim"
-    - "exact-source verification after any MemPalace result"
-    - "active thesis or shared scientific-language owner for thesis-facing terms"
+    - "selected branch in the compositional source-order tree"
+    - "localized exact owner and nearest applicable AGENTS.md"
+    - "Graphify provenance before Graphify-backed navigation"
+    - "installed call site plus current external docs for Context7-backed claims"
+    - "active shared scientific-language owner for durable terminology"
   applies_to:
     - "**"
   triggers:
-    - "locate files"
-    - "cross-surface context"
-    - "where is this implemented"
-    - "source family"
+    - "codebase architecture, ownership, relationships, or broad project context"
+    - "locate an unknown ARIA-NBV owner or source family"
     - "thesis section, glossary, symbol, equation, or notation owner"
-    - "codebase architecture, file relationships, or project-content questions"
-    - "semantic recall of prior decisions, related work, or failed approaches"
+    - "current external API, SDK, or version behavior"
+    - "semantic recall of prior decisions or failed approaches"
   must_read:
     - "AGENTS.md"
     - ".agents/references/source_order.md"
   canonical_sources:
     - "AGENTS.md"
-    - ".agents/references/source_order.md#role-split"
+    - ".agents/references/source_order.md#compositional-owner-tree"
     - ".agents/skills/aria-nbv-context/references/context_map.md"
     - ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
     - ".agents/skills/aria-nbv-context/references/context7_library_ids.md"
@@ -55,96 +52,89 @@ metadata:
     - "mcp__code_index.search_code_advanced"
     - "mcp__code_index.get_symbol_body"
   verification:
-    - "make context when generated context is stale or missing"
+    - "make context when a required generated context view is stale or missing"
     - "python3 scripts/check_graphify_freshness.py --json before Graphify-backed claims"
     - "make graphify-state-check for strict scaffold validation"
 ---
 
-# Aria NBV Context
+# ARIA-NBV Context
 
-## Graphify branch
+Use this skill as the context-traversal interface. It chooses a branch, uses the
+best navigation aid for that branch, opens the exact owner, then hands off.
 
-Every Codex worktree initializes Graphify with
-`scripts/setup_worktree_env.sh`. For broad architecture, relationship,
-ownership, or project-content discovery, run
-`scripts/check_graphify_freshness.py --json` before retrieval. A `fresh` or
-`usable-stale` artifact is usable: invoke the byte-identical upstream skill and
-query it before direct search. Open the located exact sources before any
-consequential claim or edit, and verify every consequential `stale_sources`
-path for `usable-stale`.
+## Owner-Tree Branch
 
-An `unusable` result requires bootstrap repair or reinitialization before the
-eligible query. If repair cannot establish a usable artifact, report the
-degradation and take the direct-source-only fallback. Never query corrupt,
-wrong-root, or otherwise unusable artifacts. The detailed state, provenance,
-projection, and worktree contract lives in
+Traverse `.agents/references/source_order.md` compositionally:
+
+- durable terms, symbols, and equations start at the shared Typst glossary,
+  symbols, equations, and notation registry;
+- thesis claims start at the active thesis include graph;
+- executable behavior starts at source, tests, active configuration, and the
+  nearest package guide;
+- agent workflow, accepted intent, and actionable work start at their guidance,
+  accepted-spec, human-intent, or Agents-DB owner.
+
+Generated context, retrieval, and historical evidence may locate an owner but
+cannot replace it.
+
+## Graphify Branch
+
+For architecture, ownership, relationships, or broad project content, Graphify
+is the primary navigation map. Initialize the worktree, run
+`scripts/check_graphify_freshness.py --json`, then use upstream `graphify query`
+for broad questions, `graphify path` for relationships, and `graphify explain`
+for a focused concept before raw search.
+
+Use a `fresh` or `usable-stale` graph; verify exact owners after navigation and
+every consequential stale source in the latter case. Repair an `unusable`
+bootstrap once before taking the reported direct-source fallback. The upstream
+hook is the default local accelerator for post-commit/post-checkout code refresh,
+but it neither proves semantic document freshness nor refreshes linked worktrees;
+the state/repair detail remains in
 [`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md).
 
-Before any build or semantic refresh, read
-[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md),
-which owns ARIA's detailed freshness, projection, coverage, and worktree rules.
+## Context7 Branch
 
-## MemPalace semantic-recall branch
+Use Context7 when a consequential decision depends on current external API,
+SDK, package, or version behavior. Open the local owner and installed call site
+first. Prefer the localized skill's `metadata.context7_refs`; otherwise use the
+exact ID and focused seed query in
+[`references/context7_library_ids.md`](references/context7_library_ids.md).
 
-Use semantic recall only when prior decisions, failed approaches, unknown
-ownership, or cross-surface relationships materially improve the task. Known
-files and symbols, implementation, tests, and active configuration use direct
-`rg`, code-index, and exact-source reads; code is outside the reviewed corpus.
-Use only a prompt-visible MCP search surface verified by upstream `--read-only`
-plus Codex's explicit fail-closed `enabled_tools` allowlist; otherwise report it
-unavailable or unverified and continue deterministically.
-Read-only hides/refuses mutating tools; backend bookkeeping may still occur.
+Use a supplied exact ID directly. Otherwise resolve the library ID, then issue
+one narrow documentation query per concept. Verify the result against the
+installed version, local source/tests, and exact ARIA owner.
 
-Choose the smallest wing: `aria-thesis`; `aria-literature-reviews` then the
-matching `aria-papers` room for primary evidence; `aria-project-docs`;
-`aria-debriefs`; or `aria-codex-history` only for explicit raw-history requests.
-Treat results as candidate evidence: record source and authored date, open the
-exact current-worktree source, and apply source order. Chronology alone never
-implies supersession; ingestion-only dates stay unknown.
+## MemPalace Branch
+
+Use semantic recall only for prior decisions, failed approaches, unknown
+ownership, or cross-surface relationships that materially improve the task.
+Choose one reviewed room, record source and authored date, then open the exact
+current-worktree source. Code, tests, known symbols, and active configuration use
+Graphify or direct owners rather than memory. Chronology never implies
+supersession.
 
 ## Workflow
 
-1. Read `AGENTS.md` and `.agents/references/source_order.md`.
-2. For eligible broad codebase discovery, follow the Graphify branch before
-   direct search. Route concrete failures and already-known implementation,
-   test, configuration, or symbol edits to their exact defining sources; do not
-   query MemPalace for them.
-3. For thesis-facing sections, terms, symbols, or equations, use the active thesis
-   lane in `references/context_map.md`, its include graph, and the smallest shared
-   owner among `glossary.typ`, `symbols.typ`, and `equations.typ`; `docs/notation.yml`
-   is a generated consumer adapter, not an owner;
-   generated projections are not owners.
-4. When semantic recall is eligible, choose one reviewed wing and normally one
-   room through the MemPalace branch above. Search `aria-codex-history` only for
-   an explicit raw-history request.
-5. Query Graphify first for `fresh` or `usable-stale`; use `stale_sources` for
-   scoped verification. Repair `unusable` bootstrap state before falling back
-   explicitly to direct sources.
-6. Use `docs/_generated/context/source_index.md` only when it already exists or
-   source-family routing is unclear; refresh with `make context` only as needed.
-7. Use source-specific outline tools before broad raw reads:
-   - Quarto: `scripts/nbv_qmd_outline.sh --compact`
-   - Active thesis: `scripts/nbv_typst_includes.py --thesis --mode outline`
-   - Historical seminar: `scripts/nbv_typst_includes.py --seminar --mode outline`
-   - Literature: `scripts/nbv_literature_index.sh`
-   - Code/contracts: `scripts/nbv_get_context.sh modules|contracts|match <term>`
-8. Open the exact candidate source and nearest nested `AGENTS.md` once the
-   surface is known; reject optional retrieval that conflicts with its owner.
-9. For consequential or uncertain external API/version behavior, use the localized
-   skill's `metadata.context7_refs` or `references/context7_library_ids.md`: use a
-   supplied exact ID directly; otherwise resolve it, then get current docs. Verify
-   installed behavior against pinned source/tests and the exact repository owner.
-10. Use targeted `rg` inside the narrowed file set.
+1. Select the smallest branch in the source-order tree.
+2. For eligible broad project context, take the Graphify branch first.
+3. For scientific language, open the active thesis include graph and the
+   smallest shared glossary, symbol, or equation owner. Shared Typst facades own
+   reusable body and metadata; `docs/notation.yml` is a generated consumer
+   adapter.
+4. For current external behavior, take the Context7 branch after the local call
+   site is known.
+5. Use MemPalace only for eligible semantic recall; use generated context only
+   when source-family routing remains unclear.
+6. Open the exact candidate source and nearest nested `AGENTS.md`; reject any
+   navigation evidence that conflicts with them.
+7. Hand off to the narrow implementation, docs, diagnostic, or review owner.
+8. Stop retrieving when the owner and required verification are explicit.
 
 ## Zoom-Out Output
 
-- domain term and glossary anchor when one exists
-- owning package/module and nearest `AGENTS.md`
-- main callers and data contracts
-- relevant tests or render checks
-- docs/memory surfaces likely to need updates
-- open risks or missing context
-
-## References
-
-- `references/context_map.md` for non-obvious concept-to-source routing.
+- selected source-order branch and exact owner
+- domain term and shared-language anchor when one exists
+- main callers, data contracts, and focused tests
+- current external-doc evidence when it changes the decision
+- stale, degraded, or missing context that still needs exact verification

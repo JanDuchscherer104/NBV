@@ -18,10 +18,10 @@ CONTEXT_SKILL = ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
 ARIA_BOUNDARY = (
     ROOT / ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
 )
-UPSTREAM_COMMIT = "4fe11092ccbe9f543608f140c790f68d5d83cae4"
+UPSTREAM_COMMIT = "b14b52e94ec3d9840413d81777f4c134eac0a40d"
 UPSTREAM_BLOBS = {
-    ".graphify_version": "425d81acf4c7433074588660fbe9bfc32b79d1b0",
-    "SKILL.md": "afb4ecc12169e247fcf65d4e5e64df5283064ef5",
+    ".graphify_version": "ff301c44524cb8e0ad806f65a0484c4d6d6eb4ab",
+    "SKILL.md": "af3f723c7878b8ca9252af511270511002086ed4",
     "references/add-watch.md": "77844343e140553b7f1bf419e32640568c2014ff",
     "references/exports.md": "242ff868e015b158504dda3ea1992e4cd9686843",
     "references/extraction-spec.md": "388df7674f2d25e83f87041864bbe7635aa15e75",
@@ -62,7 +62,7 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         context = CONTEXT_SKILL.read_text(encoding="utf-8")
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
         self.assertIn("references/graphify-aria-boundary.md", context)
-        self.assertIn("Graphify 0.9.31 writes `graphify-out/needs_update`", boundary)
+        self.assertIn("Graphify 0.9.47 writes `graphify-out/needs_update`", boundary)
         self.assertRegex(boundary, r"Remove\s+`graphify-out/needs_update` only after")
         self.assertIn("leave it after partial, failed, or unverified work", boundary)
 
@@ -72,18 +72,20 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
         target_state = TARGET_STATE.read_text(encoding="utf-8")
 
-        self.assertIn("## Graphify", root_guidance)
-        self.assertIn("scripts/setup_worktree_env.sh", root_guidance)
-        self.assertIn("scripts/check_graphify_freshness.py --json", root_guidance)
+        self.assertIn("## Graphify And Context7", root_guidance)
+        self.assertIn("scripts/setup_worktree_env.sh", boundary)
+        self.assertIn("scripts/check_graphify_freshness.py --json", context)
         self.assertIn(
-            "Accepted 2026-08-14 Mandatory Graphify Supersession", target_state
+            "Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession",
+            target_state,
         )
         for state in ("fresh", "usable-stale", "unusable"):
             with self.subTest(state=state):
-                self.assertIn(f"`{state}`", root_guidance)
                 self.assertIn(f"`{state}`", context)
                 self.assertIn(f"`{state}`", boundary)
-        self.assertIn("query it before direct search", context)
+        self.assertIn("`graphify query`", context)
+        self.assertIn("`graphify path`", context)
+        self.assertIn("`graphify explain`", context)
         self.assertIn("use direct sources only", boundary)
         self.assertIn("Graphify never owns the located fact", boundary)
 

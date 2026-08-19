@@ -90,7 +90,7 @@ jobs:
         if: >-
           steps.impact.outputs.scaffold == 'true' ||
           steps.impact.outputs.docs == 'true'
-        run: python -m pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"
+        run: python -m pip install --upgrade pip pytest PyYAML "graphifyy==0.9.47"
 
       - name: Set up uv
         if: steps.impact.outputs.package == 'true'
