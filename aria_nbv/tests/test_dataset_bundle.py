@@ -13,6 +13,7 @@ from aria_nbv.data_handling.vin_store.format import (
     VinOfflineMaterializedBlocks,
     VinOfflineShardSpec,
 )
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
     DatasetBundleSelection,
     build_dataset_bundle_summary,
@@ -26,7 +27,7 @@ def _write_root_store(root: Path) -> tuple[Path, str]:
     store = root / "vin"
     store.mkdir()
     manifest = VinOfflineManifest(
-        version=7,
+        version=OFFLINE_DATASET_VERSION,
         created_at="2026-07-21T00:00:00Z",
         source={},
         oracle={},

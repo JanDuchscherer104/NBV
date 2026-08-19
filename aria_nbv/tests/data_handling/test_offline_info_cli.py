@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.data_handling.vin_store.info_cli import app as offline_info_app
 from aria_nbv.data_handling.vin_store.info_cli import main as offline_info_main
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from tests.data_handling.test_vin_offline_store import _write_sample_index, _write_test_store
 
 runner = CliRunner()
@@ -23,7 +24,7 @@ def test_offline_info_default_summary_text_includes_core_fields(tmp_path, capsys
 
     out = capsys.readouterr().out
     assert "version" in out
-    assert "7" in out
+    assert str(OFFLINE_DATASET_VERSION) in out
     assert "candidate_count" in out
     assert "rri" in out
     assert "vin_points" in out
@@ -39,7 +40,7 @@ def test_offline_info_summary_json_includes_core_fields(tmp_path) -> None:
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert payload["version"] == 7
+    assert payload["version"] == OFFLINE_DATASET_VERSION
     assert payload["num_samples"] == 3
     assert payload["sampled_samples"] == 2
     assert payload["split_counts"] == {"train": 2, "val": 1}
