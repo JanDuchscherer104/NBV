@@ -101,7 +101,7 @@ dependencies = [
         "pytest>=8.4.2",
         "pytest-cov>=7.0.0",
         "ruff>=0.1.0",
-        "mypy>=1.0.0",
+        "mypy==2.1.0",
         "syrenka>=0.5.7",
         "debugpy>=1.8.17",
     ]
@@ -166,7 +166,8 @@ extra-build-dependencies = { pytorch3d = [
 [tool.mypy]
 python_version         = "3.11"
 strict                 = true
-ignore_missing_imports = true
+files                  = ["aria_nbv"]
+warn_unused_configs    = true
 check_untyped_defs     = true
 disallow_untyped_defs  = true
 

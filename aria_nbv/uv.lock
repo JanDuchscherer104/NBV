@@ -412,7 +412,7 @@ requires-dist = [
     { name = "moderngl", specifier = "==5.8.2" },
     { name = "msgspec", specifier = ">=0.20.0" },
     { name = "multimethod", marker = "sys_platform == 'linux'", specifier = ">=1.7" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = "==2.1.0" },
     { name = "notebook", marker = "extra == 'notebook'", specifier = ">=7.5.0" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "omegaconf", specifier = "==2.3.0" },

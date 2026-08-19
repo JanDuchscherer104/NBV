@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract mypy-contract mypy-full mypy-targeted
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -727,10 +727,30 @@ qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff check $(QH_CI_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
 
-package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
+package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
+
+mypy-contract: ## Run the passing public API typing contract
+	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental tests/data_handling/public_api_typing_contract.py
+
+mypy-full: ## Run the full package typing check (currently informational)
+	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental aria_nbv
+
+mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
+	@set -f; paths="$(strip $(MYPY_PATHS))"; \
+	if [ -z "$$paths" ]; then echo "MYPY_PATHS is required" >&2; exit 2; fi; \
+	normalized=; \
+	for path in $$paths; do \
+		case "$$path" in \
+			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
+			$(PKG_DIR)/*|$(TEST_DIR)/*) ;; \
+			*) echo "MYPY_PATHS contains unrelated path: $$path" >&2; exit 2 ;; \
+		esac; \
+		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
+	done; \
+	cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $$normalized
 
 ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
