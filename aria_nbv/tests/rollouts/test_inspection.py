@@ -765,7 +765,7 @@ def test_candidate_population_evidence_is_compact_callback_parity_and_order_inva
             "oracle_label": index % 3 != 0,
             "q_train": index % 3 != 0,
             "selected": index == 1,
-            "sampler_probability": 0.25,
+            "sampler_probability": 0.5,
             "target_root_gain": float(index),
             "path_collision": False,
             "path_collision_applicable": True,
@@ -805,6 +805,55 @@ def test_candidate_population_evidence_is_compact_callback_parity_and_order_inva
     assert [row["candidate_row_id"] for row in evidence["sample"]["rows"]] == [
         row["candidate_row_id"] for row in reversed_evidence["sample"]["rows"]
     ]
+
+
+@pytest.mark.parametrize(
+    ("probabilities", "reason"),
+    [
+        ([None, 0.5], "incomplete_probability_vector"),
+        ([np.nan, 0.5], "incomplete_probability_vector"),
+        ([np.inf, 0.5], "incomplete_probability_vector"),
+        ([-0.1, 1.1], "negative_probability"),
+        ([0.4, 0.4], "probability_not_normalized"),
+        ([0.0, 0.0], "nonpositive_probability_sum"),
+    ],
+)
+def test_candidate_population_probability_vectors_fail_closed(probabilities: list[float | None], reason: str) -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "mixture": "forward",
+            "position": "center",
+            "strategy": "random",
+            "invalid_reason": "none",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": probability,
+            "target_root_gain": 0.1,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, probability in enumerate(probabilities)
+    ]
+
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+    calibration = evidence["calibration"]["mixture"][0]
+    assert calibration["proposal_available"] is False
+    assert reason in str(calibration["proposal_unavailable_reason"])
+    assert calibration["population_proposal_mass"] is None
+    assert calibration["proposal_mass"] is None
 
 
 def test_headroom_condition_applicability_fails_closed_only_when_applicable() -> None:

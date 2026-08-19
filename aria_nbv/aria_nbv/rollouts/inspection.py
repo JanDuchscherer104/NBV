@@ -51,6 +51,7 @@ CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
     "invalid_reason",
     "policy",
 )
+_SAMPLER_PROBABILITY_TOLERANCE = 1e-5
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
 _STRATEGY_NAMES = {candidate_strategy_id(mode): mode.value for mode in ViewDirectionMode}
@@ -531,6 +532,23 @@ def candidate_population_evidence(
     }
 
 
+def _probability_state_error(state: Mapping[str, object]) -> str | None:
+    """Return the fail-closed reason for one complete sampler vector."""
+
+    total = int(state["total"])
+    finite = int(state["finite_probability_count"])
+    if finite != total or bool(state["missing"]):
+        return "incomplete_probability_vector"
+    if bool(state["negative"]):
+        return "negative_probability"
+    probability_sum = float(state["probability_sum"])
+    if probability_sum <= 0.0:
+        return "nonpositive_probability_sum"
+    if not np.isclose(probability_sum, 1.0, rtol=0.0, atol=_SAMPLER_PROBABILITY_TOLERANCE):
+        return "probability_not_normalized"
+    return None
+
+
 class _CandidatePopulationAccumulator:
     """Single-pass candidate aggregates with bounded deterministic sampling.
 
@@ -580,13 +598,21 @@ class _CandidatePopulationAccumulator:
         assert isinstance(states, dict)
         state = states.setdefault(
             state_id,
-            {"scene": scene, "total": 0, "probability_sum": 0.0, "missing": False, "negative": False},
+            {
+                "scene": scene,
+                "total": 0,
+                "probability_sum": 0.0,
+                "finite_probability_count": 0,
+                "missing": False,
+                "negative": False,
+            },
         )
         state["total"] += 1
         if probability is None:
             state["missing"] = True
         else:
             state["probability_sum"] += probability
+            state["finite_probability_count"] += 1
             state["negative"] |= probability < 0.0
         collision = self._collision.setdefault(
             cohort_id,
@@ -778,9 +804,7 @@ class _CandidatePopulationAccumulator:
                     empirical = _safe_fraction(int(state["total"]), int(base["total"]))
                     proposal = (
                         None
-                        if base["missing"]
-                        or base["negative"]
-                        or base["probability_sum"] <= 0
+                        if _probability_state_error(base) is not None
                         or (state["total"] and not state["finite_probability_count"])
                         else float(state["probability_sum"] / base["probability_sum"])
                     )
@@ -804,9 +828,9 @@ class _CandidatePopulationAccumulator:
                 scene_rows = self._state_macro(state_rows)
                 probability_error = next(
                     (
-                        f"incomplete_probability_vector:{key}"
+                        f"{_probability_state_error(value)}:{key}"
                         for key, value in all_states.items()
-                        if value["missing"] or value["negative"]
+                        if _probability_state_error(value) is not None
                     ),
                     None,
                 )
@@ -1927,6 +1951,8 @@ def q_h_evidence_rows(
     *,
     deep_count: bool = False,
     chunk_size: int = 1024,
+    state_row_limit: int | None = None,
+    progress_callback: Callable[[int, int], bool] | None = None,
     validation_result: RolloutZarrValidationResult | None = None,
 ) -> list[dict[str, object]]:
     """Read store-local Q_H contract facts without dataset-stage admission.
@@ -1972,38 +1998,79 @@ def q_h_evidence_rows(
     if deep_count:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
+        if state_row_limit is not None and state_row_limit < 0:
+            raise ValueError("state_row_limit must be non-negative or None")
         candidate_ids_array = q_h["candidate_row_id"]
         valid_array = q_h["valid_action_mask"]
         trainable_array = q_h["q_train_mask"]
-        factual_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
-        factual_oracle = np.asarray(reader.array("candidates/oracle_label_mask"), dtype=np.bool_).reshape(-1)
-        oracle_by_id = {
-            int(candidate_id): bool(factual_oracle[index]) for index, candidate_id in enumerate(factual_ids)
-        }
         actor_count = oracle_count = trainable_count = padding_count = 0
-        for start in range(0, int(candidate_ids_array.shape[0]), chunk_size):
-            stop = min(start + chunk_size, int(candidate_ids_array.shape[0]))
+        cancelled = False
+        factual_ids_array = reader.array("candidates/candidate_row_id")
+        factual_oracle_array = reader.array("candidates/oracle_label_mask")
+        total_state_rows = int(candidate_ids_array.shape[0])
+        if state_row_limit is not None:
+            total_state_rows = min(total_state_rows, int(state_row_limit))
+        for start in range(0, total_state_rows, chunk_size):
+            stop = min(start + chunk_size, total_state_rows)
             candidate_ids = np.asarray(candidate_ids_array[start:stop], dtype=np.int64)
             valid = np.asarray(valid_array[start:stop], dtype=np.bool_)
             trainable = np.asarray(trainable_array[start:stop], dtype=np.bool_)
-            oracle_count += sum(
-                oracle_by_id.get(int(candidate_id), False)
-                for candidate_id in candidate_ids.reshape(-1)
-                if int(candidate_id) >= 0
+            oracle_count += _bounded_candidate_oracle_matches(
+                candidate_ids,
+                factual_ids_array,
+                factual_oracle_array,
+                chunk_size=chunk_size,
             )
             actor_count += int(valid.sum())
             trainable_count += int(trainable.sum())
             padding_count += int((candidate_ids < 0).sum())
+            if progress_callback is not None and not progress_callback(stop, total_state_rows):
+                cancelled = True
+                break
         row.update(
             {
                 "actor_valid_count": actor_count,
                 "oracle_valid_count": oracle_count,
                 "trainable_count": trainable_count,
                 "padding_count": padding_count,
-                "count_reason": "explicit bounded current-store mask projection",
+                "count_reason": (
+                    "cancelled during bounded current-store mask projection"
+                    if cancelled
+                    else "explicit bounded current-store mask projection"
+                ),
             }
         )
     return [row]
+
+
+def _bounded_candidate_oracle_matches(
+    q_h_candidate_ids: np.ndarray,
+    factual_ids_array: Any,
+    factual_oracle_array: Any,
+    *,
+    chunk_size: int,
+) -> int:
+    """Join Q_H IDs to factual oracle masks without whole-array materialization."""
+
+    query = q_h_candidate_ids.reshape(-1)
+    query = query[query >= 0]
+    if not query.size:
+        return 0
+    matched = 0
+    factual_count = int(factual_ids_array.shape[0])
+    for start in range(0, factual_count, chunk_size):
+        stop = min(start + chunk_size, factual_count)
+        factual_ids = np.asarray(factual_ids_array[start:stop], dtype=np.int64).reshape(-1)
+        factual_oracle = np.asarray(factual_oracle_array[start:stop], dtype=np.bool_).reshape(-1)
+        if factual_ids.size == 0:
+            continue
+        positions = np.searchsorted(factual_ids, query)
+        valid = positions < factual_ids.size
+        if valid.any():
+            valid_positions = positions[valid]
+            equal = factual_ids[valid_positions] == query[valid]
+            matched += int(factual_oracle[valid_positions[equal]].sum())
+    return matched
 
 
 def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:

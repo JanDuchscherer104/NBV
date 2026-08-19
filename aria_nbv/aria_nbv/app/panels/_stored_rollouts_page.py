@@ -229,6 +229,8 @@ def _cached_projection_cached(
     policies: tuple[str, ...] | None = None,
     step_indices: tuple[int, ...] | None = None,
     deep_count: bool = False,
+    q_h_chunk_size: int = 1024,
+    q_h_state_limit: int | None = None,
     store_identity: str = "",
 ) -> Any:
     """Cache serializable inspection projections for one validated store identity."""
@@ -303,7 +305,13 @@ def _cached_projection_cached(
         return _cached_candidate_population_cached(store_path, store_identity)
     if projection == "q_h":
         _, validation, _ = _cached_store_bundle(store_path)
-        return q_h_evidence_rows(reader, deep_count=deep_count, validation_result=validation)
+        return q_h_evidence_rows(
+            reader,
+            deep_count=deep_count,
+            chunk_size=q_h_chunk_size,
+            state_row_limit=q_h_state_limit,
+            validation_result=validation,
+        )
     if projection == "tree":
         return rollout_tree_summary_rows(reader)
     if projection == "root_geometry":
@@ -2576,7 +2584,33 @@ def _render_q_h_evidence(store_path: str) -> None:
         value=False,
         help="Off reads metadata only. On performs the bounded current-store mask projection.",
     )
-    rows = pd.DataFrame(_cached_projection(store_path, "q_h", deep_count=deep_count))
+    chunk_size = int(
+        st.number_input(
+            "Q_H state chunk size",
+            min_value=1,
+            value=1024,
+            step=256,
+            disabled=not deep_count,
+            help="Bounded Zarr read size used by the optional Q_H mask count.",
+        )
+    )
+    state_limit_value = st.number_input(
+        "Q_H state-row limit (0 = full store)",
+        min_value=0,
+        value=0,
+        step=1024,
+        disabled=not deep_count,
+        help="Optional bounded prefix for diagnostics; 0 counts all persisted Q_H states.",
+    )
+    rows = pd.DataFrame(
+        _cached_projection(
+            store_path,
+            "q_h",
+            deep_count=deep_count,
+            q_h_chunk_size=chunk_size,
+            q_h_state_limit=None if int(state_limit_value) == 0 else int(state_limit_value),
+        )
+    )
     st.dataframe(rows, hide_index=True, width="stretch")
     if not rows.empty and not bool(rows.iloc[0].get("available", False)):
         st.info(f"Q_H evidence unavailable: {rows.iloc[0].get('blocking_reason', 'unknown reason')}")

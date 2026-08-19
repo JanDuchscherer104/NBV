@@ -319,6 +319,64 @@ def test_q_h_evidence_is_metadata_first_and_deep_counts_are_explicit(tmp_path: P
     assert deep["count_reason"] == "explicit bounded current-store mask projection"
 
 
+def test_q_h_deep_count_uses_bounded_candidate_slices(tmp_path: Path, monkeypatch) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    reader = RolloutZarrStoreReader(store)
+    validation = reader.validate()
+    original_array = reader.array
+    slice_keys: list[object] = []
+
+    class SliceOnlyArray:
+        def __init__(self, array):
+            self._array = array
+
+        @property
+        def shape(self):
+            return self._array.shape
+
+        def __getitem__(self, key):
+            if not isinstance(key, slice):
+                raise AssertionError(f"whole-array or fancy indexing is not allowed: {key!r}")
+            slice_keys.append(key)
+            return self._array[key]
+
+    def array(path: str):
+        value = original_array(path)
+        if path in {"candidates/candidate_row_id", "candidates/oracle_label_mask"}:
+            return SliceOnlyArray(value)
+        return value
+
+    monkeypatch.setattr(reader, "array", array)
+    row = q_h_evidence_rows(
+        reader,
+        deep_count=True,
+        chunk_size=2,
+        state_row_limit=2,
+        validation_result=validation,
+    )[0]
+    assert row["deep_count"] is True
+    assert row["count_reason"] == "explicit bounded current-store mask projection"
+    assert slice_keys
+    assert all(isinstance(key, slice) for key in slice_keys)
+
+
+def test_q_h_deep_count_supports_bounded_cancellation(tmp_path: Path) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    reader = RolloutZarrStoreReader(store)
+    validation = reader.validate()
+    progress: list[tuple[int, int]] = []
+
+    row = q_h_evidence_rows(
+        reader,
+        deep_count=True,
+        chunk_size=1,
+        progress_callback=lambda completed, total: progress.append((completed, total)) or False,
+        validation_result=validation,
+    )[0]
+    assert progress == [(1, int(reader.root["q_h/candidate_row_id"].shape[0]))]
+    assert row["count_reason"] == "cancelled during bounded current-store mask projection"
+
+
 def test_q_h_evidence_blocks_invalid_store_before_projection(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
     root = zarr.open_group(store, mode="a")
