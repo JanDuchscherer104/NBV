@@ -1871,6 +1871,15 @@ def test_pilot_adaptation_emits_four_ordered_myopic_recipes(tmp_path):
     ] == [
         (8, 1, 1),
     ] * 4
+    missing_target_unit = replace(plan.work_units[0], explicit_target_config=None)
+    forbidden_keyword = "explicit_" + "target"
+    with pytest.raises(TypeError, match="explicit_target"):
+        pilot.adapt_work_unit(
+            missing_target_unit,
+            writer_config=writer,
+            shard_entry=SimpleNamespace(),
+            **{forbidden_keyword: {"target_id": "forbidden"}},
+        )
     broad = _campaign(tmp_path / "broad")
     broad_plan = broad.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     broad_writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})

@@ -1494,7 +1494,6 @@ class CudaRolloutCampaign:
         *,
         writer_config: Any,
         shard_entry: Any,
-        explicit_target: Any | None = None,
         plan_hash: str = "",
         profile_hash: str = "",
     ) -> tuple[Any, Any]:
@@ -1530,16 +1529,7 @@ class CudaRolloutCampaign:
                 # Legacy in-memory adapters have no manifest to constrain;
                 # production configs always carry one and take the strict path.
                 cfg = cfg.model_copy(update={"sample_keys": None})
-        if explicit_target is not None and unit.explicit_target_config is not None:
-            from .rollout_dataset import ExplicitRolloutTargetConfig
-
-            canonical_override = ExplicitRolloutTargetConfig.model_validate(explicit_target).model_dump(mode="json")
-            canonical_unit = ExplicitRolloutTargetConfig.model_validate(unit.explicit_target_config).model_dump(
-                mode="json"
-            )
-            if canonical_override != canonical_unit:
-                raise ValueError("explicit target override does not match immutable work-unit target")
-        target_payload = unit.explicit_target_config if explicit_target is None else explicit_target
+        target_payload = unit.explicit_target_config
         if target_payload is not None and hasattr(cfg, "explicit_target"):
             from .rollout_dataset import ExplicitRolloutTargetConfig
 
