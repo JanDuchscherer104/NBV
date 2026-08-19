@@ -28,7 +28,7 @@ map_location             = "cuda"
 verbosity                = 1
 
     [source.store]
-    store_dir = "vin_offline_rollout_campaign100_v8"
+    store_dir = "vin_offline_rollout_campaign100_v8_rebuilt"
 
 [oracle_target_task_sampler]
 max_targets_per_sample            = 1

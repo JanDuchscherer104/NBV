@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -57,11 +58,7 @@ def test_source_manifest_command_builds_without_existing_manifest(tmp_path, monk
     source = object()
     captured = {}
     manifest = SimpleNamespace(rows=(1, 2), split="train", source_manifest_hash="hash")
-    monkeypatch.setattr(
-        rollout_cli,
-        "RolloutDatasetWriterConfig",
-        SimpleNamespace(from_toml=lambda path: SimpleNamespace(source=source)),
-    )
+    monkeypatch.setattr(rollout_cli, "_source_config_from_writer_toml", lambda path: source)
     monkeypatch.setattr(
         rollout_cli,
         "write_rollout_source_manifest_from_config",
@@ -76,6 +73,34 @@ def test_source_manifest_command_builds_without_existing_manifest(tmp_path, monk
     assert result.exit_code == 0
     assert captured == {"source": source, "manifest_path": output_path}
     assert "Planned Rollout Source Manifest" in result.output
+
+
+def test_source_manifest_parser_accepts_writer_source_without_manifest(tmp_path) -> None:
+    config_path = tmp_path / "writer.toml"
+    config_path.write_text(
+        "[source]\nlimit = 1\n[source.store]\nstore_dir = 'local-store'\n",
+        encoding="utf-8",
+    )
+
+    source = rollout_cli._source_config_from_writer_toml(config_path)
+
+    assert source.limit == 1
+    assert source.store.store_dir.name == "local-store"
+
+
+def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    config = tomllib.loads(
+        (repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml").read_text(encoding="utf-8")
+    )
+    manifest = json.loads((repo_root / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8"))
+    rows = manifest["rows"]
+
+    assert config["max_samples"] == 100
+    assert config["dataset"]["snippet_ids"] == [row["sample_key"] for row in rows]
+    assert config["dataset"]["scene_ids"] == [row["scene_id"] for row in rows]
+    assert config["store"]["store_dir"] == "vin_offline_rollout_campaign100_v8_rebuilt"
+    assert not (repo_root / ".data/offline_cache/vin_offline_rollout_campaign100_v8_rebuilt").exists()
 
 
 def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(tmp_path, monkeypatch) -> None:

@@ -1006,7 +1006,7 @@
   ],
   "source_cache_version": "7",
   "source_manifest_hash": "2ec35736a2c66ed4",
-  "source_store_dir": "/home/jd/repos/ARIA-NBV/.data/offline_cache/vin_offline_rollout_campaign100_v8",
+  "source_store_dir": "vin_offline_rollout_campaign100_v8_rebuilt",
   "split": "train",
   "split_manifest_hash": "58e2e26eec2530d6"
 }

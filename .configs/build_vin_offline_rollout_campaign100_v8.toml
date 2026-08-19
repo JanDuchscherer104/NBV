@@ -1,8 +1,8 @@
-# Strict-v7 profile-independent VIN source for the reviewed 100-row campaign.
+# Strict-v8 profile-independent VIN source for the reviewed 100-row campaign.
 #
 # This source cache preserves full root VIN points, GT OBBs, trajectory metadata,
 # and full-resolution GT meshes for live rollout reattachment. Its one stored
-# one-step oracle candidate exists only to satisfy the strict-v7 cache schema;
+# one-step oracle candidate exists only to satisfy the strict-v8 cache schema;
 # rollout campaigns regenerate their scientific 60-action candidate mixtures.
 #
 # Usage from the repository root:
@@ -27,7 +27,7 @@ overwrite = false
 num_failures_allowed = 0
 
 [store]
-store_dir = "vin_offline_rollout_campaign100_v8"
+store_dir = "vin_offline_rollout_campaign100_v8_rebuilt"
 
 [dataset]
 atek_variant = "efm"
@@ -42,6 +42,28 @@ scene_ids = [
   "83506", "83515", "83522", "83550", "83560", "83577", "83598", "83678", "83692", "83713",
   "83730", "83746", "83780", "83803", "83833", "83836", "83998", "84001", "84003", "84009",
   "84052", "84074", "84080", "84171", "84185", "84186", "84230", "84271", "84309", "84320",
+]
+snippet_ids = [
+  "ASE_889_Atek_000008", "ASE_8517_Atek_000000", "ASE_8559_Atek_000000", "ASE_8671_Atek_000040", "ASE_8694_Atek_000024",
+  "ASE_8715_Atek_000008", "ASE_8777_Atek_000008", "ASE_8822_Atek_000016", "ASE_8857_Atek_000032", "ASE_8860_Atek_000040",
+  "ASE_8938_Atek_000048", "ASE_81022_Atek_000016", "ASE_81048_Atek_000040", "ASE_81056_Atek_000016", "ASE_81128_Atek_000024",
+  "ASE_81161_Atek_000016", "ASE_81180_Atek_000008", "ASE_81181_Atek_000016", "ASE_81184_Atek_000000", "ASE_81188_Atek_000024",
+  "ASE_81226_Atek_000000", "ASE_81272_Atek_000000", "ASE_81283_Atek_000016", "ASE_81286_Atek_000112", "ASE_81366_Atek_000008",
+  "ASE_81387_Atek_000024", "ASE_81426_Atek_000000", "ASE_81477_Atek_000080", "ASE_81483_Atek_000048", "ASE_81625_Atek_000000",
+  "ASE_81693_Atek_000008", "ASE_81772_Atek_000000", "ASE_81807_Atek_000024", "ASE_81964_Atek_000072", "ASE_82004_Atek_000032",
+  "ASE_82254_Atek_000008", "ASE_82257_Atek_000016", "ASE_82258_Atek_000000", "ASE_82271_Atek_000016", "ASE_82294_Atek_000008",
+  "ASE_82309_Atek_000000", "ASE_82311_Atek_000000", "ASE_82342_Atek_000032", "ASE_82448_Atek_000008", "ASE_82517_Atek_000000",
+  "ASE_82545_Atek_000016", "ASE_82555_Atek_000008", "ASE_82620_Atek_000000", "ASE_82630_Atek_000008", "ASE_82647_Atek_000008",
+  "ASE_82658_Atek_000000", "ASE_82700_Atek_000016", "ASE_82832_Atek_000040", "ASE_82889_Atek_000008", "ASE_82902_Atek_000000",
+  "ASE_82953_Atek_000000", "ASE_83036_Atek_000032", "ASE_83078_Atek_000000", "ASE_83086_Atek_000024", "ASE_83098_Atek_000000",
+  "ASE_83121_Atek_000048", "ASE_83269_Atek_000056", "ASE_83307_Atek_000016", "ASE_83317_Atek_000056", "ASE_83379_Atek_000000",
+  "ASE_83393_Atek_000016", "ASE_83397_Atek_000000", "ASE_83400_Atek_000032", "ASE_83448_Atek_000008", "ASE_83467_Atek_000000",
+  "ASE_83506_Atek_000032", "ASE_83515_Atek_000080", "ASE_83522_Atek_000024", "ASE_83550_Atek_000144", "ASE_83560_Atek_000016",
+  "ASE_83577_Atek_000072", "ASE_83598_Atek_000000", "ASE_83678_Atek_000032", "ASE_83692_Atek_000008", "ASE_83713_Atek_000016",
+  "ASE_83730_Atek_000000", "ASE_83746_Atek_000008", "ASE_83780_Atek_000000", "ASE_83803_Atek_000000", "ASE_83833_Atek_000048",
+  "ASE_83836_Atek_000016", "ASE_83998_Atek_000024", "ASE_84001_Atek_000000", "ASE_84003_Atek_000000", "ASE_84009_Atek_000024",
+  "ASE_84052_Atek_000008", "ASE_84074_Atek_000024", "ASE_84080_Atek_000000", "ASE_84171_Atek_000008", "ASE_84185_Atek_000000",
+  "ASE_84186_Atek_000000", "ASE_84230_Atek_000016", "ASE_84271_Atek_000008", "ASE_84309_Atek_000000", "ASE_84320_Atek_000048",
 ]
 batch_size = 1
 wds_shuffle = false

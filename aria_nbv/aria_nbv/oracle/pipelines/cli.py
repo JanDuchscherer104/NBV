@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import tomllib
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -27,7 +28,7 @@ from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
 from .campaign import CampaignEvent, CampaignWorkerResult, CudaRolloutCampaignConfig, write_json_atomic
 from .offline_vin import VinOfflineWriterConfig
-from .rollout_dataset import RolloutDatasetWriterConfig
+from .rollout_dataset import RolloutDatasetWriterConfig, VinOfflineDatasetConfig
 from .shards import (
     RolloutShardOwnershipConflictError,
     plan_rollout_source_manifest,
@@ -60,6 +61,16 @@ def _writer_config(campaign):
     if path is None:
         return None
     return RolloutDatasetWriterConfig.from_toml(resolve_config_toml_path(path))
+
+
+def _source_config_from_writer_toml(config_path: Path) -> VinOfflineDatasetConfig:
+    """Parse only a writer TOML's source table for source-manifest bootstrap."""
+
+    payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    source_payload = payload.get("source")
+    if not isinstance(source_payload, dict):
+        raise typer.BadParameter("writer TOML requires a [source] table")
+    return VinOfflineDatasetConfig.model_validate(source_payload)
 
 
 def _validate_plan_digests(campaign, plan, writer_cfg) -> str:
@@ -718,11 +729,11 @@ def plan_rollout_source_manifest_command(
     """Plan the profile-independent source manifest directly from a writer TOML."""
 
     config_path = resolve_config_toml_path(config_path)
-    cfg = RolloutDatasetWriterConfig.from_toml(config_path)
+    source = _source_config_from_writer_toml(config_path)
     if dry_run:
-        manifest = plan_rollout_source_manifest(cfg.source)
+        manifest = plan_rollout_source_manifest(source)
     else:
-        manifest = write_rollout_source_manifest_from_config(cfg.source, manifest_path=output_manifest)
+        manifest = write_rollout_source_manifest_from_config(source, manifest_path=output_manifest)
     console = cli_console()
     console.print(
         key_value_panel(

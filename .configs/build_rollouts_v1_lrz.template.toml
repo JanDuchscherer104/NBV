@@ -27,7 +27,7 @@ map_location = "cuda"
 verbosity = 1
 
 [source.store]
-store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin_offline"
+store_dir = "/ABS/PATH/TO/ARIA_DSS/caches/vin/vin_offline_rollout_campaign100_v8_rebuilt"
 
 [oracle_target_task_sampler]
 max_targets_per_sample = 2
@@ -143,7 +143,7 @@ chunk_steps = 16
 store_dir = "/ABS/PATH/TO/ARIA_DSS/data/staging/rollouts/RUN_ID/nonsharded_preview.zarr"
 target_protocol_version = "v0_gt_input"
 field_retention_policy = "compact_selected_heavy"
-source_offline_store_version = "vin-offline-v7"
+source_offline_store_version = "vin-offline-v8-rebuilt"
 split_manifest_hash = "configured-at-runtime"
 discount_gamma = 1.0
 q_h_chunk_states = 64

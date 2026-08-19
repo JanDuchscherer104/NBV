@@ -306,7 +306,7 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
     assert writer.max_samples == writer.source.limit == 100
     assert writer.source_manifest_path == REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json"
-    assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8"
+    assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8_rebuilt"
     assert writer.min_valid_root_candidates == 15
     assert {
         str(writer.source.map_location),

@@ -2,7 +2,8 @@
 
 These are the reviewed operator entry points. Paths are repository-relative and
 are resolved from the current checkout; generated manifests and stores are not
-committed here.
+committed here. The V8 source-store identity is immutable and intentionally
+fresh: `vin_offline_rollout_campaign100_v8_rebuilt`.
 
 | Config | Role | Depends on |
 | --- | --- | --- |
@@ -14,14 +15,17 @@ committed here.
 
 ## Exact operator commands
 
-From the repository root, build the reviewed V8 source store, then bootstrap the
+Prepare the checkout, then build the reviewed V8 source store and bootstrap the
 portable source manifest directly from the writer TOML:
 
 ```bash
-uv run nbv-build-offline --config-path .configs/build_vin_offline_rollout_campaign100_v8.toml
+scripts/setup_worktree_env.sh --check
+source .env
+cd aria_nbv
+uv run nbv-build-offline --config-path ../.configs/build_vin_offline_rollout_campaign100_v8.toml
 uv run nbv-plan-rollout-source \
-  --config-path .configs/build_rollouts_v1_cuda_campaign_writer.toml \
-  --output-manifest .configs/rollout_campaign100_source_manifest.json
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_writer.toml \
+  --output-manifest ../.configs/rollout_campaign100_source_manifest.json
 ```
 
 Plan the corrected paired pilot, run its smoke, launch at most ten new units,
@@ -29,14 +33,13 @@ and inspect status:
 
 ```bash
 uv run nbv-rollout-campaign plan \
-  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml \
-  --source-manifest .configs/rollout_campaign100_source_manifest.json
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml \
+  --source-manifest ../.configs/rollout_campaign100_source_manifest.json
 uv run nbv-rollout-campaign smoke \
-  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml
 uv run nbv-rollout-campaign run \
-  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml \
-  --plan-path .campaign/cuda-rollouts-v1-pilot-corrected-v2/plan.json \
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml \
   --max-new-units 10
 uv run nbv-rollout-campaign status \
-  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml
 ```
