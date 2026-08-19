@@ -508,14 +508,16 @@ def candidate_population_evidence(
         raise ValueError(f"Unsupported candidate group field {group_by!r}; expected one of {CANDIDATE_GROUP_FIELDS}.")
     if sample_size < 0:
         raise ValueError("sample_size must be non-negative")
-    rows: list[dict[str, object]] = []
+    accumulator = _CandidatePopulationAccumulator(max_sample_rows=sample_size)
     try:
-        audit_reader(reader, row_callback=rows.append)
+        audit_reader(reader, row_callback=accumulator.consume)
     except TypeError as error:
         if "row_callback" not in str(error):
             raise
-        rows.extend(audit_reader(reader))  # type: ignore[arg-type]
-    sample = deterministic_candidate_display_sample(rows, max_rows=sample_size)
+        for row in audit_reader(reader):  # type: ignore[operator]
+            accumulator.consume(row)
+    rows = accumulator.rows
+    sample = accumulator.sample()
     compositions = {key: candidate_composition_rows(rows, group_by=key) for key in CANDIDATE_GROUP_FIELDS}
     calibrations = {key: candidate_proposal_calibration_rows(rows, group_by=key) for key in CANDIDATE_GROUP_FIELDS}
     groups = {
@@ -527,8 +529,40 @@ def candidate_population_evidence(
         "collision": candidate_collision_support_rows(rows),
         "groups": groups,
         "sample": sample,
-        "population_count": len(rows),
+        "population_count": accumulator.population_count,
     }
+
+
+class _CandidatePopulationAccumulator:
+    """Single-pass population collector with bounded deterministic sampling."""
+
+    def __init__(self, *, max_sample_rows: int) -> None:
+        self.max_sample_rows = max_sample_rows
+        self.population_count = 0
+        self.rows: list[dict[str, object]] = []
+        self._sample: list[tuple[str, int, dict[str, object]]] = []
+
+    def consume(self, row: Mapping[str, object]) -> None:
+        normalized = dict(row)
+        self.population_count += 1
+        self.rows.append(normalized)
+        if self.max_sample_rows:
+            candidate_id = int(normalized.get("candidate_row_id", -1))
+            rank = hashlib.sha256(f"stored-rollout-display-v1\0{candidate_id}".encode()).hexdigest()
+            self._sample.append((rank, candidate_id, normalized))
+            self._sample.sort(key=lambda item: (item[0], item[1]))
+            del self._sample[self.max_sample_rows :]
+
+    def sample(self) -> dict[str, object]:
+        rows = [row for _, _, row in self._sample]
+        return {
+            "rows": rows,
+            "population_count": self.population_count,
+            "display_count": len(rows),
+            "max_rows": self.max_sample_rows,
+            "seed": "stored-rollout-display-v1",
+            "display_only": True,
+        }
 
 
 def temporal_metric_summary_rows(
@@ -869,6 +903,9 @@ def oracle_headroom_evidence(
             values: dict[str, float] = {}
             if reason is None:
                 for role, row in selected.items():
+                    if row.get("termination_reason") == "incomplete_rollout":
+                        reason = f"incomplete_rollout:{role}"
+                        break
                     temperature, temperature_error = _headroom_condition(row, "temperature", missing_value=-1)
                     random_seed, seed_error = _headroom_condition(row, "random_seed", missing_value=-1)
                     if temperature_error or seed_error:
