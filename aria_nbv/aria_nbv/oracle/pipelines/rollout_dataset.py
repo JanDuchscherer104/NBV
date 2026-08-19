@@ -1068,7 +1068,7 @@ class RolloutDatasetWriter:
                             source_sample_index=sample.sample_index,
                             source_sample_key=sample.sample_key,
                             split=sample.split,
-                            campaign_split=source_lineage.campaign_split,
+                            campaign_split=getattr(source_lineage, "campaign_split", sample.split),
                             source_shard_id=sample.source_shard_id,
                             source_shard_row=sample.source_shard_row,
                             source_offline_store_manifest_hash=source_lineage.source_manifest_hash,
