@@ -55,6 +55,7 @@ from .manifest import (
     utc_timestamp,
     write_rollout_store_manifest,
 )
+from .shard_manifest import build_rollout_split_manifest_hash
 from .trace import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
@@ -724,6 +725,18 @@ class _RolloutZarrWriteSession:
         )
         q_h_horizon = _table_horizon(table)
         q_h_arrays = _build_q_h_arrays(table, gamma=self.discount_gamma)
+        effective_split_manifest_hash = _effective_split_manifest_hash(
+            table.sources, dictionaries, fallback=self.split_manifest_hash
+        )
+        if effective_split_manifest_hash != self.split_manifest_hash:
+            try:
+                split_hash_id = dictionaries["config"].index(effective_split_manifest_hash)
+            except ValueError:
+                dictionaries["config"].append(effective_split_manifest_hash)
+                split_hash_id = len(dictionaries["config"]) - 1
+            table.sources["split_manifest_hash_id"] = np.full(
+                table.sources["split_manifest_hash_id"].shape, split_hash_id, dtype=np.int32
+            )
         root_metadata = _root_metadata_payload(
             records=records,
             tables=table,
@@ -736,7 +749,7 @@ class _RolloutZarrWriteSession:
             reason_code_version=self.reason_code_version,
             field_retention_policy=self.field_retention_policy,
             source_offline_store_version=self.source_offline_store_version,
-            split_manifest_hash=self.split_manifest_hash,
+            split_manifest_hash=effective_split_manifest_hash,
             selected_depth_enabled=self.selected_depth_enabled,
             selected_depth_width_px=self.selected_depth_width_px,
             selected_depth_height_px=self.selected_depth_height_px,
@@ -1142,6 +1155,55 @@ class _RolloutZarrValidator:
                 break
         if np.any(source_shard_row < 0):
             self.errors.append("sources/source_shard_row must be non-negative.")
+        source_keys = _encoded_values(self.root, dictionary_name="source_key", array_path="sources/sample_key_id")
+        scene_ids = _encoded_values(self.root, dictionary_name="scene", array_path="sources/scene_id")
+        snippet_ids = _encoded_values(self.root, dictionary_name="snippet", array_path="sources/snippet_id")
+        split_ids = _encoded_values(self.root, dictionary_name="split", array_path="sources/split_id")
+        campaign_split_ids = _encoded_values(self.root, dictionary_name="split", array_path="sources/campaign_split_id")
+        manifest_hashes = _encoded_values(
+            self.root, dictionary_name="config", array_path="sources/source_offline_store_manifest_hash_id"
+        )
+        split_hashes = _encoded_values(self.root, dictionary_name="config", array_path="sources/split_manifest_hash_id")
+        sample_indices = np.asarray(self.root["sources/sample_index"], dtype=np.int64).reshape(-1)
+        if (
+            source_row_id.size
+            and any(value != "unknown" for value in campaign_split_ids)
+            and all(
+                len(values) == source_row_id.size
+                for values in (
+                    source_keys,
+                    scene_ids,
+                    snippet_ids,
+                    split_ids,
+                    campaign_split_ids,
+                    manifest_hashes,
+                    split_hashes,
+                )
+            )
+        ):
+            records = []
+            for order in range(source_row_id.size):
+                record = {
+                    "order": order,
+                    "sample_index": int(sample_indices[order]),
+                    "sample_key": source_keys[order],
+                    "scene_id": scene_ids[order],
+                    "snippet_id": snippet_ids[order],
+                    "split": split_ids[order],
+                    "source_shard_id": source_shard_names[int(source_shard_id[order])],
+                    "source_shard_row": int(source_shard_row[order]),
+                }
+                if campaign_split_ids[order] != "unknown":
+                    record["campaign_split"] = campaign_split_ids[order]
+                records.append(record)
+            actual_hash = build_rollout_split_manifest_hash(
+                source_manifest_hash=manifest_hashes[0], split=split_ids[0], records=records
+            )
+            expected_hash = str(self.root.attrs.get("split_manifest_hash", ""))
+            if actual_hash != expected_hash:
+                self.errors.append("sources rows do not reproduce root split_manifest_hash, including campaign split.")
+            if any(value != expected_hash for value in split_hashes):
+                self.errors.append("sources split_manifest_hash values must match the root hash.")
 
     def _validate_targets(self) -> None:
         target_row_id = np.asarray(self.root["targets/target_row_id"])
@@ -1395,6 +1457,45 @@ def _required_groups() -> tuple[str, ...]:
         "selected_depth",
         "target_eval_crops",
         "q_h",
+    )
+
+
+def _effective_split_manifest_hash(
+    sources: dict[str, np.ndarray], dictionaries: dict[str, list[str]], *, fallback: str
+) -> str:
+    """Bind campaign assignments into v3 source hashes while preserving V0."""
+
+    campaign_ids = np.asarray(sources["campaign_split_id"], dtype=np.int64).reshape(-1)
+    split_values = dictionaries["split"]
+    campaign_values = [split_values[int(value)] for value in campaign_ids]
+    if not any(value != "unknown" for value in campaign_values):
+        return fallback
+    config_values = dictionaries["config"]
+    source_manifest_ids = np.asarray(sources["source_offline_store_manifest_hash_id"], dtype=np.int64).reshape(-1)
+    source_manifest_hashes = [config_values[int(value)] for value in source_manifest_ids]
+    split_ids = np.asarray(sources["split_id"], dtype=np.int64).reshape(-1)
+    source_splits = [split_values[int(value)] for value in split_ids]
+    source_shard_values = dictionaries["source_shard"]
+    source_shard_ids = np.asarray(sources["source_shard_id"], dtype=np.int64).reshape(-1)
+    sample_keys = [dictionaries["source_key"][int(value)] for value in np.asarray(sources["sample_key_id"]).reshape(-1)]
+    scene_ids = [dictionaries["scene"][int(value)] for value in np.asarray(sources["scene_id"]).reshape(-1)]
+    snippet_ids = [dictionaries["snippet"][int(value)] for value in np.asarray(sources["snippet_id"]).reshape(-1)]
+    records = []
+    for order in range(len(campaign_values)):
+        record = {
+            "order": order,
+            "sample_index": int(np.asarray(sources["sample_index"])[order]),
+            "sample_key": sample_keys[order],
+            "scene_id": scene_ids[order],
+            "snippet_id": snippet_ids[order],
+            "split": source_splits[order],
+            "source_shard_id": source_shard_values[int(source_shard_ids[order])],
+            "source_shard_row": int(np.asarray(sources["source_shard_row"])[order]),
+            "campaign_split": campaign_values[order],
+        }
+        records.append(record)
+    return build_rollout_split_manifest_hash(
+        source_manifest_hash=source_manifest_hashes[0], split=source_splits[0], records=records
     )
 
 

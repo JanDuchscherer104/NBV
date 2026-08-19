@@ -215,7 +215,7 @@ def test_split_manifest_hash_tracks_source_rows_and_order() -> None:
     assert base != changed_source
 
 
-def test_campaign_split_is_serialized_but_excluded_from_source_hash() -> None:
+def test_campaign_split_is_serialized_and_bound_into_v3_source_hash() -> None:
     row = RolloutShardRow(
         order=0,
         sample_index=1,
@@ -227,13 +227,43 @@ def test_campaign_split_is_serialized_but_excluded_from_source_hash() -> None:
         source_shard_row=0,
     )
     campaign_row = replace(row, campaign_split="pilot")
-    assert row.hash_record() == campaign_row.hash_record()
+    assert row.hash_record() != campaign_row.hash_record()
     assert row.to_jsonable() != campaign_row.to_jsonable()
     assert _RolloutSourceLineageBuilder.build_split_manifest_hash(
         source_manifest_hash="source", split="train", records=[row.hash_record()]
-    ) == _RolloutSourceLineageBuilder.build_split_manifest_hash(
+    ) != _RolloutSourceLineageBuilder.build_split_manifest_hash(
         source_manifest_hash="source", split="train", records=[campaign_row.hash_record()]
     )
+
+
+def test_v3_campaign_split_tampering_is_rejected_by_entry_hash() -> None:
+    row = RolloutShardRow(
+        order=0,
+        sample_index=1,
+        sample_key="sample",
+        scene_id="scene",
+        snippet_id="snippet",
+        split="train",
+        source_shard_id="shard-0",
+        source_shard_row=0,
+        campaign_split="train",
+    )
+    entry = RolloutShardEntry(
+        shard_id="shard-000000",
+        split="train",
+        rows=(row,),
+        writer_config_hash="writer",
+        source_manifest_hash="source",
+        source_cache_version="v1",
+        split_manifest_hash=_RolloutSourceLineageBuilder.build_split_manifest_hash(
+            source_manifest_hash="source", split="train", records=[row.hash_record()]
+        ),
+        source_store_dir="vin.zarr",
+        campaign_split="train",
+    )
+    entry.validate()
+    with pytest.raises(ValueError, match="campaign split|split_manifest_hash"):
+        replace(entry, rows=(replace(row, campaign_split="test"),)).validate()
 
 
 def test_v2_campaign_split_hashes_fail_closed() -> None:

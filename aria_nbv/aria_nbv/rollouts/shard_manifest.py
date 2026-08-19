@@ -168,9 +168,11 @@ class RolloutShardRow:
     def hash_record(self) -> dict[str, object]:
         """Return the row fields used for deterministic lineage hashing."""
         record = self.to_jsonable()
-        # Campaign split is a campaign binding, not immutable source-row
-        # identity.  It is persisted separately but never changes source hash.
-        record.pop("campaign_split", None)
+        # V0 source manifests have no campaign assignment and retain their
+        # historical hash.  Once a v3 row is assigned to a campaign, that
+        # assignment is part of the hash-bound ownership identity.
+        if self.campaign_split is None:
+            record.pop("campaign_split", None)
         return record
 
     def matches_record(self, record: Any) -> bool:
@@ -440,6 +442,8 @@ class RolloutShardEntry:
             raise ValueError(f"Rollout shard {self.shard_id!r} campaign split disagrees with owned rows.")
         if row_campaign_splits and self.campaign_split is None:
             raise ValueError(f"Rollout shard {self.shard_id!r} rows declare campaign split but entry does not.")
+        if self.campaign_split is not None and row_campaign_splits != {self.campaign_split}:
+            raise ValueError(f"Rollout shard {self.shard_id!r} rows must carry its campaign split.")
         orders = [row.order for row in self.rows]
         if orders != list(range(len(self.rows))):
             raise ValueError(f"Rollout shard {self.shard_id!r} row order must be contiguous from zero.")
@@ -447,6 +451,13 @@ class RolloutShardEntry:
             raise ValueError(f"Rollout shard {self.shard_id!r} contains an empty source_shard_id.")
         if any(row.source_shard_row < 0 for row in self.rows):
             raise ValueError(f"Rollout shard {self.shard_id!r} contains a negative source_shard_row.")
+        expected_hash = build_rollout_split_manifest_hash(
+            source_manifest_hash=self.source_manifest_hash,
+            split=self.split,
+            records=[row.hash_record() for row in self.rows],
+        )
+        if self.split_manifest_hash != expected_hash:
+            raise ValueError(f"Rollout shard {self.shard_id!r} split_manifest_hash does not match its rows.")
 
 
 def canonical_rollout_shard_id(value: str | int) -> str:

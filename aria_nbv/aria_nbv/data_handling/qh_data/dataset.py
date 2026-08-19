@@ -215,8 +215,17 @@ class QhDataset(Dataset[QhChain]):
                         "split": record.split,
                         "source_shard_id": record.shard_id,
                         "source_shard_row": record.row,
+                        **(
+                            {
+                                "campaign_split": source_ref.campaign_split.value
+                                if source_ref.campaign_split is not Stage.VAL
+                                else "validation"
+                            }
+                            if source_ref.campaign_split is not None
+                            else {}
+                        ),
                     }
-                    for order, record in enumerate(records)
+                    for order, (record, source_ref) in enumerate(zip(records, source_refs, strict=True))
                 ],
             )
             if actual != expected:

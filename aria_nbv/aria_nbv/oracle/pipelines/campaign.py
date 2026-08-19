@@ -1543,7 +1543,7 @@ class CudaRolloutCampaign:
         narrows the source selection to one sample and carries campaign
         identity into the existing shard manifest contract.
         """
-        from ...rollouts.shard_manifest import RolloutShardCampaignBinding
+        from ...rollouts.shard_manifest import RolloutShardCampaignBinding, build_rollout_split_manifest_hash
 
         cfg = writer_config.model_copy(deep=True) if hasattr(writer_config, "model_copy") else writer_config
         original_campaign_binding = getattr(shard_entry, "campaign_binding", None)
@@ -1643,12 +1643,14 @@ class CudaRolloutCampaign:
                     ]
                 }
             )
-        if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
-            cfg = cfg.model_copy(
-                update={"store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})}
-            )
         if hasattr(cfg, "model_dump"):
             cfg = type(cfg).model_validate({**cfg.model_dump(), "explicit_target": target_payload})
+            if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
+                cfg = cfg.model_copy(
+                    update={
+                        "store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})
+                    }
+                )
         # Canonical source/split/writer lineage is mandatory for production
         # shard entries.  Legacy unit tests may adapt a config without a real
         # shard envelope; those remain an in-memory construction seam only.
@@ -1677,6 +1679,18 @@ class CudaRolloutCampaign:
                 campaign_binding=original_campaign_binding,
                 campaign_split=original_campaign_split,
                 generation_revision_hash=original_generation_revision_hash,
+            )
+            shard_entry = replace(
+                shard_entry,
+                split_manifest_hash=build_rollout_split_manifest_hash(
+                    source_manifest_hash=shard_entry.source_manifest_hash,
+                    split=shard_entry.split,
+                    records=[row.hash_record() for row in shard_entry.rows],
+                ),
+            )
+        if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
+            cfg = cfg.model_copy(
+                update={"store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})}
             )
         binding = RolloutShardCampaignBinding(
             campaign_id=self.config.campaign_id,
