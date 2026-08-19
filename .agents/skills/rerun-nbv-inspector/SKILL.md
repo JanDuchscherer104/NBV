@@ -38,8 +38,8 @@ metadata:
   context7_refs:
     - "/rerun-io/rerun"
   tool_refs:
-    - "mcp__MCP_DOCKER.resolve_library_id"
-    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__codex_apps__context7_resolve_library_id"
+    - "mcp__codex_apps__context7_query_docs"
     - "mcp__code_index.search_code_advanced"
   verification:
     - "cd aria_nbv && uv run pytest tests/rerun_inspector -q"

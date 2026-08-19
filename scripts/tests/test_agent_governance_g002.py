@@ -202,6 +202,10 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
     fixture = fixtures["context7-graphify-api-change"]
     assert _fixture_owner_paths_exist(ROOT, fixture)
     assert fixture["expected_tool_refs"] == [
+        "mcp__codex_apps__context7_resolve_library_id",
+        "mcp__codex_apps__context7_query_docs",
+    ]
+    assert fixture["forbidden_tool_refs"] == [
         "mcp__MCP_DOCKER.resolve_library_id",
         "mcp__MCP_DOCKER.get_library_docs",
     ]
@@ -226,9 +230,10 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
     provenance = _read(
         ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md"
     )
-    assert "Use a supplied exact ID directly. Otherwise resolve" in context
+    assert "Use a supplied exact ID directly; otherwise call" in context
+    assert "Do not use the\ndeprecated MCP-Docker Context7 tools" in context
     assert "/graphify-labs/graphify" in registry
-    assert "seed menu, not one broad query" in registry
+    assert "seed menu, not one broad\nquery" in registry
     assert "exact resolved" in provenance
     assert "paired `repo:` anchors" in provenance
 
@@ -243,22 +248,31 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     amendment = "### Accepted 2026-08-01 Graphify remediation amendment"
     supersession = "## Accepted 2026-08-14 Mandatory Graphify Supersession"
     lifecycle = "## Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession"
+    context_hierarchy = (
+        "## Accepted 2026-08-19 Context Hierarchy And Context7 App Supersession"
+    )
     assert spec.index(amendment) < spec.index(supersession)
     assert spec.index(supersession) < spec.index(lifecycle)
+    assert spec.index(lifecycle) < spec.index(context_hierarchy)
     assert "Graphify as a navigation prerequisite in every\nCodex worktree" in spec
     assert "Graphify chooses navigation context; it never settles behavior" in spec
     assert "upstream Graphify `query`, `path`, or\n`explain` before raw search" in spec
+    assert "single current owner of\nthe hierarchical source map" in spec
+    assert "mcp__codex_apps__context7_query_docs" in spec
 
     root_guidance = _read(ROOT / "AGENTS.md")
-    assert "## Graphify And Context7" in root_guidance
+    assert "## Graphify And Context7 App" in root_guidance
     assert "upstream Graphify `query`, `path`, and `explain`" in root_guidance
     optional_tools = root_guidance.split("## Optional Tools And Capture", maxsplit=1)[1]
     assert "Graphify" not in optional_tools
 
+    context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
     source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
     intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
-    assert "Graphify is the primary broad-context navigation map" in source_order
-    assert "Context7 is current external API/version evidence" in source_order
+    assert "## Graphify Branch" in context
+    assert "## Context7 App Branch" in context
+    assert "Deprecated Compatibility Pointer" in source_order
+    assert "do\nnot add policy here" in source_order
     assert (
         "Require the Graphify executable and usable graph artifacts as navigation"
         in intent
@@ -298,7 +312,7 @@ Rules:
         assert "optional Graphify" not in _read(owner)
 
     root_guidance = _read(ROOT / "AGENTS.md")
-    assert "## Graphify And Context7" in root_guidance
+    assert "## Graphify And Context7 App" in root_guidance
     assert "then opens exact owners before consequential" in root_guidance
 
 
@@ -345,7 +359,7 @@ def test_route_only_domain_skill_contract() -> None:
             in fixtures[fixture_id]["expected_owner_paths"]
         )
     assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
-        "mcp__MCP_DOCKER.get_library_docs"
+        "mcp__codex_apps__context7_query_docs"
     ]
     for fixture in fixtures.values():
         assert "expected_skills" not in fixture
@@ -424,7 +438,7 @@ def test_capture_and_routing_contracts() -> None:
         "AGENTS.md",
         ".agents/skills/agent-behavior/SKILL.md",
         ".agents/skills/agent-behavior/references/durable-capture.md",
-        ".agents/references/source_order.md",
+        ".agents/skills/aria-nbv-context/SKILL.md",
     ]
     assert (
         "deliberate user-authored angle-bracket prose activates durable capture"
@@ -471,16 +485,16 @@ def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
         in (hazard["forbidden_outcomes"])
     )
 
-    source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
-    assert "## Compositional Owner Tree" in source_order
-    assert "Ubiquitous language" in source_order
-    assert "docs/typst/shared/glossary.typ" in source_order
-    capture_rule = source_order.split("## Capture Rule", maxsplit=1)[1]
+    context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
+    assert "## Owner Hierarchy" in context
+    assert "**Scientific language**" in context
+    assert "docs/typst/shared/glossary.typ" in context
+    capture_rule = context.split("## Capture Rule", maxsplit=1)[1]
     for destination in (
         "Repo invariant: root or nearest nested `AGENTS.md`",
         "Repeatable workflow: `.agents/skills/*/SKILL.md`",
-        "Actionable work: `.agents/issues.toml`, `.agents/todos.toml`, or",
-        "Public narrative: active Quarto or Typst owner.",
+        "Actionable work: Agents-DB issues, todos, or refactors.",
+        "Public narrative or scientific language: the smallest active Quarto/Typst",
     ):
         assert destination in capture_rule
 
@@ -685,7 +699,7 @@ def test_thesis_context_and_context7_routing() -> None:
         "/zarr-developers/zarr-python",
     ):
         assert superseded_id not in context7_registry
-    assert "seed menu, not one broad query" in context7_registry
+    assert "seed menu, not one broad\nquery" in context7_registry
     for graphify_seed in (
         "query, path, and explain command selection and output contracts",
         "post-commit and post-checkout hook installation behavior",

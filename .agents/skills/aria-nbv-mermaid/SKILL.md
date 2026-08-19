@@ -39,8 +39,8 @@ metadata:
   context7_refs:
     - "/mermaid-js/mermaid"
   tool_refs:
-    - "mcp__MCP_DOCKER.resolve_library_id"
-    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__codex_apps__context7_resolve_library_id"
+    - "mcp__codex_apps__context7_query_docs"
   verification:
     - "python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>"
     - "tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg> when `mmdc` is available"

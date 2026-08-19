@@ -23,11 +23,16 @@ fixtures and contract tests for the review-sensitive pointers.
 
 ## Findings
 
-- `.agents/references/source_order.md` is now a compositional owner tree with
-  shared Typst terminology owners and subordinate Graphify/Context7 evidence.
-- `aria-nbv-context` owns Graphify-first traversal, worktree lifecycle detail,
-  exact Context7 IDs, and focused query seeds; the Graphify skill remains
-  byte-identical to upstream.
+- `aria-nbv-context` now owns the hierarchical source map, conflict/capture
+  rules, Graphify-first traversal, and Context7 App route.
+- Its initialization map briefly describes the shared symbol, equation, and
+  glossary owners plus the manifest-to-bibliography-to-review-to-thesis
+  literature chain. Exact scientific and executable files remain truth owners.
+- `.agents/references/source_order.md` is an 18-line deprecated compatibility
+  pointer, preserving old anchors without a second policy copy.
+- Active skills and routing fixtures use Context7 App calls; MCP-Docker
+  Context7 appears only as an explicit prohibited migration route.
+- The Graphify skill remains byte-identical to upstream.
 - `agent-behavior` remains a compact router. Durable capture and external-action
   detail stay in its branch references.
 - Canonical Python docstring examples moved behind
@@ -36,11 +41,14 @@ fixtures and contract tests for the review-sensitive pointers.
 
 ## Verification
 
-Passed `make scaffold-audit-self-test`, the Graphify upstream, freshness,
-worktree-seed, and setup tests, `scripts/tests/test_ci_impact.py`,
-the 17-test ownership-consolidation contract, `make check-agent-memory`, Ruff
-on affected Python, JSON parsing, and `git diff --check`. Hosted checks remain
-a publication-time proof.
+Passed `make scaffold-audit`, `make scaffold-audit-self-test`, the Graphify
+upstream, freshness, worktree-seed, and setup tests, the 14-test governance
+suite, the 17-test ownership-consolidation contract, CI-impact self-tests,
+`make check-agent-memory`, the skill-authoring validator, Ruff on affected
+Python, JSON parsing, and `git diff --check`. Full `make ci` also passed after
+initializing the clone's declared submodules, including the 267-test Q_H suite,
+115-test package slice, Quarto render, both Typst compiles, authoring hygiene,
+and thesis-marker contract. Hosted checks remain a publication-time proof.
 
 ## Canonical Owner Impact
 

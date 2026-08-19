@@ -5,9 +5,9 @@ tests, configuration, and Typst own behavior and scientific claims.
 
 ## Source Order
 
-- Use `.agents/references/source_order.md` for current truth and conflict
-  resolution. Generated, retrieved, and historical material is evidence, not
-  current authority.
+- Use `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy` for current
+  hierarchy and conflict resolution. Generated, retrieved, and historical
+  material is evidence, not current authority.
 
 ## Diagnosis And Routing
 
@@ -33,14 +33,14 @@ tests, configuration, and Typst own behavior and scientific claims.
   rollout inspection work uses `rerun-nbv-inspector`. Package README files,
   code, configuration, and tests remain behavioral owners.
 
-## Graphify And Context7
+## Graphify And Context7 App
 
 - For architecture, relationships, ownership, or broad project context, use
   `aria-nbv-context`. It treats upstream Graphify `query`, `path`, and `explain`
   as the primary navigation map, then opens exact owners before consequential
-  claims or edits. It also routes Context7 only for current external API or
-  version evidence. Worktree setup, hook/update behavior, freshness, repair,
-  fallback, exact library IDs, and focused query recipes stay behind that route.
+  claims or edits. It also routes the Context7 App only for current external API
+  or version evidence. Worktree setup, freshness, fallback, exact library IDs,
+  and focused query recipes stay behind that route.
 
 ## Universal Safety
 
@@ -53,7 +53,7 @@ tests, configuration, and Typst own behavior and scientific claims.
 
 - External skills, OMX, MCP, MemPalace, memory, and autoresearch provide
   optional evidence or orchestration, never ARIA truth ownership. Route durable
-  changes through the source-order owner.
+  changes through the hierarchy owner.
 - Deliberate user-authored `<...>` prose, including a read-only capture request,
   activates `agent-behavior`'s durable-capture branch. It selects the smallest
   source-order owner and names that owner's verification.

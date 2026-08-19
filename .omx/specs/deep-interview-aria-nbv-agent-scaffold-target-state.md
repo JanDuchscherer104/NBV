@@ -172,6 +172,28 @@ context reference instead of root guidance. Current external docs remain
 supporting evidence and cannot override installed behavior, focused tests, or
 ARIA's exact owner.
 
+## Accepted 2026-08-19 Context Hierarchy And Context7 App Supersession
+
+The human owner now selects `aria-nbv-context` as the single current owner of
+the hierarchical source map, conflict rule, capture destinations, Graphify
+route, and Context7 route. This supersedes the earlier requirement to retain
+`.agents/references/source_order.md` as an independent authority map. That path
+remains only as a compact compatibility pointer for historical, backlog, and
+external links; active guidance points directly to the skill.
+
+The initialization hierarchy names concise leaves for shared Typst symbols,
+equations, glossary source and renderer, the literature manifest,
+bibliographies, paper reviews, and the active thesis sections that consume
+them. These descriptions route agents; the named files remain the scientific,
+bibliographic, review, or narrative owners.
+
+Current external-library retrieval uses the Context7 App calls
+`mcp__codex_apps__context7_resolve_library_id` and
+`mcp__codex_apps__context7_query_docs`. MCP-Docker's Context7 calls are
+deprecated and may appear only in migration prohibitions or historical
+evidence. Exact IDs and one-concept query seeds remain progressively disclosed
+in `aria-nbv-context/references/context7_library_ids.md`.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
