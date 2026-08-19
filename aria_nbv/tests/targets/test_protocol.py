@@ -116,6 +116,10 @@ def test_v1_label_mapping_requires_strict_admitted_match() -> None:
             "matched_gt_target_id": "gt-3",
             "gt_match_iou": 0.21,
             "target_valid": True,
+            "descriptor_source": "detected_obbs",
+            "descriptor_provenance": TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
+            "descriptor_hash": "a" * 64,
+            "explicit_target_hash": "b" * 64,
         }
         values.update(changes)
         return TargetLabelEvidence(**values)
@@ -130,6 +134,10 @@ def test_v1_label_mapping_requires_strict_admitted_match() -> None:
         {"matched_gt_target_id": ""},
         {"target_valid": False},
         {"target_source": ORACLE_GT_TARGET_SOURCE},
+        {"descriptor_source": None},
+        {"descriptor_provenance": None},
+        {"descriptor_hash": "tampered"},
+        {"explicit_target_hash": "tampered"},
     ):
         assert not target_label_is_trainable(evidence(**changes))
 

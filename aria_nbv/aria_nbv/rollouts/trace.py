@@ -151,6 +151,18 @@ class TargetLineage:
     target_source_index: int | None = None
     """Row index in the source OBB/task table before target filtering."""
 
+    descriptor_source: str | None = None
+    """Source block that constructed the actor-facing descriptor."""
+
+    descriptor_provenance: str | None = None
+    """Typed construction provenance for the actor-facing descriptor."""
+
+    descriptor_hash: str | None = None
+    """Canonical hash of the actor-facing descriptor identity."""
+
+    explicit_target_hash: str | None = None
+    """Canonical hash binding an explicit observed target to its GT proof."""
+
     target_sem_id: int | None = None
     """Semantic class id carried by the chosen target task."""
 

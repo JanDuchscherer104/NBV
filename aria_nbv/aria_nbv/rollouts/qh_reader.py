@@ -258,6 +258,10 @@ def _validate_target_labels(
     target = root["targets"]
     target_ids = _decode_dictionary(root, "target")
     match_statuses = _decode_dictionary(root, "target_match_status")
+    descriptor_sources = _decode_dictionary(root, "descriptor_source")
+    descriptor_provenances = _decode_dictionary(root, "descriptor_provenance")
+    descriptor_hashes = _decode_dictionary(root, "descriptor_hash")
+    explicit_target_hashes = _decode_dictionary(root, "explicit_target_hash")
     source_ids = np.asarray(target["target_source_id"], dtype=np.int64).reshape(-1)
     target_rows = np.asarray(target["target_row_id"]).reshape(-1)
     target_valid = np.asarray(target["target_valid_mask"], dtype=np.bool_).reshape(-1)
@@ -288,6 +292,14 @@ def _validate_target_labels(
                 matched_gt_target_row_id=int(np.asarray(target["matched_gt_target_row_id"]).reshape(-1)[row]),
                 matched_gt_target_id=match_id,
                 gt_match_iou=float(np.asarray(target["gt_match_iou"]).reshape(-1)[row]),
+                descriptor_source=descriptor_sources[int(np.asarray(target["descriptor_source_id"]).reshape(-1)[row])],
+                descriptor_provenance=descriptor_provenances[
+                    int(np.asarray(target["descriptor_provenance_id"]).reshape(-1)[row])
+                ],
+                descriptor_hash=descriptor_hashes[int(np.asarray(target["descriptor_hash_id"]).reshape(-1)[row])],
+                explicit_target_hash=explicit_target_hashes[
+                    int(np.asarray(target["explicit_target_hash_id"]).reshape(-1)[row])
+                ],
                 target_valid=bool(target_valid[row] and target_reason[row] == 1),
             )
         )

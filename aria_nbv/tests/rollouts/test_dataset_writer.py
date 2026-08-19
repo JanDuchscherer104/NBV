@@ -365,6 +365,11 @@ def test_explicit_v1_target_preserves_actor_descriptor_and_v1_lineage_fields() -
     assert task.descriptor == actor.descriptor
     assert lineage.target_protocol_version == TargetInputProtocol.V1_OBSERVED
     assert lineage.target_source == actor.source
+    assert lineage.target_source_index == 3
+    assert lineage.descriptor_source == actor.source
+    assert lineage.descriptor_provenance == "actor_visible_detector"
+    assert lineage.descriptor_hash == actor.descriptor_hash
+    assert lineage.explicit_target_hash == explicit.explicit_target_hash
     assert lineage.matched_gt_target_row_id == 5
     assert lineage.matched_gt_target_id == "gt-5"
     assert lineage.gt_match_iou == pytest.approx(0.6)

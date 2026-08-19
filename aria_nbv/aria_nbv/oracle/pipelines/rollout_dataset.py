@@ -1081,6 +1081,7 @@ class RolloutDatasetWriter:
         """Encode one Oracle task into the frozen rollout target columns."""
 
         explicit = getattr(self.config, "explicit_target", None)
+        actor = explicit.actor_descriptor if explicit is not None else None
         gt_valid = target.identity_status == TargetTaskIdentityStatus.MATCHED.value
         if gt_valid:
             primary_reason = TARGET_INVALID_REASON_CODES["VALID"]
@@ -1090,10 +1091,10 @@ class RolloutDatasetWriter:
             primary_reason = TARGET_INVALID_REASON_CODES["OBB_EXTENT_INVALID"]
         else:
             primary_reason = TARGET_INVALID_REASON_CODES["TARGET_GT_UNMATCHED"]
-        descriptor = target.descriptor
+        descriptor = actor.descriptor if actor is not None and actor.descriptor is not None else target.descriptor
         return TargetLineage(
             target_row_id=target.target_row_id,
-            target_id=target.target_id,
+            target_id=explicit.target_id if explicit is not None else target.target_id,
             target_protocol_version=self.config.store.target_protocol_version,
             target_crop_policy=self.config.target_scorer.target_crop_policy,
             target_selection_policy=self._target_selection_policy(),
@@ -1101,8 +1102,16 @@ class RolloutDatasetWriter:
             target_selection_score=float("nan"),
             target_selection_probability=target.selection_probability,
             target_selection_temperature=None,
-            target_source=(explicit.actor_descriptor.source if explicit is not None else ORACLE_TARGET_TASK_SOURCE),
-            target_source_index=target.source_index,
+            target_source=(actor.source if actor is not None else ORACLE_TARGET_TASK_SOURCE),
+            target_source_index=(explicit.detected_source_row if explicit is not None else target.source_index),
+            descriptor_source=(actor.source if actor is not None else ORACLE_TARGET_TASK_SOURCE),
+            descriptor_provenance=(
+                TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR.value
+                if actor is not None
+                else TargetDescriptorProvenance.ORACLE_GT.value
+            ),
+            descriptor_hash=(actor.descriptor_hash if actor is not None else None),
+            explicit_target_hash=(explicit.explicit_target_hash if explicit is not None else None),
             target_sem_id=descriptor.sem_id,
             target_inst_id=target.inst_id,
             target_class_name=descriptor.class_name,
@@ -1195,6 +1204,8 @@ class RolloutDatasetWriter:
                 evidence.selected_depth_image_size_hw = (int(size_wh[1].item()), int(size_wh[0].item()))
 
     def _target_selection_policy(self) -> str:
+        if getattr(self.config, "explicit_target", None) is not None:
+            return "explicit_observed_target"
         return OracleTargetTaskSelectionPolicy.UNIFORM_WITHOUT_REPLACEMENT.value
 
 

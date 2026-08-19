@@ -82,6 +82,8 @@ class TargetLabelEvidence:
     target_valid: bool
     descriptor_source: str | None = None
     descriptor_provenance: TargetDescriptorProvenance | str | None = None
+    descriptor_hash: str | None = None
+    explicit_target_hash: str | None = None
 
 
 def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
@@ -102,23 +104,17 @@ def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
             return False
         if protocol is TargetInputProtocol.V0_GT_INPUT:
             return evidence.gt_match_status in {"matched", "v0_gt_input"}
-        descriptor_source = evidence.descriptor_source or evidence.target_source
-        if evidence.descriptor_provenance is None:
-            # The fixed Zarr schema stores the actor-visible source but not a
-            # second provenance column.  Writer/config admission validates the
-            # stronger typed provenance before persistence; readers still
-            # require a non-Oracle, self-consistent source.
-            if evidence.target_source not in _ACTOR_VISIBLE_TARGET_SOURCES:
-                return False
-            if descriptor_source != evidence.target_source:
-                return False
-        else:
-            validate_target_protocol_admission(
-                protocol,
-                target_source=evidence.target_source,
-                descriptor_source=descriptor_source,
-                descriptor_provenance=evidence.descriptor_provenance,
-            )
+        descriptor_source = evidence.descriptor_source
+        if evidence.descriptor_provenance is None or not descriptor_source:
+            return False
+        validate_target_protocol_admission(
+            protocol,
+            target_source=evidence.target_source,
+            descriptor_source=descriptor_source,
+            descriptor_provenance=evidence.descriptor_provenance,
+        )
+        if not _is_sha256_digest(evidence.descriptor_hash) or not _is_sha256_digest(evidence.explicit_target_hash):
+            return False
         iou = evidence.gt_match_iou
         return bool(
             evidence.gt_match_status == "admitted"
@@ -129,6 +125,18 @@ def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
         )
     except (TypeError, ValueError):
         return False
+
+
+def _is_sha256_digest(value: str | None) -> bool:
+    """Return whether a persisted identity proof has canonical SHA-256 shape."""
+
+    if value is None or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return True
 
 
 def validate_target_protocol_admission(

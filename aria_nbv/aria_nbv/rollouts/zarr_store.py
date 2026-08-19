@@ -1698,6 +1698,12 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
     target_match_status_values = {
         lineage.target.gt_match_status or "not_requested" for _record, _trajectory, lineage in items
     }
+    descriptor_source_values = {lineage.target.descriptor_source or "" for _record, _trajectory, lineage in items}
+    descriptor_provenance_values = {
+        lineage.target.descriptor_provenance or "" for _record, _trajectory, lineage in items
+    }
+    descriptor_hash_values = {lineage.target.descriptor_hash or "" for _record, _trajectory, lineage in items}
+    explicit_target_hash_values = {lineage.target.explicit_target_hash or "" for _record, _trajectory, lineage in items}
     return {
         "scene": sorted({lineage.source.scene_id or "" for _record, _trajectory, lineage in items}),
         "snippet": sorted(
@@ -1739,6 +1745,10 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
             {lineage.target.target_class_name or "unknown" for _record, _trajectory, lineage in items}
         ),
         "target_match_status": sorted(target_match_status_values),
+        "descriptor_source": sorted(descriptor_source_values),
+        "descriptor_provenance": sorted(descriptor_provenance_values),
+        "descriptor_hash": sorted(descriptor_hash_values),
+        "explicit_target_hash": sorted(explicit_target_hash_values),
         "termination_reason": sorted(
             {
                 _termination_reason(record.evaluated.result, trajectory)
@@ -1855,6 +1865,23 @@ def _write_targets(
             dtype=np.int32,
         ),
     )
+    for field_name, dictionary_name in (
+        ("descriptor_source", "descriptor_source"),
+        ("descriptor_provenance", "descriptor_provenance"),
+        ("descriptor_hash", "descriptor_hash"),
+        ("explicit_target_hash", "explicit_target_hash"),
+    ):
+        _write_array(
+            group,
+            f"{field_name}_id",
+            np.asarray(
+                [
+                    _dict_id(dictionaries[dictionary_name], str(target_rows[target_row_id].get(field_name) or ""))
+                    for target_row_id in target_ids
+                ],
+                dtype=np.int32,
+            ),
+        )
     _write_array(
         group,
         "target_sem_id",
@@ -2081,6 +2108,10 @@ def _write_targets(
                         ),
                         matched_gt_target_id=target_rows[target_row_id].get("matched_gt_target_id"),
                         gt_match_iou=target_rows[target_row_id].get("gt_match_iou"),
+                        descriptor_source=target_rows[target_row_id].get("descriptor_source"),
+                        descriptor_provenance=target_rows[target_row_id].get("descriptor_provenance"),
+                        descriptor_hash=target_rows[target_row_id].get("descriptor_hash"),
+                        explicit_target_hash=target_rows[target_row_id].get("explicit_target_hash"),
                         target_valid=(
                             _int_or_default(
                                 target_rows[target_row_id].get("target_invalid_reason_bitset"),
@@ -2123,6 +2154,10 @@ def _target_rows_from_records(records: list[_RolloutWriteRecord]) -> dict[int, d
             "target_selection_temperature": lineage.target.target_selection_temperature,
             "target_source": lineage.target.target_source,
             "target_source_index": lineage.target.target_source_index,
+            "descriptor_source": lineage.target.descriptor_source,
+            "descriptor_provenance": lineage.target.descriptor_provenance,
+            "descriptor_hash": lineage.target.descriptor_hash,
+            "explicit_target_hash": lineage.target.explicit_target_hash,
             "target_sem_id": lineage.target.target_sem_id,
             "target_inst_id": lineage.target.target_inst_id,
             "target_class_name": lineage.target.target_class_name,
@@ -3345,6 +3380,10 @@ def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
             matched_gt_target_row_id=lineage.target.matched_gt_target_row_id,
             matched_gt_target_id=lineage.target.matched_gt_target_id,
             gt_match_iou=lineage.target.gt_match_iou,
+            descriptor_source=lineage.target.descriptor_source,
+            descriptor_provenance=lineage.target.descriptor_provenance,
+            descriptor_hash=lineage.target.descriptor_hash,
+            explicit_target_hash=lineage.target.explicit_target_hash,
             target_valid=(
                 (target_bitset is None and protocol == TargetInputProtocol.V0_GT_INPUT)
                 or (target_bitset is not None and int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"]))
@@ -3362,6 +3401,18 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
         root,
         dictionary_name="target_source",
         array_path="targets/target_source_id",
+    )
+    descriptor_sources = _encoded_values(
+        root, dictionary_name="descriptor_source", array_path="targets/descriptor_source_id"
+    )
+    descriptor_provenances = _encoded_values(
+        root, dictionary_name="descriptor_provenance", array_path="targets/descriptor_provenance_id"
+    )
+    descriptor_hashes = _encoded_values(
+        root, dictionary_name="descriptor_hash", array_path="targets/descriptor_hash_id"
+    )
+    explicit_target_hashes = _encoded_values(
+        root, dictionary_name="explicit_target_hash", array_path="targets/explicit_target_hash_id"
     )
     target_ids = _read_string_array(root, "dictionaries/target")
     statuses = _read_string_array(root, "dictionaries/target_match_status")
@@ -3384,6 +3435,10 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
                     matched_gt_target_row_id=int(match_row),
                     matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
                     gt_match_iou=float(iou),
+                    descriptor_source=descriptor_sources[row] if row < len(descriptor_sources) else None,
+                    descriptor_provenance=descriptor_provenances[row] if row < len(descriptor_provenances) else None,
+                    descriptor_hash=descriptor_hashes[row] if row < len(descriptor_hashes) else None,
+                    explicit_target_hash=explicit_target_hashes[row] if row < len(explicit_target_hashes) else None,
                     target_valid=bool(
                         target_valid[row] and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
                     ),
