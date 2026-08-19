@@ -109,6 +109,8 @@ rollouts.zarr/
     mesh_distance_m
     path_min_clearance_m
     path_collision_mask
+    path_collision_applicable_mask
+    path_collision_evaluated_mask
     free_space_margin_m
     motion_step_length_m
     motion_height_delta_m

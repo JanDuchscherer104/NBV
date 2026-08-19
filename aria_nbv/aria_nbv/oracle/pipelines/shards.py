@@ -10,16 +10,20 @@ rather than overwritten.
 from __future__ import annotations
 
 import hashlib
+import itertools
+import json
+import os
 
 # Helper is intentionally defined before heavyweight rollout imports.
 # ruff: noqa: E402
-import json
-import os
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
+
+import numpy as np
+import zarr
 
 from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig  # noqa: E402
 from ...rollouts.manifest import (
@@ -606,17 +610,78 @@ def _success_payload(
 
 
 def _rollout_store_content_sha256(store_dir: Path) -> str:
-    """Hash promoted Zarr/manifest content, excluding lifecycle sidecars."""
+    """Hash the canonical logical Zarr payload, independent of storage layout."""
 
+    def canonical(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): canonical(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
+        if isinstance(value, (list, tuple)):
+            return [canonical(item) for item in value]
+        if hasattr(value, "item"):
+            return canonical(value.item())
+        return value
+
+    def add(digest: Any, label: str, payload: bytes) -> None:
+        label_bytes = label.encode("utf-8")
+        digest.update(len(label_bytes).to_bytes(8, "big"))
+        digest.update(label_bytes)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+
+    root = zarr.open_group(store_dir, mode="r")
     digest = hashlib.sha256()
-    excluded = {ROLLOUT_SHARD_OWNER_FILENAME, ROLLOUT_SHARD_SUCCESS_FILENAME}
-    for path in sorted(p for p in store_dir.rglob("*") if p.is_file() and p.name not in excluded):
-        relative = path.relative_to(store_dir).as_posix().encode()
-        data = path.read_bytes()
-        digest.update(len(relative).to_bytes(8, "big"))
-        digest.update(relative)
-        digest.update(len(data).to_bytes(8, "big"))
-        digest.update(data)
+    manifest_path = store_dir / str(root.attrs.get("manifest_path", "manifest.json"))
+    if not manifest_path.is_file():
+        raise ValueError(f"Missing rollout manifest: {manifest_path}")
+    add(digest, "manifest.json", manifest_path.read_bytes())
+    excluded_attrs = {"rollout_store_content_sha256", "rollout_store_content_seal"}
+
+    def attrs_payload(attrs: Any) -> bytes:
+        filtered = {str(key): value for key, value in dict(attrs).items() if str(key) not in excluded_attrs}
+        return json.dumps(canonical(filtered), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+    nodes: list[tuple[str, Any]] = [("", root)]
+
+    def collect(group: Any, prefix: str) -> None:
+        for name, node in group.members():
+            path = f"{prefix}/{name}" if prefix else str(name)
+            nodes.append((path, node))
+            if isinstance(node, zarr.Group):
+                collect(node, path)
+
+    collect(root, "")
+    for path, node in sorted(nodes, key=lambda item: item[0]):
+        if path == "":
+            add(digest, "attrs:", attrs_payload(node.attrs))
+        elif isinstance(node, zarr.Group):
+            add(digest, f"attrs:{path}", attrs_payload(node.attrs))
+        else:
+            metadata = node.metadata.to_dict()
+            array_meta = {
+                "dtype": str(node.dtype),
+                "shape": list(node.shape),
+                "chunks": list(node.chunks),
+                "fill_value": canonical(node.fill_value),
+                "order": "C",
+                "compressor": canonical(metadata.get("codecs", ())),
+            }
+            add(digest, f"array:{path}:metadata", json.dumps(array_meta, sort_keys=True, separators=(",", ":")).encode())
+            add(digest, f"attrs:{path}", attrs_payload(node.attrs))
+            shape = tuple(int(size) for size in node.shape)
+            chunks = tuple(int(size) for size in node.chunks)
+            ranges = [range((size + chunk - 1) // chunk) for size, chunk in zip(shape, chunks, strict=True)]
+            for coords in itertools.product(*ranges) if ranges else [()]:
+                chunk_key = node.metadata.chunk_key_encoding.encode_chunk_key(coords)
+                chunk_file = store_dir / path / chunk_key
+                slices = tuple(
+                    slice(coord * chunk, min((coord + 1) * chunk, size))
+                    for coord, chunk, size in zip(coords, chunks, shape, strict=True)
+                )
+                chunk_values = np.asarray(node[slices])
+                if not chunk_file.is_file() and not np.all(chunk_values == node.fill_value):
+                    raise ValueError(f"Missing logical chunk {path!r} at {chunk_file}")
+                payload = chunk_values.tobytes(order="C")
+                add(digest, f"chunk:{path}:{','.join(str(coord) for coord in coords)}", payload)
     return digest.hexdigest()
 
 

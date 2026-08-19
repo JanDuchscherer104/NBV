@@ -305,6 +305,8 @@ CANDIDATE_DIAGNOSTIC_TABLE = _TableSchema(
         _TableField("mesh_distance_m", np.float32),
         _TableField("path_min_clearance_m", np.float32),
         _TableField("path_collision_mask", np.bool_),
+        _TableField("path_collision_applicable_mask", np.bool_),
+        _TableField("path_collision_evaluated_mask", np.bool_),
         _TableField("free_space_margin_m", np.float32),
         _TableField("motion_step_length_m", np.float32),
         _TableField("motion_height_delta_m", np.float32),
@@ -1004,6 +1006,12 @@ class _RolloutZarrValidator:
                     f"must be {np.dtype(table_field.dtype)}."
                 )
         collision_mask = np.asarray(group["path_collision_mask"], dtype=np.bool_).reshape(-1)
+        collision_applicable = np.asarray(group["path_collision_applicable_mask"], dtype=np.bool_).reshape(-1)
+        collision_evaluated = np.asarray(group["path_collision_evaluated_mask"], dtype=np.bool_).reshape(-1)
+        if np.any(collision_evaluated & ~collision_applicable):
+            self.errors.append("path_collision_evaluated_mask must imply path_collision_applicable_mask.")
+        if np.any(collision_mask & ~collision_evaluated):
+            self.errors.append("path_collision_mask must imply path_collision_evaluated_mask.")
         if collision_mask.any():
             actor_action_mask = np.asarray(self.root["candidates/actor_action_mask"], dtype=np.bool_).reshape(-1)
             reason_bitset = np.asarray(self.root["candidates/invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
@@ -2697,8 +2705,43 @@ def _append_candidate_diagnostic_row(
     rows["path_min_clearance_m"].append(
         _candidate_extra_value(step.candidates.extras, "path_min_clearance_m", shell_index, candidate_valid)
     )
+    collision_debug_names = {
+        "path_collision_mask",
+        "path_collision_applicable_mask",
+        "path_collision_evaluated_mask",
+    }
+    missing_collision_debug = collision_debug_names.difference(step.candidates.extras)
+    if missing_collision_debug and missing_collision_debug not in (
+        collision_debug_names,
+        {"path_collision_applicable_mask", "path_collision_evaluated_mask"},
+    ):
+        raise ValueError(f"Missing required candidate diagnostics: {sorted(missing_collision_debug)}.")
+    legacy_collision = missing_collision_debug == {
+        "path_collision_applicable_mask",
+        "path_collision_evaluated_mask",
+    }
     rows["path_collision_mask"].append(
         _candidate_extra_bool(step.candidates.extras, "path_collision_mask", shell_index, candidate_valid)
+    )
+    rows["path_collision_applicable_mask"].append(
+        _candidate_extra_bool(
+            step.candidates.extras,
+            "path_collision_applicable_mask",
+            shell_index,
+            candidate_valid,
+            required=not missing_collision_debug,
+            legacy_default=legacy_collision,
+        )
+    )
+    rows["path_collision_evaluated_mask"].append(
+        _candidate_extra_bool(
+            step.candidates.extras,
+            "path_collision_evaluated_mask",
+            shell_index,
+            candidate_valid,
+            required=not missing_collision_debug,
+            legacy_default=legacy_collision,
+        )
     )
     rows["free_space_margin_m"].append(
         _candidate_extra_value(step.candidates.extras, "free_space_margin_m", shell_index, candidate_valid)
@@ -3337,10 +3380,14 @@ def _candidate_extra_bool(
     name: str,
     shell_index: int,
     candidate_valid: torch.Tensor,
+    required: bool = False,
+    legacy_default: bool = False,
 ) -> bool:
     value = extras.get(name)
     if value is None:
-        return False
+        if required:
+            raise ValueError(f"Missing required candidate diagnostic {name!r}.")
+        return legacy_default
     tensor = torch.as_tensor(value).detach().cpu().to(dtype=torch.bool)
     full = _full_shell_or_default(tensor, candidate_valid, fill_value=0)
     return bool(full[shell_index].item())

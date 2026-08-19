@@ -75,7 +75,15 @@ class MinDistanceToMeshRule(RuleBase):
         Updates `ctx.mask_valid` in place and records `min_distance_to_mesh` in `ctx.debug`
         when `collect_debug_stats` is enabled.
         """
-        if ctx.gt_mesh is None or ctx.centers_world is None or ctx.mask_valid is None:
+        if ctx.centers_world is None or ctx.mask_valid is None:
+            return
+        if ctx.gt_mesh is None:
+            if ctx.cfg.collect_debug_stats:
+                false = torch.zeros_like(ctx.mask_valid)
+                ctx.mark_debug("path_collision_applicable_mask", false)
+                ctx.mark_debug("path_collision_evaluated_mask", false)
+                ctx.mark_debug("path_collision_detected", false)
+                ctx.mark_debug("path_collision_mask", false)
             return
 
         need_distance = self.config.min_distance_to_mesh > 0 or ctx.cfg.collect_debug_stats
@@ -149,7 +157,10 @@ class PathCollisionRule(RuleBase):
         if ctx.cfg.collect_debug_stats:
             count = ctx.centers_world.shape[0]
             false = torch.zeros(count, device=ctx.centers_world.device, dtype=torch.bool)
-            ctx.mark_debug("path_collision_applicable", torch.ones_like(false))
+            applicable = torch.ones_like(false)
+            ctx.mark_debug("path_collision_applicable_mask", applicable)
+            ctx.mark_debug("path_collision_applicable", applicable)
+            ctx.mark_debug("path_collision_evaluated_mask", false)
             ctx.mark_debug("path_collision_evaluated", false)
             ctx.mark_debug("path_collision_detected", false)
 
@@ -164,25 +175,38 @@ class PathCollisionRule(RuleBase):
 
         backend = self.config.collision_backend
 
+        eligible = ctx.mask_valid.clone()
+        eligible_indices = torch.nonzero(eligible, as_tuple=False).reshape(-1)
         if backend == CollisionBackend.P3D and ctx.mesh_verts is not None and ctx.mesh_faces is not None:
             steps = max(2, int(self.config.ray_subsample))
             t_vals = torch.linspace(0.0, 1.0, steps, device=targets.device, dtype=targets.dtype)
-            pts = origin.view(1, 1, 3) + dirs_norm.unsqueeze(1) * (t_vals.view(1, -1, 1) * dists.view(-1, 1, 1))
+            eligible_dirs = dirs_norm[eligible_indices]
+            eligible_dists = dists[eligible_indices]
+            pts = origin.view(1, 1, 3) + eligible_dirs.unsqueeze(1) * (
+                t_vals.view(1, -1, 1) * eligible_dists.view(-1, 1, 1)
+            )
             pts_flat = pts.reshape(-1, 3)
-            dists_pts = point_mesh_distance(pts_flat, ctx.mesh_verts, ctx.mesh_faces).view(targets.shape[0], steps)
+            dists_pts = point_mesh_distance(pts_flat, ctx.mesh_verts, ctx.mesh_faces).view(eligible_indices.shape[0], steps)
             min_clearance = dists_pts.min(dim=1).values
             collide = (dists_pts < self.config.step_clearance).any(dim=1)
             if ctx.cfg.collect_debug_stats:
-                ctx.mark_debug("path_collision_evaluated", torch.ones_like(collide))
-                ctx.mark_debug("path_collision_detected", collide)
-                ctx.mark_debug("path_collision_mask", collide)
-                ctx.mark_debug("path_min_clearance_m", min_clearance)
-            ctx.invalidate(collide)
+                evaluated = torch.zeros_like(eligible)
+                evaluated[eligible_indices] = True
+                detected = torch.zeros_like(eligible)
+                detected[eligible_indices] = collide
+                clearance = torch.full_like(dists, float("nan"))
+                clearance[eligible_indices] = min_clearance
+                ctx.mark_debug("path_collision_evaluated_mask", evaluated)
+                ctx.mark_debug("path_collision_evaluated", evaluated)
+                ctx.mark_debug("path_collision_detected", detected)
+                ctx.mark_debug("path_collision_mask", detected)
+                ctx.mark_debug("path_min_clearance_m", clearance)
+            ctx.invalidate(torch.zeros_like(ctx.mask_valid).scatter(0, eligible_indices, collide))
             return
 
-        origins_np = origin.expand_as(targets).detach().cpu().numpy()
-        dirs_np = dirs_norm.detach().cpu().numpy()
-        max_dist = dists.detach().cpu().numpy()
+        origins_np = origin.expand_as(targets[eligible_indices]).detach().cpu().numpy()
+        dirs_np = dirs_norm[eligible_indices].detach().cpu().numpy()
+        max_dist = dists[eligible_indices].detach().cpu().numpy()
         ray_engine = ctx.gt_mesh.ray
         if backend == CollisionBackend.PYEMBREE and self._pyembree_available:
             from trimesh.ray.ray_pyembree import RayMeshIntersector  # type: ignore
@@ -194,10 +218,17 @@ class PathCollisionRule(RuleBase):
         intersects = ray_engine.intersects_any(origins_np, dirs_np, multiple_hits=False, max_distance=max_dist)
         collide = torch.from_numpy(intersects).to(ctx.mask_valid.device)
         if ctx.cfg.collect_debug_stats:
-            ctx.mark_debug("path_collision_evaluated", torch.ones_like(collide))
-            ctx.mark_debug("path_collision_detected", collide)
-            ctx.mark_debug("path_collision_mask", collide)
-        ctx.invalidate(collide)
+            evaluated = torch.zeros_like(eligible)
+            evaluated[eligible_indices] = True
+            detected = torch.zeros_like(eligible)
+            detected[eligible_indices] = collide
+            ctx.mark_debug("path_collision_evaluated_mask", evaluated)
+            ctx.mark_debug("path_collision_evaluated", evaluated)
+            ctx.mark_debug("path_collision_detected", detected)
+            ctx.mark_debug("path_collision_mask", detected)
+        rejection = torch.zeros_like(ctx.mask_valid)
+        rejection[eligible_indices] = collide
+        ctx.invalidate(rejection)
 
 
 class MotionRealismRule(RuleBase):
