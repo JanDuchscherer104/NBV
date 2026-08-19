@@ -329,6 +329,8 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
         for name in ("config", "scene", "snippet", "source_key", "source_shard", "split")
     }
     sources = root["sources"]
+    if not isinstance(sources, zarr.Group):
+        raise ValueError(f"Q_H store {path} sources node must be a group.")
 
     def decode(dictionary_name: str, array_name: str, row: int) -> str:
         value_id = int(sources[array_name][row])
