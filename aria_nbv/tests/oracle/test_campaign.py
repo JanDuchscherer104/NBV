@@ -1862,7 +1862,9 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
         "read_events",
         lambda **_kwargs: [
             *prefix,
-            campaign._event(plan, "unit_started", unit=plan.work_units[0]),
+            campaign._event(plan, "target_profile", unit=plan.work_units[0]),
+            campaign._event(plan, "root_preflight", unit=plan.work_units[0]),
+            campaign._event(plan, "unit_started", unit=plan.work_units[0], stage="worker"),
             campaign._event(plan, "unit_succeeded", unit=plan.work_units[0]),
         ],
     )
@@ -1904,9 +1906,13 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
     ]
     events = [
         *prefix,
-        campaign._event(plan, "unit_started", unit=plan.work_units[0]),
+        campaign._event(plan, "target_profile", unit=plan.work_units[0]),
+        campaign._event(plan, "root_preflight", unit=plan.work_units[0]),
+        campaign._event(plan, "unit_started", unit=plan.work_units[0], stage="worker"),
         campaign._event(plan, "unit_skipped", unit=plan.work_units[0]),
-        campaign._event(plan, "unit_started", unit=plan.work_units[1]),
+        campaign._event(plan, "target_profile", unit=plan.work_units[1]),
+        campaign._event(plan, "root_preflight", unit=plan.work_units[1]),
+        campaign._event(plan, "unit_started", unit=plan.work_units[1], stage="worker"),
         campaign._event(plan, "unit_failed", unit=plan.work_units[1]),
     ]
     monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
