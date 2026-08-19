@@ -22,8 +22,13 @@ def _descriptor() -> TargetDescriptor:
     )
 
 
-def test_targets_root_exports_only_descriptor() -> None:
-    assert targets.__all__ == ["TargetDescriptor"]
+def test_targets_root_exports_reviewed_target_surface() -> None:
+    assert targets.__all__ == [
+        "ObservedTargetDescriptor",
+        "TargetDescriptor",
+        "observed_target_descriptors",
+        "select_observed_target_descriptors",
+    ]
 
 
 def test_target_descriptor_exposes_sanitized_instruction_fields() -> None:
