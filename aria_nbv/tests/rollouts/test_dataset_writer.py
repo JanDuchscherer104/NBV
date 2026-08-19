@@ -219,15 +219,27 @@ def test_split_manifest_hash_tracks_source_rows_and_order() -> None:
 def test_direct_v0_writer_keeps_physical_split_out_of_campaign_hash(tmp_path: Path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=51)[:1]
     source = records[0].lineage.source
+    dataset_record = SimpleNamespace(
+        sample_index=source.source_sample_index,
+        sample_key=source.source_sample_key,
+        scene_id=source.scene_id,
+        snippet_id=source.snippet_id,
+        split=source.split,
+        shard_id=source.source_shard_id,
+        row=source.source_shard_row,
+    )
+    dataset = _FakeDataset([dataset_record])
+    lineage = _RolloutSourceLineageBuilder.from_dataset(dataset, max_samples=1, campaign_split=None)
+    assert lineage.campaign_split is None
     source.campaign_split = None
-    source.source_offline_store_manifest_hash = "fixture-source"
-    source.source_cache_version = "fixture-v0"
-    source.split_manifest_hash = "fixture-split-manifest"
+    source.source_offline_store_manifest_hash = lineage.source_manifest_hash
+    source.source_cache_version = lineage.source_cache_version
+    source.split_manifest_hash = lineage.split_manifest_hash
     result = write_rollout_zarr_store(
         tmp_path / "direct-v0.zarr",
         records,
-        source_offline_store_version="fixture-v0",
-        split_manifest_hash="fixture-split-manifest",
+        source_offline_store_version=lineage.source_cache_version,
+        split_manifest_hash=lineage.split_manifest_hash,
     )
     validation = validate_rollout_zarr_store(result.store_dir)
     assert validation.ok, validation.errors
