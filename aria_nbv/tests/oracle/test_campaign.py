@@ -23,7 +23,11 @@ from aria_nbv.oracle.pipelines.campaign import (
     CudaRolloutCampaignConfig,
     GenerationRevision,
 )
-from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
+from aria_nbv.oracle.pipelines.rollout_dataset import (
+    RolloutDatasetWriter,
+    RolloutDatasetWriterConfig,
+    _RolloutSourceLineageBuilder,
+)
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.trace import TargetLineage
@@ -32,10 +36,12 @@ from aria_nbv.rollouts.zarr_store import (
     ROLLOUT_TABLE,
     ROLLOUT_ZARR_SCHEMA_VERSION,
     STEP_TABLE,
+    RolloutZarrStoreReader,
     write_rollout_zarr_store,
 )
 from aria_nbv.targets.descriptor import TargetDescriptor
 from aria_nbv.targets.selection import ObservedTargetDescriptor
+from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
@@ -2183,6 +2189,79 @@ def test_adaptation_preserves_campaign_split_and_revision_binding(tmp_path):
     assert adapted_entry.generation_revision_hash == unit.generation_revision_hash
     assert adapted_entry.campaign_binding is not None
     assert adapted_entry.campaign_binding.generation_revision_hash == unit.generation_revision_hash
+
+
+def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, monkeypatch):
+    """A representative planned unit retains one source split through Q_H admission."""
+
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.current_generation_revision",
+        lambda: GenerationRevision("g003-v1", "commit", "tree", "lock", "bundle", "generation"),
+    )
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    unit = replace(
+        unit,
+        source_row_payload={
+            "sample_index": 0,
+            "scene_id": "s0",
+            "snippet_id": "k0",
+            "split": "train",
+            "source_shard_id": "shard-0",
+            "source_shard_row": 0,
+            "source_manifest_hash": "source",
+            "source_cache_version": "campaign-v1",
+            "source_store_dir": "vin_offline",
+        },
+    )
+    entry = campaign.shard_entry_for_unit(plan, unit)
+    writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})
+    adapted, adapted_entry = campaign.adapt_work_unit(
+        unit,
+        writer_config=writer,
+        shard_entry=entry,
+        plan_hash=plan.plan_hash,
+        profile_hash=unit.profile_hash,
+    )
+
+    source_lineage = _RolloutSourceLineageBuilder(
+        source_manifest_hash=adapted_entry.source_manifest_hash,
+        split_manifest_hash=adapted_entry.split_manifest_hash,
+        source_cache_version=adapted_entry.source_cache_version,
+        campaign_split=adapted_entry.campaign_split or adapted_entry.split,
+    )
+    RolloutDatasetWriter._validate_shard_lineage(source_lineage, adapted_entry)
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    source = records[0].lineage.source
+    row = adapted_entry.rows[0]
+    source.scene_id = row.scene_id
+    source.snippet_id = row.snippet_id
+    source.source_cache_version = adapted_entry.source_cache_version
+    source.source_sample_index = row.sample_index
+    source.source_sample_key = row.sample_key
+    source.source_shard_id = row.source_shard_id
+    source.source_shard_row = row.source_shard_row
+    source.source_offline_store_manifest_hash = adapted_entry.source_manifest_hash
+    source.campaign_split = adapted_entry.campaign_split
+    source.split_manifest_hash = adapted_entry.split_manifest_hash
+    result = write_rollout_zarr_store(
+        tmp_path / "representative.zarr",
+        records,
+        source_offline_store_version=adapted_entry.source_cache_version,
+        split_manifest_hash=adapted_entry.split_manifest_hash,
+    )
+    validation = RolloutZarrStoreReader(result.store_dir).validate()
+    assert validation.ok, validation.errors
+
+    reader = QhRolloutReader((result.store_dir,), campaign_split="train")
+    assert len(reader) == 1
+    assert len(reader.source_refs) == 1
+    assert reader.source_refs[0].source_sample_key == row.sample_key
+    assert reader.source_refs[0].campaign_split is Stage.TRAIN
+    assert reader[0].source_ref == reader.source_refs[0]
+    assert adapted.store.split_manifest_hash == adapted_entry.split_manifest_hash
 
 
 def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path):
