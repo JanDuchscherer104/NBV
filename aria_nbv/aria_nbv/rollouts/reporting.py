@@ -393,6 +393,8 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "discounted_return",
         "available",
         "reason",
+        "contract_status",
+        "factual_rollout_count",
     ),
     "oracle_headroom_contrasts": (
         "store_id",
@@ -405,6 +407,10 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "scene",
         "normalized_conditions_json",
         "role_treatments_json",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
     ),
     "oracle_headroom_summary": (
         "store_id",
@@ -622,7 +628,31 @@ def _append_store_rows(
         return_semantics=root_attrs.get("return_semantics"),
         discount_gamma=root_attrs.get("discount_gamma"),
     )
-    rows["discounted_return"].extend(_with_store_id(store_id, list(discounted["rows"])))
+    discounted_rows = list(discounted["rows"])
+    if not discounted_rows:
+        discounted_rows = [{
+            "rollout_row_id": None,
+            "scene": None,
+            "policy": None,
+            "horizon": None,
+            "discount_gamma": root_attrs.get("discount_gamma"),
+            "discounted_return": None,
+            "available": False,
+            "reason": discounted.get("reason"),
+        }]
+    rows["discounted_return"].extend(
+        _with_store_id(
+            store_id,
+            [
+                {
+                    **row,
+                    "contract_status": "available" if discounted.get("available") else "unavailable",
+                    "factual_rollout_count": len({r.get("rollout_row_id") for r in step_rows if r.get("rollout_row_id") is not None}),
+                }
+                for row in discounted_rows
+            ],
+        )
+    )
     headroom = oracle_headroom_evidence(reader)
     rows["oracle_headroom_contrasts"].extend(
         {
@@ -632,6 +662,10 @@ def _append_store_rows(
                 row["normalized_conditions"], sort_keys=True, separators=(",", ":")
             ),
             "role_treatments_json": json.dumps(row["role_treatments"], sort_keys=True, separators=(",", ":")),
+            "evidence_class": headroom.get("evidence_status"),
+            "metric_source": headroom.get("metric_source"),
+            "endpoint_kind": headroom.get("endpoint_kind"),
+            "independent_endpoint_evaluation": headroom.get("independent_endpoint_evaluation"),
         }
         for row in headroom["contrast_rows"]
     )
