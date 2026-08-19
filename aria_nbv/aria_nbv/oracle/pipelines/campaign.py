@@ -1572,6 +1572,16 @@ class CudaRolloutCampaign:
                         "max_samples": 1,
                     }
                 )
+                manifest = read_rollout_source_manifest(source_manifest_path)
+                selected_rows = cfg.selected_source_manifest_rows(manifest)
+                physical_split_hash = build_rollout_split_manifest_hash(
+                    source_manifest_hash=manifest.source_manifest_hash,
+                    split=manifest.split,
+                    records=[{**row.hash_record(), "order": order} for order, row in enumerate(selected_rows)],
+                )
+                cfg = cfg.model_copy(
+                    update={"store": cfg.store.model_copy(update={"split_manifest_hash": physical_split_hash})}
+                )
             else:
                 # Legacy in-memory adapters have no manifest to constrain;
                 # production configs always carry one and take the strict path.
@@ -1645,12 +1655,6 @@ class CudaRolloutCampaign:
             )
         if hasattr(cfg, "model_dump"):
             cfg = type(cfg).model_validate({**cfg.model_dump(), "explicit_target": target_payload})
-            if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
-                cfg = cfg.model_copy(
-                    update={
-                        "store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})
-                    }
-                )
         # Canonical source/split/writer lineage is mandatory for production
         # shard entries.  Legacy unit tests may adapt a config without a real
         # shard envelope; those remain an in-memory construction seam only.
@@ -1687,10 +1691,6 @@ class CudaRolloutCampaign:
                     split=shard_entry.split,
                     records=[row.hash_record() for row in shard_entry.rows],
                 ),
-            )
-        if hasattr(shard_entry, "split_manifest_hash") and hasattr(cfg, "store"):
-            cfg = cfg.model_copy(
-                update={"store": cfg.store.model_copy(update={"split_manifest_hash": shard_entry.split_manifest_hash})}
             )
         binding = RolloutShardCampaignBinding(
             campaign_id=self.config.campaign_id,

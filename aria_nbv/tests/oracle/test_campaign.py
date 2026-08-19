@@ -2261,7 +2261,7 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
     assert reader.source_refs[0].source_sample_key == row.sample_key
     assert reader.source_refs[0].campaign_split is Stage.TRAIN
     assert reader[0].source_ref == reader.source_refs[0]
-    assert adapted.store.split_manifest_hash == adapted_entry.split_manifest_hash
+    assert adapted.store.split_manifest_hash != adapted_entry.split_manifest_hash
 
 
 def test_admission_audit_persists_full_rows_and_rejects_stale_overwrite(tmp_path):
