@@ -1,4 +1,5 @@
 .DEFAULT_GOAL := help
+export MYPY_PATHS
 .PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract mypy-contract mypy-full mypy-targeted
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
@@ -739,10 +740,13 @@ mypy-full: ## Run the full package typing check (currently informational)
 	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental aria_nbv
 
 mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
-	@set -f; paths="$(strip $(MYPY_PATHS))"; \
+	@set -f; paths="$$MYPY_PATHS"; \
 	if [ -z "$$paths" ]; then echo "MYPY_PATHS is required" >&2; exit 2; fi; \
 	normalized=; \
 	for path in $$paths; do \
+		case "$$path" in \
+			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "MYPY_PATHS contains traversal component: $$path" >&2; exit 2 ;; \
+		esac; \
 		case "$$path" in \
 			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
 			$(PKG_DIR)/*|$(TEST_DIR)/*) ;; \
