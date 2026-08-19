@@ -304,14 +304,19 @@ def _cached_projection_cached(
 
 
 def _store_projection_identity(store_path: str) -> str:
-    """Return a lightweight identity that changes when a store manifest is replaced."""
+    """Return a content identity for the promoted artifact, not just its manifest."""
 
     path = Path(store_path)
-    manifest_path = path / "manifest.json"
     try:
-        payload = manifest_path.read_bytes()
-        stat = manifest_path.stat()
-        identity = f"manifest:{stat.st_size}:{stat.st_mtime_ns}:{hashlib.sha256(payload).hexdigest()}"
+        digest = hashlib.sha256()
+        for child in sorted((candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()):
+            relative = child.relative_to(path).as_posix().encode()
+            payload = child.read_bytes()
+            digest.update(len(relative).to_bytes(8, "big"))
+            digest.update(relative)
+            digest.update(len(payload).to_bytes(8, "big"))
+            digest.update(payload)
+        identity = f"store-content:{digest.hexdigest()}"
     except OSError:
         try:
             stat = path.stat()
