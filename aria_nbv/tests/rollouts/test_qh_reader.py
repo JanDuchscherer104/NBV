@@ -14,12 +14,12 @@ import zarr
 pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
-from aria_nbv.utils import Stage
 from aria_nbv.rollouts.zarr_store import (
     RolloutZarrStoreReader,
     RolloutZarrValidationResult,
     write_rollout_zarr_store,
 )
+from aria_nbv.utils import Stage
 from tests.rollout_fixtures import build_rollout_records
 
 
