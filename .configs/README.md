@@ -56,7 +56,7 @@ uv run nbv-rollout-campaign smoke \
   --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v5.toml
 uv run nbv-rollout-campaign run \
   --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v5.toml \
-  --plan-path ../.campaign/cuda-rollouts-v1-pilot-corrected-v5/plan.json \
+  --plan-path .campaign/cuda-rollouts-v1-pilot-corrected-v5/plan.json \
   --max-new-units 10
 uv run nbv-rollout-campaign status \
   --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v5.toml
