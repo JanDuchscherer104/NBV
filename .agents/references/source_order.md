@@ -11,13 +11,15 @@ sources. It is the global authority map; `aria-nbv-context` owns traversal.
     `docs/notation.yml` owns cross-format lookup. Generated glossary and notation
     files are projections.
   - Active narrative and research questions: `docs/typst/thesis/main.typ` and
-    its included sections, especially `sections/01-research-questions.typ`.
+    its included sections, especially
+    `docs/typst/thesis/sections/01-research-questions.typ`.
     RQ1--RQ4 are the evaluated core; RQ5 is the conditional online bridge and
     RQ6 the lower-priority continuous or simulator escalation.
-  - Development gates and open work: guarded
-    `docs/typst/thesis/development/{roadmap,m1-contract-report}.typ` and
-    `sections/06-draft-open-work.typ`. These views do not enter submission
-    output or promote a planned result.
+  - Development gates and open work:
+    `docs/typst/thesis/development/roadmap.typ`,
+    `docs/typst/thesis/development/m1-contract-report.typ`, and
+    `docs/typst/thesis/sections/06-draft-open-work.typ`. These guarded views do
+    not enter submission output or promote a planned result.
   - Historical evidence: `docs/typst/seminar_paper/`, archived proposal sources,
     dated debriefs, and `docs/contents/ideas.qmd`. They provide provenance, not
     current thesis direction.

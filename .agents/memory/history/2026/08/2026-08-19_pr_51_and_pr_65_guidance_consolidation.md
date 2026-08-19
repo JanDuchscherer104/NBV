@@ -38,8 +38,9 @@ fixtures and contract tests for the review-sensitive pointers.
 
 Passed `make scaffold-audit-self-test`, the Graphify upstream, freshness,
 worktree-seed, and setup tests, `scripts/tests/test_ci_impact.py`,
-`make check-agent-memory`, Ruff on affected Python, JSON parsing, and
-`git diff --check`. Hosted checks remain a publication-time proof.
+the 17-test ownership-consolidation contract, `make check-agent-memory`, Ruff
+on affected Python, JSON parsing, and `git diff --check`. Hosted checks remain
+a publication-time proof.
 
 ## Canonical Owner Impact
 
