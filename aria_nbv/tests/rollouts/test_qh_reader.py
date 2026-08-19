@@ -149,6 +149,34 @@ def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows
     assert {readers[split][0].source_ref.source_sample_index for split in readers} == {0, 1, 2}
 
 
+def test_reader_rejects_double_erased_campaign_identity(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    records[0].lineage.source.campaign_split = "train"
+    split_hash = _campaign_split_hash(records)
+    store = write_rollout_zarr_store(
+        tmp_path / "double-erased.zarr",
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash=split_hash,
+    ).store_dir
+    root = zarr.open_group(store, mode="a")
+    split_values = json.loads(bytes(np.asarray(root["dictionaries/split"])).decode("utf-8"))
+    split_values.append("unknown")
+    encoded = np.frombuffer(json.dumps(split_values).encode("utf-8"), dtype=np.uint8)
+    root["dictionaries/split"].resize((encoded.size,))
+    root["dictionaries/split"][:] = encoded
+    root["sources/campaign_split_id"][:] = len(split_values) - 1
+    root.attrs["campaign_split"] = "unknown"
+
+    validation = RolloutZarrStoreReader(store).validate()
+    assert not validation.ok
+    assert any("campaign_split" in error for error in validation.errors)
+    with pytest.raises(ValueError, match="canonical validation|campaign_split"):
+        QhRolloutReader((store,))
+
+
 def test_reader_campaign_filter_falls_back_to_legacy_physical_split(tmp_path: Path) -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
     records[0].lineage.source.split = "train"

@@ -920,6 +920,9 @@ class _RolloutZarrValidator:
             )
         if payload.get("schema_version") != ROLLOUT_ZARR_SCHEMA_VERSION:
             self.errors.append("Rollout manifest schema_version does not match the current rollout Zarr schema.")
+        manifest_attrs = payload.get("root_attrs", {})
+        if manifest_attrs.get("campaign_split", "unknown") != self.root.attrs.get("campaign_split", "unknown"):
+            self.errors.append("Rollout manifest campaign_split does not match root attrs.")
 
     def _validate_q_h(self, candidate_row_id: np.ndarray) -> None:
         derived = _build_q_h_arrays(
