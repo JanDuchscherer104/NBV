@@ -44,7 +44,7 @@ The current thesis direction is owned by `docs/typst/thesis/main.typ` and its
 active sections; development-only status and gates are owned by the roadmap and
 M1 report. Executable behavior is owned by `aria_nbv/aria_nbv/`,
 `aria_nbv/tests/`, and active configuration; repository guidance and routing are
-owned by `AGENTS.md` and `.agents/references/source_order.md`. The seminar paper
+owned by `AGENTS.md` and the `aria-nbv-context` owner hierarchy. The seminar paper
 and dated history remain evidence from earlier work and do not override these
 current owners.
 

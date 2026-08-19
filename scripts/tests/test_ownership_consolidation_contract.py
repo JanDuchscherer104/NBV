@@ -9,8 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_RECEIPT = (
-    ROOT
-    / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
+    ROOT / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
 )
 
 RETIRED_SOURCES = (
@@ -23,10 +22,15 @@ RETIRED_SOURCES = (
     ".agents/memory/state/OPEN_QUESTIONS.md",
 )
 
-TYPST_OWNERS = (
-    "docs/typst/thesis/sections/01-research-questions.typ",
-    "docs/typst/thesis/development/roadmap.typ",
-    "docs/typst/thesis/development/m1-contract-report.typ",
+CONTEXT_INITIALIZATION_OWNERS = (
+    "docs/typst/shared/symbols.typ",
+    "docs/typst/shared/equations.typ",
+    "docs/typst/shared/glossary.typ",
+    "docs/typst/glossary/",
+    "docs/literature/sources.jsonl",
+    "docs/references.bib",
+    "docs/contents/literature/",
+    "docs/typst/thesis/sections/",
 )
 
 THEORY_PAGES = {
@@ -153,9 +157,22 @@ def test_retired_sources_are_absent() -> None:
     assert not [path for path in RETIRED_SOURCES if (ROOT / path).exists()]
 
 
-def test_source_order_links_each_typst_owner() -> None:
-    text = (ROOT / ".agents/references/source_order.md").read_text(encoding="utf-8")
-    assert not [owner for owner in TYPST_OWNERS if f"`{owner}`" not in text]
+def test_context_skill_owns_hierarchy_and_initialization_map() -> None:
+    context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    pointer = (ROOT / ".agents/references/source_order.md").read_text(encoding="utf-8")
+
+    assert len(context.splitlines()) <= 150
+    assert not [
+        owner for owner in CONTEXT_INITIALIZATION_OWNERS if f"`{owner}`" not in context
+    ]
+    for heading in ("## Owner Hierarchy", "## Conflict Rule", "## Capture Rule"):
+        assert heading in context
+    assert "Deprecated Compatibility Pointer" in pointer
+    assert "do\nnot add policy here" in pointer
+    assert "../skills/aria-nbv-context/SKILL.md#owner-hierarchy" in pointer
+    assert len(pointer.splitlines()) <= 20
 
 
 def test_theory_pages_are_deprecated_navigation() -> None:
@@ -185,11 +202,14 @@ def test_expected_qmd_page_manifest_is_exact() -> None:
         for path in contents_root.rglob("*.qmd")
     }
     assert observed == EXPECTED_QMD_PAGES
-    assert not {
-        "thesis/questions.qmd",
-        "thesis/roadmap.qmd",
-        "thesis/m1_contract_report.qmd",
-    } & observed
+    assert (
+        not {
+            "thesis/questions.qmd",
+            "thesis/roadmap.qmd",
+            "thesis/m1_contract_report.qmd",
+        }
+        & observed
+    )
 
 
 def test_theory_qmd_matrix_covers_every_thinned_page() -> None:
@@ -316,9 +336,7 @@ def test_glossary_rq_links_match_the_six_tier_semantics() -> None:
 def test_glossary_theory_links_target_existing_anchors() -> None:
     """Do not retain fragments removed when theory pages become thin navigation."""
     text = (ROOT / "docs/typst/shared/glossary.typ").read_text(encoding="utf-8")
-    links = set(
-        re.findall(r'"(docs/contents/theory/[^"#]+\.qmd#[^"]+)"', text)
-    )
+    links = set(re.findall(r'"(docs/contents/theory/[^"#]+\.qmd#[^"]+)"', text))
     for link in links:
         relative, anchor = link.split("#", 1)
         target = (ROOT / relative).read_text(encoding="utf-8")

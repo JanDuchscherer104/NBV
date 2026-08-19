@@ -17,8 +17,8 @@ when the user asks for the lighter `elaborate` modifier.
 
 Prefer sources in this order, and state when a conclusion is an inference:
 
-1. ARIA-NBV source order owner:
-   `.agents/references/source_order.md`, thesis roadmap/questions, canonical
+1. ARIA-NBV hierarchy owner:
+   `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy`, thesis roadmap/questions, canonical
    memory, shared glossary/notation, and nearest `AGENTS.md`.
 2. Repo-local theory and literature: `docs/contents/theory/`,
    `docs/contents/literature/`, `docs/references.bib`, local paper notes, and

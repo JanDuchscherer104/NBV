@@ -32,10 +32,10 @@ metadata:
     - "option tradeoffs"
     - "literature-grounded plan"
   must_read:
-    - ".agents/references/source_order.md"
+    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
     - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
   canonical_sources:
-    - ".agents/references/source_order.md#compositional-owner-tree"
+    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/thesis/development/roadmap.typ"
     - "docs/typst/thesis/sections/01-research-questions.typ"
@@ -51,8 +51,8 @@ metadata:
     - "quality-driven-rri"
     - "egocentric-aria-substrate"
   tool_refs:
-    - "mcp__MCP_DOCKER.resolve_library_id"
-    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__codex_apps__context7_resolve_library_id"
+    - "mcp__codex_apps__context7_query_docs"
     - "mcp__code_index.search_code_advanced"
   verification:
     - "decision-complete plan with assumptions and deferred decisions"
@@ -62,10 +62,9 @@ metadata:
 
 ## Grounding
 
-Before asking the user, resolve discoverable facts from
-`.agents/references/source_order.md` and the owning source for the decision.
-Use `docs/typst/shared/glossary.typ` for overloaded terms and the nearest
-`AGENTS.md` for touched code or docs.
+Before asking, resolve discoverable facts from the `aria-nbv-context` hierarchy
+and the exact decision owner. Use `docs/typst/shared/glossary.typ` for overloaded
+terms and the nearest `AGENTS.md` for touched code or docs.
 
 For thesis-scope decisions, read the thesis owner, roadmap, and research
 questions in `canonical_sources`; non-thesis branches skip them. Theory-rich or
@@ -87,10 +86,9 @@ invocation overrides it. Select only the smallest material capability:
 - `visualize`: interactive, dynamic, or spatial explanation needing more than
   static prose or Mermaid.
 
-When selecting a capability, explicitly invoke its available installed skill.
-If it is unavailable, state that limitation and continue with source-grounded
-local analysis. Return accepted conclusions to the source-order owner; create
-no wrappers or parallel truth surfaces.
+Explicitly invoke the selected available skill. If unavailable, continue with
+source-grounded local analysis. Return accepted conclusions to the hierarchy
+owner; create no wrappers or parallel truth surfaces.
 
 ## Plan-Mode Modifiers
 

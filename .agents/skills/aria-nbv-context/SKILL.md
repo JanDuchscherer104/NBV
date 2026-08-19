@@ -1,6 +1,6 @@
 ---
 name: aria-nbv-context
-description: Use for Graphify-first ARIA-NBV owner-tree traversal, broad project relationships, or current Context7 evidence before handing work to an exact owner.
+description: Use for hierarchical ARIA-NBV owner localization, Graphify-first project relationships, scientific-source initialization, or current Context7 App evidence before handing work to an exact owner.
 metadata:
   mode: router
   not_when:
@@ -12,43 +12,45 @@ metadata:
     - "nearest owning guide for concrete implementation or documentation work"
     - "nearest failure owner for a reproducer or traceback"
   evidence_required:
-    - "selected branch in the compositional source-order tree"
+    - "selected branch and leaf in the owner hierarchy"
     - "localized exact owner and nearest applicable AGENTS.md"
     - "Graphify provenance before Graphify-backed navigation"
     - "installed call site plus current external docs for Context7-backed claims"
-    - "active shared scientific-language owner for durable terminology"
   applies_to:
     - "**"
   triggers:
     - "codebase architecture, ownership, relationships, or broad project context"
     - "locate an unknown ARIA-NBV owner or source family"
-    - "thesis section, glossary, symbol, equation, or notation owner"
+    - "thesis section, glossary, symbol, equation, notation, or literature owner"
     - "current external API, SDK, or version behavior"
     - "semantic recall of prior decisions or failed approaches"
   must_read:
     - "AGENTS.md"
-    - ".agents/references/source_order.md"
   canonical_sources:
     - "AGENTS.md"
-    - ".agents/references/source_order.md#compositional-owner-tree"
-    - ".agents/skills/aria-nbv-context/references/context_map.md"
     - ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
     - ".agents/skills/aria-nbv-context/references/context7_library_ids.md"
     - "docs/typst/thesis/main.typ"
+    - "docs/typst/thesis/sections/01-research-questions.typ"
+    - "docs/typst/thesis/development/roadmap.typ"
     - "docs/typst/shared/glossary.typ"
     - "docs/typst/shared/symbols.typ"
     - "docs/typst/shared/equations.typ"
+    - "docs/typst/glossary/main.typ"
     - "docs/notation.yml"
-    - ".graphifyignore"
-    - "docs/literature/README.md#graphify-projection"
+    - "docs/literature/sources.jsonl"
+    - "docs/references.bib"
+    - "docs/contents/literature/index.qmd"
+    - "docs/typst/thesis/sections/02-foundations/02-01-related-work.typ"
   literature_refs:
     - "docs/contents/literature/index.qmd"
     - "docs/literature/sources.jsonl"
     - "quality-driven-rri"
     - "finite-candidate-rl"
+  context7_refs: ["/graphify-labs/graphify", "/websites/typst_app", "/facebookresearch/atek", "/websites/facebookresearch_github_io_projectaria_tools", "/facebookresearch/efm3d", "/facebookresearch/pytorch3d", "/websites/zarr_readthedocs_io_en_stable", "/rerun-io/rerun"]
   tool_refs:
-    - "mcp__MCP_DOCKER.resolve_library_id"
-    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__codex_apps__context7_resolve_library_id"
+    - "mcp__codex_apps__context7_query_docs"
     - "mcp__code_index.search_code_advanced"
     - "mcp__code_index.get_symbol_body"
   verification:
@@ -59,82 +61,89 @@ metadata:
 
 # ARIA-NBV Context
 
-Use this skill as the context-traversal interface. It chooses a branch, uses the
-best navigation aid for that branch, opens the exact owner, then hands off.
+Select the smallest hierarchy leaf, use navigation only when it helps, open the
+exact owner, then hand off. Derived, retrieved, generated, and historical
+material may locate truth but cannot replace its owner.
 
-## Owner-Tree Branch
+## Owner Hierarchy
 
-Traverse `.agents/references/source_order.md` compositionally:
+- **Scientific language**
+  - `docs/typst/shared/symbols.typ`: composed `symb` facade; domain symbol
+    modules beneath it own reusable notation bodies.
+  - `docs/typst/shared/equations.typ`: composed `eqs` facade; domain equation
+    modules beneath it own reusable mathematical bodies.
+  - `docs/typst/shared/glossary.typ`: editable term registry linking prose,
+    symbols, equations, and sources. `docs/typst/glossary/` renders and checks
+    that registry; it is not another glossary owner.
+  - `docs/notation.yml`: generated cross-format lookup adapter; shared Typst
+    facades own reusable bodies and metadata.
+- **Thesis direction**: `docs/typst/thesis/main.typ` and its active includes own
+  narrative and claims; question and development-gate files own their narrower
+  contracts. Seminar, archived proposal, and dated history are evidence only.
+- **Literature to thesis**
+  - `docs/literature/sources.jsonl`: checked-in paper manifest for acquisition,
+    relevance, and adoptable-idea metadata.
+  - `docs/references.bib` and `docs/references-qh.bib`: citation identities and
+    bibliographic metadata; exact primary sources support external claims.
+  - `docs/contents/literature/`: paper-by-paper review and ARIA-NBV synthesis.
+  - `docs/typst/thesis/sections/`: current claim placement and narrative;
+    foundations/related work starts at `02-foundations/02-01-related-work.typ`.
+- **Executable system**: nearest package `AGENTS.md`, source, tests, and active
+  configuration own behavior and proof.
+- **Project intent and work**: accepted spec supersessions and reviewed human
+  intent own decisions; Agents-DB TOMLs own actionable work.
+- **Agent execution**: root/nested `AGENTS.md` own invariants; skills own
+  activation, procedure, handoff, and verification.
 
-- durable terms, symbols, and equations start at the shared Typst glossary,
-  symbols, equations, and notation registry;
-- thesis claims start at the active thesis include graph;
-- executable behavior starts at source, tests, active configuration, and the
-  nearest package guide;
-- agent workflow, accepted intent, and actionable work start at their guidance,
-  accepted-spec, human-intent, or Agents-DB owner.
+## Conflict Rule
 
-Generated context, retrieval, and historical evidence may locate an owner but
-cannot replace it.
+Prefer the narrowest active owner: active thesis over seminar/archive history;
+source, tests, and configuration over documentation or retrieval; explicit
+accepted supersessions over plans or chronology. Planned work is not an
+implemented result.
+
+## Capture Rule
+
+- Repo invariant: root or nearest nested `AGENTS.md`.
+- Repeatable workflow: `.agents/skills/*/SKILL.md`.
+- Actionable work: Agents-DB issues, todos, or refactors.
+- Public narrative or scientific language: the smallest active Quarto/Typst
+  section, glossary, symbol, equation, notation, bibliography, or source owner.
+- Reviewed preference: `.agents/references/human_owner_intent.md`.
+- Accepted scoped target: the relevant explicit `.omx/specs/` supersession.
+- Debriefs and optional tools capture evidence or proposals, not current truth.
 
 ## Graphify Branch
 
-For architecture, ownership, relationships, or broad project content, Graphify
-is the primary navigation map. Initialize the worktree, run
-`scripts/check_graphify_freshness.py --json`, then use upstream `graphify query`
-for broad questions, `graphify path` for relationships, and `graphify explain`
-for a focused concept before raw search.
+For architecture, ownership, relationships, or broad project content, initialize
+the worktree and run `scripts/check_graphify_freshness.py --json`. For `fresh`
+or `usable-stale`, use upstream `graphify query` for context, `graphify path`
+for relationships, and `graphify explain` for a concept before raw search.
+Verify exact owners and every consequential stale source. Repair `unusable`
+once, then report it and use direct sources if repair fails. Read
+[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)
+for freshness, repair, lifecycle, and fallback rules.
 
-Use a `fresh` or `usable-stale` graph; verify exact owners after navigation and
-every consequential stale source in the latter case. Repair an `unusable`
-bootstrap once before taking the reported direct-source fallback. The upstream
-hook is the default local accelerator for post-commit/post-checkout code refresh,
-but it neither proves semantic document freshness nor refreshes linked worktrees;
-the state/repair detail remains in
-[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md).
+## Context7 App Branch
 
-## Context7 Branch
-
-Use Context7 when a consequential decision depends on current external API,
-SDK, package, or version behavior. Open the local owner and installed call site
-first. Prefer the localized skill's `metadata.context7_refs`; otherwise use the
-exact ID and focused seed query in
-[`references/context7_library_ids.md`](references/context7_library_ids.md).
-
-Use a supplied exact ID directly. Otherwise resolve the library ID, then issue
-one narrow documentation query per concept. Verify the result against the
-installed version, local source/tests, and exact ARIA owner.
-
-## MemPalace Branch
-
-Use semantic recall only for prior decisions, failed approaches, unknown
-ownership, or cross-surface relationships that materially improve the task.
-Choose one reviewed room, record source and authored date, then open the exact
-current-worktree source. Code, tests, known symbols, and active configuration use
-Graphify or direct owners rather than memory. Chronology never implies
-supersession.
+Use the Context7 App only after locating the local owner and installed call
+site. Use a supplied exact ID directly; otherwise call
+`mcp__codex_apps__context7_resolve_library_id`, then issue one concept per
+`mcp__codex_apps__context7_query_docs` call. Verify against the installed
+version and local source/tests. The IDs above are initialization seeds; read
+[`references/context7_library_ids.md`](references/context7_library_ids.md) for
+their concise scopes, the full registry, and focused query menus. Do not use the
+deprecated MCP-Docker Context7 tools.
 
 ## Workflow
 
-1. Select the smallest branch in the source-order tree.
-2. For eligible broad project context, take the Graphify branch first.
-3. For scientific language, open the active thesis include graph and the
-   smallest shared glossary, symbol, or equation owner. Shared Typst facades own
-   reusable body and metadata; `docs/notation.yml` is a generated consumer
-   adapter.
-4. For current external behavior, take the Context7 branch after the local call
-   site is known.
-5. Use MemPalace only for eligible semantic recall; use generated context only
-   when source-family routing remains unclear.
-6. Open the exact candidate source and nearest nested `AGENTS.md`; reject any
-   navigation evidence that conflicts with them.
-7. Hand off to the narrow implementation, docs, diagnostic, or review owner.
-8. Stop retrieving when the owner and required verification are explicit.
-
-## Zoom-Out Output
-
-- selected source-order branch and exact owner
-- domain term and shared-language anchor when one exists
-- main callers, data contracts, and focused tests
-- current external-doc evidence when it changes the decision
-- stale, degraded, or missing context that still needs exact verification
+1. Select one hierarchy leaf and its nearest `AGENTS.md`.
+2. For scientific language, open the active thesis include graph and the
+   smallest shared glossary, symbol, or equation owner; treat `docs/notation.yml`
+   as a generated consumer.
+3. Use Graphify first for eligible broad context, subject to its state contract.
+4. Use the Context7 App only for consequential current external behavior.
+5. Use reviewed semantic memory only when prior decisions or failed approaches
+   materially help; chronology never implies supersession.
+6. Open the exact owner, reject conflicting navigation evidence, hand off, and
+   stop retrieving when the owner and proof are explicit.

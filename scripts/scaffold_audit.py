@@ -53,7 +53,7 @@ CONTEXT7_REGISTRY = (
     / "context7_library_ids.md"
 )
 CONTEXT7_ID_RE = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
-TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+\.[A-Za-z0-9_]+$")
+TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|__[A-Za-z0-9_]+)$")
 AUDIT_OWNED_TOOL_REFS = {
     "mcp__MCP_DOCKER.analyze_python_file",
     "mcp__MCP_DOCKER.analyze_python_package",
@@ -84,11 +84,9 @@ AUDIT_OWNED_TOOL_REFS = {
     "mcp__MCP_DOCKER.find_long_functions",
     "mcp__MCP_DOCKER.find_package_issues",
     "mcp__MCP_DOCKER.get_extraction_guidance",
-    "mcp__MCP_DOCKER.get_library_docs",
     "mcp__MCP_DOCKER.get_package_metrics",
     "mcp__MCP_DOCKER.list_papers",
     "mcp__MCP_DOCKER.read_paper",
-    "mcp__MCP_DOCKER.resolve_library_id",
     "mcp__MCP_DOCKER.search_papers",
     "mcp__MCP_DOCKER.tdd_refactoring_guidance",
     "mcp__code_index.get_file_summary",
@@ -527,7 +525,7 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 if not TOOL_REF_RE.match(ref):
                     errors.append(
                         f"{prefix}: metadata.tool_refs entry {ref!r} must use canonical "
-                        "mcp__<server>.<tool_name> form"
+                        "mcp__<server>.<tool_name> or app mcp__<server>__<tool_name> form"
                     )
                 elif ref not in AUDIT_OWNED_TOOL_REFS and not any(
                     ref.startswith(prefix) for prefix in OPTIONAL_TOOL_REF_PREFIXES
@@ -841,7 +839,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         anchor_text = self_test_skill_text(
             "missing-anchor-skill",
-            [".agents/references/source_order.md#definitely-missing-anchor"],
+            [".agents/skills/aria-nbv-context/SKILL.md#definitely-missing-anchor"],
             "Use this test body for missing anchor validation.",
         )
         write_self_test_skill(tmp_root, "missing-anchor-skill", anchor_text)
@@ -872,7 +870,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         mismatch_text = self_test_skill_text(
             "other-name",
-            [".agents/references/source_order.md#compositional-owner-tree"],
+            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
             "Use this test body for directory-name validation.",
         )
         write_self_test_skill(tmp_root, "mismatched-name", mismatch_text)
@@ -1074,7 +1072,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         drift_text = self_test_skill_text(
             "truth-leak-skill",
-            [".agents/references/source_order.md#compositional-owner-tree"],
+            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
             "This planned but unimplemented Q_H roadmap detail will be implemented later.",
         )
         drift_path = write_self_test_skill(tmp_root, "truth-leak-skill", drift_text)
@@ -1097,7 +1095,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         missing_literature_text = self_test_skill_text(
             "missing-literature-skill",
-            [".agents/references/source_order.md#compositional-owner-tree"],
+            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
             "Use this test body for literature ref validation.",
             '  literature_refs:\n    - "DefinitelyMissingBibKey2026"',
         )
@@ -1115,7 +1113,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         unregistered_context7_text = self_test_skill_text(
             "unregistered-context7-skill",
-            [".agents/references/source_order.md#compositional-owner-tree"],
+            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
             "Use this test body for Context7 registry validation.",
             '  context7_refs:\n    - "/example/not-in-registry"',
         )
@@ -1132,7 +1130,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         malformed_tool_text = self_test_skill_text(
             "malformed-tool-skill",
-            [".agents/references/source_order.md#compositional-owner-tree"],
+            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
             "Use this test body for tool ref validation.",
             '  tool_refs:\n    - "Context7 get-library-docs"',
         )
@@ -1147,7 +1145,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         unknown_tool_text = self_test_skill_text(
             "unknown-tool-skill",
-            [".agents/references/source_order.md#compositional-owner-tree"],
+            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
             "Use this test body for tool ref inventory validation.",
             '  tool_refs:\n    - "mcp__Bogus.fake"',
         )

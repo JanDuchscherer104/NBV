@@ -70,7 +70,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "- Repo: ${ROOT_DIR}"
   echo
   echo "## Retrieval ladder"
-  echo "1. Source order and conflict rule: .agents/references/source_order.md"
+  echo "1. Owner hierarchy and conflict rule: .agents/skills/aria-nbv-context/SKILL.md"
   echo "2. Current thesis direction: docs/typst/thesis/main.typ plus development/roadmap.typ and sections/01-research-questions.typ"
   echo "3. Active thesis prose and hierarchy: docs/typst/thesis/main.typ plus recursive includes"
   echo "4. Shared scientific language: docs/typst/shared/{glossary,symbols,equations}.typ; docs/notation.yml is generated"
@@ -81,7 +81,7 @@ memory_history_count="$(count_files '*.md' "${ROOT_DIR}/.agents/memory/history")
   echo "9. Heavyweight fallback: make context-heavy"
   echo
   echo "## Core owner map"
-  echo "- .agents/references/source_order.md"
+  echo "- .agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
   echo "- docs/typst/thesis/development/roadmap.typ"
   echo "- docs/typst/thesis/sections/01-research-questions.typ"
   echo "- docs/typst/shared/glossary.typ"

@@ -39,7 +39,7 @@ or repeatable workflows.
 - Code, tests, and active configuration own executable behavior and contracts.
 - The target state is for the active Typst thesis to own scientific narrative,
   notation, and research direction. Until that migration is reviewed,
-  `.agents/references/source_order.md` resolves current authority. Exact papers
+  the `aria-nbv-context` owner hierarchy resolves current authority. Exact papers
   own external claims, which retain page, section, equation, or source-file
   locators. Skills must not duplicate domain knowledge from either source.
 - Immutable manifests and evidence bundles own measurements. Reports and thesis
@@ -175,8 +175,6 @@ policy:
   boundary remains accepted, with mandatory Codex-worktree routing superseding
   its former optional status.
 - LitKG is retired; reintroduction requires a new evidence-backed decision.
-- Whether `aria-nbv-context` remains a thin router or owns a small amount of
-  stable project orientation.
 - Which handwritten project-state surfaces can be retired after their facts
   have verified owners.
 - Which external skills should be referenced, allowlisted, or vendored.
@@ -184,6 +182,6 @@ policy:
 ## Instruction Capture
 
 The exact destination map is owned by
-`.agents/references/source_order.md#capture-rule`. The `agent-behavior` skill
+`.agents/skills/aria-nbv-context/SKILL.md#capture-rule`. The `agent-behavior` skill
 owns the procedure for recognizing explicit current-user capture requests and
 applying that map. This file retains only reviewed human preferences.

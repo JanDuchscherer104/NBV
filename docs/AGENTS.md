@@ -1,7 +1,8 @@
 # Docs Guidance
 
-Apply this file under `docs/`; use `.agents/references/source_order.md` when
-owners conflict.
+Apply this file under `docs/`; use the
+[owner hierarchy](../.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy)
+when owners conflict.
 
 ## Owners And Hazards
 

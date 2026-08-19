@@ -30,7 +30,7 @@ metadata:
     - ".agents/skills/simplification/references/redundancy-discovery.md"
   canonical_sources:
     - "AGENTS.md"
-    - ".agents/references/source_order.md#capture-rule"
+    - ".agents/skills/aria-nbv-context/SKILL.md#capture-rule"
     - ".agents/skills/README.md#style-rules"
     - ".agents/skills/simplification/references/redundancy-discovery.md"
     - ".agents/skills/simplification/references/tool-decision-tree.md"

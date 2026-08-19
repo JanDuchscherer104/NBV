@@ -18,7 +18,7 @@ metadata; it is not a narrative owner.
 ## Current Policy
 - Non-trivial tasks should leave a debrief in `history/YYYY/MM/`.
 - If a task changes current truth, update its exact canonical owner selected by
-  `.agents/references/source_order.md`.
+  `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy`.
 - Architect and critic review outputs remain session-local. Capture only their
   accepted durable decisions in the relevant Typst, code/config/test, setup, or
   guidance owner; put actionable work in the agents DB and a bounded task

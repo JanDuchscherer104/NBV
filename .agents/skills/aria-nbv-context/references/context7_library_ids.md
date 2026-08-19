@@ -1,12 +1,11 @@
-# Context7 Library IDs And Query Seeds
+# Context7 App Library IDs And Query Seeds
 
 Use this fallback only when no narrower skill owns the external API question.
-Open the local owner and installed call site first. Use a supplied exact ID
-directly; otherwise resolve the library, then issue one focused query per
-concept. Each backticked list below is a seed menu, not one broad query: select
-only the API or behavior needed for the current decision. Verify consequential
-answers against the installed version, local source/tests, and exact ARIA
-owner.
+Open the local owner and installed call site first. In the Context7 App, use a
+supplied exact ID directly; otherwise resolve the library, then issue one
+focused query per concept. Each backticked list is a seed menu, not one broad
+query. Verify consequential answers against the installed version, local
+source/tests, and exact ARIA owner. MCP-Docker Context7 tools are deprecated.
 
 ## Navigation And Publication
 

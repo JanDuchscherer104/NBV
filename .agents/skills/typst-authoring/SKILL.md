@@ -32,10 +32,10 @@ metadata:
   must_read:
     - "AGENTS.md"
     - "docs/AGENTS.md"
-    - ".agents/references/source_order.md"
+    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
   canonical_sources:
     - "docs/AGENTS.md"
-    - ".agents/references/source_order.md#compositional-owner-tree"
+    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
     - "docs/typst/shared/symbols.typ"
@@ -59,8 +59,8 @@ metadata:
     - "quality-driven-rri"
     - "finite-candidate-rl"
   tool_refs:
-    - "mcp__MCP_DOCKER.resolve_library_id"
-    - "mcp__MCP_DOCKER.get_library_docs"
+    - "mcp__codex_apps__context7_resolve_library_id"
+    - "mcp__codex_apps__context7_query_docs"
     - "mcp__code_index.search_code_advanced"
   verification:
     - "skill quick_validate.py when available for skill edits"

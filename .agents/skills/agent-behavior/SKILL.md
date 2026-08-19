@@ -22,7 +22,7 @@ metadata:
   canonical_sources:
     - ".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md#accepted-2026-07-30-amendments"
     - "AGENTS.md"
-    - ".agents/references/source_order.md#capture-rule"
+    - ".agents/skills/aria-nbv-context/SKILL.md#capture-rule"
   verification:
     - "surface-specific checks from the nearest package guide or skill"
     - "make check-agent-memory when agent guidance or memory changes"
