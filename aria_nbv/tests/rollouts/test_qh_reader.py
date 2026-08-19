@@ -14,6 +14,7 @@ import zarr
 pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
+from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.zarr_store import (
     RolloutZarrStoreReader,
     RolloutZarrValidationResult,
@@ -21,6 +22,34 @@ from aria_nbv.rollouts.zarr_store import (
 )
 from aria_nbv.utils import Stage
 from tests.rollout_fixtures import build_rollout_records
+
+
+def _campaign_split_hash(records: list[object]) -> str:
+    """Return the canonical fixture hash for campaign-bound source rows."""
+
+    sources = [record.lineage.source for record in records]
+    first = sources[0]
+    split_hash = build_rollout_split_manifest_hash(
+        source_manifest_hash=first.source_offline_store_manifest_hash,
+        split=first.split,
+        records=[
+            {
+                "order": order,
+                "sample_index": source.source_sample_index,
+                "sample_key": source.source_sample_key,
+                "scene_id": source.scene_id,
+                "snippet_id": source.snippet_id,
+                "split": source.split,
+                "source_shard_id": source.source_shard_id,
+                "source_shard_row": source.source_shard_row,
+                "campaign_split": source.campaign_split,
+            }
+            for order, source in enumerate(sources)
+        ],
+    )
+    for source in sources:
+        source.split_manifest_hash = split_hash
+    return split_hash
 
 
 def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_id: int | None = None) -> Path:
@@ -59,7 +88,7 @@ def _write_v1_store(path: Path) -> Path:
         discount_gamma=0.95,
         target_protocol_version="v1_observed",
         source_offline_store_version="7",
-        split_manifest_hash="fixture-split-manifest",
+        split_manifest_hash=_campaign_split_hash(records),
     ).store_dir
 
 
@@ -85,7 +114,7 @@ def test_reader_normalizes_validation_campaign_split_without_changing_source_spl
         discount_gamma=0.95,
         target_protocol_version="v0_gt_input",
         source_offline_store_version="7",
-        split_manifest_hash="fixture-split-manifest",
+        split_manifest_hash=_campaign_split_hash(records),
     ).store_dir
 
     source = QhRolloutReader((store,)).source_refs[0]
@@ -104,7 +133,7 @@ def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows
         discount_gamma=0.95,
         target_protocol_version="v0_gt_input",
         source_offline_store_version="7",
-        split_manifest_hash="fixture-split-manifest",
+        split_manifest_hash=_campaign_split_hash(records),
     ).store_dir
 
     readers = {split: QhRolloutReader((store,), campaign_split=split) for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)}

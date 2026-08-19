@@ -714,6 +714,13 @@ class _RolloutZarrWriteSession:
 
         created_at_utc = utc_timestamp()
         records = _records_with_global_target_row_ids(self.records)
+        lineage_hashes = {
+            record.lineage.source.split_manifest_hash
+            for record in records
+            if record.lineage.source.campaign_split is not None
+        }
+        if lineage_hashes and lineage_hashes != {self.split_manifest_hash}:
+            raise ValueError("Rollout record split_manifest_hash does not match the configured campaign hash.")
         dictionaries = _build_dictionaries(records)
         table = _flatten_records(
             records,
@@ -730,6 +737,14 @@ class _RolloutZarrWriteSession:
         )
         if effective_split_manifest_hash != self.split_manifest_hash:
             raise ValueError("Configured split_manifest_hash does not match campaign-bound source rows.")
+        try:
+            split_hash_id = dictionaries["config"].index(self.split_manifest_hash)
+        except ValueError:
+            dictionaries["config"].append(self.split_manifest_hash)
+            split_hash_id = len(dictionaries["config"]) - 1
+        table.sources["split_manifest_hash_id"] = np.full(
+            table.sources["split_manifest_hash_id"].shape, split_hash_id, dtype=np.int32
+        )
         root_metadata = _root_metadata_payload(
             records=records,
             tables=table,

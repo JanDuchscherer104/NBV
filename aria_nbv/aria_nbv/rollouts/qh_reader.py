@@ -420,7 +420,7 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
         return refs
     actual_hash = build_rollout_split_manifest_hash(
         source_manifest_hash=ordered[0].source_manifest_hash if ordered else "",
-        split=_hash_split_value(ordered[0].split) if ordered else "",
+        split=_hash_physical_split_value(ordered[0].split) if ordered else "",
         records=[
             {
                 "order": order,
@@ -428,10 +428,14 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
                 "sample_key": source.source_sample_key,
                 "scene_id": source.scene_id,
                 "snippet_id": source.snippet_id,
-                "split": _hash_split_value(source.split),
+                "split": _hash_physical_split_value(source.split),
                 "source_shard_id": source.source_shard_id,
                 "source_shard_row": source.source_shard_row,
-                **({"campaign_split": _hash_split_value(source.campaign_split)} if source.campaign_split else {}),
+                **(
+                    {"campaign_split": _hash_campaign_split_value(source.campaign_split)}
+                    if source.campaign_split
+                    else {}
+                ),
             }
             for order, source in enumerate(ordered)
         ],
@@ -441,8 +445,14 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
     return refs
 
 
-def _hash_split_value(value: Stage | None) -> str:
-    """Return the persisted manifest spelling for a reader stage."""
+def _hash_physical_split_value(value: Stage | None) -> str:
+    """Return the physical VIN split spelling used by source manifests."""
+
+    return "" if value is None else value.value
+
+
+def _hash_campaign_split_value(value: Stage | None) -> str:
+    """Return the campaign split spelling used by campaign manifests."""
 
     if value is Stage.VAL:
         return "validation"
