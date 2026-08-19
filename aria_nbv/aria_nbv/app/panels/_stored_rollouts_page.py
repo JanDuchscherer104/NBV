@@ -33,6 +33,7 @@ from ...rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_flow_rows,
+    candidate_group_summary_rows,  # noqa: F401 - retained for projection test compatibility
     candidate_population_evidence,
     comparable_policy_cohorts,
     discounted_rollout_return_rows,
@@ -272,6 +273,9 @@ def _cached_projection_cached(
     if projection == "candidate_group":
         if group_by is None:
             raise ValueError("candidate_group projection requires group_by")
+        if not hasattr(reader, "array"):
+            audit_rows = _cached_projection(store_path, "candidates", limit=limit)
+            return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
         return candidate_population_evidence(reader)["groups"][group_by]
     if projection in {"candidate_composition", "candidate_calibration"}:
         if group_by is None:
