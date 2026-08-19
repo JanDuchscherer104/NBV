@@ -3,6 +3,7 @@
 import json
 import signal
 import subprocess
+import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +16,7 @@ from aria_nbv.oracle.pipelines.campaign import (
     CampaignProcessRunner,
     CampaignStatus,
     CampaignTimeoutError,
+    CampaignWorkerResult,
     CampaignWorkUnit,
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
@@ -36,6 +38,41 @@ from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+class _FakeCampaignProcessRunner(CampaignProcessRunner):
+    """Complete-binding subprocess fake for campaign orchestration tests."""
+
+    def __init__(self, campaign, plan, result_factory):
+        self._campaign = campaign
+        self._plan = plan
+        self._result_factory = result_factory
+
+    def run(self, argv, *, on_started=None, **kwargs):
+        del kwargs
+        work_unit_hash = argv[argv.index("--work-unit-hash") + 1]
+        unit = next(unit for unit in self._plan.work_units if unit.work_unit_hash == work_unit_hash)
+        raw = dict(self._result_factory(unit))
+        result = CampaignWorkerResult(
+            campaign_id=self._plan.campaign_id,
+            config_hash=self._plan.config_hash,
+            plan_hash=self._plan.plan_hash,
+            work_unit_hash=unit.work_unit_hash,
+            source_identity_hash=unit.source_identity_hash,
+            target_id=unit.target_id,
+            profile=unit.profile,
+            profile_hash=unit.profile_hash,
+            generation_revision_hash=unit.generation_revision_hash,
+            outcome=raw.get("outcome", "succeeded"),
+            validated=raw.get("validated", False),
+            reason=raw.get("reason"),
+            leaf_evidence=raw.get("leaf_evidence"),
+        )
+        return 0, json.dumps(result.to_jsonable()), ""
+
+
+def _bind_runner(campaign, plan, result_factory):
+    campaign.process_runner = _FakeCampaignProcessRunner(campaign, plan, result_factory)
 
 
 def test_config_factory_returns_campaign_target():
@@ -450,8 +487,17 @@ def test_worker_json_rejects_unvalidated_success_and_preserves_non_success():
 def test_smoke_rejects_non_success_worker_outcomes(tmp_path, outcome):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _bind_runner(
+        campaign,
+        plan,
+        lambda _unit: {
+            "outcome": outcome,
+            "validated": outcome == "skipped" or outcome == "succeeded",
+            "leaf_evidence": {} if outcome in {"skipped", "succeeded"} else None,
+        },
+    )
     with pytest.raises(RuntimeError, match="structured succeeded"):
-        campaign.smoke(plan, worker=lambda _unit: {"outcome": outcome})
+        campaign.smoke(plan, config_path=tmp_path / "config.toml", plan_path=tmp_path / "plan.json")
     assert not (tmp_path / "smoke-evidence.json").exists()
 
 
@@ -459,9 +505,15 @@ def test_smoke_writes_structured_succeeded_evidence(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     selected = []
+    _bind_runner(
+        campaign,
+        plan,
+        lambda unit: selected.append(unit) or {"outcome": "succeeded", "validated": True, "leaf_evidence": {}},
+    )
     result = campaign.smoke(
         plan,
-        worker=lambda unit: selected.append(unit) or {"outcome": "succeeded", "validated": True},
+        config_path=tmp_path / "config.toml",
+        plan_path=tmp_path / "plan.json",
     )
     evidence = json.loads((tmp_path / "smoke-evidence.json").read_text())
     assert result["validated"] is True
@@ -478,9 +530,15 @@ def test_time_budget_blocks_after_promotion_and_resume_skips_completed_unit(tmp_
     ticks = iter([0.0, 0.0, 0.0, 2.0, 2.0, 2.0])
     campaign.clock = lambda: next(ticks, 2.0)
     calls = []
+    _bind_runner(
+        campaign,
+        plan,
+        lambda unit: (
+            calls.append(unit.work_unit_hash) or {"outcome": "succeeded", "validated": True, "leaf_evidence": {}}
+        ),
+    )
     first = campaign._run_claimed(
         plan,
-        worker=lambda unit: calls.append(unit.work_unit_hash) or {"outcome": "succeeded", "validated": True},
         claim={"claim_hash": "first"},
         time_budget_seconds=1.0,
     )
@@ -490,11 +548,7 @@ def test_time_budget_blocks_after_promotion_and_resume_skips_completed_unit(tmp_
     assert campaign.read_status(plan=plan).bounded_error == "time budget exhausted"
 
     campaign.clock = lambda: 10.0
-    resumed = campaign._run_claimed(
-        plan,
-        worker=lambda unit: calls.append(unit.work_unit_hash) or {"outcome": "succeeded", "validated": True},
-        claim={"claim_hash": "second"},
-    )
+    resumed = campaign._run_claimed(plan, claim={"claim_hash": "second"})
     assert calls == [plan.work_units[0].work_unit_hash, plan.work_units[1].work_unit_hash]
     assert [result["outcome"] for result in resumed] == ["succeeded", "succeeded"]
 
@@ -1110,9 +1164,10 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkey
         calls.append(unit.work_unit_hash)
         if len(calls) == 1:
             raise TimeoutError("synthetic timeout")
-        return {"outcome": "skipped"}
+        return {"outcome": "skipped", "validated": True, "leaf_evidence": {}}
 
-    results = campaign._run_claimed(plan, worker=worker, claim=claim)
+    _bind_runner(campaign, plan, worker)
+    results = campaign._run_claimed(plan, claim=claim)
     assert len(calls) == len(plan.work_units)
     assert results[0]["outcome"] == "timed_out"
     assert results[1]["outcome"] == "skipped"
@@ -1134,11 +1189,8 @@ def test_run_claimed_never_marks_unvalidated_skip_complete(tmp_path):
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     _append_pre_run_prefix(campaign, plan)
 
-    results = campaign._run_claimed(
-        plan,
-        worker=lambda _unit: {"outcome": "skipped"},
-        claim={"claim_hash": "test"},
-    )
+    _bind_runner(campaign, plan, lambda _unit: {"outcome": "skipped"})
+    results = campaign._run_claimed(plan, claim={"claim_hash": "test"})
 
     assert {result["outcome"] for result in results} == {"failed"}
     assert "unit_skipped" not in [event.kind for event in campaign.read_events()]
@@ -1151,12 +1203,8 @@ def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path
     _append_pre_run_prefix(campaign, plan)
     monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda _plan, _unit: {"validation": "passed"})
 
-    first = campaign._run_claimed(
-        plan,
-        worker=lambda _unit: {"outcome": "succeeded", "validated": True},
-        claim={"claim_hash": "first"},
-        max_new_units=1,
-    )
+    _bind_runner(campaign, plan, lambda _unit: {"outcome": "succeeded", "validated": True, "leaf_evidence": {}})
+    first = campaign._run_claimed(plan, claim={"claim_hash": "first"}, max_new_units=1)
     blocked = campaign.read_status(plan=plan)
     assert len(first) == 1
     assert blocked.state == "blocked"
@@ -1170,7 +1218,8 @@ def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path
         active.append((status.current_work_unit, status.last_work_unit))
         return {"outcome": "insufficient_support", "reason": "synthetic support gap"}
 
-    resumed = campaign._run_claimed(plan, worker=resume_worker, claim={"claim_hash": "second"})
+    _bind_runner(campaign, plan, resume_worker)
+    resumed = campaign._run_claimed(plan, claim={"claim_hash": "second"})
     completed = campaign.read_status(plan=plan)
     assert len(resumed) == len(plan.work_units)
     assert completed.state == "completed"
@@ -1196,7 +1245,8 @@ def test_run_claimed_resume_retries_every_nonvalidated_terminal_outcome(tmp_path
         retried.append(unit.work_unit_hash)
         return {"outcome": "insufficient_support", "reason": "bounded"}
 
-    resumed = campaign._run_claimed(plan, worker=worker, claim={"claim_hash": "second"})
+    _bind_runner(campaign, plan, worker)
+    resumed = campaign._run_claimed(plan, claim={"claim_hash": "second"})
 
     assert retried[0] == first_unit.work_unit_hash
     assert len(resumed) == len(plan.work_units)
@@ -1228,7 +1278,8 @@ def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker
         active.append((unit, status))
         raise RuntimeError("retry still fails")
 
-    results = campaign.run(plan, worker=retry_worker)
+    _bind_runner(campaign, plan, retry_worker)
+    results = campaign.run(plan)
 
     first_retry, first_status = active[0]
     assert first_status.state == "running"
@@ -1248,11 +1299,8 @@ def test_run_claimed_rejects_restart_when_every_terminal_unit_is_validated(tmp_p
     monkeypatch.setattr(campaign, "_require_validated_terminal_shard", lambda _plan, _unit: {"validation": "passed"})
 
     with pytest.raises(ValueError, match="completed campaign cannot be resumed"):
-        campaign._run_claimed(
-            plan,
-            worker=lambda _unit: {"outcome": "insufficient_support"},
-            claim={"claim_hash": "restart"},
-        )
+        _bind_runner(campaign, plan, lambda _unit: {"outcome": "insufficient_support"})
+        campaign._run_claimed(plan, claim={"claim_hash": "restart"})
 
 
 def test_run_claimed_reconciles_interrupted_active_attempt_before_retry(tmp_path):
@@ -1263,13 +1311,12 @@ def test_run_claimed_reconciles_interrupted_active_attempt_before_retry(tmp_path
     campaign.append_event(campaign._event(plan, "target_profile", unit=interrupted, stage=interrupted.profile))
     retried = []
 
-    campaign._run_claimed(
+    _bind_runner(
+        campaign,
         plan,
-        worker=lambda unit: (
-            retried.append(unit.work_unit_hash) or {"outcome": "insufficient_support", "reason": "bounded"}
-        ),
-        claim={"claim_hash": "resume"},
+        lambda unit: retried.append(unit.work_unit_hash) or {"outcome": "insufficient_support", "reason": "bounded"},
     )
+    campaign._run_claimed(plan, claim={"claim_hash": "resume"})
 
     assert retried[0] == interrupted.work_unit_hash
     assert "campaign_resumed" in [event.kind for event in campaign.read_events(plan=plan)]
@@ -1288,11 +1335,9 @@ def test_public_run_rechecks_admission_before_resuming_interrupted_attempt(tmp_p
     admission_checks = []
     monkeypatch.setattr(campaign, "preflight", lambda *args, **kwargs: admission_checks.append("preflight"))
     monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: admission_checks.append("smoke"))
+    _bind_runner(campaign, plan, lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"})
 
-    results = campaign.run(
-        plan,
-        worker=lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"},
-    )
+    results = campaign.run(plan)
 
     events = campaign.read_events(plan=plan)
     assert admission_checks == ["preflight", "smoke"]
@@ -1320,11 +1365,9 @@ def test_public_run_reuses_valid_pre_run_prefix(tmp_path, monkeypatch, prior_gat
     admission_checks = []
     monkeypatch.setattr(campaign, "preflight", lambda *args, **kwargs: admission_checks.append("preflight"))
     monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: admission_checks.append("smoke"))
+    _bind_runner(campaign, plan, lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"})
 
-    results = campaign.run(
-        plan,
-        worker=lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"},
-    )
+    results = campaign.run(plan)
 
     events = campaign.read_events(plan=plan)
     assert admission_checks == ["preflight", "smoke"]
@@ -1359,7 +1402,8 @@ def test_run_claimed_persists_typed_timeout_and_continues(tmp_path):
             )
         return {"outcome": "insufficient_support", "reason": "synthetic support gap"}
 
-    campaign._run_claimed(plan, worker=worker, claim={"claim_hash": "test", "tmux_session": "campaign"})
+    _bind_runner(campaign, plan, worker)
+    campaign._run_claimed(plan, claim={"claim_hash": "test", "tmux_session": "campaign"})
     status = campaign.read_status(plan=plan)
     assert len(calls) == len(plan.work_units)
     assert status.last_timeout == {
@@ -1505,6 +1549,41 @@ def test_stale_smoke_evidence_is_rejected_without_overwriting(tmp_path):
     with pytest.raises(RuntimeError, match="stale"):
         campaign.smoke_evidence(plan)
     assert evidence.read_text() == before
+
+
+def test_smoke_evidence_rejects_forged_foreign_worker_identity(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    result = CampaignWorkerResult(
+        campaign_id=plan.campaign_id,
+        config_hash=plan.config_hash,
+        plan_hash=plan.plan_hash,
+        work_unit_hash=unit.work_unit_hash,
+        source_identity_hash=unit.source_identity_hash,
+        target_id=unit.target_id,
+        profile=unit.profile,
+        profile_hash=unit.profile_hash,
+        generation_revision_hash=unit.generation_revision_hash,
+        outcome="succeeded",
+        validated=True,
+        leaf_evidence={},
+    ).to_jsonable()
+    result["target_id"] = "foreign-target"
+    (tmp_path / "smoke-evidence.json").write_text(
+        json.dumps(
+            {
+                "campaign_id": plan.campaign_id,
+                "plan_hash": plan.plan_hash,
+                "config_hash": plan.config_hash,
+                "work_unit_hash": unit.work_unit_hash,
+                "result": result,
+            }
+        )
+        + "\n"
+    )
+    with pytest.raises(RuntimeError, match="identity is invalid"):
+        campaign.smoke_evidence(plan)
 
 
 def test_legacy_v0_lineage_and_zarr_table_schema_remain_structurally_stable():
@@ -1973,7 +2052,6 @@ def test_run_rejects_foreign_campaign_or_unit_identity_before_files(tmp_path):
     with pytest.raises(ValueError, match="identity"):
         campaign.run(
             foreign,
-            worker=lambda _: {"outcome": "succeeded"},
             cuda_probe=lambda: {"cuda_available": True, "pytorch3d_available": True},
         )
 
@@ -2004,7 +2082,6 @@ def test_run_rejects_plan_writer_digest_before_claim_or_events(tmp_path):
     with pytest.raises(ValueError, match="writer config hash"):
         campaign.run(
             plan,
-            worker=lambda _unit: {"outcome": "skipped"},
             cuda_probe=lambda: SimpleNamespace(ok=True, cuda_available=True, pytorch3d_available=True, device="cuda:0"),
         )
     assert not (tmp_path / "run-claim.json").exists()
@@ -2022,7 +2099,7 @@ def test_run_rejects_source_selection_only_without_mutating_evidence(tmp_path, m
     monkeypatch.setattr(campaign, "smoke_evidence", lambda _plan: {"validated": True})
 
     with pytest.raises(ValueError, match="incomplete planning event prefix"):
-        campaign.run(plan, worker=lambda _unit: {"outcome": "failed"})
+        campaign.run(plan)
 
     assert events_path.read_bytes() == events_before
     assert status_path.read_bytes() == status_before
@@ -2042,7 +2119,6 @@ def test_run_requires_smoke_evidence_even_for_injected_worker(tmp_path, monkeypa
     with pytest.raises(RuntimeError, match="smoke evidence"):
         campaign.run(
             plan,
-            worker=lambda _unit: {"outcome": "skipped"},
             cuda_probe=lambda: SimpleNamespace(ok=True, cuda_available=True, pytorch3d_available=True, device="cuda:0"),
         )
     assert called == [True]
@@ -2067,7 +2143,7 @@ def test_direct_run_forwards_plan_and_writer_to_source_preflight(tmp_path, monke
     )
     plan_path = tmp_path / "plan.json"
     with pytest.raises(RuntimeError, match="smoke evidence"):
-        campaign.run(plan, worker=lambda _unit: {"outcome": "skipped"}, plan_path=plan_path)
+        campaign.run(plan, plan_path=plan_path)
 
     assert captured["kwargs"]["plan_path"] == plan_path
     assert captured["kwargs"]["writer_config_path"] == tmp_path / "writer.toml"
@@ -2087,7 +2163,6 @@ def test_competing_run_does_not_mutate_active_owner_status_or_events(tmp_path):
     with pytest.raises(RuntimeError, match="run claim exists"):
         campaign.run(
             plan,
-            worker=lambda _unit: {"outcome": "skipped"},
             cuda_probe=lambda: {"cuda_available": True, "pytorch3d_available": True},
         )
 
@@ -2154,16 +2229,16 @@ def test_events_flush_status_atomic_and_claim_release(tmp_path):
     assert not (tmp_path / "run-claim.json").exists()
 
 
-def test_watchdog_boundary_uses_monotonic_clock(tmp_path):
-    ticks = iter([0.0, 120.0])
-    base = CudaRolloutCampaignConfig(output_root=tmp_path)
-    values = base.model_dump()
-    values.update(expected_scene_count=1, profiles=base.profiles)
-    config = CudaRolloutCampaignConfig.model_construct(**values)
-    campaign = CudaRolloutCampaign(config, clock=lambda: next(ticks))
-    unit = campaign.plan([_row("s", "k", "t")], source_manifest_hash="source").work_units[0]
-    with pytest.raises(TimeoutError):
-        campaign.run_with_watchdog(unit, lambda _: "done", timeout=120)
+def test_process_runner_real_hung_child_uses_term_then_kill_process_group():
+    argv = (
+        sys.executable,
+        "-c",
+        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)",
+    )
+    with pytest.raises(CampaignTimeoutError) as raised:
+        CampaignProcessRunner().run(argv, timeout=0.1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert raised.value.disposition == "term-grace-kill"
+    assert raised.value.process_group is not None
 
 
 def test_work_unit_delegates_skip_to_shard_leaf(tmp_path):
