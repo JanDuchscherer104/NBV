@@ -638,7 +638,7 @@ class _RolloutSourceLineageBuilder:
     source_manifest_hash: str
     split_manifest_hash: str
     source_cache_version: str
-    campaign_split: str = "unknown"
+    campaign_split: str | None = None
 
     @classmethod
     def from_dataset(
@@ -657,7 +657,7 @@ class _RolloutSourceLineageBuilder:
                 records=cls.dataset_records_for_hash(dataset, limit=max_samples, campaign_split=campaign_split),
             ),
             source_cache_version=str(dataset.manifest.version),
-            campaign_split=str(campaign_split or split),
+            campaign_split=None if campaign_split is None else str(campaign_split),
         )
 
     @staticmethod
@@ -1071,7 +1071,7 @@ class RolloutDatasetWriter:
                             source_sample_index=sample.sample_index,
                             source_sample_key=sample.sample_key,
                             split=sample.split,
-                            campaign_split=getattr(source_lineage, "campaign_split", sample.split),
+                            campaign_split=getattr(source_lineage, "campaign_split", None),
                             source_shard_id=sample.source_shard_id,
                             source_shard_row=sample.source_shard_row,
                             source_offline_store_manifest_hash=source_lineage.source_manifest_hash,

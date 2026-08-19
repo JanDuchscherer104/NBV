@@ -58,7 +58,7 @@ from aria_nbv.rollouts.shard_manifest import (
     write_rollout_shard_manifest,
     write_rollout_source_manifest,
 )
-from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import validate_rollout_zarr_store, write_rollout_zarr_store
 from aria_nbv.targets import ObservedTargetDescriptor, TargetDescriptor
 from aria_nbv.targets.protocol import TargetInputProtocol
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
@@ -214,6 +214,23 @@ def test_split_manifest_hash_tracks_source_rows_and_order() -> None:
 
     assert base != reordered
     assert base != changed_source
+
+
+def test_direct_v0_writer_keeps_physical_split_out_of_campaign_hash(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=51)[:1]
+    source = records[0].lineage.source
+    source.campaign_split = None
+    source.source_offline_store_manifest_hash = "fixture-source"
+    source.source_cache_version = "fixture-v0"
+    source.split_manifest_hash = "fixture-split-manifest"
+    result = write_rollout_zarr_store(
+        tmp_path / "direct-v0.zarr",
+        records,
+        source_offline_store_version="fixture-v0",
+        split_manifest_hash="fixture-split-manifest",
+    )
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
 
 
 def test_campaign_split_is_serialized_and_bound_into_v3_source_hash() -> None:
