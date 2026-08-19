@@ -93,7 +93,7 @@ def snippet_t_world_snippet(sample: "VinOfflineSample") -> PoseTW | None:
         if torch.is_tensor(value):
             return PoseTW(value.reshape(-1, 12)[:1])
     if isinstance(snippet, VinSnippetView):
-        poses = snippet.t_world_rig.tensor().reshape(-1, 12)
+        poses = snippet.t_world_snippet.tensor().reshape(-1, 12)
         if poses.shape[0] > 0:
             return PoseTW(poses[:1])
     return None
@@ -109,7 +109,7 @@ def observed_target_descriptors(sample: "VinOfflineSample") -> tuple[ObservedTar
     block = getattr(sample, "detected_obbs", None)
     if block is None:
         return ()
-    obbs = block.obbs if isinstance(block, CompactObbBlock) else block
+    obbs = block.obbs if isinstance(block, CompactObbBlock) or hasattr(block, "obbs") else block
     if obbs is None:
         return ()
     obbs = obbs if isinstance(obbs, ObbTW) else ObbTW(torch.as_tensor(obbs, dtype=torch.float32))

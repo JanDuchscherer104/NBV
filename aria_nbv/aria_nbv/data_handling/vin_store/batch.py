@@ -447,6 +447,7 @@ class VinOracleBatch:
             points_list = [view.points_world for view in snippet_views if view is not None]
             lengths_list = [view.lengths for view in snippet_views if view is not None]
             traj_list = [view.t_world_rig for view in snippet_views if view is not None]
+            snippet_pose_list = [view.t_world_snippet for view in snippet_views if view is not None]
             max_points = max(int(points.shape[0]) for points in points_list)
             max_frames = max(int(traj.shape[0]) for traj in traj_list)
             points_world = torch.stack(
@@ -468,7 +469,19 @@ class VinOracleBatch:
                     dim=0,
                 ),
             )
-            vin_snippet = VinSnippetView(points_world=points_world, lengths=lengths, t_world_rig=t_world_rig)
+            max_snippet_pose = max(int(pose.shape[0]) for pose in snippet_pose_list)
+            t_world_snippet = PoseTW(
+                torch.stack(
+                    [cls._pad_trajectory(pose, target_len=max_snippet_pose) for pose in snippet_pose_list],
+                    dim=0,
+                ),
+            )
+            vin_snippet = VinSnippetView(
+                points_world=points_world,
+                lengths=lengths,
+                t_world_rig=t_world_rig,
+                t_world_snippet=t_world_snippet,
+            )
 
         candidate_count = torch.stack(
             [

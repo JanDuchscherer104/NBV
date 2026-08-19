@@ -34,13 +34,14 @@ from .format import (
 )
 from .views import VinSnippetView
 
-OFFLINE_DATASET_VERSION = 7
+OFFLINE_DATASET_VERSION = 8
 """Version of the immutable VIN offline dataset format."""
 
 _ACTOR_SNIPPET_BLOCKS = (
     "vin.points_world",
     "vin.lengths",
     "vin.t_world_rig",
+    "vin.t_world_snippet",
 )
 
 
@@ -363,6 +364,7 @@ class VinOfflineStoreReader:
             :class:`VinSnippetView` with world points ``Tensor["P C", float32]``,
             valid point length ``Tensor["1", int64]``,
             and world-from-rig :class:`PoseTW` history ``Tensor["T 12", float32]``.
+            The persisted world-from-snippet gauge is ``PoseTW`` ``Tensor["1 12", float32]``.
         """
 
         shard = self._shards.get(record.shard_id)
@@ -403,10 +405,18 @@ class VinOfflineStoreReader:
                 np.array(self.read_numeric_block(record, "vin.t_world_rig"), copy=True),
             ).to(device=target, dtype=torch.float32),
         )
+        t_world_snippet = PoseTW(
+            torch.from_numpy(
+                np.array(self.read_numeric_block(record, "vin.t_world_snippet"), copy=True),
+            )
+            .to(device=target, dtype=torch.float32)
+            .reshape(-1, 12)[:1],
+        )
         return VinSnippetView(
             points_world=points_world,
             lengths=lengths,
             t_world_rig=t_world_rig,
+            t_world_snippet=t_world_snippet,
         )
 
     def read_numeric_block(self, record: VinOfflineIndexRecord, block_name: str) -> np.ndarray:
