@@ -189,7 +189,12 @@ def _make_vin_snippet(*, num_points: int = 10) -> VinSnippetView:
     points_world = torch.cat([xyz, inv_sigma, n_obs], dim=-1)
     lengths = torch.tensor([points_world.shape[0]], device=device, dtype=torch.int64)
     t_world_rig = _identity_pose(2)
-    return VinSnippetView(points_world=points_world, lengths=lengths, t_world_rig=t_world_rig)
+    return VinSnippetView(
+        points_world=points_world,
+        lengths=lengths,
+        t_world_rig=t_world_rig,
+        t_world_snippet=_identity_pose(1),
+    )
 
 
 def _make_cameras(num_cams: int) -> PerspectiveCameras:
@@ -366,6 +371,7 @@ def test_sample_semidense_points_accepts_optional_obs_count() -> None:
         points_world=four_channel_points,
         lengths=snippet.lengths,
         t_world_rig=snippet.t_world_rig,
+        t_world_snippet=snippet.t_world_snippet,
     )
     sampled = sample_semidense_points(
         four_channel_snippet,
@@ -383,7 +389,12 @@ def test_sample_semidense_points_vin_batch() -> None:
     snippet = _make_vin_snippet(num_points=16)
     points = snippet.points_world.unsqueeze(0).expand(2, -1, -1)
     lengths = torch.tensor([16, 16], dtype=torch.int64)
-    batch_snippet = VinSnippetView(points_world=points, lengths=lengths, t_world_rig=snippet.t_world_rig)
+    batch_snippet = VinSnippetView(
+        points_world=points,
+        lengths=lengths,
+        t_world_rig=snippet.t_world_rig,
+        t_world_snippet=snippet.t_world_snippet,
+    )
     sampled = sample_semidense_points(
         batch_snippet,
         device=torch.device("cpu"),
@@ -398,7 +409,12 @@ def test_sample_semidense_points_invalid_channels() -> None:
     model = _make_model()
     snippet = _make_vin_snippet(num_points=4)
     bad_points = snippet.points_world[:, :3]
-    bad_snippet = VinSnippetView(points_world=bad_points, lengths=snippet.lengths, t_world_rig=snippet.t_world_rig)
+    bad_snippet = VinSnippetView(
+        points_world=bad_points,
+        lengths=snippet.lengths,
+        t_world_rig=snippet.t_world_rig,
+        t_world_snippet=snippet.t_world_snippet,
+    )
     with pytest.raises(ValueError, match="at least 4 channels"):
         sample_semidense_points(
             bad_snippet,

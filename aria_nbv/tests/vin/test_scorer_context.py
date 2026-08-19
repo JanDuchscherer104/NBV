@@ -81,6 +81,7 @@ def _make_vin_snippet_with_traj(t_world_rig: PoseTW) -> VinSnippetView:
         points_world=torch.zeros((0, 5), dtype=torch.float32),
         lengths=torch.tensor([0], dtype=torch.int64),
         t_world_rig=t_world_rig,
+        t_world_snippet=_make_reference_pose(1),
     )
 
 
