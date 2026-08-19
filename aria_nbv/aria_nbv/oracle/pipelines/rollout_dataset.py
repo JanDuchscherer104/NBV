@@ -654,7 +654,7 @@ class _RolloutSourceLineageBuilder:
             split_manifest_hash=cls.build_split_manifest_hash(
                 source_manifest_hash=source_manifest_hash,
                 split=split,
-                records=cls.dataset_records_for_hash(dataset, limit=max_samples),
+                records=cls.dataset_records_for_hash(dataset, limit=max_samples, campaign_split=campaign_split),
             ),
             source_cache_version=str(dataset.manifest.version),
             campaign_split=str(campaign_split or split),
@@ -677,23 +677,26 @@ class _RolloutSourceLineageBuilder:
         )
 
     @staticmethod
-    def dataset_records_for_hash(dataset: VinOfflineDataset, *, limit: int) -> list[dict[str, object]]:
+    def dataset_records_for_hash(
+        dataset: VinOfflineDataset, *, limit: int, campaign_split: str | None = None
+    ) -> list[dict[str, object]]:
         """Return ordered source-row fields that define a rollout shard lineage."""
 
         output: list[dict[str, object]] = []
         for order, record in enumerate(dataset._records[:limit]):
-            output.append(
-                {
-                    "order": order,
-                    "sample_index": int(record.sample_index),
-                    "sample_key": str(record.sample_key),
-                    "scene_id": str(record.scene_id),
-                    "snippet_id": str(record.snippet_id),
-                    "split": str(record.split),
-                    "source_shard_id": str(record.shard_id),
-                    "source_shard_row": int(record.row),
-                }
-            )
+            row = {
+                "order": order,
+                "sample_index": int(record.sample_index),
+                "sample_key": str(record.sample_key),
+                "scene_id": str(record.scene_id),
+                "snippet_id": str(record.snippet_id),
+                "split": str(record.split),
+                "source_shard_id": str(record.shard_id),
+                "source_shard_row": int(record.row),
+            }
+            if campaign_split is not None:
+                row["campaign_split"] = str(campaign_split)
+            output.append(row)
         return output
 
     @staticmethod

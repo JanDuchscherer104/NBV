@@ -729,14 +729,7 @@ class _RolloutZarrWriteSession:
             table.sources, dictionaries, fallback=self.split_manifest_hash
         )
         if effective_split_manifest_hash != self.split_manifest_hash:
-            try:
-                split_hash_id = dictionaries["config"].index(effective_split_manifest_hash)
-            except ValueError:
-                dictionaries["config"].append(effective_split_manifest_hash)
-                split_hash_id = len(dictionaries["config"]) - 1
-            table.sources["split_manifest_hash_id"] = np.full(
-                table.sources["split_manifest_hash_id"].shape, split_hash_id, dtype=np.int32
-            )
+            raise ValueError("Configured split_manifest_hash does not match campaign-bound source rows.")
         root_metadata = _root_metadata_payload(
             records=records,
             tables=table,
@@ -749,7 +742,7 @@ class _RolloutZarrWriteSession:
             reason_code_version=self.reason_code_version,
             field_retention_policy=self.field_retention_policy,
             source_offline_store_version=self.source_offline_store_version,
-            split_manifest_hash=effective_split_manifest_hash,
+            split_manifest_hash=self.split_manifest_hash,
             selected_depth_enabled=self.selected_depth_enabled,
             selected_depth_width_px=self.selected_depth_width_px,
             selected_depth_height_px=self.selected_depth_height_px,
