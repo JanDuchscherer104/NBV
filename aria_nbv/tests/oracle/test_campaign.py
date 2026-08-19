@@ -396,13 +396,13 @@ def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineag
     assert entry.rows[0].source_shard_row == unit.source_row_payload["source_shard_row"]
 
 
-def test_corrected_v8_pilot_has_fresh_identity_and_unchanged_paired_contract():
+def test_corrected_v9_pilot_has_fresh_identity_and_unchanged_paired_contract():
     config = CudaRolloutCampaignConfig.from_toml(
-        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v8.toml"
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v9.toml"
     )
-    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v8"
+    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v9"
     assert not (REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml").exists()
-    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v8")
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v9")
     assert config.mode.value == "pilot"
     assert config.pilot_scene_count == 5
     assert config.temperatures == (0.5, 1.0, 2.0, 4.0)
