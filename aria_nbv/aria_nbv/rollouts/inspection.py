@@ -289,6 +289,10 @@ def rollout_header_summary(
     targets = _nonnegative_int(counts.get("targets"), root_attrs.get("num_targets"))
     reference_scenes = _nonnegative_int(coverage.get("reference_scene_count"))
     reference_rows = _nonnegative_int(coverage.get("reference_source_row_count"))
+    scene_coverage_valid = (
+        reference_scenes is not None and source_scenes is not None and 0 <= source_scenes <= reference_scenes
+    )
+    row_coverage_valid = reference_rows is not None and source_rows is not None and 0 <= source_rows <= reference_rows
     storage = runtime_storage_statistics(reader.store_dir, candidate_count=candidates or 0)
     return {
         "scenes": source_scenes,
@@ -297,20 +301,29 @@ def rollout_header_summary(
         "candidate_rows": candidates,
         "source_rows": source_rows,
         "reference_scene_count": reference_scenes,
-        "reference_scene_covered": source_scenes if reference_scenes is not None else None,
+        "reference_scene_covered": source_scenes if scene_coverage_valid else None,
         "reference_scene_gap": None
         if reference_scenes is None or source_scenes is None
-        else max(0, reference_scenes - source_scenes),
+        else max(0, reference_scenes - source_scenes)
+        if scene_coverage_valid
+        else None,
         "reference_scene_fraction": _coverage_ratio(source_scenes, reference_scenes),
         "reference_source_row_count": reference_rows,
-        "reference_source_rows_covered": source_rows if reference_rows is not None else None,
+        "reference_source_rows_covered": source_rows if row_coverage_valid else None,
         "reference_source_row_gap": None
         if reference_rows is None or source_rows is None
-        else max(0, reference_rows - source_rows),
+        else max(0, reference_rows - source_rows)
+        if row_coverage_valid
+        else None,
         "reference_source_row_fraction": _coverage_ratio(source_rows, reference_rows),
-        "reference_coverage_reason": None
-        if reference_scenes is not None or reference_rows is not None
-        else "manifest provenance does not declare a reference denominator",
+        "reference_coverage_reason": (
+            "manifest provenance declares observed coverage above its reference denominator"
+            if (reference_scenes is not None and not scene_coverage_valid)
+            or (reference_rows is not None and not row_coverage_valid)
+            else None
+            if reference_scenes is not None or reference_rows is not None
+            else "manifest provenance does not declare a reference denominator"
+        ),
         "logical_source_rows": dict(sorted(coverage.get("source_shard_counts", {}).items()))
         if isinstance(coverage.get("source_shard_counts"), dict)
         else {},
