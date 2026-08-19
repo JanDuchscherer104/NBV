@@ -338,6 +338,19 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
         return dictionary[value_id]
 
     source_ids = np.asarray(sources["source_row_id"], dtype=np.int64).reshape(-1)
+    source_array_names = tuple(sources.array_keys())
+    has_campaign_split = "campaign_split_id" in source_array_names
+
+    def decode_campaign_split(row: int) -> Stage | None:
+        if not has_campaign_split:
+            return None
+        value = decode("split", "campaign_split_id", row)
+        if value == "unknown":
+            return None
+        # Campaign plans use the canonical dataset spelling ``validation``;
+        # Stage's public value remains ``val`` at the reader boundary.
+        return Stage.VAL if value == "validation" else Stage.from_str(value)
+
     refs = {
         int(source_id): _QhSourceRef(
             source_sample_index=int(sources["sample_index"][row]),
@@ -347,11 +360,7 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
             scene_id=decode("scene", "scene_id", row),
             snippet_id=decode("snippet", "snippet_id", row),
             split=Stage.from_str(decode("split", "split_id", row)),
-            campaign_split=(
-                None
-                if "campaign_split_id" not in sources or decode("split", "campaign_split_id", row) == "unknown"
-                else Stage.from_str(decode("split", "campaign_split_id", row))
-            ),
+            campaign_split=decode_campaign_split(row),
             actor_store_version=decode("config", "source_cache_version_id", row),
             source_manifest_hash=decode("config", "source_offline_store_manifest_hash_id", row),
             split_manifest_hash=decode("config", "split_manifest_hash_id", row),

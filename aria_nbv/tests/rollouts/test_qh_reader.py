@@ -14,6 +14,7 @@ import zarr
 pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
+from aria_nbv.utils import Stage
 from aria_nbv.rollouts.zarr_store import (
     RolloutZarrStoreReader,
     RolloutZarrValidationResult,
@@ -73,6 +74,23 @@ def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> Non
     assert first.source_ref in reader.source_refs
     with pytest.raises(IndexError, match="outside corpus length"):
         _ = reader[2]
+
+
+def test_reader_normalizes_validation_campaign_split_without_changing_source_split(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    records[0].lineage.source.campaign_split = "validation"
+    store = write_rollout_zarr_store(
+        tmp_path / "validation.zarr",
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    ).store_dir
+
+    source = QhRolloutReader((store,)).source_refs[0]
+    assert source.split is Stage.TRAIN
+    assert source.campaign_split is Stage.VAL
 
 
 def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
