@@ -639,7 +639,7 @@ uv run nbv-summary --config-path offline_only.toml
 
 Current compatibility gates:
 
-- VIN offline stores must match `OFFLINE_DATASET_VERSION`, currently `7`.
+- VIN offline stores must match `OFFLINE_DATASET_VERSION`, currently `8`.
 - Rollout stores must match `ROLLOUT_ZARR_SCHEMA_VERSION`, currently
   `1.0-target-rollout-core`.
 - A rollout store with the current schema can still be untrusted if validation

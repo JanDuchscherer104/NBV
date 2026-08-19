@@ -40,6 +40,26 @@ from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_z
 from tests.rollout_fixtures import build_rollout_records
 
 
+def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=71)
+    )
+    import aria_nbv.rollouts.reporting as reporting
+
+    original = reporting.candidate_audit_rows
+    calls = 0
+
+    def spy(reader):
+        nonlocal calls
+        calls += 1
+        return original(reader)
+
+    monkeypatch.setattr(reporting, "candidate_audit_rows", spy)
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+    assert calls == 1
+    assert len(frames["candidate_groups"]) > 0
+
+
 def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:
     """The report seam and CLI should expose the same compact statistics."""
 

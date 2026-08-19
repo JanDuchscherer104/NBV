@@ -61,13 +61,23 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
     assert [[page.title for page in pages] for pages in frame.pages.values()] == [
         ["Training Dataset"],
         ["Root Observation Store", "Rollout Supervision"],
-        ["Live Rollout Lab", "Candidate Proposals"],
+        ["Campaign Generation", "Live Rollout Lab", "Candidate Proposals"],
         ["VIN Diagnostics", "RRI Binning", "W&B Runs", "Optuna Studies"],
         ["Observed Snippet", "Candidate Renders", "Single-step Oracle RRI"],
     ]
     assert frame.pages[""][0].default is True
     after = {name for name in sys.modules if name.startswith("aria_nbv.app.panels.")}
     assert after == before
+
+
+def test_campaign_generation_callback_imports_and_calls_only_its_renderer(monkeypatch) -> None:
+    """Selecting the page owns the one lazy campaign-panel import."""
+    calls: list[str] = []
+    fake_panel = type("Panel", (), {"render_campaign_generation_page": lambda: calls.append("render")})
+    monkeypatch.setitem(sys.modules, "aria_nbv.app.panels.campaign_generation", fake_panel)
+    app = NbvStreamlitApp(config=object())
+    app._page_campaign_generation()
+    assert calls == ["render"]
 
 
 def test_root_store_page_has_no_nested_rollout_route() -> None:

@@ -315,6 +315,38 @@ class TestAseEfmDataset:
         assert samples[0].mesh.faces.shape == samples[1].mesh.faces.shape
         assert samples[0].mesh.vertices.shape == samples[1].mesh.vertices.shape
 
+    def test_mesh_cache_can_be_disabled_for_unique_scene_iteration(self, tmp_path: Path):
+        mesh_path = tmp_path / "scene.ply"
+        trimesh.Trimesh(vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], faces=[[0, 1, 2]]).export(mesh_path)
+        efm_samples = [_mock_efm_sample(scene="00000"), _mock_efm_sample(scene="00001")]
+        mock_loader = MagicMock()
+        mock_loader.__iter__.return_value = iter(efm_samples)
+        mock_loader.__len__.return_value = len(efm_samples)
+
+        with patch.object(AseEfmDataset, "_load_atek_wds_dataset_as_efm", return_value=mock_loader):
+            paths = _paths(tmp_path)
+            for scene in ("00000", "00001"):
+                tar = paths.resolve_atek_data_dir("efm") / scene / "dummy.tar"
+                tar.parent.mkdir(parents=True, exist_ok=True)
+                tar.write_bytes(b"dummy")
+            config = AseEfmDatasetConfig(
+                paths=paths,
+                scene_ids=["00000", "00001"],
+                scene_to_mesh={"00000": mesh_path, "00001": mesh_path},
+                load_meshes=True,
+                cache_meshes=False,
+                crop_mesh=False,
+                mesh_simplify_ratio=None,
+                batch_size=None,
+                mesh_crop_margin_m=None,
+                verbosity=0,
+            )
+            dataset = AseEfmDataset(config)
+            samples = list(dataset)
+
+        assert all(sample.mesh is not None for sample in samples)
+        assert dataset._mesh_cache == {}
+
 
 def test_ase_atek_identifier_conversion_round_trip() -> None:
     raw = "AriaSyntheticEnvironment_81286_AtekDataSample_000000"

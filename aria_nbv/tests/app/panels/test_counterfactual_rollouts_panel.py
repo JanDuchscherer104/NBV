@@ -119,6 +119,42 @@ def _metric_values(app: AppTest) -> dict[str, str]:
     return {metric.label: metric.value for metric in app.metric}
 
 
+def test_manual_non_zarr_path_is_passed_to_existing_readonly_selector(monkeypatch, tmp_path: Path) -> None:
+    """Campaign handoff remains an explicit path override, not discovery."""
+    selected = (tmp_path / "campaign-shard").resolve()
+    stored_rollouts_page.st.session_state["rollout_store_manual_path"] = str(selected)
+
+    class _Column:
+        def selectbox(self, *args, **kwargs):
+            raise AssertionError("empty inventory must not discover stores")
+
+        def info(self, *args, **kwargs):
+            return None
+
+        def metric(self, *args, **kwargs):
+            return None
+
+        def button(self, *args, **kwargs):
+            return False
+
+    class _Expander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(stored_rollouts_page.st, "columns", lambda *_args, **_kwargs: (_Column(), _Column()))
+    monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
+    monkeypatch.setattr(
+        stored_rollouts_page.st,
+        "text_input",
+        lambda _label, value="", **kwargs: stored_rollouts_page.st.session_state[kwargs["key"]],
+    )
+    result = stored_rollouts_page._render_store_selector(PathConfig(), [])
+    assert result == selected
+
+
 def _set_stored_rollout_workspace(app: AppTest, workspace: str) -> AppTest:
     app.session_state["stored_rollouts_section"] = workspace
     return app.run()

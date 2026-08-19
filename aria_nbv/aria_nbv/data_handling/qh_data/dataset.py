@@ -48,7 +48,7 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
     """Immutable VIN store whose actor-visible root rows must match every rollout source reference."""
 
     split: Stage | None = None
-    """Actor-store split admitted during the exact join; ``None`` reads all indexed records."""
+    """Learning/campaign split admitted by the rollout reader; ``None`` reads all chains."""
 
     @field_validator("split", mode="before")
     @classmethod
@@ -72,7 +72,7 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
         """
 
         return QhDataset(
-            rollout_reader=QhRolloutReader(self.rollout_store_dirs),
+            rollout_reader=QhRolloutReader(self.rollout_store_dirs, campaign_split=self.split),
             actor_reader=VinOfflineStoreReader(self.actor),
             split=self.split,
         )
@@ -82,7 +82,8 @@ class QhDataset(Dataset[QhChain]):
     """Join validated rollout chains to one immutable actor snippet per chain.
 
     Construction preflights every private source reference against the actor
-    manifest and selected split. ``__getitem__`` then reads one stored chain
+    manifest and complete immutable actor index. ``split`` has already selected
+    campaign chains at the rollout-reader boundary. ``__getitem__`` then reads one stored chain
     and its chain-constant root snippet exactly once. The result separates
     actor state from label support and other oracle transition facts; it does
     not decide which rows are admissible to a fitted-Q objective.
@@ -104,15 +105,24 @@ class QhDataset(Dataset[QhChain]):
                 references and the fixed Q_H data contract.
             actor_reader: Reader for the immutable VIN actor rows referenced by
                 the rollout corpus.
-            split: Optional actor split admitted into the join; omitted to use
-                every indexed actor row.
+            split: Optional campaign/learning split selected by the rollout
+                reader; physical source splits remain validated independently.
         """
 
         self.rollout_reader = rollout_reader
         self.actor_reader = actor_reader
-        self.split = split
+        reader_split = getattr(rollout_reader, "campaign_split", None)
+        if split is not None and reader_split != split:
+            raise ValueError(
+                "Q_H dataset split must match rollout_reader.campaign_split; "
+                f"received split={split!r}, reader campaign_split={reader_split!r}."
+            )
+        self.split = reader_split
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
-        self._records = {record.sample_index: record for record in actor_reader.get_split_records(split)}
+        # ``split`` selects campaign chains above; actor rows are loaded from
+        # the complete immutable index so source_ref.split can validate the
+        # physical VIN lineage independently.
+        self._records = {record.sample_index: record for record in actor_reader.get_split_records(None)}
         self._validate_source_refs()
 
     def __len__(self) -> int:
@@ -205,8 +215,17 @@ class QhDataset(Dataset[QhChain]):
                         "split": record.split,
                         "source_shard_id": record.shard_id,
                         "source_shard_row": record.row,
+                        **(
+                            {
+                                "campaign_split": source_ref.campaign_split.value
+                                if source_ref.campaign_split is not Stage.VAL
+                                else "validation"
+                            }
+                            if source_ref.campaign_split is not None
+                            else {}
+                        ),
                     }
-                    for order, record in enumerate(records)
+                    for order, (record, source_ref) in enumerate(zip(records, source_refs, strict=True))
                 ],
             )
             if actual != expected:

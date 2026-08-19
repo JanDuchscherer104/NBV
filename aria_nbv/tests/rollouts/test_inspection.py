@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -38,6 +39,11 @@ from aria_nbv.rollouts.inspection import (
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_candidate_group_summary_rejects_unsupported_field() -> None:
+    with pytest.raises(ValueError, match="Unsupported candidate group field"):
+        candidate_group_summary_rows(cast(Any, object()), group_by=cast(Any, "not-supported"))
 
 
 def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores(tmp_path) -> None:

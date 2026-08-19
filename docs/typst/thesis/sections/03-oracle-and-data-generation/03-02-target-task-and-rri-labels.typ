@@ -52,6 +52,38 @@ The implemented sampler does not match actor proposals to @ground-truth:short ob
 
 The sampler bounds rollout cost without pre-filtering on headroom. Candidate scoring may subsequently invalidate the task when its mesh crop, current support, or rendered evidence is unusable; otherwise near-solved and negative-gain targets remain scientifically informative. A later actor-visible protocol must introduce proposal identity and observation-quality diagnostics as a separate selection stage rather than retroactively interpreting the present oracle fields as measurements.
 
+=== `V1` Observed-Target Admission
+
+The implemented `V1` audit path keeps this oracle sampler separate from
+actor-visible target selection. For each observed or predicted target record
+$hat(e)$, it compares only same-class GT OBB rows using oriented 3D IoU:
+
+$
+  #eqs.entity.target_identity_iou
+$
+
+$
+  #eqs.entity.target_identity_threshold
+$
+
+A GT row qualifies only when its IoU is strictly greater than $0.20$. The
+matcher admits the observed target iff exactly one GT row qualifies:
+
+$
+  #eqs.entity.target_identity_qualified_count
+$
+
+$
+  #eqs.entity.target_identity_acceptance
+$
+
+Equality at $0.20$ is rejected; zero qualifying rows are rejected; and multiple
+qualifying rows are explicitly marked ambiguous and rejected. A single
+compatible candidate is admitted only with IoU $>0.20$. This implemented `V1`
+contract has no runner-up-gap or composite-$mu$ claim. The preceding sampler
+description remains the current `V0` oracle-task path: its geometry-valid GT-row
+admission is historical `V0` evidence, not actor-visible `V1` matching.
+
 === Candidate View Generation
 
 Candidate generation turns one oracle instruction into a finite action table. Every quantitative choice---source population, target cap, shell size, family weights, motion limits, pruning thresholds, rollout recipes, renderer settings, and retention policy---belongs to the resolved run manifest and report bundle. The Methods text defines semantics only; it does not designate one mutable TOML profile as canonical.

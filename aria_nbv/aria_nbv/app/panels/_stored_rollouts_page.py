@@ -28,6 +28,7 @@ from ...dataset_topology import build_dataset_topology, discover_vin_store_dirs
 from ...rerun_inspector import RolloutLayerName, RolloutLayerPreset
 from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
+    CANDIDATE_GROUP_FIELDS,
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_flow_rows,
@@ -1365,7 +1366,7 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
 
     breakdown_by = st.selectbox(
         "Candidate aggregate breakdown",
-        options=["position", "strategy", "mixture", "invalid_reason", "policy"],
+        options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
     breakdown = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by=breakdown_by))

@@ -12,6 +12,7 @@ from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
 from efm3d.aria.pose import PoseTW
 from pytorch3d.renderer.cameras import PerspectiveCameras
 
+from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.rerun_inspector._blueprint import log_default_inspector_blueprint
 from aria_nbv.rerun_inspector._colors import TARGET_OBB_RGBA
 from aria_nbv.rerun_inspector._config import RerunOfflineInspectorConfig
@@ -32,6 +33,7 @@ from aria_nbv.rerun_inspector._entities import (
 )
 from aria_nbv.rerun_inspector._loggers import (
     RerunOfflineLogger,
+    _snippet_t_world_snippet,
 )
 from aria_nbv.rerun_inspector._metadata import OfflineVisualInventory, normalize_visual_inventory
 
@@ -161,6 +163,7 @@ def _sample(
             points_world=semidense,
             lengths=torch.tensor([num_points]),
             t_world_rig=_poses([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+            t_world_snippet=_poses([[0.0, 0.0, 0.0]]),
         ),
         oracle=SimpleNamespace(
             candidate_poses_world_cam=_poses([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]),
@@ -206,6 +209,24 @@ def _minimal_context_cfg() -> RerunOfflineInspectorConfig:
     cfg.primitives.log_invalid_frusta = False
     cfg.primitives.log_candidate_centers = False
     return cfg
+
+
+def test_rerun_snippet_gauge_uses_persisted_vin_pose_when_raw_efm_is_absent() -> None:
+    """Rerun uses VIN's canonical gauge instead of the first rig trajectory pose."""
+
+    snippet = VinSnippetView(
+        points_world=torch.zeros((0, 4), dtype=torch.float32),
+        lengths=torch.zeros((1,), dtype=torch.int64),
+        t_world_rig=_poses([[99.0, 0.0, 0.0]]),
+        t_world_snippet=_poses([[7.0, 0.0, 0.0]]),
+    )
+    sample = SimpleNamespace(vin_snippet=snippet, efm_snippet_view=None)
+
+    gauge = _snippet_t_world_snippet(sample)
+
+    assert gauge is not None
+    assert tuple(gauge.tensor().shape) == (1, 12)
+    assert gauge.tensor()[0, 9].item() == 7.0
 
 
 def _minimal_candidate_cfg() -> RerunOfflineInspectorConfig:

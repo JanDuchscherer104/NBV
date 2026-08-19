@@ -197,6 +197,47 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
         return sum(component.count for component in self.components)
 
     @classmethod
+    def reviewed_component_templates(
+        cls,
+        components: list[tuple[str, int]] | tuple[tuple[str, int], ...],
+        *,
+        existing_components: list[CandidateMixtureComponentConfig] | None = None,
+    ) -> list[CandidateMixtureComponentConfig]:
+        """Return typed templates for a reviewed campaign component schedule.
+
+        Campaign orchestration supplies the reviewed names and counts; this
+        method reuses writer-owned components by name and supplies reviewed
+        presets only for absent families. Counts are the campaign allocation;
+        all other typed component fields remain owned by their source template.
+        """
+
+        names = tuple(name for name, _count in components)
+        templates = {
+            tuple(component.name for component in preset.components): preset.components
+            for preset in (
+                cls(),
+                cls.rich_local_five_family(),
+                cls.radial_target_backtrack_family(),
+                cls.upper_bound_free_shell(),
+            )
+        }
+        try:
+            preset_components = templates[names]
+        except KeyError as exc:
+            raise ValueError(f"unsupported reviewed candidate component schedule: {names}") from exc
+
+        existing_by_name: dict[str, CandidateMixtureComponentConfig] = {}
+        for component in existing_components or ():
+            if component.name in existing_by_name:
+                raise ValueError(f"duplicate existing candidate component: {component.name}")
+            existing_by_name[component.name] = component
+
+        return [
+            existing_by_name.get(name, preset).model_copy(update={"count": count})
+            for preset, (name, count) in zip(preset_components, components, strict=True)
+        ]
+
+    @classmethod
     def upper_bound_free_shell(cls, *, count: int = 60) -> "CandidateMixtureViewGeneratorConfig":
         """Build the explicit legacy free-shell upper-bound ablation config."""
 
@@ -253,9 +294,9 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
                     count=6,
-                    view_mode=ViewDirectionMode.RADIAL_TOWARDS,
+                    view_mode=ViewDirectionMode.TARGET_POINT,
                     position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
-                    min_radius=0.2,
+                    min_radius=0.25,
                     max_radius=0.7,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
@@ -266,7 +307,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     view_mode=ViewDirectionMode.FORWARD_RIG,
                     position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
                     min_radius=0.25,
-                    max_radius=0.9,
+                    max_radius=0.25,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
                 ),
@@ -347,7 +388,7 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     view_mode=ViewDirectionMode.FORWARD_RIG,
                     position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
                     min_radius=0.25,
-                    max_radius=0.9,
+                    max_radius=0.25,
                     view_max_azimuth_deg=0.0,
                     view_max_elevation_deg=0.0,
                 ),
@@ -437,13 +478,19 @@ class CandidateMixtureViewGenerator:
         camera_calib_template: CameraTW,
         occupancy_extent: torch.Tensor,
         runtime_context: CandidateGenerationRuntimeContext | None = None,
+        seed: int | None = None,
     ) -> CandidateSamplingResult:
         """Generate one concatenated full-shell candidate table."""
 
         component_results: list[CandidateSamplingResult] = []
         component_names: list[str] = []
+        from ..rollouts.replay.policy import derive_component_seed
+
         for component_index, component in enumerate(self.config.components):
-            component_cfg = self._component_config(component, component_index, runtime_context=runtime_context)
+            component_seed = None if seed is None else derive_component_seed(seed, component.name)
+            component_cfg = self._component_config(
+                component, component_index, runtime_context=runtime_context, component_seed=component_seed
+            )
             result = CandidateViewGenerator(component_cfg).generate(
                 reference_pose=reference_pose,
                 gt_mesh=gt_mesh,
@@ -451,6 +498,7 @@ class CandidateMixtureViewGenerator:
                 mesh_faces=mesh_faces,
                 camera_calib_template=camera_calib_template,
                 occupancy_extent=occupancy_extent,
+                seed=component_seed,
             )
             shell_count = int(result.mask_valid.reshape(-1).shape[0])
             device = result.mask_valid.device
@@ -485,6 +533,7 @@ class CandidateMixtureViewGenerator:
         component_index: int,
         *,
         runtime_context: CandidateGenerationRuntimeContext | None,
+        component_seed: int | None = None,
     ) -> CandidateViewGeneratorConfig:
         target_point = self.config.base.view_target_point_world
         position_target = self.config.base.position_target_point_world
@@ -510,7 +559,9 @@ class CandidateMixtureViewGenerator:
             "view_target_point_world": target_point,
             "position_target_point_world": position_target,
         }
-        if self.config.base.seed is not None:
+        if component_seed is not None:
+            updates["seed"] = int(component_seed)
+        elif self.config.base.seed is not None:
             updates["seed"] = int(self.config.base.seed) + component_index
 
         for field_name in (

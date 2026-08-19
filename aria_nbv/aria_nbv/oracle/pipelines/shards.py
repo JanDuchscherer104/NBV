@@ -9,13 +9,23 @@ rather than overwritten.
 
 from __future__ import annotations
 
+import hashlib
+import itertools
 import json
+import os
+
+# Helper is intentionally defined before heavyweight rollout imports.
+# ruff: noqa: E402
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig
+import numpy as np
+import zarr
+
+from ...data_handling.vin_store.dataset import VinOfflineDatasetConfig  # noqa: E402
 from ...rollouts.manifest import (
     RolloutStoreInvocation,
     collect_runtime_provenance,
@@ -24,6 +34,23 @@ from ...rollouts.manifest import (
     read_rollout_store_manifest,
     utc_timestamp,
 )
+
+
+def quarantine_rollout_staging(path: Path, quarantine_root: Path, *, reason: str = "timed_out") -> Path | None:
+    """Atomically move staging evidence into collision-safe quarantine."""
+    if not path.exists():
+        return None
+    quarantine_root.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    destination = quarantine_root / f"{path.name}.{reason}-{stamp}-{os.getpid()}"
+    suffix = 0
+    while destination.exists():
+        suffix += 1
+        destination = quarantine_root / f"{path.name}.{reason}-{stamp}-{os.getpid()}-{suffix}"
+    path.rename(destination)
+    return destination
+
+
 from ...rollouts.shard_manifest import (
     ROLLOUT_SHARD_OWNER_FILENAME,
     ROLLOUT_SHARD_SUCCESS_FILENAME,
@@ -37,7 +64,22 @@ from ...rollouts.shard_manifest import (
 )
 from ...rollouts.zarr_store import RolloutZarrWriteResult, validate_rollout_zarr_store
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
-from .rollout_dataset import RolloutDatasetWriterConfig, _apply_manifest_rows, _RolloutSourceLineageBuilder
+from .rollout_dataset import (
+    InsufficientRootSupportError,
+    RolloutDatasetWriterConfig,
+    _apply_manifest_rows,
+    _RolloutSourceLineageBuilder,
+)
+
+
+class RolloutShardOwnershipConflictError(RuntimeError):
+    """A stale temporary or final path prevents safe shard ownership."""
+
+    def __init__(self, message: str, *, shard_entry: RolloutShardEntry, output_tmp: Path, output_final: Path) -> None:
+        super().__init__(message)
+        self.shard_entry = shard_entry
+        self.output_tmp = output_tmp
+        self.output_final = output_final
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +100,17 @@ class RolloutShardRunResult:
 
     store_result: RolloutZarrWriteResult | None = None
     """Fresh write summary, or ``None`` when a completed shard was skipped."""
+
+    outcome: str = "succeeded"
+    reason: str | None = None
+
+    @property
+    def manifest_path(self) -> Path:
+        """Manifest path for fresh or skipped shards."""
+
+        if self.store_result is None:
+            return self.final_dir / "manifest.json"
+        return self.store_result.manifest_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +206,6 @@ def plan_rollout_source_manifest(source: VinOfflineDatasetConfig) -> RolloutSour
     retention, and output paths so paired campaigns can derive their own shard
     manifests from one reviewed source population.
     """
-
     dataset = source.setup_target()
     if dataset is None:
         raise RuntimeError("VinOfflineDatasetConfig did not instantiate a dataset.")
@@ -161,7 +213,7 @@ def plan_rollout_source_manifest(source: VinOfflineDatasetConfig) -> RolloutSour
         dataset._records,
         source_manifest_hash=stable_msgspec_hash(dataset.manifest),
         source_cache_version=str(dataset.manifest.version),
-        source_store_dir=Path(source.store.store_dir).expanduser().resolve().as_posix(),
+        source_store_dir=Path(source.store.store_dir).expanduser().name,
     )
 
 
@@ -204,7 +256,7 @@ def plan_rollout_shards(
     source_manifest_hash = stable_msgspec_hash(dataset.manifest)
     writer_config_hash = stable_config_hash(config)
     source_cache_version = str(dataset.manifest.version)
-    source_store_dir = Path(config.source.store.store_dir).expanduser().resolve().as_posix()
+    source_store_dir = Path(config.source.store.store_dir).expanduser().name
 
     entries: list[RolloutShardEntry] = []
     for split, records in _records_by_split(dataset._records).items():
@@ -306,14 +358,20 @@ def run_rollout_shard(
                 owner_path=owner_path,
                 store_result=None,
             )
-        raise RuntimeError(
+        raise RolloutShardOwnershipConflictError(
             f"Final rollout shard path exists but is not a validated completed shard: {final_dir}. "
-            "Remove or move the partial final path after operator review before retrying."
+            "Remove or move the partial final path after operator review before retrying.",
+            shard_entry=shard_entry,
+            output_tmp=tmp_dir,
+            output_final=final_dir,
         )
     if tmp_dir.exists():
-        raise RuntimeError(
+        raise RolloutShardOwnershipConflictError(
             f"Temporary rollout shard path already exists: {tmp_dir}. "
-            "Remove stale temp data after operator review before retrying."
+            "Remove stale temp data after operator review before retrying.",
+            shard_entry=shard_entry,
+            output_tmp=tmp_dir,
+            output_final=final_dir,
         )
 
     try:
@@ -352,7 +410,21 @@ def run_rollout_shard(
             owner_path=owner_path,
             store_result=result,
         )
+    except InsufficientRootSupportError as exc:
+        return RolloutShardRunResult(
+            final_dir=final_dir,
+            skipped=False,
+            success_path=success_path,
+            owner_path=owner_path,
+            store_result=None,
+            outcome="insufficient_support",
+            reason=exc.reason,
+        )
     except Exception as exc:
+        if isinstance(exc, TimeoutError) and tmp_dir.exists():
+            # Preserve timed-out evidence through the shard-owned atomic
+            # quarantine helper; the canonical final path remains untouched.
+            quarantine_rollout_staging(tmp_dir, tmp_dir.parent / "quarantine", reason="timed_out")
         _write_failed_marker(
             final_dir.parent,
             shard_entry=shard_entry,
@@ -372,7 +444,11 @@ def _summarize_rollout_shard_entry(
     final_dir = final_root / entry.shard_id
     success_path = final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME
     owner_path = final_dir / ROLLOUT_SHARD_OWNER_FILENAME
-    failed_markers = tuple(sorted(final_root.glob(f"_FAILED.{entry.shard_id}.*.json")))
+    failed_markers = tuple(
+        path
+        for path in sorted(final_root.glob(f"_FAILED.{entry.shard_id}.*.json"))
+        if _failure_marker_matches_entry(path, entry)
+    )
     errors: list[str] = []
 
     if final_dir.exists():
@@ -435,6 +511,7 @@ def _completed_shard_is_current(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
     }
     if not all(success.get(key) == value and owner.get(key) == value for key, value in expected.items()):
         return False
@@ -445,7 +522,53 @@ def _completed_shard_is_current(
         return False
     if success.get("rollout_manifest_sha256") != rollout_manifest_sha:
         return False
-    return store_manifest.get("generation", {}).get("shard") == shard_entry.to_jsonable()
+    content_sha = _rollout_store_content_sha256(final_dir)
+    if owner.get("rollout_store_content_sha256") != content_sha:
+        return False
+    if success.get("rollout_store_content_sha256") != content_sha:
+        return False
+    expected_binding = None if shard_entry.campaign_binding is None else shard_entry.campaign_binding.to_jsonable()
+    if success.get("campaign_binding") != expected_binding or owner.get("campaign_binding") != expected_binding:
+        return False
+    stored_shard = dict(store_manifest.get("generation", {}).get("shard") or {})
+    expected_shard = shard_entry.to_jsonable()
+    if expected_binding is None:
+        stored_shard.pop("campaign_binding", None)
+        expected_shard.pop("campaign_binding", None)
+    return stored_shard == expected_shard
+
+
+def read_validated_completed_shard(
+    final_dir: Path,
+    *,
+    shard_entry: RolloutShardEntry,
+    writer_config_hash: str = "",
+) -> dict[str, Any] | None:
+    """Read one promoted shard only when its complete currentness contract holds.
+
+    This is the presentation-free read seam shared by campaign status and
+    resume logic.  ``None`` means the path is missing, malformed, stale, or
+    otherwise failed full shard validation.
+    """
+    try:
+        owner = json.loads((final_dir / ROLLOUT_SHARD_OWNER_FILENAME).read_text(encoding="utf-8"))
+        success = json.loads((final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME).read_text(encoding="utf-8"))
+        store_manifest = read_rollout_store_manifest(final_dir)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    stored_writer_hash = str(store_manifest.get("generation", {}).get("shard", {}).get("writer_config_hash", ""))
+    if writer_config_hash and stored_writer_hash != writer_config_hash:
+        return None
+    effective_entry = replace(shard_entry, writer_config_hash=stored_writer_hash)
+    if not _completed_shard_is_current(final_dir, shard_entry=effective_entry, writer_config_hash=stored_writer_hash):
+        return None
+    return {
+        "owner_evidence": owner,
+        "success_evidence": success,
+        "store_manifest": store_manifest,
+        "validation": "passed",
+        "store_path": str(final_dir.resolve()),
+    }
 
 
 def _owner_payload(
@@ -462,12 +585,14 @@ def _owner_payload(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
         "source_cache_version": shard_entry.source_cache_version,
         "split": shard_entry.split,
         "num_source_rows": len(shard_entry.rows),
         "output_tmp": output_tmp.as_posix(),
         "output_final": output_final.as_posix(),
         "rollout_manifest_sha256": result.manifest_sha256,
+        "rollout_store_content_sha256": _rollout_store_content_sha256(output_tmp),
         "counts": {
             "rollouts": result.num_rollouts,
             "steps": result.num_steps,
@@ -475,6 +600,9 @@ def _owner_payload(
         },
         "runtime": collect_runtime_provenance(),
         "shard_entry": shard_entry.to_jsonable(),
+        "campaign_binding": None
+        if shard_entry.campaign_binding is None
+        else shard_entry.campaign_binding.to_jsonable(),
     }
 
 
@@ -491,12 +619,95 @@ def _success_payload(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
         "source_cache_version": shard_entry.source_cache_version,
         "split": shard_entry.split,
         "num_source_rows": len(shard_entry.rows),
         "rollout_manifest_sha256": result.manifest_sha256,
+        "rollout_store_content_sha256": owner_payload["rollout_store_content_sha256"],
         "owner_sha256": manifest_sha256(owner_payload),
+        "campaign_binding": None
+        if shard_entry.campaign_binding is None
+        else shard_entry.campaign_binding.to_jsonable(),
     }
+
+
+def _rollout_store_content_sha256(store_dir: Path) -> str:
+    """Hash the canonical logical Zarr payload, independent of storage layout."""
+
+    def canonical(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): canonical(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
+        if isinstance(value, (list, tuple)):
+            return [canonical(item) for item in value]
+        if hasattr(value, "item"):
+            return canonical(value.item())
+        return value
+
+    def add(digest: Any, label: str, payload: bytes) -> None:
+        label_bytes = label.encode("utf-8")
+        digest.update(len(label_bytes).to_bytes(8, "big"))
+        digest.update(label_bytes)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+
+    root = zarr.open_group(store_dir, mode="r")
+    digest = hashlib.sha256()
+    manifest_path = store_dir / str(root.attrs.get("manifest_path", "manifest.json"))
+    if not manifest_path.is_file():
+        raise ValueError(f"Missing rollout manifest: {manifest_path}")
+    add(digest, "manifest.json", manifest_path.read_bytes())
+    excluded_attrs = {"rollout_store_content_sha256", "rollout_store_content_seal"}
+
+    def attrs_payload(attrs: Any) -> bytes:
+        filtered = {str(key): value for key, value in dict(attrs).items() if str(key) not in excluded_attrs}
+        return json.dumps(canonical(filtered), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+    nodes: list[tuple[str, Any]] = [("", root)]
+
+    def collect(group: Any, prefix: str) -> None:
+        for name, node in group.members():
+            path = f"{prefix}/{name}" if prefix else str(name)
+            nodes.append((path, node))
+            if isinstance(node, zarr.Group):
+                collect(node, path)
+
+    collect(root, "")
+    for path, node in sorted(nodes, key=lambda item: item[0]):
+        if path == "":
+            add(digest, "attrs:", attrs_payload(node.attrs))
+        elif isinstance(node, zarr.Group):
+            add(digest, f"attrs:{path}", attrs_payload(node.attrs))
+        else:
+            metadata = node.metadata.to_dict()
+            array_meta = {
+                "dtype": str(node.dtype),
+                "shape": list(node.shape),
+                "chunks": list(node.chunks),
+                "fill_value": canonical(node.fill_value),
+                "order": "C",
+                "compressor": canonical(metadata.get("codecs", ())),
+            }
+            add(
+                digest, f"array:{path}:metadata", json.dumps(array_meta, sort_keys=True, separators=(",", ":")).encode()
+            )
+            add(digest, f"attrs:{path}", attrs_payload(node.attrs))
+            shape = tuple(int(size) for size in node.shape)
+            chunks = tuple(int(size) for size in node.chunks)
+            ranges = [range((size + chunk - 1) // chunk) for size, chunk in zip(shape, chunks, strict=True)]
+            for coords in itertools.product(*ranges) if ranges else [()]:
+                chunk_key = node.metadata.chunk_key_encoding.encode_chunk_key(coords)
+                chunk_file = store_dir / path / chunk_key
+                slices = tuple(
+                    slice(coord * chunk, min((coord + 1) * chunk, size))
+                    for coord, chunk, size in zip(coords, chunks, shape, strict=True)
+                )
+                chunk_values = np.asarray(node[slices])
+                if not chunk_file.is_file() and not np.all(chunk_values == node.fill_value):
+                    raise ValueError(f"Missing logical chunk {path!r} at {chunk_file}")
+                payload = chunk_values.tobytes(order="C")
+                add(digest, f"chunk:{path}:{','.join(str(coord) for coord in coords)}", payload)
+    return digest.hexdigest()
 
 
 def _write_failed_marker(
@@ -517,6 +728,10 @@ def _write_failed_marker(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
+        "campaign_binding": (
+            None if shard_entry.campaign_binding is None else shard_entry.campaign_binding.to_jsonable()
+        ),
         "output_tmp": output_tmp.as_posix(),
         "output_final": output_final.as_posix(),
         "error_type": error.__class__.__name__,
@@ -524,6 +739,27 @@ def _write_failed_marker(
         "runtime": collect_runtime_provenance(),
     }
     _write_json_atomic(marker, payload)
+
+
+def _failure_marker_matches_entry(path: Path, entry: RolloutShardEntry) -> bool:
+    """Accept failure evidence only when its immutable shard binding is current."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    expected_binding = None if entry.campaign_binding is None else entry.campaign_binding.to_jsonable()
+    return all(
+        payload.get(key) == value
+        for key, value in {
+            "sidecar_kind": "rollout_shard_failure",
+            "shard_id": entry.shard_id,
+            "writer_config_hash": entry.writer_config_hash,
+            "source_manifest_hash": entry.source_manifest_hash,
+            "split_manifest_hash": entry.split_manifest_hash,
+            "generation_revision_hash": entry.generation_revision_hash,
+            "campaign_binding": expected_binding,
+        }.items()
+    )
 
 
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
@@ -537,6 +773,7 @@ __all__ = [
     "RolloutShardCampaignStatus",
     "RolloutShardRunResult",
     "RolloutShardStatus",
+    "RolloutShardOwnershipConflictError",
     "plan_rollout_source_manifest",
     "plan_rollout_shards",
     "run_rollout_shard",

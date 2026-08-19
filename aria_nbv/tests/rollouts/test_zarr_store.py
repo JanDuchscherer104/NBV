@@ -259,6 +259,14 @@ def test_rollout_zarr_validation_rejects_missing_hot_position_id(tmp_path) -> No
     for step in _steps(records[0]):
         step.transition.candidates.position_id = None
         step.transition.candidates.extras.clear()
+        n = int(step.transition.candidates.mask_valid.numel())
+        step.transition.candidates.extras.update(
+            {
+                "path_collision_mask": torch.zeros(n, dtype=torch.bool),
+                "path_collision_applicable_mask": torch.zeros(n, dtype=torch.bool),
+                "path_collision_evaluated_mask": torch.zeros(n, dtype=torch.bool),
+            }
+        )
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -299,6 +307,8 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
     path_mask[collision_shell_index] = True
     step.transition.candidates.masks["PathCollisionRule"] = ~path_mask
     step.transition.candidates.extras["path_collision_mask"] = path_mask
+    step.transition.candidates.extras["path_collision_applicable_mask"] = torch.ones_like(path_mask)
+    step.transition.candidates.extras["path_collision_evaluated_mask"] = torch.ones_like(path_mask)
     _mask_target_eval_candidate_rows(step)
 
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
@@ -317,6 +327,21 @@ def test_rollout_zarr_validates_path_collision_diagnostics_against_invalidity(tm
     validation = validate_rollout_zarr_store(result.store_dir)
     assert not validation.ok
     assert any("PATH_SEGMENT_COLLISION" in error for error in validation.errors)
+
+
+def test_rollout_zarr_writer_rejects_missing_collision_diagnostics(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=33)[:1]
+    step = _steps(records[0])[0]
+    for name in (
+        "path_collision_mask",
+        "path_collision_applicable_mask",
+        "path_collision_evaluated_mask",
+    ):
+        step.transition.candidates.extras.pop(name, None)
+    _mask_target_eval_candidate_rows(step)
+
+    with pytest.raises(ValueError, match="required candidate diagnostics"):
+        write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
 
 def test_rollout_zarr_validation_requires_selected_depth_when_enabled(tmp_path) -> None:
@@ -572,6 +597,7 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     lineage.policy.reason_code_version = INVALID_REASON_VERSION
     lineage.policy.selection_rng_state_hash = "rng-state"
     lineage.target.target_protocol_version = "v1-observed"
+    lineage.target.target_source = "detected_obbs"
     lineage.target.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
     lineage.target.target_row_id = 5
     lineage.target.target_id = "target"
@@ -629,6 +655,59 @@ def test_rollout_zarr_records_per_rollout_lineage_and_split(tmp_path) -> None:
     assert validation.ok, validation.errors
 
 
+def test_rollout_zarr_rejects_in_range_v1_target_source_even_when_masks_are_false(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=38)[:1]
+    records[0].lineage.target.target_protocol_version = "v1-observed"
+    records[0].lineage.target.target_source = "detected_obbs"
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v1-observed")
+
+    root = zarr.open_group(result.store_dir, mode="a")
+    encoded = np.frombuffer(json.dumps(["fabricated_actor"]).encode("utf-8"), dtype=np.uint8)
+    root["dictionaries/target_source"].resize((encoded.size,))
+    root["dictionaries/target_source"][...] = encoded
+    root["targets/target_valid_mask"][...] = False
+    root["targets/target_invalid_reason_bitset"][...] = 0
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert not validation.ok
+    assert any("incompatible with v1_observed" in error for error in validation.errors)
+
+
+def test_rollout_zarr_rejects_in_range_empty_v0_target_source_even_when_masks_are_false(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=41)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v0_gt_input")
+
+    root = zarr.open_group(result.store_dir, mode="a")
+    encoded = np.frombuffer(json.dumps([""]).encode("utf-8"), dtype=np.uint8)
+    root["dictionaries/target_source"].resize((encoded.size,))
+    root["dictionaries/target_source"][...] = encoded
+    root["targets/target_valid_mask"][...] = False
+    root["targets/target_invalid_reason_bitset"][...] = 0
+    root["candidates/q_train_mask"][...] = False
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert not validation.ok
+    assert any("incompatible with v0_gt_input" in error for error in validation.errors)
+
+
+def test_rollout_zarr_accepts_admitted_v1_target_source(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=39)[:1]
+    records[0].lineage.target.target_protocol_version = "v1-observed"
+    records[0].lineage.target.target_source = "detected_obbs"
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v1-observed")
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_preserves_v0_oracle_compatible_target_source(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=40)[:1]
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records, target_protocol_version="v0_gt_input")
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
 def test_rollout_zarr_rejects_mixed_split_shards(tmp_path) -> None:
     records = build_rollout_records(horizon=1, num_samples=6, seed=20)[:2]
     records[0].lineage.source.split = "train"
@@ -679,6 +758,7 @@ def test_rollout_zarr_preserves_candidate_mixture_provenance_for_real_stores(tmp
     lineage.policy.reason_code_version = INVALID_REASON_VERSION
     lineage.policy.selection_rng_state_hash = "rng-state"
     lineage.target.target_protocol_version = "v1-observed"
+    lineage.target.target_source = "detected_obbs"
     lineage.target.target_crop_policy = TARGET_CROP_POLICY_GT_OBB_ORIENTED_ANY_VERTEX_V1
     lineage.target.target_row_id = 3
     lineage.target.target_id = "target"
@@ -730,6 +810,49 @@ def test_rollout_zarr_blocks_q_training_for_target_invalid_records(tmp_path) -> 
     assert reader.array("candidates/oracle_label_mask").any()
     assert not reader.array("candidates/q_train_mask").any()
     assert not q_h["q_train_mask"].any()
+
+
+def test_rollout_zarr_blocks_q_training_when_v1_target_reason_is_missing(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=26)[:1]
+    target = records[0].lineage.target
+    target.target_protocol_version = "v1_observed"
+    target.target_source = "detected_obbs"
+    target.target_invalid_reason_bitset = None
+    target.gt_match_status = "admitted"
+    target.gt_match_iou = 0.7
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        records,
+        target_protocol_version="v1_observed",
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    assert reader.array("targets/target_invalid_reason_bitset").tolist() == [0]
+    assert reader.array("targets/target_valid_mask").tolist() == [False]
+    assert reader.array("targets/gt_label_valid_mask").tolist() == [False]
+    assert not reader.array("candidates/q_train_mask").any()
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
+
+
+def test_rollout_zarr_preserves_v0_missing_target_reason_admission(tmp_path) -> None:
+    records = build_rollout_records(horizon=1, num_samples=6, seed=27)[:1]
+    records[0].lineage.target.target_invalid_reason_bitset = None
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        records,
+        target_protocol_version="v0_gt_input",
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    assert reader.array("targets/target_invalid_reason_bitset").tolist() == [1]
+    assert reader.array("targets/target_valid_mask").tolist() == [True]
+    assert reader.array("targets/gt_label_valid_mask").tolist() == [True]
+    assert reader.array("candidates/q_train_mask").any()
+    validation = validate_rollout_zarr_store(result.store_dir)
+    assert validation.ok, validation.errors
 
 
 def test_rollout_zarr_rejects_missing_root_lineage(tmp_path) -> None:

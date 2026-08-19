@@ -101,6 +101,7 @@ def _make_snippet() -> VinSnippetView:
         points_world=points_world,
         lengths=torch.tensor([2], dtype=torch.int64),
         t_world_rig=_identity_pose(2),
+        t_world_snippet=_identity_pose(1),
     )
 
 
@@ -237,11 +238,13 @@ def test_collate_vin_snippet_view_pads_points_and_traj() -> None:
         points_world=points_a,
         lengths=torch.tensor([5], dtype=torch.int64),
         t_world_rig=traj_a,
+        t_world_snippet=traj_a[:1],
     )
     snippet_b = VinSnippetView(
         points_world=points_b,
         lengths=torch.tensor([3], dtype=torch.int64),
         t_world_rig=traj_b,
+        t_world_snippet=traj_b[:1],
     )
 
     batch_a = VinOracleBatch(

@@ -19,6 +19,8 @@ import numpy as np
 import pandas as pd
 
 from .inspection import (
+    CANDIDATE_GROUP_FIELDS,
+    candidate_audit_rows,
     candidate_group_summary_rows,
     rollout_statistics,
     rollout_step_objective_rows,
@@ -222,7 +224,6 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
 }
 """Stable table names and column order consumed by the thesis bundle."""
 
-_GROUP_FIELDS = ("position", "strategy", "mixture", "invalid_reason", "policy")
 _FACT_SPECS = (
     ("candidate_validity.valid", "count", "candidate_validity.total", "count"),
     ("candidate_validity.total", "count", "candidate_validity.total", "count"),
@@ -402,8 +403,9 @@ def _append_store_rows(
         }
         for failure in suspicious_rollout_rows(reader)
     )
-    for group_by in _GROUP_FIELDS:
-        for group_row in candidate_group_summary_rows(reader, group_by=group_by):
+    candidate_rows = candidate_audit_rows(reader)
+    for group_by in CANDIDATE_GROUP_FIELDS:
+        for group_row in candidate_group_summary_rows(reader, group_by=group_by, audit_rows=candidate_rows):
             group = group_row.pop(group_by)
             rows["candidate_groups"].append({"store_id": store_id, "group_by": group_by, "group": group, **group_row})
 

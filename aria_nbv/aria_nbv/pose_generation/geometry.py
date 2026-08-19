@@ -1,13 +1,12 @@
 """Differentiable point-to-mesh geometry for candidate validity pruning.
 
 This module provides the point-to-triangle distance primitive used by pruning
-rules and owns its device-safe PyTorch3D/CPU fallback boundary. Candidate
-sampling, validity policy, and mask/reason aggregation remain with the pose
-generator and rule layer.
+rules. Candidate sampling, validity policy, and mask/reason aggregation remain
+with the pose generator and rule layer.
 
 Inputs use world-frame metres and preserve the caller's Torch device/dtype.
-The CUDA-specific PyTorch3D failure path falls back to CPU computation, then
-moves distances back without changing their geometric meaning.
+PyTorch3D backend errors propagate to the caller; CUDA inputs never silently
+fall back to CPU computation.
 """
 
 from __future__ import annotations
@@ -53,15 +52,7 @@ def point_mesh_distance(points: torch.Tensor, verts: torch.Tensor, faces: torch.
             _DEFAULT_MIN_TRIANGLE_AREA,
         )
 
-    try:
-        dist_sq = _point_face_distance_on_current_device()
-    except RuntimeError as exc:
-        if device.type != "cuda" or "Not compiled with GPU support" not in str(exc):
-            raise
-        points = points.cpu()
-        verts = verts.cpu()
-        faces = faces.cpu()
-        dist_sq = _point_face_distance_on_current_device()
+    dist_sq = _point_face_distance_on_current_device()
     return torch.sqrt(dist_sq).to(device=device, dtype=dtype)
 
 

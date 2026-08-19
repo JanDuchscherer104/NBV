@@ -69,6 +69,7 @@ def _make_vin_snippet() -> VinSnippetView:
         points_world=points_world,
         lengths=torch.tensor([2], dtype=torch.int64),
         t_world_rig=_identity_pose(2),
+        t_world_snippet=_identity_pose(1),
     )
 
 

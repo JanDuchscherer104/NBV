@@ -477,6 +477,7 @@ def prepare_vin_offline_sample(
     points_world = _to_numpy(vin_snippet.points_world, dtype=np.float32)
     lengths = _to_numpy(vin_snippet.lengths.reshape(-1), dtype=np.int64)
     t_world_rig = _pose_to_numpy(vin_snippet.t_world_rig)
+    t_world_snippet = _pose_to_numpy(vin_snippet.t_world_snippet)
 
     camera = depths.p3d_cameras
     candidate_indices = _to_numpy(depths.candidate_indices.reshape(-1), dtype=np.int64)
@@ -494,6 +495,7 @@ def prepare_vin_offline_sample(
         "vin.points_world": points_world,
         "vin.lengths": lengths,
         "vin.t_world_rig": t_world_rig,
+        "vin.t_world_snippet": t_world_snippet,
         "oracle.candidate_count": np.asarray(candidate_count, dtype=np.int64),
         "oracle.candidate_indices": _pad_first_axis(candidate_indices, target_len=max_candidates, fill_value=-1),
         "oracle.candidate_poses_world_cam": _pad_first_axis(

@@ -161,6 +161,13 @@ class NbvStreamlitApp:
         store_state(state)
         render_candidates_page(sample, candidates, candidate_config)
 
+    def _page_campaign_generation(self) -> None:
+        """Render the bounded CUDA campaign operator page."""
+
+        from aria_nbv.app.panels.campaign_generation import render_campaign_generation_page
+
+        render_campaign_generation_page()
+
     def _page_vin_diagnostics(self) -> None:
         """Render VIN model diagnostics."""
 
@@ -300,6 +307,7 @@ class NbvStreamlitApp:
                 st.Page(self._page_rollout_supervision, title="Rollout Supervision"),
             ],
             "Generation": [
+                st.Page(self._page_campaign_generation, title="Campaign Generation"),
                 st.Page(self._page_live_rollout_lab, title="Live Rollout Lab"),
                 st.Page(self._page_candidate_proposals, title="Candidate Proposals"),
             ],

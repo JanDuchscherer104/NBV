@@ -16,8 +16,16 @@ import numpy as np
 import zarr
 from zarr.storage import LocalStore
 
-from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetInputProtocol, validate_target_protocol_admission
+from ..targets.protocol import (
+    ORACLE_GT_TARGET_SOURCE,
+    ActorVisibleTargetSource,
+    TargetInputProtocol,
+    TargetLabelEvidence,
+    target_label_is_trainable,
+    validate_target_protocol_admission,
+)
 from ..utils import Stage
+from .shard_manifest import build_rollout_split_manifest_hash
 from .zarr_store import DEFAULT_RETURN_SEMANTICS, RolloutZarrStoreReader
 
 
@@ -33,6 +41,7 @@ class _QhSourceRef:
     actor_store_version: str
     source_manifest_hash: str
     split_manifest_hash: str
+    campaign_split: Stage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +103,20 @@ class _ChainRef:
 class QhRolloutReader:
     """Read compatible validated stores through bounded chain slices."""
 
-    def __init__(self, store_dirs: tuple[str | Path, ...]) -> None:
+    def __init__(
+        self,
+        store_dirs: tuple[str | Path, ...],
+        *,
+        campaign_split: Stage | str | None = None,
+    ) -> None:
+        """Open compatible stores, optionally selecting one learning split.
+
+        ``campaign_split`` selects the persisted campaign/learning assignment.
+        Legacy stores without that field fall back to their physical source
+        split for filtering; the physical split remains available on every
+        admitted source reference for immutable VIN lineage validation.
+        """
+        campaign_split = _normalize_campaign_split(campaign_split)
         paths = tuple(Path(path).expanduser().resolve() for path in store_dirs)
         if not paths:
             raise ValueError("Q_H rollout reader requires at least one store.")
@@ -102,10 +124,22 @@ class QhRolloutReader:
             raise ValueError("Q_H rollout store paths must be unique.")
 
         self.store_dirs = paths
+        self.campaign_split = campaign_split
         self._stores = tuple(_preflight_store(path, store_index) for store_index, path in enumerate(paths))
         _validate_homogeneous(self._stores)
-        self._chains = tuple(chain for store in self._stores for chain in store.chains)
-        self._source_ref_lookup = _merge_source_refs(self._stores)
+        source_ref_lookup = _merge_source_refs(self._stores)
+        self._chains = tuple(
+            chain
+            for store in self._stores
+            for chain in store.chains
+            if _matches_campaign_split(source_ref_lookup[chain.source_sample_index], campaign_split)
+        )
+        admitted_sample_indices = {chain.source_sample_index for chain in self._chains}
+        self._source_ref_lookup = {
+            sample_index: source_ref
+            for sample_index, source_ref in source_ref_lookup.items()
+            if sample_index in admitted_sample_indices
+        }
         self._source_refs = tuple(self._source_ref_lookup.values())
         self._scenes = frozenset(source.scene_id for source in self._source_refs)
         self._open_pid: int | None = None
@@ -140,8 +174,8 @@ class QhRolloutReader:
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest realized chain length across all stores."""
-        return max(store.max_horizon for store in self._stores)
+        """Return the largest realized chain length among admitted chains."""
+        return max((chain.state_stop - chain.state_start for chain in self._chains), default=0)
 
     @property
     def contract(self) -> QhDataContract:
@@ -156,9 +190,13 @@ class QhRolloutReader:
                 {
                     "path": str(store.path),
                     "manifest_sha256": store.manifest_hash,
-                    "state_count": store.state_count,
+                    "state_count": sum(
+                        chain.state_stop - chain.state_start
+                        for chain in self._chains
+                        if chain.store_index == store_index
+                    ),
                 }
-                for store in self._stores
+                for store_index, store in enumerate(self._stores)
             ],
             "contract": self.contract,
         }
@@ -213,21 +251,104 @@ def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
     )
 
 
+def _normalize_campaign_split(value: Stage | str | None) -> Stage | None:
+    """Normalize a configured campaign split, treating ``all`` as unfiltered."""
+
+    return None if value is None or value == "all" else Stage.from_str(value)
+
+
+def _matches_campaign_split(source_ref: _QhSourceRef, campaign_split: Stage | None) -> bool:
+    """Return whether a source belongs to the requested campaign split."""
+
+    return campaign_split is None or (source_ref.campaign_split or source_ref.split) == campaign_split
+
+
 def _validate_reader_admission(root: zarr.Group) -> None:
     target_source = _decode_dictionary(root, "target_source")
-    if set(target_source) != {ORACLE_GT_TARGET_SOURCE}:
-        raise ValueError(
-            "v0_gt_input requires the target-source dictionary to contain only the canonical Oracle GT source; "
-            f"found {sorted(target_source)}."
-        )
-    protocol = validate_target_protocol_admission(
-        root.attrs.get("target_protocol_version", ""),
-        target_source=ORACLE_GT_TARGET_SOURCE,
-    )
-    if protocol is not TargetInputProtocol.V0_GT_INPUT:
-        raise ValueError("Q_H rollout reader materializes only canonical v0_gt_input corpora.")
+    protocol = TargetInputProtocol(root.attrs.get("target_protocol_version", ""))
+    if protocol is TargetInputProtocol.V0_GT_INPUT:
+        if set(target_source) != {ORACLE_GT_TARGET_SOURCE}:
+            raise ValueError(
+                "v0_gt_input requires the target-source dictionary to contain only the canonical Oracle GT source; "
+                f"found {sorted(target_source)}."
+            )
+        validate_target_protocol_admission(protocol, target_source=ORACLE_GT_TARGET_SOURCE)
+    else:
+        if (
+            len(target_source) != 1
+            or not target_source[0]
+            or target_source[0] == ORACLE_GT_TARGET_SOURCE
+            or target_source[0] not in {source.value for source in ActorVisibleTargetSource}
+        ):
+            raise ValueError(
+                f"v1_observed requires exactly one non-Oracle actor-visible target source; found {target_source!r}."
+            )
+        # The fixed store schema persists the self-consistent actor-visible
+        # source, while writer/config admission owns the stronger descriptor
+        # provenance check before this artifact can exist.
+    _validate_target_labels(root, protocol, target_source)
     if root.attrs.get("return_semantics") != DEFAULT_RETURN_SEMANTICS:
         raise ValueError(f"Q_H rollout reader requires {DEFAULT_RETURN_SEMANTICS!r} return semantics.")
+
+
+def _validate_target_labels(
+    root: zarr.Group,
+    protocol: TargetInputProtocol,
+    target_sources: tuple[str, ...],
+) -> None:
+    """Reject stores whose persisted target mask disagrees with typed evidence."""
+
+    target = root["targets"]
+    target_ids = _decode_dictionary(root, "target")
+    match_statuses = _decode_dictionary(root, "target_match_status")
+    descriptor_sources = _decode_dictionary(root, "descriptor_source")
+    descriptor_provenances = _decode_dictionary(root, "descriptor_provenance")
+    descriptor_hashes = _decode_dictionary(root, "descriptor_hash")
+    explicit_target_hashes = _decode_dictionary(root, "explicit_target_hash")
+    source_ids = np.asarray(target["target_source_id"], dtype=np.int64).reshape(-1)
+    target_rows = np.asarray(target["target_row_id"]).reshape(-1)
+    target_valid = np.asarray(target["target_valid_mask"], dtype=np.bool_).reshape(-1)
+    target_reason = np.asarray(target["target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
+    if source_ids.shape != target_rows.shape:
+        raise ValueError("targets/target_source_id must have one value per target row.")
+    for row, encoded_id in enumerate(np.asarray(target["matched_gt_target_id"]).reshape(-1)):
+        source_id = int(source_ids[row])
+        if source_id < 0 or source_id >= len(target_sources):
+            raise ValueError(f"targets/target_source_id row {row} is outside the target-source dictionary.")
+        target_source = target_sources[source_id]
+        if protocol is TargetInputProtocol.V0_GT_INPUT and target_source != ORACLE_GT_TARGET_SOURCE:
+            raise ValueError(f"targets/target_source_id row {row} is not the canonical Oracle GT source.")
+        if protocol is TargetInputProtocol.V1_OBSERVED and target_source not in {
+            source.value for source in ActorVisibleTargetSource
+        }:
+            raise ValueError(f"targets/target_source_id row {row} is not an actor-visible target source.")
+        match_id = ""
+        if 0 <= int(encoded_id) < len(target_ids):
+            match_id = target_ids[int(encoded_id)]
+        status_id = int(np.asarray(target["gt_match_status_id"]).reshape(-1)[row])
+        status = match_statuses[status_id] if 0 <= status_id < len(match_statuses) else ""
+        expected = target_label_is_trainable(
+            TargetLabelEvidence(
+                protocol=protocol,
+                target_source=target_source,
+                gt_match_status=status,
+                matched_gt_target_row_id=int(np.asarray(target["matched_gt_target_row_id"]).reshape(-1)[row]),
+                matched_gt_target_id=match_id,
+                gt_match_iou=float(np.asarray(target["gt_match_iou"]).reshape(-1)[row]),
+                descriptor_source=descriptor_sources[int(np.asarray(target["descriptor_source_id"]).reshape(-1)[row])],
+                descriptor_provenance=descriptor_provenances[
+                    int(np.asarray(target["descriptor_provenance_id"]).reshape(-1)[row])
+                ],
+                descriptor_hash=descriptor_hashes[int(np.asarray(target["descriptor_hash_id"]).reshape(-1)[row])],
+                explicit_target_hash=explicit_target_hashes[
+                    int(np.asarray(target["explicit_target_hash_id"]).reshape(-1)[row])
+                ],
+                target_valid=bool(target_valid[row] and target_reason[row] == 1),
+            )
+        )
+        actual = bool(np.asarray(target["gt_label_valid_mask"]).reshape(-1)[row])
+        if actual != expected:
+            raise ValueError(f"targets/gt_label_valid_mask row {row} disagrees with canonical target evidence.")
 
 
 def _read_contract(root: zarr.Group) -> QhDataContract:
@@ -250,6 +371,8 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
         for name in ("config", "scene", "snippet", "source_key", "source_shard", "split")
     }
     sources = root["sources"]
+    if not isinstance(sources, zarr.Group):
+        raise ValueError(f"Q_H store {path} sources node must be a group.")
 
     def decode(dictionary_name: str, array_name: str, row: int) -> str:
         value_id = int(sources[array_name][row])
@@ -259,6 +382,19 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
         return dictionary[value_id]
 
     source_ids = np.asarray(sources["source_row_id"], dtype=np.int64).reshape(-1)
+    source_array_names = tuple(sources.array_keys())
+    has_campaign_split = "campaign_split_id" in source_array_names
+
+    def decode_campaign_split(row: int) -> Stage | None:
+        if not has_campaign_split:
+            return None
+        value = decode("split", "campaign_split_id", row)
+        if value == "unknown":
+            return None
+        # Campaign plans use the canonical dataset spelling ``validation``;
+        # Stage's public value remains ``val`` at the reader boundary.
+        return Stage.VAL if value == "validation" else Stage.from_str(value)
+
     refs = {
         int(source_id): _QhSourceRef(
             source_sample_index=int(sources["sample_index"][row]),
@@ -268,6 +404,7 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
             scene_id=decode("scene", "scene_id", row),
             snippet_id=decode("snippet", "snippet_id", row),
             split=Stage.from_str(decode("split", "split_id", row)),
+            campaign_split=decode_campaign_split(row),
             actor_store_version=decode("config", "source_cache_version_id", row),
             source_manifest_hash=decode("config", "source_offline_store_manifest_hash_id", row),
             split_manifest_hash=decode("config", "split_manifest_hash_id", row),
@@ -278,7 +415,48 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
     mismatched = [source_id for source_id, source in refs.items() if source.split_manifest_hash != expected_hash]
     if mismatched:
         raise ValueError(f"Q_H store {path} source rows {mismatched} do not match root split_manifest_hash.")
+    ordered = [refs[int(source_id)] for source_id in source_ids]
+    if not any(source.campaign_split is not None for source in ordered):
+        return refs
+    actual_hash = build_rollout_split_manifest_hash(
+        source_manifest_hash=ordered[0].source_manifest_hash if ordered else "",
+        split=_hash_physical_split_value(ordered[0].split) if ordered else "",
+        records=[
+            {
+                "order": order,
+                "sample_index": source.source_sample_index,
+                "sample_key": source.source_sample_key,
+                "scene_id": source.scene_id,
+                "snippet_id": source.snippet_id,
+                "split": _hash_physical_split_value(source.split),
+                "source_shard_id": source.source_shard_id,
+                "source_shard_row": source.source_shard_row,
+                **(
+                    {"campaign_split": _hash_campaign_split_value(source.campaign_split)}
+                    if source.campaign_split
+                    else {}
+                ),
+            }
+            for order, source in enumerate(ordered)
+        ],
+    )
+    if actual_hash != expected_hash:
+        raise ValueError(f"Q_H store {path} source rows do not reproduce root split_manifest_hash.")
     return refs
+
+
+def _hash_physical_split_value(value: Stage | None) -> str:
+    """Return the physical VIN split spelling used by source manifests."""
+
+    return "" if value is None else value.value
+
+
+def _hash_campaign_split_value(value: Stage | None) -> str:
+    """Return the campaign split spelling used by campaign manifests."""
+
+    if value is Stage.VAL:
+        return "validation"
+    return "" if value is None else value.value
 
 
 def _read_chain_refs(

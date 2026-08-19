@@ -15,10 +15,10 @@ from typing import Any
 
 from ..utils.fingerprints import stable_msgspec_hash
 
-ROLLOUT_SOURCE_MANIFEST_VERSION = "rollout-source-manifest-v1"
+ROLLOUT_SOURCE_MANIFEST_VERSION = "rollout-source-manifest-v2"
 """Version label for profile-independent ordered VIN source manifests."""
 
-ROLLOUT_SHARD_MANIFEST_VERSION = "rollout-shard-manifest-v1"
+ROLLOUT_SHARD_MANIFEST_VERSION = "rollout-shard-manifest-v3"
 """Version label for rollout generation JSONL shard manifests."""
 
 ROLLOUT_SHARD_SUCCESS_FILENAME = "_SUCCESS.json"
@@ -26,6 +26,57 @@ ROLLOUT_SHARD_SUCCESS_FILENAME = "_SUCCESS.json"
 
 ROLLOUT_SHARD_OWNER_FILENAME = "_owner.json"
 """Shard owner/provenance sidecar written before final promotion."""
+
+
+@dataclass(frozen=True, slots=True)
+class RolloutShardCampaignBinding:
+    """Optional campaign identity carried by a shard entry."""
+
+    campaign_id: str
+    plan_hash: str
+    work_unit_hash: str
+    target_id: str
+    profile_hash: str
+    explicit_target_hash: str
+    generation_revision_hash: str = ""
+
+    def to_jsonable(self) -> dict[str, str]:
+        """Return stable JSON evidence."""
+
+        payload = {
+            name: str(getattr(self, name))
+            for name in (
+                "campaign_id",
+                "plan_hash",
+                "work_unit_hash",
+                "target_id",
+                "profile_hash",
+                "explicit_target_hash",
+                "generation_revision_hash",
+            )
+        }
+        if not self.generation_revision_hash:
+            payload.pop("generation_revision_hash")
+        return payload
+
+    @classmethod
+    def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardCampaignBinding":
+        """Decode a campaign binding."""
+
+        return cls(
+            **{
+                name: str(payload.get(name, ""))
+                for name in (
+                    "campaign_id",
+                    "plan_hash",
+                    "work_unit_hash",
+                    "target_id",
+                    "profile_hash",
+                    "explicit_target_hash",
+                    "generation_revision_hash",
+                )
+            }
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +106,9 @@ class RolloutShardRow:
 
     source_shard_row: int
     """Zero-based row within ``source_shard_id``."""
+
+    campaign_split: str | None = None
+    """Authoritative campaign split; ``split`` remains VIN source split."""
 
     @classmethod
     def from_index_record(cls, record: Any, *, order: int) -> "RolloutShardRow":
@@ -92,12 +146,13 @@ class RolloutShardRow:
             split=str(payload["split"]),
             source_shard_id=str(payload["source_shard_id"]),
             source_shard_row=int(payload["source_shard_row"]),
+            campaign_split=None if payload.get("campaign_split") is None else str(payload["campaign_split"]),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
         """Return a stable JSON-compatible row payload."""
 
-        return {
+        payload = {
             "order": int(self.order),
             "sample_index": int(self.sample_index),
             "sample_key": self.sample_key,
@@ -106,12 +161,19 @@ class RolloutShardRow:
             "split": self.split,
             "source_shard_id": self.source_shard_id,
             "source_shard_row": int(self.source_shard_row),
+            "campaign_split": self.campaign_split,
         }
+        return payload
 
     def hash_record(self) -> dict[str, object]:
         """Return the row fields used for deterministic lineage hashing."""
-
-        return self.to_jsonable()
+        record = self.to_jsonable()
+        # V0 source manifests have no campaign assignment and retain their
+        # historical hash.  Once a v3 row is assigned to a campaign, that
+        # assignment is part of the hash-bound ownership identity.
+        if self.campaign_split is None:
+            record.pop("campaign_split", None)
+        return record
 
     def matches_record(self, record: Any) -> bool:
         """Return whether a VIN offline index record matches this manifest row."""
@@ -152,7 +214,7 @@ class RolloutSourceManifest:
     """Hash binding the source manifest, split, and ordered source rows."""
 
     source_store_dir: str
-    """Resolved source-store directory used when the manifest was frozen."""
+    """Portable source-store basename/cache identity, never a checkout path."""
 
     manifest_version: str = ROLLOUT_SOURCE_MANIFEST_VERSION
     """Ordered source-manifest contract version."""
@@ -295,10 +357,18 @@ class RolloutShardEntry:
     """Hash binding split name and ordered source-row records."""
 
     source_store_dir: str
-    """Resolved VIN source-store directory used when the manifest was planned."""
+    """Portable VIN source-store basename/cache identity used for local reopening."""
 
     manifest_version: str = ROLLOUT_SHARD_MANIFEST_VERSION
     """JSONL ownership-contract version."""
+
+    campaign_binding: RolloutShardCampaignBinding | None = None
+    """Optional campaign identity; ``None`` preserves legacy manifests."""
+
+    campaign_split: str | None = None
+    """Authoritative campaign split, distinct from the VIN source split."""
+
+    generation_revision_hash: str = ""
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardEntry":
@@ -313,6 +383,11 @@ class RolloutShardEntry:
             rollout store.
         """
 
+        if payload.get("manifest_version") == "rollout-shard-manifest-v2" and (
+            payload.get("campaign_split") is not None
+            or any(row.get("campaign_split") is not None for row in payload.get("rows", ()))
+        ):
+            raise ValueError("rollout-shard-manifest-v2 campaign-split hashes are incompatible; regenerate as v3")
         return cls(
             manifest_version=str(payload["manifest_version"]),
             shard_id=canonical_rollout_shard_id(str(payload["shard_id"])),
@@ -323,6 +398,11 @@ class RolloutShardEntry:
             source_cache_version=str(payload["source_cache_version"]),
             split_manifest_hash=str(payload["split_manifest_hash"]),
             source_store_dir=str(payload["source_store_dir"]),
+            campaign_binding=None
+            if payload.get("campaign_binding") is None
+            else RolloutShardCampaignBinding.from_jsonable(payload["campaign_binding"]),
+            campaign_split=None if payload.get("campaign_split") is None else str(payload["campaign_split"]),
+            generation_revision_hash=str(payload.get("generation_revision_hash", "")),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
@@ -339,6 +419,9 @@ class RolloutShardEntry:
             "split_manifest_hash": self.split_manifest_hash,
             "source_store_dir": self.source_store_dir,
             "rows": [row.to_jsonable() for row in self.rows],
+            "campaign_binding": None if self.campaign_binding is None else self.campaign_binding.to_jsonable(),
+            "campaign_split": self.campaign_split,
+            "generation_revision_hash": self.generation_revision_hash,
         }
 
     def validate(self) -> None:
@@ -354,6 +437,13 @@ class RolloutShardEntry:
         splits = {row.split for row in self.rows}
         if splits != {self.split}:
             raise ValueError(f"Rollout shard {self.shard_id!r} mixes row splits {sorted(splits)}.")
+        row_campaign_splits = {row.campaign_split for row in self.rows if row.campaign_split is not None}
+        if self.campaign_split is not None and row_campaign_splits not in ({self.campaign_split}, set()):
+            raise ValueError(f"Rollout shard {self.shard_id!r} campaign split disagrees with owned rows.")
+        if row_campaign_splits and self.campaign_split is None:
+            raise ValueError(f"Rollout shard {self.shard_id!r} rows declare campaign split but entry does not.")
+        if self.campaign_split is not None and row_campaign_splits != {self.campaign_split}:
+            raise ValueError(f"Rollout shard {self.shard_id!r} rows must carry its campaign split.")
         orders = [row.order for row in self.rows]
         if orders != list(range(len(self.rows))):
             raise ValueError(f"Rollout shard {self.shard_id!r} row order must be contiguous from zero.")
@@ -361,6 +451,13 @@ class RolloutShardEntry:
             raise ValueError(f"Rollout shard {self.shard_id!r} contains an empty source_shard_id.")
         if any(row.source_shard_row < 0 for row in self.rows):
             raise ValueError(f"Rollout shard {self.shard_id!r} contains a negative source_shard_row.")
+        expected_hash = build_rollout_split_manifest_hash(
+            source_manifest_hash=self.source_manifest_hash,
+            split=self.split,
+            records=[row.hash_record() for row in self.rows],
+        )
+        if self.split_manifest_hash != expected_hash:
+            raise ValueError(f"Rollout shard {self.shard_id!r} split_manifest_hash does not match its rows.")
 
 
 def canonical_rollout_shard_id(value: str | int) -> str:
@@ -465,6 +562,7 @@ __all__ = [
     "ROLLOUT_SHARD_SUCCESS_FILENAME",
     "RolloutSourceManifest",
     "RolloutShardEntry",
+    "RolloutShardCampaignBinding",
     "RolloutShardRow",
     "build_rollout_split_manifest_hash",
     "canonical_rollout_shard_id",

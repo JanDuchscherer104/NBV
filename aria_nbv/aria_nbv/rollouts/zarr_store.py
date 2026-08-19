@@ -36,9 +36,17 @@ from zarr.storage import LocalStore
 
 from ..configs import PathConfig
 from ..data_handling.identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
-from ..targets.protocol import TargetInputProtocol
+from ..targets.protocol import (
+    ORACLE_GT_TARGET_SOURCE,
+    ActorVisibleTargetSource,
+    TargetInputProtocol,
+    TargetLabelEvidence,
+    target_label_is_trainable,
+    validate_target_protocol_admission,
+)
 from ..utils import BaseConfig
 from ..utils.config_paths import resolve_cache_artifact_dir
+from ..utils.fingerprints import stable_msgspec_hash
 from .manifest import (
     ROLLOUT_MANIFEST_FILENAME,
     ROLLOUT_MANIFEST_VERSION,
@@ -48,6 +56,7 @@ from .manifest import (
     utc_timestamp,
     write_rollout_store_manifest,
 )
+from .shard_manifest import build_rollout_split_manifest_hash
 from .trace import (
     INVALID_REASON_CODES,
     INVALID_REASON_VERSION,
@@ -93,7 +102,7 @@ if TYPE_CHECKING:
 ROLLOUT_ZARR_SCHEMA_ID = "aria_nbv.rollout_zarr_q_invalidity"
 """Schema id stored as a root attribute on rollout replay stores."""
 
-ROLLOUT_ZARR_SCHEMA_VERSION = "1.0-target-rollout-core"
+ROLLOUT_ZARR_SCHEMA_VERSION = "2.0-target-rollout-provenance"
 """Target-first rollout schema with hot candidate provenance and core parent-depth history."""
 
 DEFAULT_RETURN_SEMANTICS = "cumulative_target_root_gain"
@@ -173,6 +182,7 @@ SOURCE_TABLE = _TableSchema(
         _TableField("scene_id", np.int32),
         _TableField("snippet_id", np.int32),
         _TableField("split_id", np.int32),
+        _TableField("campaign_split_id", np.int32),
         _TableField("source_cache_version_id", np.int32),
         _TableField("source_offline_store_manifest_hash_id", np.int32),
         _TableField("split_manifest_hash_id", np.int32),
@@ -241,6 +251,8 @@ STEP_TABLE = _TableSchema(
         _TableField("selected_compact_valid_index", np.int32),
         _TableField("num_candidates", np.int32),
         _TableField("num_valid_candidates", np.int32),
+        _TableField("candidate_seed", np.int64),
+        _TableField("selection_seed", np.int64),
         _TableField("cumulative_target_rri", np.float32),
         _TableField("cumulative_scene_rri", np.float32),
         _TableField("cumulative_target_root_gain", np.float32),
@@ -298,6 +310,8 @@ CANDIDATE_DIAGNOSTIC_TABLE = _TableSchema(
         _TableField("mesh_distance_m", np.float32),
         _TableField("path_min_clearance_m", np.float32),
         _TableField("path_collision_mask", np.bool_),
+        _TableField("path_collision_applicable_mask", np.bool_),
+        _TableField("path_collision_evaluated_mask", np.bool_),
         _TableField("free_space_margin_m", np.float32),
         _TableField("motion_step_length_m", np.float32),
         _TableField("motion_height_delta_m", np.float32),
@@ -701,6 +715,13 @@ class _RolloutZarrWriteSession:
 
         created_at_utc = utc_timestamp()
         records = _records_with_global_target_row_ids(self.records)
+        lineage_hashes = {
+            record.lineage.source.split_manifest_hash
+            for record in records
+            if record.lineage.source.campaign_split is not None
+        }
+        if lineage_hashes and lineage_hashes != {self.split_manifest_hash}:
+            raise ValueError("Rollout record split_manifest_hash does not match the configured campaign hash.")
         dictionaries = _build_dictionaries(records)
         table = _flatten_records(
             records,
@@ -712,6 +733,19 @@ class _RolloutZarrWriteSession:
         )
         q_h_horizon = _table_horizon(table)
         q_h_arrays = _build_q_h_arrays(table, gamma=self.discount_gamma)
+        effective_split_manifest_hash = _effective_split_manifest_hash(
+            table.sources, dictionaries, fallback=self.split_manifest_hash
+        )
+        if effective_split_manifest_hash != self.split_manifest_hash:
+            raise ValueError("Configured split_manifest_hash does not match campaign-bound source rows.")
+        try:
+            split_hash_id = dictionaries["config"].index(self.split_manifest_hash)
+        except ValueError:
+            dictionaries["config"].append(self.split_manifest_hash)
+            split_hash_id = len(dictionaries["config"]) - 1
+        table.sources["split_manifest_hash_id"] = np.full(
+            table.sources["split_manifest_hash_id"].shape, split_hash_id, dtype=np.int32
+        )
         root_metadata = _root_metadata_payload(
             records=records,
             tables=table,
@@ -887,6 +921,26 @@ class _RolloutZarrValidator:
             )
         if payload.get("schema_version") != ROLLOUT_ZARR_SCHEMA_VERSION:
             self.errors.append("Rollout manifest schema_version does not match the current rollout Zarr schema.")
+        manifest_attrs = payload.get("root_attrs", {})
+        if manifest_attrs.get("campaign_split", "unknown") != self.root.attrs.get("campaign_split", "unknown"):
+            self.errors.append("Rollout manifest campaign_split does not match root attrs.")
+        shard_context = (payload.get("generation") or {}).get("shard") or {}
+        campaign_binding = shard_context.get("campaign_binding") or {}
+        bound_explicit_hash = campaign_binding.get("explicit_target_hash")
+        if (
+            bound_explicit_hash
+            and self.root.attrs.get("target_protocol_version") == TargetInputProtocol.V1_OBSERVED
+            and "targets" in self.root
+        ):
+            persisted_hashes = set(
+                _encoded_values(
+                    self.root,
+                    dictionary_name="explicit_target_hash",
+                    array_path="targets/explicit_target_hash_id",
+                )
+            )
+            if persisted_hashes != {str(bound_explicit_hash)}:
+                self.errors.append("Rollout manifest explicit_target_hash does not match target evidence.")
 
     def _validate_q_h(self, candidate_row_id: np.ndarray) -> None:
         derived = _build_q_h_arrays(
@@ -997,6 +1051,12 @@ class _RolloutZarrValidator:
                     f"must be {np.dtype(table_field.dtype)}."
                 )
         collision_mask = np.asarray(group["path_collision_mask"], dtype=np.bool_).reshape(-1)
+        collision_applicable = np.asarray(group["path_collision_applicable_mask"], dtype=np.bool_).reshape(-1)
+        collision_evaluated = np.asarray(group["path_collision_evaluated_mask"], dtype=np.bool_).reshape(-1)
+        if np.any(collision_evaluated & ~collision_applicable):
+            self.errors.append("path_collision_evaluated_mask must imply path_collision_applicable_mask.")
+        if np.any(collision_mask & ~collision_evaluated):
+            self.errors.append("path_collision_mask must imply path_collision_evaluated_mask.")
         if collision_mask.any():
             actor_action_mask = np.asarray(self.root["candidates/actor_action_mask"], dtype=np.bool_).reshape(-1)
             reason_bitset = np.asarray(self.root["candidates/invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
@@ -1124,6 +1184,62 @@ class _RolloutZarrValidator:
                 break
         if np.any(source_shard_row < 0):
             self.errors.append("sources/source_shard_row must be non-negative.")
+        source_keys = _encoded_values(self.root, dictionary_name="source_key", array_path="sources/sample_key_id")
+        scene_ids = _encoded_values(self.root, dictionary_name="scene", array_path="sources/scene_id")
+        snippet_ids = _encoded_values(self.root, dictionary_name="snippet", array_path="sources/snippet_id")
+        split_ids = _encoded_values(self.root, dictionary_name="split", array_path="sources/split_id")
+        campaign_split_ids = _encoded_values(self.root, dictionary_name="split", array_path="sources/campaign_split_id")
+        manifest_hashes = _encoded_values(
+            self.root, dictionary_name="config", array_path="sources/source_offline_store_manifest_hash_id"
+        )
+        split_hashes = _encoded_values(self.root, dictionary_name="config", array_path="sources/split_manifest_hash_id")
+        sample_indices = np.asarray(self.root["sources/sample_index"], dtype=np.int64).reshape(-1)
+        campaign_split_attr = str(self.root.attrs.get("campaign_split", "unknown"))
+        if (
+            source_row_id.size
+            and campaign_split_attr != "unknown"
+            and all(value == "unknown" for value in campaign_split_ids)
+        ):
+            self.errors.append("campaign-bound rollout store cannot have only unknown campaign split assignments.")
+        if (
+            source_row_id.size
+            and any(value != "unknown" for value in campaign_split_ids)
+            and all(
+                len(values) == source_row_id.size
+                for values in (
+                    source_keys,
+                    scene_ids,
+                    snippet_ids,
+                    split_ids,
+                    campaign_split_ids,
+                    manifest_hashes,
+                    split_hashes,
+                )
+            )
+        ):
+            records = []
+            for order in range(source_row_id.size):
+                record = {
+                    "order": order,
+                    "sample_index": int(sample_indices[order]),
+                    "sample_key": source_keys[order],
+                    "scene_id": scene_ids[order],
+                    "snippet_id": snippet_ids[order],
+                    "split": split_ids[order],
+                    "source_shard_id": source_shard_names[int(source_shard_id[order])],
+                    "source_shard_row": int(source_shard_row[order]),
+                }
+                if campaign_split_ids[order] != "unknown":
+                    record["campaign_split"] = campaign_split_ids[order]
+                records.append(record)
+            actual_hash = build_rollout_split_manifest_hash(
+                source_manifest_hash=manifest_hashes[0], split=split_ids[0], records=records
+            )
+            expected_hash = str(self.root.attrs.get("split_manifest_hash", ""))
+            if actual_hash != expected_hash:
+                self.errors.append("sources rows do not reproduce root split_manifest_hash, including campaign split.")
+            if any(value != expected_hash for value in split_hashes):
+                self.errors.append("sources split_manifest_hash values must match the root hash.")
 
     def _validate_targets(self) -> None:
         target_row_id = np.asarray(self.root["targets/target_row_id"])
@@ -1132,6 +1248,56 @@ class _RolloutZarrValidator:
             self.errors.append("Rollout target_row_id contains ids not present in targets/target_row_id.")
         if np.unique(target_row_id).shape[0] != target_row_id.shape[0]:
             self.errors.append("targets/target_row_id must be unique within one rollout shard.")
+        target_source_ids = np.asarray(self.root["targets/target_source_id"], dtype=np.int64).reshape(-1)
+        target_sources = _read_string_array(self.root, "dictionaries/target_source")
+        if target_source_ids.shape != target_row_id.shape:
+            self.errors.append("targets/target_source_id must have one value per target row.")
+        elif np.any((target_source_ids < 0) | (target_source_ids >= len(target_sources))):
+            self.errors.append("targets/target_source_id contains an out-of-range dictionary id.")
+        else:
+            try:
+                target_protocol = TargetInputProtocol(
+                    str(self.root.attrs.get("target_protocol_version", "")).replace("-", "_")
+                )
+            except (TypeError, ValueError):
+                target_protocol = None
+            if target_protocol is None:
+                self.errors.append("Rollout store declares an unsupported target protocol version.")
+            else:
+                actor_visible_sources = {source.value for source in ActorVisibleTargetSource}
+                for source_id in target_source_ids.tolist():
+                    target_source = target_sources[int(source_id)]
+                    if target_protocol is TargetInputProtocol.V0_GT_INPUT:
+                        admitted = target_source == ORACLE_GT_TARGET_SOURCE
+                    else:
+                        admitted = target_source in actor_visible_sources
+                    if not admitted:
+                        self.errors.append(
+                            f"targets/target_source_id contains source {target_source!r} incompatible with "
+                            f"{target_protocol.value}."
+                        )
+                        break
+                    try:
+                        validate_target_protocol_admission(
+                            target_protocol,
+                            target_source=target_source,
+                            descriptor_source=target_source,
+                            descriptor_provenance=(
+                                "actor_visible_detector"
+                                if target_protocol is TargetInputProtocol.V1_OBSERVED
+                                else "oracle_gt"
+                            ),
+                        )
+                    except ValueError as exc:
+                        self.errors.append(f"Invalid target source admission: {exc}")
+                        break
+        target_reason = np.asarray(self.root["targets/target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
+        target_valid = np.asarray(self.root["targets/target_valid_mask"], dtype=np.bool_).reshape(-1)
+        expected_target_valid = target_reason == np.uint32(1 << INVALID_REASON_CODES["VALID"])
+        if target_valid.shape != target_row_id.shape or target_reason.shape != target_row_id.shape:
+            self.errors.append("Target validity arrays must have one value per target row.")
+        elif not np.array_equal(target_valid, expected_target_valid):
+            self.errors.append("targets/target_valid_mask does not match target_invalid_reason_bitset.")
         if "root_pose_world" not in self.root["rollouts"]:
             self.errors.append("Missing required rollout root_pose_world field.")
         else:
@@ -1217,18 +1383,51 @@ class _RolloutZarrValidator:
         q_h = _q_h_arrays_for_validation(self.root)
         q_state_target_row_id = q_h["target_row_id"]
         q_train_mask = q_h["q_train_mask"]
+        expected_target_labels = _canonical_target_label_mask(self.root)
         target_valid_by_id = {
-            int(row_id): bool(valid and gt_valid)
-            for row_id, valid, gt_valid in zip(
-                target_row_id,
-                np.asarray(self.root["targets/target_valid_mask"]),
-                np.asarray(self.root["targets/gt_label_valid_mask"]),
-                strict=True,
+            int(row_id): bool(valid and expected_target_labels[index])
+            for index, (row_id, valid) in enumerate(
+                zip(
+                    target_row_id,
+                    np.asarray(self.root["targets/target_valid_mask"]),
+                    strict=True,
+                )
             )
         }
+        persisted_target_labels = np.asarray(self.root["targets/gt_label_valid_mask"], dtype=np.bool_).reshape(-1)
+        if not np.array_equal(persisted_target_labels, expected_target_labels):
+            self.errors.append("targets/gt_label_valid_mask does not match canonical target evidence.")
         q_target_valid = np.asarray([target_valid_by_id.get(int(row_id), False) for row_id in q_state_target_row_id])
         if q_train_mask.shape[0] == q_target_valid.shape[0] and np.any(q_train_mask & (~q_target_valid[:, None])):
             self.errors.append("Q_H q_train_mask is true for a target without valid task and GT label state.")
+        candidate_target_by_rollout = {
+            int(rollout_id): target_valid_by_id.get(int(target_id), False)
+            for rollout_id, target_id in zip(
+                np.asarray(self.root["rollouts/rollout_row_id"]),
+                np.asarray(self.root["rollouts/target_row_id"]),
+                strict=True,
+            )
+        }
+        step_target_valid = {
+            int(step_id): candidate_target_by_rollout.get(int(rollout_id), False)
+            for step_id, rollout_id in zip(
+                np.asarray(self.root["steps/step_row_id"]),
+                np.asarray(self.root["steps/rollout_row_id"]),
+                strict=True,
+            )
+        }
+        candidate_target_valid = np.asarray(
+            [step_target_valid.get(int(step_id), False) for step_id in np.asarray(self.root["candidates/step_row_id"])],
+            dtype=np.bool_,
+        )
+        actor = np.asarray(self.root["candidates/actor_action_mask"], dtype=np.bool_).reshape(-1)
+        oracle = np.asarray(self.root["candidates/oracle_label_mask"], dtype=np.bool_).reshape(-1)
+        candidate_q = np.asarray(self.root["candidates/q_train_mask"], dtype=np.bool_).reshape(-1)
+        expected_candidate_q = actor & oracle & candidate_target_valid
+        if not np.array_equal(candidate_q, expected_candidate_q):
+            self.errors.append(
+                "candidates/q_train_mask must equal actor_action_mask & oracle_label_mask for admitted targets."
+            )
         for attr_name in ("source_offline_store_version", "split_manifest_hash", "target_protocol_version"):
             if _missing_lineage_token(self.root.attrs.get(attr_name)):
                 self.errors.append(f"Rollout store is missing required root attr {attr_name!r}.")
@@ -1297,6 +1496,45 @@ def _required_groups() -> tuple[str, ...]:
     )
 
 
+def _effective_split_manifest_hash(
+    sources: dict[str, np.ndarray], dictionaries: dict[str, list[str]], *, fallback: str
+) -> str:
+    """Bind campaign assignments into v3 source hashes while preserving V0."""
+
+    campaign_ids = np.asarray(sources["campaign_split_id"], dtype=np.int64).reshape(-1)
+    split_values = dictionaries["split"]
+    campaign_values = [split_values[int(value)] for value in campaign_ids]
+    if not any(value != "unknown" for value in campaign_values):
+        return fallback
+    config_values = dictionaries["config"]
+    source_manifest_ids = np.asarray(sources["source_offline_store_manifest_hash_id"], dtype=np.int64).reshape(-1)
+    source_manifest_hashes = [config_values[int(value)] for value in source_manifest_ids]
+    split_ids = np.asarray(sources["split_id"], dtype=np.int64).reshape(-1)
+    source_splits = [split_values[int(value)] for value in split_ids]
+    source_shard_values = dictionaries["source_shard"]
+    source_shard_ids = np.asarray(sources["source_shard_id"], dtype=np.int64).reshape(-1)
+    sample_keys = [dictionaries["source_key"][int(value)] for value in np.asarray(sources["sample_key_id"]).reshape(-1)]
+    scene_ids = [dictionaries["scene"][int(value)] for value in np.asarray(sources["scene_id"]).reshape(-1)]
+    snippet_ids = [dictionaries["snippet"][int(value)] for value in np.asarray(sources["snippet_id"]).reshape(-1)]
+    records = []
+    for order in range(len(campaign_values)):
+        record = {
+            "order": order,
+            "sample_index": int(np.asarray(sources["sample_index"])[order]),
+            "sample_key": sample_keys[order],
+            "scene_id": scene_ids[order],
+            "snippet_id": snippet_ids[order],
+            "split": source_splits[order],
+            "source_shard_id": source_shard_values[int(source_shard_ids[order])],
+            "source_shard_row": int(np.asarray(sources["source_shard_row"])[order]),
+            "campaign_split": campaign_values[order],
+        }
+        records.append(record)
+    return build_rollout_split_manifest_hash(
+        source_manifest_hash=source_manifest_hashes[0], split=source_splits[0], records=records
+    )
+
+
 def _root_metadata_payload(
     *,
     records: list[_RolloutWriteRecord],
@@ -1331,6 +1569,11 @@ def _root_metadata_payload(
         for record in records
         for chain_id, _trajectory in enumerate(record.evaluated.result.trajectories)
     }
+    campaign_split_values = {
+        _lineage_for_chain(record, chain_id).source.campaign_split or "unknown"
+        for record in records
+        for chain_id, _trajectory in enumerate(record.evaluated.result.trajectories)
+    }
     return {
         "schema_id": ROLLOUT_ZARR_SCHEMA_ID,
         "schema_version": ROLLOUT_ZARR_SCHEMA_VERSION,
@@ -1342,6 +1585,7 @@ def _root_metadata_payload(
         "source_offline_store_version": source_offline_store_version,
         "split_manifest_hash": split_manifest_hash,
         "source_split": next(iter(split_values)) if len(split_values) == 1 else "mixed",
+        "campaign_split": next(iter(campaign_split_values)) if len(campaign_split_values) == 1 else "mixed",
         "reason_code_version": reason_code_version,
         "target_protocol_version": target_protocol_version,
         "return_semantics": return_semantics,
@@ -1604,10 +1848,20 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
         if (evaluated := record.evaluated.step(chain_id, step.step_index)) is not None
         and evaluated.evaluation.evidence.target_eval_crop_policy
     }
-    split_values = {lineage.source.split or "unknown" for _record, _trajectory, lineage in items}
+    split_values = {
+        value
+        for _record, _trajectory, lineage in items
+        for value in (lineage.source.split or "unknown", lineage.source.campaign_split or "unknown")
+    }
     target_match_status_values = {
         lineage.target.gt_match_status or "not_requested" for _record, _trajectory, lineage in items
     }
+    descriptor_source_values = {lineage.target.descriptor_source or "" for _record, _trajectory, lineage in items}
+    descriptor_provenance_values = {
+        lineage.target.descriptor_provenance or "" for _record, _trajectory, lineage in items
+    }
+    descriptor_hash_values = {lineage.target.descriptor_hash or "" for _record, _trajectory, lineage in items}
+    explicit_target_hash_values = {lineage.target.explicit_target_hash or "" for _record, _trajectory, lineage in items}
     return {
         "scene": sorted({lineage.source.scene_id or "" for _record, _trajectory, lineage in items}),
         "snippet": sorted(
@@ -1649,6 +1903,10 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
             {lineage.target.target_class_name or "unknown" for _record, _trajectory, lineage in items}
         ),
         "target_match_status": sorted(target_match_status_values),
+        "descriptor_source": sorted(descriptor_source_values),
+        "descriptor_provenance": sorted(descriptor_provenance_values),
+        "descriptor_hash": sorted(descriptor_hash_values),
+        "explicit_target_hash": sorted(explicit_target_hash_values),
         "termination_reason": sorted(
             {
                 _termination_reason(record.evaluated.result, trajectory)
@@ -1765,6 +2023,23 @@ def _write_targets(
             dtype=np.int32,
         ),
     )
+    for field_name, dictionary_name in (
+        ("descriptor_source", "descriptor_source"),
+        ("descriptor_provenance", "descriptor_provenance"),
+        ("descriptor_hash", "descriptor_hash"),
+        ("explicit_target_hash", "explicit_target_hash"),
+    ):
+        _write_array(
+            group,
+            f"{field_name}_id",
+            np.asarray(
+                [
+                    _dict_id(dictionaries[dictionary_name], str(target_rows[target_row_id].get(field_name) or ""))
+                    for target_row_id in target_ids
+                ],
+                dtype=np.int32,
+            ),
+        )
     _write_array(
         group,
         "target_sem_id",
@@ -1878,11 +2153,14 @@ def _write_targets(
             dtype=np.float32,
         ),
     )
+    default_target_reason = (
+        0 if target_protocol_version == TargetInputProtocol.V1_OBSERVED else 1 << INVALID_REASON_CODES["VALID"]
+    )
     target_reason = np.asarray(
         [
             _int_or_default(
                 target_rows[target_row_id].get("target_invalid_reason_bitset"),
-                default=1 << INVALID_REASON_CODES["VALID"],
+                default=default_target_reason,
             )
             for target_row_id in target_ids
         ],
@@ -1978,8 +2256,29 @@ def _write_targets(
         "gt_label_valid_mask",
         np.asarray(
             [
-                str(target_rows[target_row_id].get("gt_match_status") or "") in {"matched", "v0_gt_input"}
-                and _int_or_default(target_rows[target_row_id].get("matched_gt_target_row_id"), default=-1) >= 0
+                target_label_is_trainable(
+                    TargetLabelEvidence(
+                        protocol=target_protocol_version,
+                        target_source=target_rows[target_row_id].get("target_source"),
+                        gt_match_status=target_rows[target_row_id].get("gt_match_status"),
+                        matched_gt_target_row_id=_int_or_default(
+                            target_rows[target_row_id].get("matched_gt_target_row_id"), default=-1
+                        ),
+                        matched_gt_target_id=target_rows[target_row_id].get("matched_gt_target_id"),
+                        gt_match_iou=target_rows[target_row_id].get("gt_match_iou"),
+                        descriptor_source=target_rows[target_row_id].get("descriptor_source"),
+                        descriptor_provenance=target_rows[target_row_id].get("descriptor_provenance"),
+                        descriptor_hash=target_rows[target_row_id].get("descriptor_hash"),
+                        explicit_target_hash=target_rows[target_row_id].get("explicit_target_hash"),
+                        target_valid=(
+                            _int_or_default(
+                                target_rows[target_row_id].get("target_invalid_reason_bitset"),
+                                default=default_target_reason,
+                            )
+                            == 1 << INVALID_REASON_CODES["VALID"]
+                        ),
+                    )
+                )
                 for target_row_id in target_ids
             ],
             dtype=np.bool_,
@@ -2013,6 +2312,10 @@ def _target_rows_from_records(records: list[_RolloutWriteRecord]) -> dict[int, d
             "target_selection_temperature": lineage.target.target_selection_temperature,
             "target_source": lineage.target.target_source,
             "target_source_index": lineage.target.target_source_index,
+            "descriptor_source": lineage.target.descriptor_source,
+            "descriptor_provenance": lineage.target.descriptor_provenance,
+            "descriptor_hash": lineage.target.descriptor_hash,
+            "explicit_target_hash": lineage.target.explicit_target_hash,
             "target_sem_id": lineage.target.target_sem_id,
             "target_inst_id": lineage.target.target_inst_id,
             "target_class_name": lineage.target.target_class_name,
@@ -2190,6 +2493,8 @@ def _flatten_records(
             step_rows["selected_compact_valid_index"].append(step.selected_valid_index)
             step_rows["num_candidates"].append(int(candidate_valid.shape[0]))
             step_rows["num_valid_candidates"].append(int(candidate_valid.sum().item()))
+            step_rows["candidate_seed"].append(-1 if step.candidate_rng_seed is None else int(step.candidate_rng_seed))
+            step_rows["selection_seed"].append(-1 if step.selection_rng_seed is None else int(step.selection_rng_seed))
             step_rows["cumulative_target_rri"].append(_nan_if_none(running_target_rri))
             step_rows["cumulative_scene_rri"].append(_nan_if_none(running_scene_rri))
             step_rows["cumulative_target_root_gain"].append(_nan_if_none(running_target_root_gain))
@@ -2274,6 +2579,7 @@ def _append_source_row(
         _dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.source.snippet_id or ""))
     )
     rows["split_id"].append(_dict_id(dictionaries["split"], lineage.source.split or "unknown"))
+    rows["campaign_split_id"].append(_dict_id(dictionaries["split"], lineage.source.campaign_split or "unknown"))
     rows["source_cache_version_id"].append(_dict_id(dictionaries["config"], lineage.source.source_cache_version or ""))
     rows["source_offline_store_manifest_hash_id"].append(
         _dict_id(dictionaries["config"], lineage.source.source_offline_store_manifest_hash or "")
@@ -2295,6 +2601,7 @@ def _source_identity(*, lineage: RolloutLineage, source_row_id: int) -> tuple[ob
         lineage.source.scene_id,
         compact_ase_atek_sample_id(lineage.source.snippet_id or ""),
         lineage.source.split,
+        lineage.source.campaign_split,
         lineage.source.source_cache_version,
         lineage.source.source_offline_store_manifest_hash,
         lineage.source.split_manifest_hash,
@@ -2552,8 +2859,36 @@ def _append_candidate_diagnostic_row(
     rows["path_min_clearance_m"].append(
         _candidate_extra_value(step.candidates.extras, "path_min_clearance_m", shell_index, candidate_valid)
     )
+    collision_debug_names = {
+        "path_collision_mask",
+        "path_collision_applicable_mask",
+        "path_collision_evaluated_mask",
+    }
+    missing_collision_debug = collision_debug_names.difference(step.candidates.extras)
+    if missing_collision_debug:
+        raise ValueError(f"Missing required candidate diagnostics: {sorted(missing_collision_debug)}.")
     rows["path_collision_mask"].append(
-        _candidate_extra_bool(step.candidates.extras, "path_collision_mask", shell_index, candidate_valid)
+        _candidate_extra_bool(
+            step.candidates.extras, "path_collision_mask", shell_index, candidate_valid, required=True
+        )
+    )
+    rows["path_collision_applicable_mask"].append(
+        _candidate_extra_bool(
+            step.candidates.extras,
+            "path_collision_applicable_mask",
+            shell_index,
+            candidate_valid,
+            required=True,
+        )
+    )
+    rows["path_collision_evaluated_mask"].append(
+        _candidate_extra_bool(
+            step.candidates.extras,
+            "path_collision_evaluated_mask",
+            shell_index,
+            candidate_valid,
+            required=True,
+        )
     )
     rows["free_space_margin_m"].append(
         _candidate_extra_value(step.candidates.extras, "free_space_margin_m", shell_index, candidate_valid)
@@ -3192,9 +3527,12 @@ def _candidate_extra_bool(
     name: str,
     shell_index: int,
     candidate_valid: torch.Tensor,
+    required: bool = False,
 ) -> bool:
     value = extras.get(name)
     if value is None:
+        if required:
+            raise ValueError(f"Missing required candidate diagnostic {name!r}.")
         return False
     tensor = torch.as_tensor(value).detach().cpu().to(dtype=torch.bool)
     full = _full_shell_or_default(tensor, candidate_valid, fill_value=0)
@@ -3225,13 +3563,117 @@ def _valid_vector_value(
 
 
 def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
+    protocol = lineage.target.target_protocol_version or TargetInputProtocol.V0_GT_INPUT
     target_bitset = lineage.target.target_invalid_reason_bitset
-    target_valid = target_bitset is None or int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"])
-    gt_status = lineage.target.gt_match_status
-    gt_valid = gt_status in {"matched", "v0_gt_input"} and (
-        lineage.target.matched_gt_target_row_id is not None and int(lineage.target.matched_gt_target_row_id) >= 0
+    return target_label_is_trainable(
+        TargetLabelEvidence(
+            protocol=protocol,
+            target_source=lineage.target.target_source,
+            gt_match_status=lineage.target.gt_match_status,
+            matched_gt_target_row_id=lineage.target.matched_gt_target_row_id,
+            matched_gt_target_id=lineage.target.matched_gt_target_id,
+            gt_match_iou=lineage.target.gt_match_iou,
+            descriptor_source=lineage.target.descriptor_source,
+            descriptor_provenance=lineage.target.descriptor_provenance,
+            descriptor_hash=lineage.target.descriptor_hash,
+            explicit_target_hash=lineage.target.explicit_target_hash,
+            target_valid=(
+                (target_bitset is None and protocol == TargetInputProtocol.V0_GT_INPUT)
+                or (target_bitset is not None and int(target_bitset) == (1 << INVALID_REASON_CODES["VALID"]))
+            ),
+        )
     )
-    return bool(target_valid and gt_valid)
+
+
+def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
+    """Materialize the one typed target-label mapping for persisted rows."""
+
+    targets = root["targets"]
+    protocol = str(root.attrs.get("target_protocol_version", ""))
+    target_sources = _encoded_values(
+        root,
+        dictionary_name="target_source",
+        array_path="targets/target_source_id",
+    )
+    descriptor_sources = _encoded_values(
+        root, dictionary_name="descriptor_source", array_path="targets/descriptor_source_id"
+    )
+    descriptor_provenances = _encoded_values(
+        root, dictionary_name="descriptor_provenance", array_path="targets/descriptor_provenance_id"
+    )
+    descriptor_hashes = _encoded_values(
+        root, dictionary_name="descriptor_hash", array_path="targets/descriptor_hash_id"
+    )
+    explicit_target_hashes = _encoded_values(
+        root, dictionary_name="explicit_target_hash", array_path="targets/explicit_target_hash_id"
+    )
+    target_ids = _read_string_array(root, "dictionaries/target")
+    persisted_target_ids = _encoded_values(root, dictionary_name="target", array_path="targets/target_id")
+    statuses = _read_string_array(root, "dictionaries/target_match_status")
+    matched_ids = np.asarray(targets["matched_gt_target_id"], dtype=np.int64).reshape(-1)
+    matched_rows = np.asarray(targets["matched_gt_target_row_id"], dtype=np.int64).reshape(-1)
+    ious = np.asarray(targets["gt_match_iou"], dtype=np.float32).reshape(-1)
+    status_ids = np.asarray(targets["gt_match_status_id"], dtype=np.int64).reshape(-1)
+    target_valid = np.asarray(targets["target_valid_mask"], dtype=np.bool_).reshape(-1)
+    target_reason = np.asarray(targets["target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
+    target_source_indices = np.asarray(targets["target_source_index"], dtype=np.int64).reshape(-1)
+    target_row_ids = np.asarray(targets["target_row_id"], dtype=np.int64).reshape(-1)
+    rollout_target_ids = np.asarray(root["rollouts/target_row_id"], dtype=np.int64).reshape(-1)
+    rollout_source_ids = np.asarray(root["rollouts/source_row_id"], dtype=np.int64).reshape(-1)
+    source_row_ids = np.asarray(root["sources/source_row_id"], dtype=np.int64).reshape(-1)
+    source_keys = _encoded_values(root, dictionary_name="source_key", array_path="sources/sample_key_id")
+    source_key_by_row = dict(zip(source_row_ids.tolist(), source_keys, strict=True))
+    values: list[bool] = []
+    for row, (match_id, match_row, iou, status_id) in enumerate(
+        zip(matched_ids, matched_rows, ious, status_ids, strict=True)
+    ):
+        trainable = target_label_is_trainable(
+            TargetLabelEvidence(
+                protocol=protocol,
+                target_source=target_sources[row] if row < len(target_sources) else None,
+                gt_match_status=statuses[int(status_id)] if 0 <= int(status_id) < len(statuses) else None,
+                matched_gt_target_row_id=int(match_row),
+                matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
+                gt_match_iou=float(iou),
+                descriptor_source=descriptor_sources[row] if row < len(descriptor_sources) else None,
+                descriptor_provenance=descriptor_provenances[row] if row < len(descriptor_provenances) else None,
+                descriptor_hash=descriptor_hashes[row] if row < len(descriptor_hashes) else None,
+                explicit_target_hash=explicit_target_hashes[row] if row < len(explicit_target_hashes) else None,
+                target_valid=bool(
+                    target_valid[row] and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
+                ),
+            )
+        )
+        if trainable and protocol == TargetInputProtocol.V1_OBSERVED:
+            source_ids = {
+                int(source_id)
+                for target_id, source_id in zip(rollout_target_ids, rollout_source_ids, strict=True)
+                if int(target_id) == int(target_row_ids[row])
+            }
+            matched_id = target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None
+            descriptor_hash = descriptor_hashes[row] if row < len(descriptor_hashes) else None
+            explicit_hash = explicit_target_hashes[row] if row < len(explicit_target_hashes) else None
+            if len(source_ids) != 1 or matched_id is None or descriptor_hash is None or explicit_hash is None:
+                trainable = False
+            else:
+                source_key = source_key_by_row.get(next(iter(source_ids)))
+                if source_key is None or row >= len(persisted_target_ids):
+                    trainable = False
+                else:
+                    expected_explicit_hash = stable_msgspec_hash(
+                        {
+                            "sample_key": source_key,
+                            "target_id": persisted_target_ids[row],
+                            "detected_source_row": int(target_source_indices[row]),
+                            "gt_match_row": int(match_row),
+                            "gt_match_id": matched_id,
+                            "oriented_iou": float(iou),
+                            "descriptor_hash": descriptor_hash,
+                        }
+                    )
+                    trainable = explicit_hash == expected_explicit_hash
+        values.append(trainable)
+    return np.asarray(values, dtype=np.bool_)
 
 
 def _relative_pose_to_root(*, pose_world_cam: np.ndarray, root_pose_world: torch.Tensor) -> np.ndarray:

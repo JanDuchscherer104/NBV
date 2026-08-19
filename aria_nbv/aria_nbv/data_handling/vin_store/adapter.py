@@ -19,6 +19,7 @@ import json
 from typing import Any
 
 import torch
+from efm3d.aria.aria_constants import ARIA_SNIPPET_T_WORLD_SNIPPET
 from efm3d.aria.pose import PoseTW
 
 from ..ase_efm.views import EfmSnippetView
@@ -144,7 +145,19 @@ def build_vin_snippet_view(
     except Exception:
         pass
 
-    return VinSnippetView(points_world=points_world, lengths=lengths, t_world_rig=traj_world_rig)
+    snippet_pose = efm_snippet.efm.get(ARIA_SNIPPET_T_WORLD_SNIPPET)
+    if snippet_pose is None:
+        t_world_snippet = PoseTW(torch.zeros((0, 12), dtype=torch.float32, device=device))
+    elif isinstance(snippet_pose, PoseTW):
+        t_world_snippet = snippet_pose.to(device=device, dtype=torch.float32)  # type: ignore[arg-type]
+    else:
+        t_world_snippet = PoseTW(torch.as_tensor(snippet_pose, device=device, dtype=torch.float32).reshape(-1, 12))
+    return VinSnippetView(
+        points_world=points_world,
+        lengths=lengths,
+        t_world_rig=traj_world_rig,
+        t_world_snippet=t_world_snippet,
+    )
 
 
 def empty_vin_snippet(
@@ -165,6 +178,7 @@ def empty_vin_snippet(
         points_world=points_world,
         lengths=lengths,
         t_world_rig=PoseTW(torch.zeros((0, 12), dtype=torch.float32, device=device)),
+        t_world_snippet=PoseTW(torch.zeros((0, 12), dtype=torch.float32, device=device)),
     )
 
 

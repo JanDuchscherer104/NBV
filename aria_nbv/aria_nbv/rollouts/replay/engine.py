@@ -50,7 +50,13 @@ from ...pose_generation.types import CandidateGenerationRuntimeContext, Candidat
 from ...pose_generation.utils import ensure_unbatched_pose
 from ...utils import BaseConfig, Console, TargetConfig, Verbosity
 from ...utils.frames import rotate_yaw_cw90
-from .policy import CounterfactualSelectionPolicy, RolloutPolicySpec
+from .policy import (
+    CounterfactualSelectionPolicy,
+    RolloutPolicySpec,
+    derive_candidate_seed,
+    derive_rollout_seed,
+    derive_selection_seed,
+)
 from .state import (
     CounterfactualRolloutResult,
     CounterfactualSelectionRecord,
@@ -245,9 +251,6 @@ class CounterfactualPoseGenerator:
         self._candidate_generator: CandidateViewGenerator | CandidateMixtureViewGenerator = (
             self.config.candidate_config.setup_target()
         )
-        self._selection_generator = torch.Generator(device="cpu")
-        if self.policy.seed is not None:
-            self._selection_generator.manual_seed(int(self.policy.seed))
 
     @staticmethod
     def _canonicalize_pose(reference_pose: PoseTW) -> PoseTW:
@@ -373,6 +376,7 @@ class CounterfactualPoseGenerator:
             for frontier_index, trajectory in enumerate(frontier):
                 node_start_s = perf_counter()
                 candidate_start_s = perf_counter()
+                candidate_seed = derive_candidate_seed(int(self.policy.seed or 0), step_index, (frontier_index,))
                 candidates = self._candidate_generator.generate(
                     reference_pose=self._generator_input_pose(trajectory.final_pose_world()),
                     gt_mesh=gt_mesh,
@@ -381,6 +385,7 @@ class CounterfactualPoseGenerator:
                     camera_calib_template=camera_calib_template,
                     occupancy_extent=occupancy_extent,
                     runtime_context=candidate_runtime_context,
+                    seed=candidate_seed,
                 )
                 candidate_s = perf_counter() - candidate_start_s
                 candidate_total_s += candidate_s
@@ -414,6 +419,7 @@ class CounterfactualPoseGenerator:
                     valid_poses=candidates.poses_world_cam(),
                     trajectory=trajectory,
                     branch_count=branch_count,
+                    selection_seed=derive_selection_seed(int(self.policy.seed or 0), step_index, (frontier_index,)),
                 )
                 select_s = perf_counter() - select_start_s
                 select_total_s += select_s
@@ -451,7 +457,8 @@ class CounterfactualPoseGenerator:
                         selection_log_probabilities=selection.log_probabilities.detach().clone(),
                         selection_entropy=selection.entropy,
                         selected_log_probability=selection.selected_log_probability,
-                        selection_rng_seed=self.policy.seed,
+                        selection_rng_seed=selection.selection_rng_seed,
+                        candidate_rng_seed=candidate_seed,
                     )
                     next_frontier.append(trajectory.with_appended_step(step))
 
@@ -511,7 +518,11 @@ class CounterfactualPoseGenerator:
                 dtype=dtype,
             )
 
-        scores = self._builtin_scores(valid_poses=valid_poses, trajectory=trajectory)
+        scores = self._builtin_scores(
+            valid_poses=valid_poses,
+            trajectory=trajectory,
+            seed=derive_candidate_seed(int(self.policy.seed or 0), step_index, ()),
+        )
         return CandidateScores.from_valid_values(
             scores,
             name=self.policy.selection_policy.value,
@@ -525,13 +536,17 @@ class CounterfactualPoseGenerator:
         *,
         valid_poses: PoseTW,
         trajectory: CounterfactualTrajectory,
+        seed: int | None = None,
     ) -> torch.Tensor:
         centers = valid_poses.t.reshape(-1, 3)
         if self.policy.selection_policy in (
             CounterfactualSelectionPolicy.RANDOM,
             CounterfactualSelectionPolicy.RANDOM_VALID,
         ):
-            return torch.rand(centers.shape[0], generator=self._selection_generator, device="cpu").to(
+            generator = torch.Generator(device="cpu")
+            if seed is not None:
+                generator.manual_seed(int(seed))
+            return torch.rand(centers.shape[0], generator=generator, device="cpu").to(
                 device=centers.device,
                 dtype=centers.dtype,
             )
@@ -552,6 +567,7 @@ class CounterfactualPoseGenerator:
         valid_poses: PoseTW,
         trajectory: CounterfactualTrajectory,
         branch_count: int,
+        selection_seed: int | None = None,
     ) -> list[CounterfactualSelectionRecord]:
         scores = candidate_scores.values
         if self.policy.selection_policy in (
@@ -565,6 +581,7 @@ class CounterfactualPoseGenerator:
                 valid_poses=valid_poses,
                 trajectory=trajectory,
                 branch_count=branch_count,
+                selection_seed=selection_seed,
             )
         return self._greedy_valid_candidates(
             scores=scores,
@@ -582,6 +599,7 @@ class CounterfactualPoseGenerator:
         valid_poses: PoseTW,
         trajectory: CounterfactualTrajectory,
         branch_count: int,
+        selection_seed: int | None = None,
     ) -> list[CounterfactualSelectionRecord]:
         finite_scores = torch.isfinite(scores)
         if not bool(finite_scores.any().item()):
@@ -637,6 +655,7 @@ class CounterfactualPoseGenerator:
         valid_poses: PoseTW,
         trajectory: CounterfactualTrajectory,
         branch_count: int,
+        selection_seed: int | None = None,
     ) -> list[CounterfactualSelectionRecord]:
         centers = valid_poses.t.reshape(-1, 3)
         history = trajectory.history_centers_world().to(device=centers.device, dtype=centers.dtype)
@@ -647,6 +666,9 @@ class CounterfactualPoseGenerator:
         selected_strategies: list[int] = []
         selected_target_bearings: list[torch.Tensor] = []
         records: list[CounterfactualSelectionRecord] = []
+        generator = torch.Generator(device="cpu")
+        if selection_seed is not None:
+            generator.manual_seed(int(selection_seed))
 
         for _draw_index in range(branch_count):
             if not bool(remaining.any().item()):
@@ -681,7 +703,7 @@ class CounterfactualPoseGenerator:
                 distribution.probabilities.detach().cpu(),
                 num_samples=1,
                 replacement=False,
-                generator=self._selection_generator,
+                generator=generator,
             )
             selected_index = int(selected_tensor.item())
             records.append(
@@ -741,7 +763,9 @@ class CounterfactualPoseGenerator:
                 probabilities,
                 num_samples=1,
                 replacement=True,
-                generator=self._selection_generator,
+                generator=torch.Generator(device="cpu").manual_seed(
+                    int(derive_rollout_seed("branch", self.policy.seed or 0, step_index))
+                ),
             )
             return int(choices[int(sampled.item())].item())
         if self.policy.branch_factor_schedule is not None:

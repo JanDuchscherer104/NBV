@@ -40,6 +40,9 @@ class VinSnippetView(_CompactReprMixin):
     t_world_rig: PoseTW
     """``PoseTW["F 12"]`` MPS/EFM world-from-rig trajectory; translation is metres."""
 
+    t_world_snippet: PoseTW
+    """``PoseTW["1 12"]`` persisted world-from-snippet gauge; translation is metres."""
+
     def to(self, device: str | torch.device, *, dtype: torch.dtype | None = None) -> VinSnippetView:
         """Move the VIN snippet tensors to the requested device and dtype."""
 
@@ -49,6 +52,7 @@ class VinSnippetView(_CompactReprMixin):
             points_world=self.points_world.to(device=target_device, dtype=dtype),
             lengths=self.lengths.to(target_device),
             t_world_rig=self.t_world_rig.to(device=target_device, dtype=dtype),  # type: ignore[arg-type]
+            t_world_snippet=self.t_world_snippet.to(device=target_device, dtype=dtype),  # type: ignore[arg-type]
         )
 
 
@@ -59,6 +63,7 @@ def is_vin_snippet_view_instance(value: object) -> bool:
         getattr_static(value, "points_world")
         getattr_static(value, "lengths")
         getattr_static(value, "t_world_rig")
+        getattr_static(value, "t_world_snippet")
     except AttributeError:
         return False
     return True

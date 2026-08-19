@@ -11,10 +11,10 @@ import pytest
 from pydantic import ValidationError
 
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig, RolloutRecipeConfig
-from aria_nbv.oracle.pipelines.shards import plan_rollout_shards
 from aria_nbv.pose_generation import CandidatePositionMode, ViewDirectionMode
 from aria_nbv.rollouts import CounterfactualPoseGeneratorConfig, RolloutPolicySpec
 from aria_nbv.rollouts.shard_manifest import read_rollout_source_manifest
+from aria_nbv.targets.protocol import TargetInputProtocol
 
 _HIGH_GAIN_SAMPLE_KEYS = [
     "ASE_81283_Atek_000005",
@@ -158,11 +158,11 @@ def test_multihorizon_highgain_profile_selects_exact_ordered_cross_scene_roots()
     assert all(recipe.policy.branch_factor == 2 for recipe in config.recipes)
     assert all(recipe.policy.beam_width == 2 for recipe in config.recipes)
     assert config.target_scorer.depth.renderer.max_views_per_batch == 2
+    assert config.store.target_protocol_version is TargetInputProtocol.V0_GT_INPUT
 
-    entries = plan_rollout_shards(config, rows_per_shard=1)
-
-    assert [row.sample_key for entry in entries for row in entry.rows] == _HIGH_GAIN_SAMPLE_KEYS
-    assert [row.scene_id for entry in entries for row in entry.rows] == ["81283", "83515", "83550"]
+    # The profile is retained only as a quarantined historical recipe. Its
+    # strict-v7 source store is intentionally not launched by current tests.
+    assert config.sample_keys == _HIGH_GAIN_SAMPLE_KEYS
 
 
 def test_rollout_sample_keys_fail_closed_for_duplicates_and_manifest_misses() -> None:

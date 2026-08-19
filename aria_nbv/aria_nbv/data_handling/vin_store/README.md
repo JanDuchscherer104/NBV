@@ -32,6 +32,11 @@ Inventory generated: `2026-07-10T16:19:49.706440+00:00`
 | `VinSnippetView` | DTO | public | `data_handling.ase_efm.views` | `data_handling.vin_store.views` | moved |
 | `is_vin_snippet_view_instance` | function | public | `data_handling.ase_efm.views` | `data_handling.vin_store.views` | moved |
 
+`VinSnippetView` includes the persisted `t_world_snippet` (`PoseTW[1, 12]`)
+world-from-snippet gauge alongside the historical `t_world_rig` trajectory.
+VIN offline format version 8 requires the corresponding `vin.t_world_snippet`
+numeric shard block; version-7 or incomplete stores must be rebuilt.
+
 ## Symbol Ownership Matrix
 
 ### `__init__.py`

@@ -133,7 +133,16 @@ def _make_vin_snippet(num_points: int = 8) -> VinSnippetView:
     points_world = torch.cat([xyz, inv_sigma, n_obs], dim=-1)
     lengths = torch.tensor([points_world.shape[0]], device=device, dtype=torch.int64)
     t_world_rig = PoseTW.from_Rt(torch.eye(3, device=device, dtype=dtype).unsqueeze(0), torch.zeros((1, 3)))
-    return VinSnippetView(points_world=points_world, lengths=lengths, t_world_rig=t_world_rig)
+    t_world_snippet = PoseTW.from_Rt(
+        torch.eye(3, device=device, dtype=dtype).unsqueeze(0),
+        torch.zeros((1, 3), device=device, dtype=dtype),
+    )
+    return VinSnippetView(
+        points_world=points_world,
+        lengths=lengths,
+        t_world_rig=t_world_rig,
+        t_world_snippet=t_world_snippet,
+    )
 
 
 def test_vin_model_v3_gradients(monkeypatch) -> None:

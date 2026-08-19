@@ -1,0 +1,186 @@
+# Canonical 100-scene V1 CUDA rollout campaign writer profile.
+#
+# This config owns the reviewed 100-row source population consumed by
+# build_rollouts_v1_cuda_campaign.toml. The campaign adapter binds one
+# actor-visible target and the exact profile recipe suite per work unit.
+# Do not use this writer directly to launch the broad campaign.
+max_samples            = 100
+source_manifest_path   = ".configs/rollout_campaign100_source_manifest.json"
+require_label_valid    = true
+min_valid_root_candidates = 15
+log_timing             = true
+verbosity              = 1
+
+[source]
+split                    = "train"
+limit                    = 100
+return_format            = "sample"
+include_efm_snippet      = true
+include_gt_mesh          = true
+load_backbone            = true
+load_candidates          = false
+load_depths              = false
+load_candidate_pcs       = false
+load_gt_obbs             = true
+load_detected_obbs       = true
+load_trajectory_metadata = true
+map_location             = "cuda"
+verbosity                = 1
+
+    [source.store]
+    store_dir = "vin_offline_rollout_campaign100_v8_rebuilt"
+
+[oracle_target_task_sampler]
+max_targets_per_sample            = 1
+seed                              = 0
+policy                            = "uniform_without_replacement"
+
+[candidate_mixture.base]
+camera_label           = "rgb"
+num_samples            = 60
+align_to_gravity       = true
+min_radius             = 0.25
+max_radius             = 1.1
+min_elev_deg           = -12.0
+max_elev_deg           = 18.0
+delta_azimuth_deg      = 100.0
+sampling_strategy      = "forward_powerspherical"
+kappa                  = 8.0
+min_distance_to_mesh   = 0.2
+ensure_collision_free  = true
+ensure_free_space      = true
+collision_backend      = "pytorch3d"
+ray_subsample          = 32
+step_clearance         = 0.1
+enforce_motion_realism = true
+max_step_distance_m    = 1.0
+max_height_delta_m     = 0.25
+max_backward_step_m    = 0.25
+max_yaw_delta_deg      = 70.0
+device                 = "cuda"
+verbosity              = 1
+collect_rule_masks     = true
+collect_debug_stats    = true
+view_max_angle_deg     = 0.0
+view_max_azimuth_deg   = 0.0
+view_max_elevation_deg = 0.0
+view_roll_jitter_deg   = 0.0
+seed                   = 0
+
+[[candidate_mixture.components]]
+name                   = "forward_local"
+count                  = 24
+view_mode              = "forward_rig"
+position_mode          = "forward_local"
+view_max_azimuth_deg   = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name                   = "target_bearing_local"
+count                  = 24
+view_mode              = "target_point"
+position_mode          = "target_bearing_local"
+min_radius             = 0.4
+max_radius             = 1.1
+view_max_azimuth_deg   = 0.0
+view_max_elevation_deg = 0.0
+
+[[candidate_mixture.components]]
+name                   = "lateral_target_bypass"
+count                  = 12
+view_mode              = "target_point"
+position_mode          = "lateral_target_bypass"
+view_max_azimuth_deg   = 0.0
+view_max_elevation_deg = 0.0
+
+[target_scorer]
+backprojection_stride       = 2
+target_crop_margin_m        = 0.05
+min_current_target_points   = 1
+include_scene_rri           = false
+eval_point_cloud_source     = "ase_gt_depth_root"
+eval_camera_label           = "rgb"
+eval_fusion_voxel_size_m    = 0.02
+eval_fusion_max_points      = 200000
+target_eval_max_points      = 50000
+reward_mode                 = "root_normalized_gain"
+eval_depth_far_m            = 20.0
+target_crop_policy          = "gt_obb_oriented_any_vertex_v1"
+scene_crop_policy           = "snippet_occupancy_extent_v1"
+verbosity                   = 1
+log_timing                  = true
+
+    [target_scorer.oracle]
+    fusion_voxel_size_m = 0.02
+    fusion_max_points    = 200000
+
+    [target_scorer.depth]
+    device               = "cuda"
+    max_candidates_final = 60
+    resolution_scale     = 0.2
+    verbosity            = 1
+
+        [target_scorer.depth.renderer]
+        device              = "cuda"
+        zfar                = 20.0
+        znear               = 0.001
+        cull_backfaces      = false
+        blur_radius         = 0.0
+        bin_size            = 0
+        max_views_per_batch = 3
+        dtype               = "float32"
+        is_debug            = false
+        verbosity           = 1
+
+[selected_depth]
+enabled     = true
+width_px    = 240
+height_px   = 240
+chunk_steps = 16
+
+[store]
+store_dir                    = "rollouts_v1_cuda_campaign.zarr"
+target_protocol_version      = "v0_gt_input"
+field_retention_policy       = "compact_selected_heavy"
+source_offline_store_version = "8"
+split_manifest_hash          = "3e647fe8bbb80b91"
+discount_gamma               = 1.0
+q_h_chunk_states             = 64
+target_eval_crop_max_points  = 50000
+target_eval_crops_enabled    = false
+
+[[recipes]]
+name = "random_valid"
+[recipes.policy]
+selection_policy = "random_valid"
+horizon          = 1
+branch_factor    = 1
+seed             = 0
+
+[[recipes]]
+name = "oracle_greedy"
+[recipes.policy]
+selection_policy = "oracle_greedy"
+horizon          = 1
+branch_factor    = 1
+seed             = 0
+
+[[recipes]]
+name = "oracle_lookahead"
+[recipes.policy]
+selection_policy = "oracle_greedy"
+horizon          = 2
+branch_factor    = 2
+beam_width       = 2
+seed             = 0
+
+[[recipes]]
+name = "temperature_softmax"
+[recipes.policy]
+selection_policy      = "temperature_softmax"
+horizon               = 2
+branch_factor         = 2
+beam_width            = 2
+selection_temperature = 1.0
+seed                  = 0
+# ``v1`` names this rollout-build profile; persisted target protocol remains ``v0_gt_input``.

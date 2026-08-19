@@ -13,12 +13,14 @@ from aria_nbv.data_handling.vin_store.format import (
     VinOfflineMaterializedBlocks,
     VinOfflineShardSpec,
 )
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
     DatasetBundleSelection,
     build_dataset_bundle_summary,
     compute_dataset_bundle_deep_statistics,
     scan_root_gt_obb_target_opportunities,
 )
+from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 
@@ -26,7 +28,7 @@ def _write_root_store(root: Path) -> tuple[Path, str]:
     store = root / "vin"
     store.mkdir()
     manifest = VinOfflineManifest(
-        version=7,
+        version=OFFLINE_DATASET_VERSION,
         created_at="2026-07-21T00:00:00Z",
         source={},
         oracle={},
@@ -68,9 +70,9 @@ def _write_rollout_store(
     payload = {
         "manifest_version": "rollout-store-manifest-v1",
         "schema_id": "aria_nbv.rollout_zarr_q_invalidity",
-        "schema_version": "1.0-target-rollout-core",
+        "schema_version": ROLLOUT_ZARR_SCHEMA_VERSION,
         "root_attrs": {
-            "schema_version": "1.0-target-rollout-core",
+            "schema_version": ROLLOUT_ZARR_SCHEMA_VERSION,
             "source_split": split,
             "split_manifest_hash": f"split-{name}",
             "q_h_horizon": 2,

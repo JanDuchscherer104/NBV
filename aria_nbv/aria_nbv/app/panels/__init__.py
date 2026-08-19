@@ -11,6 +11,7 @@ from typing import Any
 
 _EXPORT_MODULES = {
     "render_candidates_page": ".candidates",
+    "render_campaign_generation_page": ".campaign_generation",
     "render_counterfactual_rollouts_page": ".counterfactual_rollouts",
     "render_data_page": ".data",
     "render_depth_page": ".depth",

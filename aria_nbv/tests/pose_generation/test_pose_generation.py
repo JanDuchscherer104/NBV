@@ -208,6 +208,9 @@ def test_path_collision_rule_records_p3d_min_clearance(monkeypatch):
     rule(ctx)
     assert torch.equal(ctx.mask_valid, torch.tensor([False, True]))
     assert torch.equal(ctx.debug["path_collision_mask"], torch.tensor([True, False]))
+    assert torch.equal(ctx.debug["path_collision_applicable"], torch.tensor([True, True]))
+    assert torch.equal(ctx.debug["path_collision_evaluated"], torch.tensor([True, True]))
+    assert torch.equal(ctx.debug["path_collision_detected"], torch.tensor([True, False]))
     assert torch.allclose(ctx.debug["path_min_clearance_m"], torch.tensor([0.05, 0.2]))
 
 
@@ -244,6 +247,7 @@ def test_path_collision_rule_blocks_intersecting_ray():
     rule(ctx)
     assert torch.equal(ctx.mask_valid, torch.tensor([False, True]))
     assert torch.equal(ctx.debug["path_collision_mask"], torch.tensor([True, False]))
+    assert torch.equal(ctx.debug["path_collision_detected"], torch.tensor([True, False]))
 
 
 def test_free_space_rule_bounds_candidates():

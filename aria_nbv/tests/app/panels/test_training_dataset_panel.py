@@ -18,7 +18,9 @@ from aria_nbv.data_handling.vin_store.format import (
     VinOfflineManifest,
     VinOfflineMaterializedBlocks,
 )
+from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import DatasetBundleSelection, build_dataset_bundle_summary
+from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 _PATH_CONFIG_FIELDS = (
@@ -60,7 +62,7 @@ def _write_root_store(cache: Path) -> tuple[Path, str]:
     store = cache / "vin-root"
     store.mkdir(parents=True)
     manifest = VinOfflineManifest(
-        version=7,
+        version=OFFLINE_DATASET_VERSION,
         created_at="2026-07-21T00:00:00Z",
         source={},
         oracle={},
@@ -93,8 +95,8 @@ def _write_rollout_store(cache: Path, source_hash: str, *, compatible: bool = Tr
     payload = {
         "manifest_version": "rollout-store-manifest-v1",
         "schema_id": "aria_nbv.rollout_zarr_q_invalidity",
-        "schema_version": "1.0-target-rollout-core",
-        "root_attrs": {"schema_version": "1.0-target-rollout-core", "q_h_horizon": 2},
+        "schema_version": ROLLOUT_ZARR_SCHEMA_VERSION,
+        "root_attrs": {"schema_version": ROLLOUT_ZARR_SCHEMA_VERSION, "q_h_horizon": 2},
         "counts": {"sources": 1, "targets": 2, "rollouts": 3, "steps": 6, "candidates": 24},
         "config_hashes": {
             "source_manifest": [source_hash if compatible else "wrong-root"],

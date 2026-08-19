@@ -200,6 +200,8 @@ def _attach_fixture_candidate_provenance(evaluated: EvaluatedRollout) -> None:
                     "min_distance_to_mesh": torch.linspace(0.25, 0.25 + 0.01 * max(n - 1, 0), n),
                     "path_min_clearance_m": torch.linspace(0.15, 0.15 + 0.01 * max(n - 1, 0), n),
                     "path_collision_mask": torch.zeros(n, dtype=torch.bool),
+                    "path_collision_applicable_mask": torch.ones(n, dtype=torch.bool),
+                    "path_collision_evaluated_mask": torch.ones(n, dtype=torch.bool),
                     "free_space_margin_m": torch.full((n,), 1.0, dtype=torch.float32),
                     "motion_step_length_m": torch.linspace(0.5, 0.5 + 0.01 * max(n - 1, 0), n),
                     "motion_height_delta_m": torch.zeros(n, dtype=torch.float32),

@@ -26,44 +26,38 @@
     )
   $,
   target_identity_iou: $
-    mu_"id" (hat(e), e)
+    mu_"IoU" (hat(e), e)
     =
     op("IoU")_"3D" (hat(bold(B))_(hat(e)), bold(B)_e)
+  $,
+  target_identity_threshold: $
+    tau_"IoU" = 0.20
+  $,
+  target_identity_qualified_count: $
+    n_"qual" (hat(e))
+    =
+    op("card") ( {
+      e in #symb.entity.E :
+      kappa(hat(y)_(hat(e)), y_e) = 1
+      and mu_"IoU" (hat(e), e) > tau_"IoU"
+    } )
   $,
   target_identity_acceptance: $
     a_"id" (hat(e)) = 1
     op("iff")
-    cases(
-      mu_1 >= tau_"IoU",
-      mu_1 - mu_2 >= tau_"gap",
-    )
-  $,
-  target_match_score: $
-    mu(hat(e), e)
-    =
-    kappa(hat(y)_(hat(e)), y_e)
-    dot op("IoU")_"3D" (hat(bold(B))_(hat(e)), bold(B)_e)
-    dot sigma(A_(hat(e))^"proj", n_(hat(e))^"semi", n_(hat(e))^"EVL")
+    n_"qual" (hat(e)) = 1
   $,
   target_match_selection: $
-    (e^star, mu_1, mu_2, g_mu)
-    =
-    (
-      op("argmax", limits: #true)_(e in cal(E)) mu(hat(e), e),
-      mu(hat(e), e^star),
-      op("max", limits: #true)_(e in cal(E), e != e^star) mu(hat(e), e),
-      mu_1 - mu_2
-    )
+    e^star = e
+    op("iff")
+    n_"qual" (hat(e)) = 1
+    and kappa(hat(y)_(hat(e)), y_e) = 1
+    and mu_"IoU" (hat(e), e) > tau_"IoU"
   $,
   target_match_acceptance: $
     a_"match" (hat(e)) = 1
     op("iff")
-    cases(
-      kappa(hat(y)_(hat(e)), y_(e^star)) = 1,
-      mu_1 >= tau_mu,
-      g_mu >= tau_"gap",
-      n_(hat(e))^"semi" + n_(hat(e))^"EVL" >= tau_"support",
-    )
+    n_"qual" (hat(e)) = 1
   $,
   target_error: $
     #symb.entity.target_error

@@ -14,10 +14,12 @@ import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
+import aria_nbv.data_handling.qh_data.dataset as qh_dataset_module
 from aria_nbv.data_handling.qh_data import (
     QhActorTensors,
     QhChain,
     QhDataset,
+    QhDatasetConfig,
     collate_qh_chains,
 )
 from aria_nbv.data_handling.qh_data.views import QhChainKey, QhSupervision
@@ -80,6 +82,7 @@ def _snippet(points: int = 2) -> VinSnippetView:
         points_world=torch.arange(points * 3, dtype=torch.float32).reshape(points, 3),
         lengths=torch.tensor([points]),
         t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
+        t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
     )
 
 
@@ -254,10 +257,11 @@ class _RolloutReader:
     contract = QhDataContract("8", "v0_gt_input", "gain", "return", "td", 0.95, "reason", "7")
     provenance = {"stores": []}
 
-    def __init__(self, source_ref: _QhSourceRef) -> None:
+    def __init__(self, source_ref: _QhSourceRef, campaign_split: Stage | None = None) -> None:
         self.source_refs = (source_ref,)
         self.scenes = frozenset({source_ref.scene_id})
         self.stored = _stored(source_ref)
+        self.campaign_split = campaign_split
 
     def __len__(self) -> int:
         return 1
@@ -277,6 +281,36 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert chain.actor.target_pose_relative_root[-3:].tolist() == pytest.approx([1, 2, 3])
     assert chain.actor.history_mask.tolist() == [[False, False], [True, False]]
     assert chain.actor.horizon_remaining.tolist() == [2, 1]
+
+
+def test_dataset_rejects_split_inconsistent_with_unfiltered_reader() -> None:
+    with pytest.raises(ValueError, match="must match rollout_reader.campaign_split"):
+        QhDataset(  # type: ignore[arg-type]
+            rollout_reader=_RolloutReader(_source_ref()),
+            actor_reader=_ActorReader(),
+            split=Stage.VAL,
+        )
+
+
+def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path: Path, monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _Reader:
+        def __init__(self, store_dirs, *, campaign_split):
+            captured["store_dirs"] = store_dirs
+            captured["campaign_split"] = campaign_split
+
+    monkeypatch.setattr(qh_dataset_module, "QhRolloutReader", _Reader)
+    monkeypatch.setattr(qh_dataset_module, "VinOfflineStoreReader", lambda actor: "actor-reader")
+    monkeypatch.setattr(qh_dataset_module, "QhDataset", lambda **kwargs: kwargs)
+
+    result = QhDatasetConfig(rollout_store_dirs=(tmp_path / "rollouts.zarr",), split="val").setup_target()
+
+    assert captured == {
+        "store_dirs": (tmp_path / "rollouts.zarr",),
+        "campaign_split": Stage.VAL,
+    }
+    assert result["split"] is Stage.VAL
 
 
 @pytest.mark.parametrize(
