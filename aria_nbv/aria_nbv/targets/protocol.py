@@ -113,7 +113,9 @@ def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
             descriptor_source=descriptor_source,
             descriptor_provenance=evidence.descriptor_provenance,
         )
-        if not _is_sha256_digest(evidence.descriptor_hash) or not _is_sha256_digest(evidence.explicit_target_hash):
+        if not _is_hex_digest(evidence.descriptor_hash, length=64) or not _is_hex_digest(
+            evidence.explicit_target_hash, length=16
+        ):
             return False
         iou = evidence.gt_match_iou
         return bool(
@@ -127,10 +129,10 @@ def target_label_is_trainable(evidence: TargetLabelEvidence) -> bool:
         return False
 
 
-def _is_sha256_digest(value: str | None) -> bool:
-    """Return whether a persisted identity proof has canonical SHA-256 shape."""
+def _is_hex_digest(value: str | None, *, length: int) -> bool:
+    """Return whether a persisted identity proof has the requested hex shape."""
 
-    if value is None or len(value) != 64:
+    if value is None or len(value) != length:
         return False
     try:
         int(value, 16)

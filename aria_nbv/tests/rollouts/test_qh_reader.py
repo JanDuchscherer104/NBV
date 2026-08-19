@@ -79,7 +79,7 @@ def _write_v1_store(path: Path) -> Path:
     target.descriptor_source = "detected_obbs"
     target.descriptor_provenance = "actor_visible_detector"
     target.descriptor_hash = "a" * 64
-    target.explicit_target_hash = "b" * 64
+    target.explicit_target_hash = "b" * 16
     target.target_invalid_reason_bitset = 1
     target.gt_match_status = "admitted"
     target.gt_match_iou = 0.7

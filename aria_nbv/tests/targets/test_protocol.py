@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from aria_nbv.oracle.pipelines.rollout_dataset import ExplicitRolloutTargetConfig
 from aria_nbv.targets.protocol import (
     ORACLE_GT_TARGET_SOURCE,
     TargetDescriptorProvenance,
@@ -12,6 +13,8 @@ from aria_nbv.targets.protocol import (
     target_label_is_trainable,
     validate_target_protocol_admission,
 )
+from aria_nbv.targets.selection import ObservedTargetDescriptor
+from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -107,6 +110,37 @@ def test_v1_rejects_missing_or_mismatched_descriptor_provenance(
 
 
 def test_v1_label_mapping_requires_strict_admitted_match() -> None:
+    actor = ObservedTargetDescriptor(
+        sample_key="scene/snippet/0",
+        source="detected_obbs",
+        source_row=3,
+        target_id="scene/snippet/0:detected:3:7",
+        descriptor=None,
+        confidence=0.9,
+        inst_id=7,
+    )
+    explicit_hash = stable_msgspec_hash(
+        {
+            "sample_key": actor.sample_key,
+            "target_id": actor.target_id,
+            "detected_source_row": 3,
+            "gt_match_row": 5,
+            "gt_match_id": "gt-5",
+            "oriented_iou": 0.6,
+            "descriptor_hash": actor.descriptor_hash,
+        }
+    )
+    explicit_target = ExplicitRolloutTargetConfig(
+        sample_key=actor.sample_key,
+        actor_descriptor=actor,
+        detected_source_row=3,
+        gt_match_row=5,
+        gt_match_id="gt-5",
+        oriented_iou=0.6,
+        target_id=actor.target_id,
+        explicit_target_hash=explicit_hash,
+    )
+
     def evidence(**changes: object) -> TargetLabelEvidence:
         values: dict[str, object] = {
             "protocol": TargetInputProtocol.V1_OBSERVED,
@@ -118,8 +152,8 @@ def test_v1_label_mapping_requires_strict_admitted_match() -> None:
             "target_valid": True,
             "descriptor_source": "detected_obbs",
             "descriptor_provenance": TargetDescriptorProvenance.ACTOR_VISIBLE_DETECTOR,
-            "descriptor_hash": "a" * 64,
-            "explicit_target_hash": "b" * 64,
+            "descriptor_hash": actor.descriptor_hash,
+            "explicit_target_hash": explicit_target.explicit_target_hash,
         }
         values.update(changes)
         return TargetLabelEvidence(**values)
@@ -138,6 +172,7 @@ def test_v1_label_mapping_requires_strict_admitted_match() -> None:
         {"descriptor_provenance": None},
         {"descriptor_hash": "tampered"},
         {"explicit_target_hash": "tampered"},
+        {"explicit_target_hash": "b" * 64},
     ):
         assert not target_label_is_trainable(evidence(**changes))
 
