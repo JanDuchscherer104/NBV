@@ -409,6 +409,7 @@ class CampaignEvent:
     writer_config_hash: str | None = None
     source_manifest_hash: str | None = None
     elapsed_seconds: float | None = None
+    unit_elapsed_seconds: float | None = None
     schema_version: str = "campaign-event-v1"
     pid: int | None = None
     process_group: int | None = None
@@ -1872,7 +1873,21 @@ class CudaRolloutCampaign:
                     )
                 )
                 break
-            self.append_event(self._event(plan, "target_profile", unit=unit, stage=unit.profile))
+            unit_started_at = self.clock()
+
+            def unit_elapsed(start: float = unit_started_at) -> float:
+                return self.clock() - start
+
+            self.append_event(
+                self._event(
+                    plan,
+                    "target_profile",
+                    unit=unit,
+                    stage=unit.profile,
+                    elapsed_seconds=self.clock() - started_at,
+                    unit_elapsed_seconds=unit_elapsed(),
+                )
+            )
             self.write_status(
                 self.status(
                     plan,
@@ -1884,7 +1899,16 @@ class CudaRolloutCampaign:
                     started_at=started_at_iso,
                 )
             )
-            self.append_event(self._event(plan, "root_preflight", unit=unit, stage="preflight"))
+            self.append_event(
+                self._event(
+                    plan,
+                    "root_preflight",
+                    unit=unit,
+                    stage="preflight",
+                    elapsed_seconds=self.clock() - started_at,
+                    unit_elapsed_seconds=unit_elapsed(),
+                )
+            )
             self.write_status(
                 self.status(
                     plan,
@@ -1897,7 +1921,14 @@ class CudaRolloutCampaign:
                 )
             )
             try:
-                started = self._event(plan, "unit_started", unit=unit, stage="worker")
+                started = self._event(
+                    plan,
+                    "unit_started",
+                    unit=unit,
+                    stage="worker",
+                    elapsed_seconds=self.clock() - started_at,
+                    unit_elapsed_seconds=unit_elapsed(),
+                )
                 self.append_event(started)
                 self.write_status(
                     self.status(
@@ -1911,11 +1942,21 @@ class CudaRolloutCampaign:
                         active_started_at=started.timestamp,
                     )
                 )
-                self.append_event(self._event(plan, "recipe_worker", unit=unit, stage=unit.profile))
+                self.append_event(
+                    self._event(
+                        plan,
+                        "recipe_worker",
+                        unit=unit,
+                        stage=unit.profile,
+                        elapsed_seconds=self.clock() - started_at,
+                        unit_elapsed_seconds=unit_elapsed(),
+                    )
+                )
                 argv = self.worker_argv(
                     plan_path or (self.config.output_root / "plan.json"), unit, config_path=config_path
                 )
                 argv = tuple(plan.plan_hash if x == "PLAN_HASH" else x for x in argv)
+                new_units += 1
                 returncode, stdout, stderr = self.process_runner.run(
                     argv,
                     timeout=self.config.work_unit_timeout_seconds,
@@ -1926,6 +1967,7 @@ class CudaRolloutCampaign:
                         results,
                         unit,
                         started_at=started_at,
+                        unit_started_at=unit_started_at,
                         started_at_iso=started_at_iso,
                         last_timeout=last_timeout,
                     ),
@@ -1938,8 +1980,6 @@ class CudaRolloutCampaign:
                     if isinstance(result, dict)
                     else CampaignOutcome.SUCCEEDED.value
                 )
-                if outcome != CampaignOutcome.SKIPPED.value:
-                    new_units += 1
                 elapsed = self.clock() - started_at
                 if outcome in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}:
                     self._require_validated_terminal_shard(plan, unit)
@@ -1954,6 +1994,7 @@ class CudaRolloutCampaign:
                             detail=detail,
                             stage="preflight",
                             elapsed_seconds=elapsed,
+                            unit_elapsed_seconds=unit_elapsed(),
                         )
                     )
                     self.write_status(
@@ -1997,6 +2038,7 @@ class CudaRolloutCampaign:
                             outcome=outcome,
                             stage=unit.profile,
                             elapsed_seconds=elapsed,
+                            unit_elapsed_seconds=unit_elapsed(),
                         )
                     )
                     self.write_status(
@@ -2018,6 +2060,7 @@ class CudaRolloutCampaign:
                             outcome=outcome,
                             stage="promotion",
                             elapsed_seconds=elapsed,
+                            unit_elapsed_seconds=unit_elapsed(),
                         )
                     )
                     self.write_status(
@@ -2043,6 +2086,7 @@ class CudaRolloutCampaign:
                         outcome=str(outcome),
                         detail=str(result.get("reason", "")) if isinstance(result, dict) else "",
                         elapsed_seconds=elapsed,
+                        unit_elapsed_seconds=unit_elapsed(),
                     )
                 )
             except Exception as exc:  # record-and-continue is intentional
@@ -2077,6 +2121,7 @@ class CudaRolloutCampaign:
                             else str(exc)[-2000:]
                         ),
                         elapsed_seconds=self.clock() - started_at,
+                        unit_elapsed_seconds=unit_elapsed(),
                         pid=getattr(exc, "pid", None),
                         process_group=getattr(exc, "process_group", None),
                         tmux_session=claim.get("tmux_session") if isinstance(claim, dict) else None,
@@ -2122,7 +2167,7 @@ class CudaRolloutCampaign:
         resumable_outcomes = {
             outcome
             for outcome in outcomes.values()
-            if outcome not in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+            if outcome in {CampaignOutcome.FAILED.value, CampaignOutcome.TIMED_OUT.value}
         }
         if progress["allowed_states"] <= {"completed", "completed_with_failures"} and not resumable_outcomes:
             raise ValueError("completed campaign cannot be resumed")
@@ -2135,7 +2180,12 @@ class CudaRolloutCampaign:
         return [
             {"outcome": outcomes[unit.work_unit_hash], "work_unit_hash": unit.work_unit_hash}
             for unit in plan.work_units
-            if outcomes.get(unit.work_unit_hash) in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+            if outcomes.get(unit.work_unit_hash)
+            in {
+                CampaignOutcome.SUCCEEDED.value,
+                CampaignOutcome.SKIPPED.value,
+                CampaignOutcome.INSUFFICIENT_SUPPORT.value,
+            }
         ]
 
     def _event(
@@ -2148,6 +2198,7 @@ class CudaRolloutCampaign:
         detail: str = "",
         stage: str | None = None,
         elapsed_seconds: float | None = None,
+        unit_elapsed_seconds: float | None = None,
         pid: int | None = None,
         process_group: int | None = None,
         tmux_session: str | None = None,
@@ -2171,6 +2222,7 @@ class CudaRolloutCampaign:
             writer_config_hash=plan.writer_config_hash,
             source_manifest_hash=plan.source_manifest_hash,
             elapsed_seconds=elapsed_seconds,
+            unit_elapsed_seconds=unit_elapsed_seconds,
             pid=pid,
             process_group=process_group,
             tmux_session=tmux_session,
@@ -2329,6 +2381,7 @@ class CudaRolloutCampaign:
         unit: CampaignWorkUnit,
         *,
         started_at: float,
+        unit_started_at: float | None = None,
         started_at_iso: str,
         last_timeout: dict[str, Any] | None,
     ) -> Callable[[int, int | None], None]:
@@ -2340,6 +2393,8 @@ class CudaRolloutCampaign:
                 "unit_started",
                 unit=unit,
                 stage="worker",
+                elapsed_seconds=self.clock() - started_at,
+                unit_elapsed_seconds=self.clock() - (unit_started_at if unit_started_at is not None else started_at),
                 pid=pid,
                 process_group=process_group,
             )
@@ -2822,7 +2877,7 @@ class CudaRolloutCampaign:
                 retryable = {
                     outcome
                     for outcome in terminal_outcomes.values()
-                    if outcome not in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+                    if outcome in {CampaignOutcome.FAILED.value, CampaignOutcome.TIMED_OUT.value}
                 }
                 if (
                     run_state not in {"running", "blocked", "finished"}
@@ -2833,7 +2888,12 @@ class CudaRolloutCampaign:
                 terminal_outcomes = {
                     work_unit_hash: outcome
                     for work_unit_hash, outcome in terminal_outcomes.items()
-                    if outcome in {CampaignOutcome.SUCCEEDED.value, CampaignOutcome.SKIPPED.value}
+                    if outcome
+                    in {
+                        CampaignOutcome.SUCCEEDED.value,
+                        CampaignOutcome.SKIPPED.value,
+                        CampaignOutcome.INSUFFICIENT_SUPPORT.value,
+                    }
                 }
                 current_work_unit = None
                 current_target_id = None

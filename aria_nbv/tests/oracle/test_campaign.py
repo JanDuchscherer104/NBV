@@ -1230,7 +1230,7 @@ def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path
     assert active[0] == (plan.work_units[1].work_unit_hash, plan.work_units[0].work_unit_hash)
 
 
-@pytest.mark.parametrize("retry_outcome", ["failed", "timed_out", "insufficient_support"])
+@pytest.mark.parametrize("retry_outcome", ["failed", "timed_out"])
 def test_run_claimed_resume_retries_every_nonvalidated_terminal_outcome(tmp_path, retry_outcome):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
@@ -1251,6 +1251,71 @@ def test_run_claimed_resume_retries_every_nonvalidated_terminal_outcome(tmp_path
     assert retried[0] == first_unit.work_unit_hash
     assert len(resumed) == len(plan.work_units)
     assert [event.kind for event in campaign.read_events(plan=plan)].count("campaign_resumed") == 1
+
+
+def test_run_claimed_resume_retains_insufficient_support_and_retries_only_failures(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_campaign_started(campaign, plan)
+    _append_unit_events(campaign, plan, plan.work_units[0], "insufficient_support")
+    _append_unit_events(campaign, plan, plan.work_units[1], "failed")
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+    retried = []
+    _bind_runner(
+        campaign,
+        plan,
+        lambda unit: (
+            retried.append(unit.work_unit_hash) or {"outcome": "insufficient_support", "reason": "still bounded"}
+        ),
+    )
+
+    resumed = campaign._run_claimed(plan, claim={"claim_hash": "second"})
+
+    assert retried == [plan.work_units[1].work_unit_hash]
+    assert len(resumed) == len(plan.work_units)
+    assert resumed[0]["outcome"] == "insufficient_support"
+
+
+@pytest.mark.parametrize("failure", [RuntimeError("launch failed"), TimeoutError("launch timed out")])
+def test_run_claimed_max_new_units_counts_failed_and_timed_out_launches(tmp_path, failure):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
+    calls = []
+
+    def worker(unit):
+        calls.append(unit.work_unit_hash)
+        raise failure
+
+    _bind_runner(campaign, plan, worker)
+    results = campaign._run_claimed(plan, claim={"claim_hash": "bounded"}, max_new_units=1)
+
+    assert calls == [plan.work_units[0].work_unit_hash]
+    assert results[0]["outcome"] == ("timed_out" if isinstance(failure, TimeoutError) else "failed")
+    assert campaign.read_status(plan=plan).state == "blocked"
+
+
+def test_run_claimed_event_timing_resets_per_unit_and_campaign_elapsed_increases(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
+    clock_value = 0.0
+
+    def clock():
+        nonlocal clock_value
+        clock_value += 1.0
+        return clock_value
+
+    campaign.clock = clock
+    _bind_runner(campaign, plan, lambda _unit: {"outcome": "insufficient_support", "reason": "bounded"})
+    campaign._run_claimed(plan, claim={"claim_hash": "timing"})
+
+    terminal_events = [event for event in campaign.read_events(plan=plan) if event.kind == "unit_insufficient_support"]
+    assert len(terminal_events) == 2
+    assert terminal_events[1].elapsed_seconds > terminal_events[0].elapsed_seconds
+    assert terminal_events[0].unit_elapsed_seconds is not None
+    assert terminal_events[1].unit_elapsed_seconds is not None
+    assert terminal_events[1].unit_elapsed_seconds < terminal_events[1].elapsed_seconds
 
 
 def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):
