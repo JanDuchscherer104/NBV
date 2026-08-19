@@ -52,6 +52,7 @@ from aria_nbv.rollouts.shard_manifest import (
     RolloutShardEntry,
     RolloutShardRow,
     RolloutSourceManifest,
+    build_rollout_split_manifest_hash,
     canonical_rollout_shard_id,
     read_rollout_source_manifest,
     write_rollout_shard_manifest,
@@ -977,6 +978,26 @@ def test_rollout_shard_atomic_promotion_writes_markers_and_skips_completed(tmp_p
     assert result.owner_path.exists()
     assert not tmp_dir.exists()
     assert skipped.skipped
+
+    alternate_row = replace(entry.rows[0], campaign_split="validation")
+    alternate_entry = replace(
+        entry,
+        rows=(alternate_row,),
+        campaign_split="validation",
+        split_manifest_hash=build_rollout_split_manifest_hash(
+            source_manifest_hash=entry.source_manifest_hash,
+            split=entry.split,
+            records=[alternate_row.hash_record()],
+        ),
+    )
+    assert (
+        read_validated_completed_shard(
+            final_dir,
+            shard_entry=alternate_entry,
+            writer_config_hash=alternate_entry.writer_config_hash,
+        )
+        is None
+    )
 
 
 def test_read_validated_completed_shard_rejects_tampered_success_binding(tmp_path: Path) -> None:
