@@ -29,6 +29,9 @@ from pydantic import BaseModel, Field, model_validator
 from ...utils import TargetConfig
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
+CAMPAIGN_PLAN_SCHEMA_VERSION = "campaign-plan-v2"
+CAMPAIGN_ADMISSION_AUDIT_SCHEMA_VERSION = "campaign-admission-audit-v2"
+
 
 class CampaignOutcome(StrEnum):
     SUCCEEDED = "succeeded"
@@ -107,7 +110,7 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
     observed_target_iou_threshold: float = Field(default=0.20, ge=0, lt=1)
     expected_scene_count: int = Field(default=100, ge=1)
     paired_panel_scene_count: int = Field(default=20, ge=0)
-    min_valid_root_candidates: int = Field(default=10, ge=0)
+    min_valid_root_candidates: int = Field(default=15, ge=0)
     stage_timeout_seconds: float = Field(default=120, gt=0)
     work_unit_timeout_seconds: float = Field(default=3600, gt=0)
     profiles: list[CampaignProfileConfig] = Field(default_factory=_default_profiles)
@@ -119,7 +122,7 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
         if self.seed != 20260728 or self.observed_target_iou_threshold != 0.20:
             raise ValueError("campaign seed and strict IoU threshold are fixed reviewed constants")
         if (
-            self.min_valid_root_candidates != 10
+            self.min_valid_root_candidates != 15
             or self.stage_timeout_seconds != 120
             or self.work_unit_timeout_seconds != 3600
         ):
@@ -171,6 +174,15 @@ class CampaignWorkUnit:
     temperature: float = 0.5
     temperatures: tuple[float, ...] = (0.5,)
     scene_split: str = "train"
+    seed_lineage: dict[str, int] | None = None
+    campaign_split: str = "train"
+
+
+def derive_campaign_seed(*parts: object) -> int:
+    """Derive a stable 32-bit seed from the campaign seed lineage parts."""
+
+    payload = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
 
 
 def _work_unit_identity(unit: CampaignWorkUnit, *, seed: int) -> str:
@@ -188,6 +200,7 @@ def _work_unit_identity(unit: CampaignWorkUnit, *, seed: int) -> str:
         "writer_config_hash": unit.writer_config_hash,
         "temperatures": unit.temperatures,
         "scene_split": unit.scene_split,
+        "campaign_split": unit.campaign_split,
     }
     return stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
 
@@ -226,6 +239,7 @@ class CampaignPlan:
 
     def to_jsonable(self) -> dict[str, Any]:
         return {
+            "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
             "campaign_id": self.campaign_id,
             "seed": self.seed,
             "source_manifest_hash": self.source_manifest_hash,
@@ -241,6 +255,8 @@ class CampaignPlan:
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignPlan":
+        if payload.get("schema_version") != CAMPAIGN_PLAN_SCHEMA_VERSION:
+            raise ValueError("unsupported campaign plan schema version; regenerate the plan")
         units = tuple(
             CampaignWorkUnit(
                 **{
@@ -264,6 +280,7 @@ class CampaignPlan:
             payload.get("admission_reason_counts") or {},
         )
         expected_payload = {
+            "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
             "campaign_id": plan.campaign_id,
             "seed": plan.seed,
             "source_manifest_hash": plan.source_manifest_hash,
@@ -809,6 +826,11 @@ class CudaRolloutCampaign:
                         temperature=temperature,
                         temperatures=tuple(temperatures),
                         scene_split=split_by_scene[scene],
+                        seed_lineage={
+                            "unit": derive_campaign_seed(self.config.seed, "unit", sample, target, profile.name),
+                            "recipe": derive_campaign_seed(self.config.seed, "recipe", sample, target, profile.name),
+                        },
+                        campaign_split=split_by_scene[scene],
                     )
                 )
             eligible_index += 1
@@ -847,6 +869,7 @@ class CudaRolloutCampaign:
         audit_rows = _jsonable_audit_rows(rows)
         admission_audit_hash = stable_msgspec_hash(audit_rows)
         payload = {
+            "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
             "campaign_id": self.config.campaign_id,
             "seed": self.config.seed,
             "source_manifest_hash": source_manifest_hash,
@@ -981,7 +1004,7 @@ class CudaRolloutCampaign:
             raise ValueError("admission audit hash does not match campaign plan")
         target = path or (self.config.output_root / "admission-audit.json")
         payload = {
-            "schema_version": "campaign-admission-audit-v1",
+            "schema_version": CAMPAIGN_ADMISSION_AUDIT_SCHEMA_VERSION,
             "campaign_id": self.config.campaign_id,
             "source_manifest_hash": source_manifest_hash,
             "admission_audit_hash": audit_hash,
@@ -1305,7 +1328,7 @@ class CudaRolloutCampaign:
                     "explicit_target": target_payload,
                     "max_targets_per_sample": 1,
                     "oracle_target_task_sampler": OracleTargetTaskSamplerConfig(),
-                    "min_valid_root_candidates": 10,
+                    "min_valid_root_candidates": 15,
                 }
             )
         if hasattr(cfg, "recipes"):
@@ -1348,7 +1371,7 @@ class CudaRolloutCampaign:
                                 branch_factor=recipe["branch"],
                                 beam_width=recipe["beam"],
                                 selection_temperature=temperature,
-                                seed=self.config.seed,
+                                seed=(unit.seed_lineage or {}).get("recipe", self.config.seed),
                             ),
                         )
                         for temperature in temperatures

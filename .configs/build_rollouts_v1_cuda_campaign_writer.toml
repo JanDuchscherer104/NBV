@@ -7,7 +7,7 @@
 max_samples            = 100
 source_manifest_path   = ".configs/rollout_campaign100_source_manifest.json"
 require_label_valid    = true
-min_valid_root_candidates = 10
+min_valid_root_candidates = 15
 log_timing             = true
 verbosity              = 1
 

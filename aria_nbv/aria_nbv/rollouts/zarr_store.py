@@ -100,7 +100,7 @@ if TYPE_CHECKING:
 ROLLOUT_ZARR_SCHEMA_ID = "aria_nbv.rollout_zarr_q_invalidity"
 """Schema id stored as a root attribute on rollout replay stores."""
 
-ROLLOUT_ZARR_SCHEMA_VERSION = "1.0-target-rollout-core"
+ROLLOUT_ZARR_SCHEMA_VERSION = "2.0-target-rollout-provenance"
 """Target-first rollout schema with hot candidate provenance and core parent-depth history."""
 
 DEFAULT_RETURN_SEMANTICS = "cumulative_target_root_gain"

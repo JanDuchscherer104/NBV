@@ -146,6 +146,13 @@ class PathCollisionRule(RuleBase):
         if ctx.gt_mesh is None or ctx.centers_world is None or ctx.mask_valid is None:
             return
 
+        if ctx.cfg.collect_debug_stats:
+            count = ctx.centers_world.shape[0]
+            false = torch.zeros(count, device=ctx.centers_world.device, dtype=torch.bool)
+            ctx.mark_debug("path_collision_applicable", torch.ones_like(false))
+            ctx.mark_debug("path_collision_evaluated", false)
+            ctx.mark_debug("path_collision_detected", false)
+
         if self.config.step_clearance <= 0:
             return
 
@@ -166,6 +173,8 @@ class PathCollisionRule(RuleBase):
             min_clearance = dists_pts.min(dim=1).values
             collide = (dists_pts < self.config.step_clearance).any(dim=1)
             if ctx.cfg.collect_debug_stats:
+                ctx.mark_debug("path_collision_evaluated", torch.ones_like(collide))
+                ctx.mark_debug("path_collision_detected", collide)
                 ctx.mark_debug("path_collision_mask", collide)
                 ctx.mark_debug("path_min_clearance_m", min_clearance)
             ctx.invalidate(collide)
@@ -185,6 +194,8 @@ class PathCollisionRule(RuleBase):
         intersects = ray_engine.intersects_any(origins_np, dirs_np, multiple_hits=False, max_distance=max_dist)
         collide = torch.from_numpy(intersects).to(ctx.mask_valid.device)
         if ctx.cfg.collect_debug_stats:
+            ctx.mark_debug("path_collision_evaluated", torch.ones_like(collide))
+            ctx.mark_debug("path_collision_detected", collide)
             ctx.mark_debug("path_collision_mask", collide)
         ctx.invalidate(collide)
 

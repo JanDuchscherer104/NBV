@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from aria_nbv.oracle.pipelines.campaign import (
+    CAMPAIGN_PLAN_SCHEMA_VERSION,
     CampaignOutcome,
     CampaignProcessRunner,
     CampaignStatus,
@@ -40,6 +41,15 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 def test_config_factory_returns_campaign_target():
     config = CudaRolloutCampaignConfig()
     assert isinstance(config.setup_target(), CudaRolloutCampaign)
+
+
+def test_campaign_plan_persists_split_and_seed_lineage(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    assert plan.to_jsonable()["schema_version"] == CAMPAIGN_PLAN_SCHEMA_VERSION
+    assert unit.campaign_split == unit.scene_split == "train"
+    assert unit.seed_lineage and set(unit.seed_lineage) == {"unit", "recipe"}
 
 
 def test_reviewed_profile_components_and_worker_json(tmp_path):
@@ -184,7 +194,7 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
     assert writer.max_samples == writer.source.limit == 100
     assert writer.source_manifest_path == REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json"
     assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8"
-    assert writer.min_valid_root_candidates == 10
+    assert writer.min_valid_root_candidates == 15
     assert {
         str(writer.source.map_location),
         str(writer.candidate_mixture.base.device),

@@ -9,6 +9,8 @@ rather than overwritten.
 
 from __future__ import annotations
 
+import hashlib
+
 # Helper is intentionally defined before heavyweight rollout imports.
 # ruff: noqa: E402
 import json
@@ -495,6 +497,11 @@ def _completed_shard_is_current(
         return False
     if success.get("rollout_manifest_sha256") != rollout_manifest_sha:
         return False
+    content_sha = _rollout_store_content_sha256(final_dir)
+    if owner.get("rollout_store_content_sha256") != content_sha:
+        return False
+    if success.get("rollout_store_content_sha256") != content_sha:
+        return False
     expected_binding = None if shard_entry.campaign_binding is None else shard_entry.campaign_binding.to_jsonable()
     if success.get("campaign_binding") != expected_binding or owner.get("campaign_binding") != expected_binding:
         return False
@@ -559,6 +566,7 @@ def _owner_payload(
         "output_tmp": output_tmp.as_posix(),
         "output_final": output_final.as_posix(),
         "rollout_manifest_sha256": result.manifest_sha256,
+        "rollout_store_content_sha256": _rollout_store_content_sha256(output_tmp),
         "counts": {
             "rollouts": result.num_rollouts,
             "steps": result.num_steps,
@@ -589,11 +597,27 @@ def _success_payload(
         "split": shard_entry.split,
         "num_source_rows": len(shard_entry.rows),
         "rollout_manifest_sha256": result.manifest_sha256,
+        "rollout_store_content_sha256": owner_payload["rollout_store_content_sha256"],
         "owner_sha256": manifest_sha256(owner_payload),
         "campaign_binding": None
         if shard_entry.campaign_binding is None
         else shard_entry.campaign_binding.to_jsonable(),
     }
+
+
+def _rollout_store_content_sha256(store_dir: Path) -> str:
+    """Hash promoted Zarr/manifest content, excluding lifecycle sidecars."""
+
+    digest = hashlib.sha256()
+    excluded = {ROLLOUT_SHARD_OWNER_FILENAME, ROLLOUT_SHARD_SUCCESS_FILENAME}
+    for path in sorted(p for p in store_dir.rglob("*") if p.is_file() and p.name not in excluded):
+        relative = path.relative_to(store_dir).as_posix().encode()
+        data = path.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(data).to_bytes(8, "big"))
+        digest.update(data)
+    return digest.hexdigest()
 
 
 def _write_failed_marker(

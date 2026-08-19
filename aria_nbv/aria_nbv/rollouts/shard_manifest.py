@@ -15,10 +15,10 @@ from typing import Any
 
 from ..utils.fingerprints import stable_msgspec_hash
 
-ROLLOUT_SOURCE_MANIFEST_VERSION = "rollout-source-manifest-v1"
+ROLLOUT_SOURCE_MANIFEST_VERSION = "rollout-source-manifest-v2"
 """Version label for profile-independent ordered VIN source manifests."""
 
-ROLLOUT_SHARD_MANIFEST_VERSION = "rollout-shard-manifest-v1"
+ROLLOUT_SHARD_MANIFEST_VERSION = "rollout-shard-manifest-v2"
 """Version label for rollout generation JSONL shard manifests."""
 
 ROLLOUT_SHARD_SUCCESS_FILENAME = "_SUCCESS.json"
