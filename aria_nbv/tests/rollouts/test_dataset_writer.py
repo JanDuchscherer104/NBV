@@ -583,6 +583,13 @@ def test_rollout_shard_campaign_binding_is_copied_and_required_for_resume(tmp_pa
             )
 
 
+def test_rollout_shard_campaign_binding_roundtrips_generation_revision_hash() -> None:
+    binding = RolloutShardCampaignBinding(
+        "campaign", "plan", "work", "target", "profile", "explicit", "revision-a"
+    )
+    assert RolloutShardCampaignBinding.from_jsonable(binding.to_jsonable()) == binding
+
+
 def test_rollout_shard_insufficient_support_is_typed_and_leaves_no_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
