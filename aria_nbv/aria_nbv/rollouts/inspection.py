@@ -786,10 +786,16 @@ def oracle_headroom_evidence(
     role_rows = exact_policy_role_rows(source_rows)
     grouped: dict[str, list[dict[str, object]]] = {}
     malformed_rows: list[dict[str, object]] = []
-    for row in role_rows:
+    for raw_row_index, row in enumerate(role_rows):
         missing = tuple(field for field in _HEADROOM_INVARIANT_FIELDS[:10] if _missing_identity(row.get(field)))
         if missing:
-            malformed_rows.append({**row, "exclusion_reason": f"identity_mismatch:{','.join(missing)}"})
+            malformed_rows.append(
+                {
+                    **row,
+                    "raw_row_id": raw_row_index,
+                    "exclusion_reason": f"identity_mismatch:{','.join(missing)}",
+                }
+            )
             continue
         key_payload = {field: row.get(field) for field in _HEADROOM_INVARIANT_FIELDS}
         invariant_key = json.dumps(key_payload, sort_keys=True, separators=(",", ":"))
@@ -887,7 +893,7 @@ def oracle_headroom_evidence(
                     "scene": malformed.get("scene"),
                     "normalized_conditions": {},
                     "role_treatments": {},
-                    "raw_row_id": malformed.get("candidate_row_id"),
+                    "raw_row_id": malformed.get("raw_row_id"),
                 }
             )
     summary_rows: list[dict[str, object]] = []
@@ -1465,6 +1471,7 @@ def q_h_evidence_rows(
     reader: RolloutZarrStoreReader,
     *,
     deep_count: bool = False,
+    chunk_size: int = 1024,
     validation_result: RolloutZarrValidationResult | None = None,
 ) -> list[dict[str, object]]:
     """Read store-local Q_H contract facts without dataset-stage admission.
@@ -1508,6 +1515,8 @@ def q_h_evidence_rows(
         "count_reason": "metadata does not prove mask counts; request deep_count",
     }
     if deep_count:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
         candidate_ids_array = q_h["candidate_row_id"]
         valid_array = q_h["valid_action_mask"]
         trainable_array = q_h["q_train_mask"]
@@ -1517,7 +1526,6 @@ def q_h_evidence_rows(
             int(candidate_id): bool(factual_oracle[index]) for index, candidate_id in enumerate(factual_ids)
         }
         actor_count = oracle_count = trainable_count = padding_count = 0
-        chunk_size = 1024
         for start in range(0, int(candidate_ids_array.shape[0]), chunk_size):
             stop = min(start + chunk_size, int(candidate_ids_array.shape[0]))
             candidate_ids = np.asarray(candidate_ids_array[start:stop], dtype=np.int64)
