@@ -249,6 +249,8 @@ STEP_TABLE = _TableSchema(
         _TableField("selected_compact_valid_index", np.int32),
         _TableField("num_candidates", np.int32),
         _TableField("num_valid_candidates", np.int32),
+        _TableField("candidate_seed", np.int64),
+        _TableField("selection_seed", np.int64),
         _TableField("cumulative_target_rri", np.float32),
         _TableField("cumulative_scene_rri", np.float32),
         _TableField("cumulative_target_root_gain", np.float32),
@@ -2354,6 +2356,8 @@ def _flatten_records(
             step_rows["selected_compact_valid_index"].append(step.selected_valid_index)
             step_rows["num_candidates"].append(int(candidate_valid.shape[0]))
             step_rows["num_valid_candidates"].append(int(candidate_valid.sum().item()))
+            step_rows["candidate_seed"].append(-1 if step.candidate_rng_seed is None else int(step.candidate_rng_seed))
+            step_rows["selection_seed"].append(-1 if step.selection_rng_seed is None else int(step.selection_rng_seed))
             step_rows["cumulative_target_rri"].append(_nan_if_none(running_target_rri))
             step_rows["cumulative_scene_rri"].append(_nan_if_none(running_scene_rri))
             step_rows["cumulative_target_root_gain"].append(_nan_if_none(running_target_root_gain))
@@ -2727,7 +2731,9 @@ def _append_candidate_diagnostic_row(
     if missing_collision_debug:
         raise ValueError(f"Missing required candidate diagnostics: {sorted(missing_collision_debug)}.")
     rows["path_collision_mask"].append(
-        _candidate_extra_bool(step.candidates.extras, "path_collision_mask", shell_index, candidate_valid, required=True)
+        _candidate_extra_bool(
+            step.candidates.extras, "path_collision_mask", shell_index, candidate_valid, required=True
+        )
     )
     rows["path_collision_applicable_mask"].append(
         _candidate_extra_bool(

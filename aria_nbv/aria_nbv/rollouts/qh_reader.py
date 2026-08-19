@@ -40,6 +40,7 @@ class _QhSourceRef:
     actor_store_version: str
     source_manifest_hash: str
     split_manifest_hash: str
+    campaign_split: Stage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,6 +347,11 @@ def _read_source_refs(root: zarr.Group, path: Path) -> dict[int, _QhSourceRef]:
             scene_id=decode("scene", "scene_id", row),
             snippet_id=decode("snippet", "snippet_id", row),
             split=Stage.from_str(decode("split", "split_id", row)),
+            campaign_split=(
+                None
+                if "campaign_split_id" not in sources or decode("split", "campaign_split_id", row) == "unknown"
+                else Stage.from_str(decode("split", "campaign_split_id", row))
+            ),
             actor_store_version=decode("config", "source_cache_version_id", row),
             source_manifest_hash=decode("config", "source_offline_store_manifest_hash_id", row),
             split_manifest_hash=decode("config", "split_manifest_hash_id", row),

@@ -638,9 +638,12 @@ class _RolloutSourceLineageBuilder:
     source_manifest_hash: str
     split_manifest_hash: str
     source_cache_version: str
+    campaign_split: str = "unknown"
 
     @classmethod
-    def from_dataset(cls, dataset: VinOfflineDataset, *, max_samples: int) -> "_RolloutSourceLineageBuilder":
+    def from_dataset(
+        cls, dataset: VinOfflineDataset, *, max_samples: int, campaign_split: str | None = None
+    ) -> "_RolloutSourceLineageBuilder":
         """Hash the source manifest and ordered source rows used by a rollout shard."""
 
         source_manifest_hash = stable_msgspec_hash(dataset.manifest)
@@ -654,6 +657,7 @@ class _RolloutSourceLineageBuilder:
                 records=cls.dataset_records_for_hash(dataset, limit=max_samples),
             ),
             source_cache_version=str(dataset.manifest.version),
+            campaign_split=str(campaign_split or split),
         )
 
     @staticmethod
@@ -792,7 +796,11 @@ class RolloutDatasetWriter:
             if shard_entry is not None or self.config.max_samples is None
             else min(int(self.config.max_samples), len(dataset))
         )
-        source_lineage = _RolloutSourceLineageBuilder.from_dataset(dataset, max_samples=max_samples)
+        source_lineage = _RolloutSourceLineageBuilder.from_dataset(
+            dataset,
+            max_samples=max_samples,
+            campaign_split=None if shard_entry is None else shard_entry.campaign_split,
+        )
         if source_manifest is not None and shard_entry is None:
             self._validate_source_manifest_lineage(
                 source_lineage,
@@ -952,6 +960,11 @@ class RolloutDatasetWriter:
                 f"Rollout shard {shard_entry.shard_id!r} split manifest hash mismatch: "
                 f"config source={source_lineage.split_manifest_hash} manifest={shard_entry.split_manifest_hash}."
             )
+        if shard_entry.campaign_split is not None and source_lineage.campaign_split != shard_entry.campaign_split:
+            raise ValueError(
+                f"Rollout shard {shard_entry.shard_id!r} campaign split mismatch: "
+                f"config source={source_lineage.campaign_split} manifest={shard_entry.campaign_split}."
+            )
 
     def _rollout_target(
         self,
@@ -1055,6 +1068,7 @@ class RolloutDatasetWriter:
                             source_sample_index=sample.sample_index,
                             source_sample_key=sample.sample_key,
                             split=sample.split,
+                            campaign_split=source_lineage.campaign_split,
                             source_shard_id=sample.source_shard_id,
                             source_shard_row=sample.source_shard_row,
                             source_offline_store_manifest_hash=source_lineage.source_manifest_hash,

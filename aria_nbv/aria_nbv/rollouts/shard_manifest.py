@@ -73,6 +73,7 @@ class RolloutShardCampaignBinding:
                     "target_id",
                     "profile_hash",
                     "explicit_target_hash",
+                    "generation_revision_hash",
                 )
             }
         )

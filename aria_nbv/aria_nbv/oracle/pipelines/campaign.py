@@ -1655,6 +1655,11 @@ class CudaRolloutCampaign:
             unit.campaign_id != plan.campaign_id for unit in plan.work_units
         ):
             raise ValueError("campaign plan/unit identity does not match configured campaign")
+        if plan.generation_revision is None:
+            raise ValueError("campaign plan requires generation revision identity")
+        current_revision = current_generation_revision()
+        if current_revision.revision_hash != plan.generation_revision.revision_hash:
+            raise ValueError("campaign generation revision does not match the plan")
         current_config_hash = stable_msgspec_hash(self.config.model_dump_jsonable())
         if plan.config_hash and plan.config_hash != current_config_hash:
             raise ValueError("campaign config hash does not match plan")
