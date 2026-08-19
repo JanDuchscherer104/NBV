@@ -46,6 +46,7 @@ from ..targets.protocol import (
 )
 from ..utils import BaseConfig
 from ..utils.config_paths import resolve_cache_artifact_dir
+from ..utils.fingerprints import stable_msgspec_hash
 from .manifest import (
     ROLLOUT_MANIFEST_FILENAME,
     ROLLOUT_MANIFEST_VERSION,
@@ -923,6 +924,23 @@ class _RolloutZarrValidator:
         manifest_attrs = payload.get("root_attrs", {})
         if manifest_attrs.get("campaign_split", "unknown") != self.root.attrs.get("campaign_split", "unknown"):
             self.errors.append("Rollout manifest campaign_split does not match root attrs.")
+        shard_context = (payload.get("generation") or {}).get("shard") or {}
+        campaign_binding = shard_context.get("campaign_binding") or {}
+        bound_explicit_hash = campaign_binding.get("explicit_target_hash")
+        if (
+            bound_explicit_hash
+            and self.root.attrs.get("target_protocol_version") == TargetInputProtocol.V1_OBSERVED
+            and "targets" in self.root
+        ):
+            persisted_hashes = set(
+                _encoded_values(
+                    self.root,
+                    dictionary_name="explicit_target_hash",
+                    array_path="targets/explicit_target_hash_id",
+                )
+            )
+            if persisted_hashes != {str(bound_explicit_hash)}:
+                self.errors.append("Rollout manifest explicit_target_hash does not match target evidence.")
 
     def _validate_q_h(self, candidate_row_id: np.ndarray) -> None:
         derived = _build_q_h_arrays(
@@ -3590,6 +3608,7 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
         root, dictionary_name="explicit_target_hash", array_path="targets/explicit_target_hash_id"
     )
     target_ids = _read_string_array(root, "dictionaries/target")
+    persisted_target_ids = _encoded_values(root, dictionary_name="target", array_path="targets/target_id")
     statuses = _read_string_array(root, "dictionaries/target_match_status")
     matched_ids = np.asarray(targets["matched_gt_target_id"], dtype=np.int64).reshape(-1)
     matched_rows = np.asarray(targets["matched_gt_target_row_id"], dtype=np.int64).reshape(-1)
@@ -3597,29 +3616,63 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
     status_ids = np.asarray(targets["gt_match_status_id"], dtype=np.int64).reshape(-1)
     target_valid = np.asarray(targets["target_valid_mask"], dtype=np.bool_).reshape(-1)
     target_reason = np.asarray(targets["target_invalid_reason_bitset"], dtype=np.uint32).reshape(-1)
+    target_source_indices = np.asarray(targets["target_source_index"], dtype=np.int64).reshape(-1)
+    target_row_ids = np.asarray(targets["target_row_id"], dtype=np.int64).reshape(-1)
+    rollout_target_ids = np.asarray(root["rollouts/target_row_id"], dtype=np.int64).reshape(-1)
+    rollout_source_ids = np.asarray(root["rollouts/source_row_id"], dtype=np.int64).reshape(-1)
+    source_row_ids = np.asarray(root["sources/source_row_id"], dtype=np.int64).reshape(-1)
+    source_keys = _encoded_values(root, dictionary_name="source_key", array_path="sources/sample_key_id")
+    source_key_by_row = dict(zip(source_row_ids.tolist(), source_keys, strict=True))
     values: list[bool] = []
     for row, (match_id, match_row, iou, status_id) in enumerate(
         zip(matched_ids, matched_rows, ious, status_ids, strict=True)
     ):
-        values.append(
-            target_label_is_trainable(
-                TargetLabelEvidence(
-                    protocol=protocol,
-                    target_source=target_sources[row] if row < len(target_sources) else None,
-                    gt_match_status=statuses[int(status_id)] if 0 <= int(status_id) < len(statuses) else None,
-                    matched_gt_target_row_id=int(match_row),
-                    matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
-                    gt_match_iou=float(iou),
-                    descriptor_source=descriptor_sources[row] if row < len(descriptor_sources) else None,
-                    descriptor_provenance=descriptor_provenances[row] if row < len(descriptor_provenances) else None,
-                    descriptor_hash=descriptor_hashes[row] if row < len(descriptor_hashes) else None,
-                    explicit_target_hash=explicit_target_hashes[row] if row < len(explicit_target_hashes) else None,
-                    target_valid=bool(
-                        target_valid[row] and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
-                    ),
-                )
+        trainable = target_label_is_trainable(
+            TargetLabelEvidence(
+                protocol=protocol,
+                target_source=target_sources[row] if row < len(target_sources) else None,
+                gt_match_status=statuses[int(status_id)] if 0 <= int(status_id) < len(statuses) else None,
+                matched_gt_target_row_id=int(match_row),
+                matched_gt_target_id=target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None,
+                gt_match_iou=float(iou),
+                descriptor_source=descriptor_sources[row] if row < len(descriptor_sources) else None,
+                descriptor_provenance=descriptor_provenances[row] if row < len(descriptor_provenances) else None,
+                descriptor_hash=descriptor_hashes[row] if row < len(descriptor_hashes) else None,
+                explicit_target_hash=explicit_target_hashes[row] if row < len(explicit_target_hashes) else None,
+                target_valid=bool(
+                    target_valid[row] and target_reason[row] == np.uint32(1 << INVALID_REASON_CODES["VALID"])
+                ),
             )
         )
+        if trainable and protocol == TargetInputProtocol.V1_OBSERVED:
+            source_ids = {
+                int(source_id)
+                for target_id, source_id in zip(rollout_target_ids, rollout_source_ids, strict=True)
+                if int(target_id) == int(target_row_ids[row])
+            }
+            matched_id = target_ids[int(match_id)] if 0 <= int(match_id) < len(target_ids) else None
+            descriptor_hash = descriptor_hashes[row] if row < len(descriptor_hashes) else None
+            explicit_hash = explicit_target_hashes[row] if row < len(explicit_target_hashes) else None
+            if len(source_ids) != 1 or matched_id is None or descriptor_hash is None or explicit_hash is None:
+                trainable = False
+            else:
+                source_key = source_key_by_row.get(next(iter(source_ids)))
+                if source_key is None or row >= len(persisted_target_ids):
+                    trainable = False
+                else:
+                    expected_explicit_hash = stable_msgspec_hash(
+                        {
+                            "sample_key": source_key,
+                            "target_id": persisted_target_ids[row],
+                            "detected_source_row": int(target_source_indices[row]),
+                            "gt_match_row": int(match_row),
+                            "gt_match_id": matched_id,
+                            "oriented_iou": float(iou),
+                            "descriptor_hash": descriptor_hash,
+                        }
+                    )
+                    trainable = explicit_hash == expected_explicit_hash
+        values.append(trainable)
     return np.asarray(values, dtype=np.bool_)
 
 

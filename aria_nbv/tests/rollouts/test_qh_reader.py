@@ -21,7 +21,10 @@ from aria_nbv.rollouts.zarr_store import (
     RolloutZarrValidationResult,
     write_rollout_zarr_store,
 )
+from aria_nbv.targets.descriptor import TargetDescriptor
+from aria_nbv.targets.selection import ObservedTargetDescriptor
 from aria_nbv.utils import Stage
+from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -73,16 +76,42 @@ def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_i
 
 def _write_v1_store(path: Path) -> Path:
     records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    source = records[0].lineage.source
     target = records[0].lineage.target
     target.target_protocol_version = "v1_observed"
     target.target_source = "detected_obbs"
     target.descriptor_source = "detected_obbs"
     target.descriptor_provenance = "actor_visible_detector"
-    target.descriptor_hash = "a" * 64
-    target.explicit_target_hash = "b" * 16
+    actor = ObservedTargetDescriptor(
+        sample_key=str(source.source_sample_key),
+        source="detected_obbs",
+        source_row=int(target.target_source_index),
+        target_id=str(target.target_id),
+        descriptor=TargetDescriptor(
+            sem_id=int(target.target_sem_id),
+            class_name=str(target.target_class_name),
+            pose_world_object=tuple(target.target_pose_world_object),
+            extents_m=tuple(target.target_extents),
+            relative_pose_reference_object=tuple(target.target_relative_pose_reference_object),
+        ),
+        confidence=float(target.target_confidence),
+        inst_id=int(target.target_inst_id),
+    )
+    target.descriptor_hash = actor.descriptor_hash
     target.target_invalid_reason_bitset = 1
     target.gt_match_status = "admitted"
-    target.gt_match_iou = 0.7
+    target.gt_match_iou = float(np.float32(0.7))
+    target.explicit_target_hash = stable_msgspec_hash(
+        {
+            "sample_key": actor.sample_key,
+            "target_id": actor.target_id,
+            "detected_source_row": actor.source_row,
+            "gt_match_row": target.matched_gt_target_row_id,
+            "gt_match_id": target.matched_gt_target_id,
+            "oriented_iou": target.gt_match_iou,
+            "descriptor_hash": actor.descriptor_hash,
+        }
+    )
     return write_rollout_zarr_store(
         path,
         records,
@@ -231,6 +260,31 @@ def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: 
     q_train = np.asarray(zarr_root["candidates/q_train_mask"], dtype=np.bool_)
     assert q_train.any()
     assert np.array_equal(q_train, actor & oracle)
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (("descriptor_hash", "c" * 64), ("explicit_target_hash", "c" * 16)),
+)
+def test_reader_rejects_well_shaped_tampered_v1_target_hash(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+) -> None:
+    store = _write_v1_store(tmp_path / "v1.zarr")
+    root = zarr.open_group(store, mode="a")
+    dictionary = root[f"dictionaries/{field}"]
+    values = json.loads(np.asarray(dictionary, dtype=np.uint8).tobytes().decode("utf-8"))
+    values[0] = replacement
+    encoded = np.frombuffer(json.dumps(values, separators=(",", ":")).encode("utf-8"), dtype=np.uint8)
+    dictionary.resize((encoded.size,))
+    dictionary[:] = encoded
+
+    validation = RolloutZarrStoreReader(store).validate()
+    assert not validation.ok
+    assert any("canonical target evidence" in error for error in validation.errors)
+    with pytest.raises(ValueError, match="canonical validation"):
+        QhRolloutReader((store,))
 
 
 def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -> None:
