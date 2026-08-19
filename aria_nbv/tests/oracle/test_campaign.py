@@ -32,7 +32,12 @@ from aria_nbv.oracle.pipelines.rollout_dataset import (
     _RolloutSourceLineageBuilder,
 )
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
-from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
+from aria_nbv.rollouts.shard_manifest import (
+    RolloutShardRow,
+    RolloutSourceManifest,
+    build_rollout_split_manifest_hash,
+    write_rollout_source_manifest,
+)
 from aria_nbv.rollouts.trace import TargetLineage
 from aria_nbv.rollouts.zarr_store import (
     LINEAGE_TABLE,
@@ -2225,7 +2230,46 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
         },
     )
     entry = campaign.shard_entry_for_unit(plan, unit)
-    writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})
+    source_manifest_path = tmp_path / "source-manifest.json"
+    source_record = SimpleNamespace(
+        sample_index=0,
+        sample_key="k0",
+        scene_id="s0",
+        snippet_id="k0",
+        split="train",
+        shard_id="shard-0",
+        row=0,
+    )
+    source_manifest = RolloutSourceManifest.from_index_records(
+        [source_record],
+        source_manifest_hash=source_manifest_hash,
+        source_cache_version="7",
+        source_store_dir="vin_offline",
+    )
+    write_rollout_source_manifest(source_manifest_path, source_manifest)
+    base_writer = RolloutDatasetWriterConfig()
+    source_config = base_writer.source.model_copy(
+        update={
+            "limit": 1,
+            "split": "train",
+            "store": base_writer.source.store.model_copy(update={"store_dir": tmp_path / "vin_offline"}),
+        }
+    )
+    writer = base_writer.model_copy(
+        update={
+            "source_manifest_path": source_manifest_path,
+            "max_samples": 1,
+            "source": source_config,
+        }
+    )
+    planned_entry = replace(
+        entry,
+        rows=(RolloutShardRow.from_index_record(source_record, order=0),),
+    )
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.shards.plan_rollout_shards",
+        lambda cfg, **_kwargs: [replace(planned_entry, writer_config_hash=stable_config_hash(cfg))],
+    )
     adapted, adapted_entry = campaign.adapt_work_unit(
         unit,
         writer_config=writer,
@@ -2234,8 +2278,22 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
         profile_hash=unit.profile_hash,
     )
 
+    physical_hash = build_rollout_split_manifest_hash(
+        source_manifest_hash=source_manifest.source_manifest_hash,
+        split=source_manifest.split,
+        records=[source_manifest.rows[0].hash_record()],
+    )
+    campaign_hash = build_rollout_split_manifest_hash(
+        source_manifest_hash=adapted_entry.source_manifest_hash,
+        split=adapted_entry.split,
+        records=[adapted_entry.rows[0].hash_record()],
+    )
+    assert adapted.store.split_manifest_hash == physical_hash
+    assert adapted_entry.split_manifest_hash == campaign_hash
+    assert campaign_hash != physical_hash
+    assert adapted_entry.writer_config_hash == stable_config_hash(adapted)
     dataset = SimpleNamespace(
-        manifest=source_manifest,
+        manifest=_CampaignFixtureManifest(),
         config=SimpleNamespace(split="train"),
         _records=[
             SimpleNamespace(
@@ -2303,7 +2361,7 @@ def test_campaign_split_binds_plan_shard_writer_store_and_qh_reader(tmp_path, mo
 
     class _ActorReader:
         config = SimpleNamespace(store_dir=tmp_path / "vin_offline")
-        manifest = source_manifest
+        manifest = _CampaignFixtureManifest()
 
         @staticmethod
         def get_split_records(_split):
