@@ -1865,7 +1865,11 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
             campaign._event(plan, "target_profile", unit=plan.work_units[0]),
             campaign._event(plan, "root_preflight", unit=plan.work_units[0]),
             campaign._event(plan, "unit_started", unit=plan.work_units[0], stage="worker"),
-            campaign._event(plan, "unit_succeeded", unit=plan.work_units[0]),
+            campaign._event(plan, "recipe_worker", unit=plan.work_units[0]),
+            campaign._event(plan, "root_preflight_completed", unit=plan.work_units[0], outcome="succeeded"),
+            campaign._event(plan, "recipe_stage_completed", unit=plan.work_units[0], outcome="succeeded"),
+            campaign._event(plan, "unit_promoted", unit=plan.work_units[0], outcome="succeeded"),
+            campaign._event(plan, "unit_succeeded", unit=plan.work_units[0], outcome="succeeded"),
         ],
     )
 
@@ -1909,11 +1913,16 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
         campaign._event(plan, "target_profile", unit=plan.work_units[0]),
         campaign._event(plan, "root_preflight", unit=plan.work_units[0]),
         campaign._event(plan, "unit_started", unit=plan.work_units[0], stage="worker"),
-        campaign._event(plan, "unit_skipped", unit=plan.work_units[0]),
+        campaign._event(plan, "recipe_worker", unit=plan.work_units[0]),
+        campaign._event(plan, "root_preflight_completed", unit=plan.work_units[0], outcome="skipped"),
+        campaign._event(plan, "recipe_stage_completed", unit=plan.work_units[0], outcome="skipped"),
+        campaign._event(plan, "unit_validated_skip", unit=plan.work_units[0], outcome="skipped"),
+        campaign._event(plan, "unit_skipped", unit=plan.work_units[0], outcome="skipped"),
         campaign._event(plan, "target_profile", unit=plan.work_units[1]),
         campaign._event(plan, "root_preflight", unit=plan.work_units[1]),
         campaign._event(plan, "unit_started", unit=plan.work_units[1], stage="worker"),
-        campaign._event(plan, "unit_failed", unit=plan.work_units[1]),
+        campaign._event(plan, "recipe_worker", unit=plan.work_units[1]),
+        campaign._event(plan, "unit_failed", unit=plan.work_units[1], outcome="failed"),
     ]
     monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
     units = tuple(
