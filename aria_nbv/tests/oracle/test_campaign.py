@@ -304,9 +304,14 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
     assert ".configs/build_rollouts_v1_cuda_campaign_writer.toml" in argv
 
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
+    manifest = json.loads(
+        (REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8")
+    )
     assert writer.max_samples == writer.source.limit == 100
     assert writer.source_manifest_path == REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json"
     assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8_rebuilt"
+    assert writer.store.source_offline_store_version == manifest["source_cache_version"] == "8"
+    assert writer.store.split_manifest_hash == manifest["split_manifest_hash"]
     assert writer.min_valid_root_candidates == 15
     assert {
         str(writer.source.map_location),
@@ -324,13 +329,13 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 4
 
 
-def test_corrected_v2_pilot_has_fresh_identity_and_unchanged_paired_contract():
+def test_corrected_v3_pilot_has_fresh_identity_and_unchanged_paired_contract():
     config = CudaRolloutCampaignConfig.from_toml(
-        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml"
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v3.toml"
     )
-    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v2"
+    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v3"
     assert not (REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml").exists()
-    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v2")
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v3")
     assert config.mode.value == "pilot"
     assert config.pilot_scene_count == 5
     assert config.temperatures == (0.5, 1.0, 2.0, 4.0)
