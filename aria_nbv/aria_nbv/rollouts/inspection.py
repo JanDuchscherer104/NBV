@@ -490,6 +490,47 @@ def candidate_audit_rows(
     return rows
 
 
+def candidate_population_evidence(
+    reader: RolloutZarrStoreReader,
+    *,
+    group_by: CandidateGroupField | None = None,
+    sample_size: int = 500,
+    audit_reader: Callable[..., object] = candidate_audit_rows,
+) -> dict[str, object]:
+    """Collect candidate evidence once and expose bounded public projections.
+
+    The callback path keeps Zarr access incremental and centralizes all
+    candidate-derived projections behind one validated grouping vocabulary.
+    ``sample`` is deterministic and capped independently from aggregate rows.
+    """
+
+    if group_by is not None and group_by not in CANDIDATE_GROUP_FIELDS:
+        raise ValueError(f"Unsupported candidate group field {group_by!r}; expected one of {CANDIDATE_GROUP_FIELDS}.")
+    if sample_size < 0:
+        raise ValueError("sample_size must be non-negative")
+    rows: list[dict[str, object]] = []
+    try:
+        audit_reader(reader, row_callback=rows.append)
+    except TypeError as error:
+        if "row_callback" not in str(error):
+            raise
+        rows.extend(audit_reader(reader))  # type: ignore[arg-type]
+    sample = deterministic_candidate_display_sample(rows, max_rows=sample_size)
+    compositions = {key: candidate_composition_rows(rows, group_by=key) for key in CANDIDATE_GROUP_FIELDS}
+    calibrations = {key: candidate_proposal_calibration_rows(rows, group_by=key) for key in CANDIDATE_GROUP_FIELDS}
+    groups = {
+        key: candidate_group_summary_rows(reader, group_by=key, audit_rows=rows) for key in CANDIDATE_GROUP_FIELDS
+    }
+    return {
+        "composition": compositions,
+        "calibration": calibrations,
+        "collision": candidate_collision_support_rows(rows),
+        "groups": groups,
+        "sample": sample,
+        "population_count": len(rows),
+    }
+
+
 def temporal_metric_summary_rows(
     source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
     *,

@@ -20,11 +20,8 @@ import pandas as pd
 
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
-    candidate_audit_rows,
-    candidate_collision_support_rows,
-    candidate_composition_rows,
-    candidate_group_summary_rows,
-    candidate_proposal_calibration_rows,
+    candidate_audit_rows,  # noqa: F401 - retained for direct consumer compatibility
+    candidate_population_evidence,
     discounted_rollout_return_rows,
     oracle_headroom_evidence,
     q_h_evidence_rows,
@@ -697,26 +694,14 @@ def _append_store_rows(
         }
         for failure in suspicious_rollout_rows(reader)
     )
-    candidate_rows: list[dict[str, object]] = []
-    try:
-        candidate_audit_rows(reader, row_callback=candidate_rows.append)
-    except TypeError as error:
-        if "row_callback" not in str(error):
-            raise
-        candidate_rows.extend(candidate_audit_rows(reader))
+    candidate_evidence = candidate_population_evidence(reader, audit_reader=candidate_audit_rows)
     for group_by in CANDIDATE_GROUP_FIELDS:
-        rows["candidate_composition"].extend(
-            _with_store_id(store_id, candidate_composition_rows(candidate_rows, group_by=group_by))
-        )
-        rows["candidate_calibration"].extend(
-            _with_store_id(store_id, candidate_proposal_calibration_rows(candidate_rows, group_by=group_by))
-        )
-    rows["candidate_collision_support"].extend(
-        _with_store_id(store_id, candidate_collision_support_rows(candidate_rows))
-    )
+        rows["candidate_composition"].extend(_with_store_id(store_id, candidate_evidence["composition"][group_by]))
+        rows["candidate_calibration"].extend(_with_store_id(store_id, candidate_evidence["calibration"][group_by]))
+    rows["candidate_collision_support"].extend(_with_store_id(store_id, candidate_evidence["collision"]))
     rows["q_h_evidence"].extend(_with_store_id(store_id, q_h_evidence_rows(reader, validation_result=validation)))
     for group_by in CANDIDATE_GROUP_FIELDS:
-        for group_row in candidate_group_summary_rows(reader, group_by=group_by, audit_rows=candidate_rows):
+        for group_row in candidate_evidence["groups"][group_by]:
             group = group_row.pop(group_by)
             rows["candidate_groups"].append({"store_id": store_id, "group_by": group_by, "group": group, **group_row})
 

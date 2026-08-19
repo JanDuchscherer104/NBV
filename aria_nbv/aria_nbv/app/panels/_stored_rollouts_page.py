@@ -32,13 +32,9 @@ from ...rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
-    candidate_collision_support_rows,
-    candidate_composition_rows,
     candidate_flow_rows,
-    candidate_group_summary_rows,
-    candidate_proposal_calibration_rows,
+    candidate_population_evidence,
     comparable_policy_cohorts,
-    deterministic_candidate_display_sample,
     discounted_rollout_return_rows,
     discover_rollout_store_paths,
     mask_combination_rows,
@@ -276,23 +272,19 @@ def _cached_projection_cached(
     if projection == "candidate_group":
         if group_by is None:
             raise ValueError("candidate_group projection requires group_by")
-        audit_rows = _cached_projection(store_path, "candidates", limit=limit)
-        return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
+        return candidate_population_evidence(reader)["groups"][group_by]
     if projection in {"candidate_composition", "candidate_calibration"}:
         if group_by is None:
             raise ValueError(f"{projection} projection requires group_by")
-        audit_rows = _cached_projection(store_path, "candidates")
-        projector = (
-            candidate_composition_rows if projection == "candidate_composition" else candidate_proposal_calibration_rows
-        )
-        return projector(audit_rows, group_by=group_by)
+        evidence = candidate_population_evidence(reader)
+        key = "composition" if projection == "candidate_composition" else "calibration"
+        return evidence[key][group_by]
     if projection == "candidate_collision":
-        return candidate_collision_support_rows(_cached_projection(store_path, "candidates"))
+        return candidate_population_evidence(reader)["collision"]
     if projection == "candidate_sample":
-        return deterministic_candidate_display_sample(
-            _cached_projection(store_path, "candidates"),
-            max_rows=500 if limit is None else limit,
-        )
+        return candidate_population_evidence(reader, sample_size=500 if limit is None else limit)["sample"]
+    if projection == "candidate_population":
+        return candidate_population_evidence(reader, group_by=group_by if group_by else None)
     if projection == "q_h":
         _, validation, _ = _cached_store_bundle(store_path)
         return q_h_evidence_rows(reader, deep_count=deep_count, validation_result=validation)
@@ -1324,10 +1316,11 @@ def _render_candidate_population_evidence(store_path: str) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
-    composition = pd.DataFrame(_cached_projection(store_path, "candidate_composition", group_by=group_by))
-    calibration = pd.DataFrame(_cached_projection(store_path, "candidate_calibration", group_by=group_by))
-    collision = pd.DataFrame(_cached_projection(store_path, "candidate_collision"))
-    sample = _cached_projection(store_path, "candidate_sample", limit=500)
+    population = _cached_projection(store_path, "candidate_population", group_by=group_by)
+    composition = pd.DataFrame(population["composition"][group_by])
+    calibration = pd.DataFrame(population["calibration"][group_by])
+    collision = pd.DataFrame(population["collision"])
+    sample = population["sample"]
 
     st.markdown("#### Candidate composition")
     st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
