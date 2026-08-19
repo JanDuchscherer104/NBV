@@ -1232,7 +1232,9 @@ def _explicit_target_result(target: ExplicitRolloutTarget):
     """Adapt one explicit target to the writer's existing task loop."""
 
     task = OracleTargetTask(
-        source_index=target.detected_source_row,
+        # Oracle crop/scoring resolves this index against the privileged GT
+        # table.  The detector row remains separately persisted as lineage.
+        source_index=target.gt_match_row,
         target_row_id=target.detected_source_row,
         target_id=target.target_id,
         descriptor=target.actor_descriptor.descriptor,

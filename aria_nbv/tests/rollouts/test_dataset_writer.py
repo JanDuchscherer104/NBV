@@ -325,8 +325,8 @@ def test_explicit_v1_target_preserves_actor_descriptor_and_v1_lineage_fields() -
     actor = ObservedTargetDescriptor(
         sample_key="scene/snippet/0",
         source="detected_obbs",
-        source_row=3,
-        target_id="scene/snippet/0:detected:3:7",
+        source_row=0,
+        target_id="scene/snippet/0:detected:0:7",
         descriptor=_target_descriptor(),
         confidence=0.9,
         inst_id=7,
@@ -334,18 +334,18 @@ def test_explicit_v1_target_preserves_actor_descriptor_and_v1_lineage_fields() -
     payload = {
         "sample_key": actor.sample_key,
         "target_id": actor.target_id,
-        "detected_source_row": 3,
-        "gt_match_row": 5,
-        "gt_match_id": "gt-5",
+        "detected_source_row": 0,
+        "gt_match_row": 7,
+        "gt_match_id": "gt-7",
         "oriented_iou": 0.6,
         "descriptor_hash": actor.descriptor_hash,
     }
     explicit = ExplicitRolloutTargetConfig(
         sample_key=actor.sample_key,
         actor_descriptor=actor,
-        detected_source_row=3,
-        gt_match_row=5,
-        gt_match_id="gt-5",
+        detected_source_row=0,
+        gt_match_row=7,
+        gt_match_id="gt-7",
         oriented_iou=0.6,
         status="admitted",
         reason="admitted",
@@ -363,15 +363,16 @@ def test_explicit_v1_target_preserves_actor_descriptor_and_v1_lineage_fields() -
     lineage = writer._target_lineage(task, target_rank=0)
 
     assert task.descriptor == actor.descriptor
+    assert task.source_index == 7
     assert lineage.target_protocol_version == TargetInputProtocol.V1_OBSERVED
     assert lineage.target_source == actor.source
-    assert lineage.target_source_index == 3
+    assert lineage.target_source_index == 0
     assert lineage.descriptor_source == actor.source
     assert lineage.descriptor_provenance == "actor_visible_detector"
     assert lineage.descriptor_hash == actor.descriptor_hash
     assert lineage.explicit_target_hash == explicit.explicit_target_hash
-    assert lineage.matched_gt_target_row_id == 5
-    assert lineage.matched_gt_target_id == "gt-5"
+    assert lineage.matched_gt_target_row_id == 7
+    assert lineage.matched_gt_target_id == "gt-7"
     assert lineage.gt_match_iou == pytest.approx(0.6)
     assert lineage.gt_match_status == "admitted"
 
