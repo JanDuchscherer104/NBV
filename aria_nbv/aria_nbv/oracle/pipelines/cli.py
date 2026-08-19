@@ -424,6 +424,12 @@ plan_app = typer.Typer(
     help="Plan deterministic source-row rollout shard manifests from a writer TOML.",
     pretty_exceptions_show_locals=False,
 )
+source_manifest_app = typer.Typer(
+    add_completion=False,
+    context_settings=_HELP_SETTINGS,
+    help="Bootstrap one profile-independent rollout source manifest from a writer TOML.",
+    pretty_exceptions_show_locals=False,
+)
 status_app = typer.Typer(
     add_completion=False,
     context_settings=_HELP_SETTINGS,
@@ -454,6 +460,13 @@ def plan_main(argv: list[str] | None = None) -> None:
 
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     run_typer_app(plan_app, raw_argv, prog_name="nbv-plan-rollout-shards", obj={"raw_argv": raw_argv})
+
+
+def source_manifest_main(argv: list[str] | None = None) -> None:
+    """Entry point for bootstrapping a rollout source manifest."""
+
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    run_typer_app(source_manifest_app, raw_argv, prog_name="nbv-plan-rollout-source", obj={"raw_argv": raw_argv})
 
 
 def status_main(argv: list[str] | None = None) -> None:
@@ -687,7 +700,7 @@ def plan_rollout_shards_command(
         console.print(f"Wrote rollout shard manifest: {output_manifest}")
 
 
-@plan_app.command("source-manifest")
+@source_manifest_app.command()
 def plan_rollout_source_manifest_command(
     config_path: Annotated[
         Path,
@@ -862,6 +875,8 @@ __all__ = [
     "offline_main",
     "plan_app",
     "plan_main",
+    "source_manifest_app",
+    "source_manifest_main",
     "status_app",
     "status_main",
 ]

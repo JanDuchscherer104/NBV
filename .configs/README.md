@@ -14,29 +14,29 @@ committed here.
 
 ## Exact operator commands
 
-From the repository root, review the source rows directly from the writer TOML:
+From the repository root, build the reviewed V8 source store, then bootstrap the
+portable source manifest directly from the writer TOML:
 
 ```bash
-uv run nbv-plan-rollout-shards source-manifest \
+uv run nbv-build-offline --config-path .configs/build_vin_offline_rollout_campaign100_v8.toml
+uv run nbv-plan-rollout-source \
   --config-path .configs/build_rollouts_v1_cuda_campaign_writer.toml \
   --output-manifest .configs/rollout_campaign100_source_manifest.json
 ```
 
-Plan profile-specific shards without building stores:
+Plan the corrected paired pilot, run its smoke, launch at most ten new units,
+and inspect status:
 
 ```bash
-uv run nbv-plan-rollout-shards \
-  --config-path .configs/build_rollouts_v1_cuda_campaign_writer.toml \
-  --output-manifest .campaign/cuda-rollouts-v1/shards.jsonl \
-  --rows-per-shard 1
-```
-
-Run campaign gates and the bounded smoke before launch:
-
-```bash
-uv run nbv-rollout-campaign preflight --config-path .configs/build_rollouts_v1_cuda_campaign.toml
-uv run nbv-rollout-campaign plan --config-path .configs/build_rollouts_v1_cuda_campaign.toml \
+uv run nbv-rollout-campaign plan \
+  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml \
   --source-manifest .configs/rollout_campaign100_source_manifest.json
-uv run nbv-rollout-campaign smoke --config-path .configs/build_rollouts_v1_cuda_campaign.toml \
-  --plan-path .campaign/cuda-rollouts-v1/plan.json
+uv run nbv-rollout-campaign smoke \
+  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml
+uv run nbv-rollout-campaign run \
+  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml \
+  --plan-path .campaign/cuda-rollouts-v1-pilot-corrected-v2/plan.json \
+  --max-new-units 10
+uv run nbv-rollout-campaign status \
+  --config-path .configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml
 ```

@@ -9,12 +9,12 @@
 #   uv run nbv-build-offline \
 #     --config-path .configs/build_vin_offline_rollout_campaign100_v8.toml
 
-include_backbone = false
+include_backbone = true
 include_depths = false
 include_pointclouds = false
 include_diagnostic_payloads = false
 include_gt_obbs = true
-include_detected_obbs = false
+include_detected_obbs = true
 include_trajectory_metadata = true
 vin_pad_points = 50000
 semidense_max_points = 50000
@@ -31,20 +31,17 @@ store_dir = "vin_offline_rollout_campaign100_v8"
 
 [dataset]
 atek_variant = "efm"
-scene_ids = ["81283", "81286", "82004", "83515", "83550"]
-# Explicit shard paths avoid the repeated tar-header scan performed when sample
-# keys are supplied through snippet_ids. Each listed shard contains eight rows.
-snippet_ids = [
-  ".data/ase_efm/81283/shards-0000.tar",
-  ".data/ase_efm/81283/shards-0001.tar",
-  ".data/ase_efm/81286/shards-0000.tar",
-  ".data/ase_efm/81286/shards-0001.tar",
-  ".data/ase_efm/82004/shards-0000.tar",
-  ".data/ase_efm/82004/shards-0001.tar",
-  ".data/ase_efm/83515/shards-0000.tar",
-  ".data/ase_efm/83515/shards-0001.tar",
-  ".data/ase_efm/83550/shards-0000.tar",
-  ".data/ase_efm/83550/shards-0001.tar",
+scene_ids = [
+  "889", "8517", "8559", "8671", "8694", "8715", "8777", "8822", "8857", "8860",
+  "8938", "81022", "81048", "81056", "81128", "81161", "81180", "81181", "81184", "81188",
+  "81226", "81272", "81283", "81286", "81366", "81387", "81426", "81477", "81483", "81625",
+  "81693", "81772", "81807", "81964", "82004", "82254", "82257", "82258", "82271", "82294",
+  "82309", "82311", "82342", "82448", "82517", "82545", "82555", "82620", "82630", "82647",
+  "82658", "82700", "82832", "82889", "82902", "82953", "83036", "83078", "83086", "83098",
+  "83121", "83269", "83307", "83317", "83379", "83393", "83397", "83400", "83448", "83467",
+  "83506", "83515", "83522", "83550", "83560", "83577", "83598", "83678", "83692", "83713",
+  "83730", "83746", "83780", "83803", "83833", "83836", "83998", "84001", "84003", "84009",
+  "84052", "84074", "84080", "84171", "84185", "84186", "84230", "84271", "84309", "84320",
 ]
 batch_size = 1
 wds_shuffle = false

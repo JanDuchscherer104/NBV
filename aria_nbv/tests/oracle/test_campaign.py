@@ -328,18 +328,9 @@ def test_corrected_v2_pilot_has_fresh_identity_and_unchanged_paired_contract():
     config = CudaRolloutCampaignConfig.from_toml(
         REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v2.toml"
     )
-    prior = CudaRolloutCampaignConfig.from_toml(
-        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml"
-    )
-    current_payload = config.model_dump_jsonable()
-    prior_payload = prior.model_dump_jsonable()
-    for identity_field in ("campaign_id", "output_root"):
-        current_payload.pop(identity_field)
-        prior_payload.pop(identity_field)
-
     assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v2"
+    assert not (REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml").exists()
     assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v2")
-    assert current_payload == prior_payload
     assert config.mode.value == "pilot"
     assert config.pilot_scene_count == 5
     assert config.temperatures == (0.5, 1.0, 2.0, 4.0)

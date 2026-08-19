@@ -211,7 +211,7 @@ class RolloutSourceManifest:
     """Hash binding the source manifest, split, and ordered source rows."""
 
     source_store_dir: str
-    """Resolved source-store directory used when the manifest was frozen."""
+    """Portable source-store basename/cache identity, never a checkout path."""
 
     manifest_version: str = ROLLOUT_SOURCE_MANIFEST_VERSION
     """Ordered source-manifest contract version."""
@@ -354,7 +354,7 @@ class RolloutShardEntry:
     """Hash binding split name and ordered source-row records."""
 
     source_store_dir: str
-    """Resolved VIN source-store directory used when the manifest was planned."""
+    """Portable VIN source-store basename/cache identity used for local reopening."""
 
     manifest_version: str = ROLLOUT_SHARD_MANIFEST_VERSION
     """JSONL ownership-contract version."""

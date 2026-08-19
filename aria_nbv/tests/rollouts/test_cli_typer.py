@@ -69,13 +69,37 @@ def test_source_manifest_command_builds_without_existing_manifest(tmp_path, monk
     )
 
     result = runner.invoke(
-        rollout_cli.plan_app,
-        ["source-manifest", "--config-path", str(config_path), "--output-manifest", str(output_path)],
+        rollout_cli.source_manifest_app,
+        ["--config-path", str(config_path), "--output-manifest", str(output_path)],
     )
 
     assert result.exit_code == 0
     assert captured == {"source": source, "manifest_path": output_path}
     assert "Planned Rollout Source Manifest" in result.output
+
+
+def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(tmp_path, monkeypatch) -> None:
+    writer_path = tmp_path / "writer.toml"
+    writer_path.write_text("[source.store]\nstore_dir = 'local-store'\n", encoding="utf-8")
+    (tmp_path / "local-store").mkdir()
+    foreign_manifest = tmp_path / "foreign" / "source.json"
+    foreign_manifest.parent.mkdir()
+    fake_writer = SimpleNamespace(
+        source_manifest_path=foreign_manifest,
+        source=SimpleNamespace(store=SimpleNamespace(store_dir=tmp_path / "local-store")),
+    )
+    monkeypatch.setattr(rollout_cli, "RolloutDatasetWriterConfig", SimpleNamespace(from_toml=lambda _: fake_writer))
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.shard_manifest.read_rollout_source_manifest",
+        lambda _: SimpleNamespace(rows=(SimpleNamespace(scene_id="scene"),), source_store_dir="/old/checkout/store"),
+    )
+
+    assert (
+        rollout_cli._internal_preflight(
+            "source-target-preflight", writer_config_path=writer_path, expected_scene_count=1
+        )
+        == 0
+    )
 
 
 def test_build_rollouts_rejects_partial_shard_arguments(tmp_path, monkeypatch) -> None:
