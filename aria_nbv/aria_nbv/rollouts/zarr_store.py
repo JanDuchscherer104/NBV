@@ -1173,6 +1173,13 @@ class _RolloutZarrValidator:
         )
         split_hashes = _encoded_values(self.root, dictionary_name="config", array_path="sources/split_manifest_hash_id")
         sample_indices = np.asarray(self.root["sources/sample_index"], dtype=np.int64).reshape(-1)
+        campaign_split_attr = str(self.root.attrs.get("campaign_split", "unknown"))
+        if (
+            source_row_id.size
+            and campaign_split_attr != "unknown"
+            and all(value == "unknown" for value in campaign_split_ids)
+        ):
+            self.errors.append("campaign-bound rollout store cannot have only unknown campaign split assignments.")
         if (
             source_row_id.size
             and any(value != "unknown" for value in campaign_split_ids)

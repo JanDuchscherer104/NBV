@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 from pathlib import Path
 
@@ -162,6 +163,33 @@ def test_reader_campaign_filter_falls_back_to_legacy_physical_split(tmp_path: Pa
     ).store_dir
 
     assert [len(QhRolloutReader((store,), campaign_split=split)) for split in Stage] == [1, 0, 0]
+
+
+def test_campaign_bound_store_rejects_all_unknown_campaign_assignments(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    records[0].lineage.source.campaign_split = "train"
+    store = write_rollout_zarr_store(
+        tmp_path / "tampered.zarr",
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash=_campaign_split_hash(records),
+    ).store_dir
+    root = zarr.open_group(store, mode="a")
+    split_values = json.loads(bytes(np.asarray(root["dictionaries/split"])).decode("utf-8"))
+    split_values.append("unknown")
+    encoded = np.frombuffer(json.dumps(split_values).encode("utf-8"), dtype=np.uint8)
+    root["dictionaries/split"].resize((encoded.size,))
+    root["dictionaries/split"][:] = encoded
+    unknown_id = len(split_values) - 1
+    root["sources/campaign_split_id"][:] = unknown_id
+
+    validation = RolloutZarrStoreReader(store).validate()
+    assert not validation.ok
+    assert any("unknown campaign split" in error for error in validation.errors)
+    with pytest.raises(ValueError, match="canonical validation|unknown campaign split"):
+        QhRolloutReader((store,))
 
 
 def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
