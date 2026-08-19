@@ -1333,37 +1333,23 @@ class CudaRolloutCampaign:
         self,
         plan: CampaignPlan,
         *,
-        worker: Callable[[CampaignWorkUnit], Any] | None = None,
         config_path: Path | None = None,
         plan_path: Path | None = None,
     ) -> Any:
         unit = self._smoke_unit(plan)
-        if worker is None:
-            if config_path is None or plan_path is None:
-                raise ValueError("production smoke requires canonical config_path and plan_path")
-            argv = self.worker_argv(plan_path, unit, config_path=config_path)
-            argv = tuple(plan.plan_hash if value == "PLAN_HASH" else value for value in argv)
-            code, stdout, stderr = self.process_runner.run(
-                argv,
-                timeout=self.config.work_unit_timeout_seconds,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if code:
-                raise RuntimeError((stderr or stdout or f"worker exited {code}")[-2000:])
-            try:
-                result = self.parse_worker_result(stdout, plan, unit).to_jsonable()
-            except (TypeError, ValueError, json.JSONDecodeError) as exc:
-                raise RuntimeError("worker did not emit typed validated JSON") from exc
-        else:
-            result = self.run_with_watchdog(unit, worker, timeout=self.config.work_unit_timeout_seconds)
-        result = self.parse_worker_json(result)
-        if result.get("outcome") == CampaignOutcome.SKIPPED.value and result.get("validated") is True:
-            try:
-                self.smoke_evidence(plan)
-            except RuntimeError as exc:
-                raise RuntimeError("smoke evidence requires a structured succeeded+validated worker result") from exc
-            return result
+        if config_path is None or plan_path is None:
+            raise ValueError("production smoke requires canonical config_path and plan_path")
+        argv = self.worker_argv(plan_path, unit, config_path=config_path)
+        argv = tuple(plan.plan_hash if value == "PLAN_HASH" else value for value in argv)
+        code, stdout, stderr = self.process_runner.run(
+            argv, timeout=self.config.work_unit_timeout_seconds, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        if code:
+            raise RuntimeError((stderr or stdout or f"worker exited {code}")[-2000:])
+        try:
+            result = self.parse_worker_result(stdout, plan, unit).to_jsonable()
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise RuntimeError("worker did not emit typed validated JSON") from exc
         if result.get("outcome") != CampaignOutcome.SUCCEEDED.value or result.get("validated") is not True:
             raise RuntimeError("smoke evidence requires a structured succeeded+validated worker result")
         evidence = {
@@ -1751,7 +1737,6 @@ class CudaRolloutCampaign:
         self,
         plan: CampaignPlan,
         *,
-        worker: Callable[[CampaignWorkUnit], Any] | None = None,
         plan_path: Path | None = None,
         config_path: Path | None = None,
         cuda_probe: Callable[[], Any] | None = None,
@@ -1808,15 +1793,12 @@ class CudaRolloutCampaign:
             if not resuming_campaign and prior_state not in {"preflight_passed", "smoke_passed"}:
                 self.append_event(self._event(plan, "preflight_passed"))
                 self.write_status(self.status(plan, prior_results, stage="preflight_passed"))
-            # An injected worker remains subject to the same current smoke gate;
-            # injection changes execution mechanics, not campaign admission.
             self.smoke_evidence(plan)
             if not resuming_campaign and prior_state != "smoke_passed":
                 self.append_event(self._event(plan, "smoke_passed"))
                 self.write_status(self.status(plan, prior_results, stage="smoke_passed"))
             return self._run_claimed(
                 plan,
-                worker=worker,
                 plan_path=plan_path,
                 config_path=config_path,
                 claim=claim,
@@ -1831,7 +1813,6 @@ class CudaRolloutCampaign:
         self,
         plan: CampaignPlan,
         *,
-        worker: Callable[[CampaignWorkUnit], Any] | None = None,
         plan_path: Path | None = None,
         config_path: Path | None = None,
         claim: dict[str, Any],
@@ -1921,7 +1902,7 @@ class CudaRolloutCampaign:
                     started_at=started_at_iso,
                 )
             )
-            if worker is not None:
+            try:
                 started = self._event(plan, "unit_started", unit=unit, stage="worker")
                 self.append_event(started)
                 self.write_status(
@@ -1936,35 +1917,28 @@ class CudaRolloutCampaign:
                         active_started_at=started.timestamp,
                     )
                 )
-            try:
-                if worker is not None:
-                    self.append_event(self._event(plan, "recipe_worker", unit=unit, stage=unit.profile))
-                    result = self.run_with_watchdog(unit, worker)
-                    # Injected workers are a test seam, not a bypass around
-                    # the typed worker contract used by the subprocess path.
-                    result = self.parse_worker_json(result)
-                else:
-                    argv = self.worker_argv(
-                        plan_path or (self.config.output_root / "plan.json"), unit, config_path=config_path
-                    )
-                    argv = tuple(plan.plan_hash if x == "PLAN_HASH" else x for x in argv)
-                    returncode, stdout, stderr = self.process_runner.run(
-                        argv,
-                        timeout=self.config.work_unit_timeout_seconds,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        on_started=self._child_started_callback(
-                            plan,
-                            results,
-                            unit,
-                            started_at=started_at,
-                            started_at_iso=started_at_iso,
-                            last_timeout=last_timeout,
-                        ),
-                    )
-                    if returncode:
-                        raise RuntimeError((stderr or stdout or f"worker exited {returncode}")[-2000:])
-                    result = self.parse_worker_result(stdout, plan, unit).to_jsonable()
+                self.append_event(self._event(plan, "recipe_worker", unit=unit, stage=unit.profile))
+                argv = self.worker_argv(
+                    plan_path or (self.config.output_root / "plan.json"), unit, config_path=config_path
+                )
+                argv = tuple(plan.plan_hash if x == "PLAN_HASH" else x for x in argv)
+                returncode, stdout, stderr = self.process_runner.run(
+                    argv,
+                    timeout=self.config.work_unit_timeout_seconds,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    on_started=self._child_started_callback(
+                        plan,
+                        results,
+                        unit,
+                        started_at=started_at,
+                        started_at_iso=started_at_iso,
+                        last_timeout=last_timeout,
+                    ),
+                )
+                if returncode:
+                    raise RuntimeError((stderr or stdout or f"worker exited {returncode}")[-2000:])
+                result = self.parse_worker_result(stdout, plan, unit).to_jsonable()
                 outcome = (
                     result.get("outcome", CampaignOutcome.SUCCEEDED.value)
                     if isinstance(result, dict)
@@ -2353,20 +2327,6 @@ class CudaRolloutCampaign:
         if previous.plan_hash not in {"", plan.plan_hash}:
             return None
         return next((unit for unit in plan.work_units if unit.work_unit_hash == previous.last_work_unit), None)
-
-    def run_with_watchdog(
-        self, unit: CampaignWorkUnit, worker: Callable[[CampaignWorkUnit], Any], *, timeout: float | None = None
-    ) -> Any:
-        """Run an injected unit and enforce a monotonic timeout.
-
-        Callable workers are kept for deterministic tests; production callers
-        may use ``process_runner`` and the same termination semantics.
-        """
-        started = self.clock()
-        result = worker(unit)
-        if self.clock() - started >= (self.config.work_unit_timeout_seconds if timeout is None else timeout):
-            raise TimeoutError(f"work unit timed out: {unit.work_unit_hash}")
-        return result
 
     def _child_started_callback(
         self,
