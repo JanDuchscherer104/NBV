@@ -203,7 +203,6 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
     seed: int = 20260728
     observed_target_iou_threshold: float = Field(default=0.20, ge=0, lt=1)
     expected_scene_count: int = Field(default=100, ge=1)
-    paired_panel_scene_count: int = Field(default=20, ge=0)
     min_valid_root_candidates: int = Field(default=15, ge=0)
     stage_timeout_seconds: float = Field(default=120, gt=0)
     work_unit_timeout_seconds: float = Field(default=3600, gt=0)
@@ -221,8 +220,8 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
             or self.work_unit_timeout_seconds != 3600
         ):
             raise ValueError("campaign support and watchdog constants are fixed reviewed constants")
-        if self.expected_scene_count != 100 or self.paired_panel_scene_count != 20:
-            raise ValueError("campaign scene and panel counts are fixed reviewed constants")
+        if self.expected_scene_count != 100:
+            raise ValueError("campaign scene count is a fixed reviewed constant")
         if self.mode not in {CampaignMode.BROAD, CampaignMode.PILOT}:
             raise ValueError("campaign mode must be broad or pilot")
         if self.frozen_profile not in _PROFILE_COMPONENTS:
@@ -3174,24 +3173,73 @@ class CudaRolloutCampaign:
         if plan is not None and status.plan_hash and status.plan_hash != plan.plan_hash:
             payload["latest_failure_reason"] = "stale_status_plan_hash"
         artifacts: list[dict[str, Any]] = []
+        artifact_records: list[dict[str, Any]] = []
         shards_root = self.config.output_root / "shards"
         if shards_root.is_dir() and plan is not None:
             from .shards import read_validated_completed_shard
 
+            terminal_outcomes = {
+                event.work_unit_hash: event.kind.removeprefix("unit_")
+                for event in self.read_events(plan=plan)
+                if event.work_unit_hash is not None and event.kind.startswith("unit_")
+            }
+            planned_hashes = {unit.work_unit_hash for unit in plan.work_units}
+
             for unit in plan.work_units:
+                outcome = terminal_outcomes.get(unit.work_unit_hash, "pending")
+                path = shards_root / unit.work_unit_hash
                 try:
                     effective_writer, entry = self._effective_writer_and_shard_entry(plan, unit)
                     effective_writer_hash = (
                         plan.writer_config_hash if effective_writer is None else stable_config_hash(effective_writer)
                     )
                     entry = replace(entry, writer_config_hash=effective_writer_hash)
-                except (TypeError, ValueError, KeyError):
+                except (TypeError, ValueError, KeyError) as exc:
+                    artifact_records.append(
+                        {
+                            "work_unit_hash": unit.work_unit_hash,
+                            "outcome": outcome,
+                            "status": "invalid",
+                            "reason": f"planned artifact binding is invalid: {exc}",
+                        }
+                    )
                     continue
-                path = shards_root / unit.work_unit_hash
                 evidence = read_validated_completed_shard(
                     path, shard_entry=entry, writer_config_hash=effective_writer_hash
                 )
                 if evidence is None:
+                    if path.exists():
+                        artifact_records.append(
+                            {
+                                "work_unit_hash": unit.work_unit_hash,
+                                "outcome": outcome,
+                                "status": "conflicting" if (path / "_SUCCESS.json").exists() else "invalid",
+                                "reason": (
+                                    "promoted artifact exists but is not a validated completed shard"
+                                    if (path / "_SUCCESS.json").exists()
+                                    else "planned artifact path exists without validated completion evidence"
+                                ),
+                            }
+                        )
+                    elif outcome != "pending":
+                        artifact_records.append(
+                            {
+                                "work_unit_hash": unit.work_unit_hash,
+                                "outcome": outcome,
+                                "status": "missing",
+                                "reason": "ledger terminal outcome has no promoted artifact",
+                            }
+                        )
+                    continue
+                if outcome != "succeeded":
+                    artifact_records.append(
+                        {
+                            "work_unit_hash": unit.work_unit_hash,
+                            "outcome": outcome,
+                            "status": "conflicting",
+                            "reason": "validated promoted artifact conflicts with the ledger outcome",
+                        }
+                    )
                     continue
                 binding = entry.campaign_binding.to_jsonable() if entry.campaign_binding else {}
                 artifacts.append(
@@ -3216,10 +3264,21 @@ class CudaRolloutCampaign:
                         "effective_writer_config_hash": evidence["owner_evidence"].get("writer_config_hash", ""),
                         "campaign_source_manifest_hash": plan.source_manifest_hash,
                         "shard_source_manifest_hash": evidence["owner_evidence"].get("source_manifest_hash", ""),
-                        "outcome": "succeeded",
+                        "outcome": outcome,
+                    }
+                )
+            for orphan in sorted(path for path in shards_root.iterdir() if path.name not in planned_hashes):
+                artifact_records.append(
+                    {
+                        "work_unit_hash": orphan.name,
+                        "outcome": "orphan",
+                        "status": "orphan",
+                        "reason": "artifact is not referenced by the current campaign plan",
+                        "store_path": str(orphan.resolve()),
                     }
                 )
         payload["validated_artifacts"] = artifacts
+        payload["artifact_records"] = artifact_records
         return payload
 
     def write_status(self, status: CampaignStatus, path: Path | None = None) -> Path:

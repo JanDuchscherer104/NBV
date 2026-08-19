@@ -236,7 +236,7 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
         f"{recipe.get('policy', 'invalid')} H={recipe.get('horizon', '?')} "
         f"branch {recipe.get('branch', '?')} / beam {recipe.get('beam', '?')} · "
         f"60 candidates · balanced temperatures {list(cfg.temperatures)} · "
-        "support gate 10 · watchdog 120s / 3600s"
+        f"support gate {cfg.min_valid_root_candidates} · watchdog 120s / 3600s"
     )
     st.json(
         {
@@ -264,7 +264,6 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                 "strict_iou": f"> {cfg.observed_target_iou_threshold} (equality rejected)",
                 "seed": cfg.seed,
                 "expected_scenes": cfg.expected_scene_count,
-                "paired_panel_scenes": cfg.paired_panel_scene_count,
                 "min_valid_root_candidates": cfg.min_valid_root_candidates,
                 "watchdogs_seconds": [cfg.stage_timeout_seconds, cfg.work_unit_timeout_seconds],
                 "execution": "one serial CUDA worker; no CPU fallback",
@@ -382,6 +381,10 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
                     )
                 }
             )
+            artifact_records = summary.get("artifact_records", [])
+            if artifact_records:
+                st.subheader("Campaign artifact records")
+                st.dataframe(artifact_records, use_container_width=True)
             artifacts = summary.get("validated_artifacts", [])
             if artifacts:
                 st.subheader("Validated campaign artifacts")

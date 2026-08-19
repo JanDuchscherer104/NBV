@@ -272,7 +272,7 @@ def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
 def _campaign(tmp_path):
     base = CudaRolloutCampaignConfig(output_root=tmp_path)
     values = base.model_dump()
-    values.update(expected_scene_count=2, paired_panel_scene_count=1, profiles=base.profiles)
+    values.update(expected_scene_count=2, profiles=base.profiles)
     config = CudaRolloutCampaignConfig.model_construct(**values)
     return CudaRolloutCampaign(config)
 
@@ -1853,6 +1853,11 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
         "_effective_writer_and_shard_entry",
         lambda _plan, unit: (effective_writer, entries[unit.work_unit_hash]),
     )
+    monkeypatch.setattr(
+        campaign,
+        "read_events",
+        lambda **_kwargs: [campaign._event(plan, "unit_succeeded", work_unit=plan.work_units[0])],
+    )
 
     def read(path, *, shard_entry, writer_config_hash=""):
         seen_writer_hashes.append(writer_config_hash)
@@ -1874,6 +1879,42 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
     assert seen_writer_hashes == [effective_hash] * len(plan.work_units)
     assert "owner_evidence" not in artifacts[0]
     assert not any(row["work_unit_hash"] == "unrelated" for row in artifacts)
+
+
+def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflict(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan(
+        [_row("s0", "k", "t"), _row("s1", "k1", "t1"), _row("s2", "k2", "t2")],
+        source_manifest_hash="source",
+    )
+    shards = tmp_path / "shards"
+    shards.mkdir()
+    (shards / plan.work_units[0].work_unit_hash).mkdir()
+    (shards / plan.work_units[0].work_unit_hash / "_SUCCESS.json").write_text("{}")
+    (shards / plan.work_units[1].work_unit_hash).mkdir()
+    (shards / "orphan-store").mkdir()
+    events = [
+        campaign._event(plan, "unit_skipped", work_unit=plan.work_units[0]),
+        campaign._event(plan, "unit_failed", work_unit=plan.work_units[1]),
+        campaign._event(plan, "unit_timed_out", work_unit=plan.work_units[2]),
+    ]
+    monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
+    entries = {unit.work_unit_hash: campaign.shard_entry_for_unit(plan, unit) for unit in plan.work_units}
+    monkeypatch.setattr(
+        campaign,
+        "_effective_writer_and_shard_entry",
+        lambda _plan, unit: (None, entries[unit.work_unit_hash]),
+    )
+    from aria_nbv.oracle.pipelines import shards as shard_module
+
+    monkeypatch.setattr(shard_module, "read_validated_completed_shard", lambda *_args, **_kwargs: None)
+    summary = campaign.progress_summary(plan)
+    records = summary["artifact_records"]
+    assert any(record["status"] == "conflicting" and record["outcome"] == "skipped" for record in records)
+    assert any(record["status"] == "invalid" and record["outcome"] == "failed" for record in records)
+    assert any(record["status"] == "missing" and record["outcome"] == "timed_out" for record in records)
+    assert any(record["status"] == "orphan" for record in records)
+    assert summary["validated_artifacts"] == []
 
 
 def test_effective_writer_hash_rebinds_base_writer_before_terminal_validation(tmp_path, monkeypatch):
