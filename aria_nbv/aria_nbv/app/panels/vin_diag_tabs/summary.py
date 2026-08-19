@@ -7,8 +7,6 @@ inputs and outputs.
 
 from __future__ import annotations
 
-from dataclasses import asdict
-
 import numpy as np
 import plotly.express as px
 import streamlit as st
@@ -19,7 +17,7 @@ from ....data_handling.vin_store.diagnostics import collect_vin_offline_dataset_
 from ....data_handling.vin_store.source import VinOfflineSourceConfig
 from ....utils.plotting import _histogram_overlay, _to_numpy
 from ....vin.diagnostics.plotting import _parameter_distribution
-from ..common import _info_popover, _pretty_label, _strip_ansi
+from ..common import _info_popover, _offline_summary_rows, _pretty_label, _strip_ansi
 from .context import VinDiagContext
 
 
@@ -65,11 +63,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
                 col_c.metric("Snippets", stats.num_snippets)
                 col_d.metric("Numeric blocks", f"{stats.numeric_bytes / (1024**2):.1f} MiB")
                 st.dataframe(
-                    [
-                        {"metric": "candidate_count", **asdict(stats.candidate_count)},
-                        {"metric": "rri", **asdict(stats.rri)},
-                        {"metric": "vin_points", **asdict(stats.vin_points)},
-                    ],
+                    _offline_summary_rows(stats),
                     width="stretch",
                     hide_index=True,
                 )

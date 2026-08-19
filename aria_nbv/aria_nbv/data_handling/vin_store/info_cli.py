@@ -32,7 +32,7 @@ from ...utils.cli_format import (
 )
 from ...utils.typer_cli import run_typer_app
 from ..identifiers import compact_ase_atek_identifiers, compact_ase_atek_sample_id
-from .diagnostics import NumericSummary, collect_vin_offline_dataset_stats
+from .diagnostics import _numeric_summary, collect_vin_offline_dataset_stats
 from .format import VinOfflineBlockSpec, VinOfflineIndexRecord, VinOfflineShardSpec
 from .store import VinOfflineStoreConfig, VinOfflineStoreReader
 
@@ -288,19 +288,6 @@ def _block_payload(block: VinOfflineBlockSpec) -> dict[str, Any]:
         "optional": bool(block.optional),
         "estimated_mib": estimated_mib,
     }
-
-
-def _numeric_summary(values: np.ndarray) -> NumericSummary:
-    finite = np.asarray(values, dtype=np.float64).reshape(-1)
-    finite = finite[np.isfinite(finite)]
-    if finite.size == 0:
-        return NumericSummary(count=0, minimum=None, mean=None, maximum=None)
-    return NumericSummary(
-        count=int(finite.size),
-        minimum=float(finite.min()),
-        mean=float(finite.mean()),
-        maximum=float(finite.max()),
-    )
 
 
 def _bytes_to_mib(num_bytes: int) -> float:

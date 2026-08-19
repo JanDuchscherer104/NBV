@@ -258,8 +258,6 @@ website:
           file: reference/utils.schemas.qmd
         - text: semantic_names
           file: reference/utils.semantic_names.qmd
-        - text: summary
-          file: reference/utils.summary.qmd
         - text: typed_payloads
           file: reference/utils.typed_payloads.qmd
         - text: typer_cli

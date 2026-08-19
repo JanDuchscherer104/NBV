@@ -219,7 +219,7 @@ class NbvStreamlitApp:
         state.dataset_cfg = dataset_config
         sample = controller.get_sample(force=refresh)
         store_state(state)
-        render_data_page(sample, crop_margin=dataset_config.mesh_crop_margin_m)
+        render_data_page(sample)
 
     def _page_candidate_renders(self) -> None:
         """Render candidate depths with page-owned renderer controls."""
