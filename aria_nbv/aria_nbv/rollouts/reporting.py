@@ -697,7 +697,13 @@ def _append_store_rows(
         }
         for failure in suspicious_rollout_rows(reader)
     )
-    candidate_rows = candidate_audit_rows(reader)
+    candidate_rows: list[dict[str, object]] = []
+    try:
+        candidate_audit_rows(reader, row_callback=candidate_rows.append)
+    except TypeError as error:
+        if "row_callback" not in str(error):
+            raise
+        candidate_rows.extend(candidate_audit_rows(reader))
     for group_by in CANDIDATE_GROUP_FIELDS:
         rows["candidate_composition"].extend(
             _with_store_id(store_id, candidate_composition_rows(candidate_rows, group_by=group_by))

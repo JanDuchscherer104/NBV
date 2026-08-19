@@ -264,12 +264,15 @@ def _cached_projection_cached(
     if projection == "masks":
         return mask_combination_rows(reader)
     if projection == "candidates":
-        return candidate_audit_rows(
+        rows: list[dict[str, object]] = []
+        candidate_audit_rows(
             reader,
             rollout_row_id=rollout_row_id,
             step_row_id=step_row_id,
             limit=limit,
+            row_callback=rows.append,
         )
+        return rows
     if projection == "candidate_group":
         if group_by is None:
             raise ValueError("candidate_group projection requires group_by")
