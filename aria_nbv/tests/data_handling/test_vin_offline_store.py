@@ -200,6 +200,7 @@ def _make_vin_snippet(*, offset: float = 0.0) -> VinSnippetView:
         points_world=points_world,
         lengths=lengths,
         t_world_rig=_make_pose_batch(2, offset=offset),
+        t_world_snippet=_make_pose_batch(1, offset=offset),
     )
 
 
@@ -1298,7 +1299,7 @@ def test_vin_offline_manifest_omits_counterfactual_placeholders(tmp_path: Path) 
     store_cfg = _write_test_store(tmp_path)
     manifest_payload = json.loads(store_cfg.manifest_path.read_text(encoding="utf-8"))
 
-    assert OFFLINE_DATASET_VERSION == 7  # noqa: S101
+    assert OFFLINE_DATASET_VERSION == 8  # noqa: S101
     assert "counterfactuals" not in manifest_payload  # noqa: S101
     assert "counterfactuals" not in manifest_payload["materialized_blocks"]  # noqa: S101
 

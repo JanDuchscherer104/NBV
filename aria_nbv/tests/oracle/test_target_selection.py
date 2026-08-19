@@ -108,6 +108,7 @@ def _sample(
         points_world=point_tensor,
         lengths=torch.tensor([point_tensor.shape[0]], dtype=torch.int64),
         t_world_rig=_poses([[0.0, 0.0, 0.0]]),
+        t_world_snippet=_poses([[0.0, 0.0, 0.0]]),
     )
     oracle = VinOfflineOracleBlock(
         candidate_poses_world_cam=_poses([[0.0, 0.0, 0.0]]),
@@ -244,6 +245,7 @@ def test_observed_descriptor_extraction_is_actor_only_and_deterministic() -> Non
 def test_observed_descriptor_transforms_snippet_obb_to_world_and_reference_frame() -> None:
     sample = _sample(detected_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]), gt_obbs=None)
     sample.vin_snippet.t_world_rig = _poses([[10.0, 0.0, 0.0]])
+    sample.vin_snippet.t_world_snippet = _poses([[10.0, 0.0, 0.0]])
     sample.oracle.reference_pose_world_rig = _poses([[11.0, 0.0, 0.0]])
 
     observed = observed_target_descriptors(sample)[0]
