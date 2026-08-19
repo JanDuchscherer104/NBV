@@ -4,6 +4,7 @@
   "num_scenes": 100,
   "rows": [
     {
+      "campaign_split": null,
       "order": 0,
       "sample_index": 0,
       "sample_key": "ASE_889_Atek_000008",
@@ -14,6 +15,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 1,
       "sample_index": 1,
       "sample_key": "ASE_8517_Atek_000000",
@@ -24,6 +26,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 2,
       "sample_index": 2,
       "sample_key": "ASE_8559_Atek_000000",
@@ -34,6 +37,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 3,
       "sample_index": 3,
       "sample_key": "ASE_8671_Atek_000040",
@@ -44,6 +48,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 4,
       "sample_index": 4,
       "sample_key": "ASE_8694_Atek_000024",
@@ -54,6 +59,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 5,
       "sample_index": 5,
       "sample_key": "ASE_8715_Atek_000008",
@@ -64,6 +70,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 6,
       "sample_index": 6,
       "sample_key": "ASE_8777_Atek_000008",
@@ -74,6 +81,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 7,
       "sample_index": 7,
       "sample_key": "ASE_8822_Atek_000016",
@@ -84,6 +92,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 8,
       "sample_index": 8,
       "sample_key": "ASE_8857_Atek_000032",
@@ -94,6 +103,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 9,
       "sample_index": 9,
       "sample_key": "ASE_8860_Atek_000040",
@@ -104,6 +114,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 10,
       "sample_index": 10,
       "sample_key": "ASE_8938_Atek_000048",
@@ -114,6 +125,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 11,
       "sample_index": 11,
       "sample_key": "ASE_81022_Atek_000016",
@@ -124,6 +136,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 12,
       "sample_index": 12,
       "sample_key": "ASE_81048_Atek_000040",
@@ -134,6 +147,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 13,
       "sample_index": 13,
       "sample_key": "ASE_81056_Atek_000016",
@@ -144,6 +158,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 14,
       "sample_index": 14,
       "sample_key": "ASE_81128_Atek_000024",
@@ -154,6 +169,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 15,
       "sample_index": 15,
       "sample_key": "ASE_81161_Atek_000016",
@@ -164,6 +180,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 16,
       "sample_index": 16,
       "sample_key": "ASE_81180_Atek_000008",
@@ -174,6 +191,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 17,
       "sample_index": 17,
       "sample_key": "ASE_81181_Atek_000016",
@@ -184,6 +202,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 18,
       "sample_index": 18,
       "sample_key": "ASE_81184_Atek_000000",
@@ -194,6 +213,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 19,
       "sample_index": 19,
       "sample_key": "ASE_81188_Atek_000024",
@@ -204,6 +224,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 20,
       "sample_index": 20,
       "sample_key": "ASE_81226_Atek_000000",
@@ -214,6 +235,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 21,
       "sample_index": 21,
       "sample_key": "ASE_81272_Atek_000000",
@@ -224,6 +246,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 22,
       "sample_index": 22,
       "sample_key": "ASE_81283_Atek_000016",
@@ -234,6 +257,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 23,
       "sample_index": 23,
       "sample_key": "ASE_81286_Atek_000112",
@@ -244,6 +268,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 24,
       "sample_index": 24,
       "sample_key": "ASE_81366_Atek_000008",
@@ -254,6 +279,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 25,
       "sample_index": 25,
       "sample_key": "ASE_81387_Atek_000024",
@@ -264,6 +290,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 26,
       "sample_index": 26,
       "sample_key": "ASE_81426_Atek_000000",
@@ -274,6 +301,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 27,
       "sample_index": 27,
       "sample_key": "ASE_81477_Atek_000080",
@@ -284,6 +312,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 28,
       "sample_index": 28,
       "sample_key": "ASE_81483_Atek_000048",
@@ -294,6 +323,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 29,
       "sample_index": 29,
       "sample_key": "ASE_81625_Atek_000000",
@@ -304,6 +334,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 30,
       "sample_index": 30,
       "sample_key": "ASE_81693_Atek_000008",
@@ -314,6 +345,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 31,
       "sample_index": 31,
       "sample_key": "ASE_81772_Atek_000000",
@@ -324,6 +356,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 32,
       "sample_index": 32,
       "sample_key": "ASE_81807_Atek_000024",
@@ -334,6 +367,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 33,
       "sample_index": 33,
       "sample_key": "ASE_81964_Atek_000072",
@@ -344,6 +378,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 34,
       "sample_index": 34,
       "sample_key": "ASE_82004_Atek_000032",
@@ -354,6 +389,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 35,
       "sample_index": 35,
       "sample_key": "ASE_82254_Atek_000008",
@@ -364,6 +400,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 36,
       "sample_index": 36,
       "sample_key": "ASE_82257_Atek_000016",
@@ -374,6 +411,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 37,
       "sample_index": 37,
       "sample_key": "ASE_82258_Atek_000000",
@@ -384,6 +422,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 38,
       "sample_index": 38,
       "sample_key": "ASE_82271_Atek_000016",
@@ -394,6 +433,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 39,
       "sample_index": 39,
       "sample_key": "ASE_82294_Atek_000008",
@@ -404,6 +444,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 40,
       "sample_index": 40,
       "sample_key": "ASE_82309_Atek_000000",
@@ -414,6 +455,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 41,
       "sample_index": 41,
       "sample_key": "ASE_82311_Atek_000000",
@@ -424,6 +466,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 42,
       "sample_index": 42,
       "sample_key": "ASE_82342_Atek_000032",
@@ -434,6 +477,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 43,
       "sample_index": 43,
       "sample_key": "ASE_82448_Atek_000008",
@@ -444,6 +488,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 44,
       "sample_index": 44,
       "sample_key": "ASE_82517_Atek_000000",
@@ -454,6 +499,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 45,
       "sample_index": 45,
       "sample_key": "ASE_82545_Atek_000016",
@@ -464,6 +510,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 46,
       "sample_index": 46,
       "sample_key": "ASE_82555_Atek_000008",
@@ -474,6 +521,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 47,
       "sample_index": 47,
       "sample_key": "ASE_82620_Atek_000000",
@@ -484,6 +532,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 48,
       "sample_index": 48,
       "sample_key": "ASE_82630_Atek_000008",
@@ -494,6 +543,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 49,
       "sample_index": 49,
       "sample_key": "ASE_82647_Atek_000008",
@@ -504,6 +554,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 50,
       "sample_index": 50,
       "sample_key": "ASE_82658_Atek_000000",
@@ -514,6 +565,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 51,
       "sample_index": 51,
       "sample_key": "ASE_82700_Atek_000016",
@@ -524,6 +576,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 52,
       "sample_index": 52,
       "sample_key": "ASE_82832_Atek_000040",
@@ -534,6 +587,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 53,
       "sample_index": 53,
       "sample_key": "ASE_82889_Atek_000008",
@@ -544,6 +598,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 54,
       "sample_index": 54,
       "sample_key": "ASE_82902_Atek_000000",
@@ -554,6 +609,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 55,
       "sample_index": 55,
       "sample_key": "ASE_82953_Atek_000000",
@@ -564,6 +620,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 56,
       "sample_index": 56,
       "sample_key": "ASE_83036_Atek_000032",
@@ -574,6 +631,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 57,
       "sample_index": 57,
       "sample_key": "ASE_83078_Atek_000000",
@@ -584,6 +642,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 58,
       "sample_index": 58,
       "sample_key": "ASE_83086_Atek_000024",
@@ -594,6 +653,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 59,
       "sample_index": 59,
       "sample_key": "ASE_83098_Atek_000000",
@@ -604,6 +664,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 60,
       "sample_index": 60,
       "sample_key": "ASE_83121_Atek_000048",
@@ -614,6 +675,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 61,
       "sample_index": 61,
       "sample_key": "ASE_83269_Atek_000056",
@@ -624,6 +686,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 62,
       "sample_index": 62,
       "sample_key": "ASE_83307_Atek_000016",
@@ -634,6 +697,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 63,
       "sample_index": 63,
       "sample_key": "ASE_83317_Atek_000056",
@@ -644,6 +708,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 64,
       "sample_index": 64,
       "sample_key": "ASE_83379_Atek_000000",
@@ -654,6 +719,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 65,
       "sample_index": 65,
       "sample_key": "ASE_83393_Atek_000016",
@@ -664,6 +730,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 66,
       "sample_index": 66,
       "sample_key": "ASE_83397_Atek_000000",
@@ -674,6 +741,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 67,
       "sample_index": 67,
       "sample_key": "ASE_83400_Atek_000032",
@@ -684,6 +752,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 68,
       "sample_index": 68,
       "sample_key": "ASE_83448_Atek_000008",
@@ -694,6 +763,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 69,
       "sample_index": 69,
       "sample_key": "ASE_83467_Atek_000000",
@@ -704,6 +774,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 70,
       "sample_index": 70,
       "sample_key": "ASE_83506_Atek_000032",
@@ -714,6 +785,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 71,
       "sample_index": 71,
       "sample_key": "ASE_83515_Atek_000080",
@@ -724,6 +796,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 72,
       "sample_index": 72,
       "sample_key": "ASE_83522_Atek_000024",
@@ -734,6 +807,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 73,
       "sample_index": 73,
       "sample_key": "ASE_83550_Atek_000144",
@@ -744,6 +818,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 74,
       "sample_index": 74,
       "sample_key": "ASE_83560_Atek_000016",
@@ -754,6 +829,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 75,
       "sample_index": 75,
       "sample_key": "ASE_83577_Atek_000072",
@@ -764,6 +840,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 76,
       "sample_index": 76,
       "sample_key": "ASE_83598_Atek_000000",
@@ -774,6 +851,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 77,
       "sample_index": 77,
       "sample_key": "ASE_83678_Atek_000032",
@@ -784,6 +862,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 78,
       "sample_index": 78,
       "sample_key": "ASE_83692_Atek_000008",
@@ -794,6 +873,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 79,
       "sample_index": 79,
       "sample_key": "ASE_83713_Atek_000016",
@@ -804,6 +884,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 80,
       "sample_index": 80,
       "sample_key": "ASE_83730_Atek_000000",
@@ -814,6 +895,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 81,
       "sample_index": 81,
       "sample_key": "ASE_83746_Atek_000008",
@@ -824,6 +906,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 82,
       "sample_index": 82,
       "sample_key": "ASE_83780_Atek_000000",
@@ -834,6 +917,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 83,
       "sample_index": 83,
       "sample_key": "ASE_83803_Atek_000000",
@@ -844,6 +928,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 84,
       "sample_index": 84,
       "sample_key": "ASE_83833_Atek_000048",
@@ -854,6 +939,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 85,
       "sample_index": 85,
       "sample_key": "ASE_83836_Atek_000016",
@@ -864,6 +950,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 86,
       "sample_index": 86,
       "sample_key": "ASE_83998_Atek_000024",
@@ -874,6 +961,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 87,
       "sample_index": 87,
       "sample_key": "ASE_84001_Atek_000000",
@@ -884,6 +972,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 88,
       "sample_index": 88,
       "sample_key": "ASE_84003_Atek_000000",
@@ -894,6 +983,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 89,
       "sample_index": 89,
       "sample_key": "ASE_84009_Atek_000024",
@@ -904,6 +994,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 90,
       "sample_index": 90,
       "sample_key": "ASE_84052_Atek_000008",
@@ -914,6 +1005,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 91,
       "sample_index": 91,
       "sample_key": "ASE_84074_Atek_000024",
@@ -924,6 +1016,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 92,
       "sample_index": 92,
       "sample_key": "ASE_84080_Atek_000000",
@@ -934,6 +1027,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 93,
       "sample_index": 93,
       "sample_key": "ASE_84171_Atek_000008",
@@ -944,6 +1038,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 94,
       "sample_index": 94,
       "sample_key": "ASE_84185_Atek_000000",
@@ -954,6 +1049,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 95,
       "sample_index": 95,
       "sample_key": "ASE_84186_Atek_000000",
@@ -964,6 +1060,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 96,
       "sample_index": 96,
       "sample_key": "ASE_84230_Atek_000016",
@@ -974,6 +1071,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 97,
       "sample_index": 97,
       "sample_key": "ASE_84271_Atek_000008",
@@ -984,6 +1082,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 98,
       "sample_index": 98,
       "sample_key": "ASE_84309_Atek_000000",
@@ -994,6 +1093,7 @@
       "split": "train"
     },
     {
+      "campaign_split": null,
       "order": 99,
       "sample_index": 99,
       "sample_key": "ASE_84320_Atek_000048",
@@ -1004,9 +1104,9 @@
       "split": "train"
     }
   ],
-  "source_cache_version": "7",
-  "source_manifest_hash": "2ec35736a2c66ed4",
+  "source_cache_version": "8",
+  "source_manifest_hash": "ef88fa5940221922",
   "source_store_dir": "vin_offline_rollout_campaign100_v8_rebuilt",
   "split": "train",
-  "split_manifest_hash": "58e2e26eec2530d6"
+  "split_manifest_hash": "3e647fe8bbb80b91"
 }
