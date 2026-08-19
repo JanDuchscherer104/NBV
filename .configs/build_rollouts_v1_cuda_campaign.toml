@@ -7,7 +7,6 @@ writer_config_path = ".configs/build_rollouts_v1_cuda_campaign_writer.toml"
 seed = 20260728
 observed_target_iou_threshold = 0.20
 expected_scene_count = 100
-paired_panel_scene_count = 20
 min_valid_root_candidates = 15
 stage_timeout_seconds = 120
 work_unit_timeout_seconds = 3600

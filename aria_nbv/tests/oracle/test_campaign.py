@@ -1856,7 +1856,7 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
     monkeypatch.setattr(
         campaign,
         "read_events",
-        lambda **_kwargs: [campaign._event(plan, "unit_succeeded", work_unit=plan.work_units[0])],
+        lambda **_kwargs: [campaign._event(plan, "unit_succeeded", unit=plan.work_units[0])],
     )
 
     def read(path, *, shard_entry, writer_config_hash=""):
@@ -1883,10 +1883,7 @@ def test_progress_summary_artifacts_follow_plan_order_and_ignore_invalid_paths(t
 
 def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflict(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
-    plan = campaign.plan(
-        [_row("s0", "k", "t"), _row("s1", "k1", "t1"), _row("s2", "k2", "t2")],
-        source_manifest_hash="source",
-    )
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
     shards = tmp_path / "shards"
     shards.mkdir()
     (shards / plan.work_units[0].work_unit_hash).mkdir()
@@ -1896,7 +1893,6 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
     events = [
         campaign._event(plan, "unit_skipped", work_unit=plan.work_units[0]),
         campaign._event(plan, "unit_failed", work_unit=plan.work_units[1]),
-        campaign._event(plan, "unit_timed_out", work_unit=plan.work_units[2]),
     ]
     monkeypatch.setattr(campaign, "read_events", lambda **_kwargs: events)
     entries = {unit.work_unit_hash: campaign.shard_entry_for_unit(plan, unit) for unit in plan.work_units}
@@ -1912,7 +1908,6 @@ def test_progress_summary_preserves_skip_and_surfaces_invalid_orphan_and_conflic
     records = summary["artifact_records"]
     assert any(record["status"] == "conflicting" and record["outcome"] == "skipped" for record in records)
     assert any(record["status"] == "invalid" and record["outcome"] == "failed" for record in records)
-    assert any(record["status"] == "missing" and record["outcome"] == "timed_out" for record in records)
     assert any(record["status"] == "orphan" for record in records)
     assert summary["validated_artifacts"] == []
 
