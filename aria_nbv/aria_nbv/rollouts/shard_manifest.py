@@ -18,7 +18,7 @@ from ..utils.fingerprints import stable_msgspec_hash
 ROLLOUT_SOURCE_MANIFEST_VERSION = "rollout-source-manifest-v2"
 """Version label for profile-independent ordered VIN source manifests."""
 
-ROLLOUT_SHARD_MANIFEST_VERSION = "rollout-shard-manifest-v2"
+ROLLOUT_SHARD_MANIFEST_VERSION = "rollout-shard-manifest-v3"
 """Version label for rollout generation JSONL shard manifests."""
 
 ROLLOUT_SHARD_SUCCESS_FILENAME = "_SUCCESS.json"
@@ -168,8 +168,9 @@ class RolloutShardRow:
     def hash_record(self) -> dict[str, object]:
         """Return the row fields used for deterministic lineage hashing."""
         record = self.to_jsonable()
-        if self.campaign_split is None:
-            record.pop("campaign_split", None)
+        # Campaign split is a campaign binding, not immutable source-row
+        # identity.  It is persisted separately but never changes source hash.
+        record.pop("campaign_split", None)
         return record
 
     def matches_record(self, record: Any) -> bool:
@@ -380,6 +381,13 @@ class RolloutShardEntry:
             rollout store.
         """
 
+        if payload.get("manifest_version") == "rollout-shard-manifest-v2" and (
+            payload.get("campaign_split") is not None
+            or any(row.get("campaign_split") is not None for row in payload.get("rows", ()))
+        ):
+            raise ValueError(
+                "rollout-shard-manifest-v2 campaign-split hashes are incompatible; regenerate as v3"
+            )
         return cls(
             manifest_version=str(payload["manifest_version"]),
             shard_id=canonical_rollout_shard_id(str(payload["shard_id"])),

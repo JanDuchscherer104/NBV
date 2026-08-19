@@ -8,7 +8,7 @@ fresh: `vin_offline_rollout_campaign100_v8_rebuilt`.
 | Config | Role | Depends on |
 | --- | --- | --- |
 | `build_rollouts_v1_cuda_campaign.toml` | Broad 100-scene CUDA campaign | `build_rollouts_v1_cuda_campaign_writer.toml` |
-| `build_rollouts_v1_cuda_campaign_pilot_corrected_v3.toml` | Corrected paired pilot | `build_rollouts_v1_cuda_campaign_writer.toml` |
+| `build_rollouts_v1_cuda_campaign_pilot_corrected_v4.toml` | Corrected paired pilot | `build_rollouts_v1_cuda_campaign_writer.toml` |
 | `build_rollouts_v1_cuda_campaign_writer.toml` | Local 100-row generation writer | `rollout_campaign100_source_manifest.json` and local VIN source store |
 | `build_vin_offline_rollout_campaign100_v8.toml` | Local 100-row V8 source-store build | VIN source shards listed in the file |
 | `build_rollouts_v1_lrz.template.toml` | LRZ generation template | Replace `/ABS/PATH/TO/...` placeholders |
@@ -50,14 +50,14 @@ and inspect status:
 
 ```bash
 uv run nbv-rollout-campaign plan \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v3.toml \
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v4.toml \
   --source-manifest ../.configs/rollout_campaign100_source_manifest.json
 uv run nbv-rollout-campaign smoke \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v3.toml
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v4.toml
 uv run nbv-rollout-campaign run \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v3.toml \
-  --plan-path ../.campaign/cuda-rollouts-v1-pilot-corrected-v3/plan.json \
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v4.toml \
+  --plan-path ../.campaign/cuda-rollouts-v1-pilot-corrected-v4/plan.json \
   --max-new-units 10
 uv run nbv-rollout-campaign status \
-  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v3.toml
+  --config-path ../.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v4.toml
 ```

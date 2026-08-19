@@ -1546,10 +1546,17 @@ class CudaRolloutCampaign:
         from ...rollouts.shard_manifest import RolloutShardCampaignBinding
 
         cfg = writer_config.model_copy(deep=True) if hasattr(writer_config, "model_copy") else writer_config
+        original_campaign_binding = getattr(shard_entry, "campaign_binding", None)
+        original_campaign_split = getattr(shard_entry, "campaign_split", None) or unit.campaign_split
+        original_generation_revision_hash = (
+            getattr(shard_entry, "generation_revision_hash", "") or unit.generation_revision_hash
+        )
+        original_row_campaign_split = None
         if hasattr(shard_entry, "rows"):
             rows = tuple(shard_entry.rows)
             if len(rows) != 1 or getattr(rows[0], "sample_key", None) != unit.sample_key:
                 raise ValueError("campaign work unit must bind exactly one matching source row")
+            original_row_campaign_split = getattr(rows[0], "campaign_split", None) or unit.campaign_split
         if hasattr(cfg, "sample_keys"):
             # Each campaign work unit is exactly one immutable source row.
             source_manifest_path = getattr(cfg, "source_manifest_path", None)
@@ -1661,6 +1668,16 @@ class CudaRolloutCampaign:
                 raise ValueError("campaign source row does not match canonical VIN manifest")
             if getattr(shard_entry, "writer_config_hash", "") != stable_config_hash(cfg):
                 raise ValueError("campaign writer config hash does not match canonical shard lineage")
+            from dataclasses import replace
+
+            row = replace(shard_entry.rows[0], campaign_split=original_row_campaign_split)
+            shard_entry = replace(
+                shard_entry,
+                rows=(row,),
+                campaign_binding=original_campaign_binding,
+                campaign_split=original_campaign_split,
+                generation_revision_hash=original_generation_revision_hash,
+            )
         binding = RolloutShardCampaignBinding(
             campaign_id=self.config.campaign_id,
             plan_hash=plan_hash
