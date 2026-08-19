@@ -2096,7 +2096,20 @@ def test_pilot_adaptation_emits_four_ordered_myopic_recipes(tmp_path):
 def test_adaptation_preserves_campaign_split_and_revision_binding(tmp_path):
     campaign = _campaign(tmp_path)
     plan = campaign.plan([_row("s0", "k0", "t0"), _row("s1", "k1", "t1")], source_manifest_hash="source")
-    unit = plan.work_units[0]
+    unit = replace(
+        plan.work_units[0],
+        source_row_payload={
+            "sample_index": 0,
+            "scene_id": "s0",
+            "snippet_id": "k0",
+            "split": "train",
+            "source_shard_id": "shard-000000",
+            "source_shard_row": 0,
+            "source_manifest_hash": "source",
+            "source_cache_version": "8",
+            "source_store_dir": "vin_offline",
+        },
+    )
     entry = campaign.shard_entry_for_unit(plan, unit)
     writer = RolloutDatasetWriterConfig().model_copy(update={"source_manifest_path": None})
 
