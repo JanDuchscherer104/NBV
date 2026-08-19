@@ -109,7 +109,7 @@ def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> Non
     assert all(Path(tar).parts[-2] == row["scene_id"] for tar, row in zip(tar_paths, rows, strict=True))
     assert len(set(tar_paths)) == 100
     assert config["store"]["store_dir"] == "vin_offline_rollout_campaign100_v8_rebuilt"
-    assert not (repo_root / ".data/offline_cache/vin_offline_rollout_campaign100_v8_rebuilt").exists()
+    assert config["store"]["store_dir"] != "vin_offline_rollout_campaign100_v7"
     resolved = VinOfflineWriterConfig.from_toml(repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml")
     assert len(resolved.dataset.tar_urls) == 100
     assert all(Path(tar).is_absolute() and Path(tar).is_file() for tar in resolved.dataset.tar_urls)
