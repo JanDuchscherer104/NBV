@@ -21,6 +21,7 @@ from aria_nbv.oracle.pipelines.campaign import (
     CampaignWorkUnit,
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
+    GenerationRevision,
 )
 from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
@@ -327,6 +328,54 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
 
     assert config.frozen_profile == "realistic_core_60"
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 4
+
+
+def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineage(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.current_generation_revision",
+        lambda: GenerationRevision("g003-v1", "commit", "tree", "lock", "bundle", "generation"),
+    )
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+    campaign = CudaRolloutCampaign(config.model_copy(update={"output_root": tmp_path}))
+    rows = []
+    for index in range(100):
+        row = _row(f"scene-{index:03d}", f"sample-{index:03d}", f"target-{index:03d}")
+        for key, value in {
+            "sample_index": index,
+            "snippet_id": f"snippet-{index:03d}",
+            "split": "train",
+            "source_shard_id": f"source-{index // 10:03d}",
+            "source_shard_row": index % 10,
+            "source_manifest_hash": "canonical-source",
+            "source_cache_version": "8",
+            "source_store_dir": "vin_offline_rollout_campaign100_v8_rebuilt",
+        }.items():
+            setattr(row, key, value)
+        rows.append(row)
+
+    plan = campaign.plan(rows, source_manifest_hash="canonical-source")
+    scenes_by_split = {
+        split: {unit.source_row_payload["scene_id"] for unit in plan.work_units if unit.campaign_split == split}
+        for split in ("train", "validation", "test")
+    }
+    all_scenes = {f"scene-{index:03d}" for index in range(100)}
+    assert len(scenes_by_split["train"]) == 80
+    assert len(scenes_by_split["validation"]) == 10
+    assert len(scenes_by_split["test"]) == 10
+    assert set().union(*scenes_by_split.values()) == all_scenes
+    assert not (scenes_by_split["train"] & scenes_by_split["validation"])
+    assert not (scenes_by_split["train"] & scenes_by_split["test"])
+    assert not (scenes_by_split["validation"] & scenes_by_split["test"])
+
+    unit = plan.work_units[0]
+    entry = campaign.shard_entry_for_unit(plan, unit)
+    assert entry.campaign_split == unit.campaign_split
+    assert entry.rows[0].scene_id == unit.source_row_payload["scene_id"]
+    assert entry.source_manifest_hash == "canonical-source"
+    assert entry.rows[0].source_shard_id == unit.source_row_payload["source_shard_id"]
+    assert entry.rows[0].source_shard_row == unit.source_row_payload["source_shard_row"]
 
 
 def test_corrected_v5_pilot_has_fresh_identity_and_unchanged_paired_contract():

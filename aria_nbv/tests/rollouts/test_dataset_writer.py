@@ -1100,6 +1100,43 @@ def test_rollout_shard_campaign_status_reports_retry_classes(tmp_path: Path) -> 
     assert by_id["shard-000003"].status == "missing"
 
 
+def test_failure_sidecar_binds_campaign_and_excludes_tampered_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    base_entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    binding = RolloutShardCampaignBinding("campaign", "plan", "work", "target", "profile", "explicit")
+    entry = replace(base_entry, campaign_binding=binding)
+    final_root = tmp_path / "final"
+
+    class _FailingWriter:
+        def run(self, **_kwargs: object) -> None:
+            raise RuntimeError("synthetic failure")
+
+    monkeypatch.setattr(config, "setup_target", lambda: _FailingWriter())
+    with pytest.raises(RuntimeError, match="synthetic failure"):
+        run_rollout_shard(
+            config,
+            shard_entry=entry,
+            output_tmp=tmp_path / "tmp" / "unit.tmp",
+            output_final=final_root / entry.shard_id,
+        )
+
+    marker = next(final_root.glob(f"_FAILED.{entry.shard_id}.*.json"))
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert payload["campaign_binding"] == binding.to_jsonable()
+
+    tampered = dict(payload)
+    tampered["campaign_binding"] = {**binding.to_jsonable(), "work_unit_hash": "tampered"}
+    (final_root / f"_FAILED.{entry.shard_id}.tampered.json").write_text(json.dumps(tampered), encoding="utf-8")
+    manifest_path = tmp_path / "rollout_shards.jsonl"
+    write_rollout_shard_manifest(manifest_path, [entry])
+    campaign = summarize_rollout_shard_campaign(manifest_path, final_root=final_root)
+    status = campaign.shards[0]
+    assert status.status == "failed"
+    assert status.failed_markers == (marker,)
+
+
 def test_rollout_source_manifest_is_profile_independent_and_roundtrips(tmp_path: Path) -> None:
     records = [_fake_record(index) for index in range(3)]
     config = _FakeRolloutConfig(records, store_dir=tmp_path)
