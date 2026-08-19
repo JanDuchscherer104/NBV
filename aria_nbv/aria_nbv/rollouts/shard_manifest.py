@@ -162,8 +162,6 @@ class RolloutShardRow:
             "source_shard_row": int(self.source_shard_row),
             "campaign_split": self.campaign_split,
         }
-        if not self.generation_revision_hash:
-            payload.pop("generation_revision_hash")
         return payload
 
     def hash_record(self) -> dict[str, object]:
