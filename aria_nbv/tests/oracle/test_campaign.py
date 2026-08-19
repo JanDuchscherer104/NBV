@@ -304,9 +304,7 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
     assert ".configs/build_rollouts_v1_cuda_campaign_writer.toml" in argv
 
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
-    manifest = json.loads(
-        (REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8"))
     assert writer.max_samples == writer.source.limit == 100
     assert writer.source_manifest_path == REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json"
     assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8_rebuilt"
