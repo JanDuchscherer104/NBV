@@ -736,6 +736,66 @@ def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> Non
     assert "plan_hash" in str(partial_binding["role_rows"][0]["exclusion_reason"])
 
 
+@pytest.mark.parametrize(
+    ("policy", "schedule", "applicable_contrasts"),
+    [
+        ("oracle_greedy", "oracle_greedy", {"delta_look"}),
+        ("oracle_greedy", "oracle_lookahead", {"delta_look", "eta_Q"}),
+        ("learned_one_step", "learned_one_step", {"delta_Q", "eta_Q"}),
+        ("q_h", "q_h", {"delta_Q", "eta_Q"}),
+    ],
+)
+def test_headroom_role_ledger_conserves_valid_plus_malformed_near_duplicates(
+    policy: str,
+    schedule: str,
+    applicable_contrasts: set[str],
+) -> None:
+    invariant = {
+        "source_sample_key": "sample-a",
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "scene": "scene-a",
+        "temperature": np.nan,
+        "random_seed": -1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "recipe",
+    }
+    roles = (
+        ("oracle_greedy", "oracle_greedy", 6.0),
+        ("oracle_greedy", "oracle_lookahead", 10.0),
+        ("learned_one_step", "learned_one_step", 4.0),
+        ("q_h", "q_h", 7.0),
+    )
+    rows = [
+        {
+            **invariant,
+            "policy": row_policy,
+            "branch_schedule": row_schedule,
+            "final_cumulative_target_root_gain": value,
+        }
+        for row_policy, row_schedule, value in roles
+    ]
+    malformed = next(row for row in rows if row["policy"] == policy and row["branch_schedule"] == schedule)
+    evidence = oracle_headroom_evidence([*rows, {**malformed, "source_sample_key": None}])
+
+    assert [row["raw_row_id"] for row in evidence["role_rows"]] == list(range(5))
+    dispositions = evidence["role_disposition_rows"]
+    keys = {(int(row["raw_row_id"]), str(row["contrast"])) for row in dispositions}
+    assert len(dispositions) == 15
+    assert len(keys) == 15
+    malformed_dispositions = {str(row["contrast"]): row for row in dispositions if row["raw_row_id"] == 4}
+    for contrast, row in malformed_dispositions.items():
+        assert row["status"] == ("excluded" if contrast in applicable_contrasts else "not_applicable")
+
+
 def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> None:
     def row(
         candidate_row_id: int,
