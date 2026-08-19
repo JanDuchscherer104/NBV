@@ -584,9 +584,7 @@ def test_rollout_shard_campaign_binding_is_copied_and_required_for_resume(tmp_pa
 
 
 def test_rollout_shard_campaign_binding_roundtrips_generation_revision_hash() -> None:
-    binding = RolloutShardCampaignBinding(
-        "campaign", "plan", "work", "target", "profile", "explicit", "revision-a"
-    )
+    binding = RolloutShardCampaignBinding("campaign", "plan", "work", "target", "profile", "explicit", "revision-a")
     assert RolloutShardCampaignBinding.from_jsonable(binding.to_jsonable()) == binding
 
 
@@ -1015,9 +1013,11 @@ def test_rollout_shard_atomic_promotion_rejects_stale_paths(tmp_path: Path) -> N
     partial_final = tmp_path / "final" / "shard-000000"
     partial_final.mkdir(parents=True)
 
-    with pytest.raises(RuntimeError, match="Temporary rollout shard path already exists"):
+    with pytest.raises(
+        shards_module.RolloutShardOwnershipConflictError, match="Temporary rollout shard path already exists"
+    ):
         run_rollout_shard(config, shard_entry=entry, output_tmp=stale_tmp, output_final=tmp_path / "new-final")
-    with pytest.raises(RuntimeError, match="Final rollout shard path exists"):
+    with pytest.raises(shards_module.RolloutShardOwnershipConflictError, match="Final rollout shard path exists"):
         run_rollout_shard(config, shard_entry=entry, output_tmp=tmp_path / "fresh.tmp", output_final=partial_final)
 
 
@@ -1035,8 +1035,23 @@ def test_rollout_shard_campaign_status_reports_retry_classes(tmp_path: Path) -> 
         output_tmp=tmp_path / "tmp" / "shard-000000.tmp",
         output_final=final_root / "shard-000000",
     )
+    (final_root / "_FAILED.shard-000001.foreign.json").write_text(
+        json.dumps({"sidecar_kind": "rollout_shard_failure", "shard_id": entries[1].shard_id}),
+        encoding="utf-8",
+    )
     (final_root / "_FAILED.shard-000001.2026-05-15T00-00-00Z.json").write_text(
-        '{"error": "synthetic failure"}',
+        json.dumps(
+            {
+                "sidecar_kind": "rollout_shard_failure",
+                "shard_id": entries[1].shard_id,
+                "writer_config_hash": entries[1].writer_config_hash,
+                "source_manifest_hash": entries[1].source_manifest_hash,
+                "split_manifest_hash": entries[1].split_manifest_hash,
+                "generation_revision_hash": entries[1].generation_revision_hash,
+                "campaign_binding": None,
+                "error": "synthetic failure",
+            }
+        ),
         encoding="utf-8",
     )
     (final_root / "shard-000002").mkdir(parents=True)
@@ -1048,6 +1063,7 @@ def test_rollout_shard_campaign_status_reports_retry_classes(tmp_path: Path) -> 
     assert by_id["shard-000000"].status == "succeeded"
     assert by_id["shard-000001"].status == "failed"
     assert by_id["shard-000001"].failed_markers
+    assert len(by_id["shard-000001"].failed_markers) == 1
     assert by_id["shard-000002"].status == "incomplete"
     assert by_id["shard-000003"].status == "missing"
 

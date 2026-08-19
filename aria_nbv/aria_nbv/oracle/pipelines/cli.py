@@ -25,10 +25,15 @@ from ...utils.config_paths import resolve_config_toml_path
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CampaignEvent, CudaRolloutCampaignConfig
+from .campaign import CampaignEvent, CampaignWorkerResult, CudaRolloutCampaignConfig
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
-from .shards import run_rollout_shard, summarize_rollout_shard_campaign, write_rollout_shard_manifest_from_config
+from .shards import (
+    RolloutShardOwnershipConflictError,
+    run_rollout_shard,
+    summarize_rollout_shard_campaign,
+    write_rollout_shard_manifest_from_config,
+)
 
 campaign_app = typer.Typer(
     add_completion=False,
@@ -335,12 +340,34 @@ def campaign_worker(
         writer_config_path=writer_path,
         plan_path=plan_path,
     )
-    result = run_rollout_shard(
-        writer_cfg,
-        shard_entry=entry,
-        output_tmp=campaign.config.output_root / "tmp" / unit.work_unit_hash,
-        output_final=campaign.config.output_root / "shards" / unit.work_unit_hash,
-    )
+    try:
+        result = run_rollout_shard(
+            writer_cfg,
+            shard_entry=entry,
+            output_tmp=campaign.config.output_root / "tmp" / unit.work_unit_hash,
+            output_final=campaign.config.output_root / "shards" / unit.work_unit_hash,
+        )
+    except RolloutShardOwnershipConflictError as exc:
+        conflict = CampaignWorkerResult(
+            campaign_id=plan.campaign_id,
+            config_hash=plan.config_hash,
+            plan_hash=plan.plan_hash,
+            work_unit_hash=unit.work_unit_hash,
+            source_identity_hash=unit.source_identity_hash,
+            target_id=unit.target_id,
+            profile=unit.profile,
+            profile_hash=unit.profile_hash,
+            generation_revision_hash=unit.generation_revision_hash,
+            outcome="conflicted",
+            reason=str(exc),
+            leaf_evidence={
+                "error_type": type(exc).__name__,
+                "output_tmp": exc.output_tmp.as_posix(),
+                "output_final": exc.output_final.as_posix(),
+            },
+        )
+        typer.echo(json.dumps(conflict.to_jsonable(), sort_keys=True))
+        return
     typer.echo(
         json.dumps(
             {

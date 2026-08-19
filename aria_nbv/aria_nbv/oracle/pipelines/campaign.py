@@ -481,7 +481,7 @@ class CampaignWorkerResult:
             if str(payload.get(field, "")) != str(expected):
                 raise ValueError(f"worker result {field} binding mismatch")
         outcome = str(payload["outcome"])
-        if outcome not in {"succeeded", "skipped", "insufficient_support"}:
+        if outcome not in {"succeeded", "skipped", "insufficient_support", "conflicted"}:
             raise ValueError("worker result has unsupported outcome")
         validated = payload.get("validated") is True
         evidence = payload.get("leaf_evidence")
@@ -489,6 +489,8 @@ class CampaignWorkerResult:
             raise ValueError("successful worker result requires validated leaf evidence")
         if outcome == "insufficient_support" and (validated or evidence not in (None, {})):
             raise ValueError("insufficient-support result cannot claim validated leaf evidence")
+        if outcome == "conflicted" and (validated or not isinstance(evidence, dict)):
+            raise ValueError("conflicted worker result requires immutable conflict evidence")
         return cls(
             **{field: str(payload[field]) for field in bindings},
             outcome=outcome,
@@ -1382,8 +1384,13 @@ class CudaRolloutCampaign:
                 raise ValueError("worker output contains no JSON result")
         else:
             value = payload
-        if not isinstance(value, dict) or value.get("outcome") not in {"succeeded", "skipped", "insufficient_support"}:
-            raise ValueError("worker JSON requires succeeded, skipped, or insufficient_support outcome")
+        if not isinstance(value, dict) or value.get("outcome") not in {
+            "succeeded",
+            "skipped",
+            "insufficient_support",
+            "conflicted",
+        }:
+            raise ValueError("worker JSON requires succeeded, skipped, insufficient_support, or conflicted outcome")
         if value["outcome"] == "succeeded" and not value.get("validated"):
             raise ValueError("succeeded worker result requires validated evidence")
         return value
@@ -2078,6 +2085,8 @@ class CudaRolloutCampaign:
                     result = {**result, "work_unit_hash": unit.work_unit_hash}
                 results_by_unit[unit.work_unit_hash] = result
                 results = ordered_results()
+                if outcome == CampaignOutcome.CONFLICTED.value:
+                    blocked = True
                 self.append_event(
                     self._event(
                         plan,
@@ -2129,20 +2138,34 @@ class CudaRolloutCampaign:
                         stderr_tail=getattr(exc, "stderr_tail", None),
                     )
                 )
-            self.write_status(
-                replace(
+            if outcome == CampaignOutcome.CONFLICTED.value:
+                self.write_status(
                     self.status(
                         plan,
                         results,
                         current_unit=unit,
-                        stage=str(outcome),
+                        stage=CampaignOutcome.CONFLICTED.value,
                         elapsed_seconds=self.clock() - started_at,
+                        bounded_error=str(result.get("reason", "")) if isinstance(result, dict) else None,
                         last_timeout=last_timeout,
                         started_at=started_at_iso,
-                    ),
-                    state="running",
+                    )
                 )
-            )
+            else:
+                self.write_status(
+                    replace(
+                        self.status(
+                            plan,
+                            results,
+                            current_unit=unit,
+                            stage=str(outcome),
+                            elapsed_seconds=self.clock() - started_at,
+                            last_timeout=last_timeout,
+                            started_at=started_at_iso,
+                        ),
+                        state="running",
+                    )
+                )
         if not blocked:
             self.append_event(self._event(plan, "campaign_finished"))
             self.write_status(
@@ -2294,7 +2317,7 @@ class CudaRolloutCampaign:
                 else "completed"
             )
         counts["pending"] = max(0, len(plan.work_units) - terminal)
-        if stage in {CampaignOutcome.BLOCKED.value, CampaignOutcome.CONFLICTED.value}:
+        if stage == CampaignOutcome.BLOCKED.value:
             counts[stage] = counts.get(stage, 0) + 1
         if (
             any(counts[k] for k in (CampaignOutcome.FAILED.value, CampaignOutcome.TIMED_OUT.value))
@@ -2308,7 +2331,7 @@ class CudaRolloutCampaign:
                     for result in reversed(results)
                     if (
                         isinstance(result, dict)
-                        and result.get("outcome") in {"failed", "timed_out", "insufficient_support"}
+                        and result.get("outcome") in {"failed", "timed_out", "insufficient_support", "conflicted"}
                         and (result.get("error") or result.get("reason"))
                     )
                 ),
@@ -3023,7 +3046,9 @@ class CudaRolloutCampaign:
         elif run_state == "blocked":
             allowed_states = {"blocked"}
         elif run_state == "running":
-            allowed_states = {"running"}
+            allowed_states = (
+                {"conflicted"} if CampaignOutcome.CONFLICTED.value in terminal_outcomes.values() else {"running"}
+            )
         elif pre_run_state != "not_started":
             allowed_states = {pre_run_state}
         else:
@@ -3149,6 +3174,8 @@ class CudaRolloutCampaign:
                 canonical_state = "running"
             elif event.kind == "campaign_blocked":
                 canonical_state = "blocked"
+            elif event.kind == "unit_conflicted" and status.state == "conflicted":
+                canonical_state = "conflicted"
 
         prior_state = previous.state if previous is not None else canonical_state or "not_started"
         if prior_state in {"planned", "preflight_passed", "smoke_passed"} and canonical_state in {
@@ -3158,7 +3185,7 @@ class CudaRolloutCampaign:
         }:
             order = {"planned": 0, "preflight_passed": 1, "smoke_passed": 2}
             prior_state = max((prior_state, canonical_state), key=order.__getitem__)
-        elif canonical_state in {"running", "blocked"}:
+        elif canonical_state in {"running", "blocked", "conflicted"}:
             prior_state = canonical_state
         required_event_kinds = {
             "planned": {"plan_ready"},

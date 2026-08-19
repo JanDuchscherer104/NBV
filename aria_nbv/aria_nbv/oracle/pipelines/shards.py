@@ -72,6 +72,16 @@ from .rollout_dataset import (
 )
 
 
+class RolloutShardOwnershipConflictError(RuntimeError):
+    """A stale temporary or final path prevents safe shard ownership."""
+
+    def __init__(self, message: str, *, shard_entry: RolloutShardEntry, output_tmp: Path, output_final: Path) -> None:
+        super().__init__(message)
+        self.shard_entry = shard_entry
+        self.output_tmp = output_tmp
+        self.output_final = output_final
+
+
 @dataclass(frozen=True, slots=True)
 class RolloutShardRunResult:
     """Result of one strict rollout shard build or resume check."""
@@ -348,14 +358,20 @@ def run_rollout_shard(
                 owner_path=owner_path,
                 store_result=None,
             )
-        raise RuntimeError(
+        raise RolloutShardOwnershipConflictError(
             f"Final rollout shard path exists but is not a validated completed shard: {final_dir}. "
-            "Remove or move the partial final path after operator review before retrying."
+            "Remove or move the partial final path after operator review before retrying.",
+            shard_entry=shard_entry,
+            output_tmp=tmp_dir,
+            output_final=final_dir,
         )
     if tmp_dir.exists():
-        raise RuntimeError(
+        raise RolloutShardOwnershipConflictError(
             f"Temporary rollout shard path already exists: {tmp_dir}. "
-            "Remove stale temp data after operator review before retrying."
+            "Remove stale temp data after operator review before retrying.",
+            shard_entry=shard_entry,
+            output_tmp=tmp_dir,
+            output_final=final_dir,
         )
 
     try:
@@ -428,7 +444,11 @@ def _summarize_rollout_shard_entry(
     final_dir = final_root / entry.shard_id
     success_path = final_dir / ROLLOUT_SHARD_SUCCESS_FILENAME
     owner_path = final_dir / ROLLOUT_SHARD_OWNER_FILENAME
-    failed_markers = tuple(sorted(final_root.glob(f"_FAILED.{entry.shard_id}.*.json")))
+    failed_markers = tuple(
+        path
+        for path in sorted(final_root.glob(f"_FAILED.{entry.shard_id}.*.json"))
+        if _failure_marker_matches_entry(path, entry)
+    )
     errors: list[str] = []
 
     if final_dir.exists():
@@ -668,7 +688,9 @@ def _rollout_store_content_sha256(store_dir: Path) -> str:
                 "order": "C",
                 "compressor": canonical(metadata.get("codecs", ())),
             }
-            add(digest, f"array:{path}:metadata", json.dumps(array_meta, sort_keys=True, separators=(",", ":")).encode())
+            add(
+                digest, f"array:{path}:metadata", json.dumps(array_meta, sort_keys=True, separators=(",", ":")).encode()
+            )
             add(digest, f"attrs:{path}", attrs_payload(node.attrs))
             shape = tuple(int(size) for size in node.shape)
             chunks = tuple(int(size) for size in node.chunks)
@@ -706,6 +728,10 @@ def _write_failed_marker(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
+        "campaign_binding": (
+            None if shard_entry.campaign_binding is None else shard_entry.campaign_binding.to_jsonable()
+        ),
         "output_tmp": output_tmp.as_posix(),
         "output_final": output_final.as_posix(),
         "error_type": error.__class__.__name__,
@@ -713,6 +739,27 @@ def _write_failed_marker(
         "runtime": collect_runtime_provenance(),
     }
     _write_json_atomic(marker, payload)
+
+
+def _failure_marker_matches_entry(path: Path, entry: RolloutShardEntry) -> bool:
+    """Accept failure evidence only when its immutable shard binding is current."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    expected_binding = None if entry.campaign_binding is None else entry.campaign_binding.to_jsonable()
+    return all(
+        payload.get(key) == value
+        for key, value in {
+            "sidecar_kind": "rollout_shard_failure",
+            "shard_id": entry.shard_id,
+            "writer_config_hash": entry.writer_config_hash,
+            "source_manifest_hash": entry.source_manifest_hash,
+            "split_manifest_hash": entry.split_manifest_hash,
+            "generation_revision_hash": entry.generation_revision_hash,
+            "campaign_binding": expected_binding,
+        }.items()
+    )
 
 
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
@@ -726,6 +773,7 @@ __all__ = [
     "RolloutShardCampaignStatus",
     "RolloutShardRunResult",
     "RolloutShardStatus",
+    "RolloutShardOwnershipConflictError",
     "plan_rollout_source_manifest",
     "plan_rollout_shards",
     "run_rollout_shard",

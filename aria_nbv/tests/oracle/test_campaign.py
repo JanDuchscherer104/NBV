@@ -168,6 +168,33 @@ def test_typed_worker_result_rejects_validated_insufficient_support(tmp_path):
         campaign.parse_worker_result(payload, plan, unit)
 
 
+def test_typed_worker_result_preserves_bound_conflicted_outcome(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    unit = plan.work_units[0]
+    result = campaign.parse_worker_result(
+        {
+            "campaign_id": plan.campaign_id,
+            "config_hash": plan.config_hash,
+            "plan_hash": plan.plan_hash,
+            "work_unit_hash": unit.work_unit_hash,
+            "source_identity_hash": unit.source_identity_hash,
+            "target_id": unit.target_id,
+            "profile": unit.profile,
+            "profile_hash": unit.profile_hash,
+            "generation_revision_hash": unit.generation_revision_hash,
+            "outcome": "conflicted",
+            "validated": False,
+            "reason": "stale ownership",
+            "leaf_evidence": {"output_final": "/final"},
+        },
+        plan,
+        unit,
+    )
+    assert result.outcome == "conflicted"
+    assert result.leaf_evidence == {"output_final": "/final"}
+
+
 def test_all_profiles_adapt_into_real_writer_candidate_mixture(tmp_path):
     campaign = _campaign(tmp_path)
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_realistic.toml")
@@ -1274,6 +1301,28 @@ def test_run_claimed_resume_retains_insufficient_support_and_retries_only_failur
     assert retried == [plan.work_units[1].work_unit_hash]
     assert len(resumed) == len(plan.work_units)
     assert resumed[0]["outcome"] == "insufficient_support"
+
+
+def test_run_claimed_conflict_records_bound_event_and_stops_safely(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_pre_run_prefix(campaign, plan)
+    _bind_runner(
+        campaign,
+        plan,
+        lambda _unit: {
+            "outcome": "conflicted",
+            "reason": "stale ownership",
+            "leaf_evidence": {"error_type": "RolloutShardOwnershipConflictError"},
+        },
+    )
+
+    results = campaign._run_claimed(plan, claim={"claim_hash": "conflict"})
+
+    assert results[0]["outcome"] == "conflicted"
+    assert campaign.read_events(plan=plan)[-1].kind == "unit_conflicted"
+    assert campaign.read_status(plan=plan).state == "conflicted"
+    assert not any(event.kind == "campaign_finished" for event in campaign.read_events(plan=plan))
 
 
 @pytest.mark.parametrize("failure", [RuntimeError("launch failed"), TimeoutError("launch timed out")])
