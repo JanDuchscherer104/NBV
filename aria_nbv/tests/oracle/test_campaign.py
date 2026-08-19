@@ -345,7 +345,7 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
 
     assert config.frozen_profile == "realistic_core_60"
-    assert writer.target_scorer.depth.renderer.max_views_per_batch == 4
+    assert writer.target_scorer.depth.renderer.max_views_per_batch == 3
 
 
 def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineage(
