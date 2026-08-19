@@ -10,5 +10,3 @@ or generated documentation.
   plans and specifications.
 - `operator_quick_reference.md`: practical environment, worktree, frame, and
   EFM-view recovery aids that are not canonical project state.
-- `mattpocock_skills_manifest.toml`: conditional runtime configuration, kept
-  only while the repository maintains an external-skill allowlist.

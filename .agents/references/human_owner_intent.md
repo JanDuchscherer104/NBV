@@ -15,10 +15,6 @@ or repeatable workflows.
 - **Single source of truth:** Give every durable meaning one authoritative
   owner. Derived indexes, graphs, reports, plans, debriefs, and agent output may
   link to that owner but must not compete with it.
-- **Changeability and locality:** Prefer deep modules behind small explicit
-  interfaces, with dependencies accepted and results returned across clean
-  seams. Add adapters or abstraction only for demonstrated variation, and
-  confine likely change to one owner.
 - **Progressive disclosure:** Keep root guidance thin. Put local contracts and
   verification beside the package, document, or workflow that owns them.
 - **Upstream first:** Prefer maintained upstream behavior and native tool
@@ -33,10 +29,6 @@ or repeatable workflows.
 - **Reviewability:** Prefer small, owner-scoped, reversible changes and pull
   requests. Do not combine scaffold migration, domain changes, generated
   artifacts, and unrelated cleanup into one review unit.
-- **Reversible learning:** Advance through small verified slices. Keep tracer
-  work production-quality and retained; use prototypes to answer one uncertain
-  question, and treat their artifacts as evidence until conclusions are
-  promoted through their owner.
 - **Conceptual collaboration:** For meaningful Spatial-AI, ML, MLOps,
   data-science, or statistics work, prefer an explanation of the governing
   model, assumptions, and failure mode. Use diagrams when they clarify a real

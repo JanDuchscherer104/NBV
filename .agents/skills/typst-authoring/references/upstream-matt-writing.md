@@ -15,9 +15,9 @@ Pinned to `mattpocock/skills` reviewed ref
 - `writing-beats`:
   <https://raw.githubusercontent.com/mattpocock/skills/896f14d9c25659f03b24e08e4efc3ee69bbade08/skills/in-progress/writing-beats/SKILL.md>
 
-Before adopting future upstream changes, compare upstream `main` with the
-manifest `reviewed_ref`, then adapt only the generic mechanics that improve
-ARIA thesis authoring.
+Before adopting future upstream changes, compare upstream `main` with the pinned
+links above, then adapt only generic mechanics that improve ARIA thesis
+authoring.
 
 ## ARIA Adaptation
 

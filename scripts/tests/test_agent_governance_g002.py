@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -341,70 +341,67 @@ def test_route_only_domain_skill_contract() -> None:
 
 
 def test_capture_and_routing_contracts() -> None:
-    agent_behavior_path = (
-        ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md"
-    )
+    agent_behavior_path = ROOT / ".agents" / "skills" / "agent-behavior" / "SKILL.md"
     assert agent_behavior_path.is_file()
     agent_behavior = _read(agent_behavior_path)
-    for contract in (
-        "earliest failed assumption or\n   contract that stops or redirects the lane",
-        "current owner's smallest interface",
-        "**Failure-first diagnosis:**",
-        "**Reversible learning:**",
-        "configured, installed, initialized, healthy, fresh,\n   and successful",
-    ):
-        assert contract in agent_behavior
-    assert len(agent_behavior.splitlines()) <= 100
-    assert "establish the smallest red reproducer" not in agent_behavior
-    assert "production-quality tracer slice" not in agent_behavior
+    assert "**Workpackage completion, Git, or external action:**" in agent_behavior
+    reference_paths = {
+        link.split("#", 1)[0]
+        for link in re.findall(r"\]\((references/[^)]+)\)", agent_behavior)
+    }
+    assert reference_paths == {
+        "references/durable-capture.md",
+        "references/execution-branches.md",
+        "references/external-actions.md",
+    }
+    for reference_path in reference_paths:
+        assert (agent_behavior_path.parent / reference_path).is_file()
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
     )
-    for contract in (
-        "Establish the smallest red reproducer before editing.",
-        "production-quality tracer slice",
-        "retained, promoted, discarded, or deferred",
-    ):
-        assert contract in execution_branches
+    assert "## Failure-First Diagnosis" in execution_branches
+    assert "## Reversible Learning" in execution_branches
 
     external_actions = _read(
         agent_behavior_path.parent / "references" / "external-actions.md"
     )
-    for contract in (
-        "After each completed workpackage or self-contained task",
-        "explicitly authorizes both push and pull-request",
-        "Every currently authorized publication has a pushed branch and pull request.",
-    ):
-        assert contract in external_actions
+    assert "## Local Git Scope" in external_actions
+    assert "## External Boundary" in external_actions
 
     root_guidance = _read(ROOT / "AGENTS.md")
     assert "Failure-first diagnosis uses `agent-behavior`" in root_guidance
     assert "establish the smallest red reproducer" not in root_guidance
 
-    manifest = tomllib.loads(
-        _read(ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml")
+    retired_manifest = (
+        ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml"
     )
-    assert manifest["source"]["install_command"] == (
-        "npx skills@latest add mattpocock/skills --global --agent codex"
-    )
+    assert not retired_manifest.exists()
+    for owner in (
+        ROOT / ".agents" / "references" / "README.md",
+        ROOT / ".agents" / "skills" / "README.md",
+        ROOT / ".codex" / "config.example.toml",
+        ROOT
+        / ".agents"
+        / "skills"
+        / "typst-authoring"
+        / "references"
+        / "upstream-matt-writing.md",
+    ):
+        assert "mattpocock_skills_manifest" not in _read(owner)
 
-    skill_routes = {skill["name"]: skill for skill in manifest["skill"]}
-    posture_names = {
-        name for names in manifest["postures"].values() for name in names
-    }
-    assert set(skill_routes) == posture_names
-    for posture, names in manifest["postures"].items():
-        assert all(skill_routes[name]["posture"] == posture for name in names)
-
-    assert "design-an-interface" not in skill_routes
-    assert "writing-great-skills" not in skill_routes
-    assert skill_routes["codebase-design"]["posture"] == "explicit"
-    assert skill_routes["codebase-design"]["aria_owner"] == "aria-grill"
-    assert skill_routes["writing-for-agents"]["posture"] == "reference"
-    assert skill_routes["writing-for-agents"]["aria_owner"] == (
-        ".agents/references/source_order.md"
+    routing = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
     )
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    completion = fixtures["durable-workpackage-completion"]
+    assert completion["expected_owner_paths"] == [
+        ".agents/skills/agent-behavior/SKILL.md",
+        ".agents/skills/agent-behavior/references/external-actions.md",
+    ]
+    assert completion["required_outcomes"] == [
+        "a focused local commit creates a rollback boundary before unrelated work"
+    ]
 
 
 def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:

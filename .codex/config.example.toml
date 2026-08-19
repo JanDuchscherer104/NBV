@@ -17,10 +17,3 @@ trust_level = "trusted"
 # authentication NONE, while this CLI needs ON_INSTALL. Keep any temporary
 # NONE-to-ON_INSTALL metadata overlay in the user-local marketplace only; do not
 # copy it or any MemPalace runtime implementation into this repository.
-#
-# Matt Pocock skills are installed outside this repo, for example:
-#   npx skills@latest add mattpocock/skills
-# Keep the canonical ARIA-NBV activation policy in
-# .agents/references/mattpocock_skills_manifest.toml. If a local runtime
-# supports project-specific skill enablement, mirror only that tracked allowlist
-# in the untracked .codex/config.toml.
