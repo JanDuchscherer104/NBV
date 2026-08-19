@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, model_validator
 from ...utils import TargetConfig
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
-CAMPAIGN_PLAN_SCHEMA_VERSION = "campaign-plan-v2"
+CAMPAIGN_PLAN_SCHEMA_VERSION = "campaign-plan-v3"
 CAMPAIGN_ADMISSION_AUDIT_SCHEMA_VERSION = "campaign-admission-audit-v2"
 GENERATION_REVISION_SCHEMA_VERSION = "campaign-generation-revision-v1"
 
@@ -58,7 +58,7 @@ def current_generation_revision(
     if root is None:
         root = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
     status = subprocess.check_output(
-        ["git", "status", "--porcelain", "--untracked-files=no"], cwd=root, text=True
+        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=root, text=True
     ).strip()
     if status:
         raise ValueError("campaign generation revision requires a clean worktree")
@@ -236,6 +236,7 @@ class CampaignWorkUnit:
     scene_split: str = "train"
     seed_lineage: dict[str, int] | None = None
     campaign_split: str = "train"
+    generation_revision_hash: str = ""
 
 
 def derive_campaign_seed(*parts: object) -> int:
@@ -261,6 +262,7 @@ def _work_unit_identity(unit: CampaignWorkUnit, *, seed: int) -> str:
         "temperatures": unit.temperatures,
         "scene_split": unit.scene_split,
         "campaign_split": unit.campaign_split,
+        "generation_revision_hash": unit.generation_revision_hash,
     }
     return stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
 
@@ -297,6 +299,8 @@ class CampaignPlan:
     admission_counts: dict[str, int] | None = None
     admission_reason_counts: dict[str, int] | None = None
     generation_revision: GenerationRevision | None = None
+    zero_admission_scene_ids: tuple[str, ...] = ()
+    zero_admission_scene_count: int = 0
 
     def to_jsonable(self) -> dict[str, Any]:
         return {
@@ -313,12 +317,17 @@ class CampaignPlan:
             "admission_counts": self.admission_counts or {},
             "admission_reason_counts": self.admission_reason_counts or {},
             "generation_revision": None if self.generation_revision is None else self.generation_revision.to_jsonable(),
+            "zero_admission_scene_ids": list(self.zero_admission_scene_ids),
+            "zero_admission_scene_count": self.zero_admission_scene_count,
         }
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "CampaignPlan":
         if payload.get("schema_version") != CAMPAIGN_PLAN_SCHEMA_VERSION:
             raise ValueError("unsupported campaign plan schema version; regenerate the plan")
+        revision_payload = payload.get("generation_revision")
+        if not isinstance(revision_payload, dict) or not revision_payload.get("revision_hash"):
+            raise ValueError("campaign plan requires generation revision identity")
         units = tuple(
             CampaignWorkUnit(
                 **{
@@ -355,6 +364,8 @@ class CampaignPlan:
                     )
                 }
             ),
+            tuple(str(value) for value in payload.get("zero_admission_scene_ids", ())),
+            int(payload.get("zero_admission_scene_count", len(payload.get("zero_admission_scene_ids", ())))),
         )
         expected_payload = {
             "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
@@ -368,6 +379,8 @@ class CampaignPlan:
             "admission_counts": plan.admission_counts or {},
             "admission_reason_counts": plan.admission_reason_counts or {},
             "generation_revision": None if plan.generation_revision is None else plan.generation_revision.to_jsonable(),
+            "zero_admission_scene_ids": list(plan.zero_admission_scene_ids),
+            "zero_admission_scene_count": plan.zero_admission_scene_count,
             "work_units": [asdict(u) for u in units],
         }
         expected = stable_msgspec_hash(json.loads(json.dumps(expected_payload, sort_keys=True, default=str)))
@@ -933,6 +946,7 @@ class CudaRolloutCampaign:
                         "row": unit.source_row_payload or unit.source_row_index,
                     }
                 ),
+                generation_revision_hash=generation_revision.revision_hash,
             )
             for unit in units
         ]
@@ -963,6 +977,16 @@ class CudaRolloutCampaign:
             "admission_counts": admission_counts,
             "admission_reason_counts": reason_counts,
             "generation_revision": generation_revision.to_jsonable(),
+            "zero_admission_scene_ids": sorted(
+                scene
+                for scene in scenes
+                if not any(is_strictly_eligible(row) and str(val(row, "scene_id")) == scene for row in rows)
+            ),
+            "zero_admission_scene_count": sum(
+                1
+                for scene in scenes
+                if not any(is_strictly_eligible(row) and str(val(row, "scene_id")) == scene for row in rows)
+            ),
             "work_units": [asdict(u) for u in units],
         }
         plan_hash = stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
@@ -979,6 +1003,8 @@ class CudaRolloutCampaign:
             admission_counts,
             reason_counts,
             generation_revision,
+            tuple(payload["zero_admission_scene_ids"]),
+            int(payload["zero_admission_scene_count"]),
         )
 
     def audit_source_manifest(self, writer_config: Any, source_manifest: Any) -> list[dict[str, Any]]:
@@ -1511,6 +1537,7 @@ class CudaRolloutCampaign:
             profile_hash=profile_hash
             or (unit.explicit_target_config.get("profile_hash", "") if unit.explicit_target_config else ""),
             explicit_target_hash=unit.explicit_target_hash,
+            generation_revision_hash=unit.generation_revision_hash,
         )
         if hasattr(shard_entry, "campaign_binding"):
             from dataclasses import replace
@@ -1573,8 +1600,10 @@ class CudaRolloutCampaign:
                 target_id=unit.target_id,
                 profile_hash=unit.profile_hash,
                 explicit_target_hash=unit.explicit_target_hash,
+                generation_revision_hash=plan.generation_revision.revision_hash if plan.generation_revision else "",
             ),
             campaign_split=unit.campaign_split,
+            generation_revision_hash=plan.generation_revision.revision_hash if plan.generation_revision else "",
         )
         return entry
 

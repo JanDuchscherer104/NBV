@@ -38,11 +38,12 @@ class RolloutShardCampaignBinding:
     target_id: str
     profile_hash: str
     explicit_target_hash: str
+    generation_revision_hash: str = ""
 
     def to_jsonable(self) -> dict[str, str]:
         """Return stable JSON evidence."""
 
-        return {
+        payload = {
             name: str(getattr(self, name))
             for name in (
                 "campaign_id",
@@ -51,8 +52,12 @@ class RolloutShardCampaignBinding:
                 "target_id",
                 "profile_hash",
                 "explicit_target_hash",
+                "generation_revision_hash",
             )
         }
+        if not self.generation_revision_hash:
+            payload.pop("generation_revision_hash")
+        return payload
 
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardCampaignBinding":
@@ -60,7 +65,7 @@ class RolloutShardCampaignBinding:
 
         return cls(
             **{
-                name: str(payload[name])
+                name: str(payload.get(name, ""))
                 for name in (
                     "campaign_id",
                     "plan_hash",
@@ -146,7 +151,7 @@ class RolloutShardRow:
     def to_jsonable(self) -> dict[str, Any]:
         """Return a stable JSON-compatible row payload."""
 
-        return {
+        payload = {
             "order": int(self.order),
             "sample_index": int(self.sample_index),
             "sample_key": self.sample_key,
@@ -157,6 +162,9 @@ class RolloutShardRow:
             "source_shard_row": int(self.source_shard_row),
             "campaign_split": self.campaign_split,
         }
+        if not self.generation_revision_hash:
+            payload.pop("generation_revision_hash")
+        return payload
 
     def hash_record(self) -> dict[str, object]:
         """Return the row fields used for deterministic lineage hashing."""
@@ -358,6 +366,8 @@ class RolloutShardEntry:
     campaign_split: str | None = None
     """Authoritative campaign split, distinct from the VIN source split."""
 
+    generation_revision_hash: str = ""
+
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardEntry":
         """Decode and canonicalize one JSONL shard ownership entry.
@@ -385,6 +395,7 @@ class RolloutShardEntry:
             if payload.get("campaign_binding") is None
             else RolloutShardCampaignBinding.from_jsonable(payload["campaign_binding"]),
             campaign_split=None if payload.get("campaign_split") is None else str(payload["campaign_split"]),
+            generation_revision_hash=str(payload.get("generation_revision_hash", "")),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
@@ -403,6 +414,7 @@ class RolloutShardEntry:
             "rows": [row.to_jsonable() for row in self.rows],
             "campaign_binding": None if self.campaign_binding is None else self.campaign_binding.to_jsonable(),
             "campaign_split": self.campaign_split,
+            "generation_revision_hash": self.generation_revision_hash,
         }
 
     def validate(self) -> None:
@@ -418,6 +430,11 @@ class RolloutShardEntry:
         splits = {row.split for row in self.rows}
         if splits != {self.split}:
             raise ValueError(f"Rollout shard {self.shard_id!r} mixes row splits {sorted(splits)}.")
+        row_campaign_splits = {row.campaign_split for row in self.rows if row.campaign_split is not None}
+        if self.campaign_split is not None and row_campaign_splits not in ({self.campaign_split}, set()):
+            raise ValueError(f"Rollout shard {self.shard_id!r} campaign split disagrees with owned rows.")
+        if row_campaign_splits and self.campaign_split is None:
+            raise ValueError(f"Rollout shard {self.shard_id!r} rows declare campaign split but entry does not.")
         orders = [row.order for row in self.rows]
         if orders != list(range(len(self.rows))):
             raise ValueError(f"Rollout shard {self.shard_id!r} row order must be contiguous from zero.")

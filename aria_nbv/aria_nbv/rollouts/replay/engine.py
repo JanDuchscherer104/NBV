@@ -376,6 +376,7 @@ class CounterfactualPoseGenerator:
             for frontier_index, trajectory in enumerate(frontier):
                 node_start_s = perf_counter()
                 candidate_start_s = perf_counter()
+                candidate_seed = derive_candidate_seed(int(self.policy.seed or 0), step_index, (frontier_index,))
                 candidates = self._candidate_generator.generate(
                     reference_pose=self._generator_input_pose(trajectory.final_pose_world()),
                     gt_mesh=gt_mesh,
@@ -384,6 +385,7 @@ class CounterfactualPoseGenerator:
                     camera_calib_template=camera_calib_template,
                     occupancy_extent=occupancy_extent,
                     runtime_context=candidate_runtime_context,
+                    seed=candidate_seed,
                 )
                 candidate_s = perf_counter() - candidate_start_s
                 candidate_total_s += candidate_s
@@ -400,7 +402,6 @@ class CounterfactualPoseGenerator:
                     continue
 
                 evaluate_start_s = perf_counter()
-                candidate_seed = derive_candidate_seed(int(self.policy.seed or 0), step_index, (frontier_index,))
                 candidate_scores = self._evaluate_valid_candidates(
                     result=candidates,
                     trajectory=trajectory,

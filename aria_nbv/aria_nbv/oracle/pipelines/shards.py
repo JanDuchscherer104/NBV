@@ -491,6 +491,7 @@ def _completed_shard_is_current(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
     }
     if not all(success.get(key) == value and owner.get(key) == value for key, value in expected.items()):
         return False
@@ -564,6 +565,7 @@ def _owner_payload(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
         "source_cache_version": shard_entry.source_cache_version,
         "split": shard_entry.split,
         "num_source_rows": len(shard_entry.rows),
@@ -597,6 +599,7 @@ def _success_payload(
         "writer_config_hash": writer_config_hash,
         "source_manifest_hash": shard_entry.source_manifest_hash,
         "split_manifest_hash": shard_entry.split_manifest_hash,
+        "generation_revision_hash": shard_entry.generation_revision_hash,
         "source_cache_version": shard_entry.source_cache_version,
         "split": shard_entry.split,
         "num_source_rows": len(shard_entry.rows),

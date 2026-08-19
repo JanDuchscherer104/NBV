@@ -180,6 +180,7 @@ SOURCE_TABLE = _TableSchema(
         _TableField("scene_id", np.int32),
         _TableField("snippet_id", np.int32),
         _TableField("split_id", np.int32),
+        _TableField("campaign_split_id", np.int32),
         _TableField("source_cache_version_id", np.int32),
         _TableField("source_offline_store_manifest_hash_id", np.int32),
         _TableField("split_manifest_hash_id", np.int32),
@@ -1429,6 +1430,11 @@ def _root_metadata_payload(
         for record in records
         for chain_id, _trajectory in enumerate(record.evaluated.result.trajectories)
     }
+    campaign_split_values = {
+        _lineage_for_chain(record, chain_id).source.campaign_split or "unknown"
+        for record in records
+        for chain_id, _trajectory in enumerate(record.evaluated.result.trajectories)
+    }
     return {
         "schema_id": ROLLOUT_ZARR_SCHEMA_ID,
         "schema_version": ROLLOUT_ZARR_SCHEMA_VERSION,
@@ -1440,6 +1446,7 @@ def _root_metadata_payload(
         "source_offline_store_version": source_offline_store_version,
         "split_manifest_hash": split_manifest_hash,
         "source_split": next(iter(split_values)) if len(split_values) == 1 else "mixed",
+        "campaign_split": next(iter(campaign_split_values)) if len(campaign_split_values) == 1 else "mixed",
         "reason_code_version": reason_code_version,
         "target_protocol_version": target_protocol_version,
         "return_semantics": return_semantics,
@@ -1702,7 +1709,11 @@ def _build_dictionaries(records: list[_RolloutWriteRecord]) -> dict[str, list[st
         if (evaluated := record.evaluated.step(chain_id, step.step_index)) is not None
         and evaluated.evaluation.evidence.target_eval_crop_policy
     }
-    split_values = {lineage.source.split or "unknown" for _record, _trajectory, lineage in items}
+    split_values = {
+        value
+        for _record, _trajectory, lineage in items
+        for value in (lineage.source.split or "unknown", lineage.source.campaign_split or "unknown")
+    }
     target_match_status_values = {
         lineage.target.gt_match_status or "not_requested" for _record, _trajectory, lineage in items
     }
@@ -2427,6 +2438,7 @@ def _append_source_row(
         _dict_id(dictionaries["snippet"], compact_ase_atek_sample_id(lineage.source.snippet_id or ""))
     )
     rows["split_id"].append(_dict_id(dictionaries["split"], lineage.source.split or "unknown"))
+    rows["campaign_split_id"].append(_dict_id(dictionaries["split"], lineage.source.campaign_split or "unknown"))
     rows["source_cache_version_id"].append(_dict_id(dictionaries["config"], lineage.source.source_cache_version or ""))
     rows["source_offline_store_manifest_hash_id"].append(
         _dict_id(dictionaries["config"], lineage.source.source_offline_store_manifest_hash or "")
@@ -2448,6 +2460,7 @@ def _source_identity(*, lineage: RolloutLineage, source_row_id: int) -> tuple[ob
         lineage.source.scene_id,
         compact_ase_atek_sample_id(lineage.source.snippet_id or ""),
         lineage.source.split,
+        lineage.source.campaign_split,
         lineage.source.source_cache_version,
         lineage.source.source_offline_store_manifest_hash,
         lineage.source.split_manifest_hash,

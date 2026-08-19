@@ -478,13 +478,19 @@ class CandidateMixtureViewGenerator:
         camera_calib_template: CameraTW,
         occupancy_extent: torch.Tensor,
         runtime_context: CandidateGenerationRuntimeContext | None = None,
+        seed: int | None = None,
     ) -> CandidateSamplingResult:
         """Generate one concatenated full-shell candidate table."""
 
         component_results: list[CandidateSamplingResult] = []
         component_names: list[str] = []
+        from ..rollouts.replay.policy import derive_component_seed
+
         for component_index, component in enumerate(self.config.components):
-            component_cfg = self._component_config(component, component_index, runtime_context=runtime_context)
+            component_seed = None if seed is None else derive_component_seed(seed, component.name)
+            component_cfg = self._component_config(
+                component, component_index, runtime_context=runtime_context, component_seed=component_seed
+            )
             result = CandidateViewGenerator(component_cfg).generate(
                 reference_pose=reference_pose,
                 gt_mesh=gt_mesh,
@@ -492,6 +498,7 @@ class CandidateMixtureViewGenerator:
                 mesh_faces=mesh_faces,
                 camera_calib_template=camera_calib_template,
                 occupancy_extent=occupancy_extent,
+                seed=component_seed,
             )
             shell_count = int(result.mask_valid.reshape(-1).shape[0])
             device = result.mask_valid.device
@@ -526,6 +533,7 @@ class CandidateMixtureViewGenerator:
         component_index: int,
         *,
         runtime_context: CandidateGenerationRuntimeContext | None,
+        component_seed: int | None = None,
     ) -> CandidateViewGeneratorConfig:
         target_point = self.config.base.view_target_point_world
         position_target = self.config.base.position_target_point_world
@@ -551,7 +559,9 @@ class CandidateMixtureViewGenerator:
             "view_target_point_world": target_point,
             "position_target_point_world": position_target,
         }
-        if self.config.base.seed is not None:
+        if component_seed is not None:
+            updates["seed"] = int(component_seed)
+        elif self.config.base.seed is not None:
             updates["seed"] = int(self.config.base.seed) + component_index
 
         for field_name in (

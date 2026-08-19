@@ -449,6 +449,7 @@ class CandidateViewGenerator:
         camera_calib_template: CameraTW,
         occupancy_extent: torch.Tensor,
         runtime_context: CandidateGenerationRuntimeContext | None = None,
+        seed: int | None = None,
     ) -> CandidateSamplingResult:
         """Sample candidate poses around `reference_pose` and apply pruning rules.
 
@@ -488,7 +489,7 @@ class CandidateViewGenerator:
         )
         sampling_pose = _gravity_align_pose(reference_pose) if self.config.align_to_gravity else reference_pose
 
-        with _maybe_seed(self.config.seed, device=torch.device(device)):
+        with _maybe_seed(self.config.seed if seed is None else seed, device=torch.device(device)):
             centers_world, offsets_ref = PositionSampler(self.config).sample(
                 sampling_pose,
             )
@@ -518,9 +519,7 @@ class CandidateViewGenerator:
         )
         if self.config.collect_debug_stats:
             collision_enabled = bool(
-                self.config.ensure_collision_free
-                and self.config.step_clearance > 0
-                and gt_mesh is not None
+                self.config.ensure_collision_free and self.config.step_clearance > 0 and gt_mesh is not None
             )
             ctx.mark_debug("path_collision_applicable_mask", torch.full_like(ctx.mask_valid, collision_enabled))
             ctx.mark_debug("path_collision_evaluated_mask", torch.zeros_like(ctx.mask_valid))

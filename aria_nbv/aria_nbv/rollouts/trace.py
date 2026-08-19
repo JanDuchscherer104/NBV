@@ -92,6 +92,9 @@ class SourceLineage:
     split: str | None = None
     """VIN source split associated with this rollout root."""
 
+    campaign_split: str | None = None
+    """Authoritative campaign split; never overwrites VIN ``split``."""
+
     source_offline_store_manifest_hash: str | None = None
     """Hash of the complete VIN source-store manifest."""
 
