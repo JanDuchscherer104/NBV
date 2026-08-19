@@ -2,6 +2,7 @@
 
 import json
 import signal
+import socket
 import subprocess
 import sys
 from dataclasses import asdict, replace
@@ -2306,16 +2307,59 @@ def test_preflight_rejects_output_root_that_is_not_a_directory(tmp_path):
 
 def test_stale_claim_requires_exact_hash_and_archives_acknowledged_claim(tmp_path, monkeypatch):
     path = tmp_path / "run-claim.json"
-    path.write_text(json.dumps({"pid": 99999999, "claim_hash": "abc"}))
+    claim = {
+        "campaign_id": "cuda-rollouts-v1",
+        "plan_hash": "plan",
+        "config_hash": "config",
+        "generation_revision_hash": "generation",
+        "hostname": socket.gethostname(),
+        "pid": 99999999,
+        "process_group": 99999999,
+        "started_at": "now",
+    }
+    claim["claim_hash"] = stable_msgspec_hash(dict(sorted(claim.items())))
+    path.write_text(json.dumps(claim))
     monkeypatch.setattr(
         "aria_nbv.oracle.pipelines.campaign.os.kill", lambda *_args: (_ for _ in ()).throw(ProcessLookupError)
     )
     assert CudaRolloutCampaign.claim_is_stale(path)
     with pytest.raises(ValueError, match="hash mismatch"):
         CudaRolloutCampaign.acknowledge_stale_claim(path, "wrong")
-    archive = CudaRolloutCampaign.acknowledge_stale_claim(path, "abc")
-    assert archive.name == "run-claim.json.stale-abc"
+    archive = CudaRolloutCampaign.acknowledge_stale_claim(path, claim["claim_hash"])
+    assert archive.name == f"run-claim.json.stale-{claim['claim_hash']}"
     assert archive.exists() and not path.exists()
+
+
+def test_claim_dispositions_and_release_require_bound_hash(tmp_path, monkeypatch):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    claim = campaign.acquire_claim(plan)
+    path = tmp_path / "run-claim.json"
+    assert campaign.claim_disposition(plan, path).value == "active"
+    with pytest.raises(ValueError, match="required"):
+        campaign.release_claim(plan, path)
+    with pytest.raises(ValueError, match="mismatch"):
+        campaign.release_claim(plan, path, claim_hash="wrong")
+    campaign.release_claim(plan, path, claim_hash=claim["claim_hash"])
+
+    foreign = {**claim, "campaign_id": "foreign", "claim_hash": "foreign"}
+    path.write_text(json.dumps(foreign))
+    assert campaign.claim_disposition(plan, path).value == "invalid"
+    foreign["claim_hash"] = stable_msgspec_hash(
+        dict(sorted((key, value) for key, value in foreign.items() if key != "claim_hash"))
+    )
+    path.write_text(json.dumps(foreign))
+    assert campaign.claim_disposition(plan, path).value == "foreign"
+
+    local_dead = {**claim, "pid": 99999999, "process_group": 99999999}
+    local_dead["claim_hash"] = stable_msgspec_hash(
+        dict(sorted((key, value) for key, value in local_dead.items() if key != "claim_hash"))
+    )
+    path.write_text(json.dumps(local_dead))
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.os.kill", lambda *_args: (_ for _ in ()).throw(ProcessLookupError)
+    )
+    assert campaign.claim_disposition(plan, path).value == "stale-local"
 
 
 @pytest.mark.parametrize("scene_count", [99, 100, 101])

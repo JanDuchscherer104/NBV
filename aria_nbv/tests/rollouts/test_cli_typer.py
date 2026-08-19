@@ -336,6 +336,9 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
         def append_event(self, _event):
             return None
 
+        def read_events(self, **_kwargs):
+            return []
+
         def status(self, plan, *, stage):
             captured.update(status_plan=plan, status_stage=stage)
             return SimpleNamespace(

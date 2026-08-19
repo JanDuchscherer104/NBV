@@ -34,6 +34,31 @@ CAMPAIGN_ADMISSION_AUDIT_SCHEMA_VERSION = "campaign-admission-audit-v2"
 GENERATION_REVISION_SCHEMA_VERSION = "campaign-generation-revision-v1"
 
 
+def write_json_atomic(path: Path, payload: Any, *, indent: int | None = None) -> None:
+    """Durably replace one JSON file without exposing a partial payload."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(payload, sort_keys=True, indent=indent, default=str) + "\n"
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    with tmp.open("w", encoding="utf-8") as stream:
+        stream.write(encoded)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(tmp, path)
+    try:
+        directory_fd = os.open(path.parent, os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        pass
+
+
+def _claim_hash(payload: dict[str, Any]) -> str:
+    """Hash claim identity with canonical key ordering."""
+    return stable_msgspec_hash({key: payload[key] for key in sorted(payload)})
+
+
 @dataclass(frozen=True, slots=True)
 class GenerationRevision:
     """Reproducibility identity required before campaign planning/output."""
@@ -102,6 +127,15 @@ class CampaignOutcome(StrEnum):
     PENDING = "pending"
     BLOCKED = "blocked"
     CONFLICTED = "conflicted"
+
+
+class ClaimDisposition(StrEnum):
+    """Typed diagnosis of one persisted campaign claim."""
+
+    ACTIVE = "active"
+    STALE_LOCAL = "stale-local"
+    FOREIGN = "foreign"
+    INVALID = "invalid"
 
 
 class CampaignMode(StrEnum):
@@ -1362,8 +1396,7 @@ class CudaRolloutCampaign:
             "config_hash": plan.config_hash,
             "result": result,
         }
-        (self.config.output_root / "smoke-evidence.json").parent.mkdir(parents=True, exist_ok=True)
-        (self.config.output_root / "smoke-evidence.json").write_text(json.dumps(evidence, sort_keys=True) + "\n")
+        write_json_atomic(self.config.output_root / "smoke-evidence.json", evidence)
         return result
 
     @staticmethod
@@ -2447,29 +2480,76 @@ class CudaRolloutCampaign:
         payload = {
             "campaign_id": self.config.campaign_id,
             "plan_hash": plan.plan_hash,
+            "config_hash": plan.config_hash,
+            "generation_revision_hash": plan.generation_revision.revision_hash if plan.generation_revision else "",
             "hostname": socket.gethostname(),
             "pid": os.getpid(),
             "process_group": os.getpgrp(),
             "tmux_session": tmux_session,
             "started_at": self.utc_now().isoformat(),
         }
-        payload["claim_hash"] = stable_msgspec_hash(payload)
+        payload["claim_hash"] = _claim_hash(payload)
         try:
             with claim_path.open("x", encoding="utf-8") as f:
                 json.dump(payload, f, sort_keys=True)
         except FileExistsError as exc:
-            raise RuntimeError(f"active or stale run claim exists: {claim_path}") from exc
+            disposition = self.claim_disposition(plan, claim_path)
+            raise RuntimeError(f"{disposition.value} run claim exists: {claim_path}") from exc
         return payload
 
     def release_claim(self, plan: CampaignPlan, path: Path | None = None, *, claim_hash: str | None = None) -> None:
         claim_path = path or (self.config.output_root / "run-claim.json")
         if not claim_path.exists():
             return
+        if claim_hash is None:
+            raise ValueError("claim hash is required to release a run claim")
         payload = json.loads(claim_path.read_text())
-        if payload.get("plan_hash") == plan.plan_hash and (
-            claim_hash is None or payload.get("claim_hash") == claim_hash
-        ):
-            claim_path.unlink()
+        if self.claim_disposition(plan, claim_path) is not ClaimDisposition.ACTIVE:
+            raise ValueError("only the active local claim may be released")
+        if payload.get("claim_hash") != claim_hash:
+            raise ValueError("run claim hash mismatch")
+        claim_path.unlink()
+
+    @classmethod
+    def claim_disposition(cls, plan: CampaignPlan, path: Path) -> ClaimDisposition:
+        """Classify a claim without mutating its evidence."""
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            required = {
+                "campaign_id",
+                "plan_hash",
+                "config_hash",
+                "generation_revision_hash",
+                "hostname",
+                "pid",
+                "process_group",
+                "started_at",
+                "claim_hash",
+            }
+            if not isinstance(payload, dict) or not required.issubset(payload):
+                return ClaimDisposition.INVALID
+            identity = {key: payload[key] for key in payload if key != "claim_hash"}
+            if payload["claim_hash"] != _claim_hash(identity):
+                return ClaimDisposition.INVALID
+            if (
+                payload["campaign_id"] != plan.campaign_id
+                or payload["plan_hash"] != plan.plan_hash
+                or payload["config_hash"] != plan.config_hash
+                or payload["generation_revision_hash"]
+                != (plan.generation_revision.revision_hash if plan.generation_revision else "")
+                or payload["hostname"] != socket.gethostname()
+            ):
+                return ClaimDisposition.FOREIGN
+            pid = int(payload["pid"])
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return ClaimDisposition.STALE_LOCAL
+            except PermissionError:
+                return ClaimDisposition.ACTIVE
+            return ClaimDisposition.ACTIVE
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return ClaimDisposition.INVALID
 
     @staticmethod
     def claim_is_stale(
@@ -2484,33 +2564,33 @@ class CudaRolloutCampaign:
         if not path.exists():
             return False
         try:
-            payload = json.loads(path.read_text())
-            if payload.get("hostname") and payload["hostname"] != socket.gethostname():
-                return True
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            required = {"hostname", "pid", "claim_hash"}
+            if not isinstance(payload, dict) or not required.issubset(payload):
+                return False
+            identity = {key: payload[key] for key in payload if key != "claim_hash"}
+            if payload["claim_hash"] != _claim_hash(identity):
+                return False
+            if payload["hostname"] != socket.gethostname():
+                return False
             if payload.get("tmux_session"):
                 probe = tmux_probe or (
                     lambda session: (
                         subprocess.run(("tmux", "has-session", "-t", session), capture_output=True).returncode == 0
                     )
                 )
-                if probe(str(payload["tmux_session"])):
-                    return False
-                return True
-            pid = int(payload["pid"])
-            alive = (pid_probe or (lambda p: os.kill(p, 0) is None))(pid)
-            if not alive:
-                return True
-            if (
-                payload.get("process_group")
-                and process_group_probe is not None
-                and not process_group_probe(int(payload["process_group"]))
-            ):
-                return True
-            if payload.get("owner") and owner_probe is not None and not owner_probe(str(payload["owner"])):
-                return True
+                return not probe(str(payload["tmux_session"]))
+            try:
+                alive = (pid_probe or (lambda p: os.kill(p, 0) is None))(int(payload["pid"]))
+            except ProcessLookupError:
+                alive = False
+            if alive and payload.get("process_group") and process_group_probe is not None:
+                alive = process_group_probe(int(payload["process_group"]))
+            if alive and payload.get("owner") and owner_probe is not None:
+                alive = owner_probe(str(payload["owner"]))
+            return not alive
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             return False
-        except (OSError, KeyError, ValueError, json.JSONDecodeError):
-            return True
 
     @staticmethod
     def acknowledge_stale_claim(path: Path, claim_hash: str) -> Path:
@@ -2524,14 +2604,11 @@ class CudaRolloutCampaign:
 
     def write_plan(self, plan: CampaignPlan, path: Path | None = None) -> Path:
         target = path or (self.config.output_root / "plan.json")
-        target.parent.mkdir(parents=True, exist_ok=True)
         encoded = json.dumps(plan.to_jsonable(), sort_keys=True, indent=2) + "\n"
         if target.exists() and target.read_text() != encoded:
             raise ValueError("canonical plan already exists with different content")
         if not target.exists():
-            tmp = target.with_name(f".{target.name}.tmp-{os.getpid()}")
-            tmp.write_text(encoded, encoding="utf-8")
-            os.replace(tmp, target)
+            write_json_atomic(target, plan.to_jsonable(), indent=2)
         return target
 
     @staticmethod

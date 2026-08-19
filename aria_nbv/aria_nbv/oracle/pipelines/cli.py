@@ -25,7 +25,7 @@ from ...utils.config_paths import resolve_config_toml_path
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ...utils.typer_cli import run_typer_app
 from ..target_selection import ORACLE_TARGET_TASK_SOURCE
-from .campaign import CampaignEvent, CampaignWorkerResult, CudaRolloutCampaignConfig
+from .campaign import CampaignEvent, CampaignWorkerResult, CudaRolloutCampaignConfig, write_json_atomic
 from .offline_vin import VinOfflineWriterConfig
 from .rollout_dataset import RolloutDatasetWriterConfig
 from .shards import (
@@ -125,7 +125,7 @@ def campaign_plan(
             source_manifest_hash=planned.source_manifest_hash,
             expected_hash=planned.admission_audit_hash,
         )
-        campaign.write_plan(planned, output_json if output_json is not None else None)
+        campaign.write_plan(planned)
         event_identity = {
             "campaign_id": campaign.config.campaign_id,
             "plan_hash": planned.plan_hash,
@@ -133,16 +133,23 @@ def campaign_plan(
             "writer_config_hash": planned.writer_config_hash,
             "source_manifest_hash": planned.source_manifest_hash,
         }
-        campaign.append_event(
-            CampaignEvent("source_selection", timestamp=campaign.utc_now().isoformat(), **event_identity)
-        )
-        campaign.append_event(CampaignEvent("plan_ready", timestamp=campaign.utc_now().isoformat(), **event_identity))
+        existing = campaign.read_events(plan=planned)
+        prefix = [event.kind for event in existing[:2]]
+        if not existing:
+            campaign.append_event(
+                CampaignEvent("source_selection", timestamp=campaign.utc_now().isoformat(), **event_identity)
+            )
+            campaign.append_event(
+                CampaignEvent("plan_ready", timestamp=campaign.utc_now().isoformat(), **event_identity)
+            )
+        elif prefix != ["source_selection", "plan_ready"]:
+            raise typer.BadParameter("campaign planning ledger prefix is not idempotently reusable")
         campaign.write_status(campaign.status(planned, stage="planned"))
         payload = planned.to_jsonable()
     else:
         payload = campaign.config.model_dump_jsonable()
     if output_json:
-        output_json.write_text(json.dumps(payload, sort_keys=True, default=str, indent=2) + "\n")
+        write_json_atomic(output_json, payload, indent=2)
     typer.echo(json.dumps(payload, sort_keys=True, default=str) if json_output or not output_json else str(output_json))
 
 
