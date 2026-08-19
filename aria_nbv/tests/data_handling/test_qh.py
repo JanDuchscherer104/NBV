@@ -80,6 +80,7 @@ def _snippet(points: int = 2) -> VinSnippetView:
         points_world=torch.arange(points * 3, dtype=torch.float32).reshape(points, 3),
         lengths=torch.tensor([points]),
         t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
+        t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
     )
 
 

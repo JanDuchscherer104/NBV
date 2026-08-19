@@ -163,6 +163,7 @@ def _sample(
             points_world=semidense,
             lengths=torch.tensor([num_points]),
             t_world_rig=_poses([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+            t_world_snippet=_poses([[0.0, 0.0, 0.0]]),
         ),
         oracle=SimpleNamespace(
             candidate_poses_world_cam=_poses([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]),
