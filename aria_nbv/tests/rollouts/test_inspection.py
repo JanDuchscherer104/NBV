@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import copy
+import json
+from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
@@ -17,13 +19,25 @@ from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
+    candidate_collision_support_rows,
+    candidate_composition_rows,
     candidate_flow_rows,
     candidate_group_summary_rows,
+    candidate_population_evidence,
+    candidate_proposal_calibration_rows,
     comparable_policy_cohorts,
+    deterministic_candidate_display_sample,
+    discounted_rollout_return_rows,
     discover_rollout_store_paths,
+    exact_policy_role_rows,
     mask_combination_rows,
+    oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    reconstruction_endpoint_rows,
+    reconstruction_endpoint_summary_rows,
+    reconstruction_metric_summary_rows,
     rollout_endpoint_metric_summary,
+    rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
@@ -387,6 +401,754 @@ def test_rollout_endpoint_metric_summary_uses_one_factual_endpoint_per_rollout()
         [float(row["median"]) for row in grouped if row["step_index"] == global_max_depth and row["median"] is not None]
     )
     assert misleading_median == 50.0
+
+
+def test_rollout_header_summary_requires_proven_reference_denominators(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=451)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    unavailable = rollout_header_summary(reader)
+    assert unavailable["reference_scene_fraction"] is None
+    assert unavailable["reference_coverage_reason"] == "manifest provenance does not declare a reference denominator"
+    assert unavailable["physical_bytes_per_rollout"] == pytest.approx(
+        float(unavailable["physical_store_bytes"]) / float(result.num_rollouts)
+    )
+    assert unavailable["physical_bytes_per_candidate"] == pytest.approx(
+        float(unavailable["physical_store_bytes"]) / float(result.num_candidates)
+    )
+
+    payload = copy.deepcopy(reader.manifest())
+    payload["manifest"]["source_coverage"]["reference_scene_count"] = 5
+    payload["manifest"]["source_coverage"]["reference_source_row_count"] = 4
+    available = rollout_header_summary(reader, manifest_payload=payload)
+    assert available["reference_scene_covered"] == 1
+    assert available["reference_scene_gap"] == 4
+    assert available["reference_scene_fraction"] == pytest.approx(0.2)
+    assert available["reference_source_row_gap"] == 3
+    assert available["reference_source_row_fraction"] == pytest.approx(0.25)
+
+    overcovered = copy.deepcopy(payload)
+    overcovered["manifest"]["source_coverage"]["reference_scene_count"] = 0
+    overcovered["manifest"]["source_coverage"]["reference_source_row_count"] = 0
+    rejected = rollout_header_summary(reader, manifest_payload=overcovered)
+    assert rejected["reference_scene_covered"] is None
+    assert rejected["reference_scene_fraction"] is None
+    assert rejected["reference_source_rows_covered"] is None
+    assert rejected["reference_source_row_fraction"] is None
+
+    empty = copy.deepcopy(overcovered)
+    empty["manifest"]["source_coverage"]["scene_counts"] = {}
+    empty["manifest"]["source_coverage"]["num_source_rows"] = 0
+    empty_rejected = rollout_header_summary(reader, manifest_payload=empty)
+    assert empty_rejected["reference_scene_covered"] is None
+    assert empty_rejected["reference_source_rows_covered"] is None
+    assert empty_rejected["reference_coverage_reason"] is not None
+
+
+def test_reconstruction_and_discounted_return_rows_use_factual_steps() -> None:
+    rows = [
+        {
+            "rollout_row_id": 0,
+            "scene": "scene-a",
+            "policy": "oracle_greedy",
+            "horizon": 3,
+            "step_index": index,
+            "selected_target_root_gain": gain,
+            "cumulative_target_root_gain": cumulative,
+            "selected_target_rri": gain / 10.0,
+            "cumulative_target_rri": cumulative / 10.0,
+            "selected_probability": 0.5,
+            "selected_entropy": 0.25,
+        }
+        for index, (gain, cumulative) in enumerate(((1.0, 1.0), (2.0, 3.0), (3.0, 6.0)))
+    ]
+    rows.append(
+        {
+            **rows[0],
+            "rollout_row_id": 1,
+            "policy": "short",
+            "horizon": 1,
+            "selected_target_root_gain": np.nan,
+            "cumulative_target_root_gain": 4.0,
+        }
+    )
+
+    endpoints = reconstruction_endpoint_rows(rows)
+    assert [row["step_index"] for row in endpoints] == [2, 0]
+    summaries = reconstruction_endpoint_summary_rows(rows)
+    assert all(row["total_count"] == row["finite_count"] + row["missing_count"] for row in summaries)
+    metrics = reconstruction_metric_summary_rows(rows)
+    selected = next(row for row in metrics if row["metric"] == "selected_target_root_gain")
+    assert selected["endpoint_total_count"] == 2
+    assert selected["endpoint_finite_count"] == 1
+
+    gamma_one = discounted_rollout_return_rows(
+        rows[:3],
+        return_semantics="cumulative_target_root_gain",
+        discount_gamma=1.0,
+    )
+    gamma_half = discounted_rollout_return_rows(
+        rows[:3],
+        return_semantics="cumulative_target_root_gain",
+        discount_gamma=0.5,
+    )
+    assert gamma_one["rows"][0]["discounted_return"] == pytest.approx(6.0)
+    assert gamma_half["rows"][0]["discounted_return"] == pytest.approx(2.75)
+    assert gamma_one["rows"][0]["discounted_return"] != endpoints[0]["cumulative_target_root_gain"] + 1.0
+    assert discounted_rollout_return_rows(rows, return_semantics="other", discount_gamma=1.0) == {
+        "available": False,
+        "reason": "unsupported return_semantics='other'",
+        "rows": [],
+    }
+
+
+def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
+    invariant = {
+        "source_sample_key": "sample-a",
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "scene": "scene-a",
+        "temperature": np.nan,
+        "random_seed": -1,
+    }
+    rows = [
+        {
+            **invariant,
+            "policy": policy,
+            "branch_schedule": schedule,
+            "branch_factor": branch_factor,
+            "beam_width": beam_width,
+            "rollout_recipe": recipe,
+            "final_cumulative_target_root_gain": value,
+        }
+        for policy, schedule, branch_factor, beam_width, recipe, value in (
+            ("oracle_greedy", "oracle_greedy", 1, 1, "one", 6.0),
+            ("oracle_greedy", "oracle_lookahead", 4, 2, "look", 10.0),
+            ("learned_one_step", "learned_one_step", 1, 1, "learned", 4.0),
+            ("q_h", "q_h", 1, 1, "qh", 7.0),
+        )
+    ]
+
+    evidence = oracle_headroom_evidence(rows)
+    included = {row["contrast"]: row for row in evidence["contrast_rows"] if row["status"] == "included"}
+    assert included["delta_look"]["value"] == pytest.approx(4.0)
+    assert included["delta_Q"]["value"] == pytest.approx(3.0)
+    assert included["eta_Q"]["headroom_denominator"] == pytest.approx(6.0)
+    assert included["eta_Q"]["value"] == pytest.approx(0.5)
+    assert all(
+        row["eligible_count"] == row["included_count"] + row["excluded_count"] for row in evidence["summary_rows"]
+    )
+    assert [row["raw_row_id"] for row in evidence["role_rows"]] == list(range(len(rows)))
+    assert {row["evidence_status"] for row in evidence["role_rows"]} == {"included"}
+    assert len(evidence["role_disposition_rows"]) == len(rows) * 3
+    assert all("raw_row_id" in row for row in evidence["role_disposition_rows"])
+    assert included["delta_look"]["role_treatments"]["oracle_lookahead"]["branch_schedule"] == "oracle_lookahead"
+
+    alias_only = [{**rows[0], "policy": "unsupported", "branch_schedule": "unsupported", "rollout_recipe": "q_h"}]
+    aliased = exact_policy_role_rows(alias_only)
+    assert len(aliased) == 1
+    assert aliased[0]["semantic_role"] is None
+    rejected = oracle_headroom_evidence(alias_only)
+    assert len(rejected["malformed_role_rows"]) == 1
+    assert rejected["malformed_role_rows"][0]["exclusion_reason"] == "unsupported_role_identifier"
+    assert all(row["excluded_count"] == 1 for row in rejected["summary_rows"])
+
+
+def test_reader_policy_projection_excludes_incomplete_terminal_rollout(tmp_path, monkeypatch) -> None:
+    import aria_nbv.rollouts.inspection as inspection
+
+    store = zarr.open_group(tmp_path / "headroom-reader.zarr", mode="w")
+
+    def put(path: str, values: object) -> None:
+        store.create_array(path, data=np.asarray(values))
+
+    put("rollouts/rollout_row_id", [0, 1, 2])
+    put("rollouts/source_row_id", [0, 0, 0])
+    put("rollouts/target_row_id", [0, 0, 0])
+    put("rollouts/policy_id", [0, 0, 1])
+    put("rollouts/termination_reason", [0, 1, 0])
+    put("rollouts/horizon", [1, 1, 1])
+    put("rollouts/branch_factor", [1, 1, 1])
+    put("rollouts/beam_width", [1, 1, 1])
+    put("rollouts/temperature", [np.nan, np.nan, np.nan])
+    put("rollouts/random_seed", [-1, -1, -1])
+    put("rollouts/chain_id", [0, 1, 2])
+    put("rollouts/final_cumulative_target_rri", [1.0, 2.0, 3.0])
+    put("rollouts/final_cumulative_target_root_gain", [1.0, 2.0, 3.0])
+    put("sources/source_row_id", [0])
+    put("sources/sample_key_id", [0])
+    put("sources/sample_index", [0])
+    put("targets/target_row_id", [0])
+    put("targets/target_id", [0])
+    for path in (
+        "lineage/candidate_config_id",
+        "lineage/oracle_config_id",
+        "lineage/rollout_config_id",
+        "lineage/target_protocol_version_id",
+    ):
+        put(path, [0, 0, 0])
+    put("lineage/branch_schedule_id", [0, 1, 2])
+    for name, values in {
+        "policy": ["oracle_greedy", "q_h"],
+        "source_key": ["sample-a"],
+        "target": ["target-a"],
+        "config": ["oracle_greedy", "oracle_lookahead", "q_h"],
+        "termination_reason": ["completed", "incomplete_rollout"],
+    }.items():
+        payload = np.frombuffer(json.dumps(values).encode(), dtype=np.uint8)
+        put(f"dictionaries/{name}", payload)
+
+    monkeypatch.setattr(inspection, "rollout_at", lambda _reader, _index: SimpleNamespace(scene="scene-a"))
+    reader = SimpleNamespace(
+        root=store,
+        array=lambda path: store[path],
+        manifest=lambda: {
+            "root_attrs": {"manifest_sha256": "manifest"},
+            "manifest": {"generation": {"shard": {"writer_config_hash": "writer"}}},
+        },
+    )
+    evidence = inspection.oracle_headroom_evidence(reader)  # type: ignore[arg-type]
+    delta_look = next(row for row in evidence["contrast_rows"] if row["contrast"] == "delta_look")
+    assert delta_look["status"] == "excluded"
+    assert delta_look["exclusion_reason"] == "incomplete_rollout:oracle_lookahead"
+    assert all(
+        row["eligible_count"] == row["included_count"] + row["excluded_count"] for row in evidence["summary_rows"]
+    )
+
+
+def test_oracle_headroom_excludes_duplicate_roles_and_weak_eta_only() -> None:
+    invariant = {
+        "source_sample_key": "sample-a",
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "temperature": np.nan,
+        "random_seed": -1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "recipe",
+    }
+    weak_rows = [
+        {
+            **invariant,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_greedy",
+            "final_cumulative_target_root_gain": 2.0,
+        },
+        {
+            **invariant,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_lookahead",
+            "final_cumulative_target_root_gain": 1.0,
+        },
+        {
+            **invariant,
+            "policy": "learned_one_step",
+            "branch_schedule": "learned_one_step",
+            "final_cumulative_target_root_gain": 1.0,
+        },
+        {**invariant, "policy": "q_h", "branch_schedule": "q_h", "final_cumulative_target_root_gain": 1.5},
+    ]
+    weak = oracle_headroom_evidence(weak_rows)
+    by_contrast = {row["contrast"]: row for row in weak["contrast_rows"]}
+    assert by_contrast["delta_look"]["status"] == "included"
+    assert by_contrast["delta_Q"]["status"] == "included"
+    assert by_contrast["eta_Q"]["status"] == "excluded"
+    assert by_contrast["eta_Q"]["exclusion_reason"] == "nonpositive_or_weak_headroom"
+
+    duplicate = oracle_headroom_evidence(
+        weak_rows
+        + [
+            {
+                **weak_rows[1],
+                "branch_schedule": "oracle_lookahead_diverse",
+                "rollout_recipe": "diverse",
+            }
+        ]
+    )
+    duplicate_by_contrast = {row["contrast"]: row for row in duplicate["contrast_rows"]}
+    assert duplicate_by_contrast["delta_look"]["exclusion_reason"] == "duplicate_role:oracle_lookahead"
+
+
+def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> None:
+    row = {
+        "source_sample_key": None,
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "campaign_id": "campaign",
+        "plan_hash": "plan",
+        "work_unit_hash": "unit",
+        "profile_hash": "profile",
+        "explicit_target_hash": "target-hash",
+        "policy": "oracle_greedy",
+        "branch_schedule": "oracle_greedy",
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "recipe",
+        "final_cumulative_target_root_gain": 1.0,
+        "scene": "scene-a",
+        "temperature": np.nan,
+        "random_seed": -1,
+    }
+    evidence = oracle_headroom_evidence([row, dict(row)])
+    assert len(evidence["malformed_role_rows"]) == 2
+    assert [item["raw_row_id"] for item in evidence["role_rows"]] == [0, 1]
+    assert len(evidence["role_disposition_rows"]) == 6
+    assert all(item["status"] == "excluded" for item in evidence["contrast_rows"])
+    assert all(
+        item["eligible_count"] == item["included_count"] + item["excluded_count"] for item in evidence["summary_rows"]
+    )
+    summaries = {item["contrast"]: item for item in evidence["summary_rows"]}
+    assert summaries["delta_look"]["excluded_count"] == 2
+    assert summaries["delta_Q"]["excluded_count"] == 0
+    assert summaries["eta_Q"]["excluded_count"] == 0
+    assert {
+        item["status"] for item in evidence["role_disposition_rows"] if item["contrast"] in {"delta_Q", "eta_Q"}
+    } == {"not_applicable"}
+
+    partial_binding = oracle_headroom_evidence(
+        [{**row, "source_sample_key": "sample-a", "campaign_id": "campaign", "plan_hash": None}]
+    )
+    assert partial_binding["role_rows"][0]["evidence_status"] == "excluded"
+    assert "plan_hash" in str(partial_binding["role_rows"][0]["exclusion_reason"])
+
+
+@pytest.mark.parametrize(
+    ("policy", "schedule", "applicable_contrasts"),
+    [
+        ("oracle_greedy", "oracle_greedy", {"delta_look"}),
+        ("oracle_greedy", "oracle_lookahead", {"delta_look", "eta_Q"}),
+        ("learned_one_step", "learned_one_step", {"delta_Q", "eta_Q"}),
+        ("q_h", "q_h", {"delta_Q", "eta_Q"}),
+    ],
+)
+def test_headroom_role_ledger_conserves_valid_plus_malformed_near_duplicates(
+    policy: str,
+    schedule: str,
+    applicable_contrasts: set[str],
+) -> None:
+    invariant = {
+        "source_sample_key": "sample-a",
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "scene": "scene-a",
+        "temperature": np.nan,
+        "random_seed": -1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "recipe",
+    }
+    roles = (
+        ("oracle_greedy", "oracle_greedy", 6.0),
+        ("oracle_greedy", "oracle_lookahead", 10.0),
+        ("learned_one_step", "learned_one_step", 4.0),
+        ("q_h", "q_h", 7.0),
+    )
+    rows = [
+        {
+            **invariant,
+            "policy": row_policy,
+            "branch_schedule": row_schedule,
+            "final_cumulative_target_root_gain": value,
+        }
+        for row_policy, row_schedule, value in roles
+    ]
+    malformed = next(row for row in rows if row["policy"] == policy and row["branch_schedule"] == schedule)
+    evidence = oracle_headroom_evidence([*rows, {**malformed, "source_sample_key": None}])
+
+    assert [row["raw_row_id"] for row in evidence["role_rows"]] == list(range(5))
+    dispositions = evidence["role_disposition_rows"]
+    keys = {(int(row["raw_row_id"]), str(row["contrast"])) for row in dispositions}
+    assert len(dispositions) == 15
+    assert len(keys) == 15
+    malformed_dispositions = {str(row["contrast"]): row for row in dispositions if row["raw_row_id"] == 4}
+    for contrast, row in malformed_dispositions.items():
+        assert row["status"] == ("excluded" if contrast in applicable_contrasts else "not_applicable")
+
+
+def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> None:
+    def row(
+        candidate_row_id: int,
+        *,
+        cohort: str,
+        scene: str,
+        state: int,
+        actor: bool,
+        selected: bool,
+        probability: float,
+        mixture: str = "forward",
+    ) -> dict[str, object]:
+        return {
+            "candidate_row_id": candidate_row_id,
+            "generation_cohort_id": cohort,
+            "generation_cohort": f'{{"cohort":"{cohort}"}}',
+            "scene": scene,
+            "rollout_row_id": state,
+            "step_row_id": state,
+            "mixture": mixture,
+            "actor_action": actor,
+            "oracle_label": actor,
+            "q_train": actor,
+            "selected": selected,
+            "sampler_probability": probability,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+
+    rows = [
+        row(0, cohort="a", scene="s1", state=0, actor=True, selected=True, probability=0.25),
+        row(1, cohort="a", scene="s1", state=0, actor=True, selected=False, probability=0.25),
+        row(2, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=1 / 3),
+        row(3, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=1 / 3),
+        row(4, cohort="a", scene="s2", state=2, actor=True, selected=True, probability=1.0),
+        row(5, cohort="b", scene="s3", state=3, actor=False, selected=False, probability=1.0),
+        row(6, cohort="a", scene="s1", state=0, actor=False, selected=False, probability=0.25, mixture="side"),
+        row(7, cohort="a", scene="s1", state=0, actor=False, selected=False, probability=0.25, mixture="side"),
+        row(8, cohort="a", scene="s1", state=1, actor=True, selected=False, probability=1 / 3, mixture="side"),
+    ]
+
+    composition = candidate_composition_rows(rows)
+    assert {(candidate["generation_cohort_id"], candidate["family"]) for candidate in composition} == {
+        ("a", "forward"),
+        ("a", "side"),
+        ("b", "forward"),
+    }
+    cohort_a = next(
+        candidate
+        for candidate in composition
+        if candidate["generation_cohort_id"] == "a" and candidate["family"] == "forward"
+    )
+    assert cohort_a["allocated_count"] == 5
+    assert cohort_a["actor_valid_count"] == 3
+    assert cohort_a["macro_actor_valid_rate"] == pytest.approx(0.75)
+    assert cohort_a["aggregation"] == "state_then_scene_macro"
+
+    calibration = candidate_proposal_calibration_rows(rows)
+    calibration_a = next(
+        candidate
+        for candidate in calibration
+        if candidate["generation_cohort_id"] == "a" and candidate["family"] == "forward"
+    )
+    assert calibration_a["population_empirical_frequency"] == pytest.approx(5 / 8)
+    assert calibration_a["population_proposal_mass"] == pytest.approx(13 / 18)
+    assert calibration_a["empirical_frequency"] == pytest.approx(19 / 24)
+    assert calibration_a["proposal_mass"] == pytest.approx(19 / 24)
+    assert calibration_a["calibration_gap"] == pytest.approx(0.0)
+    assert calibration_a["population_selected_share"] == pytest.approx(1.0)
+    assert calibration_a["selected_share"] == pytest.approx(1.0)
+    assert calibration_a["state_count"] == 3
+    assert calibration_a["scene_count"] == 2
+    calibration_side = next(
+        candidate
+        for candidate in calibration
+        if candidate["generation_cohort_id"] == "a" and candidate["family"] == "side"
+    )
+    assert calibration_side["state_count"] == 3
+    assert calibration_side["scene_count"] == 2
+    assert calibration_side["empirical_frequency"] == pytest.approx(5 / 24)
+    assert calibration_side["proposal_mass"] == pytest.approx(5 / 24)
+    assert calibration_side["empirical_denominator"] == 8
+    assert calibration_side["proposal_denominator"] == 8
+    assert calibration_side["selected_denominator"] == 2
+    malformed = [
+        row(20, cohort="c", scene="s1", state=0, actor=True, selected=True, probability=0.5),
+        row(21, cohort="c", scene="s1", state=0, actor=True, selected=False, probability=None, mixture="side"),
+    ]
+    malformed_side = next(
+        candidate for candidate in candidate_proposal_calibration_rows(malformed) if candidate["family"] == "side"
+    )
+    assert malformed_side["population_proposal_mass"] is None
+    assert malformed_side["proposal_mass"] is None
+    assert malformed_side["calibration_gap"] is None
+
+    collision = candidate_collision_support_rows(rows)[0]
+    assert collision["available"] is True
+    assert collision["collision_rate"] == pytest.approx(0.0)
+    assert len(candidate_collision_support_rows(rows)) == 2
+    assert collision["generation_cohort_id"] == "a"
+    assert collision["candidate_count"] == 8
+    unavailable = candidate_collision_support_rows(
+        [
+            {
+                **rows[0],
+                "path_collision": None,
+                "path_collision_evaluated": False,
+                "path_min_clearance_m": None,
+            }
+        ]
+    )[0]
+    assert unavailable["available"] is False
+    assert unavailable["collision_rate"] is None
+    not_applicable = candidate_collision_support_rows(
+        [
+            {
+                **rows[0],
+                "path_collision": None,
+                "path_collision_applicable": False,
+                "path_collision_evaluated": False,
+                "path_min_clearance_m": None,
+            }
+        ]
+    )[0]
+    assert not_applicable["collision_not_applicable_count"] == 1
+    assert not_applicable["collision_unavailable_count"] == 0
+
+    unproved = candidate_collision_support_rows(
+        [{key: value for key, value in rows[0].items() if key != "path_collision_evaluated"}]
+    )[0]
+    assert unproved["collision_evaluated_count"] == 0
+
+    first = deterministic_candidate_display_sample(rows, max_rows=3)
+    second = deterministic_candidate_display_sample(reversed(rows), max_rows=3)
+    assert [item["candidate_row_id"] for item in first["rows"]] == [item["candidate_row_id"] for item in second["rows"]]
+    assert first["population_count"] == 9
+    assert first["display_count"] == 3
+    assert first["display_only"] is True
+    with pytest.raises(ValueError, match="Unsupported candidate group field"):
+        candidate_composition_rows(rows, group_by=cast(Any, "unsupported"))
+
+
+def test_candidate_population_evidence_is_compact_callback_parity_and_order_invariant() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": index // 2,
+            "step_row_id": index // 2,
+            "mixture": "forward" if index % 2 else "side",
+            "position": "center",
+            "strategy": "random",
+            "invalid_reason": "none",
+            "actor_action": index % 3 != 0,
+            "oracle_label": index % 3 != 0,
+            "q_train": index % 3 != 0,
+            "selected": index == 1,
+            "sampler_probability": 0.5,
+            "target_root_gain": float(index),
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index in range(8)
+    ]
+
+    class Poison:
+        def __iter__(self):
+            raise AssertionError("the callback producer result must not be materialized")
+
+    calls = 0
+
+    def producer(_reader, *, row_callback):
+        nonlocal calls
+        calls += 1
+        for row in rows:
+            row_callback(row)
+        return Poison()
+
+    evidence = candidate_population_evidence(object(), audit_reader=producer, sample_size=3)
+    assert calls == 1
+    assert evidence["population_count"] == len(rows)
+    assert len(evidence["sample"]["rows"]) == 3
+    assert evidence["composition"]["mixture"] == candidate_composition_rows(rows)
+    assert evidence["calibration"]["mixture"] == candidate_proposal_calibration_rows(rows)
+    assert evidence["collision"] == candidate_collision_support_rows(rows)
+    assert evidence["groups"]["mixture"] == candidate_group_summary_rows(object(), group_by="mixture", audit_rows=rows)
+
+    reversed_evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in reversed(rows)],
+        sample_size=3,
+    )
+    assert [row["candidate_row_id"] for row in evidence["sample"]["rows"]] == [
+        row["candidate_row_id"] for row in reversed_evidence["sample"]["rows"]
+    ]
+
+
+@pytest.mark.parametrize(
+    ("probabilities", "reason"),
+    [
+        ([None, 0.5], "incomplete_probability_vector"),
+        ([np.nan, 0.5], "incomplete_probability_vector"),
+        ([np.inf, 0.5], "incomplete_probability_vector"),
+        ([-0.1, 1.1], "negative_probability"),
+        ([0.4, 0.4], "probability_not_normalized"),
+        ([0.0, 0.0], "nonpositive_probability_sum"),
+    ],
+)
+def test_candidate_population_probability_vectors_fail_closed(probabilities: list[float | None], reason: str) -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "mixture": "forward",
+            "position": "center",
+            "strategy": "random",
+            "invalid_reason": "none",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": probability,
+            "target_root_gain": 0.1,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, probability in enumerate(probabilities)
+    ]
+
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+    calibration = evidence["calibration"]["mixture"][0]
+    assert calibration["proposal_available"] is False
+    assert reason in str(calibration["proposal_unavailable_reason"])
+    assert calibration["population_proposal_mass"] is None
+    assert calibration["proposal_mass"] is None
+
+
+def test_candidate_population_mixed_state_probability_error_closes_macro() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": index // 2,
+            "step_row_id": index // 2,
+            "mixture": "forward",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": probability,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, probability in enumerate((0.5, 0.5, 0.8, 0.8))
+    ]
+
+    row = candidate_population_evidence(object(), audit_reader=lambda _reader: rows)["calibration"]["mixture"][0]
+
+    assert row["proposal_available"] is False
+    assert row["population_proposal_mass"] is None
+    assert row["proposal_mass"] is None
+    assert row["calibration_gap"] is None
+
+
+def test_public_candidate_calibration_rejects_non_normalized_state_probability() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "mixture": "forward",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": 0.8,
+        }
+        for index in range(2)
+    ]
+
+    calibration = candidate_proposal_calibration_rows(rows)[0]
+
+    assert calibration["proposal_available"] is False
+    assert "probability_not_normalized" in str(calibration["proposal_unavailable_reason"])
+    assert calibration["population_proposal_mass"] is None
+    assert calibration["proposal_mass"] is None
+
+
+def test_headroom_condition_applicability_fails_closed_only_when_applicable() -> None:
+    common = {
+        "source_sample_key": "sample-a",
+        "source_sample_index": 2,
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "horizon": 3,
+        "acquisition_budget_steps": 3,
+        "candidate_config": "candidate-hash",
+        "oracle_config": "oracle-hash",
+        "manifest_sha256": "manifest-hash",
+        "writer_config_hash": "writer-hash",
+        "campaign_id": "campaign",
+        "plan_hash": "plan",
+        "work_unit_hash": "unit",
+        "profile_hash": "profile",
+        "explicit_target_hash": "target-hash",
+        "branch_factor": 1,
+        "beam_width": 1,
+        "rollout_recipe": "oracle",
+        "final_cumulative_target_root_gain": 1.0,
+        "temperature": np.nan,
+        "random_seed": -1,
+    }
+    rows = [
+        {
+            **common,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_greedy",
+            "temperature_applicable": False,
+            "random_seed_applicable": False,
+        },
+        {
+            **common,
+            "policy": "oracle_greedy",
+            "branch_schedule": "oracle_lookahead",
+            "temperature_applicable": True,
+            "random_seed_applicable": False,
+        },
+    ]
+    evidence = oracle_headroom_evidence(rows)
+    assert evidence["contrast_rows"][0]["status"] == "excluded"
+    assert evidence["contrast_rows"][0]["exclusion_reason"] == "unsupported_semantics"
 
 
 class _NarrowCandidateFlowReader:

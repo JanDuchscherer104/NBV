@@ -20,8 +20,16 @@ import pandas as pd
 
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
-    candidate_audit_rows,
-    candidate_group_summary_rows,
+    candidate_audit_rows,  # noqa: F401 - retained for direct consumer compatibility
+    candidate_population_evidence,
+    discounted_rollout_return_rows,
+    oracle_headroom_evidence,
+    promoted_store_validation_error,
+    q_h_evidence_rows,
+    reconstruction_endpoint_rows,
+    reconstruction_endpoint_summary_rows,
+    reconstruction_metric_summary_rows,
+    rollout_header_summary,
     rollout_statistics,
     rollout_step_objective_rows,
     rollout_tree_summary_rows,
@@ -104,6 +112,95 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "deficit_score",
     ),
     "validity": ("store_id", "stage", "count", "fraction_of_full"),
+    "candidate_composition": (
+        "store_id",
+        "group_by",
+        "generation_cohort_id",
+        "generation_cohort",
+        "family",
+        "allocated_count",
+        "actor_valid_count",
+        "oracle_valid_count",
+        "trainable_count",
+        "selected_count",
+        "state_count",
+        "scene_count",
+        "macro_actor_valid_rate",
+        "macro_oracle_valid_rate",
+        "macro_trainable_rate",
+        "macro_selected_rate",
+        "aggregation",
+    ),
+    "candidate_calibration": (
+        "store_id",
+        "group_by",
+        "generation_cohort_id",
+        "generation_cohort",
+        "family",
+        "candidate_count",
+        "finite_probability_count",
+        "state_count",
+        "scene_count",
+        "empirical_denominator",
+        "proposal_denominator",
+        "selected_denominator",
+        "proposal_available",
+        "proposal_unavailable_reason",
+        "population_empirical_frequency",
+        "population_proposal_mass",
+        "population_calibration_gap",
+        "population_selected_share",
+        "population_selection_enrichment",
+        "empirical_frequency",
+        "proposal_mass",
+        "calibration_gap",
+        "selected_share",
+        "selection_enrichment",
+        "aggregation",
+    ),
+    "candidate_collision_support": (
+        "store_id",
+        "generation_cohort_id",
+        "generation_cohort",
+        "candidate_count",
+        "collision_available_count",
+        "collision_evaluated_count",
+        "collision_not_applicable_count",
+        "collision_unavailable_count",
+        "collision_count",
+        "collision_denominator",
+        "population_collision_rate",
+        "collision_rate",
+        "clearance_finite_count",
+        "clearance_denominator",
+        "population_clearance_mean_m",
+        "clearance_mean_m",
+        "state_count",
+        "scene_count",
+        "available",
+        "reason",
+    ),
+    "q_h_evidence": (
+        "store_id",
+        "available",
+        "blocking_reason",
+        "deep_count",
+        "view_role",
+        "return_semantics",
+        "td_semantics",
+        "reward_metric",
+        "discount_gamma",
+        "state_count",
+        "max_candidates",
+        "actor_valid_count",
+        "oracle_valid_count",
+        "trainable_count",
+        "padding_count",
+        "counted_state_rows",
+        "total_state_rows",
+        "truncated",
+        "count_reason",
+    ),
     "candidate_groups": (
         "store_id",
         "group_by",
@@ -207,6 +304,144 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "bytes_per_candidate_limit",
         "status",
         "source",
+    ),
+    "rollout_header": (
+        "store_id",
+        "scenes",
+        "targets",
+        "rollouts",
+        "candidate_rows",
+        "source_rows",
+        "reference_scene_count",
+        "reference_scene_covered",
+        "reference_scene_gap",
+        "reference_scene_fraction",
+        "reference_source_row_count",
+        "reference_source_rows_covered",
+        "reference_source_row_gap",
+        "reference_source_row_fraction",
+        "reference_coverage_reason",
+        "logical_source_rows_json",
+        "physical_store_bytes",
+        "physical_bytes_per_rollout",
+        "physical_bytes_per_candidate",
+        "return_semantics",
+        "discount_gamma",
+    ),
+    "reconstruction_metrics": (
+        "store_id",
+        "family",
+        "metric",
+        "label",
+        "units",
+        "row_count",
+        "rollout_count",
+        "finite_count",
+        "missing_count",
+        "mean",
+        "std",
+        "median",
+        "q25",
+        "q75",
+        "min",
+        "max",
+        "endpoint_total_count",
+        "endpoint_finite_count",
+        "endpoint_missing_count",
+        "endpoint_mean",
+        "endpoint_std",
+        "endpoint_median",
+        "endpoint_q25",
+        "endpoint_q75",
+        "endpoint_min",
+        "endpoint_max",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
+    ),
+    "reconstruction_endpoints": (
+        "store_id",
+        "rollout_row_id",
+        "scene",
+        "policy",
+        "horizon",
+        "step_index",
+        "cumulative_target_root_gain",
+        "cumulative_target_rri",
+        "selected_target_root_gain",
+        "selected_target_rri",
+        "selected_probability",
+        "selected_entropy",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
+    ),
+    "reconstruction_endpoint_summary": (
+        "store_id",
+        "policy",
+        "horizon",
+        "family",
+        "metric",
+        "label",
+        "units",
+        "total_count",
+        "finite_count",
+        "missing_count",
+        "mean",
+        "std",
+        "median",
+        "q25",
+        "q75",
+        "min",
+        "max",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
+    ),
+    "discounted_return": (
+        "store_id",
+        "rollout_row_id",
+        "scene",
+        "policy",
+        "horizon",
+        "discount_gamma",
+        "discounted_return",
+        "available",
+        "reason",
+        "contract_status",
+        "factual_rollout_count",
+    ),
+    "oracle_headroom_contrasts": (
+        "store_id",
+        "contrast",
+        "status",
+        "exclusion_reason",
+        "value",
+        "headroom_denominator",
+        "headroom_invariant_key",
+        "scene",
+        "normalized_conditions_json",
+        "role_treatments_json",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
+    ),
+    "oracle_headroom_summary": (
+        "store_id",
+        "contrast",
+        "eligible_count",
+        "included_count",
+        "excluded_count",
+        "exclusion_reason_counts_json",
+        "scene_support",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
     ),
     "failures": (
         "store_id",
@@ -341,6 +576,8 @@ def _append_store_rows(
         detail = "; ".join(validation.errors[:3]) or "unknown validation error"
         raise ValueError(f"Rollout store {store_path} failed validation: {detail}")
     manifest_payload = reader.manifest()
+    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
+        raise ValueError(f"Rollout store {store_path} failed promotion validation: {promotion_error}")
     manifest = manifest_payload.get("manifest", {})
     root_attrs = manifest_payload.get("root_attrs", {})
     manifest_sha256 = str(root_attrs["manifest_sha256"])
@@ -367,13 +604,22 @@ def _append_store_rows(
     )
 
     generation = manifest.get("generation", {}) if isinstance(manifest, dict) else {}
+    parameter_root_attrs = dict(root_attrs)
+    discount_gamma = root_attrs.get("discount_gamma")
+    parameter_root_attrs["discount_gamma"] = (
+        float(discount_gamma)
+        if isinstance(discount_gamma, (int, float, np.integer, np.floating))
+        and not isinstance(discount_gamma, bool)
+        and np.isfinite(discount_gamma)
+        else None
+    )
     parameter_payload = {
         "writer_config": generation.get("writer_config") if isinstance(generation, dict) else None,
         "invocation": _without_raw_toml(generation.get("invocation")) if isinstance(generation, dict) else None,
         "runtime": generation.get("runtime") if isinstance(generation, dict) else None,
         "shard": generation.get("shard") if isinstance(generation, dict) else None,
         "config_hashes": manifest.get("config_hashes") if isinstance(manifest, dict) else None,
-        "root_attrs": root_attrs,
+        "root_attrs": parameter_root_attrs,
     }
     rows["parameters"].extend(_typed_leaf_rows("store_id", store_id, parameter_payload))
     stats = rollout_statistics(reader, manifest_payload=manifest_payload)
@@ -382,7 +628,8 @@ def _append_store_rows(
     rows["source_coverage"].extend(_source_coverage_rows(store_id, stats.get("source_coverage", {})))
     rows["targets"].extend(_with_store_id(store_id, target_audit_rows(reader)))
     rows["validity"].extend(_with_store_id(store_id, validity_waterfall_rows(reader)))
-    rows["steps"].extend(_with_store_id(store_id, rollout_step_objective_rows(reader)))
+    step_rows = rollout_step_objective_rows(reader)
+    rows["steps"].extend(_with_store_id(store_id, step_rows))
     rows["rollout_tree"].extend(_with_store_id(store_id, rollout_tree_summary_rows(reader)))
     rows["selected_depth"].extend(_with_store_id(store_id, selected_depth_summary_rows(reader, limit=None)))
     storage = runtime_storage_statistics(store_path, candidate_count=int(counts.get("candidates") or 0))
@@ -394,6 +641,104 @@ def _append_store_rows(
             "source": "inspection.runtime_storage_statistics",
         }
     )
+    header = rollout_header_summary(reader, manifest_payload=manifest_payload)
+    rows["rollout_header"].append(
+        {
+            "store_id": store_id,
+            **{key: value for key, value in header.items() if key != "logical_source_rows"},
+            "logical_source_rows_json": json.dumps(
+                header["logical_source_rows"], sort_keys=True, separators=(",", ":")
+            ),
+        }
+    )
+    reconstruction_provenance = {
+        "evidence_class": "diagnostic_proxy",
+        "metric_source": "rollout_step_objective_rows",
+        "endpoint_kind": "persisted_chain_terminal_step",
+        "independent_endpoint_evaluation": False,
+    }
+    rows["reconstruction_metrics"].extend(
+        _with_store_id(
+            store_id,
+            [{**row, **reconstruction_provenance} for row in reconstruction_metric_summary_rows(step_rows)],
+        )
+    )
+    rows["reconstruction_endpoints"].extend(
+        _with_store_id(
+            store_id,
+            [{**row, **reconstruction_provenance} for row in reconstruction_endpoint_rows(step_rows)],
+        )
+    )
+    rows["reconstruction_endpoint_summary"].extend(
+        _with_store_id(
+            store_id,
+            [{**row, **reconstruction_provenance} for row in reconstruction_endpoint_summary_rows(step_rows)],
+        )
+    )
+    discounted = discounted_rollout_return_rows(
+        step_rows,
+        return_semantics=root_attrs.get("return_semantics"),
+        discount_gamma=root_attrs.get("discount_gamma"),
+    )
+    discounted_rows = list(discounted["rows"])
+    if not discounted_rows:
+        discounted_rows = [
+            {
+                "rollout_row_id": None,
+                "scene": None,
+                "policy": None,
+                "horizon": None,
+                "discount_gamma": root_attrs.get("discount_gamma"),
+                "discounted_return": None,
+                "available": False,
+                "reason": discounted.get("reason"),
+            }
+        ]
+    rows["discounted_return"].extend(
+        _with_store_id(
+            store_id,
+            [
+                {
+                    **row,
+                    "contract_status": "available" if discounted.get("available") else "unavailable",
+                    "factual_rollout_count": len(
+                        {r.get("rollout_row_id") for r in step_rows if r.get("rollout_row_id") is not None}
+                    ),
+                }
+                for row in discounted_rows
+            ],
+        )
+    )
+    headroom = oracle_headroom_evidence(reader)
+    rows["oracle_headroom_contrasts"].extend(
+        {
+            "store_id": store_id,
+            **{key: value for key, value in row.items() if key not in {"normalized_conditions", "role_treatments"}},
+            "normalized_conditions_json": json.dumps(
+                row["normalized_conditions"], sort_keys=True, separators=(",", ":")
+            ),
+            "role_treatments_json": json.dumps(row["role_treatments"], sort_keys=True, separators=(",", ":")),
+            "evidence_class": headroom.get("evidence_status"),
+            "metric_source": headroom.get("metric_source"),
+            "endpoint_kind": headroom.get("endpoint_kind"),
+            "independent_endpoint_evaluation": headroom.get("independent_endpoint_evaluation"),
+        }
+        for row in headroom["contrast_rows"]
+    )
+    rows["oracle_headroom_summary"].extend(
+        {
+            "store_id": store_id,
+            **{key: value for key, value in row.items() if key != "exclusion_reason_counts"},
+            "exclusion_reason_counts_json": json.dumps(
+                row["exclusion_reason_counts"], sort_keys=True, separators=(",", ":")
+            ),
+            "evidence_class": headroom.get("evidence_status"),
+            "metric_source": headroom.get("metric_source"),
+            "endpoint_kind": headroom.get("endpoint_kind"),
+            "independent_endpoint_evaluation": headroom.get("independent_endpoint_evaluation"),
+        }
+        for row in headroom["summary_rows"]
+    )
     rows["failures"].extend(
         {
             "store_id": store_id,
@@ -403,9 +748,14 @@ def _append_store_rows(
         }
         for failure in suspicious_rollout_rows(reader)
     )
-    candidate_rows = candidate_audit_rows(reader)
+    candidate_evidence = candidate_population_evidence(reader, audit_reader=candidate_audit_rows)
     for group_by in CANDIDATE_GROUP_FIELDS:
-        for group_row in candidate_group_summary_rows(reader, group_by=group_by, audit_rows=candidate_rows):
+        rows["candidate_composition"].extend(_with_store_id(store_id, candidate_evidence["composition"][group_by]))
+        rows["candidate_calibration"].extend(_with_store_id(store_id, candidate_evidence["calibration"][group_by]))
+    rows["candidate_collision_support"].extend(_with_store_id(store_id, candidate_evidence["collision"]))
+    rows["q_h_evidence"].extend(_with_store_id(store_id, q_h_evidence_rows(reader, validation_result=validation)))
+    for group_by in CANDIDATE_GROUP_FIELDS:
+        for group_row in candidate_evidence["groups"][group_by]:
             group = group_row.pop(group_by)
             rows["candidate_groups"].append({"store_id": store_id, "group_by": group_by, "group": group, **group_row})
 

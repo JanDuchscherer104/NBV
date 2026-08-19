@@ -13,6 +13,7 @@ import json
 from collections import Counter
 from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass
+from functools import wraps
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
@@ -32,12 +33,20 @@ from ...rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_flow_rows,
-    candidate_group_summary_rows,
+    candidate_group_summary_rows,  # noqa: F401 - retained for projection test compatibility
+    candidate_population_evidence,
     comparable_policy_cohorts,
+    discounted_rollout_return_rows,
     discover_rollout_store_paths,
     mask_combination_rows,
+    oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    promoted_store_validation_error,
+    q_h_evidence_rows,
+    reconstruction_endpoint_summary_rows,
+    reconstruction_metric_summary_rows,
     rollout_endpoint_metric_summary,
+    rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
@@ -166,8 +175,10 @@ class ScientificExplanation:
 
 
 @st.cache_resource(show_spinner=False)
-def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
-    """Open and validate one immutable rollout store once per Streamlit process."""
+def _cached_store_bundle_cached(
+    store_path: str, *, store_identity: str = ""
+) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
+    """Open and validate one replacement-sensitive rollout store identity."""
 
     reader = RolloutZarrStoreReader(Path(store_path))
     validation = reader.validate()
@@ -175,7 +186,16 @@ def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, 
         manifest_payload = reader.manifest()
     except Exception:
         manifest_payload = {"root_attrs": {}, "manifest": {}}
+    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
+        validation.errors.append(promotion_error)
     return reader, validation, manifest_payload
+
+
+@wraps(_cached_store_bundle_cached.__wrapped__)
+def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
+    """Open one store through a cache key that changes when its manifest is replaced."""
+
+    return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
 
 
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
@@ -189,7 +209,17 @@ def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
 
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-def _cached_projection(
+def _cached_candidate_population_cached(
+    store_path: str, store_identity: str, sample_size: int = 500
+) -> dict[str, object]:
+    """Build the complete candidate bundle once per immutable store identity."""
+
+    reader, _, _ = _cached_store_bundle(store_path)
+    return candidate_population_evidence(reader, sample_size=sample_size)
+
+
+@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
+def _cached_projection_cached(
     store_path: str,
     projection: str,
     *,
@@ -201,18 +231,38 @@ def _cached_projection(
     group_fields: tuple[str, ...] = (),
     policies: tuple[str, ...] | None = None,
     step_indices: tuple[int, ...] | None = None,
+    deep_count: bool = False,
+    q_h_chunk_size: int = 1024,
+    q_h_state_limit: int | None = None,
+    store_identity: str = "",
 ) -> Any:
-    """Cache serializable inspection projections for an immutable store."""
+    """Cache serializable inspection projections for one validated store identity."""
 
     reader, _, manifest_payload = _cached_store_bundle(store_path)
     if projection == "invariants":
         return store_invariant_rows(reader, manifest_payload=manifest_payload)
+    if projection == "header":
+        return rollout_header_summary(reader, manifest_payload=manifest_payload)
     if projection == "cohorts":
         return comparable_policy_cohorts(reader)
     if projection == "paired":
         return paired_policy_comparison_rows(reader)
     if projection == "steps":
         return rollout_step_objective_rows(reader, rollout_row_id=rollout_row_id)
+    if projection == "reconstruction_metrics":
+        return reconstruction_metric_summary_rows(reader)
+    if projection == "reconstruction_endpoints":
+        return reconstruction_endpoint_summary_rows(reader)
+    if projection == "discounted_returns":
+        root_attrs = manifest_payload.get("root_attrs", {})
+        root_attrs = root_attrs if isinstance(root_attrs, dict) else {}
+        return discounted_rollout_return_rows(
+            reader,
+            return_semantics=root_attrs.get("return_semantics"),
+            discount_gamma=root_attrs.get("discount_gamma"),
+        )
+    if projection == "headroom":
+        return oracle_headroom_evidence(reader)
     if projection == "temporal":
         if metric is None:
             raise ValueError("temporal projection requires metric")
@@ -226,17 +276,45 @@ def _cached_projection(
     if projection == "masks":
         return mask_combination_rows(reader)
     if projection == "candidates":
-        return candidate_audit_rows(
+        rows: list[dict[str, object]] = []
+        candidate_audit_rows(
             reader,
             rollout_row_id=rollout_row_id,
             step_row_id=step_row_id,
             limit=limit,
+            row_callback=rows.append,
         )
+        return rows
     if projection == "candidate_group":
         if group_by is None:
             raise ValueError("candidate_group projection requires group_by")
-        audit_rows = _cached_projection(store_path, "candidates", limit=limit)
-        return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
+        if not hasattr(reader, "array"):
+            audit_rows = _cached_projection(store_path, "candidates", limit=limit)
+            return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
+        return _cached_candidate_population_cached(store_path, store_identity)["groups"][group_by]
+    if projection in {"candidate_composition", "candidate_calibration"}:
+        if group_by is None:
+            raise ValueError(f"{projection} projection requires group_by")
+        evidence = _cached_candidate_population_cached(store_path, store_identity)
+        key = "composition" if projection == "candidate_composition" else "calibration"
+        return evidence[key][group_by]
+    if projection == "candidate_collision":
+        return _cached_candidate_population_cached(store_path, store_identity)["collision"]
+    if projection == "candidate_sample":
+        return _cached_candidate_population_cached(store_path, store_identity, 500 if limit is None else limit)[
+            "sample"
+        ]
+    if projection == "candidate_population":
+        return _cached_candidate_population_cached(store_path, store_identity)
+    if projection == "q_h":
+        _, validation, _ = _cached_store_bundle(store_path)
+        return q_h_evidence_rows(
+            reader,
+            deep_count=deep_count,
+            chunk_size=q_h_chunk_size,
+            state_row_limit=q_h_state_limit,
+            validation_result=validation,
+        )
     if projection == "tree":
         return rollout_tree_summary_rows(reader)
     if projection == "root_geometry":
@@ -247,14 +325,65 @@ def _cached_projection(
     raise ValueError(f"Unknown cached rollout projection: {projection}")
 
 
+def _store_projection_identity(store_path: str) -> str:
+    """Return a replacement-sensitive identity without reading Zarr payloads."""
+
+    path = Path(store_path)
+    try:
+        digest = hashlib.sha256()
+        for child in sorted(
+            (candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()
+        ):
+            relative = child.relative_to(path).as_posix().encode()
+            stat = child.stat()
+            digest.update(len(relative).to_bytes(8, "big"))
+            digest.update(relative)
+            digest.update(stat.st_size.to_bytes(8, "big"))
+            digest.update(stat.st_mtime_ns.to_bytes(8, "big"))
+            digest.update(stat.st_ctime_ns.to_bytes(8, "big"))
+            digest.update(stat.st_ino.to_bytes(8, "big"))
+        success = _read_json_mapping(path / "_SUCCESS.json")
+        seal = success.get("rollout_store_content_sha256") if success is not None else None
+        identity = f"store:{seal or 'unpromoted'}:{digest.hexdigest()}"
+    except OSError:
+        try:
+            stat = path.stat()
+            identity = f"store:{stat.st_size}:{stat.st_mtime_ns}"
+        except OSError:
+            identity = "missing"
+    return identity
+
+
+def _read_json_mapping(path: Path) -> dict[str, object] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+@wraps(_cached_projection_cached.__wrapped__)
+def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
+    """Dispatch through the projection cache with a replacement-sensitive store key."""
+
+    return _cached_projection_cached(
+        store_path,
+        projection,
+        store_identity=_store_projection_identity(store_path),
+        **kwargs,
+    )
+
+
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
-def _cached_topology(
+def _cached_topology_cached(
     store_path: str,
     vin_store_dirs: tuple[str, ...],
     paths: PathConfig,
     selected_source_row_id: int | None = None,
+    *,
+    store_identity: str = "",
 ) -> Any:
-    """Resolve one immutable cross-store topology and reuse its Rich tree."""
+    """Resolve one replacement-sensitive cross-store topology and reuse its Rich tree."""
 
     return build_dataset_topology(
         rollout_store_dir=Path(store_path),
@@ -264,14 +393,34 @@ def _cached_topology(
     )
 
 
+@wraps(_cached_topology_cached.__wrapped__)
+def _cached_topology(
+    store_path: str,
+    vin_store_dirs: tuple[str, ...],
+    paths: PathConfig,
+    selected_source_row_id: int | None = None,
+) -> Any:
+    """Resolve topology through a cache key bound to the selected store identity."""
+
+    return _cached_topology_cached(
+        store_path,
+        vin_store_dirs,
+        paths,
+        selected_source_row_id,
+        store_identity=_store_projection_identity(store_path),
+    )
+
+
 @st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
-def _cached_failures(
+def _cached_failures_cached(
     store_path: str,
     min_valid_candidates: int,
     dominant_invalid_fraction: float,
     max_step_distance_m: float,
+    *,
+    store_identity: str = "",
 ) -> list[dict[str, object]]:
-    """Cache failure triage for one immutable store and threshold tuple."""
+    """Cache failure triage for one replacement-sensitive store and threshold tuple."""
 
     reader, _, _ = _cached_store_bundle(store_path)
     config = RolloutSuspiciousQueryConfig(
@@ -282,23 +431,52 @@ def _cached_failures(
     return suspicious_rollout_rows(reader, config=config)
 
 
+@wraps(_cached_failures_cached.__wrapped__)
+def _cached_failures(
+    store_path: str,
+    min_valid_candidates: int,
+    dominant_invalid_fraction: float,
+    max_step_distance_m: float,
+) -> list[dict[str, object]]:
+    """Evaluate failure triage through a cache key bound to the selected store identity."""
+
+    return _cached_failures_cached(
+        store_path,
+        min_valid_candidates,
+        dominant_invalid_fraction,
+        max_step_distance_m,
+        store_identity=_store_projection_identity(store_path),
+    )
+
+
 @st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
-def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
-    """Build one deterministic bundle only after the operator requests it."""
+def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, store_identity: str = "") -> bytes:
+    """Build one deterministic bundle for a replacement-sensitive store identity."""
 
     frames = build_thesis_report_frames([Path(store_path)], evidence_status=evidence_status)
     return serialize_thesis_report_bundle(frames)
+
+
+@wraps(_cached_evidence_bundle_cached.__wrapped__)
+def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
+    """Build a report bundle through the replacement-sensitive store cache key."""
+
+    return _cached_evidence_bundle_cached(
+        store_path,
+        evidence_status,
+        store_identity=_store_projection_identity(store_path),
+    )
 
 
 def _clear_stored_rollout_caches() -> None:
     """Clear only the inspector caches after stores are created or replaced."""
 
     _cached_inventory.clear()
-    _cached_projection.clear()
-    _cached_topology.clear()
-    _cached_failures.clear()
-    _cached_evidence_bundle.clear()
-    _cached_store_bundle.clear()
+    _cached_projection_cached.clear()
+    _cached_topology_cached.clear()
+    _cached_failures_cached.clear()
+    _cached_evidence_bundle_cached.clear()
+    _cached_store_bundle_cached.clear()
 
 
 def render_stored_rollouts_page() -> None:
@@ -445,6 +623,8 @@ def _render_trust_and_topology(
     cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
     cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
+    _render_validated_store_header(reader.store_dir.as_posix(), validation_ok=validation_ok)
+
     try:
         invariants = _cached_projection(reader.store_dir.as_posix(), "invariants")
     except Exception as exc:
@@ -529,9 +709,77 @@ def _render_trust_and_topology(
     )
 
 
+def _render_store_header_summary(store_path: str) -> None:
+    """Render reference coverage and physical cost without candidate projection."""
+
+    header = _cached_projection(store_path, "header")
+    st.markdown("#### Coverage and physical cost")
+    coverage_cols = st.columns(4)
+    coverage_cols[0].metric("Scenes", _format_count(header.get("scenes")))
+    coverage_cols[1].metric("Targets", _format_count(header.get("targets")))
+    coverage_cols[2].metric("Source rows", _format_count(header.get("source_rows")))
+    coverage_cols[3].metric("Store size", _format_bytes(header.get("physical_store_bytes")))
+    if header.get("reference_scene_count") is None and header.get("reference_source_row_count") is None:
+        st.caption(str(header.get("reference_coverage_reason") or "Reference coverage is unavailable."))
+    else:
+        st.caption(
+            "Reference coverage: "
+            f"scenes {_format_fraction(header.get('reference_scene_fraction'))}; "
+            f"source rows {_format_fraction(header.get('reference_source_row_fraction'))}. "
+            "Observed rows never define their own reference denominator."
+        )
+    cost = pd.DataFrame(
+        [
+            {
+                "bytes_per_rollout": header.get("physical_bytes_per_rollout"),
+                "bytes_per_candidate": header.get("physical_bytes_per_candidate"),
+                "return_semantics": header.get("return_semantics"),
+                "discount_gamma": header.get("discount_gamma"),
+            }
+        ]
+    )
+    st.dataframe(cost, hide_index=True, width="stretch")
+    _download_json("Download coverage and cost JSON", "rollout-coverage-cost.json", header)
+
+
+def _render_validated_store_header(store_path: str, *, validation_ok: bool) -> None:
+    """Render scientific coverage only for a store that passed validation."""
+
+    if not validation_ok:
+        st.info("Coverage and physical-cost projections are withheld until store validation succeeds.")
+        return
+    _render_store_header_summary(store_path)
+
+
+def _format_count(value: object) -> str:
+    """Format an optional integral count without inventing a zero."""
+
+    return "n/a" if value is None else f"{int(value):,}"
+
+
+def _format_bytes(value: object) -> str:
+    """Format an optional byte count using compact binary units."""
+
+    if value is None:
+        return "n/a"
+    size = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if abs(size) < 1024.0 or unit == "TiB":
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    raise AssertionError("unreachable byte unit")
+
+
+def _format_fraction(value: object) -> str:
+    """Format an optional coverage fraction without deriving a denominator."""
+
+    return "n/a" if value is None else f"{float(value):.1%}"
+
+
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
     st.subheader("Scientific Evidence")
     store_path = reader.store_dir.as_posix()
+    _render_reconstruction_summary(store_path)
     cohort = _cached_projection(store_path, "cohorts")
     eligibility = bool(cohort.get("eligible"))
     st.metric("Matched comparison eligible", "YES" if eligibility else "NO")
@@ -601,6 +849,53 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
         ):
             _render_branching_evidence(steps, pd.DataFrame(_cached_projection(store_path, "tree")))
             _render_selected_rank_and_geometry(store_path)
+
+
+def _render_reconstruction_summary(store_path: str) -> None:
+    """Render frozen reconstruction, return, and headroom rows on demand."""
+
+    if not st.toggle(
+        "Load reconstruction endpoints, discounted returns, and oracle headroom",
+        value=False,
+        help="Materializes only frozen inspection projections after this explicit request.",
+    ):
+        return
+
+    metric_rows = pd.DataFrame(_cached_projection(store_path, "reconstruction_metrics"))
+    endpoint_rows = pd.DataFrame(_cached_projection(store_path, "reconstruction_endpoints"))
+    discounted = _cached_projection(store_path, "discounted_returns")
+    headroom = _cached_projection(store_path, "headroom")
+
+    st.markdown("#### Reconstruction and selection metric plan")
+    if metric_rows.empty:
+        st.info("No factual reconstruction metric rows are available.")
+    else:
+        st.dataframe(metric_rows, hide_index=True, width="stretch")
+        _download_frame("Download reconstruction metric CSV", "reconstruction-metrics.csv", metric_rows)
+    if not endpoint_rows.empty:
+        st.dataframe(endpoint_rows, hide_index=True, width="stretch")
+        _download_frame("Download endpoint summary CSV", "reconstruction-endpoints.csv", endpoint_rows)
+
+    st.markdown("#### Discounted factual selected gain")
+    discounted_rows = pd.DataFrame(discounted.get("rows", []))
+    if bool(discounted.get("available")) and not discounted_rows.empty:
+        st.caption(str(discounted.get("reason")))
+        st.dataframe(discounted_rows, hide_index=True, width="stretch")
+        _download_frame("Download discounted return CSV", "discounted-returns.csv", discounted_rows)
+    else:
+        st.info(f"Discounted return unavailable: {discounted.get('reason', 'no factual rows')}")
+
+    st.markdown("#### Exact-role oracle headroom diagnostics")
+    st.caption("These are diagnostic contrasts, not causal policy comparisons. Exclusions remain explicit.")
+    headroom_rows = pd.DataFrame(headroom.get("contrast_rows", []))
+    headroom_summary = pd.DataFrame(headroom.get("summary_rows", []))
+    if headroom_rows.empty:
+        st.info("No exact-role headroom contrasts are available.")
+    else:
+        st.dataframe(headroom_rows, hide_index=True, width="stretch")
+        _download_frame("Download headroom contrasts CSV", "oracle-headroom-contrasts.csv", headroom_rows)
+    if not headroom_summary.empty:
+        st.dataframe(headroom_summary, hide_index=True, width="stretch")
 
 
 def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
@@ -1037,6 +1332,13 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
         _render_candidate_aggregate_breakdowns(store_path)
 
     if st.toggle(
+        "Load cohort composition, proposal calibration, and collision support",
+        value=False,
+        help="Materializes the complete candidate audit only after this explicit request and reuses its cached rows.",
+    ):
+        _render_candidate_population_evidence(store_path)
+
+    if st.toggle(
         "Load bounded candidate geometry and reward plots",
         value=False,
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
@@ -1047,6 +1349,39 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             pd.DataFrame(candidate_rows),
             total_candidates=int(reader.array("candidates/candidate_row_id").size),
         )
+
+
+def _render_candidate_population_evidence(store_path: str) -> None:
+    """Render complete candidate aggregates and a deterministic display-only sample."""
+
+    group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
+    population = _cached_projection(store_path, "candidate_population", group_by=group_by)
+    composition = pd.DataFrame(population["composition"][group_by])
+    calibration = pd.DataFrame(population["calibration"][group_by])
+    collision = pd.DataFrame(population["collision"])
+    sample = population["sample"]
+
+    st.markdown("#### Candidate composition")
+    st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
+    st.dataframe(composition, hide_index=True, width="stretch")
+    _download_frame("Download candidate composition CSV", "candidate-composition.csv", composition)
+
+    st.markdown("#### Proposal calibration")
+    st.caption("Empirical frequency, proposal mass, and selection enrichment remain descriptive within cohort.")
+    st.dataframe(calibration, hide_index=True, width="stretch")
+    _download_frame("Download proposal calibration CSV", "candidate-proposal-calibration.csv", calibration)
+
+    st.markdown("#### Collision support")
+    st.dataframe(collision, hide_index=True, width="stretch")
+    _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
+
+    sample_rows = pd.DataFrame(sample.get("rows", []))
+    st.markdown("#### Deterministic display sample")
+    st.caption(
+        f"Showing {int(sample.get('display_count', 0)):,} of {int(sample.get('population_count', 0)):,} rows. "
+        "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
+    )
+    st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
 def _render_candidate_provenance_flow(store_path: str) -> None:
@@ -2250,8 +2585,83 @@ def _render_inspect_export_rerun(
         st.json(manifest_payload, expanded=False)
         st.dataframe(steps, hide_index=True, width="stretch")
     _download_json("Download selected metadata JSON", f"rollout-{rollout_id}-metadata.json", manifest_payload)
+    _render_q_h_evidence(store_path_key)
     _render_evidence_bundle_download(store_path)
     _render_rerun_launcher(store_path=store_path, rollout_id=rollout_id, paths=paths)
+
+
+def _render_q_h_evidence(store_path: str) -> None:
+    """Render metadata-only Q_H facts and gate mask counts behind an explicit toggle."""
+
+    st.markdown("#### Store-local Q_H evidence")
+    deep_count = st.toggle(
+        "Count current-store Q_H masks",
+        value=False,
+        help="Off reads metadata only. On performs the bounded current-store mask projection.",
+    )
+    chunk_size = int(
+        st.number_input(
+            "Q_H state chunk size",
+            min_value=1,
+            value=1024,
+            step=256,
+            disabled=not deep_count,
+            help="Bounded Zarr read size used by the optional Q_H mask count.",
+        )
+    )
+    state_limit_value = st.number_input(
+        "Q_H state-row limit (0 = full store)",
+        min_value=0,
+        value=0,
+        step=1024,
+        disabled=not deep_count,
+        help="Optional bounded prefix for diagnostics; 0 counts all persisted Q_H states.",
+    )
+    state_limit = None if int(state_limit_value) == 0 else int(state_limit_value)
+    if not deep_count:
+        evidence_rows = _cached_projection(store_path, "q_h", deep_count=False)
+    else:
+        cancel_key = f"q_h_cancel:{Path(store_path).resolve().as_posix()}"
+        stop_requested = bool(
+            st.checkbox(
+                "Stop after the current Q_H chunk",
+                value=bool(st.session_state.get(cancel_key, False)),
+                key=cancel_key,
+                help="Cancellation is observed at the next bounded chunk boundary.",
+            )
+        )
+        progress = st.progress(0.0, text="Preparing bounded Q_H count…")
+        status = st.empty()
+        reader, validation, _ = _cached_store_bundle(store_path)
+
+        def update_progress(completed: int, total: int) -> bool:
+            fraction = 1.0 if total <= 0 else min(1.0, float(completed) / float(total))
+            progress.progress(fraction, text=f"Q_H count: {completed:,}/{total:,} state rows")
+            status.caption(
+                "Stop requested; finishing the current chunk." if stop_requested else "Reading bounded Q_H slices…"
+            )
+            return not stop_requested
+
+        evidence_rows = q_h_evidence_rows(
+            reader,
+            deep_count=True,
+            chunk_size=chunk_size,
+            state_row_limit=state_limit,
+            progress_callback=update_progress,
+            validation_result=validation,
+        )
+        evidence = evidence_rows[0] if evidence_rows else {}
+        if str(evidence.get("count_reason", "")).startswith("cancelled"):
+            status.caption("Q_H count stopped at a chunk boundary.")
+        elif bool(evidence.get("truncated")):
+            status.caption("Q_H bounded-prefix count complete.")
+        else:
+            status.caption("Q_H full-store count complete.")
+    rows = pd.DataFrame(evidence_rows)
+    st.dataframe(rows, hide_index=True, width="stretch")
+    if not rows.empty and not bool(rows.iloc[0].get("available", False)):
+        st.info(f"Q_H evidence unavailable: {rows.iloc[0].get('blocking_reason', 'unknown reason')}")
+    _download_frame("Download Q_H evidence CSV", "q-h-evidence.csv", rows)
 
 
 def _render_evidence_bundle_download(store_path: Path) -> None:
