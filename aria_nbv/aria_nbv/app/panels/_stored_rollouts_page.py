@@ -206,6 +206,16 @@ def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
 
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
+def _cached_candidate_population_cached(
+    store_path: str, store_identity: str, sample_size: int = 500
+) -> dict[str, object]:
+    """Build the complete candidate bundle once per immutable store identity."""
+
+    reader, _, _ = _cached_store_bundle(store_path)
+    return candidate_population_evidence(reader, sample_size=sample_size)
+
+
+@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
 def _cached_projection_cached(
     store_path: str,
     projection: str,
@@ -276,19 +286,21 @@ def _cached_projection_cached(
         if not hasattr(reader, "array"):
             audit_rows = _cached_projection(store_path, "candidates", limit=limit)
             return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
-        return candidate_population_evidence(reader)["groups"][group_by]
+        return _cached_candidate_population_cached(store_path, store_identity)["groups"][group_by]
     if projection in {"candidate_composition", "candidate_calibration"}:
         if group_by is None:
             raise ValueError(f"{projection} projection requires group_by")
-        evidence = candidate_population_evidence(reader)
+        evidence = _cached_candidate_population_cached(store_path, store_identity)
         key = "composition" if projection == "candidate_composition" else "calibration"
         return evidence[key][group_by]
     if projection == "candidate_collision":
-        return candidate_population_evidence(reader)["collision"]
+        return _cached_candidate_population_cached(store_path, store_identity)["collision"]
     if projection == "candidate_sample":
-        return candidate_population_evidence(reader, sample_size=500 if limit is None else limit)["sample"]
+        return _cached_candidate_population_cached(store_path, store_identity, 500 if limit is None else limit)[
+            "sample"
+        ]
     if projection == "candidate_population":
-        return candidate_population_evidence(reader, group_by=group_by if group_by else None)
+        return _cached_candidate_population_cached(store_path, store_identity)
     if projection == "q_h":
         _, validation, _ = _cached_store_bundle(store_path)
         return q_h_evidence_rows(reader, deep_count=deep_count, validation_result=validation)

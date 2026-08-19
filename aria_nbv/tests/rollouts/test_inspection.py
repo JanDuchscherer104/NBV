@@ -21,6 +21,7 @@ from aria_nbv.rollouts.inspection import (
     candidate_composition_rows,
     candidate_flow_rows,
     candidate_group_summary_rows,
+    candidate_population_evidence,
     candidate_proposal_calibration_rows,
     comparable_policy_cohorts,
     deterministic_candidate_display_sample,
@@ -745,6 +746,65 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     assert first["display_only"] is True
     with pytest.raises(ValueError, match="Unsupported candidate group field"):
         candidate_composition_rows(rows, group_by=cast(Any, "unsupported"))
+
+
+def test_candidate_population_evidence_is_compact_callback_parity_and_order_invariant() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": index // 2,
+            "step_row_id": index // 2,
+            "mixture": "forward" if index % 2 else "side",
+            "position": "center",
+            "strategy": "random",
+            "invalid_reason": "none",
+            "actor_action": index % 3 != 0,
+            "oracle_label": index % 3 != 0,
+            "q_train": index % 3 != 0,
+            "selected": index == 1,
+            "sampler_probability": 0.25,
+            "target_root_gain": float(index),
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index in range(8)
+    ]
+
+    class Poison:
+        def __iter__(self):
+            raise AssertionError("the callback producer result must not be materialized")
+
+    calls = 0
+
+    def producer(_reader, *, row_callback):
+        nonlocal calls
+        calls += 1
+        for row in rows:
+            row_callback(row)
+        return Poison()
+
+    evidence = candidate_population_evidence(object(), audit_reader=producer, sample_size=3)
+    assert calls == 1
+    assert evidence["population_count"] == len(rows)
+    assert len(evidence["sample"]["rows"]) == 3
+    assert evidence["composition"]["mixture"] == candidate_composition_rows(rows)
+    assert evidence["calibration"]["mixture"] == candidate_proposal_calibration_rows(rows)
+    assert evidence["collision"] == candidate_collision_support_rows(rows)
+    assert evidence["groups"]["mixture"] == candidate_group_summary_rows(object(), group_by="mixture", audit_rows=rows)
+
+    reversed_evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in reversed(rows)],
+        sample_size=3,
+    )
+    assert [row["candidate_row_id"] for row in evidence["sample"]["rows"]] == [
+        row["candidate_row_id"] for row in reversed_evidence["sample"]["rows"]
+    ]
 
 
 def test_headroom_condition_applicability_fails_closed_only_when_applicable() -> None:

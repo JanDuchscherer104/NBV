@@ -516,17 +516,15 @@ def candidate_population_evidence(
             raise
         for row in audit_reader(reader):  # type: ignore[operator]
             accumulator.consume(row)
-    rows = accumulator.rows
     sample = accumulator.sample()
-    compositions = {key: candidate_composition_rows(rows, group_by=key) for key in CANDIDATE_GROUP_FIELDS}
-    calibrations = {key: candidate_proposal_calibration_rows(rows, group_by=key) for key in CANDIDATE_GROUP_FIELDS}
-    groups = {
-        key: candidate_group_summary_rows(reader, group_by=key, audit_rows=rows) for key in CANDIDATE_GROUP_FIELDS
-    }
+    compositions = accumulator.compositions()
+    calibrations = accumulator.calibrations()
+    groups = accumulator.groups()
+    collision = accumulator.collision()
     return {
         "composition": compositions,
         "calibration": calibrations,
-        "collision": candidate_collision_support_rows(rows),
+        "collision": collision,
         "groups": groups,
         "sample": sample,
         "population_count": accumulator.population_count,
@@ -534,24 +532,402 @@ def candidate_population_evidence(
 
 
 class _CandidatePopulationAccumulator:
-    """Single-pass population collector with bounded deterministic sampling."""
+    """Single-pass candidate aggregates with bounded deterministic sampling.
+
+    The accumulator deliberately retains only state/family totals and a
+    bounded display sample.  Candidate-level normalized rows remain owned by
+    :func:`candidate_audit_rows` when an interactive caller explicitly asks
+    for them.
+    """
 
     def __init__(self, *, max_sample_rows: int) -> None:
         self.max_sample_rows = max_sample_rows
         self.population_count = 0
-        self.rows: list[dict[str, object]] = []
         self._sample: list[tuple[str, int, dict[str, object]]] = []
+        self._cohorts: dict[str, dict[str, object]] = {}
+        self._state_families: dict[CandidateGroupField, dict[tuple[str, str, str], dict[str, object]]] = {
+            key: {} for key in CANDIDATE_GROUP_FIELDS
+        }
+        self._groups: dict[CandidateGroupField, dict[str, dict[str, object]]] = {
+            key: {} for key in CANDIDATE_GROUP_FIELDS
+        }
+        self._collision: dict[str, dict[str, object]] = {}
 
     def consume(self, row: Mapping[str, object]) -> None:
         normalized = dict(row)
         self.population_count += 1
-        self.rows.append(normalized)
+        cohort_id = str(normalized.get("generation_cohort_id", "unknown"))
+        scene = str(normalized.get("scene", "unknown"))
+        state_id = f"{scene}\0{normalized.get('rollout_row_id', 'unknown')}\0{normalized.get('step_row_id', 'unknown')}"
+        cohort = self._cohorts.setdefault(
+            cohort_id,
+            {
+                "generation_cohort": normalized.get("generation_cohort"),
+                "total": 0,
+                "selected": 0,
+                "probability_sum": 0.0,
+                "finite_probability_count": 0,
+                "states": {},
+            },
+        )
+        cohort["total"] = int(cohort["total"]) + 1
+        cohort["selected"] = int(cohort["selected"]) + int(bool(normalized.get("selected")))
+        probability = _finite_or_none(normalized.get("sampler_probability"))
+        if probability is not None:
+            cohort["probability_sum"] = float(cohort["probability_sum"]) + probability
+            cohort["finite_probability_count"] = int(cohort["finite_probability_count"]) + 1
+        states = cohort["states"]
+        assert isinstance(states, dict)
+        state = states.setdefault(
+            state_id,
+            {"scene": scene, "total": 0, "probability_sum": 0.0, "missing": False, "negative": False},
+        )
+        state["total"] += 1
+        if probability is None:
+            state["missing"] = True
+        else:
+            state["probability_sum"] += probability
+            state["negative"] |= probability < 0.0
+        collision = self._collision.setdefault(
+            cohort_id,
+            {
+                "generation_cohort": normalized.get("generation_cohort"),
+                "count": 0,
+                "available": 0,
+                "collisions": 0,
+                "not_applicable": 0,
+                "clearance_count": 0,
+                "clearance_sum": 0.0,
+                "states": {},
+            },
+        )
+        collision["count"] += 1
+        evaluated = _collision_evaluated(normalized)
+        if evaluated:
+            collision["available"] += 1
+            collision["collisions"] += int(bool(normalized.get("path_collision")))
+        elif normalized.get("path_collision_applicable") is False:
+            collision["not_applicable"] += 1
+        clearance = _finite_or_none(normalized.get("path_min_clearance_m"))
+        if clearance is not None:
+            collision["clearance_count"] += 1
+            collision["clearance_sum"] += clearance
+        collision_state = collision["states"].setdefault(
+            state_id,
+            {"scene": scene, "count": 0, "available": 0, "collisions": 0, "clearance_count": 0, "clearance_sum": 0.0},
+        )
+        collision_state["count"] += 1
+        collision_state["available"] += int(evaluated)
+        collision_state["collisions"] += int(evaluated and bool(normalized.get("path_collision")))
+        if clearance is not None:
+            collision_state["clearance_count"] += 1
+            collision_state["clearance_sum"] += clearance
+        for group_by in CANDIDATE_GROUP_FIELDS:
+            family = str(normalized.get(group_by, "unknown"))
+            summary = self._groups[group_by].setdefault(
+                family,
+                {
+                    "generation_cohort": normalized.get("generation_cohort"),
+                    "total": 0,
+                    "actor_valid": 0,
+                    "oracle_valid": 0,
+                    "q_train": 0,
+                    "selected": 0,
+                    "gain_sum": 0.0,
+                    "gain_count": 0,
+                },
+            )
+            summary["total"] += 1
+            summary["actor_valid"] += int(bool(normalized.get("actor_action")))
+            summary["oracle_valid"] += int(bool(normalized.get("oracle_label")))
+            summary["q_train"] += int(bool(normalized.get("q_train")))
+            summary["selected"] += int(bool(normalized.get("selected")))
+            gain = _finite_or_none(normalized.get("target_root_gain"))
+            if gain is not None:
+                summary["gain_sum"] += gain
+                summary["gain_count"] += 1
+            state_key = (cohort_id, family, state_id)
+            family_state = self._state_families[group_by].setdefault(
+                state_key,
+                {
+                    "scene": scene,
+                    "total": 0,
+                    "actor_valid": 0,
+                    "oracle_valid": 0,
+                    "q_train": 0,
+                    "selected": 0,
+                    "probability_sum": 0.0,
+                    "finite_probability_count": 0,
+                },
+            )
+            family_state["total"] += 1
+            family_state["actor_valid"] += int(bool(normalized.get("actor_action")))
+            family_state["oracle_valid"] += int(bool(normalized.get("oracle_label")))
+            family_state["q_train"] += int(bool(normalized.get("q_train")))
+            family_state["selected"] += int(bool(normalized.get("selected")))
+            if probability is not None:
+                family_state["probability_sum"] += probability
+                family_state["finite_probability_count"] += 1
         if self.max_sample_rows:
             candidate_id = int(normalized.get("candidate_row_id", -1))
             rank = hashlib.sha256(f"stored-rollout-display-v1\0{candidate_id}".encode()).hexdigest()
             self._sample.append((rank, candidate_id, normalized))
             self._sample.sort(key=lambda item: (item[0], item[1]))
             del self._sample[self.max_sample_rows :]
+
+    @staticmethod
+    def _state_macro(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+        by_scene: dict[str, list[Mapping[str, object]]] = {}
+        for row in rows:
+            by_scene.setdefault(str(row["scene"]), []).append(row)
+        return [
+            {
+                "scene": scene,
+                **{field: _macro_mean(scene_rows, field) for field in _MACRO_RATE_FIELDS},
+            }
+            for scene, scene_rows in sorted(by_scene.items())
+        ]
+
+    def compositions(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
+        output: dict[CandidateGroupField, list[dict[str, object]]] = {}
+        for group_by in CANDIDATE_GROUP_FIELDS:
+            families: dict[tuple[str, str], list[dict[str, object]]] = {}
+            for (cohort_id, family, _state_id), state in self._state_families[group_by].items():
+                families.setdefault((cohort_id, family), []).append(state)
+            rows: list[dict[str, object]] = []
+            for (cohort_id, family), states in sorted(families.items()):
+                scenes: dict[str, list[dict[str, object]]] = {}
+                for state in states:
+                    scenes.setdefault(str(state["scene"]), []).append(state)
+                scene_rates = [
+                    {
+                        "scene": scene,
+                        **{
+                            f"{field}_rate": float(
+                                np.mean(
+                                    [
+                                        _safe_fraction(int(state[field]), int(state["total"])) or 0.0
+                                        for state in scene_states
+                                    ]
+                                )
+                            )
+                            for field in ("actor_valid", "oracle_valid", "q_train", "selected")
+                        },
+                    }
+                    for scene, scene_states in sorted(scenes.items())
+                ]
+                totals = {
+                    field: sum(int(state[field]) for state in states)
+                    for field in ("total", "actor_valid", "oracle_valid", "q_train", "selected")
+                }
+                rows.append(
+                    {
+                        "group_by": group_by,
+                        "generation_cohort_id": cohort_id,
+                        "generation_cohort": self._cohorts[cohort_id]["generation_cohort"],
+                        "family": family,
+                        "allocated_count": totals["total"],
+                        "actor_valid_count": totals["actor_valid"],
+                        "oracle_valid_count": totals["oracle_valid"],
+                        "trainable_count": totals["q_train"],
+                        "selected_count": totals["selected"],
+                        "state_count": len(states),
+                        "scene_count": len(scenes),
+                        "macro_actor_valid_rate": float(np.mean([row["actor_valid_rate"] for row in scene_rates])),
+                        "macro_oracle_valid_rate": float(np.mean([row["oracle_valid_rate"] for row in scene_rates])),
+                        "macro_trainable_rate": float(np.mean([row["q_train_rate"] for row in scene_rates])),
+                        "macro_selected_rate": float(np.mean([row["selected_rate"] for row in scene_rates])),
+                        "aggregation": "state_then_scene_macro",
+                    }
+                )
+            output[group_by] = rows
+        return output
+
+    def calibrations(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
+        compositions = self.compositions()
+        output: dict[CandidateGroupField, list[dict[str, object]]] = {}
+        for group_by in CANDIDATE_GROUP_FIELDS:
+            rows: list[dict[str, object]] = []
+            for summary in compositions[group_by]:
+                cohort_id = str(summary["generation_cohort_id"])
+                family = str(summary["family"])
+                cohort = self._cohorts[cohort_id]
+                family_states = [
+                    state
+                    for (cid, fam, _), state in self._state_families[group_by].items()
+                    if cid == cohort_id and fam == family
+                ]
+                all_states = cohort["states"]
+                state_rows: list[dict[str, object]] = []
+                family_state_by_id = {
+                    key[2]: value
+                    for key, value in self._state_families[group_by].items()
+                    if key[0] == cohort_id and key[1] == family
+                }
+                for state_id, base in all_states.items():
+                    state = family_state_by_id.get(
+                        state_id,
+                        {
+                            "scene": base["scene"],
+                            "total": 0,
+                            "selected": 0,
+                            "probability_sum": 0.0,
+                            "finite_probability_count": 0,
+                        },
+                    )
+                    empirical = _safe_fraction(int(state["total"]), int(base["total"]))
+                    proposal = (
+                        None
+                        if base["missing"]
+                        or base["negative"]
+                        or base["probability_sum"] <= 0
+                        or (state["total"] and not state["finite_probability_count"])
+                        else float(state["probability_sum"] / base["probability_sum"])
+                    )
+                    selected_total = sum(
+                        int(value["selected"])
+                        for (cid, _fam, sid), value in self._state_families[group_by].items()
+                        if cid == cohort_id and sid == state_id
+                    )
+                    selected_share = _safe_fraction(int(state["selected"]), selected_total)
+                    state_rows.append(
+                        {
+                            "scene": state["scene"],
+                            "empirical_frequency": empirical,
+                            "proposal_mass": proposal,
+                            "selected_share": selected_share,
+                            "selection_enrichment": None
+                            if empirical in (None, 0.0) or selected_share is None
+                            else selected_share / empirical,
+                        }
+                    )
+                scene_rows = self._state_macro(state_rows)
+                probability_error = next(
+                    (
+                        f"incomplete_probability_vector:{key}"
+                        for key, value in all_states.items()
+                        if value["missing"] or value["negative"]
+                    ),
+                    None,
+                )
+                finite = int(sum(int(state["finite_probability_count"]) for state in family_states))
+                proposal_mass = (
+                    None
+                    if probability_error or not finite or cohort["probability_sum"] <= 0
+                    else float(
+                        sum(float(state["probability_sum"]) for state in family_states)
+                        / float(cohort["probability_sum"])
+                    )
+                )
+                empirical = _safe_fraction(int(summary["allocated_count"]), int(cohort["total"]))
+                selected_share = _safe_fraction(int(summary["selected_count"]), int(cohort["selected"]))
+                macro = {
+                    metric: _macro_mean(scene_rows, metric)
+                    for metric in ("empirical_frequency", "proposal_mass", "selected_share", "selection_enrichment")
+                }
+                rows.append(
+                    {
+                        "group_by": group_by,
+                        "generation_cohort_id": cohort_id,
+                        "generation_cohort": summary["generation_cohort"],
+                        "family": family,
+                        "candidate_count": summary["allocated_count"],
+                        "finite_probability_count": finite,
+                        "population_empirical_frequency": empirical,
+                        "population_proposal_mass": proposal_mass,
+                        "population_calibration_gap": None
+                        if proposal_mass is None or empirical is None
+                        else empirical - proposal_mass,
+                        "population_selected_share": selected_share,
+                        "population_selection_enrichment": None
+                        if empirical in (None, 0.0) or selected_share is None
+                        else selected_share / empirical,
+                        "state_count": len(all_states),
+                        "scene_count": len(scene_rows),
+                        "empirical_frequency": macro["empirical_frequency"],
+                        "proposal_mass": macro["proposal_mass"],
+                        "calibration_gap": None
+                        if macro["proposal_mass"] is None or macro["empirical_frequency"] is None
+                        else macro["empirical_frequency"] - macro["proposal_mass"],
+                        "selected_share": macro["selected_share"],
+                        "selection_enrichment": macro["selection_enrichment"],
+                        "empirical_denominator": int(cohort["total"]),
+                        "proposal_denominator": int(cohort["finite_probability_count"]),
+                        "proposal_available": probability_error is None,
+                        "proposal_unavailable_reason": probability_error,
+                        "selected_denominator": int(cohort["selected"]),
+                        "aggregation": "exact_store_population; descriptive family comparison",
+                    }
+                )
+            output[group_by] = rows
+        return output
+
+    def collision(self) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        for cohort_id, summary in sorted(self._collision.items()):
+            state_rows = []
+            for state in summary["states"].values():
+                state_rows.append(
+                    {
+                        "scene": state["scene"],
+                        "collision_rate": _safe_fraction(state["collisions"], state["available"]),
+                        "clearance_mean_m": None
+                        if not state["clearance_count"]
+                        else state["clearance_sum"] / state["clearance_count"],
+                    }
+                )
+            scene_rows = self._state_macro(state_rows)
+            available = int(summary["available"])
+            clearance_count = int(summary["clearance_count"])
+            rows.append(
+                {
+                    "generation_cohort_id": cohort_id,
+                    "generation_cohort": summary["generation_cohort"],
+                    "candidate_count": int(summary["count"]),
+                    "collision_available_count": available,
+                    "collision_evaluated_count": available,
+                    "collision_not_applicable_count": int(summary["not_applicable"]),
+                    "collision_unavailable_count": int(summary["count"]) - available,
+                    "collision_count": int(summary["collisions"]),
+                    "population_collision_rate": _safe_fraction(int(summary["collisions"]), available),
+                    "clearance_finite_count": clearance_count,
+                    "population_clearance_mean_m": None
+                    if not clearance_count
+                    else float(summary["clearance_sum"]) / clearance_count,
+                    "state_count": len(summary["states"]),
+                    "scene_count": len(scene_rows),
+                    "collision_rate": _macro_mean(scene_rows, "collision_rate"),
+                    "clearance_mean_m": _macro_mean(scene_rows, "clearance_mean_m"),
+                    "collision_denominator": available,
+                    "clearance_denominator": clearance_count,
+                    "available": bool(summary["count"]) and bool(available) and bool(clearance_count),
+                    "reason": None
+                    if summary["count"] and available and clearance_count
+                    else "collision or clearance evidence is unavailable",
+                }
+            )
+        return rows
+
+    def groups(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
+        output: dict[CandidateGroupField, list[dict[str, object]]] = {}
+        for group_by in CANDIDATE_GROUP_FIELDS:
+            rows = []
+            for family, summary in sorted(self._groups[group_by].items()):
+                total = int(summary["total"])
+                gain_count = int(summary["gain_count"])
+                rows.append(
+                    {
+                        group_by: family,
+                        "total": total,
+                        "actor_valid": int(summary["actor_valid"]),
+                        "actor_valid_fraction": _safe_fraction(int(summary["actor_valid"]), total),
+                        "q_train": int(summary["q_train"]),
+                        "selected": int(summary["selected"]),
+                        "mean_target_root_gain": None if not gain_count else float(summary["gain_sum"]) / gain_count,
+                    }
+                )
+            output[group_by] = rows
+        return output
 
     def sample(self) -> dict[str, object]:
         rows = [row for _, _, row in self._sample]
