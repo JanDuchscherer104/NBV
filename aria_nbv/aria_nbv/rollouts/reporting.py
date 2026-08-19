@@ -24,6 +24,7 @@ from .inspection import (
     candidate_population_evidence,
     discounted_rollout_return_rows,
     oracle_headroom_evidence,
+    promoted_store_validation_error,
     q_h_evidence_rows,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
@@ -575,6 +576,8 @@ def _append_store_rows(
         detail = "; ".join(validation.errors[:3]) or "unknown validation error"
         raise ValueError(f"Rollout store {store_path} failed validation: {detail}")
     manifest_payload = reader.manifest()
+    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
+        raise ValueError(f"Rollout store {store_path} failed promotion validation: {promotion_error}")
     manifest = manifest_payload.get("manifest", {})
     root_attrs = manifest_payload.get("root_attrs", {})
     manifest_sha256 = str(root_attrs["manifest_sha256"])
@@ -649,7 +652,7 @@ def _append_store_rows(
         }
     )
     reconstruction_provenance = {
-        "evidence_class": "persisted_factual_projection",
+        "evidence_class": "diagnostic_proxy",
         "metric_source": "rollout_step_objective_rows",
         "endpoint_kind": "persisted_chain_terminal_step",
         "independent_endpoint_evaluation": False,

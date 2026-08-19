@@ -549,7 +549,9 @@ def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
         row["eligible_count"] == row["included_count"] + row["excluded_count"] for row in evidence["summary_rows"]
     )
     assert [row["raw_row_id"] for row in evidence["role_rows"]] == list(range(len(rows)))
-    assert {row["evidence_status"] for row in evidence["role_rows"]} == {"eligible"}
+    assert {row["evidence_status"] for row in evidence["role_rows"]} == {"included"}
+    assert len(evidence["role_disposition_rows"]) == len(rows) * 3
+    assert all("raw_row_id" in row for row in evidence["role_disposition_rows"])
     assert included["delta_look"]["role_treatments"]["oracle_lookahead"]["branch_schedule"] == "oracle_lookahead"
 
     alias_only = [{**rows[0], "policy": "unsupported", "branch_schedule": "unsupported", "rollout_recipe": "q_h"}]

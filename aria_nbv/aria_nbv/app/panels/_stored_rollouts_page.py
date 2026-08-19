@@ -41,6 +41,7 @@ from ...rollouts.inspection import (
     mask_combination_rows,
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    promoted_store_validation_error,
     q_h_evidence_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
@@ -181,12 +182,12 @@ def _cached_store_bundle_cached(
 
     reader = RolloutZarrStoreReader(Path(store_path))
     validation = reader.validate()
-    if promotion_error := _promotion_evidence_error(Path(store_path)):
-        validation.errors.append(promotion_error)
     try:
         manifest_payload = reader.manifest()
     except Exception:
         manifest_payload = {"root_attrs": {}, "manifest": {}}
+    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
+        validation.errors.append(promotion_error)
     return reader, validation, manifest_payload
 
 
@@ -349,30 +350,6 @@ def _store_projection_identity(store_path: str) -> str:
         except OSError:
             identity = "missing"
     return identity
-
-
-def _promotion_evidence_error(store_path: Path) -> str | None:
-    """Fail closed on incomplete or post-promotion campaign evidence."""
-
-    success_path = store_path / "_SUCCESS.json"
-    owner_path = store_path / "_owner.json"
-    if not success_path.exists() and not owner_path.exists():
-        return None
-    success = _read_json_mapping(success_path)
-    owner = _read_json_mapping(owner_path)
-    if success is None or owner is None:
-        return "promoted rollout evidence is missing or malformed"
-    success_seal = success.get("rollout_store_content_sha256")
-    owner_seal = owner.get("rollout_store_content_sha256")
-    if not isinstance(success_seal, str) or not success_seal or success_seal != owner_seal:
-        return "promoted rollout content seals are missing or inconsistent"
-    promoted_at = success_path.stat().st_mtime_ns
-    if any(
-        child.is_file() and child.name != "_SUCCESS.json" and child.stat().st_mtime_ns > promoted_at
-        for child in store_path.rglob("*")
-    ):
-        return "promoted rollout content changed after completion evidence"
-    return None
 
 
 def _read_json_mapping(path: Path) -> dict[str, object] | None:

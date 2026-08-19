@@ -189,7 +189,7 @@ def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path:
     )
 
     assert not validation.ok
-    assert "changed after completion evidence" in "; ".join(validation.errors)
+    assert "promoted rollout" in "; ".join(validation.errors)
 
 
 def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:

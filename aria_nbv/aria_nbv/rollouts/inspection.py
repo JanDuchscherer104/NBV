@@ -326,9 +326,11 @@ def rollout_header_summary(
         else None,
         "reference_source_row_fraction": _coverage_ratio(source_rows, reference_rows),
         "reference_coverage_reason": (
-            "manifest provenance declares observed coverage above its reference denominator"
-            if (reference_scenes is not None and not scene_coverage_valid)
-            or (reference_rows is not None and not row_coverage_valid)
+            "manifest provenance declares a nonpositive reference denominator"
+            if reference_scenes == 0 or reference_rows == 0
+            else "manifest provenance declares observed coverage above its reference denominator"
+            if (reference_scenes is not None and source_scenes is not None and source_scenes > reference_scenes)
+            or (reference_rows is not None and source_rows is not None and source_rows > reference_rows)
             else None
             if reference_scenes is not None or reference_rows is not None
             else "manifest provenance does not declare a reference denominator"
@@ -371,6 +373,41 @@ def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict
         "file_count_limit": max(2000, denominator * 20),
         "bytes_per_candidate_limit": 2_000_000.0,
     }
+
+
+def promoted_store_validation_error(
+    reader: RolloutZarrStoreReader,
+    *,
+    manifest_payload: Mapping[str, object] | None = None,
+) -> str | None:
+    """Return an error when campaign completion evidence is not current."""
+
+    store_dir = reader.store_dir
+    success_path = store_dir / "_SUCCESS.json"
+    owner_path = store_dir / "_owner.json"
+    if not success_path.exists() and not owner_path.exists():
+        return None
+    if not success_path.exists() or not owner_path.exists():
+        return "promoted rollout evidence is incomplete"
+    payload = reader.manifest() if manifest_payload is None else manifest_payload
+    manifest = payload.get("manifest")
+    generation = manifest.get("generation") if isinstance(manifest, Mapping) else None
+    shard_payload = generation.get("shard") if isinstance(generation, Mapping) else None
+    if not isinstance(shard_payload, dict):
+        return "promoted rollout manifest has no typed shard ownership"
+    try:
+        from ..oracle.pipelines.shards import read_validated_completed_shard
+        from .shard_manifest import RolloutShardEntry
+
+        shard_entry = RolloutShardEntry.from_jsonable(shard_payload)
+        evidence = read_validated_completed_shard(
+            store_dir,
+            shard_entry=shard_entry,
+            writer_config_hash=shard_entry.writer_config_hash,
+        )
+    except (KeyError, TypeError, ValueError):
+        return "promoted rollout evidence is malformed"
+    return None if evidence is not None else "promoted rollout evidence does not match the canonical store content"
 
 
 def candidate_audit_rows(
@@ -1317,6 +1354,7 @@ def oracle_headroom_evidence(
         "eta_Q": ("learned_one_step", "q_h", "oracle_lookahead"),
     }
     contrast_rows: list[dict[str, object]] = []
+    role_disposition_rows: list[dict[str, object]] = []
     for invariant_key, rows in sorted(grouped.items()):
         by_role: dict[str, list[dict[str, object]]] = {}
         for row in rows:
@@ -1374,6 +1412,7 @@ def oracle_headroom_evidence(
                 else:
                     value = (values["q_h"] - values["learned_one_step"]) / denominator
             evidence_row = next(iter(selected.values()), rows[0])
+            relevant_rows = [row for row in rows if row.get("semantic_role") in roles]
             contrast_rows.append(
                 {
                     "contrast": contrast,
@@ -1388,7 +1427,24 @@ def oracle_headroom_evidence(
                         role: {field: row.get(field) for field in _HEADROOM_TREATMENT_FIELDS}
                         for role, row in selected.items()
                     },
+                    "raw_row_ids": [int(row["raw_row_id"]) for row in relevant_rows],
                 }
+            )
+            selected_ids = {int(row["raw_row_id"]) for row in selected.values()}
+            role_disposition_rows.extend(
+                {
+                    "raw_row_id": int(row["raw_row_id"]),
+                    "contrast": contrast,
+                    "status": (
+                        "not_applicable"
+                        if row.get("semantic_role") not in roles
+                        else "included"
+                        if reason is None and int(row["raw_row_id"]) in selected_ids
+                        else "excluded"
+                    ),
+                    "exclusion_reason": None if row.get("semantic_role") not in roles or reason is None else reason,
+                }
+                for row in rows
             )
     malformed_cohorts: list[dict[str, object]] = []
     for malformed in malformed_rows:
@@ -1407,8 +1463,33 @@ def oracle_headroom_evidence(
                     "normalized_conditions": {},
                     "role_treatments": {},
                     "raw_row_id": malformed.get("raw_row_id"),
+                    "raw_row_ids": [malformed.get("raw_row_id")],
                 }
             )
+            role_disposition_rows.append(
+                {
+                    "raw_row_id": int(malformed["raw_row_id"]),
+                    "contrast": contrast,
+                    "status": "excluded",
+                    "exclusion_reason": malformed["exclusion_reason"],
+                }
+            )
+    dispositions_by_id: dict[int, list[dict[str, object]]] = {}
+    for disposition in role_disposition_rows:
+        dispositions_by_id.setdefault(int(disposition["raw_row_id"]), []).append(disposition)
+    for row in role_rows:
+        dispositions = dispositions_by_id[int(row["raw_row_id"])]
+        if any(item["status"] == "included" for item in dispositions):
+            row["evidence_status"] = "included"
+            row["exclusion_reason"] = None
+        elif any(item["status"] == "excluded" for item in dispositions):
+            row["evidence_status"] = "excluded"
+            row["exclusion_reason"] = next(
+                item["exclusion_reason"] for item in dispositions if item["status"] == "excluded"
+            )
+        else:
+            row["evidence_status"] = "not_applicable"
+            row["exclusion_reason"] = None
     summary_rows: list[dict[str, object]] = []
     for contrast in contrast_specs:
         rows = [row for row in contrast_rows if row["contrast"] == contrast]
@@ -1431,6 +1512,7 @@ def oracle_headroom_evidence(
         "independent_endpoint_evaluation": False,
         "role_rows": role_rows,
         "malformed_role_rows": malformed_rows,
+        "role_disposition_rows": role_disposition_rows,
         "contrast_rows": contrast_rows,
         "summary_rows": summary_rows,
     }
@@ -4395,6 +4477,7 @@ __all__ = [
     "discover_rollout_store_paths",
     "mask_combination_rows",
     "paired_policy_comparison_rows",
+    "promoted_store_validation_error",
     "root_relative_candidate_rows",
     "rollout_store_inventory_rows",
     "rollout_statistics",

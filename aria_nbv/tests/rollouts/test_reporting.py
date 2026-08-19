@@ -181,7 +181,7 @@ def test_report_headroom_summary_preserves_proxy_provenance(tmp_path) -> None:
     assert not summary["independent_endpoint_evaluation"].any()
     for table in ("reconstruction_metrics", "reconstruction_endpoints", "reconstruction_endpoint_summary"):
         reconstruction = frames[table]
-        assert set(reconstruction["evidence_class"]) == {"persisted_factual_projection"}
+        assert set(reconstruction["evidence_class"]) == {"diagnostic_proxy"}
         assert set(reconstruction["metric_source"]) == {"rollout_step_objective_rows"}
         assert set(reconstruction["endpoint_kind"]) == {"persisted_chain_terminal_step"}
         assert not reconstruction["independent_endpoint_evaluation"].any()
