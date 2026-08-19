@@ -146,6 +146,47 @@ def test_report_bundle_round_trips_unavailable_discounted_return(tmp_path) -> No
     assert rows[0]["reason"] == "unsupported return_semantics='unsupported'"
 
 
+@pytest.mark.parametrize("gamma", [None, np.nan, -0.1, 1.1])
+def test_report_bundle_fails_closed_for_invalid_discount_gamma(tmp_path, monkeypatch, gamma) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "discounted-invalid-gamma.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=904)[:1],
+    )
+    accepted_validation = RolloutZarrStoreReader(result.store_dir).validate()
+    root = zarr.open_group(result.store_dir, mode="a")
+    root.attrs["discount_gamma"] = gamma
+    root["q_h"].attrs["discount_gamma"] = gamma
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: accepted_validation)
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+    row = frames["discounted_return"].iloc[0]
+
+    assert not bool(row["available"])
+    assert row["contract_status"] == "unavailable"
+    assert "discount_gamma" in str(row["reason"])
+
+
+def test_report_headroom_summary_preserves_proxy_provenance(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "headroom-provenance.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=903)[:1],
+    )
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="confirmatory")
+
+    summary = frames["oracle_headroom_summary"]
+    assert set(summary["evidence_class"]) == {"diagnostic_proxy"}
+    assert set(summary["metric_source"]) == {"final_cumulative_target_root_gain"}
+    assert set(summary["endpoint_kind"]) == {"persisted_chain_terminal_step"}
+    assert not summary["independent_endpoint_evaluation"].any()
+    for table in ("reconstruction_metrics", "reconstruction_endpoints", "reconstruction_endpoint_summary"):
+        reconstruction = frames[table]
+        assert set(reconstruction["evidence_class"]) == {"persisted_factual_projection"}
+        assert set(reconstruction["metric_source"]) == {"rollout_step_objective_rows"}
+        assert set(reconstruction["endpoint_kind"]) == {"persisted_chain_terminal_step"}
+        assert not reconstruction["independent_endpoint_evaluation"].any()
+
+
 def test_streamlit_inspection_rows_map_identically_into_bundle_frames(tmp_path) -> None:
     """Report tables should be exact projections of the row builders used by Streamlit."""
 

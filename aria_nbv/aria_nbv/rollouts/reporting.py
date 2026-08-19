@@ -195,6 +195,9 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "oracle_valid_count",
         "trainable_count",
         "padding_count",
+        "counted_state_rows",
+        "total_state_rows",
+        "truncated",
         "count_reason",
     ),
     "candidate_groups": (
@@ -351,6 +354,10 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "endpoint_q75",
         "endpoint_min",
         "endpoint_max",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
     ),
     "reconstruction_endpoints": (
         "store_id",
@@ -365,6 +372,10 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "selected_target_rri",
         "selected_probability",
         "selected_entropy",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
     ),
     "reconstruction_endpoint_summary": (
         "store_id",
@@ -384,6 +395,10 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "q75",
         "min",
         "max",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
     ),
     "discounted_return": (
         "store_id",
@@ -422,6 +437,10 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "excluded_count",
         "exclusion_reason_counts_json",
         "scene_support",
+        "evidence_class",
+        "metric_source",
+        "endpoint_kind",
+        "independent_endpoint_evaluation",
     ),
     "failures": (
         "store_id",
@@ -582,13 +601,22 @@ def _append_store_rows(
     )
 
     generation = manifest.get("generation", {}) if isinstance(manifest, dict) else {}
+    parameter_root_attrs = dict(root_attrs)
+    discount_gamma = root_attrs.get("discount_gamma")
+    parameter_root_attrs["discount_gamma"] = (
+        float(discount_gamma)
+        if isinstance(discount_gamma, (int, float, np.integer, np.floating))
+        and not isinstance(discount_gamma, bool)
+        and np.isfinite(discount_gamma)
+        else None
+    )
     parameter_payload = {
         "writer_config": generation.get("writer_config") if isinstance(generation, dict) else None,
         "invocation": _without_raw_toml(generation.get("invocation")) if isinstance(generation, dict) else None,
         "runtime": generation.get("runtime") if isinstance(generation, dict) else None,
         "shard": generation.get("shard") if isinstance(generation, dict) else None,
         "config_hashes": manifest.get("config_hashes") if isinstance(manifest, dict) else None,
-        "root_attrs": root_attrs,
+        "root_attrs": parameter_root_attrs,
     }
     rows["parameters"].extend(_typed_leaf_rows("store_id", store_id, parameter_payload))
     stats = rollout_statistics(reader, manifest_payload=manifest_payload)
@@ -620,10 +648,29 @@ def _append_store_rows(
             ),
         }
     )
-    rows["reconstruction_metrics"].extend(_with_store_id(store_id, reconstruction_metric_summary_rows(step_rows)))
-    rows["reconstruction_endpoints"].extend(_with_store_id(store_id, reconstruction_endpoint_rows(step_rows)))
+    reconstruction_provenance = {
+        "evidence_class": "persisted_factual_projection",
+        "metric_source": "rollout_step_objective_rows",
+        "endpoint_kind": "persisted_chain_terminal_step",
+        "independent_endpoint_evaluation": False,
+    }
+    rows["reconstruction_metrics"].extend(
+        _with_store_id(
+            store_id,
+            [{**row, **reconstruction_provenance} for row in reconstruction_metric_summary_rows(step_rows)],
+        )
+    )
+    rows["reconstruction_endpoints"].extend(
+        _with_store_id(
+            store_id,
+            [{**row, **reconstruction_provenance} for row in reconstruction_endpoint_rows(step_rows)],
+        )
+    )
     rows["reconstruction_endpoint_summary"].extend(
-        _with_store_id(store_id, reconstruction_endpoint_summary_rows(step_rows))
+        _with_store_id(
+            store_id,
+            [{**row, **reconstruction_provenance} for row in reconstruction_endpoint_summary_rows(step_rows)],
+        )
     )
     discounted = discounted_rollout_return_rows(
         step_rows,
@@ -682,6 +729,10 @@ def _append_store_rows(
             "exclusion_reason_counts_json": json.dumps(
                 row["exclusion_reason_counts"], sort_keys=True, separators=(",", ":")
             ),
+            "evidence_class": headroom.get("evidence_status"),
+            "metric_source": headroom.get("metric_source"),
+            "endpoint_kind": headroom.get("endpoint_kind"),
+            "independent_endpoint_evaluation": headroom.get("independent_endpoint_evaluation"),
         }
         for row in headroom["summary_rows"]
     )

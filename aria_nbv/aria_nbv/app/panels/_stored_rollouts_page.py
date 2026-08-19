@@ -181,6 +181,8 @@ def _cached_store_bundle_cached(
 
     reader = RolloutZarrStoreReader(Path(store_path))
     validation = reader.validate()
+    if promotion_error := _promotion_evidence_error(Path(store_path)):
+        validation.errors.append(promotion_error)
     try:
         manifest_payload = reader.manifest()
     except Exception:
@@ -323,7 +325,7 @@ def _cached_projection_cached(
 
 
 def _store_projection_identity(store_path: str) -> str:
-    """Return a content identity for the promoted artifact, not just its manifest."""
+    """Return a replacement-sensitive identity without reading Zarr payloads."""
 
     path = Path(store_path)
     try:
@@ -332,12 +334,14 @@ def _store_projection_identity(store_path: str) -> str:
             (candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()
         ):
             relative = child.relative_to(path).as_posix().encode()
-            payload = child.read_bytes()
+            stat = child.stat()
             digest.update(len(relative).to_bytes(8, "big"))
             digest.update(relative)
-            digest.update(len(payload).to_bytes(8, "big"))
-            digest.update(payload)
-        identity = f"store-content:{digest.hexdigest()}"
+            digest.update(stat.st_size.to_bytes(8, "big"))
+            digest.update(stat.st_mtime_ns.to_bytes(8, "big"))
+        success = _read_json_mapping(path / "_SUCCESS.json")
+        seal = success.get("rollout_store_content_sha256") if success is not None else None
+        identity = f"store:{seal or 'unpromoted'}:{digest.hexdigest()}"
     except OSError:
         try:
             stat = path.stat()
@@ -345,6 +349,38 @@ def _store_projection_identity(store_path: str) -> str:
         except OSError:
             identity = "missing"
     return identity
+
+
+def _promotion_evidence_error(store_path: Path) -> str | None:
+    """Fail closed on incomplete or post-promotion campaign evidence."""
+
+    success_path = store_path / "_SUCCESS.json"
+    owner_path = store_path / "_owner.json"
+    if not success_path.exists() and not owner_path.exists():
+        return None
+    success = _read_json_mapping(success_path)
+    owner = _read_json_mapping(owner_path)
+    if success is None or owner is None:
+        return "promoted rollout evidence is missing or malformed"
+    success_seal = success.get("rollout_store_content_sha256")
+    owner_seal = owner.get("rollout_store_content_sha256")
+    if not isinstance(success_seal, str) or not success_seal or success_seal != owner_seal:
+        return "promoted rollout content seals are missing or inconsistent"
+    promoted_at = success_path.stat().st_mtime_ns
+    if any(
+        child.is_file() and child.name != "_SUCCESS.json" and child.stat().st_mtime_ns > promoted_at
+        for child in store_path.rglob("*")
+    ):
+        return "promoted rollout content changed after completion evidence"
+    return None
+
+
+def _read_json_mapping(path: Path) -> dict[str, object] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 @wraps(_cached_projection_cached.__wrapped__)
@@ -2625,7 +2661,7 @@ def _render_q_h_evidence(store_path: str) -> None:
             status.caption(
                 "Stop requested; finishing the current chunk." if stop_requested else "Reading bounded Q_H slices…"
             )
-            return stop_requested
+            return not stop_requested
 
         evidence_rows = q_h_evidence_rows(
             reader,
@@ -2635,7 +2671,13 @@ def _render_q_h_evidence(store_path: str) -> None:
             progress_callback=update_progress,
             validation_result=validation,
         )
-        status.caption("Q_H count stopped at a chunk boundary." if stop_requested else "Q_H count complete.")
+        evidence = evidence_rows[0] if evidence_rows else {}
+        if str(evidence.get("count_reason", "")).startswith("cancelled"):
+            status.caption("Q_H count stopped at a chunk boundary.")
+        elif bool(evidence.get("truncated")):
+            status.caption("Q_H bounded-prefix count complete.")
+        else:
+            status.caption("Q_H full-store count complete.")
     rows = pd.DataFrame(evidence_rows)
     st.dataframe(rows, hide_index=True, width="stretch")
     if not rows.empty and not bool(rows.iloc[0].get("available", False)):

@@ -158,14 +158,38 @@ def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat
         return []
 
     monkeypatch.setattr(page, "_cached_projection_cached", cached_projection)
+    original_read_bytes = Path.read_bytes
+    monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
     page._cached_projection(result.store_dir.as_posix(), "header")
+    monkeypatch.setattr(Path, "read_bytes", original_read_bytes)
     root = zarr.open_group(result.store_dir, mode="a")
     candidate_ids = root["candidates/candidate_row_id"]
     candidate_ids[0] = int(candidate_ids[0]) + 1
     os.utime(manifest, ns=(manifest_stat.st_atime_ns, manifest_stat.st_mtime_ns))
+    monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
     page._cached_projection(result.store_dir.as_posix(), "header")
 
     assert identities[1] != identities[0]
+
+
+def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "promoted.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=905)[:1],
+    )
+    seal = "a" * 64
+    (result.store_dir / "_owner.json").write_text(json.dumps({"rollout_store_content_sha256": seal}), encoding="utf-8")
+    (result.store_dir / "_SUCCESS.json").write_text(
+        json.dumps({"rollout_store_content_sha256": seal}), encoding="utf-8"
+    )
+    (result.store_dir / "post-promotion.txt").write_text("tampered", encoding="utf-8")
+
+    _, validation, _ = page._cached_store_bundle_cached.__wrapped__(
+        result.store_dir.as_posix(), store_identity="changed"
+    )
+
+    assert not validation.ok
+    assert "changed after completion evidence" in "; ".join(validation.errors)
 
 
 def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -205,12 +229,19 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     def q_h(_reader, **kwargs):
         callback = kwargs["progress_callback"]
         callback_results.append(callback(2, 4))
-        return [{"available": True, "deep_count": True}]
+        return [
+            {
+                "available": True,
+                "deep_count": True,
+                "count_reason": "cancelled during bounded current-store mask projection",
+                "truncated": True,
+            }
+        ]
 
     monkeypatch.setattr(page, "q_h_evidence_rows", q_h)
     page._render_q_h_evidence("/fixture.zarr")
 
-    assert callback_results == [True]
+    assert callback_results == [False]
     assert progress.calls == [(0.5, "Q_H count: 2/4 state rows")]
     assert status.captions[-1] == "Q_H count stopped at a chunk boundary."
 

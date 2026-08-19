@@ -301,6 +301,8 @@ def test_q_h_evidence_is_metadata_first_and_deep_counts_are_explicit(tmp_path: P
     assert shallow["actor_valid_count"] is None
     assert shallow["oracle_valid_count"] is None
     assert shallow["trainable_count"] is None
+    assert shallow["counted_state_rows"] is None
+    assert shallow["truncated"] is None
     assert shallow["count_reason"] == "metadata does not prove mask counts; request deep_count"
 
     deep = q_h_evidence_rows(reader, deep_count=True, validation_result=validation)[0]
@@ -316,7 +318,10 @@ def test_q_h_evidence_is_metadata_first_and_deep_counts_are_explicit(tmp_path: P
     assert deep["oracle_valid_count"] == expected_oracle
     assert deep["trainable_count"] == int(trainable.sum())
     assert deep["padding_count"] == int((candidate_ids < 0).sum())
-    assert deep["count_reason"] == "explicit bounded current-store mask projection"
+    assert deep["counted_state_rows"] == int(candidate_ids.shape[0])
+    assert deep["total_state_rows"] == int(candidate_ids.shape[0])
+    assert deep["truncated"] is False
+    assert deep["count_reason"] == "explicit complete current-store mask projection"
 
 
 def test_q_h_deep_count_uses_bounded_candidate_slices(tmp_path: Path, monkeypatch) -> None:
@@ -355,11 +360,14 @@ def test_q_h_deep_count_uses_bounded_candidate_slices(tmp_path: Path, monkeypatc
         reader,
         deep_count=True,
         chunk_size=2,
-        state_row_limit=2,
+        state_row_limit=1,
         validation_result=validation,
     )[0]
     assert row["deep_count"] is True
-    assert row["count_reason"] == "explicit bounded current-store mask projection"
+    assert row["count_reason"] == "explicit bounded-prefix current-store mask projection"
+    assert row["counted_state_rows"] == 1
+    assert row["total_state_rows"] == int(reader.root["q_h/candidate_row_id"].shape[0])
+    assert row["truncated"] is True
     assert slice_keys
     assert all(isinstance(key, slice) for key in slice_keys)
 
@@ -379,6 +387,8 @@ def test_q_h_deep_count_supports_bounded_cancellation(tmp_path: Path) -> None:
     )[0]
     assert progress == [(1, int(reader.root["q_h/candidate_row_id"].shape[0]))]
     assert row["count_reason"] == "cancelled during bounded current-store mask projection"
+    assert row["counted_state_rows"] == 1
+    assert row["truncated"] is True
 
 
 def test_q_h_deep_count_fails_closed_for_unsorted_factual_ids(tmp_path: Path, monkeypatch) -> None:

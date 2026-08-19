@@ -291,9 +291,17 @@ def rollout_header_summary(
     reference_scenes = _nonnegative_int(coverage.get("reference_scene_count"))
     reference_rows = _nonnegative_int(coverage.get("reference_source_row_count"))
     scene_coverage_valid = (
-        reference_scenes is not None and source_scenes is not None and 0 <= source_scenes <= reference_scenes
+        reference_scenes is not None
+        and source_scenes is not None
+        and 0 < reference_scenes
+        and 0 <= source_scenes <= reference_scenes
     )
-    row_coverage_valid = reference_rows is not None and source_rows is not None and 0 <= source_rows <= reference_rows
+    row_coverage_valid = (
+        reference_rows is not None
+        and source_rows is not None
+        and 0 < reference_rows
+        and 0 <= source_rows <= reference_rows
+    )
     storage = runtime_storage_statistics(reader.store_dir, candidate_count=candidates or 0)
     return {
         "scenes": source_scenes,
@@ -849,6 +857,8 @@ class _CandidatePopulationAccumulator:
                     metric: _macro_mean(scene_rows, metric)
                     for metric in ("empirical_frequency", "proposal_mass", "selected_share", "selection_enrichment")
                 }
+                if probability_error is not None:
+                    macro["proposal_mass"] = None
                 rows.append(
                     {
                         "group_by": group_by,
@@ -911,7 +921,7 @@ class _CandidatePopulationAccumulator:
                     "collision_available_count": available,
                     "collision_evaluated_count": available,
                     "collision_not_applicable_count": int(summary["not_applicable"]),
-                    "collision_unavailable_count": int(summary["count"]) - available,
+                    "collision_unavailable_count": int(summary["count"]) - available - int(summary["not_applicable"]),
                     "collision_count": int(summary["collisions"]),
                     "population_collision_rate": _safe_fraction(int(summary["collisions"]), available),
                     "clearance_finite_count": clearance_count,
@@ -1237,15 +1247,21 @@ def discounted_rollout_return_rows(
 
 
 def exact_policy_role_rows(cohort_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    """Attach roles only from exact persisted ``(policy, branch_schedule)`` pairs."""
+    """Attach roles from exact persisted pairs without dropping unknown rows."""
 
     output: list[dict[str, object]] = []
-    for source_row in cohort_rows:
+    for raw_row_id, source_row in enumerate(cohort_rows):
         row = dict(source_row)
         identifier = (str(row.get("policy", "")), str(row.get("branch_schedule", "")))
         role = _EXACT_POLICY_ROLE_IDENTIFIERS.get(identifier)
-        if role is not None:
-            output.append({**row, "semantic_role": role, "role_identifier": f"{identifier[0]} / {identifier[1]}"})
+        output.append(
+            {
+                **row,
+                "raw_row_id": raw_row_id,
+                "semantic_role": role,
+                "role_identifier": f"{identifier[0]} / {identifier[1]}",
+            }
+        )
     return output
 
 
@@ -1262,20 +1278,38 @@ def oracle_headroom_evidence(
     role_rows = exact_policy_role_rows(source_rows)
     grouped: dict[str, list[dict[str, object]]] = {}
     malformed_rows: list[dict[str, object]] = []
-    for raw_row_index, row in enumerate(role_rows):
-        missing = tuple(field for field in _HEADROOM_INVARIANT_FIELDS[:10] if _missing_identity(row.get(field)))
+    for row in role_rows:
+        if row.get("semantic_role") is None:
+            malformed_rows.append(
+                {
+                    **row,
+                    "exclusion_reason": "unsupported_role_identifier",
+                }
+            )
+            continue
+        required_fields = list(_HEADROOM_INVARIANT_FIELDS[:10])
+        campaign_fields = _HEADROOM_INVARIANT_FIELDS[10:]
+        if any(not _missing_identity(row.get(field)) for field in campaign_fields):
+            required_fields.extend(campaign_fields)
+        missing = tuple(field for field in required_fields if _missing_identity(row.get(field)))
         if missing:
             malformed_rows.append(
                 {
                     **row,
-                    "raw_row_id": raw_row_index,
                     "exclusion_reason": f"identity_mismatch:{','.join(missing)}",
                 }
             )
             continue
         key_payload = {field: row.get(field) for field in _HEADROOM_INVARIANT_FIELDS}
         invariant_key = json.dumps(key_payload, sort_keys=True, separators=(",", ":"))
-        grouped.setdefault(invariant_key, []).append({**row, "headroom_invariant_key": invariant_key})
+        row.update({"headroom_invariant_key": invariant_key, "evidence_status": "eligible", "exclusion_reason": None})
+        grouped.setdefault(invariant_key, []).append(row)
+
+    malformed_by_id = {int(row["raw_row_id"]): row for row in malformed_rows}
+    for row in role_rows:
+        malformed = malformed_by_id.get(int(row["raw_row_id"]))
+        if malformed is not None:
+            row.update({"evidence_status": "excluded", "exclusion_reason": malformed["exclusion_reason"]})
 
     contrast_specs = {
         "delta_look": ("oracle_one_step", "oracle_lookahead"),
@@ -1655,11 +1689,17 @@ def candidate_proposal_calibration_rows(
         for state_key, state_rows_for_probability in _group_candidate_states(cohort_rows).items():
             state_values = [row.get("sampler_probability") for row in state_rows_for_probability]
             normalized = [_finite_or_none(value) for value in state_values]
-            if any(value is None for value in normalized):
-                probability_error = f"incomplete_probability_vector:{state_key}"
-                break
-            if any(float(value) < 0.0 for value in normalized if value is not None):
-                probability_error = f"negative_probability:{state_key}"
+            state_error = _probability_state_error(
+                {
+                    "total": len(normalized),
+                    "finite_probability_count": sum(value is not None for value in normalized),
+                    "missing": any(value is None for value in normalized),
+                    "negative": any(float(value) < 0.0 for value in normalized if value is not None),
+                    "probability_sum": sum(float(value) for value in normalized if value is not None),
+                }
+            )
+            if state_error is not None:
+                probability_error = f"{state_error}:{state_key}"
                 break
         total_probability = sum(
             value for row in cohort_rows if (value := _finite_or_none(row.get("sampler_probability"))) is not None
@@ -1699,10 +1739,12 @@ def candidate_proposal_calibration_rows(
                 "state_count": len(state_rows),
                 "scene_count": len(scene_rows),
                 "empirical_frequency": macro["empirical_frequency"],
-                "proposal_mass": macro["proposal_mass"],
+                "proposal_mass": None if probability_error is not None else macro["proposal_mass"],
                 "calibration_gap": (
                     None
-                    if macro["proposal_mass"] is None or macro["empirical_frequency"] is None
+                    if probability_error is not None
+                    or macro["proposal_mass"] is None
+                    or macro["empirical_frequency"] is None
                     else macro["empirical_frequency"] - macro["proposal_mass"]
                 ),
                 "selected_share": macro["selected_share"],
@@ -1760,7 +1802,10 @@ def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]])
                 "collision_not_applicable_count": sum(
                     row.get("path_collision_applicable") is False for row in cohort_rows
                 ),
-                "collision_unavailable_count": sum(not _collision_evaluated(row) for row in cohort_rows),
+                "collision_unavailable_count": sum(
+                    not _collision_evaluated(row) and row.get("path_collision_applicable") is not False
+                    for row in cohort_rows
+                ),
                 "collision_count": collision_count,
                 "population_collision_rate": _safe_fraction(collision_count, len(collision_available)),
                 "clearance_finite_count": len(finite_clearance),
@@ -1781,11 +1826,9 @@ def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]])
 
 
 def _collision_evaluated(row: Mapping[str, object]) -> bool:
-    """Read explicit collision availability, retaining legacy row compatibility."""
+    """Read only explicit collision-evaluation evidence."""
 
-    if "path_collision_evaluated" in row:
-        return row.get("path_collision_evaluated") is True
-    return row.get("path_collision") is not None
+    return row.get("path_collision_evaluated") is True
 
 
 def _candidate_state_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -1993,6 +2036,9 @@ def q_h_evidence_rows(
         "oracle_valid_count": None,
         "trainable_count": None,
         "padding_count": None,
+        "counted_state_rows": None,
+        "total_state_rows": _nonnegative_int(q_h["candidate_row_id"].shape[0]),
+        "truncated": None,
         "count_reason": "metadata does not prove mask counts; request deep_count",
     }
     if deep_count:
@@ -2018,11 +2064,13 @@ def q_h_evidence_rows(
                 }
             )
             return [row]
-        total_state_rows = int(candidate_ids_array.shape[0])
+        available_state_rows = int(candidate_ids_array.shape[0])
+        requested_state_rows = available_state_rows
         if state_row_limit is not None:
-            total_state_rows = min(total_state_rows, int(state_row_limit))
-        for start in range(0, total_state_rows, chunk_size):
-            stop = min(start + chunk_size, total_state_rows)
+            requested_state_rows = min(available_state_rows, int(state_row_limit))
+        counted_state_rows = 0
+        for start in range(0, requested_state_rows, chunk_size):
+            stop = min(start + chunk_size, requested_state_rows)
             candidate_ids = np.asarray(candidate_ids_array[start:stop], dtype=np.int64)
             valid = np.asarray(valid_array[start:stop], dtype=np.bool_)
             trainable = np.asarray(trainable_array[start:stop], dtype=np.bool_)
@@ -2035,7 +2083,8 @@ def q_h_evidence_rows(
             actor_count += int(valid.sum())
             trainable_count += int(trainable.sum())
             padding_count += int((candidate_ids < 0).sum())
-            if progress_callback is not None and not progress_callback(stop, total_state_rows):
+            counted_state_rows = stop
+            if progress_callback is not None and not progress_callback(stop, requested_state_rows):
                 cancelled = True
                 break
         row.update(
@@ -2044,10 +2093,15 @@ def q_h_evidence_rows(
                 "oracle_valid_count": oracle_count,
                 "trainable_count": trainable_count,
                 "padding_count": padding_count,
+                "counted_state_rows": counted_state_rows,
+                "total_state_rows": available_state_rows,
+                "truncated": counted_state_rows < available_state_rows,
                 "count_reason": (
                     "cancelled during bounded current-store mask projection"
                     if cancelled
-                    else "explicit bounded current-store mask projection"
+                    else "explicit bounded-prefix current-store mask projection"
+                    if counted_state_rows < available_state_rows
+                    else "explicit complete current-store mask projection"
                 ),
             }
         )

@@ -439,6 +439,14 @@ def test_rollout_header_summary_requires_proven_reference_denominators(tmp_path)
     assert rejected["reference_source_rows_covered"] is None
     assert rejected["reference_source_row_fraction"] is None
 
+    empty = copy.deepcopy(overcovered)
+    empty["manifest"]["source_coverage"]["scene_counts"] = {}
+    empty["manifest"]["source_coverage"]["num_source_rows"] = 0
+    empty_rejected = rollout_header_summary(reader, manifest_payload=empty)
+    assert empty_rejected["reference_scene_covered"] is None
+    assert empty_rejected["reference_source_rows_covered"] is None
+    assert empty_rejected["reference_coverage_reason"] is not None
+
 
 def test_reconstruction_and_discounted_return_rows_use_factual_steps() -> None:
     rows = [
@@ -540,10 +548,18 @@ def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
     assert all(
         row["eligible_count"] == row["included_count"] + row["excluded_count"] for row in evidence["summary_rows"]
     )
+    assert [row["raw_row_id"] for row in evidence["role_rows"]] == list(range(len(rows)))
+    assert {row["evidence_status"] for row in evidence["role_rows"]} == {"eligible"}
     assert included["delta_look"]["role_treatments"]["oracle_lookahead"]["branch_schedule"] == "oracle_lookahead"
 
     alias_only = [{**rows[0], "policy": "unsupported", "branch_schedule": "unsupported", "rollout_recipe": "q_h"}]
-    assert exact_policy_role_rows(alias_only) == []
+    aliased = exact_policy_role_rows(alias_only)
+    assert len(aliased) == 1
+    assert aliased[0]["semantic_role"] is None
+    rejected = oracle_headroom_evidence(alias_only)
+    assert len(rejected["malformed_role_rows"]) == 1
+    assert rejected["malformed_role_rows"][0]["exclusion_reason"] == "unsupported_role_identifier"
+    assert all(row["excluded_count"] == 1 for row in rejected["summary_rows"])
 
 
 def test_reader_policy_projection_excludes_incomplete_terminal_rollout(tmp_path, monkeypatch) -> None:
@@ -703,6 +719,12 @@ def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> Non
     )
     assert all(item["excluded_count"] == 1 for item in evidence["summary_rows"])
 
+    partial_binding = oracle_headroom_evidence(
+        [{**row, "source_sample_key": "sample-a", "campaign_id": "campaign", "plan_hash": None}]
+    )
+    assert partial_binding["role_rows"][0]["evidence_status"] == "excluded"
+    assert "plan_hash" in str(partial_binding["role_rows"][0]["exclusion_reason"])
+
 
 def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> None:
     def row(
@@ -730,19 +752,21 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
             "selected": selected,
             "sampler_probability": probability,
             "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
             "path_min_clearance_m": 1.0,
         }
 
     rows = [
         row(0, cohort="a", scene="s1", state=0, actor=True, selected=True, probability=0.25),
         row(1, cohort="a", scene="s1", state=0, actor=True, selected=False, probability=0.25),
-        row(2, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=0.25),
-        row(3, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=0.25),
+        row(2, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=1 / 3),
+        row(3, cohort="a", scene="s1", state=1, actor=False, selected=False, probability=1 / 3),
         row(4, cohort="a", scene="s2", state=2, actor=True, selected=True, probability=1.0),
         row(5, cohort="b", scene="s3", state=3, actor=False, selected=False, probability=1.0),
         row(6, cohort="a", scene="s1", state=0, actor=False, selected=False, probability=0.25, mixture="side"),
         row(7, cohort="a", scene="s1", state=0, actor=False, selected=False, probability=0.25, mixture="side"),
-        row(8, cohort="a", scene="s1", state=1, actor=True, selected=False, probability=0.25, mixture="side"),
+        row(8, cohort="a", scene="s1", state=1, actor=True, selected=False, probability=1 / 3, mixture="side"),
     ]
 
     composition = candidate_composition_rows(rows)
@@ -768,7 +792,7 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
         if candidate["generation_cohort_id"] == "a" and candidate["family"] == "forward"
     )
     assert calibration_a["population_empirical_frequency"] == pytest.approx(5 / 8)
-    assert calibration_a["population_proposal_mass"] == pytest.approx(8 / 11)
+    assert calibration_a["population_proposal_mass"] == pytest.approx(13 / 18)
     assert calibration_a["empirical_frequency"] == pytest.approx(19 / 24)
     assert calibration_a["proposal_mass"] == pytest.approx(19 / 24)
     assert calibration_a["calibration_gap"] == pytest.approx(0.0)
@@ -805,11 +829,36 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
     assert len(candidate_collision_support_rows(rows)) == 2
     assert collision["generation_cohort_id"] == "a"
     assert collision["candidate_count"] == 8
-    unavailable = candidate_collision_support_rows([{**rows[0], "path_collision": None, "path_min_clearance_m": None}])[
-        0
-    ]
+    unavailable = candidate_collision_support_rows(
+        [
+            {
+                **rows[0],
+                "path_collision": None,
+                "path_collision_evaluated": False,
+                "path_min_clearance_m": None,
+            }
+        ]
+    )[0]
     assert unavailable["available"] is False
     assert unavailable["collision_rate"] is None
+    not_applicable = candidate_collision_support_rows(
+        [
+            {
+                **rows[0],
+                "path_collision": None,
+                "path_collision_applicable": False,
+                "path_collision_evaluated": False,
+                "path_min_clearance_m": None,
+            }
+        ]
+    )[0]
+    assert not_applicable["collision_not_applicable_count"] == 1
+    assert not_applicable["collision_unavailable_count"] == 0
+
+    unproved = candidate_collision_support_rows(
+        [{key: value for key, value in rows[0].items() if key != "path_collision_evaluated"}]
+    )[0]
+    assert unproved["collision_evaluated_count"] == 0
 
     first = deterministic_candidate_display_sample(rows, max_rows=3)
     second = deterministic_candidate_display_sample(reversed(rows), max_rows=3)
@@ -925,6 +974,64 @@ def test_candidate_population_probability_vectors_fail_closed(probabilities: lis
     calibration = evidence["calibration"]["mixture"][0]
     assert calibration["proposal_available"] is False
     assert reason in str(calibration["proposal_unavailable_reason"])
+    assert calibration["population_proposal_mass"] is None
+    assert calibration["proposal_mass"] is None
+
+
+def test_candidate_population_mixed_state_probability_error_closes_macro() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": index // 2,
+            "step_row_id": index // 2,
+            "mixture": "forward",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": probability,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, probability in enumerate((0.5, 0.5, 0.8, 0.8))
+    ]
+
+    row = candidate_population_evidence(object(), audit_reader=lambda _reader: rows)["calibration"]["mixture"][0]
+
+    assert row["proposal_available"] is False
+    assert row["population_proposal_mass"] is None
+    assert row["proposal_mass"] is None
+    assert row["calibration_gap"] is None
+
+
+def test_public_candidate_calibration_rejects_non_normalized_state_probability() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "mixture": "forward",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": 0.8,
+        }
+        for index in range(2)
+    ]
+
+    calibration = candidate_proposal_calibration_rows(rows)[0]
+
+    assert calibration["proposal_available"] is False
+    assert "probability_not_normalized" in str(calibration["proposal_unavailable_reason"])
     assert calibration["population_proposal_mass"] is None
     assert calibration["proposal_mass"] is None
 
