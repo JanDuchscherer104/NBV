@@ -353,8 +353,10 @@ class AseEfmDatasetConfig(TargetConfig["AseEfmDataset"]):
 
     @field_validator("tar_urls", mode="before")
     @classmethod
-    def _populate_tar_urls(cls, _: list[str] | None, info: ValidationInfo) -> list[str]:
-        """Populate shard URLs from the requested scenes when omitted."""
+    def _populate_tar_urls(cls, value: list[str] | None, info: ValidationInfo) -> list[str]:
+        """Populate shard URLs from scenes only when the caller omitted them."""
+        if value:
+            return list(value)
         data = info.data
         paths: PathConfig = data.get("paths") or PathConfig()
         scene_ids: list[str] = data.get("scene_ids")  # type: ignore[assignment]

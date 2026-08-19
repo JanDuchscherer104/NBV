@@ -28,6 +28,11 @@ uv run nbv-plan-rollout-source \
   --output-manifest ../.configs/rollout_campaign100_source_manifest.json
 ```
 
+The source-manifest command is a required post-build reconciliation step: it
+refreshes the source cache version, source-store basename, row hash, and split
+hash from the newly promoted immutable store. Do not launch a campaign using a
+pre-build copy of the tracked manifest.
+
 Plan the corrected paired pilot, run its smoke, launch at most ten new units,
 and inspect status:
 

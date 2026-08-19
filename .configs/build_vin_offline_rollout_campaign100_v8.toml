@@ -43,7 +43,29 @@ scene_ids = [
   "83730", "83746", "83780", "83803", "83833", "83836", "83998", "84001", "84003", "84009",
   "84052", "84074", "84080", "84171", "84185", "84186", "84230", "84271", "84309", "84320",
 ]
-snippet_ids = [
+tar_urls = [
+  ".data/ase_efm/889/shards-0001.tar", ".data/ase_efm/8517/shards-0000.tar", ".data/ase_efm/8559/shards-0000.tar", ".data/ase_efm/8671/shards-0005.tar", ".data/ase_efm/8694/shards-0003.tar",
+  ".data/ase_efm/8715/shards-0001.tar", ".data/ase_efm/8777/shards-0001.tar", ".data/ase_efm/8822/shards-0002.tar", ".data/ase_efm/8857/shards-0004.tar", ".data/ase_efm/8860/shards-0005.tar",
+  ".data/ase_efm/8938/shards-0006.tar", ".data/ase_efm/81022/shards-0002.tar", ".data/ase_efm/81048/shards-0005.tar", ".data/ase_efm/81056/shards-0002.tar", ".data/ase_efm/81128/shards-0003.tar",
+  ".data/ase_efm/81161/shards-0002.tar", ".data/ase_efm/81180/shards-0001.tar", ".data/ase_efm/81181/shards-0002.tar", ".data/ase_efm/81184/shards-0000.tar", ".data/ase_efm/81188/shards-0003.tar",
+  ".data/ase_efm/81226/shards-0000.tar", ".data/ase_efm/81272/shards-0000.tar", ".data/ase_efm/81283/shards-0002.tar", ".data/ase_efm/81286/shards-0014.tar", ".data/ase_efm/81366/shards-0001.tar",
+  ".data/ase_efm/81387/shards-0003.tar", ".data/ase_efm/81426/shards-0000.tar", ".data/ase_efm/81477/shards-0010.tar", ".data/ase_efm/81483/shards-0006.tar", ".data/ase_efm/81625/shards-0000.tar",
+  ".data/ase_efm/81693/shards-0001.tar", ".data/ase_efm/81772/shards-0000.tar", ".data/ase_efm/81807/shards-0003.tar", ".data/ase_efm/81964/shards-0009.tar", ".data/ase_efm/82004/shards-0004.tar",
+  ".data/ase_efm/82254/shards-0001.tar", ".data/ase_efm/82257/shards-0002.tar", ".data/ase_efm/82258/shards-0000.tar", ".data/ase_efm/82271/shards-0002.tar", ".data/ase_efm/82294/shards-0001.tar",
+  ".data/ase_efm/82309/shards-0000.tar", ".data/ase_efm/82311/shards-0000.tar", ".data/ase_efm/82342/shards-0004.tar", ".data/ase_efm/82448/shards-0001.tar", ".data/ase_efm/82517/shards-0000.tar",
+  ".data/ase_efm/82545/shards-0002.tar", ".data/ase_efm/82555/shards-0001.tar", ".data/ase_efm/82620/shards-0000.tar", ".data/ase_efm/82630/shards-0001.tar", ".data/ase_efm/82647/shards-0001.tar",
+  ".data/ase_efm/82658/shards-0000.tar", ".data/ase_efm/82700/shards-0002.tar", ".data/ase_efm/82832/shards-0005.tar", ".data/ase_efm/82889/shards-0001.tar", ".data/ase_efm/82902/shards-0000.tar",
+  ".data/ase_efm/82953/shards-0000.tar", ".data/ase_efm/83036/shards-0004.tar", ".data/ase_efm/83078/shards-0000.tar", ".data/ase_efm/83086/shards-0003.tar", ".data/ase_efm/83098/shards-0000.tar",
+  ".data/ase_efm/83121/shards-0006.tar", ".data/ase_efm/83269/shards-0007.tar", ".data/ase_efm/83307/shards-0002.tar", ".data/ase_efm/83317/shards-0007.tar", ".data/ase_efm/83379/shards-0000.tar",
+  ".data/ase_efm/83393/shards-0002.tar", ".data/ase_efm/83397/shards-0000.tar", ".data/ase_efm/83400/shards-0004.tar", ".data/ase_efm/83448/shards-0001.tar", ".data/ase_efm/83467/shards-0000.tar",
+  ".data/ase_efm/83506/shards-0004.tar", ".data/ase_efm/83515/shards-0010.tar", ".data/ase_efm/83522/shards-0003.tar", ".data/ase_efm/83550/shards-0018.tar", ".data/ase_efm/83560/shards-0002.tar",
+  ".data/ase_efm/83577/shards-0009.tar", ".data/ase_efm/83598/shards-0000.tar", ".data/ase_efm/83678/shards-0004.tar", ".data/ase_efm/83692/shards-0001.tar", ".data/ase_efm/83713/shards-0002.tar",
+  ".data/ase_efm/83730/shards-0000.tar", ".data/ase_efm/83746/shards-0001.tar", ".data/ase_efm/83780/shards-0000.tar", ".data/ase_efm/83803/shards-0000.tar", ".data/ase_efm/83833/shards-0006.tar",
+  ".data/ase_efm/83836/shards-0002.tar", ".data/ase_efm/83998/shards-0003.tar", ".data/ase_efm/84001/shards-0000.tar", ".data/ase_efm/84003/shards-0000.tar", ".data/ase_efm/84009/shards-0003.tar",
+  ".data/ase_efm/84052/shards-0001.tar", ".data/ase_efm/84074/shards-0003.tar", ".data/ase_efm/84080/shards-0000.tar", ".data/ase_efm/84171/shards-0001.tar", ".data/ase_efm/84185/shards-0000.tar",
+  ".data/ase_efm/84186/shards-0000.tar", ".data/ase_efm/84230/shards-0002.tar", ".data/ase_efm/84271/shards-0001.tar", ".data/ase_efm/84309/shards-0000.tar", ".data/ase_efm/84320/shards-0006.tar",
+]
+snippet_key_filter = [
   "ASE_889_Atek_000008", "ASE_8517_Atek_000000", "ASE_8559_Atek_000000", "ASE_8671_Atek_000040", "ASE_8694_Atek_000024",
   "ASE_8715_Atek_000008", "ASE_8777_Atek_000008", "ASE_8822_Atek_000016", "ASE_8857_Atek_000032", "ASE_8860_Atek_000040",
   "ASE_8938_Atek_000048", "ASE_81022_Atek_000016", "ASE_81048_Atek_000040", "ASE_81056_Atek_000016", "ASE_81128_Atek_000024",

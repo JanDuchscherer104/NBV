@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 
 from aria_nbv.oracle.pipelines import cli as rollout_cli
 from aria_nbv.oracle.pipelines.campaign import CampaignOutcome, CudaRolloutCampaignConfig
+from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 runner = CliRunner()
@@ -97,10 +98,20 @@ def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> Non
     rows = manifest["rows"]
 
     assert config["max_samples"] == 100
-    assert config["dataset"]["snippet_ids"] == [row["sample_key"] for row in rows]
+    sample_keys = [row["sample_key"] for row in rows]
+    assert "snippet_ids" not in config["dataset"]
+    assert config["dataset"]["snippet_key_filter"] == sample_keys
     assert config["dataset"]["scene_ids"] == [row["scene_id"] for row in rows]
+    tar_urls = config["dataset"]["tar_urls"]
+    assert len(tar_urls) == len(sample_keys) == 100
+    assert all(Path(tar).parts[-2] == row["scene_id"] for tar, row in zip(tar_urls, rows, strict=True))
+    assert len(set(tar_urls)) == 100
     assert config["store"]["store_dir"] == "vin_offline_rollout_campaign100_v8_rebuilt"
     assert not (repo_root / ".data/offline_cache/vin_offline_rollout_campaign100_v8_rebuilt").exists()
+    resolved = VinOfflineWriterConfig.from_toml(repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml")
+    assert len(resolved.dataset.tar_urls) == 100
+    assert len(resolved.dataset.snippet_key_filter) == 100
+    assert [Path(tar).parts[-2] for tar in resolved.dataset.tar_urls] == [row["scene_id"] for row in rows]
 
 
 def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(tmp_path, monkeypatch) -> None:
