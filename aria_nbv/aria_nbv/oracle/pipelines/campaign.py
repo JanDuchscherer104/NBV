@@ -1977,37 +1977,6 @@ class CudaRolloutCampaign:
                 )
             )
             try:
-                started = self._event(
-                    plan,
-                    "unit_started",
-                    unit=unit,
-                    stage="worker",
-                    elapsed_seconds=self.clock() - started_at,
-                    unit_elapsed_seconds=unit_elapsed(),
-                )
-                self.append_event(started)
-                self.write_status(
-                    self.status(
-                        plan,
-                        results,
-                        current_unit=unit,
-                        stage="worker",
-                        elapsed_seconds=self.clock() - started_at,
-                        last_timeout=last_timeout,
-                        started_at=started_at_iso,
-                        active_started_at=started.timestamp,
-                    )
-                )
-                self.append_event(
-                    self._event(
-                        plan,
-                        "recipe_worker",
-                        unit=unit,
-                        stage=unit.profile,
-                        elapsed_seconds=self.clock() - started_at,
-                        unit_elapsed_seconds=unit_elapsed(),
-                    )
-                )
                 argv = self.worker_argv(
                     plan_path or (self.config.output_root / "plan.json"), unit, config_path=config_path
                 )
@@ -2484,6 +2453,17 @@ class CudaRolloutCampaign:
                     active_pid=pid,
                     active_process_group=process_group,
                     active_started_at=started.timestamp,
+                )
+            )
+            self.append_event(
+                self._event(
+                    plan,
+                    "recipe_worker",
+                    unit=unit,
+                    stage=unit.profile,
+                    elapsed_seconds=self.clock() - started_at,
+                    unit_elapsed_seconds=self.clock()
+                    - (unit_started_at if unit_started_at is not None else started_at),
                 )
             )
 

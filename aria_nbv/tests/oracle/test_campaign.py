@@ -53,6 +53,8 @@ class _FakeCampaignProcessRunner(CampaignProcessRunner):
         del kwargs
         work_unit_hash = argv[argv.index("--work-unit-hash") + 1]
         unit = next(unit for unit in self._plan.work_units if unit.work_unit_hash == work_unit_hash)
+        if on_started is not None:
+            on_started(4000 + self._plan.work_units.index(unit), 5000 + self._plan.work_units.index(unit))
         raw = dict(self._result_factory(unit))
         result = CampaignWorkerResult(
             campaign_id=self._plan.campaign_id,
@@ -327,13 +329,13 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 4
 
 
-def test_corrected_v4_pilot_has_fresh_identity_and_unchanged_paired_contract():
+def test_corrected_v5_pilot_has_fresh_identity_and_unchanged_paired_contract():
     config = CudaRolloutCampaignConfig.from_toml(
-        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v4.toml"
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v5.toml"
     )
-    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v4"
+    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v5"
     assert not (REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml").exists()
-    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v4")
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v5")
     assert config.mode.value == "pilot"
     assert config.pilot_scene_count == 5
     assert config.temperatures == (0.5, 1.0, 2.0, 4.0)
@@ -1077,7 +1079,7 @@ def test_child_start_event_and_status_share_active_timestamp(tmp_path):
         last_timeout=None,
     )(4321, 9876)
 
-    started = campaign.read_events(plan=plan)[-1]
+    started = next(event for event in campaign.read_events(plan=plan) if event.kind == "unit_started")
     status = campaign.read_status(plan=plan)
     assert status.active_pid == started.pid == 4321
     assert status.active_process_group == started.process_group == 9876
@@ -1204,6 +1206,9 @@ def test_run_claimed_records_failure_and_continues_to_next_unit(tmp_path, monkey
     ]
     assert kinds[-1] == "campaign_finished"
     assert kinds.count("unit_started") == len(plan.work_units)
+    started_events = [event for event in campaign.read_events() if event.kind == "unit_started"]
+    assert len(started_events) == len(plan.work_units)
+    assert all(event.pid is not None and event.process_group is not None for event in started_events)
     assert all(event.unit_elapsed_seconds is not None for event in campaign.read_events() if event.work_unit_hash)
 
 
@@ -1238,7 +1243,7 @@ def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path
 
     def resume_worker(unit):
         status = campaign.read_status(plan=plan)
-        active.append((status.current_work_unit, status.last_work_unit))
+        active.append((status.current_work_unit, status.last_work_unit, status.active_pid, status.active_process_group))
         return {"outcome": "insufficient_support", "reason": "synthetic support gap"}
 
     _bind_runner(campaign, plan, resume_worker)
@@ -1250,7 +1255,10 @@ def test_run_claimed_resume_rebuilds_counts_and_preserves_last_identity(tmp_path
     assert completed.counts["insufficient_support"] == len(plan.work_units) - 1
     assert completed.counts["pending"] == 0
     assert len(active) == len(plan.work_units) - 1
-    assert active[0] == (plan.work_units[1].work_unit_hash, plan.work_units[0].work_unit_hash)
+    assert active[0] == (plan.work_units[1].work_unit_hash, plan.work_units[0].work_unit_hash, 4001, 5001)
+    started_events = [event for event in campaign.read_events() if event.kind == "unit_started"]
+    assert len(started_events) == len(plan.work_units)
+    assert all(event.pid is not None and event.process_group is not None for event in started_events)
 
 
 @pytest.mark.parametrize("retry_outcome", ["failed", "timed_out"])
