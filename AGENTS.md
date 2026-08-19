@@ -17,7 +17,8 @@ tests, configuration, and Typst own behavior and scientific claims.
   the touched contract. Docs, bibliography, Typst, and Quarto work starts at
   `docs/AGENTS.md`.
 - Mermaid and thesis-diagram work uses `aria-nbv-mermaid`; notation is owned by
-  `docs/typst/shared`. Use `aria-nbv-context` for deterministic discovery.
+  `docs/typst/shared`. Use `aria-nbv-context` for owner-tree traversal, broad
+  project context, and current external-library evidence.
 - Vague, high-impact, advisor-facing, architecture, interface-design, committed
   Mermaid, or interactive-visualization work routes through `aria-grill` unless
   the user explicitly chooses another route.
@@ -32,16 +33,14 @@ tests, configuration, and Typst own behavior and scientific claims.
   rollout inspection work uses `rerun-nbv-inspector`. Package README files,
   code, configuration, and tests remain behavioral owners.
 
-## Graphify
+## Graphify And Context7
 
-- Every Codex worktree initializes Graphify through
-  `scripts/setup_worktree_env.sh`. For eligible codebase architecture,
-  relationship, ownership, or project-content questions, run
-  `scripts/check_graphify_freshness.py --json`, query the byte-identical
-  upstream Graphify skill first for `fresh` or `usable-stale`, then verify
-  exact sources. Repair an `unusable` bootstrap before eligible work; if it
-  remains unusable, report the degradation and use exact sources only.
-  Graph output is derived navigation, never authority.
+- For architecture, relationships, ownership, or broad project context, use
+  `aria-nbv-context`. It treats upstream Graphify `query`, `path`, and `explain`
+  as the primary navigation map, then opens exact owners before consequential
+  claims or edits. It also routes Context7 only for current external API or
+  version evidence. Worktree setup, hook/update behavior, freshness, repair,
+  fallback, exact library IDs, and focused query recipes stay behind that route.
 
 ## Universal Safety
 
@@ -55,9 +54,11 @@ tests, configuration, and Typst own behavior and scientific claims.
 - External skills, OMX, MCP, MemPalace, memory, and autoresearch provide
   optional evidence or orchestration, never ARIA truth ownership. Route durable
   changes through the source-order owner.
-- Unavailable optional retrieval falls back to exact sources. The source-order
-  capture rule selects the smallest owner; guidance, state, memory, and debrief
-  owners use `make check-agent-memory`.
+- Deliberate user-authored `<...>` prose, including a read-only capture request,
+  activates `agent-behavior`'s durable-capture branch. It selects the smallest
+  source-order owner and names that owner's verification.
+- Unavailable optional retrieval falls back to exact sources; guidance, state,
+  memory, and debrief owners use `make check-agent-memory`.
 
 ## Verification And Debriefs
 

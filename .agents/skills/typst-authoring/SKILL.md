@@ -35,7 +35,7 @@ metadata:
     - ".agents/references/source_order.md"
   canonical_sources:
     - "docs/AGENTS.md"
-    - ".agents/references/source_order.md#role-split"
+    - ".agents/references/source_order.md#compositional-owner-tree"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
     - "docs/typst/shared/symbols.typ"

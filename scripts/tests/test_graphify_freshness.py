@@ -34,8 +34,8 @@ def graphify_python() -> Path:
         capture_output=True,
         text=True,
     )
-    if result.returncode or result.stdout.strip() != "0.9.31":
-        raise RuntimeError("Graphify 0.9.31 is required for freshness tests")
+    if result.returncode or result.stdout.strip() != "0.9.47":
+        raise RuntimeError("Graphify 0.9.47 is required for freshness tests")
     return candidate
 
 

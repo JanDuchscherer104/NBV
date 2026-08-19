@@ -21,7 +21,7 @@ INTERPRETER = Path("graphify-out/.graphify_python")
 ROOT_MARKER = Path("graphify-out/.graphify_root")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
-PINNED_GRAPHIFY_VERSION = "0.9.31"
+PINNED_GRAPHIFY_VERSION = "0.9.47"
 MAX_STALE_SOURCES = 128
 _OWNER_DIGEST = re.compile(r"^- ([^:\r\n]+): sha256:([0-9a-f]{64})\r?$")
 

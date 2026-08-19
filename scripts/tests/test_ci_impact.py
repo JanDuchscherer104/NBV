@@ -61,7 +61,7 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertNotIn("ci-gate", workflow)
         self.assertIn(
-            'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.31"',
+            'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.47"',
             workflow,
         )
         self.assertIn(
@@ -83,9 +83,9 @@ class SelectionTests(unittest.TestCase):
         )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
         self.assertEqual(workflow.count("uv sync --locked --extra dev"), 1)
-        sync = workflow.split(
-            "      - name: Sync package validation environment\n", 1
-        )[1].split("      - name: Set up Quarto\n", 1)[0]
+        sync = workflow.split("      - name: Sync package validation environment\n", 1)[
+            1
+        ].split("      - name: Set up Quarto\n", 1)[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", sync)
         self.assertIn("run: uv sync --locked --extra dev", workflow)
         self.assertNotIn("pip install --upgrade pip uv", workflow)
@@ -255,13 +255,18 @@ class SelectionTests(unittest.TestCase):
         boundary_owner = (
             ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
         )
+        boundary_guidance = (REPO_ROOT / boundary_owner).read_text(encoding="utf-8")
         canonical_sources = frontmatter_list_items(
             context_guidance, "canonical_sources"
         )
 
         self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
         self.assertIn("make graphify-state-check", context_guidance)
-        self.assertIn("scripts/setup_worktree_env.sh", context_guidance)
+        self.assertIn("scripts/setup_worktree_env.sh", boundary_guidance)
+        self.assertIn("graphify hook install", boundary_guidance)
+        self.assertIn(
+            "skips hook rebuilds inside linked Git worktrees", boundary_guidance
+        )
         self.assertIn(boundary_owner, canonical_sources)
         for scalar in (boundary_owner, f"'{boundary_owner}'", f'"{boundary_owner}"'):
             with self.subTest(scalar=scalar):
@@ -278,7 +283,7 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue((REPO_ROOT / boundary_owner).is_file())
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
-            "0.9.31",
+            "0.9.47",
         )
         self.assertTrue((skill_root / "references/query.md").is_file())
 
@@ -388,7 +393,7 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertNotIn("/home/jd/repos/ARIA-NBV", fixture)
         self.assertIn('ROOT / "graphify-out/.graphify_python"', fixture)
-        self.assertIn("Graphify 0.9.31 is required", fixture)
+        self.assertIn("Graphify 0.9.47 is required", fixture)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ metadata:
     - "aria_nbv/AGENTS.md#completion-criteria"
     - "aria_nbv/pyproject.toml"
     - ".agents/skills/python-standards/references/general_conventions.md"
+    - ".agents/skills/python-standards/references/canonical-examples.md"
     - ".agents/skills/python-standards/references/tensor-shapes.md"
     - ".agents/skills/python-standards/references/theory-rich-docstrings.md"
     - ".agents/skills/python-standards/references/config-datamodel-fields.md"
@@ -75,24 +76,34 @@ formatter, linter, and type configuration; domain semantics remain with the pack
 Write or refactor Python docstrings as API contracts. Prefer concise,
 high-information docstrings that explain behavior, invariants, units, shapes,
 ownership, sequencing, theory, and boundary semantics instead of paraphrasing
-type hints. This skill owns all ARIA-NBV docstring preferences, including
-field docs, tensor-shape display, examples,
-cross-references, equations, and Quartodoc rendering constraints. Load the
-focused reference only for the active contract: tensor shapes, theory-rich
-docs, config fields, Quartodoc, and cross-references are branch-specific
-extensions to the general conventions.
+type hints. This skill owns field docs, shape display, examples,
+cross-references, equations, and Quartodoc constraints. Load only the focused
+reference for the active contract. For module, theory-rich function,
+config/datamodel, or sequencing examples, load the matching section in
+[references/canonical-examples.md](./references/canonical-examples.md).
 
 ## Docstring Workflow
 
 1. Read the package owner and this skill before editing Python docstrings.
-2. Identify public modules, classes, functions, methods, and typed fields forming an external or cross-module contract.
-3. Choose only useful Google-style sections: `Args:`, `Returns:`, `Yields:`, `Attributes:`, `Examples:`, `Notes:`, or `Theory:`.
-4. Document semantics, invariants, side effects, units, shapes, frames, ownership, lifecycle, theory, and boundaries; do not restate type hints.
-5. Cross-reference with the local Quartodoc role contract or Quarto Markdown; see [references/cross-references.md](./references/cross-references.md).
-6. For shaped tensors, include `points ``Tensor["N 3", float32]``: ...` and
-   see [references/tensor-shapes.md](./references/tensor-shapes.md).
-7. Trim boilerplate and empty sections; avoid `Raises:` unless it is a caller
-   contract. Optionally run `scripts/audit_docstrings.py`.
+2. Identify the public API surface. Cover public modules, public classes,
+   public functions, public methods, and meaningful typed fields or properties
+   that form an external or cross-module contract.
+3. Choose sections deliberately. Default to a summary line plus only the
+   sections that add information: `Args:`, `Returns:`, `Yields:`,
+   `Attributes:`, `Examples:`, `Notes:` or `Theory:`.
+4. Write behavioral contracts. Document semantics, invariants, side effects,
+   units, shapes, coordinate frames, ownership, lifecycle, theory, and boundary
+   expectations. Do not restate obvious type hints.
+5. Cross-reference symbols and sources with the local Quartodoc role contract
+   or Quarto-compatible Markdown. See
+   [references/cross-references.md](./references/cross-references.md).
+6. For tensors, use ordinary framework annotations and add the shape-style token
+   when shape or dtype matters: `points ``Tensor["N 3", float32]``: ...`. See
+   [references/tensor-shapes.md](./references/tensor-shapes.md).
+7. Trim boilerplate. Remove empty sections and filler prose. Avoid `Raises:`
+   unless callers genuinely need to rely on or handle the failure contract.
+8. Optionally run [scripts/audit_docstrings.py](./scripts/audit_docstrings.py)
+   before or after a refactor.
 
 ## Writing Rules
 

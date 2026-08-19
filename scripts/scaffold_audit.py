@@ -872,7 +872,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         mismatch_text = self_test_skill_text(
             "other-name",
-            [".agents/references/source_order.md#role-split"],
+            [".agents/references/source_order.md#compositional-owner-tree"],
             "Use this test body for directory-name validation.",
         )
         write_self_test_skill(tmp_root, "mismatched-name", mismatch_text)
@@ -1074,7 +1074,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         drift_text = self_test_skill_text(
             "truth-leak-skill",
-            [".agents/references/source_order.md#role-split"],
+            [".agents/references/source_order.md#compositional-owner-tree"],
             "This planned but unimplemented Q_H roadmap detail will be implemented later.",
         )
         drift_path = write_self_test_skill(tmp_root, "truth-leak-skill", drift_text)
@@ -1097,7 +1097,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         missing_literature_text = self_test_skill_text(
             "missing-literature-skill",
-            [".agents/references/source_order.md#role-split"],
+            [".agents/references/source_order.md#compositional-owner-tree"],
             "Use this test body for literature ref validation.",
             '  literature_refs:\n    - "DefinitelyMissingBibKey2026"',
         )
@@ -1115,7 +1115,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         unregistered_context7_text = self_test_skill_text(
             "unregistered-context7-skill",
-            [".agents/references/source_order.md#role-split"],
+            [".agents/references/source_order.md#compositional-owner-tree"],
             "Use this test body for Context7 registry validation.",
             '  context7_refs:\n    - "/example/not-in-registry"',
         )
@@ -1132,7 +1132,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         malformed_tool_text = self_test_skill_text(
             "malformed-tool-skill",
-            [".agents/references/source_order.md#role-split"],
+            [".agents/references/source_order.md#compositional-owner-tree"],
             "Use this test body for tool ref validation.",
             '  tool_refs:\n    - "Context7 get-library-docs"',
         )
@@ -1147,7 +1147,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
 
         unknown_tool_text = self_test_skill_text(
             "unknown-tool-skill",
-            [".agents/references/source_order.md#role-split"],
+            [".agents/references/source_order.md#compositional-owner-tree"],
             "Use this test body for tool ref inventory validation.",
             '  tool_refs:\n    - "mcp__Bogus.fake"',
         )

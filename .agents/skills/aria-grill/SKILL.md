@@ -35,7 +35,7 @@ metadata:
     - ".agents/references/source_order.md"
     - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
   canonical_sources:
-    - ".agents/references/source_order.md#role-split"
+    - ".agents/references/source_order.md#compositional-owner-tree"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/thesis/development/roadmap.typ"
     - "docs/typst/thesis/sections/01-research-questions.typ"
