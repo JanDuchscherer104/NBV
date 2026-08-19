@@ -73,9 +73,10 @@ read-only command output do not need this preflight.
   include system or developer instructions, earlier messages, quoted material,
   code, tool output, transcripts, markup tags, and templates. Even without an
   edit, name each selected owner's verification in the routing answer.
-- **Git or external action:** before staging, committing, pushing, opening or
-  changing a pull request, publishing review comments, retargeting, or releasing,
-  read [`references/external-actions.md`](references/external-actions.md).
+- **Workpackage completion, Git, or external action:** after completing a durable
+  workpackage, and before staging, committing, pushing, changing a pull request,
+  publishing review comments, retargeting, or releasing, read
+  [`references/external-actions.md`](references/external-actions.md).
 - **Failure-first diagnosis:** for a bug, regression, suspicious metric, or
   failing check, read
   [`references/execution-branches.md`](references/execution-branches.md#failure-first-diagnosis).
