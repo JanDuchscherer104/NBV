@@ -13,8 +13,10 @@ import pytest
 import zarr
 
 from aria_nbv.app.panels import _stored_rollouts_page as page
+from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
 
 
 @pytest.mark.parametrize(
@@ -190,6 +192,37 @@ def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path:
 
     assert not validation.ok
     assert "promoted rollout" in "; ".join(validation.errors)
+
+
+def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(tmp_path: Path) -> None:
+    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    entry = plan_rollout_shards(config, rows_per_shard=1)[0]
+    result = run_rollout_shard(
+        config,
+        shard_entry=entry,
+        output_tmp=tmp_path / "unit.tmp",
+        output_final=tmp_path / "unit",
+    )
+    store_path = result.final_dir.as_posix()
+    mtimes = {path: path.stat().st_mtime_ns for path in result.final_dir.rglob("*") if path.is_file()}
+    first_identity = page._store_projection_identity(store_path)
+    _, first_validation, _ = page._cached_store_bundle(store_path)
+    assert first_validation.ok
+
+    root = zarr.open_group(result.final_dir, mode="a")
+    clearance = root["candidate_diagnostics/path_min_clearance_m"]
+    clearance[0] = float(clearance[0]) + 0.125
+    for path, mtime_ns in mtimes.items():
+        os.utime(path, ns=(path.stat().st_atime_ns, mtime_ns))
+
+    second_identity = page._store_projection_identity(store_path)
+    _, second_validation, _ = page._cached_store_bundle(store_path)
+
+    assert second_identity != first_identity
+    assert not second_validation.ok
+    assert "canonical store content" in "; ".join(second_validation.errors)
+    with pytest.raises(ValueError, match="promotion validation"):
+        page.build_thesis_report_frames([result.final_dir], evidence_status="pilot")
 
 
 def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:

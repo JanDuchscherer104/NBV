@@ -340,6 +340,8 @@ def _store_projection_identity(store_path: str) -> str:
             digest.update(relative)
             digest.update(stat.st_size.to_bytes(8, "big"))
             digest.update(stat.st_mtime_ns.to_bytes(8, "big"))
+            digest.update(stat.st_ctime_ns.to_bytes(8, "big"))
+            digest.update(stat.st_ino.to_bytes(8, "big"))
         success = _read_json_mapping(path / "_SUCCESS.json")
         seal = success.get("rollout_store_content_sha256") if success is not None else None
         identity = f"store:{seal or 'unpromoted'}:{digest.hexdigest()}"

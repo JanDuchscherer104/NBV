@@ -713,13 +713,21 @@ def test_oracle_headroom_malformed_identity_closes_exclusion_arithmetic() -> Non
         "temperature": np.nan,
         "random_seed": -1,
     }
-    evidence = oracle_headroom_evidence([row])
-    assert len(evidence["malformed_role_rows"]) == 1
+    evidence = oracle_headroom_evidence([row, dict(row)])
+    assert len(evidence["malformed_role_rows"]) == 2
+    assert [item["raw_row_id"] for item in evidence["role_rows"]] == [0, 1]
+    assert len(evidence["role_disposition_rows"]) == 6
     assert all(item["status"] == "excluded" for item in evidence["contrast_rows"])
     assert all(
         item["eligible_count"] == item["included_count"] + item["excluded_count"] for item in evidence["summary_rows"]
     )
-    assert all(item["excluded_count"] == 1 for item in evidence["summary_rows"])
+    summaries = {item["contrast"]: item for item in evidence["summary_rows"]}
+    assert summaries["delta_look"]["excluded_count"] == 2
+    assert summaries["delta_Q"]["excluded_count"] == 0
+    assert summaries["eta_Q"]["excluded_count"] == 0
+    assert {
+        item["status"] for item in evidence["role_disposition_rows"] if item["contrast"] in {"delta_Q", "eta_Q"}
+    } == {"not_applicable"}
 
     partial_binding = oracle_headroom_evidence(
         [{**row, "source_sample_key": "sample-a", "campaign_id": "campaign", "plan_hash": None}]

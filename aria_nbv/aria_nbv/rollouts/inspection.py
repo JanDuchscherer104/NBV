@@ -400,6 +400,7 @@ def promoted_store_validation_error(
         from .shard_manifest import RolloutShardEntry
 
         shard_entry = RolloutShardEntry.from_jsonable(shard_payload)
+        shard_entry.validate()
         evidence = read_validated_completed_shard(
             store_dir,
             shard_entry=shard_entry,
@@ -1450,7 +1451,19 @@ def oracle_headroom_evidence(
     for malformed in malformed_rows:
         malformed_cohorts.append(malformed)
     for malformed in malformed_cohorts:
-        for contrast in contrast_specs:
+        semantic_role = malformed.get("semantic_role")
+        for contrast, roles in contrast_specs.items():
+            disposition = "excluded" if semantic_role is None or semantic_role in roles else "not_applicable"
+            if disposition == "not_applicable":
+                role_disposition_rows.append(
+                    {
+                        "raw_row_id": int(malformed["raw_row_id"]),
+                        "contrast": contrast,
+                        "status": disposition,
+                        "exclusion_reason": None,
+                    }
+                )
+                continue
             contrast_rows.append(
                 {
                     "contrast": contrast,
@@ -1470,7 +1483,7 @@ def oracle_headroom_evidence(
                 {
                     "raw_row_id": int(malformed["raw_row_id"]),
                     "contrast": contrast,
-                    "status": "excluded",
+                    "status": disposition,
                     "exclusion_reason": malformed["exclusion_reason"],
                 }
             )
