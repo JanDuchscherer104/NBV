@@ -1548,6 +1548,7 @@ class CudaRolloutCampaign:
             split=str(source.get("split", "sample")),
             source_shard_id=str(source.get("source_shard_id", "campaign-source")),
             source_shard_row=int(source.get("source_shard_row", unit.source_row_index)),
+            campaign_split=unit.campaign_split,
         )
         source_lineage_hash = str(source.get("source_manifest_hash", ""))
         if not source_lineage_hash:
@@ -1573,6 +1574,7 @@ class CudaRolloutCampaign:
                 profile_hash=unit.profile_hash,
                 explicit_target_hash=unit.explicit_target_hash,
             ),
+            campaign_split=unit.campaign_split,
         )
         return entry
 

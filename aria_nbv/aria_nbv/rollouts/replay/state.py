@@ -56,6 +56,9 @@ class CounterfactualSelectionRecord:
     selected_log_probability: float
     """Log probability assigned to `valid_index`, in nats."""
 
+    selection_rng_seed: int | None = None
+    """Deterministic seed used for this selection draw."""
+
 
 @dataclass(slots=True)
 class CounterfactualStepResult:
@@ -110,6 +113,9 @@ class CounterfactualStepResult:
 
     selection_rng_seed: int | None = None
     """Deterministic per-node seed used for stochastic selection."""
+
+    candidate_rng_seed: int | None = None
+    """Deterministic per-node seed used for candidate generation."""
 
     @property
     def selected_pose_world(self) -> PoseTW:

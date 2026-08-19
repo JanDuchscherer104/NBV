@@ -101,6 +101,9 @@ class RolloutShardRow:
     source_shard_row: int
     """Zero-based row within ``source_shard_id``."""
 
+    campaign_split: str | None = None
+    """Authoritative campaign split; ``split`` remains VIN source split."""
+
     @classmethod
     def from_index_record(cls, record: Any, *, order: int) -> "RolloutShardRow":
         """Build a manifest row from a VIN offline index record."""
@@ -137,6 +140,7 @@ class RolloutShardRow:
             split=str(payload["split"]),
             source_shard_id=str(payload["source_shard_id"]),
             source_shard_row=int(payload["source_shard_row"]),
+            campaign_split=None if payload.get("campaign_split") is None else str(payload["campaign_split"]),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
@@ -151,12 +155,15 @@ class RolloutShardRow:
             "split": self.split,
             "source_shard_id": self.source_shard_id,
             "source_shard_row": int(self.source_shard_row),
+            "campaign_split": self.campaign_split,
         }
 
     def hash_record(self) -> dict[str, object]:
         """Return the row fields used for deterministic lineage hashing."""
-
-        return self.to_jsonable()
+        record = self.to_jsonable()
+        if self.campaign_split is None:
+            record.pop("campaign_split", None)
+        return record
 
     def matches_record(self, record: Any) -> bool:
         """Return whether a VIN offline index record matches this manifest row."""
@@ -348,6 +355,9 @@ class RolloutShardEntry:
     campaign_binding: RolloutShardCampaignBinding | None = None
     """Optional campaign identity; ``None`` preserves legacy manifests."""
 
+    campaign_split: str | None = None
+    """Authoritative campaign split, distinct from the VIN source split."""
+
     @classmethod
     def from_jsonable(cls, payload: dict[str, Any]) -> "RolloutShardEntry":
         """Decode and canonicalize one JSONL shard ownership entry.
@@ -374,6 +384,7 @@ class RolloutShardEntry:
             campaign_binding=None
             if payload.get("campaign_binding") is None
             else RolloutShardCampaignBinding.from_jsonable(payload["campaign_binding"]),
+            campaign_split=None if payload.get("campaign_split") is None else str(payload["campaign_split"]),
         )
 
     def to_jsonable(self) -> dict[str, Any]:
@@ -391,6 +402,7 @@ class RolloutShardEntry:
             "source_store_dir": self.source_store_dir,
             "rows": [row.to_jsonable() for row in self.rows],
             "campaign_binding": None if self.campaign_binding is None else self.campaign_binding.to_jsonable(),
+            "campaign_split": self.campaign_split,
         }
 
     def validate(self) -> None:
