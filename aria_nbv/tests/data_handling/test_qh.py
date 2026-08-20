@@ -30,6 +30,7 @@ from aria_nbv.rollouts.qh_reader import QhDataContract, _QhSourceRef
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
+from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
 
 
 def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_types() -> None:
@@ -353,6 +354,62 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     assert batch.actor.selected_observation_prefix is not None
     assert batch.actor.selected_observation_prefix.prefix_mask.tolist() == [[[False, False], [True, False]]]
     assert chain.audit is audit
+
+
+def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
+    """Keep the documented Q_H chain and padded-batch axes executable."""
+
+    stored = _stored(_source_ref())
+    stored.selected_depth_m = np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3)
+    stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
+    stored.selected_depth_focal_px = np.full((2, 2), 10, dtype=np.float32)
+    stored.selected_depth_principal_point_px = np.full((2, 2), 1, dtype=np.float32)
+    stored.selected_depth_image_size_hw = np.tile(np.array([2, 3], dtype=np.int64), (2, 1))
+    stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    context = QhStaticContext(
+        vin_snippet=_snippet(),
+        t_world_voxel=PoseTW().tensor(),
+        voxel_extent=torch.ones(6),
+        occ_pr=torch.ones(1, 1, 1, 1),
+        occ_input=torch.ones(1, 1, 1, 1),
+        free_input=torch.ones(1, 1, 1, 1),
+        counts=torch.ones(1, 1, 1, dtype=torch.int64),
+        cent_pr=torch.ones(1, 1, 1, 1),
+        pts_world=torch.ones(1, 3),
+        evl_presence=torch.ones(8, dtype=torch.bool),
+    )
+    chain = _tensor_chain(stored, _snippet(), static_context=context, require_rich_modalities=True)
+    batch = collate_qh_chains([chain, chain])
+
+    def summary(actor: QhActorTensors) -> dict[str, object]:
+        static = actor.static_context
+        prefix = actor.selected_observation_prefix
+        assert static is not None and prefix is not None
+        return {
+            "candidate_pose_relative_root": summarize(actor.candidate_pose_relative_root),
+            "history_pose_relative_root": summarize(actor.history_pose_relative_root),
+            "step_mask": summarize(actor.step_mask),
+            "vin_points_world": summarize(actor.vin_snippet.points_world),
+            "evl_occ_pr": summarize(static.occ_pr),
+            "evl_presence": summarize(static.evl_presence),
+            "selected_depth_m": summarize(prefix.depth_m),
+            "selected_depth_valid_mask": summarize(prefix.valid_mask),
+            "selected_depth_camera_pose_relative_root": summarize(prefix.camera_pose_relative_root),
+            "selected_depth_prefix_mask": summarize(prefix.prefix_mask),
+        }
+
+    rendered = capture_tree(
+        rich_summary({"chain": summary(chain.actor), "batch": summary(batch.actor)}, is_print=False)
+    )
+    assert "candidate_pose_relative_root" in rendered
+    assert "(2, 2, 12)" in rendered
+    assert "(2, 2, 2, 12)" in rendered
+    assert "selected_depth_m" in rendered
+    assert "(2, 2, 2, 3)" in rendered
+    assert "(2, 2, 2, 2, 3)" in rendered
+    assert "evl_occ_pr" in rendered
+    assert "(1, 1, 1, 1)" in rendered
+    assert "(2, 1, 1, 1, 1)" in rendered
 
 
 def test_rich_dataset_rejects_actor_store_without_root_evl_evidence() -> None:
