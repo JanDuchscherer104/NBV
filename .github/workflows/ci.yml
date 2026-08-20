@@ -154,7 +154,8 @@ jobs:
         if: steps.impact.outputs.package == 'true'
         env:
           UV_NO_SYNC: "1"
-        run: make package-smoke PYTEST_ARGS=
+          PYTEST_WORKERS: "0"
+        run: make ruff-full package-smoke
 
       - name: Validate documentation
         if: steps.impact.outputs.docs == 'true'

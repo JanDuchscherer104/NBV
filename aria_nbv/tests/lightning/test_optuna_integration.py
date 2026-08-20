@@ -5,11 +5,12 @@ from __future__ import annotations
 # ruff: noqa: S101
 from typing import TYPE_CHECKING
 
+from pydantic import Field
+from pytorch_lightning.callbacks import Callback
+
 from aria_nbv.configs import OptunaConfig
 from aria_nbv.lightning.lit_trainer_callbacks import TrainerCallbacksConfig
 from aria_nbv.utils import BaseConfig, Optimizable, optimizable_field
-from pydantic import Field
-from pytorch_lightning.callbacks import Callback
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

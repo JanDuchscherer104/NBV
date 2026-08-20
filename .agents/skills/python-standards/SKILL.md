@@ -56,215 +56,99 @@ metadata:
     - "ruff format <file>"
     - "ruff check <file>"
     - "cd aria_nbv && uv run pytest <path>"
+    - "make mypy-contract; make mypy-targeted MYPY_PATHS=\"...\"; make mypy-full"
     - "./scripts/quarto_generate_api_docs.sh when generated API docs are affected"
 ---
 
 # Python Standards
 
-## OMX Integration
+## Codex Verification Loop
 
-OMX can schedule Python-standard or docstring work as part of implementation
-cleanup, but this skill supplies only Python API-contract guidance. Return the
-changed public surface, convention evidence, and targeted lint, test, or docs
-verification.
+Inspect the changed surface, run the narrowest Ruff, pytest, coverage, and mypy proof,
+then report command, scope, result, and baseline gaps. Targeted success never proves
+package-wide correctness.
 
 ## General Python Conventions
 
-Read [references/general_conventions.md](./references/general_conventions.md)
-for typing, paths, config-as-factory behavior, runtime setup, logging, and
-project wrapper conventions. Executable requirements remain owned by source,
-tests, formatter, linter, and type configuration. ARIA-NBV domain semantics
-remain with the nearest package owner.
+Read [references/general_conventions.md](./references/general_conventions.md) for
+typing, paths, config-as-factory behavior, runtime setup, logging, and project
+wrapper conventions. Executable requirements remain owned by source, tests,
+formatter, linter, and type configuration; domain semantics remain with the package owner.
 
 ## Docstring Overview
 
-Write or refactor Python docstrings as API contracts. Prefer concise,
-high-information docstrings that explain behavior, invariants, units, shapes,
-ownership, sequencing, theory, and boundary semantics instead of paraphrasing
-type hints. This skill owns all ARIA-NBV docstring preferences, including
-field docs, tensor-shape display, examples,
+Write or refactor Python docstrings as API contracts. Prefer concise, high-information
+explanations of behavior, invariants, units, shapes, ownership, sequencing, theory,
+and boundaries. This skill owns field docs, tensor-shape display, examples,
 cross-references, equations, and Quartodoc rendering constraints.
 
-## Workflow
+## Docstring Workflow
 
 1. Read the package owner and this skill before editing Python docstrings.
-2. Identify the public API surface. Cover public modules, public classes,
-   public functions, public methods, and meaningful typed fields or properties
-   that form an external or cross-module contract.
-3. Choose sections deliberately. Default to a summary line plus only the
-   sections that add information: `Args:`, `Returns:`, `Yields:`,
-   `Attributes:`, `Examples:`, `Notes:` or `Theory:`.
-4. Write behavioral contracts. Document semantics, invariants, side effects,
-   units, shapes, coordinate frames, ownership, lifecycle, theory, and boundary
-   expectations. Do not restate obvious type hints.
-5. Cross-reference internal symbols and external sources with the local
-   Quartodoc role contract or Quarto-compatible Markdown. See
-   [references/cross-references.md](./references/cross-references.md).
-6. For tensor values, use ordinary framework annotations and include the
-   shape-style docstring token when shape or dtype matters:
-   `points ``Tensor["N 3", float32]``: ...`. See
-   [references/tensor-shapes.md](./references/tensor-shapes.md).
-7. Trim boilerplate. Remove empty sections and filler prose. Avoid `Raises:`
-   unless callers genuinely need to rely on or handle the failure contract.
-8. Optionally audit. Run [scripts/audit_docstrings.py](./scripts/audit_docstrings.py)
-   to find missing or suspiciously short docstrings before or after a refactor.
+2. Identify public modules, classes, functions, methods, and typed fields forming an external or cross-module contract.
+3. Choose only useful Google-style sections: `Args:`, `Returns:`, `Yields:`, `Attributes:`, `Examples:`, `Notes:`, or `Theory:`.
+4. Document semantics, invariants, side effects, units, shapes, frames, ownership, lifecycle, theory, and boundaries; do not restate type hints.
+5. Cross-reference with the local Quartodoc role contract or Quarto Markdown; see [references/cross-references.md](./references/cross-references.md).
+6. For shaped tensors, include `points ``Tensor["N 3", float32]``: ...` and
+   see [references/tensor-shapes.md](./references/tensor-shapes.md).
+7. Trim boilerplate and empty sections; avoid `Raises:` unless it is a caller
+   contract. Optionally run `scripts/audit_docstrings.py`.
 
 ## Writing Rules
 
-- Start with a concise summary line that describes behavior, not the symbol
-  name.
-- Use Google-style sections, but omit sections that do not add information.
-- Make module docstrings explain purpose, main contents, conceptual model, and
-  responsibility boundaries.
-- Make important class docstrings explain role, theoretical meaning, and when
-  to use the abstraction.
-- Make function and method docstrings explain behavior and semantics, not just
-  parameters.
-- Prefer dense explanation over long prose. Prioritize invariants,
-  preconditions, coordinate frames, units, shapes, mathematical definitions,
-  normalization terms, ownership, mutation semantics, persistence boundaries,
-  and sequencing expectations.
-- Use `Attributes:` when instance state is part of the contract. Public
-  dataclasses, Pydantic models, DTOs, configs, and typed payloads also need
-  per-field docstrings. Explain conceptual or theoretical meaning for fields
-  whose role cannot be inferred from the type and name alone.
-- Document a non-straightforward private function or method when its invariant,
-  transformation, state transition, or failure mode is needed to safely change
-  its caller. Keep trivial private helpers concise.
-- Use standard Python annotations plus framework types (`Tensor`, `ndarray`,
-  and project types). Do not introduce Jaxtyping or another runtime shape-type
-  system; record shapes, frames, units, and support semantics in docstrings.
-- Use `aria-grill` before documenting a genuinely unsettled boundary. Aria
-  Grill may progressively invoke external architecture, interface, or domain-
-  modeling capabilities; this skill records the resulting source-level
-  contract and does not duplicate those design methods.
-- Use `Yields:` for generators, iterators, and streaming-style APIs.
-- Use `Examples:` for public APIs that are easy to misuse.
-- Use `Notes:` or `Theory:` when they materially help correct usage. A complex
-  geometry, RRI, rollout, reconstruction, or learning API may state one
-  contract-defining equation, then link to the thesis owner for its definition
-  and full derivation. Do not copy thesis prose or mathematical definitions.
-- Use Markdown math (`$...$`, `$$...$$`) for equations that should render in
-  generated Quarto API pages; use raw Python docstrings (`r"""..."""`) when
-  LaTeX backslashes appear.
-- Use Sphinx/Python-domain roles for local API symbols so docstrings remain
-  readable in VS Code and link in Quarto API pages: `:mod:`, `:class:`,
-  `:func:`, `:meth:`, `:attr:`, and their explicit `:py:*:` forms. ARIA-NBV's
-  Quarto role filter resolves these roles against `docs/objects.json`; see
-  [references/cross-references.md](./references/cross-references.md).
-- Avoid repeating the symbol name in prose, converting every type hint into a
-  sentence, adding every section mechanically, or inserting long theory blocks
-  for simple helpers.
+- Start with a concise summary line that describes behavior, not the symbol name.
+- Use Google-style sections only when they add information. Explain purpose,
+  role, behavior, invariants, units, shapes, frames, ownership, mutation,
+  lifecycle, and sequencing rather than restating names or type hints.
+- Use `Attributes:` for contract-bearing state. Public dataclasses, Pydantic
+  models, DTOs, configs, and typed payloads need meaningful field docs.
+- Use standard Python and framework annotations (`Tensor`, `ndarray`, and
+  project types); record shapes, frames, units, and support semantics in prose.
+- Use `aria-grill` before documenting a genuinely unsettled boundary; this
+  skill records the resulting source-level contract without duplicating design.
+- Use `Yields:` for streaming APIs, `Examples:` for easy-to-misuse APIs, and
+  `Notes:` or `Theory:` when they materially improve correct usage. Link complex
+  definitions to the thesis owner instead of copying them.
+- Use Markdown math (`$...$`, `$$...$$`) for Quarto equations and raw Python
+  docstrings (`r"""..."""`) when LaTeX backslashes appear.
+- Use Sphinx/Python-domain roles (`:mod:`, `:class:`, `:func:`, `:meth:`,
+  `:attr:` and `:py:*:` forms) for local API symbols; the Quarto role filter
+  resolves them against `docs/objects.json` (see cross-references reference).
+- Keep private-helper docs concise unless their invariant or failure mode is
+  needed by callers. Avoid boilerplate and long theory blocks for simple APIs.
 
-## Canonical Examples
+## Verification Commands
 
-Module docstring:
+Run from the repository root. `aria_nbv/pyproject.toml` owns Ruff/mypy/pytest/coverage
+configuration, `aria_nbv/uv.lock` pins versions, and `Makefile` owns gates/path
+normalization. Point to these sources, not copied flags or pins.
 
-```python
-r"""High-level oracle RRI computation orchestrator.
+- `make package-smoke` runs fixed Ruff/pytest smoke surfaces plus the public API
+  typing contract; CI adds `make ruff-full` for the complete stable Ruff surface;
+  CI sets `PYTEST_WORKERS=0`; `make mypy-contract` runs that contract alone.
+- `make ruff-full` or `make ruff-targeted RUFF_PATHS="..."` runs stable Ruff
+  gates; `make coverage-targeted COVERAGE_TESTS="tests/<path>"` reports branch
+  coverage. Add `MYPY_JUNIT_XML=/tmp/mypy.xml` or
+  `COVERAGE_JSON=/tmp/coverage.json` for structured output.
+- `make mypy-targeted MYPY_PATHS="aria_nbv/<path> tests/<path>"` checks selected roots;
+  `make mypy-full` remains informational while its baseline is nonzero.
+- `coverage-targeted` is intentionally operator-selected rather than a CI gate;
+  it has no representative repository-wide threshold yet.
 
-This module wires candidate point clouds, point-mesh distance primitives, and
-:class:`OracleRRIConfig` into one target-aware RRI scorer. It owns score
-orchestration only; candidate sampling belongs to :mod:`aria_nbv.pose_generation`
-and depth rendering belongs to :mod:`aria_nbv.rendering`.
+Pass repository-root paths such as `aria_nbv/aria_nbv/<path>` or `aria_nbv/tests/<path>`;
+the target normalizes, validates, and deduplicates them. Targeted success is surface-limited.
+Include `aria_nbv/tests/data_handling/public_api_typing_contract.py` for affected exports.
 
-The implemented scalar score is
-
-$$
-\mathrm{RRI}(q)=
-\frac{\Delta(P_t, M)-\Delta(P_t \cup P_q, M)}
-     {\max(\Delta(P_t, M), \epsilon)}.
-$$
-"""
+```sh
+cd aria_nbv
+uv run --extra dev ruff format --check <changed-paths> && uv run --extra dev ruff check <changed-paths>
+uv run --extra dev pytest --import-mode=importlib <tests> && uv run --extra dev pytest --import-mode=importlib --cov <tests>
 ```
 
-Theory-rich function docstring:
-
-```python
-from torch import Tensor
-
-
-def compute_rri(
-    points_t: Tensor,
-    points_q: Tensor,
-    gt_mesh_vertices: Tensor,
-    gt_mesh_faces: Tensor,
-) -> tuple[Tensor, Tensor]:
-    r"""Compute candidate-view Relative Reconstruction Improvement.
-
-    Args:
-        points_t ``Tensor["N_t 3", float32]``: Current target reconstruction
-            points in world frame, metres.
-        points_q ``Tensor["N_q 3", float32]``: Candidate-view points in world
-            frame, metres.
-        gt_mesh_vertices ``Tensor["V 3", float32]``: Ground-truth mesh
-            vertices in world frame, metres.
-        gt_mesh_faces ``Tensor["F 3", int64]``: Triangle vertex indices into
-            `gt_mesh_vertices`.
-
-    Returns:
-        Tuple[Tensor, Tensor]: RRI scores and diagnostics.
-            - rri ``Tensor["N_q", float32]``: Candidate-point improvement
-              values after normalization and validity masking.
-            - diagnostics ``Tensor["D", float32]``: Diagnostic terms for
-              current distance, candidate distance, and normalization.
-
-    Theory:
-        RRI scores how much candidate evidence reduces target reconstruction
-        error relative to the current reconstruction:
-
-        $$
-        \mathrm{RRI}(q)=
-        \frac{D(P_t, M)-D(P_t \cup P_q, M)}
-             {\max(D(P_t, M), \epsilon)}.
-        $$
-
-        `P_t` is the current target point set, `P_q` is the candidate-view point
-        set, and `M` is the ground-truth target mesh. Invalid candidates are
-        masked before this value is used as a training target.
-    """
-```
-
-Config or datamodel field docs:
-
-```python
-class OracleRRIConfig(TargetConfig["OracleRRI"]):
-    """Config-as-factory wrapper for oracle RRI computation."""
-
-    fusion_voxel_size_m: float = Field(default=0.0, ge=0.0)
-    """Optional deterministic voxel-fusion size for ``P_t`` and ``P_t ∪ P_q``."""
-
-    fusion_max_points: int | None = Field(default=None, ge=1)
-    """Optional deterministic point cap applied after voxel fusion."""
-```
-
-Sequencing example:
-
-```python
-def run(self, sample: EfmSnippetView) -> OracleRriSample:
-    """Run candidate generation, depth rendering, backprojection, and RRI scoring.
-
-    Args:
-        sample: EFM snippet with semi-dense points, camera calibration, target
-            metadata, and loaded GT mesh tensors.
-
-    Returns:
-        :class:`OracleRriSample` containing candidates, rendered depths,
-        backprojected candidate point clouds, and `RriResult` labels.
-
-    Examples:
-        >>> labeler = OracleRriLabeler(OracleRriLabelerConfig())
-        >>> labeled = labeler.run(sample)
-        >>> labeled.rri.rri.shape
-        torch.Size([num_candidates])
-    """
-```
+Targeted Ruff, pytest, coverage, and mypy results apply only to the named surface;
+package-smoke covers its fixed list. Claim package-wide results only after the corresponding
+full surface succeeds; full mypy is currently non-gating.
 
 ## References
 
-- [General Python conventions](./references/general_conventions.md)
-- [Tensor and NumPy shapes](./references/tensor-shapes.md)
-- [Theory-rich docstrings](./references/theory-rich-docstrings.md)
-- [Config and datamodel fields](./references/config-datamodel-fields.md)
-- [Quartodoc contract](./references/quartodoc-contract.md)
-- [Cross-references](./references/cross-references.md)
+- [General Python conventions](./references/general_conventions.md); [Tensor and NumPy shapes](./references/tensor-shapes.md); [Theory-rich docstrings](./references/theory-rich-docstrings.md); [Config and datamodel fields](./references/config-datamodel-fields.md); [Quartodoc contract](./references/quartodoc-contract.md); [Cross-references](./references/cross-references.md)

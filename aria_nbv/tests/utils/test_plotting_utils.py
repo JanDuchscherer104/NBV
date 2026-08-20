@@ -1,6 +1,7 @@
 """Tests for shared plotting helpers."""
 
 import numpy as np
+
 from aria_nbv.utils.plotting import _histogram_overlay
 
 

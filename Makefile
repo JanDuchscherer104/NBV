@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -135,7 +135,18 @@ QH_CI_TESTS := \
 	tests/test_config_field_constraints.py \
 	../scripts/tests/test_quartodoc_expand_config.py
 QH_CI_PYTHON ?= uv run --extra dev python
-PYTEST_ARGS ?= -n auto
+PYTEST_WORKERS ?= auto
+PYTEST_WORKERS_FLAG = $(if $(filter auto,$(PYTEST_WORKERS)),-n auto,$(if $(filter 0,$(PYTEST_WORKERS)),,$(error PYTEST_WORKERS must be auto or 0)))
+RUFF_PATHS ?=
+RUFF_CHECK_OUTPUT_FORMAT ?= concise
+RUFF_FIX ?= 0
+RUFF_FIX_FLAG = $(if $(filter 1 true yes,$(RUFF_FIX)),--fix,$(if $(filter 0 false no,$(RUFF_FIX)),,$(error RUFF_FIX must be one of 0, 1, false, true, no, or yes)))
+MYPY_JUNIT_XML ?=
+COVERAGE_TESTS ?=
+MYPY_JUNIT_FLAG = $(if $(MYPY_JUNIT_XML),--junit-xml="$$MYPY_JUNIT_XML",)
+COVERAGE_JSON ?=
+COVERAGE_JSON_FLAG = $(if $(COVERAGE_JSON),--cov-report=json:"$$COVERAGE_JSON",)
+export RUFF_PATHS MYPY_PATHS COVERAGE_TESTS RUFF_CHECK_OUTPUT_FORMAT MYPY_JUNIT_XML COVERAGE_JSON
 
 # Read-only operator inspection defaults.
 OFFLINE_STORE ?= vin_offline
@@ -725,12 +736,77 @@ docs-render-core: graphify-projection-self-test graphify-projection-live-check q
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff check $(QH_CI_RUFF_PATHS)
-	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
+	@cd $(PKG_DIR) && PYTHONPATH=.. $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(QH_CI_TESTS)
 
-package-smoke: qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
+package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
-	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
+	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)
+
+ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
+	@cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet aria_nbv tests
+	@cd $(PKG_DIR) && uv run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests
+
+ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
+	@set -f; paths="$$RUFF_PATHS"; \
+	if [ -z "$$paths" ]; then echo "RUFF_PATHS is required" >&2; exit 2; fi; \
+	normalized=; \
+	for path in $$paths; do \
+		case "$$path" in \
+			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "RUFF_PATHS contains traversal component: $$path" >&2; exit 2 ;; \
+			*[!A-Za-z0-9_./-]*) echo "RUFF_PATHS contains unsupported characters: $$path" >&2; exit 2 ;; \
+		esac; \
+		case "$$path" in \
+			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
+			$(PKG_DIR)/*|$(TEST_DIR)/*) ;; \
+			*) echo "RUFF_PATHS contains unrelated path: $$path" >&2; exit 2 ;; \
+		esac; \
+		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
+	done; \
+	cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet $$normalized && \
+	uv run --extra dev ruff check --output-format "$$RUFF_CHECK_OUTPUT_FORMAT" $(RUFF_FIX_FLAG) $$normalized
+
+mypy-contract: ## Run the passing public API typing contract
+	@cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py
+
+mypy-full: ## Run the full package typing check (currently informational)
+	@cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) aria_nbv
+
+mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
+	@set -f; paths="$$MYPY_PATHS"; \
+	if [ -z "$$paths" ]; then echo "MYPY_PATHS is required" >&2; exit 2; fi; \
+	normalized=; \
+	for path in $$paths; do \
+		case "$$path" in \
+			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "MYPY_PATHS contains traversal component: $$path" >&2; exit 2 ;; \
+			*[!A-Za-z0-9_./-]*) echo "MYPY_PATHS contains unsupported characters: $$path" >&2; exit 2 ;; \
+		esac; \
+		case "$$path" in \
+			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
+			$(PKG_DIR)/*|$(TEST_DIR)/*) ;; \
+			*) echo "MYPY_PATHS contains unrelated path: $$path" >&2; exit 2 ;; \
+		esac; \
+		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
+	done; \
+	cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) $$normalized
+
+coverage-targeted: ## Run branch coverage for explicitly supplied tests (set COVERAGE_TESTS)
+	@set -f; paths="$$COVERAGE_TESTS"; \
+	if [ -z "$$paths" ]; then echo "COVERAGE_TESTS is required" >&2; exit 2; fi; \
+	normalized=; \
+	for path in $$paths; do \
+		case "$$path" in \
+			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "COVERAGE_TESTS contains traversal component: $$path" >&2; exit 2 ;; \
+			*[!A-Za-z0-9_./-]*) echo "COVERAGE_TESTS contains unsupported characters: $$path" >&2; exit 2 ;; \
+		esac; \
+		case "$$path" in \
+			$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
+			$(TEST_DIR)/*) ;; \
+			*) echo "COVERAGE_TESTS must name tests under $(TEST_DIR)/: $$path" >&2; exit 2 ;; \
+		esac; \
+		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
+	done; \
+	cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov $(COVERAGE_JSON_FLAG) $$normalized
 
 ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
