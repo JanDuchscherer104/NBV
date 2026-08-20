@@ -1439,6 +1439,47 @@ def test_run_claimed_event_timing_resets_per_unit_and_campaign_elapsed_increases
     terminal_status = campaign.read_status(plan=plan)
     assert terminal_status.state == "completed"
     assert terminal_status.elapsed_seconds > 0.0
+    finished = [event for event in campaign.read_events(plan=plan) if event.kind == "campaign_finished"][-1]
+    assert finished.elapsed_seconds == terminal_status.elapsed_seconds
+
+
+def test_terminal_status_rebuild_uses_finish_elapsed_and_rejects_divergence(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_campaign_started(campaign, plan)
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, "insufficient_support")
+    campaign.append_event(campaign._event(plan, "campaign_finished", elapsed_seconds=12.5))
+    campaign.write_status(
+        campaign.status(
+            plan,
+            [{"outcome": "insufficient_support"}] * len(plan.work_units),
+            stage="terminal",
+            elapsed_seconds=12.5,
+            last_unit=plan.work_units[-1],
+        )
+    )
+    status_path = tmp_path / "status.json"
+    status_path.unlink()
+    rebuilt = campaign.read_status(plan=plan)
+    assert rebuilt.elapsed_seconds == 12.5
+
+    campaign.write_status(replace(rebuilt, elapsed_seconds=11.5))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_terminal_status_rebuilds_legacy_null_finish_elapsed_from_timestamps(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_campaign_started(campaign, plan)
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, "insufficient_support")
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+
+    rebuilt = campaign.read_status(plan=plan)
+    assert rebuilt.state == "completed"
+    assert rebuilt.elapsed_seconds >= 0.0
 
 
 def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):
