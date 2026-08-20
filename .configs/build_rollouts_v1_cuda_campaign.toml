@@ -10,7 +10,7 @@ expected_scene_count = 100
 min_valid_root_candidates = 15
 stage_timeout_seconds = 120
 work_unit_timeout_seconds = 3600
-output_root = ".campaign/cuda-rollouts-v1"
+output_root = "rollout_supervision/campaigns/cuda-rollouts-v1"
 
 [[profiles]]
 name = "realistic_core_60"

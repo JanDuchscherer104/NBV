@@ -131,6 +131,27 @@ def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path) -> None
     assert set(paths) == {first.resolve(), second.resolve()}
 
 
+def test_discover_rollout_store_paths_includes_completed_campaign_shards(tmp_path) -> None:
+    """Discovery should include only fully promoted hash-named campaign stores."""
+
+    campaign_root = tmp_path / "rollout_supervision" / "campaigns" / "campaign" / "shards"
+    promoted = campaign_root / "work-unit-hash"
+    incomplete = campaign_root / "incomplete-work-unit"
+    nested_group = promoted / "candidate"
+    for path in (promoted, incomplete, nested_group):
+        path.mkdir(parents=True)
+    for marker in ("zarr.json", "manifest.json", "_SUCCESS.json", "_owner.json"):
+        (promoted / marker).write_text("{}", encoding="utf-8")
+    (incomplete / "zarr.json").write_text("{}", encoding="utf-8")
+    (nested_group / "zarr.json").write_text("{}", encoding="utf-8")
+
+    paths = discover_rollout_store_paths(tmp_path)
+
+    assert promoted.resolve() in paths
+    assert incomplete.resolve() not in paths
+    assert nested_group.resolve() not in paths
+
+
 def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path) -> None:
     """Audit helpers should expose decoded rollout QA rows without changing store data."""
 

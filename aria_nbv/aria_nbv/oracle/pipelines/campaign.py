@@ -24,9 +24,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from ...utils import TargetConfig
+from ...utils.config_paths import resolve_cache_artifact_dir
 from ...utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 CAMPAIGN_PLAN_SCHEMA_VERSION = "campaign-plan-v3"
@@ -192,6 +193,15 @@ def _default_profiles() -> list[CampaignProfileConfig]:
     ]
 
 
+def _resolve_campaign_output_root(value: str | Path, info: ValidationInfo) -> Path:
+    """Resolve shared rollout-supervision outputs without changing legacy campaigns."""
+
+    path = Path(value)
+    if not path.is_absolute() and path.parts[:1] == ("rollout_supervision",):
+        return resolve_cache_artifact_dir(path, info)
+    return path
+
+
 class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
     """Config-as-factory for the fixed CUDA campaign contract."""
 
@@ -209,6 +219,8 @@ class CudaRolloutCampaignConfig(TargetConfig["CudaRolloutCampaign"]):
     profiles: list[CampaignProfileConfig] = Field(default_factory=_default_profiles)
     output_root: Path = Path(".campaign")
     writer_config_path: Path | None = None
+
+    _resolve_output_root = field_validator("output_root", mode="before")(_resolve_campaign_output_root)
 
     @model_validator(mode="after")
     def _validate_contract(self) -> "CudaRolloutCampaignConfig":

@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import msgspec
 import pytest
 
+from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.qh_data import QhDataset
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.oracle.pipelines.campaign import (
@@ -346,6 +347,15 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
 
     assert config.frozen_profile == "realistic_core_60"
     assert writer.target_scorer.depth.renderer.max_views_per_batch == 2
+
+
+def test_canonical_campaign_writes_to_shared_rollout_supervision_cache():
+    config = CudaRolloutCampaignConfig.from_toml(REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign.toml")
+
+    assert (
+        config.output_root
+        == (PathConfig().offline_cache_dir / "rollout_supervision" / "campaigns" / "cuda-rollouts-v1").resolve()
+    )
 
 
 def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineage(
