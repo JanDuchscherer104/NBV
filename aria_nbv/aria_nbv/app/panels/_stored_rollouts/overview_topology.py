@@ -211,8 +211,8 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
                 uncertainty="These are additive protocol counts, not effect estimates. Invalid, ambiguous, unmatched, and below-threshold targets stay visible instead of being converted to low-reward examples.",
                 external_references=(
                     (
-                        "Canonical ARIA-NBV RRI definition",
-                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                        "Canonical observed-target admission",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/target_selection.py#L96-L169",
                     ),
                 ),
                 definition="A valid privileged label requires exactly one same-class GT match with strict oriented IoU greater than 0.20; equality and ambiguity are rejected.",
