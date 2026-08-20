@@ -55,6 +55,37 @@ from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
 
+
+def test_inspector_refresh_clears_candidate_population_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refresh clears every native inspector cache, including population evidence."""
+
+    cleared: list[str] = []
+    for name in (
+        "_cached_inventory",
+        "_cached_candidate_population_cached",
+        "_cached_projection_cached",
+        "_cached_topology_cached",
+        "_cached_failures_cached",
+        "_cached_evidence_bundle_cached",
+        "_cached_store_bundle_cached",
+        "_cached_corpus_summary",
+    ):
+        monkeypatch.setattr(session, name, SimpleNamespace(clear=lambda name=name: cleared.append(name)))
+
+    session._clear_stored_rollout_caches()
+
+    assert set(cleared) == {
+        "_cached_inventory",
+        "_cached_candidate_population_cached",
+        "_cached_projection_cached",
+        "_cached_topology_cached",
+        "_cached_failures_cached",
+        "_cached_evidence_bundle_cached",
+        "_cached_store_bundle_cached",
+        "_cached_corpus_summary",
+    }
+
+
 _PATH_CONFIG_FIELDS = (
     "root",
     "data_root",

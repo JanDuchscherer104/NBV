@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app.panels import training_dataset as panel
+from aria_nbv.app.panels._stored_rollouts import session
 from aria_nbv.app.panels.training_dataset import _artifact_identity, _download_payload
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
@@ -70,6 +72,30 @@ def test_qh_ui_dispatchers_cross_real_owners_only_when_called(monkeypatch: pytes
     assert panel._cached_qh_readiness.__wrapped__("/root", ("/rollout",), (), 2, 7) is readiness
     assert panel._cached_qh_preview.__wrapped__("/root", ("/rollout",), (), "train", 0, 2, 7) is preview
     assert [name for name, _payload in calls] == ["readiness", "preview"]
+
+
+def test_refresh_rollout_caches_clears_each_page_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One refresh control invalidates all native read-model caches."""
+
+    cleared: list[str] = []
+    for name in (
+        "_cached_bundle_summary",
+        "_cached_deep_statistics",
+        "_cached_qh_readiness",
+        "_cached_qh_preview",
+    ):
+        monkeypatch.setattr(panel, name, SimpleNamespace(clear=lambda name=name: cleared.append(name)))
+    monkeypatch.setattr(session, "_clear_stored_rollout_caches", lambda: cleared.append("supervision"))
+
+    session.clear_rollout_page_caches()
+
+    assert set(cleared) == {
+        "_cached_bundle_summary",
+        "_cached_deep_statistics",
+        "_cached_qh_readiness",
+        "_cached_qh_preview",
+        "supervision",
+    }
 
 
 @pytest.fixture

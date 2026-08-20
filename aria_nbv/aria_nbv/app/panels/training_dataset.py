@@ -153,6 +153,22 @@ def _cached_qh_preview(
     )
 
 
+def _clear_training_dataset_caches() -> None:
+    """Clear this page's cached read models and selection-bound session results."""
+
+    _cached_bundle_summary.clear()
+    _cached_deep_statistics.clear()
+    _cached_qh_readiness.clear()
+    _cached_qh_preview.clear()
+    for key in (
+        _VALIDATED_STATE_KEY,
+        _DEEP_STATE_KEY,
+        _QH_READINESS_STATE_KEY,
+        _QH_PREVIEW_STATE_KEY,
+    ):
+        st.session_state.pop(key, None)
+
+
 def _manual_paths(value: str) -> tuple[Path, ...]:
     """Parse newline-separated manual paths without fabricating artifacts."""
 
@@ -317,6 +333,14 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         "Compose one immutable VIN root observation store with explicit rollout supervision stores, "
         "then audit whether the resulting Q_H training bundle is usable."
     )
+    from ._stored_rollouts.session import clear_rollout_page_caches
+
+    if st.button(
+        "Refresh rollout caches",
+        help="Clear cached rollout and training-bundle read models after creating or replacing an artifact.",
+    ):
+        clear_rollout_page_caches()
+        st.rerun()
 
     paths = PathConfig()
     discovered_roots = discover_vin_store_dirs(paths.offline_cache_dir)

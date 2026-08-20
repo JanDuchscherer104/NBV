@@ -15,7 +15,7 @@ from ....configs import PathConfig
 from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
-from .session import _cached_projection, _cached_topology, _clear_stored_rollout_caches
+from .session import _cached_projection, _cached_topology, clear_rollout_page_caches
 from .shared import _ROLE_COLORS, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
@@ -66,8 +66,11 @@ def _render_store_selector(
             selected = candidate.resolve()
             if selected not in corpus:
                 corpus = (*corpus, selected)
-    if col_status.button("Refresh stores", help="Clear inspector caches after creating or replacing a store."):
-        _clear_stored_rollout_caches()
+    if col_status.button(
+        "Refresh rollout caches",
+        help="Clear cached rollout and training-bundle read models after creating or replacing an artifact.",
+    ):
+        clear_rollout_page_caches()
         st.rerun()
     if selected is not None and selected not in corpus:
         corpus = (*corpus, selected)
