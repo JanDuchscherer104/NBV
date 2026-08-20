@@ -1135,6 +1135,33 @@ def test_target_score_correlation_uses_rich_guide_builder() -> None:
     assert 'definition="Pearson r is the standardized covariance' in correlation_block
 
 
+def test_target_and_q_h_mask_guides_link_their_owning_contracts() -> None:
+    """Admission and trainability guides must not cite the unrelated RRI equation."""
+
+    observed_target_admission_url = (
+        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/target_selection.py#L96-L169"
+    )
+    target_label_admission_url = (
+        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/targets/protocol.py#L15-L128"
+    )
+    q_h_train_mask_url = (
+        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/zarr_store.py#L1386-L1429"
+    )
+
+    support_source = Path(validity_support.__file__).read_text(encoding="utf-8")
+    corpus_source = Path(overview_topology.__file__).read_text(encoding="utf-8")
+    corpus_admission = corpus_source[
+        corpus_source.index('title="Target admission outcomes"') : corpus_source.index("if summary.feasibility")
+    ]
+
+    assert support_source.count(observed_target_admission_url) == 1
+    assert observed_target_admission_url in corpus_admission
+    assert target_label_admission_url in support_source
+    assert q_h_train_mask_url in support_source
+    assert "Canonical ARIA-NBV RRI definition" not in support_source
+    assert "docs/typst/shared/equations/rri.typ" not in corpus_admission
+
+
 def test_primary_rollout_plot_guides_are_complete_at_each_constructor() -> None:
     """Primary inspector plots cannot silently regress to the generic guide."""
 

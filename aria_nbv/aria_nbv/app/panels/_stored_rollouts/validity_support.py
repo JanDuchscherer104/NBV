@@ -65,8 +65,8 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
                 uncertainty="All target rows remain in the denominator, including ambiguous, unmatched, and invalid rows; counts describe protocol coverage rather than effect size.",
                 external_references=(
                     (
-                        "Canonical ARIA-NBV RRI definition",
-                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                        "Canonical observed-target admission",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/target_selection.py#L96-L169",
                     ),
                 ),
                 definition="Actor target validity describes whether the target can drive an action; GT-label validity describes whether exactly one qualifying privileged match exists for oracle supervision.",
@@ -104,8 +104,12 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
                 uncertainty="Counts are exact within this store and the masks overlap by design; the display is a contract audit, not a reward distribution or a policy comparison.",
                 external_references=(
                     (
-                        "Canonical ARIA-NBV RRI definition",
-                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                        "Canonical V1 target-label admission",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/targets/protocol.py#L15-L128",
+                    ),
+                    (
+                        "Canonical candidate and Q_H train-mask validation",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/zarr_store.py#L1386-L1429",
                     ),
                 ),
                 definition="q_train_mask = actor_action_mask AND oracle_label_mask for valid V1 evidence; selection is not itself a trainability condition.",
