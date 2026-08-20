@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import os
 from collections.abc import Callable
@@ -13,7 +15,7 @@ import pandas as pd
 import pytest
 import zarr
 
-from aria_nbv.app.panels._stored_rollouts import overview_topology, qh_admission, session
+from aria_nbv.app.panels._stored_rollouts import failure_triage, inspect_rerun, overview_topology, qh_admission, session
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
@@ -190,6 +192,48 @@ def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytes
     overview_topology._render_validated_store_header("/tampered.zarr", validation_ok=False)
 
     assert messages == ["Coverage and physical-cost projections are withheld until store validation succeeds."]
+
+
+def test_failure_promotion_preserves_ids_and_selects_inspection_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Failure promotion changes only the Diagnose route while carrying stable ids."""
+
+    state: dict[str, object] = {
+        "stored_rollout_id": 3,
+        "stored_step_id": 8,
+    }
+    monkeypatch.setattr(failure_triage.st, "session_state", state)
+
+    failure_triage._carry_failure_to_inspect({"rollout_row_id": 12, "step_row_id": 19})
+
+    assert state == {
+        "stored_rollout_id": 12,
+        "stored_step_id": 19,
+        "stored_rollouts_section": "Diagnose a store",
+        "stored_rollouts_diagnose_mode": "Inspect, export, and Rerun",
+    }
+
+
+@pytest.mark.parametrize(
+    ("module", "reference"),
+    [
+        (failure_triage, "https://www.itl.nist.gov/div898/handbook/toolaids/pff/pmc.pdf"),
+        (inspect_rerun, "https://pytorch3d.org/docs/renderer_getting_started"),
+    ],
+)
+def test_diagnose_plot_guides_are_rich(module: object, reference: str) -> None:
+    """Diagnostic plot renderers opt into the reader-intent guide contract."""
+
+    tree = ast.parse(inspect.getsource(module))
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "ScientificExplanation"
+    ]
+    assert calls
+    for call in calls:
+        fields = {keyword.arg for keyword in call.keywords}
+        assert {"answer", "intuition", "visual_encoding", "uncertainty", "external_references"} <= fields
+        assert reference in ast.get_source_segment(inspect.getsource(module), call)
 
 
 def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
