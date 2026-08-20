@@ -21,6 +21,15 @@ from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
 
+_EVIDENCE_REPORTING_REFERENCE = (
+    "ARRIVE reporting guidance for individual data and summaries",
+    "https://arriveguidelines.org/arrive-guidelines/results/10a/explanation",
+)
+_FAILURE_COUNT_REFERENCE = (
+    "NIST Engineering Statistics Handbook: counts and nonconformities",
+    "https://www.itl.nist.gov/div898/handbook/toolaids/pff/pmc.pdf",
+)
+
 
 def _render_store_selector(
     paths: PathConfig,
@@ -159,6 +168,7 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
                     "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
                 ),
             ),
+            definition="An endpoint is the final factual selected step recorded for one rollout; early-terminated rollouts contribute their observed terminal value rather than an imputed horizon value.",
             source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
         ),
     )
@@ -195,6 +205,17 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
                 expected_pattern="Admitted targets have actor and GT validity; non-admitted categories remain visible rather than becoming low-RRI examples.",
                 failure_interpretation="A rise in ambiguous or unmatched rows indicates target or evidence coverage trouble, not an effect-size change.",
                 evidence_role="oracle/evaluation",
+                answer="The bars count every target outcome so that actor admission and privileged GT-label admission remain auditable separate decisions.",
+                intuition="An executable target is not automatically a trainable oracle-label target: exactly one same-class qualifying GT match is an independent requirement.",
+                visual_encoding="Each bar is the number of persisted targets in one combined actor-validity, GT-label-validity, and match-status category; color preserves label validity.",
+                uncertainty="These are additive protocol counts, not effect estimates. Invalid, ambiguous, unmatched, and below-threshold targets stay visible instead of being converted to low-reward examples.",
+                external_references=(
+                    (
+                        "Canonical ARIA-NBV RRI definition",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                    ),
+                ),
+                definition="A valid privileged label requires exactly one same-class GT match with strict oriented IoU greater than 0.20; equality and ambiguity are rejected.",
                 source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets/gt_match_status_id"),
             ),
         )
@@ -229,6 +250,12 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             expected_pattern="Clearance coverage is high where the geometry audit is available, while collision rates remain interpretable per cohort.",
             failure_interpretation="Missing coverage or elevated collision rates point to candidate geometry/support failures and warrant active-store drill-down.",
             evidence_role="actor-visible",
+            answer="The paired bars show whether each frozen generation cohort has enough collision and clearance evidence to assess action feasibility.",
+            intuition="Collision frequency and clearance coverage diagnose different issues: a candidate can be non-colliding yet lack the geometric evidence required for a clearance conclusion.",
+            visual_encoding="For every exact generation cohort, grouped bars show collision rate and the fraction with finite clearance evidence on the common fractional scale.",
+            uncertainty="Each rate is recomputed from additive persisted counts and zero denominators stay unavailable; cohorts are intentionally separated rather than averaged across incompatible candidate contracts.",
+            external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+            definition="Collision rate = collided evaluated candidates / evaluated candidates; clearance coverage = candidates with finite persisted clearance / its eligible persisted denominator.",
             source_fields=("reporting.RolloutCorpusSummary.feasibility", "candidate_diagnostics/path_collision_mask"),
         ),
     )
@@ -261,6 +288,12 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
             expected_pattern="Hard contract failures are absent or sparse and every count is traceable to a store.",
             failure_interpretation="Large counts identify debugging priorities, not policy-performance effects.",
             evidence_role="provenance",
+            answer="The bars prioritize the failure predicates occurring most often among the selected validated stores so an investigator can choose an evidence trail to inspect.",
+            intuition="Failure findings are operational signals at mixed rollout, step, candidate, target, and store grains; concentration identifies where to debug, not what policy is better.",
+            visual_encoding="Bar height is the additive number of emitted findings, x is exact failure kind, and color separates the persisted severity category.",
+            uncertainty="Counts depend on the selected corpus and failure rules and are not independent scientific samples; excluded-store reasons remain separate from these values.",
+            external_references=(_FAILURE_COUNT_REFERENCE,),
+            definition="A failure count is the number of emitted diagnostic predicates, not the number of independent rollouts or an estimated failure probability.",
             source_fields=("reporting.RolloutCorpusSummary.failure_counts", "inspection.suspicious_rollout_rows"),
         ),
     )
@@ -348,6 +381,12 @@ def _render_trust_and_topology(
                     expected_pattern="Manifest hashes resolve uniquely and required actor/oracle modalities have one owner.",
                     failure_interpretation="Missing or ambiguous links indicate incomplete local provenance, not invalid scientific values by themselves.",
                     evidence_role="provenance",
+                    answer="The Sankey maps which rollout payloads and external artifacts the selected store declares, resolves, infers, or fails to locate.",
+                    intuition="Scientific values can only be interpreted in context when their source, actor inputs, oracle material, and configuration references have one traceable owner.",
+                    visual_encoding="Nodes are artifact or modality classes and link width is the number of recorded relationships; it does not encode bytes, quality, or causal influence.",
+                    uncertainty="Topology is a provenance inventory, not a validity proof: a resolved path still requires the store's schema and semantic validation before scientific use.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="A topology link records a persisted or resolved relationship between rollout and VIN/store artifacts; its class states whether the relation is embedded, resolved, inferred, or missing.",
                     source_fields=("rollout manifest source lineage", "VIN manifest", "PathConfig", "mesh paths"),
                 ),
             )

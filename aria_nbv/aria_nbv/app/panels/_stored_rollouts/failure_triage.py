@@ -8,12 +8,15 @@ import streamlit as st
 
 from ....rollouts import RolloutZarrStoreReader
 from .session import _cached_failures
-from .shared import ScientificExplanation
+from .shared import (
+    STORED_ROLLOUTS_DIAGNOSE_MODE_KEY,
+    STORED_ROLLOUTS_DIAGNOSE_MODES,
+    STORED_ROLLOUTS_DIAGNOSE_SECTION,
+    STORED_ROLLOUTS_SECTION_KEY,
+    ScientificExplanation,
+)
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
-
-_SECTION_KEY = "stored_rollouts_section"
-_DIAGNOSE_MODE_KEY = "stored_rollouts_diagnose_mode"
 
 
 def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
@@ -80,5 +83,5 @@ def _carry_failure_to_inspect(row: dict[str, object]) -> None:
         st.session_state["stored_rollout_id"] = int(row["rollout_row_id"])
     if row.get("step_row_id") is not None:
         st.session_state["stored_step_id"] = int(row["step_row_id"])
-    st.session_state[_SECTION_KEY] = "Diagnose a store"
-    st.session_state[_DIAGNOSE_MODE_KEY] = "Inspect, export, and Rerun"
+    st.session_state[STORED_ROLLOUTS_SECTION_KEY] = STORED_ROLLOUTS_DIAGNOSE_SECTION
+    st.session_state[STORED_ROLLOUTS_DIAGNOSE_MODE_KEY] = STORED_ROLLOUTS_DIAGNOSE_MODES[1]

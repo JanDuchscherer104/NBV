@@ -69,6 +69,7 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
                         "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
                     ),
                 ),
+                definition="Actor target validity describes whether the target can drive an action; GT-label validity describes whether exactly one qualifying privileged match exists for oracle supervision.",
                 source_fields=(
                     "targets/target_valid_mask",
                     "targets/gt_label_valid_mask",
@@ -97,6 +98,17 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
                 expected_pattern="No selected/actor_action violation; selected-but-not-q_train may legitimately occur.",
                 failure_interpretation="A selected actor-invalid row is a hard contract failure; missing q_train is a label/cache issue, not invalid action support.",
                 evidence_role="derived training data",
+                answer="The bars make every observed combination of action validity, oracle-label validity, Q_H trainability, and selection explicit.",
+                intuition="The masks encode distinct contracts: a candidate must be executable to be selected, while trainability additionally requires valid privileged label evidence.",
+                visual_encoding="Each bar is the exact count of one four-bit mask pattern across the full persisted candidate shell.",
+                uncertainty="Counts are exact within this store and the masks overlap by design; the display is a contract audit, not a reward distribution or a policy comparison.",
+                external_references=(
+                    (
+                        "Canonical ARIA-NBV RRI definition",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                    ),
+                ),
+                definition="q_train_mask = actor_action_mask AND oracle_label_mask for valid V1 evidence; selection is not itself a trainability condition.",
                 source_fields=("candidates/actor_action_mask", "oracle_label_mask", "q_train_mask", "selected_mask"),
             ),
         )

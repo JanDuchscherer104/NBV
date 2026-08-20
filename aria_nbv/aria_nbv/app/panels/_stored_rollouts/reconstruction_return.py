@@ -19,6 +19,15 @@ from .shared import download_frame as _download_frame
 from .shared import plot_control_key as _plot_control_key
 from .shared import render_plot as _render_plot
 
+_RRI_REFERENCE = (
+    "Canonical ARIA-NBV RRI definition",
+    "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+)
+_EVIDENCE_REPORTING_REFERENCE = (
+    "ARRIVE reporting guidance for individual data and summaries",
+    "https://arriveguidelines.org/arrive-guidelines/results/10a/explanation",
+)
+
 _TEMPORAL_METRIC_LABELS = {
     "Cumulative target root gain": "cumulative_target_root_gain",
     "Selected one-step target root gain": "selected_target_root_gain",
@@ -228,6 +237,12 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
                     expected_pattern="Intervals and paired deltas are stable across cohorts rather than driven by one scene.",
                     failure_interpretation="Wide intervals or sign changes indicate weak evidence; they are not policy wins.",
                     evidence_role="oracle/evaluation",
+                    answer="The bars summarize endpoint differences only after source, target, recipe, budget, and rollout controls have been exactly matched across policies.",
+                    intuition="Pairing removes shared cohort context before comparing policies, so each delta asks how two policy outcomes differed on the same eligible experiment unit.",
+                    visual_encoding="Bar height is the median paired endpoint delta, color distinguishes metric where present, and whiskers are deterministic bootstrap intervals for the matched deltas.",
+                    uncertainty="Intervals describe resampling variation of the observed matched cohort, not proof of a general policy effect; small or mismatched cohorts remain blocked.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="Paired delta = endpoint under the first policy minus the matched endpoint under the comparison policy within one exact persisted cohort.",
                     source_fields=("inspection.paired_policy_comparison_rows", "rollouts", "steps"),
                 ),
             )
@@ -369,6 +384,12 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
             expected_pattern="Central tendency and dispersion change smoothly where repeated evidence exists, with sample size visible at every depth.",
             failure_interpretation="Wide IQR, small n, abrupt missingness, or divergent strata require row-level inspection; they are not automatically policy effects.",
             evidence_role=_temporal_evidence_role(metric),
+            answer=f"The trace summarizes how {metric_label.lower()} is observed to change with acquisition number for the selected descriptive grouping.",
+            intuition="Factual rollout steps are irregular observations, so each depth is summarized separately rather than treating one rollout trajectory as continuous evidence for another.",
+            visual_encoding="Each colored line is a group-specific median at one acquisition number; the translucent ribbon spans the linear-interpolated IQR and hover reports support, spread, and extrema.",
+            uncertainty="IQR and finite/total counts describe observed variability and missingness, not confidence intervals. Later depths include only factual rows that reached them.",
+            external_references=(_RRI_REFERENCE,),
+            definition="For a metric at one depth, median and quartiles are computed from finite factual selected-step values only; no missing depth is zero-filled or interpolated.",
             source_fields=(
                 "inspection.temporal_metric_summary_rows",
                 f"steps/{_TEMPORAL_SOURCE_FIELDS.get(metric, metric)}",
@@ -408,6 +429,12 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
                     expected_pattern="The raw trajectory should explain one aggregate contribution without hiding its exact step ids.",
                     failure_interpretation="Abrupt jumps or negative valid gains can identify an interesting case for Inspect/Rerun.",
                     evidence_role=_temporal_evidence_role(metric),
+                    answer="The line exposes the exact stored trajectory for one chosen rollout so the aggregate view can be traced back to factual step identifiers.",
+                    intuition="A case trace is valuable for debugging because it preserves the sequence that an aggregate median deliberately hides, without joining rows from different rollouts.",
+                    visual_encoding="Markers are the finite persisted selected steps of the chosen rollout, ordered by one-based acquisition number; hover retains stored step and policy identifiers.",
+                    uncertainty="This is one diagnostic case, not a population statistic. Missing steps are absent rather than imputed, and any apparent pattern requires comparison with the aggregate support above.",
+                    external_references=(_RRI_REFERENCE,),
+                    definition="Acquisition number is stored step_index + 1; step_index 0 is the first selected view, while the root baseline is not plotted as a rollout step.",
                     source_fields=("inspection.rollout_step_objective_rows", f"steps/{source_field}"),
                 ),
                 log_y_key=_plot_control_key("raw-trajectory", store_path, metric, selected_rollout),
@@ -533,6 +560,12 @@ def _render_selected_rank_and_geometry(store_path: str) -> None:
                     expected_pattern="Most selected actions have low rank and small regret without total diversity collapse.",
                     failure_interpretation="High regret suggests selection/model mismatch; negative valid rewards remain distinct from invalid rows.",
                     evidence_role="oracle/evaluation",
+                    answer="The scatter shows the opportunity cost of each selected action relative to the best valid oracle-scored option in its own candidate shell.",
+                    intuition="Rank records relative position and regret records magnitude, so using both distinguishes an action that is merely not first from one that loses meaningful target-root gain.",
+                    visual_encoding="Each point is one factual selected step; x is shell-local rank, y is best-valid minus selected gain, and color separates policy when available.",
+                    uncertainty="The oracle metric is privileged evaluation evidence and ranks are local to a candidate shell; this is not a causal policy comparison or a training target for invalid alternatives.",
+                    external_references=(_RRI_REFERENCE,),
+                    definition="Regret = max finite target-root gain among actor-valid candidates − target-root gain of the selected candidate for the same step.",
                     source_fields=(
                         "inspection.selected_candidate_rank_rows",
                         "candidates/actor_action_mask",
@@ -588,6 +621,12 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                     expected_pattern="Confidence can rise with evidence while entropy does not collapse identically across every sample.",
                     failure_interpretation="Near-zero entropy everywhere suggests collapse; low probability with high regret suggests selection mismatch.",
                     evidence_role=_temporal_evidence_role("selected_probability"),
+                    answer="The faceted traces reveal whether the persisted selection distribution is becoming concentrated or remains broad as rollout depth increases.",
+                    intuition="Probability describes the mass placed on the action actually selected, while entropy summarizes how dispersed the complete selection distribution was before sampling.",
+                    visual_encoding="Each line follows factual selected steps by policy or rollout; the two facets use separate y axes for selected probability and categorical entropy.",
+                    uncertainty="These are observed selection diagnostics, not calibrated uncertainty estimates. Varying candidate shells and missing steps can change them, so compare only matched recipes and budgets.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="Categorical entropy is −Σ pᵢ log pᵢ over the persisted selectable candidate distribution; selected probability is p for the sampled action.",
                     source_fields=("steps/selected_probability", "steps/selected_entropy"),
                 ),
             )
@@ -623,6 +662,12 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                     expected_pattern="Fanout remains sufficient across depth and invalidity does not abruptly dominate.",
                     failure_interpretation="Low fanout or rising invalidity points to geometry, collision, or generator-support failures.",
                     evidence_role="actor-visible",
+                    answer="The facets show whether the action set remains usable across factual rollout depth or is being eroded by invalid candidates.",
+                    intuition="A rollout may have many sampled candidates but few executable ones, so valid fanout and invalid fraction jointly expose support before any oracle reward is considered.",
+                    visual_encoding="Each line summarizes factual steps by policy or rollout; one facet is actor-valid candidate count and the other is the invalid fraction of the complete shell.",
+                    uncertainty="Counts and fractions are descriptive per observed candidate shell, not estimates of collision risk. Missing or early-terminated depths are not fabricated.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="Valid fanout is the count with actor_action_mask true; invalid fraction is 1 minus that count divided by the persisted sampled candidate-shell size.",
                     source_fields=("steps/num_valid_candidates", "steps/invalid_fraction"),
                 ),
             )
@@ -652,6 +697,12 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                     expected_pattern="Multiple intended families contribute without unexplained monopolies or disappearing depths.",
                     failure_interpretation="Single-family dominance can reflect policy preference, generator imbalance, or mask collapse and needs row-level inspection.",
                     evidence_role="provenance",
+                    answer="The bars identify which persisted candidate families supplied the actions actually selected at each factual rollout depth.",
+                    intuition="Selected-family provenance explains the realized behavior path, but it must be read beside full-shell availability because selection counts alone cannot tell whether a family had alternatives.",
+                    visual_encoding="Each bar is selected-step count for one family and depth, with policy facets retained when multiple policies are present; hover reports supporting fanout diagnostics.",
+                    uncertainty="This is post-selection provenance, not a reconstructed search tree or a causal family-effect estimate; absent families may be unavailable, invalid, or simply unselected.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="Selected-family provenance is the persisted mixture, position, and strategy identity of the candidate chosen for an actor-valid rollout transition.",
                     source_fields=(
                         "inspection.rollout_tree_summary_rows",
                         "candidate family ids",

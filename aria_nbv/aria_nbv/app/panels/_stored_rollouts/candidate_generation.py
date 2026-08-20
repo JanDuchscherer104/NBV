@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from itertools import pairwise
+from typing import TypedDict
 
 import numpy as np
 import pandas as pd
@@ -21,9 +22,26 @@ _CORRELATION_REFERENCE = (
     "SciPy Pearson correlation documentation",
     "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html",
 )
+_EVIDENCE_REPORTING_REFERENCE = (
+    "ARRIVE reporting guidance for individual data and summaries",
+    "https://arriveguidelines.org/arrive-guidelines/results/10a/explanation",
+)
+_PYTORCH3D_RENDERING_REFERENCE = (
+    "PyTorch3D renderer concepts",
+    "https://pytorch3d.org/docs/renderer_getting_started",
+)
 
 
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
+
+
+class _PairwiseCorrelation(TypedDict):
+    """Pair-local Pearson estimates and auditable exclusions for one heatmap."""
+
+    correlation: pd.DataFrame
+    counts: pd.DataFrame
+    reasons: dict[tuple[str, str], str]
+    has_finite_off_diagonal: bool
 
 
 def _render_candidate_population_evidence(store_path: str) -> None:
@@ -103,6 +121,12 @@ def _render_candidate_provenance_flow(store_path: str) -> None:
             expected_pattern="Intended center/view proposal signatures retain actor-valid support, while invalid rows terminate at explicit reasons and selected rows remain actor-valid.",
             failure_interpretation="Unknown provenance indicates missing persisted labels; concentrated invalid reasons indicate support loss; selection_contract_violation is a hard invariant failure.",
             evidence_role="provenance",
+            answer="The flow separates what the generator proposed, what the actor could execute, and what the rollout ultimately selected or rejected.",
+            intuition="Following one conserved candidate population through these stages distinguishes lack of support from a later selection or labeling problem.",
+            visual_encoding="Link width is the candidate count and the hover label gives its fraction of the filtered root population; nodes are ordered by provenance stage.",
+            uncertainty="This is an exact accounting of the filtered persisted rows, not a sampled estimate; filters change the root population and must be read with the result.",
+            external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+            definition="Actor-valid means the candidate satisfies executable-action constraints; selected rows are the persisted actions actually taken.",
             source_fields=(
                 "inspection.candidate_flow_rows",
                 "candidates/mixture_id",
@@ -167,6 +191,12 @@ def _render_selected_action_policy_flow(ranks: pd.DataFrame) -> None:
                 expected_pattern="Temperature-softmax covers more than rank one without collapsing to uniformly poor target-RRI ranks; greedy policies concentrate near the top.",
                 failure_interpretation="Unavailable ranks indicate missing oracle diagnostics; high-rank concentration can indicate excessive temperature or score/RRI mismatch.",
                 evidence_role="oracle/evaluation",
+                answer="The flow shows which policy produced each executed action and how that action ranked among the valid oracle-scored alternatives available at that same step.",
+                intuition="A selected action can be diverse without being arbitrary: its target-RRI rank gives a local opportunity-cost diagnostic after action validity has been enforced.",
+                visual_encoding="Link width is selected-step count; policy and temperature label the first stage, while the terminal node is the shell-local target-RRI rank bucket.",
+                uncertainty="Ranks are unavailable when oracle evaluation is absent and are shell-local, so the chart is descriptive rather than a cross-scene policy effect estimate.",
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                definition="Target-RRI rank orders finite target-RRI values only among actor-valid candidates in one persisted candidate shell.",
                 source_fields=(
                     "inspection.selected_candidate_rank_rows",
                     "rollouts/policy_id",
@@ -369,6 +399,12 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
                 expected_pattern="Useful families retain availability and non-degenerate normalized selection without monopolizing support.",
                 failure_interpretation="High raw selection with tiny availability can be unstable; zero availability is a generator/mask clue.",
                 evidence_role="actor-visible",
+                answer="The paired bars separate a family's opportunity to be chosen from the rate at which it is chosen when that opportunity exists.",
+                intuition="Raw selections conflate availability and preference, whereas selection divided by actor-valid support asks which usable family the policy favors.",
+                visual_encoding="For each family, one bar is its actor-valid fraction of the sampled shell and the other is selected divided by actor-valid count.",
+                uncertainty="Both fractions are exact store summaries; a low-support family can have a volatile normalized rate, so read availability before inferring preference.",
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                definition="Selection rate given availability = selected candidate rows / actor-valid candidate rows for that family.",
                 source_fields=("candidate position_id", "actor_action_mask", "selected_mask"),
             ),
         )
@@ -407,6 +443,12 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
                 expected_pattern="Trainable support is no larger than label availability permits, and selection stays within actor support.",
                 failure_interpretation="Missing groups, selected-only spikes, or large actor/train gaps identify generator, mask, or label-cache issues.",
                 evidence_role="derived training data",
+                answer="The grouped counts reveal where candidates are executable, label-trainable, or actually selected without pretending those masks form a single pipeline.",
+                intuition="Actor validity, oracle-label availability, and selection answer different questions; their overlap exposes where supervision or action support is lost.",
+                visual_encoding="Each bar is an exact count for one persisted provenance group and mask population; grouped bars permit within-group comparison.",
+                uncertainty="Counts are descriptive and mask populations overlap, so bar heights must not be added or read as mutually exclusive stages.",
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                definition="q_train marks candidates with both actor-action validity and the required oracle-label evidence for Q_H supervision.",
                 source_fields=(
                     "inspection.candidate_group_summary_rows",
                     f"candidate {breakdown_by}",
@@ -471,6 +513,12 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     expected_pattern="Higher-priority ranks follow higher scores while validity classes remain visibly distinct.",
                     failure_interpretation="Rank inversions, score ties, or high-scoring invalid targets indicate selection or matching problems.",
                     evidence_role="provenance",
+                    answer="The scatter checks whether the persisted ordinal priority is consistent with the configured score while retaining each target's validity status.",
+                    intuition="Rank is an ordering of a score, so inversions, ties, or valid/invalid separation make target-selection behavior inspectable rather than implicit.",
+                    visual_encoding="Each mark is one target proposal; horizontal position is its stored rank, vertical position is score, and visual groups retain GT-match status and label validity.",
+                    uncertainty="This is a finite proposal audit, not a calibration curve; scores are configuration-dependent and should only be compared under the same target protocol.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="Selection rank is the persisted ordinal priority assigned by the target-selection procedure; smaller ranks denote earlier priority.",
                     source_fields=("targets/selection_rank", "targets/selection_score", "targets/gt_match_status_id"),
                 ),
             )
@@ -506,6 +554,12 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                         expected_pattern="Support contributes monotonically without becoming the only determinant of score.",
                         failure_interpretation="High scores at negligible support or validity-separated clusters can reveal weighting or GT-association issues.",
                         evidence_role="oracle/evaluation",
+                        answer="The scatter shows whether the selected support diagnostic contributes plausibly to the persisted target-selection score.",
+                        intuition="Support should inform confidence that a target is observable, but a composite score should not be explained by one diagnostic alone.",
+                        visual_encoding="Each mark is one finite target proposal; x is the chosen support diagnostic, y is selection score, and groups retain validity and GT-match evidence.",
+                        uncertainty="The apparent relationship is descriptive and may be shaped by other score terms, target sources, or missing GT labels; it is not a fitted effect.",
+                        external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                        definition="The persisted selection score is a configured target-priority composite; its individual components are diagnostics, not independent outcomes.",
                         source_fields=(
                             f"targets/{support_field}",
                             "targets/selection_score",
@@ -579,12 +633,7 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     intuition="Pearson r compares centered component values within the same finite pair; it diagnoses redundancy or opposition but does not establish causality.",
                     visual_encoding="Cell color encodes r from -1 to 1; each annotation and hover label reports r and the exact pairwise finite n.",
                     uncertainty="Pairs with n=2 are algebraically forced to |r|=1 and are not substantive evidence; missing or constant pairs are withheld.",
-                    external_references=(
-                        (
-                            "SciPy Pearson correlation documentation",
-                            "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html",
-                        ),
-                    ),
+                    external_references=(_CORRELATION_REFERENCE,),
                     definition="Pearson r is the standardized covariance of the same pair-local finite observations.",
                     source_fields=tuple(f"targets/{name}" for name in component_cols),
                 ),
@@ -597,7 +646,7 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
             st.info("Correlation heatmap unavailable: no target-score components have finite observations.")
 
 
-def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> dict[str, object]:
+def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> _PairwiseCorrelation:
     """Prepare pair-local Pearson evidence without changing reporting semantics."""
 
     numeric = frame.loc[:, columns].apply(pd.to_numeric, errors="coerce")
@@ -607,16 +656,22 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> di
     has_finite_off_diagonal = False
     for left in columns:
         for right in columns:
-            pair = pd.DataFrame({"left": numeric[left], "right": numeric[right]}).dropna()
-            n = len(pair)
+            pair_values = numeric.loc[:, [left, right]].to_numpy(dtype=float)
+            finite = np.isfinite(pair_values).all(axis=1)
+            finite_values = pair_values[finite]
+            n = len(finite_values)
             counts.loc[left, right] = n
             if n < 2:
                 reasons[(left, right)] = f"insufficient finite paired rows (n={n}; need n>=2)"
                 continue
-            if pair["left"].nunique() == 1 or pair["right"].nunique() == 1:
+            left_values, right_values = finite_values[:, 0], finite_values[:, 1]
+            if np.unique(left_values).size == 1 or np.unique(right_values).size == 1:
                 reasons[(left, right)] = "constant pair value (zero variance)"
                 continue
-            value = float(pair["left"].corr(pair["right"]))
+            value = float(pd.Series(left_values).corr(pd.Series(right_values)))
+            if not np.isfinite(value):
+                reasons[(left, right)] = "non-finite Pearson correlation after finite pair filtering"
+                continue
             correlation.loc[left, right] = value
             if left != right:
                 has_finite_off_diagonal = True
@@ -684,6 +739,12 @@ def _render_candidate_geometry_diagnostics(
                     evidence_role="oracle/evaluation"
                     if metric in {"target_root_gain", "target_rri"}
                     else "actor-visible",
+                    answer=f"The distribution shows the observed support and tails of {metric}, with invalidity retained as a diagnostic stratum.",
+                    intuition="Physical and scoring diagnostics are most useful when their full range and any validity-specific modes are visible before selecting an individual row to inspect.",
+                    visual_encoding="Histogram bars count finite candidate rows, color separates invalidity reasons, and the marginal box plot summarizes center, spread, and outliers.",
+                    uncertainty="This is a bounded interactive sample rather than a corpus estimate; rare tails can be absent at the current plot limit and invalid rows are not silently imputed.",
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                    definition="Metric suffixes `_m` and `_deg` denote metres and degrees; target-root gain and RRI are dimensionless oracle-evaluation quantities.",
                     source_fields=(f"candidate audit/{metric}", "candidates/invalid_reason_bitset"),
                 ),
             )
@@ -713,6 +774,12 @@ def _render_candidate_geometry_diagnostics(
                     expected_pattern="Families occupy their intended local regions with selected actions inside actor-valid support.",
                     failure_interpretation="Collapsed clusters, extreme radii, or family overlap can expose pose, frame, or generator defects.",
                     evidence_role="actor-visible",
+                    answer="The ground-plane map tests whether each candidate family occupies its intended local support around its own rollout root.",
+                    intuition="Subtracting every rollout root makes local candidate motion comparable without mixing unrelated scene-world origins.",
+                    visual_encoding="Each point is one candidate center in root-relative metres; color is family and symbol retains whether the candidate was selected.",
+                    uncertainty="Only bounded plotted rows with finite coordinates appear, so this supports geometric diagnosis rather than an exhaustive count or an uncertainty estimate.",
+                    external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
+                    definition="Root-relative position = candidate camera center in world coordinates minus the selected rollout root camera center, expressed in metres.",
                     source_fields=(
                         "inspection.root_relative_candidate_rows",
                         "candidate pose_world_cam",
@@ -750,6 +817,12 @@ def _render_candidate_geometry_diagnostics(
                         expected_pattern="Families occupy their intended local volume with selected actions inside actor-valid support.",
                         failure_interpretation="Flattened, collapsed, or implausibly elevated clusters can expose frame, pose, or generator defects.",
                         evidence_role="actor-visible",
+                        answer="The three-dimensional view tests the same root-relative candidate support while making vertical displacement visible rather than hover-only.",
+                        intuition="A family can appear plausible in the ground plane but still collapse or drift vertically, so the Z-up dimension is a separate geometry check.",
+                        visual_encoding="Each point is one finite root-relative candidate center; x, y, and z are metres, color is family, and symbol retains selection state.",
+                        uncertainty="The display is bounded to interactive rows and preserves only finite coordinates; it is a diagnostic projection, not a rendered reconstruction or coverage proof.",
+                        external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
+                        definition="ARIA uses a right-handed Z-up world convention here; the plotted coordinates are local differences, not absolute scene positions.",
                         source_fields=(
                             "inspection.root_relative_candidate_rows",
                             "candidate pose_world_cam",
@@ -786,6 +859,12 @@ def _render_candidate_geometry_diagnostics(
                     expected_pattern="Executed yaw support overlaps relevant target bearings without implausible spikes.",
                     failure_interpretation="Systematic offsets suggest frame errors; narrow motion support suggests generator or constraint collapse.",
                     evidence_role="actor-visible",
+                    answer="The overlaid angle distributions show whether proposed motion yaw reaches the target-relative bearings represented in the stored candidate audit.",
+                    intuition="A candidate family can meet translation limits yet miss the target if its camera orientation is systematically offset from useful bearing directions.",
+                    visual_encoding="Histogram position is yaw angle in degrees; color distinguishes target-bearing diagnostics from executed motion-yaw changes.",
+                    uncertainty="Finite diagnostic rows are counted without a directional-confidence model; wrap-around and sparse tails require row-level interpretation rather than a single average.",
+                    external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
+                    definition="Yaw is the persisted signed horizontal rotation in degrees under the rollout coordinate convention, displayed on [-180°, 180°].",
                     source_fields=(
                         "candidate_diagnostics/target_bearing_yaw_deg",
                         "candidate_diagnostics/motion_yaw_delta_deg",
@@ -817,6 +896,12 @@ def _render_candidate_geometry_diagnostics(
                         expected_pattern="Samples respect configured motion support and selected actions avoid extreme corners.",
                         failure_interpretation="Outliers or family-specific streaks can indicate transform errors, unrealistic moves, or constraint failures.",
                         evidence_role="actor-visible",
+                        answer="The scatter checks whether sampled and selected actions jointly respect plausible translation and rotation support.",
+                        intuition="A view action is geometric: step length and yaw change must be interpreted together because an apparently modest value on either axis can be implausible in combination.",
+                        visual_encoding="Each finite candidate is plotted by translation metres and yaw degrees; color identifies family and symbol marks selected candidates.",
+                        uncertainty="This is a bounded audit sample with no fitted motion model; density and empty regions are diagnostic clues, not calibrated probabilities.",
+                        external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
+                        definition="Motion step length is camera-center displacement in metres and motion yaw delta is the signed change in horizontal orientation in degrees.",
                         source_fields=(
                             "candidate_diagnostics/motion_step_length_m",
                             "candidate_diagnostics/motion_yaw_delta_deg",
@@ -846,6 +931,12 @@ def _render_candidate_geometry_diagnostics(
                         expected_pattern="Selected rewards occupy competitive support without every family collapsing to one value.",
                         failure_interpretation="Selected low-tail rewards suggest policy mismatch; missing families suggest generator or label coverage gaps.",
                         evidence_role="oracle/evaluation",
+                        answer="The boxes compare the oracle target-root-gain support offered by each family with the values on the actions actually selected.",
+                        intuition="Family-level reward support asks what choices were available, while selected marks reveal which part of that support the behavior policy used.",
+                        visual_encoding="Each box summarizes finite candidate gains by family and selected state; outliers remain visible instead of being folded into an average.",
+                        uncertainty="Only candidates with finite privileged oracle labels contribute, and the bounded plot sample is descriptive; invalid or unlabeled rows are excluded rather than assigned a poor gain.",
+                        external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+                        definition="Target root gain is the target reconstruction-error reduction normalized by the root reconstruction error; negative finite values remain valid measurements.",
                         source_fields=(
                             "candidates/target_root_gain",
                             "candidates/selected_mask",
