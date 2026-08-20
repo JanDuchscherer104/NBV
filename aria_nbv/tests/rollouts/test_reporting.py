@@ -131,6 +131,42 @@ def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_suppor
     assert_frame_equal(summary.failure_counts, repeated.failure_counts)
 
 
+def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(tmp_path) -> None:
+    """Factual depth rows combine only inside one persisted rollout contract."""
+
+    shared = {"profile": "realistic_core_60"}
+    matching_records = build_rollout_records(horizon=2, num_samples=6, seed=301)[:1]
+    first = write_rollout_zarr_store(
+        tmp_path / "first.zarr",
+        matching_records,
+        manifest_context=RolloutStoreManifestContext(writer_config=shared),
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "second.zarr",
+        matching_records,
+        manifest_context=RolloutStoreManifestContext(writer_config=shared),
+    )
+    incompatible = write_rollout_zarr_store(
+        tmp_path / "incompatible.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=303)[:1],
+        manifest_context=RolloutStoreManifestContext(writer_config={"profile": "rich_local_60"}),
+    )
+
+    summary = build_rollout_corpus_summary((incompatible.store_dir, second.store_dir, first.store_dir))
+    temporal = summary.temporal_summary
+    matching = temporal[
+        (temporal["metric"] == "cumulative_target_root_gain") & (temporal["profile"] == "realistic_core_60")
+    ]
+
+    assert set(temporal["profile"]) == {"realistic_core_60", "rich_local_60"}
+    assert matching["contract_id"].nunique() == 1
+    assert matching["store_count"].tolist() == [2, 2]
+    assert matching["total_count"].tolist() == [2, 2]
+    assert matching["finite_count"].tolist() == [2, 2]
+    assert matching["missing_count"].tolist() == [0, 0]
+    assert np.allclose(matching["iqr_width"], matching["q75"] - matching["q25"])
+
+
 def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:
     """The report seam and CLI should expose the same compact statistics."""
 

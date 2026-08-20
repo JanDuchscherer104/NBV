@@ -12,6 +12,7 @@ import streamlit as st
 
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import rollout_endpoint_metric_summary
+from ....rollouts.reporting import RolloutCorpusSummary
 from .session import _cached_projection
 from .shared import ScientificExplanation
 from .shared import download_frame as _download_frame
@@ -49,6 +50,73 @@ _TEMPORAL_EVIDENCE_ROLES: dict[
     "selected_probability": "actor-visible",
     "selected_entropy": "actor-visible",
 }
+
+
+def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
+    """Show the default factual corpus trajectories, separated by contract."""
+
+    st.subheader("Corpus reward and reconstruction")
+    if summary is None:
+        st.info("Build the corpus summary in Overview before viewing corpus trajectories.")
+        return
+    temporal = summary.temporal_summary
+    if temporal.empty:
+        st.info("No validated factual temporal rows are available.")
+        return
+    for metric, label in (
+        ("cumulative_target_root_gain", "Cumulative target root gain"),
+        ("cumulative_target_rri", "Cumulative target RRI"),
+    ):
+        metric_rows = temporal[temporal["metric"] == metric].copy()
+        if metric_rows.empty:
+            continue
+        for contract_id, rows in metric_rows.groupby("contract_id", sort=True, dropna=False):
+            contract = str(rows["contract"].iloc[0])
+            rows = rows.copy()
+            rows["trajectory"] = rows.apply(
+                lambda row: (
+                    f"{row['policy']} · T={row['temperature']} · H={row['horizon']} · "
+                    f"B={row['branch_factor']} · beam={row['beam_width']}"
+                ),
+                axis=1,
+            )
+            store_count = int(rows["store_count"].max())
+            per_depth = "; ".join(
+                f"{trajectory} ({', '.join(f'depth {int(step)}: n={int(count)}' for step, count in depth_rows.groupby('step_index', sort=True)['total_count'].sum().items())})"
+                for trajectory, depth_rows in rows.groupby("trajectory", sort=True)
+            )
+            iqr_width = pd.to_numeric(rows["iqr_width"], errors="coerce").max()
+            cols = st.columns(3)
+            cols[0].metric("Validated shards", store_count)
+            cols[1].metric("Observed rows", f"{int(rows['finite_count'].sum()):,} / {int(rows['total_count'].sum()):,}")
+            cols[2].metric("Maximum IQR width", "n/a" if pd.isna(iqr_width) else f"{float(iqr_width):.3g}")
+            st.caption(
+                f"**{label}** — contract: `{contract}` (`{contract_id}`); per-depth factual n per trajectory: {per_depth}. "
+                "Ribbon is IQR, not a confidence interval. Later depths include only observed factual rows."
+            )
+            _render_plot(
+                _temporal_summary_figure(rows, group_field="trajectory", metric_label=label),
+                ScientificExplanation(
+                    question=f"How does {label.lower()} evolve across all compatible selected shards?",
+                    population="One factual selected-step row per compatible store, policy, temperature, rollout controls, and depth; the trace never connects raw rollout rows.",
+                    metric=f"Median with linear-interpolated IQR; units are {rows['units'].iloc[0]}.",
+                    denominator_masks="Each depth reports finite_count / total_count. Statistics use finite factual rows only: no zero-fill, depth interpolation, or failed-store values.",
+                    comparability="Only rows with this persisted profile/candidate/oracle/return contract are pooled. Policy, temperature, horizon, branch factor, and beam width remain separate trajectories.",
+                    expected_pattern="The ribbon can be visually narrow at this scale even with nonzero IQR; hover and the maximum-width card expose its actual magnitude.",
+                    failure_interpretation="Small n, missing later depth, or divergent traces are evidence to inspect, not a confidence interval or policy conclusion.",
+                    evidence_role="oracle/evaluation",
+                    source_fields=(
+                        "reporting.RolloutCorpusSummary.temporal_summary",
+                        "inspection.temporal_metric_summary_rows",
+                    ),
+                ),
+                log_y_key=_plot_control_key("corpus-temporal", contract_id, metric),
+            )
+            with st.expander(f"{label} rows and CSV · {contract_id}", expanded=False):
+                st.dataframe(rows.drop(columns="trajectory"), hide_index=True, width="stretch")
+                _download_frame(
+                    f"Download {label} CSV", f"corpus-{metric}-{contract_id}.csv", rows.drop(columns="trajectory")
+                )
 
 
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
@@ -297,6 +365,8 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
                 ordered["finite_count"],
                 ordered["total_count"],
                 ordered["missing_count"] / ordered["total_count"].clip(lower=1),
+                ordered["store_count"] if "store_count" in ordered else np.ones(len(ordered), dtype=np.int64),
+                ordered["q75"] - ordered["q25"],
                 ordered["mean"],
                 ordered["min"],
                 ordered["max"],
@@ -338,8 +408,9 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
                 hovertemplate=(
                     f"{group_field}={group_value}<br>step=%{{x}}<br>median=%{{y:.4g}}"
                     "<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}"
-                    "<br>missing=%{customdata[2]:.1%}<br>mean=%{customdata[3]:.4g}"
-                    "<br>min=%{customdata[4]:.4g}<br>max=%{customdata[5]:.4g}<extra></extra>"
+                    "<br>missing=%{customdata[2]:.1%}<br>stores=%{customdata[3]:.0f}"
+                    "<br>IQR width=%{customdata[4]:.4g}<br>mean=%{customdata[5]:.4g}"
+                    "<br>min=%{customdata[6]:.4g}<br>max=%{customdata[7]:.4g}<extra></extra>"
                 ),
             )
         )

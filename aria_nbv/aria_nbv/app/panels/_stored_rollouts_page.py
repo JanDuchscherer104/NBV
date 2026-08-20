@@ -17,7 +17,7 @@ from ._stored_rollouts import overview_topology as overview
 from ._stored_rollouts import reconstruction_return as reconstruction
 from ._stored_rollouts.shared import download_json, render_stale_store_boundary
 
-_SECTIONS = ("Overview", "Evidence", "Failures", "Drill-down")
+_SECTIONS = ("Overview", "Reward & reconstruction", "Admission & feasibility", "Failures", "Drill-down")
 _SECTION_KEY = "stored_rollouts_section"
 
 
@@ -75,18 +75,27 @@ def render_stored_rollouts_page() -> None:
             )
     if tabs[1].open:
         with tabs[1]:
-            overview._render_corpus_evidence(corpus_summary)
+            reconstruction._render_corpus_temporal_evidence(corpus_summary)
+            overview._render_corpus_endpoint_distributions(corpus_summary)
             if current:
-                with st.expander("Active-store scientific evidence"):
+                with st.expander("Active-store reward and reconstruction drill-down", expanded=False):
                     reconstruction._render_scientific_evidence(reader)
-                with st.expander("Active-store targets and action support"):
-                    validity_support._render_targets_and_support(reader)
             else:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
                 )
     if tabs[2].open:
         with tabs[2]:
+            overview._render_corpus_admission(corpus_summary)
+            if current:
+                with st.expander("Active-store target, support, clearance, and collision drill-down", expanded=False):
+                    validity_support._render_targets_and_support(reader)
+            else:
+                render_stale_store_boundary(
+                    validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
+                )
+    if tabs[3].open:
+        with tabs[3]:
             overview._render_corpus_failures(corpus_summary)
             if current:
                 failure_triage._render_failure_triage(reader)
@@ -94,8 +103,8 @@ def render_stored_rollouts_page() -> None:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
                 )
-    if tabs[3].open:
-        with tabs[3]:
+    if tabs[4].open:
+        with tabs[4]:
             overview._render_corpus_details(corpus_summary)
             if current:
                 inspect_rerun._render_inspect_export_rerun(
