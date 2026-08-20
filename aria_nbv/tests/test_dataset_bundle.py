@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import torch
+from efm3d.aria.pose import PoseTW
 
+from aria_nbv.data_handling.qh_data import QhActorTensors, QhChain, QhDatasetConfig
+from aria_nbv.data_handling.qh_data.views import QhChainKey, QhSupervision
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
@@ -14,13 +19,18 @@ from aria_nbv.data_handling.vin_store.format import (
     VinOfflineShardSpec,
 )
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
+from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.dataset_bundle import (
     DatasetBundleSelection,
     build_dataset_bundle_summary,
+    build_qh_corpus_readiness,
     compute_dataset_bundle_deep_statistics,
+    preview_qh_batch,
     scan_root_gt_obb_target_opportunities,
 )
+from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
+from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 
@@ -39,7 +49,7 @@ def _write_root_store(root: Path) -> tuple[Path, str]:
             candidate_pcs=False,
             gt_obbs=True,
         ),
-        stats={"num_samples": 2, "num_train": 1, "num_val": 1},
+        stats={"num_samples": 2, "num_train": 1, "num_val": 1, "storage_bytes": 200},
         provenance={},
         shards=[],
     )
@@ -83,6 +93,7 @@ def _write_rollout_store(
             "split_manifest": [f"split-{name}"],
         },
         "generation": {"writer_config": {"profile": "pilot"}},
+        "storage_bytes": 600,
         "source_coverage": {
             "num_source_rows": 1,
             "scene_counts": {"scene-a": 1},
@@ -103,6 +114,90 @@ def _write_rollout_store(
     }
     (store / "manifest.json").write_text(json.dumps(payload), encoding="utf-8")
     return store
+
+
+_QH_CONTRACT = QhDataContract(
+    schema_version=ROLLOUT_ZARR_SCHEMA_VERSION,
+    target_protocol="v0_gt_input",
+    reward_metric="target-root-gain",
+    return_semantics="finite-horizon",
+    td_semantics="fitted-q",
+    discount_gamma=0.95,
+    reason_code_version="reasons-v1",
+    actor_store_version=str(OFFLINE_DATASET_VERSION),
+)
+
+
+def _qh_chain(*, scene: str, steps: int, width: int, offset: int) -> QhChain:
+    identity = PoseTW().tensor()
+    candidate_poses = torch.stack([identity] * (steps * width)).reshape(steps, width, 12)
+    step_mask = torch.ones(steps, dtype=torch.bool)
+    candidate_mask = torch.ones(steps, width, dtype=torch.bool)
+    history_mask = torch.arange(steps)[:, None] > torch.arange(steps)
+    return QhChain(
+        actor=QhActorTensors(
+            vin_snippet=VinSnippetView(
+                points_world=torch.zeros(2, 3),
+                lengths=torch.tensor([2]),
+                t_world_rig=PoseTW(torch.stack([identity])),
+                t_world_snippet=PoseTW(torch.stack([identity])),
+            ),
+            root_pose_world=identity,
+            target_pose_relative_root=identity,
+            target_extents=torch.ones(3),
+            candidate_pose_relative_root=candidate_poses,
+            candidate_mask=candidate_mask,
+            action_mask=candidate_mask,
+            history_pose_relative_root=torch.zeros(steps, steps, 12),
+            history_mask=history_mask,
+            horizon_remaining=torch.arange(steps, 0, -1),
+            step_mask=step_mask,
+        ),
+        supervision=QhSupervision(
+            label_mask=candidate_mask,
+            candidate_reward=torch.ones(steps, width),
+            selected_index=torch.zeros(steps, dtype=torch.int64),
+            discount=torch.cat((torch.full((max(steps - 1, 0),), 0.95), torch.zeros(1))),
+            terminal=torch.arange(steps) == steps - 1,
+        ),
+        key=QhChainKey(offset, offset, offset, scene, offset),
+    )
+
+
+class _QhStageDataset:
+    def __init__(
+        self,
+        stage: Stage,
+        chains: tuple[QhChain, ...],
+        *,
+        contract: QhDataContract = _QH_CONTRACT,
+    ) -> None:
+        self.stage = stage
+        self.chains = chains
+        self.contract = contract
+        self.scenes = frozenset(chain.key.scene_id for chain in chains)
+        self.max_horizon = max((chain.num_steps for chain in chains), default=0)
+        self.provenance = {"stage": stage, "stores": ["fixture.zarr"]}
+
+    def __len__(self) -> int:
+        return len(self.chains)
+
+    def __getitem__(self, index: int) -> QhChain:
+        return self.chains[index]
+
+
+def _patch_qh_stages(
+    monkeypatch,
+    stages: dict[Stage, _QhStageDataset],
+    captured: list[QhDatasetConfig] | None = None,
+) -> None:
+    def _setup(config: QhDatasetConfig) -> _QhStageDataset:
+        if captured is not None:
+            captured.append(config)
+        assert config.split is not None
+        return stages[config.split]
+
+    monkeypatch.setattr(QhDatasetConfig, "setup_target", _setup)
 
 
 def test_lightweight_bundle_aggregates_compatible_rollouts_without_duplicating_root(tmp_path: Path) -> None:
@@ -128,6 +223,144 @@ def test_lightweight_bundle_aggregates_compatible_rollouts_without_duplicating_r
     assert evidence.aggregate["q_h_trainable_candidates"] is None
     assert all(row["included_in_training_totals"] for row in evidence.rollouts)
     json.dumps(evidence.to_jsonable(), sort_keys=True)
+
+
+def test_qh_readiness_constructs_real_datamodule_and_normalizes_storage(monkeypatch, tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="qh.zarr", source_hash=source_hash)
+    stages = {
+        Stage.TRAIN: _QhStageDataset(
+            Stage.TRAIN,
+            (
+                _qh_chain(scene="scene-train", steps=1, width=2, offset=0),
+                _qh_chain(scene="scene-train", steps=2, width=2, offset=1),
+            ),
+        ),
+        Stage.VAL: _QhStageDataset(
+            Stage.VAL,
+            (_qh_chain(scene="scene-val", steps=1, width=2, offset=2),),
+        ),
+        Stage.TEST: _QhStageDataset(
+            Stage.TEST,
+            (_qh_chain(scene="scene-test", steps=1, width=2, offset=3),),
+        ),
+    }
+    captured: list[QhDatasetConfig] = []
+    _patch_qh_stages(monkeypatch, stages, captured)
+
+    readiness = build_qh_corpus_readiness(
+        DatasetBundleSelection(root, (rollout,)),
+        batch_size=2,
+        seed=17,
+    )
+
+    assert readiness.verdict == "Ready"
+    assert readiness.scene_disjoint is True
+    assert [row.stage for row in readiness.stages] == [Stage.TRAIN, Stage.VAL, Stage.TEST]
+    assert [row.chain_count for row in readiness.stages] == [2, 1, 1]
+    assert [row.state_count for row in readiness.stages] == [3, 1, 1]
+    assert [row.trainable_candidate_count for row in readiness.stages] == [6, 2, 2]
+    assert readiness.loader_settings == {
+        "batch_size": 2,
+        "num_workers": 0,
+        "pin_memory": False,
+        "persistent_workers": False,
+        "seed": 17,
+    }
+    assert readiness.contract is not None and readiness.contract["target_protocol"] == "v0_gt_input"
+    assert [metric.value for metric in readiness.storage] == [100.0, 150.0, 120.0, 60.0]
+    assert [config.split for config in captured] == [Stage.TRAIN, Stage.VAL, Stage.TEST]
+    assert all(config.actor.store_dir == root for config in captured)
+    json.dumps(readiness.to_jsonable(), sort_keys=True)
+
+
+def test_qh_batch_preview_is_seeded_and_reports_real_padding(monkeypatch, tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="qh.zarr", source_hash=source_hash)
+    stages = {
+        Stage.TRAIN: _QhStageDataset(
+            Stage.TRAIN,
+            (
+                _qh_chain(scene="scene-train", steps=1, width=2, offset=0),
+                _qh_chain(scene="scene-train", steps=2, width=1, offset=1),
+            ),
+        ),
+        Stage.VAL: _QhStageDataset(Stage.VAL, ()),
+        Stage.TEST: _QhStageDataset(Stage.TEST, ()),
+    }
+    _patch_qh_stages(monkeypatch, stages)
+    selection = DatasetBundleSelection(root, (rollout,))
+
+    first = preview_qh_batch(selection, stage=Stage.TRAIN, chain_index=1, batch_size=2, seed=11)
+    second = preview_qh_batch(selection, stage="train", chain_index=1, batch_size=2, seed=11)
+
+    assert first == second
+    assert first.selected_chain_steps == 2
+    assert first.shapes["candidate_pose_relative_root"] == (2, 2, 2, 12)
+    assert first.shapes["label_mask"] == (2, 2, 2)
+    assert sorted(first.batch_step_counts) == [1, 2]
+    assert first.step_padding_count == 1
+    assert first.candidate_padding_count == 4
+    assert first.action_count == first.trainable_candidate_count == 4
+    json.dumps(first.to_jsonable(), sort_keys=True)
+
+
+def test_qh_readiness_fails_closed_for_empty_train_overlap_and_contract_mismatch(monkeypatch, tmp_path: Path) -> None:
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="qh.zarr", source_hash=source_hash)
+    selection = DatasetBundleSelection(root, (rollout,))
+
+    empty_train = {
+        Stage.TRAIN: _QhStageDataset(Stage.TRAIN, ()),
+        Stage.VAL: _QhStageDataset(Stage.VAL, (_qh_chain(scene="scene-val", steps=1, width=1, offset=0),)),
+        Stage.TEST: _QhStageDataset(Stage.TEST, ()),
+    }
+    _patch_qh_stages(monkeypatch, empty_train)
+    empty = build_qh_corpus_readiness(selection)
+    assert empty.verdict == "Blocked"
+    assert "training stage" in empty.blockers[0]
+
+    overlap = {
+        Stage.TRAIN: _QhStageDataset(Stage.TRAIN, (_qh_chain(scene="shared", steps=1, width=1, offset=0),)),
+        Stage.VAL: _QhStageDataset(Stage.VAL, (_qh_chain(scene="shared", steps=1, width=1, offset=1),)),
+        Stage.TEST: _QhStageDataset(Stage.TEST, ()),
+    }
+    _patch_qh_stages(monkeypatch, overlap)
+    overlapping = build_qh_corpus_readiness(selection)
+    assert overlapping.verdict == "Blocked"
+    assert "overlap scenes" in overlapping.blockers[0]
+
+    mismatch = {
+        Stage.TRAIN: _QhStageDataset(Stage.TRAIN, (_qh_chain(scene="train", steps=1, width=1, offset=0),)),
+        Stage.VAL: _QhStageDataset(
+            Stage.VAL,
+            (_qh_chain(scene="val", steps=1, width=1, offset=1),),
+            contract=replace(_QH_CONTRACT, reward_metric="scene-rri"),
+        ),
+        Stage.TEST: _QhStageDataset(Stage.TEST, ()),
+    }
+    _patch_qh_stages(monkeypatch, mismatch)
+    incompatible = build_qh_corpus_readiness(selection)
+    assert incompatible.verdict == "Blocked"
+    assert "incompatible learning contracts" in incompatible.blockers[0]
+
+
+def test_qh_readiness_rejects_bundle_binding_before_dataset_construction(monkeypatch, tmp_path: Path) -> None:
+    root, _source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="tampered.zarr", source_hash="wrong-root")
+    called = False
+
+    def _unexpected_setup(_config: QhDatasetConfig):
+        nonlocal called
+        called = True
+        raise AssertionError("dataset construction must not run")
+
+    monkeypatch.setattr(QhDatasetConfig, "setup_target", _unexpected_setup)
+    readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)))
+
+    assert readiness.verdict == "Blocked"
+    assert not called
+    assert any("manifest hash" in blocker for blocker in readiness.blockers)
 
 
 def test_incompatible_hash_and_split_rows_remain_visible_but_are_excluded(tmp_path: Path) -> None:
