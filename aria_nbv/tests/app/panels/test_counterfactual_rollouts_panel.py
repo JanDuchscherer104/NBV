@@ -1112,6 +1112,84 @@ def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
     assert shared.plot_control_key("summary", "a") != shared.plot_control_key("summary", "b")
 
 
+def _rich_explanation(*, definition: str | None = "RRI = gain / baseline") -> shared.ScientificExplanation:
+    return shared.ScientificExplanation(
+        question="How much does the selected view improve reconstruction?",
+        population="Finite evaluated rollout steps.",
+        metric="Relative reconstruction improvement (unitless).",
+        denominator_masks="Only paired finite baseline and selected gains contribute.",
+        comparability="Compare policies only on the same store and evaluated steps.",
+        expected_pattern="Higher values indicate larger reconstruction gains.",
+        failure_interpretation="Investigate missing masks or invalid candidate geometry.",
+        evidence_role="oracle/evaluation",
+        source_fields=("inspection.rollout_step_objective_rows",),
+        answer="Selected views improve reconstruction relative to the baseline.",
+        intuition="The score measures the gain attributable to the selected view.",
+        visual_encoding="Each mark is one evaluated rollout step.",
+        uncertainty="Describe spread across finite steps; it is not a confidence interval.",
+        external_references=(
+            ("ARRIVE results guidance", "https://arriveguidelines.org/arrive-guidelines/results/10a/explanation"),
+        ),
+        definition=definition,
+    )
+
+
+def test_scientific_explanation_supports_explicit_rich_guide() -> None:
+    explanation = _rich_explanation()
+
+    assert explanation.answer.startswith("Selected views")
+    assert explanation.external_references[0][1].startswith("https://")
+    assert explanation.definition is not None
+
+
+def test_rich_guide_groups_content_definition_and_references(monkeypatch: pytest.MonkeyPatch) -> None:
+    rendered: list[str] = []
+    monkeypatch.setattr(shared.st, "markdown", lambda body, **_kwargs: rendered.append(body))
+
+    shared._render_rich_guide(_rich_explanation())
+
+    joined = "\n".join(rendered)
+    positions = [
+        joined.index(f"### {title}")
+        for title in (
+            "Core idea",
+            "Reading the marks",
+            "Evidence and uncertainty",
+            "Compare only when",
+            "Investigate next",
+        )
+    ]
+    assert positions == sorted(positions)
+    assert "**Definition**" in joined
+    assert "[ARRIVE results guidance](https://arriveguidelines.org/arrive-guidelines/results/10a/explanation)" in joined
+    assert "Sources" not in joined
+
+
+def test_rich_guide_omits_absent_definition(monkeypatch: pytest.MonkeyPatch) -> None:
+    rendered: list[str] = []
+    monkeypatch.setattr(shared.st, "markdown", lambda body, **_kwargs: rendered.append(body))
+
+    shared._render_rich_guide(_rich_explanation(definition=None))
+
+    assert "Definition" not in "\n".join(rendered)
+
+
+def test_scientific_explanation_rejects_incomplete_rich_guide() -> None:
+    with pytest.raises(ValueError, match="every guide field"):
+        shared.ScientificExplanation(
+            question="Question",
+            population="Population",
+            metric="Metric",
+            denominator_masks="Masks",
+            comparability="Comparable",
+            expected_pattern="Pattern",
+            failure_interpretation="Failure",
+            evidence_role="actor-visible",
+            source_fields=("steps/value",),
+            answer="Answer",
+        )
+
+
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:
     """Candidate Sankey should present one informative proposal-signature stage."""
 

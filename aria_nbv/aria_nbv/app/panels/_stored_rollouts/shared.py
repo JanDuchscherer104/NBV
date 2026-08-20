@@ -26,7 +26,13 @@ _ROLE_COLORS = {
 
 @dataclass(frozen=True, slots=True)
 class ScientificExplanation:
-    """Complete interpretation contract shown beside one primary visualization."""
+    """Complete interpretation contract shown beside one primary visualization.
+
+    The legacy fields remain positional-compatible while chart call sites migrate
+    to the richer reader-intent guide.  Supplying any rich guide field opts into
+    validation of the complete guide; legacy callers continue to render their
+    existing checklist until they are migrated.
+    """
 
     question: str
     population: str
@@ -37,6 +43,12 @@ class ScientificExplanation:
     failure_interpretation: str
     evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
     source_fields: tuple[str, ...]
+    answer: str = ""
+    intuition: str = ""
+    visual_encoding: str = ""
+    uncertainty: str = ""
+    external_references: tuple[tuple[str, str], ...] = ()
+    definition: str | None = None
 
     def __post_init__(self) -> None:
         required = (
@@ -50,6 +62,12 @@ class ScientificExplanation:
         )
         if any(not value.strip() for value in required) or not self.source_fields:
             raise ValueError("Scientific explanations require every interpretation field and at least one source.")
+        rich_fields = (self.answer, self.intuition, self.visual_encoding, self.uncertainty)
+        if any(rich_fields) or self.external_references or self.definition is not None:
+            if any(not value.strip() for value in rich_fields) or not self.external_references:
+                raise ValueError("Rich scientific explanations require every guide field and an external reference.")
+            if any(not label.strip() or not url.strip() for label, url in self.external_references):
+                raise ValueError("External references require a label and URL.")
 
 
 def render_stale_store_boundary(
@@ -81,28 +99,75 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         f"{html.escape(explanation.evidence_role)}</span>",
         unsafe_allow_html=True,
     )
-    with col_info.popover("How to read this", icon="ℹ️"):
-        for label, value in (
-            ("Question", explanation.question),
-            ("Population / grain", explanation.population),
-            ("Metric / units", explanation.metric),
-            ("Denominator / masks", explanation.denominator_masks),
-            ("Valid comparison conditions", explanation.comparability),
-            ("Expected pattern", explanation.expected_pattern),
-            ("Warnings / failure modes", explanation.failure_interpretation),
-        ):
-            explanation_item(label, value)
+    answer = explanation.answer or explanation.question
+    st.markdown(f"**Answer:** {answer}")
+    with col_info.popover("Interpret this plot", icon="ℹ️"):
+        if explanation.answer:
+            _render_rich_guide(explanation)
+        else:
+            for label, value in (
+                ("Question", explanation.question),
+                ("Population / grain", explanation.population),
+                ("Metric / units", explanation.metric),
+                ("Denominator / masks", explanation.denominator_masks),
+                ("Valid comparison conditions", explanation.comparability),
+                ("Expected pattern", explanation.expected_pattern),
+                ("Warnings / failure modes", explanation.failure_interpretation),
+            ):
+                explanation_item(label, value)
         if log_y_key is not None:
             explanation_item(
                 "Axis scale",
                 "Linear by default. Logarithmic scale is independently selectable for this plot and hides zero or negative observations.",
             )
-        explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
+        explanation_item("Provenance", ", ".join(explanation.source_fields), code=True)
     rendered = fig
     if log_y_key is not None:
         with columns[2]:
             rendered, _ = _plot_with_y_axis_control(fig, key=log_y_key)
     st.plotly_chart(rendered, width="stretch")
+
+
+def _render_rich_guide(explanation: ScientificExplanation) -> None:
+    """Render the reader-intent sections for an explicitly rich guide."""
+
+    explanation_section(
+        "Core idea",
+        (
+            ("Question", explanation.question),
+            ("Answer", explanation.answer),
+            ("Intuition", explanation.intuition),
+            ("Metric / units", explanation.metric),
+        ),
+    )
+    if explanation.definition is not None:
+        explanation_item("Definition", explanation.definition)
+    explanation_section(
+        "Reading the marks",
+        (("Visual encoding", explanation.visual_encoding), ("Expected pattern", explanation.expected_pattern)),
+    )
+    explanation_section(
+        "Evidence and uncertainty",
+        (
+            ("Population / grain", explanation.population),
+            ("Denominator / masks", explanation.denominator_masks),
+            ("Uncertainty", explanation.uncertainty),
+        ),
+    )
+    explanation_section("Compare only when", (("Valid comparison conditions", explanation.comparability),))
+    explanation_section("Investigate next", (("Warnings / failure modes", explanation.failure_interpretation),))
+    if explanation.external_references:
+        st.markdown("**External sources**")
+        for label, url in explanation.external_references:
+            st.markdown(f"- [{label}]({url})")
+
+
+def explanation_section(title: str, items: tuple[tuple[str, str], ...]) -> None:
+    """Render one named group of interpretation fields."""
+
+    st.markdown(f"### {title}")
+    for label, value in items:
+        explanation_item(label, value)
 
 
 def explanation_item(label: str, value: str, *, code: bool = False) -> None:
