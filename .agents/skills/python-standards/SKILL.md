@@ -124,12 +124,15 @@ configuration, `aria_nbv/uv.lock` pins versions, and `Makefile` owns gates/path
 normalization. Point to these sources, not copied flags or pins.
 
 - `make package-smoke` runs fixed Ruff/pytest smoke surfaces plus the public API
-  typing contract; `make mypy-contract` runs that contract alone.
+  typing contract; CI adds `make ruff-full` for the complete stable Ruff surface;
+  `make mypy-contract` runs that contract alone.
 - `make ruff-full` or `make ruff-targeted RUFF_PATHS="..."` runs stable Ruff
   gates; `make coverage-targeted COVERAGE_TESTS="tests/<path>"` reports branch
   coverage. Add `MYPY_ARGS="--junit-xml=/tmp/mypy.xml"` for structured mypy output.
 - `make mypy-targeted MYPY_PATHS="aria_nbv/<path> tests/<path>"` checks selected roots;
   `make mypy-full` remains informational while its baseline is nonzero.
+- `coverage-targeted` is intentionally operator-selected rather than a CI gate;
+  it has no representative repository-wide threshold yet.
 
 Pass repository-root paths such as `aria_nbv/aria_nbv/<path>` or `aria_nbv/tests/<path>`;
 the target normalizes, validates, and deduplicates them. Targeted success is surface-limited.

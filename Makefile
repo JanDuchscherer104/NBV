@@ -751,6 +751,7 @@ ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
 	for path in $$paths; do \
 		case "$$path" in \
 			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "RUFF_PATHS contains traversal component: $$path" >&2; exit 2 ;; \
+			*[!A-Za-z0-9_./-]*) echo "RUFF_PATHS contains unsupported characters: $$path" >&2; exit 2 ;; \
 		esac; \
 		case "$$path" in \
 			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
@@ -775,6 +776,7 @@ mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
 	for path in $$paths; do \
 		case "$$path" in \
 			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "MYPY_PATHS contains traversal component: $$path" >&2; exit 2 ;; \
+			*[!A-Za-z0-9_./-]*) echo "MYPY_PATHS contains unsupported characters: $$path" >&2; exit 2 ;; \
 		esac; \
 		case "$$path" in \
 			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
