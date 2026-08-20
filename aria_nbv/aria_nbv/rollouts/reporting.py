@@ -12,7 +12,7 @@ import hashlib
 import json
 import math
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -505,6 +505,15 @@ class RolloutCorpusSummary:
     q_h_stores: pd.DataFrame
     """Per-store deep Q_H counts and any explicit unavailability reason."""
 
+    temporal_summary: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Factual finite-only depth summaries, separated by persisted contract."""
+
+    target_admission: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Additive target-admission counts across validated stores."""
+
+    feasibility: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Additive collision and clearance availability evidence by exact cohort."""
+
 
 def build_thesis_report_frames(
     store_paths: Iterable[Path | str],
@@ -595,6 +604,9 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
     candidate = _candidate_corpus_support(_concat_report_frames(valid_frames, "candidate_composition"))
     endpoints = _corpus_endpoints(valid_frames, included)
     failures = _corpus_failure_counts(_concat_report_frames(valid_frames, "failures"))
+    temporal = _corpus_temporal_summary(valid_frames, included)
+    target_admission = _corpus_target_admission(_concat_report_frames(valid_frames, "targets"))
+    feasibility = _corpus_feasibility(_concat_report_frames(valid_frames, "candidate_collision_support"))
     q_h_stores = (
         pd.DataFrame(q_h_rows).sort_values(["store_id"], kind="stable").reset_index(drop=True)
         if q_h_rows
@@ -651,6 +663,9 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
         endpoints=endpoints,
         failure_counts=failures,
         q_h_stores=q_h_stores,
+        temporal_summary=temporal,
+        target_admission=target_admission,
+        feasibility=feasibility,
     )
 
 
@@ -664,6 +679,131 @@ def _report_profile(frames: Mapping[str, pd.DataFrame], store_id: str) -> str:
         if not rows.empty and isinstance(rows.iloc[0]["value_text"], str):
             return str(rows.iloc[0]["value_text"])
     return "unknown"
+
+
+def _corpus_temporal_summary(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+) -> pd.DataFrame:
+    """Recompute factual depth summaries over compatible validated shards.
+
+    The persisted contract is deliberately narrower than a campaign identity:
+    campaign shards with the same profile, candidate/oracle configuration, and
+    return semantics combine, while different generated data contracts remain
+    separate. Policy, temperature, and rollout controls stay as explicit plot
+    strata rather than being pooled into a single trace.
+    """
+
+    columns = (
+        "metric",
+        "units",
+        "contract_id",
+        "contract",
+        "profile",
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+        "step_index",
+        "store_count",
+        "total_count",
+        "finite_count",
+        "missing_count",
+        "median",
+        "q25",
+        "q75",
+        "iqr_width",
+        "mean",
+        "min",
+        "max",
+    )
+    annotated: list[pd.DataFrame] = []
+    for bundle, store in zip(frames, included, strict=True):
+        steps = bundle["steps"].copy()
+        if steps.empty:
+            continue
+        contract = _persisted_rollout_contract(bundle, str(store["store_id"]), str(store["profile"]))
+        steps["contract_id"] = contract["id"]
+        steps["contract"] = contract["label"]
+        steps["profile"] = contract["profile"]
+        annotated.append(steps)
+    if not annotated:
+        return pd.DataFrame(columns=columns)
+
+    from .inspection import temporal_metric_summary_rows
+
+    source = pd.concat(annotated, ignore_index=True)
+    groups = ("contract_id", "contract", "profile", "policy", "temperature", "horizon", "branch_factor", "beam_width")
+    for group_field in groups:
+        source[group_field] = source[group_field].map(_temporal_group_scalar)
+    store_counts = (
+        source.groupby([*groups, "step_index"], dropna=False, sort=True)["store_id"]
+        .nunique()
+        .rename("store_count")
+        .reset_index()
+    )
+    summaries: list[pd.DataFrame] = []
+    for metric in ("cumulative_target_rri", "cumulative_target_root_gain", "valid_fanout", "invalid_fraction"):
+        rows = temporal_metric_summary_rows(source.to_dict("records"), metric=metric, group_fields=groups)
+        if not rows:
+            continue
+        frame = pd.DataFrame(rows).merge(store_counts, on=[*groups, "step_index"], how="left", validate="one_to_one")
+        frame["store_count"] = frame["store_count"].astype(np.int64)
+        frame["iqr_width"] = frame["q75"] - frame["q25"]
+        summaries.append(frame.loc[:, columns])
+    if not summaries:
+        return pd.DataFrame(columns=columns)
+    return (
+        pd.concat(summaries, ignore_index=True)
+        .sort_values(["metric", "contract_id", "policy", "temperature", "horizon", "step_index"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, str]:
+    """Return the stable, persisted compatibility contract for one store."""
+
+    parameters = frames["parameters"]
+
+    def values(key: str) -> tuple[object, ...]:
+        rows = parameters[
+            (parameters["store_id"] == store_id)
+            & ((parameters["key"] == key) | parameters["key"].str.startswith(f"{key}["))
+        ]
+        output: list[object] = []
+        for _, row in rows.iterrows():
+            for column in ("value_text", "value_float", "value_int", "value_bool"):
+                candidate = row[column]
+                if pd.notna(candidate):
+                    output.append(candidate.item() if isinstance(candidate, np.generic) else candidate)
+                    break
+        return tuple(output)
+
+    def value(key: str) -> object:
+        return values(key)[0] if values(key) else None
+
+    payload = {
+        "profile": profile,
+        "candidate_configs": values("config_hashes.candidate"),
+        "oracle_configs": values("config_hashes.oracle"),
+        "return_semantics": value("root_attrs.return_semantics"),
+        "discount_gamma": value("root_attrs.discount_gamma"),
+        "q_h_return_semantics": value("root_attrs.q_h_return_semantics"),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return {
+        "id": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
+        "profile": profile,
+        "label": f"{profile} · {str(payload['candidate_configs'][0] if payload['candidate_configs'] else 'unknown')[:12]} · "
+        f"{payload['return_semantics'] or 'unknown'}",
+    }
+
+
+def _temporal_group_scalar(value: object) -> object:
+    """Match the inspection owner's explicit unknown-group normalization."""
+
+    return "unknown" if value is None or (not isinstance(value, str) and bool(pd.isna(value))) else value
 
 
 def _concat_report_frames(frames: list[dict[str, pd.DataFrame]], name: str) -> pd.DataFrame:
@@ -729,6 +869,59 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
         .sort_values(["generation_cohort_id", "family"], kind="stable", na_position="last")
         .reset_index(drop=True)
     )
+
+
+def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
+    """Count target-admission outcomes without translating invalidity into RRI."""
+
+    columns = ("target_valid", "gt_label_valid", "gt_match_status", "count", "store_count")
+    if targets.empty:
+        return pd.DataFrame(columns=columns)
+    return (
+        targets.groupby(["target_valid", "gt_label_valid", "gt_match_status"], dropna=False, sort=True)
+        .agg(count=("target_row_id", "size"), store_count=("store_id", "nunique"))
+        .reset_index()
+        .loc[:, columns]
+    )
+
+
+def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
+    """Recompute only additive collision and clearance denominators by cohort."""
+
+    columns = (
+        "generation_cohort_id",
+        "generation_cohort",
+        "store_count",
+        "candidate_count",
+        "collision_evaluated_count",
+        "collision_count",
+        "collision_rate",
+        "clearance_finite_count",
+        "clearance_denominator",
+        "clearance_coverage",
+    )
+    if collision.empty:
+        return pd.DataFrame(columns=columns)
+    count_columns = (
+        "candidate_count",
+        "collision_evaluated_count",
+        "collision_count",
+        "clearance_finite_count",
+        "clearance_denominator",
+    )
+    source = collision.copy()
+    for column in count_columns:
+        source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
+    grouped = (
+        source.groupby(["generation_cohort_id", "generation_cohort"], dropna=False, sort=True)
+        .agg(store_count=("store_id", "nunique"), **{column: (column, "sum") for column in count_columns})
+        .reset_index()
+    )
+    grouped["collision_rate"] = grouped["collision_count"] / grouped["collision_evaluated_count"].replace(0, np.nan)
+    grouped["clearance_coverage"] = grouped["clearance_finite_count"] / grouped["clearance_denominator"].replace(
+        0, np.nan
+    )
+    return grouped.loc[:, columns]
 
 
 def _corpus_endpoints(

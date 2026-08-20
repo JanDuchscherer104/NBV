@@ -109,53 +109,121 @@ def _render_corpus_details(summary: RolloutCorpusSummary | None) -> None:
         st.dataframe(summary.q_h_stores, hide_index=True, width="stretch")
 
 
-def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
-    """Render cohort-separated additive support and raw endpoint distributions."""
+def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) -> None:
+    """Render corpus endpoint plots first; raw rows stay opt-in below them."""
 
-    st.subheader("Corpus evidence")
+    st.subheader("Corpus endpoint distributions")
     if summary is None:
-        st.info("Build the corpus summary in Overview before viewing aggregate evidence.")
+        st.info("Build the corpus summary in Overview before viewing corpus endpoints.")
         return
-    if summary.candidate_support.empty:
-        st.info("No validated candidate-support rows are available.")
-    else:
-        st.dataframe(summary.candidate_support, hide_index=True, width="stretch")
     if summary.endpoints.empty:
         st.info("No validated endpoint rows are available.")
-    else:
+        return
+    metric = next(
+        (name for name in ("endpoint_gain", "target_rri", "cumulative_target_root_gain") if name in summary.endpoints),
+        None,
+    )
+    if metric is None:
+        st.info("The selected stores do not expose a supported endpoint metric.")
+        return
+    fig = px.box(
+        summary.endpoints,
+        x="profile",
+        y=metric,
+        color="policy",
+        facet_col="horizon",
+        hover_data=["store_id"],
+        title="Store-qualified factual endpoint distributions",
+    )
+    _render_plot(
+        fig,
+        ScientificExplanation(
+            question="How are factual rollout endpoints distributed across selected validated shards?",
+            population="One store-qualified factual rollout endpoint, faceted by persisted horizon.",
+            metric=f"{metric}; units follow the persisted endpoint metric contract.",
+            denominator_masks="Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
+            comparability="Compare within profile, policy, horizon, and the persisted contract; store identity remains visible.",
+            expected_pattern="Distributions remain stable across shards of one profile rather than being driven by one store.",
+            failure_interpretation="Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down.",
+            evidence_role="oracle/evaluation",
+            source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
+        ),
+    )
+    with st.expander("Endpoint rows and CSV", expanded=False):
         st.dataframe(summary.endpoints, hide_index=True, width="stretch")
-        metric = next(
-            (
-                name
-                for name in ("endpoint_gain", "target_rri", "cumulative_target_root_gain")
-                if name in summary.endpoints
+        _download_frame("Download endpoint rows CSV", "corpus-endpoints.csv", summary.endpoints)
+
+
+def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
+    """Render additive admission and feasibility evidence without reward metrics."""
+
+    st.subheader("Corpus admission and feasibility")
+    if summary is None:
+        st.info("Build the corpus summary in Overview before viewing admission evidence.")
+        return
+    if summary.target_admission.empty:
+        st.info("No validated target-admission rows are available.")
+    else:
+        target_rows = summary.target_admission.copy()
+        target_rows["admission"] = target_rows.apply(
+            lambda row: (
+                f"actor={bool(row['target_valid'])} · gt={bool(row['gt_label_valid'])} · {row['gt_match_status']}"
             ),
-            None,
+            axis=1,
         )
-        if metric is not None:
-            fig = px.box(
-                summary.endpoints,
-                x="profile",
-                y=metric,
-                color="policy",
-                facet_col="horizon",
-                hover_data=["store_id"],
-                title="Store-qualified endpoint distributions",
-            )
-            _render_plot(
-                fig,
-                ScientificExplanation(
-                    question="How are diagnostic rollout endpoints distributed across validated stores?",
-                    population="One store-qualified factual rollout endpoint, faceted by persisted horizon.",
-                    metric=f"{metric}; units follow the persisted endpoint metric contract.",
-                    denominator_masks="Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
-                    comparability="Compare within profile, policy, horizon, and compatible generation contracts; store identity remains visible.",
-                    expected_pattern="Distributions remain stable across stores of the same profile rather than being driven by one shard.",
-                    failure_interpretation="Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down.",
-                    evidence_role="oracle/evaluation",
-                    source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
-                ),
-            )
+        _render_plot(
+            px.bar(target_rows, x="admission", y="count", color="gt_label_valid", title="Target admission outcomes"),
+            ScientificExplanation(
+                question="Which actor-visible targets remain valid and receive an unambiguous GT label?",
+                population="One persisted target row across validated selected stores.",
+                metric="Target count by actor validity, GT-label validity, and exact match status.",
+                denominator_masks="All persisted target rows; invalid, ambiguous, unmatched, and below-threshold rows remain explicit.",
+                comparability="Target-selection and GT-matching contracts must match before comparing counts.",
+                expected_pattern="Admitted targets have actor and GT validity; non-admitted categories remain visible rather than becoming low-RRI examples.",
+                failure_interpretation="A rise in ambiguous or unmatched rows indicates target or evidence coverage trouble, not an effect-size change.",
+                evidence_role="oracle/evaluation",
+                source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets/gt_match_status_id"),
+            ),
+        )
+        with st.expander("Target-admission rows and CSV", expanded=False):
+            st.dataframe(target_rows, hide_index=True, width="stretch")
+            _download_frame("Download target-admission CSV", "corpus-target-admission.csv", target_rows)
+    if summary.feasibility.empty:
+        st.info("No validated collision or clearance availability rows are available.")
+        return
+    feasibility = summary.feasibility
+    fig = px.bar(
+        feasibility.melt(
+            id_vars=["generation_cohort"],
+            value_vars=["collision_rate", "clearance_coverage"],
+            var_name="metric",
+            value_name="fraction",
+        ),
+        x="generation_cohort",
+        y="fraction",
+        color="metric",
+        barmode="group",
+        title="Collision rate and clearance-evidence coverage by generation cohort",
+    )
+    _render_plot(
+        fig,
+        ScientificExplanation(
+            question="Does each exact candidate-generation cohort retain collision and clearance evidence?",
+            population="Additive candidate counts from validated stores, kept separate by generation cohort.",
+            metric="Collision rate among evaluated candidates and fraction with finite clearance evidence.",
+            denominator_masks="Collision uses evaluated candidates; clearance uses its persisted finite-value denominator. Zero denominators remain unavailable, not zero.",
+            comparability="Compare exact generation cohorts only; no per-store macro or calibration estimate is averaged.",
+            expected_pattern="Clearance coverage is high where the geometry audit is available, while collision rates remain interpretable per cohort.",
+            failure_interpretation="Missing coverage or elevated collision rates point to candidate geometry/support failures and warrant active-store drill-down.",
+            evidence_role="actor-visible",
+            source_fields=("reporting.RolloutCorpusSummary.feasibility", "candidate_diagnostics/path_collision_mask"),
+        ),
+    )
+    with st.expander("Candidate support, feasibility rows, and CSV", expanded=False):
+        st.dataframe(summary.candidate_support, hide_index=True, width="stretch")
+        st.dataframe(feasibility, hide_index=True, width="stretch")
+        _download_frame("Download candidate support CSV", "corpus-candidate-support.csv", summary.candidate_support)
+        _download_frame("Download feasibility CSV", "corpus-feasibility.csv", feasibility)
 
 
 def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:

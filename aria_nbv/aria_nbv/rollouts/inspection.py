@@ -81,18 +81,19 @@ _TEMPORAL_METRICS = {
     "selected_probability": ("selected_probability", "probability"),
     "selected_entropy": ("selected_entropy", "nats"),
 }
-_TEMPORAL_GROUP_FIELDS = frozenset(
-    {
-        "policy",
-        "horizon",
-        "branch_factor",
-        "beam_width",
-        "temperature",
-        "budget_configuration",
-        "selected_position",
-        "selected_strategy",
-        "selected_mixture",
-    }
+_TEMPORAL_GROUP_FIELDS = (
+    "contract_id",
+    "contract",
+    "profile",
+    "policy",
+    "horizon",
+    "branch_factor",
+    "beam_width",
+    "temperature",
+    "budget_configuration",
+    "selected_position",
+    "selected_strategy",
+    "selected_mixture",
 )
 _RECONSTRUCTION_METRIC_SPECS = (
     ("cumulative", "cumulative_target_root_gain", "Cumulative root-normalized target gain"),
