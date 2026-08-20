@@ -26,27 +26,33 @@ V9 completed all 10 units but reached only 1,093 MiB free GPU memory, below the
 advanced to V10 in
 `.configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml`.
 
-V10 plan `c93180127ce7ca5f` completed with 3,608 MiB minimum free GPU memory.
-Its 10 validated stores contain 40 rollout/Q_H chains and 8,599 trainable Q_H
-rows; the smallest store contains 516. No candidate count, profile, horizon,
-branching, beam, temperature, schema, or generation algorithm changed.
+V10 completed with 3,608 MiB minimum free GPU memory. Its 10 validated stores
+contain 40 rollout/Q_H chains, and every store contains nonzero trainable Q_H
+rows. No candidate count, profile, horizon, branching, beam, temperature,
+schema, or generation algorithm changed.
 
-The terminal audit also exposed that the final status write reset
-`elapsed_seconds` to zero. The campaign now carries the measured campaign
-duration into terminal status; this changes observability only, not rollout
-generation or persisted dataset contents.
+The terminal audit also exposed that elapsed time was not reconstructible from
+the canonical event ledger. The campaign now writes one measured duration to
+both the `campaign_finished` event and terminal status, reconstructs status
+from that evidence, and rejects divergence. This changes observability only,
+not rollout generation or persisted dataset contents.
 
 ## Verification
-- Focused local suite: 341 passed.
-- GitHub Root Verification run `32309437282`: passed at commit
-  `99f7558604a62d6100606e0ce75f3c601a326f06`.
+- Focused Campaign tests, Ruff format/check, agent-memory validation, and hosted
+  Root Verification passed.
 - Canonical V10 status: completed; 1 validated smoke skip, 9 successes, zero
   failed, timed-out, insufficient, blocked, conflicted, or pending units.
 - Independent two-second sampler: `min_free_mib=3608`, `max_used_mib=8306`.
 - Canonical Zarr and Q_H audit: 10/10 stores valid, 40/40 chains readable,
   every store has nonzero trainable Q_H rows.
-- Terminal elapsed-time regression: completed status retains a positive
-  campaign duration; the full Campaign test file passes.
+- Terminal elapsed-time regressions: completed status retains the exact ledger
+  duration, event-only reconstruction agrees, tampering fails closed, and
+  legacy null-elapsed ledgers use their timestamp-derived fallback.
+
+Exact commit, plan, generation, work-unit, row-count, and raw sampler receipts
+remain with the current campaign artifacts under
+`aria_nbv/.campaign/cuda-rollouts-v1-pilot-corrected-v10/`; this debrief records
+the durable batch-size decision without duplicating mutable run identity.
 
 ## Canonical Owner Impact
 The writer TOML owns the two-view execution batch. The V10 campaign TOML and
