@@ -604,6 +604,30 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["entity.target_identity_acceptance"] = {
+      tex = "a_{\\mathrm{id}}(\\hat e)=1\\ \\Longleftrightarrow\\ n_{\\mathrm{qual}}(\\hat e)=1",
+      typst = "#eqs.entity.target_identity_acceptance",
+      description = "V1 target admission requires exactly one qualifying GT OBB; zero or multiple qualifiers are rejected.",
+      thesis_list = true,
+    },
+    ["entity.target_identity_iou"] = {
+      tex = "\\mu_{\\mathrm{IoU}}(\\hat e,e)=\\operatorname{IoU}_{3D}(\\hat{\\boldsymbol{B}}_{\\hat e},\\boldsymbol{B}_e)",
+      typst = "#eqs.entity.target_identity_iou",
+      description = "Same-class oriented 3D IoU used by the V1 observed-target matcher.",
+      thesis_list = true,
+    },
+    ["entity.target_identity_qualified_count"] = {
+      tex = "n_{\\mathrm{qual}}(\\hat e)=\\left|\\{e:\\operatorname{class}(e)=\\operatorname{class}(\\hat e),\\ \\mu_{\\mathrm{IoU}}(\\hat e,e)>\\tau_{\\mathrm{IoU}}\\}\\right|",
+      typst = "#eqs.entity.target_identity_qualified_count",
+      description = "Number of same-class GT OBBs whose oriented IoU is strictly above the V1 threshold.",
+      thesis_list = true,
+    },
+    ["entity.target_identity_threshold"] = {
+      tex = "\\tau_{\\mathrm{IoU}}=0.20",
+      typst = "#eqs.entity.target_identity_threshold",
+      description = "Strict V1 observed-target IoU threshold; equality is rejected.",
+      thesis_list = true,
+    },
     ["features.point_dino_token"] = {
       tex = "\\boldsymbol{x}_j^{\\mathrm{pt}}=\\operatorname{concat}(\\boldsymbol{p}_j,\\boldsymbol{f}_j^{\\mathrm{DINO-comp}},\\sigma_j^{-1},n_j,\\boldsymbol{a}_j^{\\mathrm{hist}})",
       typst = "#eqs.features.point_dino_token",
