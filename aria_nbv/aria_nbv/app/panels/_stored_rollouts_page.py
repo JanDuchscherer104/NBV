@@ -76,7 +76,7 @@ from ..rerun_launch import (
     start_rerun_launch,
     stop_rerun_launch,
 )
-from .common import _report_exception
+from .common import _plot_with_y_axis_control, _report_exception
 
 _SECTIONS = (
     "Overview",
@@ -699,7 +699,20 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
                 hover_data=["store_id"],
                 title="Store-qualified endpoint distributions",
             )
-            st.plotly_chart(fig, width="stretch")
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="How are diagnostic rollout endpoints distributed across validated stores?",
+                    population="One store-qualified factual rollout endpoint, faceted by persisted horizon.",
+                    metric=f"{metric}; units follow the persisted endpoint metric contract.",
+                    denominator_masks="Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
+                    comparability="Compare within profile, policy, horizon, and compatible generation contracts; store identity remains visible.",
+                    expected_pattern="Distributions remain stable across stores of the same profile rather than being driven by one shard.",
+                    failure_interpretation="Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down.",
+                    evidence_role="oracle/evaluation",
+                    source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
+                ),
+            )
 
 
 def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
@@ -713,9 +726,19 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
         st.success("No validated aggregate failure rows were reported.")
         return
     st.dataframe(summary.failure_counts, hide_index=True, width="stretch")
-    st.plotly_chart(
+    _render_plot(
         px.bar(summary.failure_counts, x="kind", y="count", color="severity", title="Failures across included stores"),
-        width="stretch",
+        ScientificExplanation(
+            question="Which validation and data-quality failure classes dominate the selected corpus?",
+            population="Additive failure findings from validated included stores, grouped by exact kind and severity.",
+            metric="Finding count; counts prioritize debugging and are not independent scientific samples.",
+            denominator_masks="Only findings emitted by included validated stores; excluded-store reasons remain in Overview.",
+            comparability="Compare counts only for the same selected corpus and failure rules.",
+            expected_pattern="Hard contract failures are absent or sparse and every count is traceable to a store.",
+            failure_interpretation="Large counts identify debugging priorities, not policy-performance effects.",
+            evidence_role="provenance",
+            source_fields=("reporting.RolloutCorpusSummary.failure_counts", "inspection.suspicious_rollout_rows"),
+        ),
     )
 
 
@@ -1106,6 +1129,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
                 f"steps/{_TEMPORAL_SOURCE_FIELDS.get(metric, metric)}",
             ),
         ),
+        log_y_key=_plot_control_key("temporal-summary", store_path, metric, group_field),
     )
     st.dataframe(summary, hide_index=True, width="stretch")
     _download_frame("Download temporal summary CSV", "temporal-metric-summary.csv", summary)
@@ -1140,6 +1164,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
                     evidence_role=_temporal_evidence_role(metric),
                     source_fields=("inspection.rollout_step_objective_rows", f"steps/{source_field}"),
                 ),
+                log_y_key=_plot_control_key("raw-trajectory", store_path, metric, selected_rollout),
             )
 
 
@@ -2966,11 +2991,25 @@ def _render_stale_store_boundary(
     _download_json("Download stale-store diagnostics JSON", "stale-rollout-store.json", payload)
 
 
-def _render_plot(fig: go.Figure, explanation: ScientificExplanation) -> None:
-    """Render one primary plot with a complete scientific interpretation popover."""
+def _plot_control_key(plot_name: str, *identity: object) -> str:
+    """Return one stable Streamlit key for an independently controlled plot."""
+
+    payload = "\x1f".join((plot_name, *(str(value) for value in identity)))
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    return f"stored-rollout-plot:{plot_name}:{digest}"
+
+
+def _render_plot(
+    fig: go.Figure,
+    explanation: ScientificExplanation,
+    *,
+    log_y_key: str | None = None,
+) -> None:
+    """Render one primary plot with context and an optional independent log axis."""
 
     badge_color = _ROLE_COLORS[explanation.evidence_role]
-    col_title, col_info = st.columns([5, 1])
+    columns = st.columns([4, 1, 1]) if log_y_key is not None else st.columns([5, 1])
+    col_title, col_info = columns[:2]
     col_title.markdown(
         f'<span style="padding:.15rem .45rem;border-radius:.35rem;background:{badge_color};color:white">'
         f"{html.escape(explanation.evidence_role)}</span>",
@@ -2984,8 +3023,17 @@ def _render_plot(fig: go.Figure, explanation: ScientificExplanation) -> None:
         _explanation_item("Valid comparison conditions", explanation.comparability)
         _explanation_item("Expected pattern", explanation.expected_pattern)
         _explanation_item("Warnings / failure modes", explanation.failure_interpretation)
+        if log_y_key is not None:
+            _explanation_item(
+                "Axis scale",
+                "Linear by default. Logarithmic scale is independently selectable for this plot and hides zero or negative observations.",
+            )
         _explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
-    st.plotly_chart(fig, width="stretch")
+    rendered = fig
+    if log_y_key is not None:
+        with columns[2]:
+            rendered, _ = _plot_with_y_axis_control(fig, key=log_y_key)
+    st.plotly_chart(rendered, width="stretch")
 
 
 def _explanation_item(label: str, value: str, *, code: bool = False) -> None:

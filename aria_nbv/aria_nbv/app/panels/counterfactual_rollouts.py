@@ -72,7 +72,7 @@ from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
 from ..state_types import config_signature
-from .common import _info_popover, _pretty_label, _report_exception, _strip_ansi
+from .common import _info_popover, _plot_with_y_axis_control, _pretty_label, _report_exception, _strip_ansi
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 _SOURCE_TARGET_INFO = """
@@ -1948,11 +1948,19 @@ def _render_live_rollout_metric_dashboard(
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
-        _info_popover("selected target return", _LIVE_SELECTED_RETURN_INFO)
-        st.plotly_chart(rri_fig, width="stretch")
+        _render_live_quality_plot(
+            rri_fig,
+            label="selected target return",
+            context=_LIVE_SELECTED_RETURN_INFO,
+            log_y_key="live-rollout-plot:selected-target-return",
+        )
     with chart_col2:
-        _info_popover("valid candidate return band", _LIVE_FANOUT_BAND_INFO)
-        st.plotly_chart(fanout_fig, width="stretch")
+        _render_live_quality_plot(
+            fanout_fig,
+            label="valid candidate return band",
+            context=_LIVE_FANOUT_BAND_INFO,
+            log_y_key="live-rollout-plot:valid-candidate-return-band",
+        )
         st.caption(
             "Band shows the empirical 2.5-97.5 percentile range of valid candidate target root gain when "
             "available, falling back to target RRI; the selected line shows the action actually taken."
@@ -1986,8 +1994,12 @@ def _render_live_rollout_metric_dashboard(
             xaxis_title="rollout step",
             yaxis_title="target root gain / target RRI",
         )
-        _info_popover("top-k candidate headroom", _LIVE_TOPK_CANDIDATE_INFO)
-        st.plotly_chart(top_fig, width="stretch")
+        _render_live_quality_plot(
+            top_fig,
+            label="top-k candidate headroom",
+            context=_LIVE_TOPK_CANDIDATE_INFO,
+            log_y_key="live-rollout-plot:top-k-candidate-headroom",
+        )
 
     if rows_df["J_endpoint"].notna().any() or rows_df["log_gain"].notna().any():
         endpoint_fig = go.Figure()
@@ -2006,6 +2018,24 @@ def _render_live_rollout_metric_dashboard(
         st.caption(
             "Endpoint `J_e^(H)` and log-gain are unavailable for this run because selected target point-mesh before/after fields were not emitted."
         )
+
+
+def _render_live_quality_plot(
+    fig: go.Figure,
+    *,
+    label: str,
+    context: str,
+    log_y_key: str,
+) -> None:
+    """Render one live reconstruction trajectory with context and its own axis control."""
+
+    _info_popover(
+        label,
+        context + "\n\n**Axis scale:** Linear by default. Logarithmic scale is independently selectable for this plot; "
+        "zero and negative observations are not visible on a logarithmic axis.",
+    )
+    rendered, _ = _plot_with_y_axis_control(fig, key=log_y_key)
+    st.plotly_chart(rendered, width="stretch")
 
 
 def render_counterfactual_rollouts_page() -> None:
