@@ -1436,6 +1436,9 @@ def test_run_claimed_event_timing_resets_per_unit_and_campaign_elapsed_increases
     assert terminal_events[0].unit_elapsed_seconds is not None
     assert terminal_events[1].unit_elapsed_seconds is not None
     assert terminal_events[1].unit_elapsed_seconds < terminal_events[1].elapsed_seconds
+    terminal_status = campaign.read_status(plan=plan)
+    assert terminal_status.state == "completed"
+    assert terminal_status.elapsed_seconds > 0.0
 
 
 def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):

@@ -2206,6 +2206,7 @@ class CudaRolloutCampaign:
                     plan,
                     results,
                     stage="terminal",
+                    elapsed_seconds=self.clock() - started_at,
                     last_timeout=last_timeout,
                     started_at=started_at_iso,
                     finished_at=self.utc_now().isoformat(),

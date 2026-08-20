@@ -31,6 +31,11 @@ Its 10 validated stores contain 40 rollout/Q_H chains and 8,599 trainable Q_H
 rows; the smallest store contains 516. No candidate count, profile, horizon,
 branching, beam, temperature, schema, or generation algorithm changed.
 
+The terminal audit also exposed that the final status write reset
+`elapsed_seconds` to zero. The campaign now carries the measured campaign
+duration into terminal status; this changes observability only, not rollout
+generation or persisted dataset contents.
+
 ## Verification
 - Focused local suite: 341 passed.
 - GitHub Root Verification run `32309437282`: passed at commit
@@ -40,9 +45,12 @@ branching, beam, temperature, schema, or generation algorithm changed.
 - Independent two-second sampler: `min_free_mib=3608`, `max_used_mib=8306`.
 - Canonical Zarr and Q_H audit: 10/10 stores valid, 40/40 chains readable,
   every store has nonzero trainable Q_H rows.
+- Terminal elapsed-time regression: completed status retains a positive
+  campaign duration; the full Campaign test file passes.
 
 ## Canonical Owner Impact
 The writer TOML owns the two-view execution batch. The V10 campaign TOML and
 `.configs/README.md` own the reproducible operator identity and command surface;
-`aria_nbv/tests/oracle/test_campaign.py` locks those bindings. No further
+`aria_nbv/aria_nbv/oracle/pipelines/campaign.py` owns truthful terminal status,
+and `aria_nbv/tests/oracle/test_campaign.py` locks both contracts. No further
 canonical update is needed.
