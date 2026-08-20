@@ -165,6 +165,7 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
     assert matching["finite_count"].tolist() == [2, 2]
     assert matching["missing_count"].tolist() == [0, 0]
     assert np.allclose(matching["iqr_width"], matching["q75"] - matching["q25"])
+    assert {"selected_target_root_gain", "selected_probability", "selected_entropy"}.issubset(set(temporal["metric"]))
 
 
 def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:

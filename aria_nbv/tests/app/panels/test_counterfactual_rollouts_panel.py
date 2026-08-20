@@ -977,9 +977,13 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
 
     median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
     assert {trace.name for trace in median_traces} == {"greedy", "softmax"}
-    assert all(trace.customdata.shape == (2, 8) for trace in median_traces)
-    assert all(np.asarray(trace.customdata)[:, :2].tolist() == [[3.0, 4.0], [3.0, 4.0]] for trace in median_traces)
-    assert all(np.asarray(trace.customdata)[:, 3].tolist() == [2.0, 2.0] for trace in median_traces)
+    assert all(trace.customdata.shape == (2, 9) for trace in median_traces)
+    assert all(np.asarray(trace.x).tolist() == [1, 2] for trace in median_traces)
+    assert all(
+        np.asarray(trace.customdata)[:, :3].tolist() == [[0.0, 3.0, 4.0], [1.0, 3.0, 4.0]] for trace in median_traces
+    )
+    assert all(np.asarray(trace.customdata)[:, 4].tolist() == [2.0, 2.0] for trace in median_traces)
+    assert figure.layout.xaxis.title.text == "acquisition number (1 = first selected view; root baseline omitted)"
     assert sum(trace.fill == "tonexty" for trace in figure.data) == 2
     assert not any("rollout" in str(trace.name).lower() for trace in figure.data)
 

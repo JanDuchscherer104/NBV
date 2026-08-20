@@ -53,7 +53,7 @@ _TEMPORAL_EVIDENCE_ROLES: dict[
 
 
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
-    """Show the default factual corpus trajectories, separated by contract."""
+    """Show the essential factual corpus trajectories, separated by contract."""
 
     st.subheader("Corpus reward and reconstruction")
     if summary is None:
@@ -63,60 +63,110 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
     if temporal.empty:
         st.info("No validated factual temporal rows are available.")
         return
-    for metric, label in (
-        ("cumulative_target_root_gain", "Cumulative target root gain"),
-        ("cumulative_target_rri", "Cumulative target RRI"),
-    ):
-        metric_rows = temporal[temporal["metric"] == metric].copy()
-        if metric_rows.empty:
-            continue
-        for contract_id, rows in metric_rows.groupby("contract_id", sort=True, dropna=False):
-            contract = str(rows["contract"].iloc[0])
-            rows = rows.copy()
-            rows["trajectory"] = rows.apply(
-                lambda row: (
-                    f"{row['policy']} · T={row['temperature']} · H={row['horizon']} · "
-                    f"B={row['branch_factor']} · beam={row['beam_width']}"
-                ),
-                axis=1,
-            )
-            store_count = int(rows["store_count"].max())
-            per_depth = "; ".join(
-                f"{trajectory} ({', '.join(f'depth {int(step)}: n={int(count)}' for step, count in depth_rows.groupby('step_index', sort=True)['total_count'].sum().items())})"
-                for trajectory, depth_rows in rows.groupby("trajectory", sort=True)
-            )
-            iqr_width = pd.to_numeric(rows["iqr_width"], errors="coerce").max()
-            cols = st.columns(3)
-            cols[0].metric("Validated shards", store_count)
-            cols[1].metric("Observed rows", f"{int(rows['finite_count'].sum()):,} / {int(rows['total_count'].sum()):,}")
-            cols[2].metric("Maximum IQR width", "n/a" if pd.isna(iqr_width) else f"{float(iqr_width):.3g}")
-            st.caption(
-                f"**{label}** — contract: `{contract}` (`{contract_id}`); per-depth factual n per trajectory: {per_depth}. "
-                "Ribbon is IQR, not a confidence interval. Later depths include only observed factual rows."
-            )
-            _render_plot(
-                _temporal_summary_figure(rows, group_field="trajectory", metric_label=label),
-                ScientificExplanation(
-                    question=f"How does {label.lower()} evolve across all compatible selected shards?",
-                    population="One factual selected-step row per compatible store, policy, temperature, rollout controls, and depth; the trace never connects raw rollout rows.",
-                    metric=f"Median with linear-interpolated IQR; units are {rows['units'].iloc[0]}.",
-                    denominator_masks="Each depth reports finite_count / total_count. Statistics use finite factual rows only: no zero-fill, depth interpolation, or failed-store values.",
-                    comparability="Only rows with this persisted profile/candidate/oracle/return contract are pooled. Policy, temperature, horizon, branch factor, and beam width remain separate trajectories.",
-                    expected_pattern="The ribbon can be visually narrow at this scale even with nonzero IQR; hover and the maximum-width card expose its actual magnitude.",
-                    failure_interpretation="Small n, missing later depth, or divergent traces are evidence to inspect, not a confidence interval or policy conclusion.",
-                    evidence_role="oracle/evaluation",
-                    source_fields=(
-                        "reporting.RolloutCorpusSummary.temporal_summary",
-                        "inspection.temporal_metric_summary_rows",
-                    ),
-                ),
-                log_y_key=_plot_control_key("corpus-temporal", contract_id, metric),
-            )
-            with st.expander(f"{label} rows and CSV · {contract_id}", expanded=False):
-                st.dataframe(rows.drop(columns="trajectory"), hide_index=True, width="stretch")
+    for contract_id, contract_rows in temporal.groupby("contract_id", sort=True, dropna=False):
+        contract = str(contract_rows["contract"].iloc[0])
+        st.markdown(f"#### {contract}")
+        _render_corpus_quality_cards(contract_rows)
+        for metric, label in (
+            ("cumulative_target_root_gain", "Cumulative target root gain"),
+            ("selected_target_root_gain", "Selected one-step target root gain"),
+        ):
+            rows = contract_rows[contract_rows["metric"] == metric].copy()
+            if rows.empty:
+                continue
+            rows["trajectory"] = _trajectory_label(rows)
+            _render_corpus_temporal_plot(rows, contract_id=contract_id, metric=metric, label=label)
+
+        with st.expander("Diagnostic target RRI, selection-distribution rows, and CSV", expanded=False):
+            diagnostics = contract_rows[
+                contract_rows["metric"].isin(("cumulative_target_rri", "selected_probability", "selected_entropy"))
+            ].copy()
+            if diagnostics.empty:
+                st.info("No optional diagnostic rows are available for this contract.")
+            else:
+                st.dataframe(diagnostics, hide_index=True, width="stretch")
                 _download_frame(
-                    f"Download {label} CSV", f"corpus-{metric}-{contract_id}.csv", rows.drop(columns="trajectory")
+                    "Download diagnostic temporal CSV", f"corpus-diagnostics-{contract_id}.csv", diagnostics
                 )
+
+
+def _trajectory_label(rows: pd.DataFrame) -> pd.Series:
+    """Return the compact display stratum for one corpus temporal frame."""
+
+    return rows.apply(
+        lambda row: (
+            f"{row['policy']} · T={row['temperature']} · H={row['horizon']} · "
+            f"B={row['branch_factor']} · beam={row['beam_width']}"
+        ),
+        axis=1,
+    )
+
+
+def _render_corpus_quality_cards(rows: pd.DataFrame) -> None:
+    """Expose the minimal selection-quality context before the two primary plots."""
+
+    cumulative = rows[rows["metric"] == "cumulative_target_root_gain"]
+    selected = rows[rows["metric"] == "selected_target_root_gain"]
+    probability = rows[rows["metric"] == "selected_probability"]
+    entropy = rows[rows["metric"] == "selected_entropy"]
+    if cumulative.empty or selected.empty:
+        return
+    first_selected = selected[selected["step_index"] == selected["step_index"].min()]["median"].median()
+    endpoint = cumulative.loc[cumulative["step_index"] == cumulative["step_index"].max(), "median"].median()
+    first_probability = probability.loc[probability["step_index"] == probability["step_index"].min(), "median"].median()
+    first_entropy = entropy.loc[entropy["step_index"] == entropy["step_index"].min(), "median"].median()
+    cols = st.columns(4)
+    cols[0].metric("First-view median gain", _format_fraction(first_selected))
+    cols[1].metric("Endpoint median gain", _format_fraction(endpoint))
+    cols[2].metric("First-view selection probability", _format_fraction(first_probability))
+    cols[3].metric("First-view policy entropy", "n/a" if pd.isna(first_entropy) else f"{float(first_entropy):.3g} nats")
+    with st.popover("How to interpret these quality cards", icon="ℹ️"):
+        st.markdown(
+            "**First view** is the first selected counterfactual acquisition, not the root state. "
+            "The root baseline is omitted because its cumulative gain is zero by definition. "
+            "A small first-view gain is therefore factual evidence of a weak first selected action, not plot padding.\n\n"
+            "**Selection probability** and **entropy** describe the persisted temperature-softmax distribution. "
+            "They explain how concentrated the draw was; they do not by themselves prove that the selected view was useful."
+        )
+
+
+def _format_fraction(value: object) -> str:
+    """Format small dimensionless gains without visually rounding them to zero."""
+
+    numeric = pd.to_numeric(value, errors="coerce")
+    return "n/a" if pd.isna(numeric) else f"{float(numeric):.3g} ({float(numeric):.4%})"
+
+
+def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, metric: str, label: str) -> None:
+    """Render one default corpus plot with interpretation and its raw rows collapsed below."""
+
+    store_count = int(rows["store_count"].max())
+    iqr_width = pd.to_numeric(rows["iqr_width"], errors="coerce").max()
+    cols = st.columns(3)
+    cols[0].metric("Validated shards", store_count)
+    cols[1].metric("Observed rows", f"{int(rows['finite_count'].sum()):,} / {int(rows['total_count'].sum()):,}")
+    cols[2].metric("Maximum IQR width", "n/a" if pd.isna(iqr_width) else f"{float(iqr_width):.3g}")
+    _render_plot(
+        _temporal_summary_figure(rows, group_field="trajectory", metric_label=label),
+        ScientificExplanation(
+            question=f"How does {label.lower()} evolve across all compatible selected shards?",
+            population="One factual selected-step row per compatible store, policy, temperature, rollout controls, and acquisition number; the trace never connects raw rollout rows.",
+            metric=f"Median with linear-interpolated IQR; units are {rows['units'].iloc[0]}.",
+            denominator_masks="Each point reports finite_count / total_count. Statistics use finite factual rows only: no zero-fill, depth interpolation, or failed-store values.",
+            comparability="Only rows with this persisted profile/candidate/oracle/return contract are pooled. Policy, temperature, horizon, branch factor, and beam width remain separate trajectories.",
+            expected_pattern="The ribbon can be visually narrow at this scale even with nonzero IQR; hover exposes its exact width and factual n.",
+            failure_interpretation="Small n, missing later acquisition, a near-zero first-view gain, or divergent traces are data-quality evidence to inspect, not a confidence interval or policy conclusion.",
+            evidence_role="oracle/evaluation",
+            source_fields=(
+                "reporting.RolloutCorpusSummary.temporal_summary",
+                "inspection.temporal_metric_summary_rows",
+            ),
+        ),
+        log_y_key=_plot_control_key("corpus-temporal", contract_id, metric),
+    )
+    with st.expander(f"{label} rows and CSV", expanded=False):
+        st.dataframe(rows.drop(columns="trajectory"), hide_index=True, width="stretch")
+        _download_frame(f"Download {label} CSV", f"corpus-{metric}-{contract_id}.csv", rows.drop(columns="trajectory"))
 
 
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
@@ -289,7 +339,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
     cols = st.columns(4)
     cols[0].metric("Finite temporal rows", f"{finite_count:,} / {total_count:,}")
     cols[1].metric("Missing temporal rows", f"{missing_count:,}")
-    cols[2].metric("Observed depth", f"0–{endpoint_depth}")
+    cols[2].metric("Observed acquisitions", f"1–{endpoint_depth + 1}")
     cols[3].metric(
         "Factual endpoint median",
         "n/a" if endpoint_median is None else f"{float(endpoint_median):.4g}",
@@ -301,7 +351,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
         _temporal_summary_figure(summary, group_field=group_field, metric_label=metric_label),
         ScientificExplanation(
             question=f"How does {metric_label.lower()} change over persisted rollout depth?",
-            population=f"One aggregate per {group_field} and step_index over factual selected-step rows; individual rollouts are not connected.",
+            population=f"One aggregate per {group_field} and stored step_index over factual selected-step rows; the plot displays acquisition number (one-based) and never connects individual rollouts.",
             metric=f"Median with linear-interpolated IQR; units are {summary['units'].iloc[0]}.",
             denominator_masks="Each point reports finite_count / total_count and missing fraction; statistics use finite values only with no zero fill or depth interpolation.",
             comparability="Upstream policy/recipe groups are descriptive unless exact cohort keys match; selected-action provenance groups are post-selection strata only.",
@@ -321,25 +371,26 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
     with st.expander("Raw selected-rollout trajectory drill-down", expanded=False):
         rollout_ids = sorted(int(value) for value in steps["rollout_row_id"].dropna().unique().tolist())
         selected_rollout = st.selectbox("Raw trajectory rollout", options=rollout_ids)
-        selected_rows = steps.loc[steps["rollout_row_id"] == selected_rollout].sort_values("step_index")
+        selected_rows = steps.loc[steps["rollout_row_id"] == selected_rollout].sort_values("step_index").copy()
         source_field = _TEMPORAL_SOURCE_FIELDS.get(metric, metric)
         raw = selected_rows.dropna(subset=[source_field])
         if raw.empty:
             st.info(f"Rollout {selected_rollout} has no finite {metric_label.lower()} rows.")
         else:
+            raw["acquisition_number"] = raw["step_index"].astype(int) + 1
             fig = px.line(
                 raw,
-                x="step_index",
+                x="acquisition_number",
                 y=source_field,
                 markers=True,
                 title=f"Raw trajectory for rollout {selected_rollout}",
-                hover_data=[column for column in ("step_row_id", "policy") if column in raw],
+                hover_data=[column for column in ("step_index", "step_row_id", "policy") if column in raw],
             )
             _render_plot(
                 fig,
                 ScientificExplanation(
                     question=f"What exact {metric_label.lower()} trajectory produced rollout {selected_rollout}?",
-                    population="One explicitly selected rollout only; no line joins unrelated rollout_row_id values.",
+                    population="One explicitly selected rollout only. Acquisition 1 is stored step_index 0; no line joins unrelated rollout_row_id values.",
                     metric=f"Persisted {source_field}; units follow the aggregate view above.",
                     denominator_masks="Finite factual selected-step rows for this rollout; missing depths remain absent rather than interpolated.",
                     comparability="Use this for case inspection, not population or policy inference.",
@@ -358,10 +409,12 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
     figure = go.Figure()
     palette = px.colors.qualitative.Plotly
     for index, (group_value, rows) in enumerate(summary.groupby(group_field, sort=True, dropna=False)):
-        ordered = rows.sort_values("step_index")
+        ordered = rows.sort_values("step_index").copy()
+        acquisition_number = ordered["step_index"].to_numpy(dtype=np.int64) + 1
         color = palette[index % len(palette)]
         custom = np.column_stack(
             (
+                ordered["step_index"],
                 ordered["finite_count"],
                 ordered["total_count"],
                 ordered["missing_count"] / ordered["total_count"].clip(lower=1),
@@ -374,7 +427,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
         )
         figure.add_trace(
             go.Scatter(
-                x=ordered["step_index"],
+                x=acquisition_number,
                 y=ordered["q25"],
                 mode="lines",
                 line={"color": color, "width": 0},
@@ -385,7 +438,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
         )
         figure.add_trace(
             go.Scatter(
-                x=ordered["step_index"],
+                x=acquisition_number,
                 y=ordered["q75"],
                 mode="lines",
                 line={"color": color, "width": 0},
@@ -398,7 +451,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
         )
         figure.add_trace(
             go.Scatter(
-                x=ordered["step_index"],
+                x=acquisition_number,
                 y=ordered["median"],
                 mode="lines+markers",
                 line={"color": color},
@@ -406,17 +459,18 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
                 legendgroup=str(group_value),
                 customdata=custom,
                 hovertemplate=(
-                    f"{group_field}={group_value}<br>step=%{{x}}<br>median=%{{y:.4g}}"
-                    "<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}"
-                    "<br>missing=%{customdata[2]:.1%}<br>stores=%{customdata[3]:.0f}"
-                    "<br>IQR width=%{customdata[4]:.4g}<br>mean=%{customdata[5]:.4g}"
-                    "<br>min=%{customdata[6]:.4g}<br>max=%{customdata[7]:.4g}<extra></extra>"
+                    f"{group_field}={group_value}<br>acquisition=%{{x}}"
+                    "<br>stored step_index=%{customdata[0]:.0f}<br>median=%{y:.4g}"
+                    "<br>finite=%{customdata[1]:.0f} / %{customdata[2]:.0f}"
+                    "<br>missing=%{customdata[3]:.1%}<br>stores=%{customdata[4]:.0f}"
+                    "<br>IQR width=%{customdata[5]:.4g}<br>mean=%{customdata[6]:.4g}"
+                    "<br>min=%{customdata[7]:.4g}<br>max=%{customdata[8]:.4g}<extra></extra>"
                 ),
             )
         )
     figure.update_layout(
-        title=f"{metric_label}: median and interquartile range by rollout depth",
-        xaxis_title="rollout step_index",
+        title=f"{metric_label}: median and interquartile range by acquisition number",
+        xaxis_title="acquisition number (1 = first selected view; root baseline omitted)",
         yaxis_title=f"{summary['metric'].iloc[0]} ({summary['units'].iloc[0]})",
         hovermode="x unified",
     )
