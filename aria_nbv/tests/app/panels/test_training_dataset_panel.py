@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from aria_nbv.app.panels import training_dataset as panel
 from aria_nbv.app.panels.training_dataset import _artifact_identity, _deep_metric_value, _download_payload
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
@@ -39,6 +40,29 @@ _PATH_CONFIG_FIELDS = (
     "processed_meshes",
     "external_dir",
 )
+
+
+def test_qh_ui_dispatchers_cross_real_owners_only_when_called(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Initial rendering owns buttons; explicit dispatch owns Q_H construction and preview."""
+
+    readiness = object()
+    preview = object()
+    calls: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        panel,
+        "build_qh_corpus_readiness",
+        lambda selection, **kwargs: calls.append(("readiness", (selection, kwargs))) or readiness,
+    )
+    monkeypatch.setattr(
+        panel,
+        "preview_qh_batch",
+        lambda selection, **kwargs: calls.append(("preview", (selection, kwargs))) or preview,
+    )
+
+    assert calls == []
+    assert panel._cached_qh_readiness.__wrapped__("/root", ("/rollout",), (), 2, 7) is readiness
+    assert panel._cached_qh_preview.__wrapped__("/root", ("/rollout",), (), "train", 0, 2, 7) is preview
+    assert [name for name, _payload in calls] == ["readiness", "preview"]
 
 
 @pytest.fixture
@@ -147,12 +171,16 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
 
     assert not app.exception
     assert app.title[0].value == "Training Dataset"
+    assert [tab.label for tab in app.tabs] == ["Readiness", "Q_H corpus", "Details"]
     assert _metrics(app)["Root samples"] == "2"
     assert _metrics(app)["Compatible rollout stores"] == "0 / 0"
     assert {button.label for button in app.button} >= {
         "Validate bundle",
         "Deep statistics / target scan",
+        "Preflight Q_H corpus",
     }
+    assert "training_dataset_qh_readiness" not in app.session_state
+    assert not any("CORAL" in tab.label for tab in app.tabs)
     assert "Download resolved bundle evidence JSON" in {button.label for button in app.get("download_button")}
     assert "Run full single-step pipeline" not in {button.label for button in app.button}
 

@@ -99,6 +99,8 @@ def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_suppor
     assert summary.totals["rollout_count"] == first.num_rollouts + second.num_rollouts
     assert summary.totals["step_count"] == first.num_steps + second.num_steps
     assert summary.totals["candidate_count"] == first.num_candidates + second.num_candidates
+    assert summary.totals["physical_sample_count"] == summary.totals["source_row_count"]
+    assert summary.totals["q_h_chain_count"] == summary.totals["rollout_count"]
     assert summary.totals["storage_bytes"] is not None and summary.totals["storage_bytes"] > 0
     assert summary.totals["q_h_state_count"] == summary.totals["step_count"]
     assert summary.totals["q_h_trainable_count"] is not None

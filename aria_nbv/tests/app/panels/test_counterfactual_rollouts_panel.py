@@ -152,7 +152,7 @@ def test_manual_non_zarr_path_is_passed_to_existing_readonly_selector(monkeypatc
         lambda _label, value="", **kwargs: stored_rollouts_page.st.session_state[kwargs["key"]],
     )
     result = stored_rollouts_page._render_store_selector(PathConfig(), [])
-    assert result == selected
+    assert result == ((selected,), selected)
 
 
 def _set_stored_rollout_workspace(app: AppTest, workspace: str) -> AppTest:
@@ -407,29 +407,28 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert not app.exception
     assert [header.value for header in app.header] == ["Rollout Supervision"]
     assert all("\\n+" not in markdown.value for markdown in app.markdown)
-    assert "Trust & Topology" in [subheader.value for subheader in app.subheader]
+    assert "Active-store validation" in [subheader.value for subheader in app.subheader]
     assert _metric_values(app)["Validation"] == "OK"
     assert _metric_values(app)["Rollouts"] == "1"
     assert _metric_values(app)["Steps"] == "1"
     assert _metric_values(app)["Candidates"] == "12"
     assert [tab.label for tab in app.tabs] == [
-        "Trust & Topology",
-        "Scientific Evidence",
-        "Targets & Action Support",
-        "Failure Triage",
-        "Inspect, Export & Rerun",
+        "Overview",
+        "Evidence",
+        "Failures",
+        "Drill-down",
     ]
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert {button.label for button in app.get("download_button")} >= {
-        "Download invariant CSV",
-        "Download invariant JSON",
-        "Download topology JSON",
-    }
+    assert "Download invariant CSV" not in {button.label for button in app.get("download_button")}
+    advanced = next(
+        toggle for toggle in app.toggle if toggle.label == "Show advanced validation, topology, and raw metadata"
+    )
+    assert advanced.value is False
     assert not app.error
 
-    app = _set_stored_rollout_workspace(app, "Scientific Evidence")
+    app = _set_stored_rollout_workspace(app, "Evidence")
     assert not app.exception
-    assert "Scientific Evidence" in [subheader.value for subheader in app.subheader]
+    assert "Scientific evidence" in [subheader.value for subheader in app.subheader]
     assert _metric_values(app)["Matched comparison eligible"] == "NO"
     assert any("comparison is blocked" in warning.value for warning in app.warning)
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
@@ -442,7 +441,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert "Download temporal summary CSV" in {button.label for button in app.get("download_button")}
     grouping_class = next(selectbox for selectbox in app.selectbox if selectbox.label == "Temporal grouping class")
     grouping_class.set_value("Selected-action provenance (descriptive, non-causal)")
-    app.session_state["stored_rollouts_section"] = "Scientific Evidence"
+    app.session_state["stored_rollouts_section"] = "Evidence"
     app = app.run()
     assert not app.exception
     assert any("descriptive and post-selection" in warning.value for warning in app.warning)
@@ -450,7 +449,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         toggle for toggle in app.toggle if toggle.label == "Load branching, rank/regret, and root-relative evidence"
     )
     extra_evidence.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Scientific Evidence"
+    app.session_state["stored_rollouts_section"] = "Evidence"
     app = app.run()
     assert not app.exception
     assert {button.label for button in app.get("download_button")} >= {
@@ -459,9 +458,9 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         "Download root-relative geometry CSV",
     }
 
-    app = _set_stored_rollout_workspace(app, "Targets & Action Support")
+    app = _set_stored_rollout_workspace(app, "Evidence")
     assert not app.exception
-    assert "Targets & Action Support" in [subheader.value for subheader in app.subheader]
+    assert "Targets and action support" in [subheader.value for subheader in app.subheader]
     assert {button.label for button in app.get("download_button")} >= {
         "Download target protocol CSV",
         "Download mask combinations CSV",
@@ -473,7 +472,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
     aggregates = next(toggle for toggle in app.toggle if toggle.label == "Load complete candidate aggregate breakdowns")
     aggregates.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Targets & Action Support"
+    app.session_state["stored_rollouts_section"] = "Evidence"
     app = app.run()
     assert not app.exception
     assert "Download family support CSV" in {button.label for button in app.get("download_button")}
@@ -481,20 +480,20 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         toggle for toggle in app.toggle if toggle.label == "Load bounded candidate geometry and reward plots"
     )
     geometry.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Targets & Action Support"
+    app.session_state["stored_rollouts_section"] = "Evidence"
     app = app.run()
     assert not app.exception
     assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
 
-    app = _set_stored_rollout_workspace(app, "Failure Triage")
+    app = _set_stored_rollout_workspace(app, "Failures")
     assert not app.exception
-    assert "Failure Triage" in [subheader.value for subheader in app.subheader]
+    assert "Active-store failure detail" in [subheader.value for subheader in app.subheader]
     assert "Minimum valid fanout" in {item.label for item in app.number_input}
     assert "Dominant invalidity fraction" in {item.label for item in app.slider}
 
-    app = _set_stored_rollout_workspace(app, "Inspect, Export & Rerun")
+    app = _set_stored_rollout_workspace(app, "Drill-down")
     assert not app.exception
-    assert "Inspect, Export & Rerun" in [subheader.value for subheader in app.subheader]
+    assert "Drill-down" in [subheader.value for subheader in app.subheader]
     assert {selectbox.label for selectbox in app.selectbox} >= {
         "Query scope",
         "Rollout row",
@@ -532,12 +531,17 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     assert _metric_values(app)["Steps"] == "4"
     assert _metric_values(app)["Candidates"] == "8"
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
+    advanced = next(
+        toggle for toggle in app.toggle if toggle.label == "Show advanced validation, topology, and raw metadata"
+    )
+    advanced.set_value(True)
+    app = app.run()
     assert {button.label for button in app.get("download_button")} >= {
         "Download store metadata JSON",
         "Download topology JSON",
     }
 
-    app = _set_stored_rollout_workspace(app, "Scientific Evidence")
+    app = _set_stored_rollout_workspace(app, "Evidence")
     assert not app.exception
     assert any("disabled because this store" in warning.value for warning in app.warning)
     assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
@@ -554,7 +558,7 @@ def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path
     root.attrs["selected_depth_enabled"] = False
 
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Inspect, Export & Rerun")
+    app = _set_stored_rollout_workspace(app, "Drill-down")
 
     assert not app.exception
     assert any("No selected-depth row" in info.value for info in app.info)
@@ -571,7 +575,7 @@ def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolat
     app = _stored_rollouts_app(tmp_path).run()
 
     assert not app.exception
-    assert "Trust & Topology" in [subheader.value for subheader in app.subheader]
+    assert "Active-store validation" in [subheader.value for subheader in app.subheader]
     assert not any(selectbox.label in {"Rollout row", "Step row", "Launch mode"} for selectbox in app.selectbox)
     assert not any(number.label == "Candidate preview row limit" for number in app.number_input)
 
@@ -594,19 +598,19 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
 
     monkeypatch.setattr(stored_rollouts_page, "candidate_audit_rows", fail_heavy_audit)
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Targets & Action Support")
+    app = _set_stored_rollout_workspace(app, "Evidence")
 
     assert not app.exception
     assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
 
 
-def test_stored_rollouts_unopened_heavy_evidence_calls_are_exactly_zero(
+def test_stored_rollouts_default_evidence_only_reads_bounded_selected_rank_flow(
     isolated_path_config,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Scientific defaults must not traverse candidate-heavy projections."""
+    """Evidence defaults may read selected ranks but not full candidate projections."""
 
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "lazy-heavy.zarr",
@@ -623,10 +627,16 @@ def test_stored_rollouts_unopened_heavy_evidence_calls_are_exactly_zero(
 
     monkeypatch.setattr(stored_rollouts_page, "_cached_projection", spy_projection)
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Scientific Evidence")
+    app = _set_stored_rollout_workspace(app, "Evidence")
 
     assert not app.exception
-    assert heavy_calls == dict.fromkeys(heavy_calls, 0)
+    assert heavy_calls == {
+        "candidates": 0,
+        "candidate_group": 0,
+        "ranks": 1,
+        "root_geometry": 0,
+        "tree": 0,
+    }
 
 
 def test_stored_rollout_evidence_roles_are_explicit() -> None:
@@ -861,21 +871,21 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
     )
     stored_rollouts_page._clear_stored_rollout_caches()
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Inspect, Export & Rerun")
+    app = _set_stored_rollout_workspace(app, "Drill-down")
     scope = next(item for item in app.selectbox if item.label == "Query scope")
     scope.set_value("Candidates")
-    app.session_state["stored_rollouts_section"] = "Inspect, Export & Rerun"
+    app.session_state["stored_rollouts_section"] = "Drill-down"
     app = app.run()
     population = next(item for item in app.selectbox if item.label == "Candidate population")
     population.set_value("Explicit full store")
-    app.session_state["stored_rollouts_section"] = "Inspect, Export & Rerun"
+    app.session_state["stored_rollouts_section"] = "Drill-down"
     app = app.run()
     assert any("Explicit full-store candidate query selected" in warning.value for warning in app.warning)
 
     expression = next(item for item in app.text_area if item.label == "Pandas query expression")
     expression.set_value("rollout_row_id == 1 and step_index == 1 and selected")
     next(button for button in app.button if button.label == "Apply query").click()
-    app.session_state["stored_rollouts_section"] = "Inspect, Export & Rerun"
+    app.session_state["stored_rollouts_section"] = "Drill-down"
     app = app.run()
     assert not app.exception
     assert any("matched rows: 1" in caption.value for caption in app.caption)
@@ -884,14 +894,14 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
     expression = next(item for item in app.text_area if item.label == "Pandas query expression")
     expression.set_value("unknown_column > 0")
     next(button for button in app.button if button.label == "Apply query").click()
-    app.session_state["stored_rollouts_section"] = "Inspect, Export & Rerun"
+    app.session_state["stored_rollouts_section"] = "Drill-down"
     app = app.run()
     assert not app.exception
     assert any("last valid result is preserved" in error.value for error in app.error)
     assert any("matched rows: 1" in caption.value for caption in app.caption)
 
     next(button for button in app.button if button.label == "Promote queried row").click()
-    app.session_state["stored_rollouts_section"] = "Inspect, Export & Rerun"
+    app.session_state["stored_rollouts_section"] = "Drill-down"
     app = app.run()
 
     assert not app.exception

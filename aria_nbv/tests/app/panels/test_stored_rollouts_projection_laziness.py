@@ -19,6 +19,26 @@ from tests.rollout_fixtures import build_rollout_records
 from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
 
 
+def test_corpus_summary_cache_delegates_only_after_explicit_dispatch_and_preserves_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The UI cache key binds ordered paths and identities before calling reporting."""
+
+    calls: list[tuple[Path, ...]] = []
+    expected = object()
+
+    def build(paths):
+        calls.append(tuple(paths))
+        return expected
+
+    monkeypatch.setattr(page, "build_rollout_corpus_summary", build)
+
+    result = page._cached_corpus_summary.__wrapped__(("/b.zarr", "/a.zarr"), ("b-id", "a-id"))
+
+    assert result is expected
+    assert calls == [(Path("/b.zarr"), Path("/a.zarr"))]
+
+
 @pytest.mark.parametrize(
     ("projection", "owner_name", "kwargs"),
     [
