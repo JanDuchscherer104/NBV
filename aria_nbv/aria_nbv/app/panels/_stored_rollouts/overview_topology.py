@@ -149,6 +149,16 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
             expected_pattern="Distributions remain stable across shards of one profile rather than being driven by one store.",
             failure_interpretation="Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down.",
             evidence_role="oracle/evaluation",
+            answer="The endpoint boxes show the observed store-to-store distribution for each matched profile, policy, and horizon.",
+            intuition="Endpoint variability is a corpus-coverage diagnostic: it reveals whether the reported return is supported across shards rather than one pooled average.",
+            visual_encoding="Each box summarizes finite endpoint values; color separates policy and facets preserve horizon while store_id remains available on hover.",
+            uncertainty="Excluded stores contribute no values; compare medians and spread only within the same persisted endpoint contract and profile.",
+            external_references=(
+                (
+                    "Canonical ARIA-NBV RRI definition",
+                    "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                ),
+            ),
             source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
         ),
     )

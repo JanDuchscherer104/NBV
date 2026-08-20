@@ -17,6 +17,12 @@ from .shared import ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
+_CORRELATION_REFERENCE = (
+    "SciPy Pearson correlation documentation",
+    "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html",
+)
+
+
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
 
 
@@ -520,8 +526,28 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
             )
             if name in targets and targets[name].notna().any()
         ]
-        if len(component_cols) >= 3:
-            corr = targets[component_cols].apply(pd.to_numeric, errors="coerce").corr(min_periods=2)
+        if len(component_cols) >= 2:
+            prepared = _prepare_pairwise_correlation(targets[component_cols], component_cols)
+            corr = prepared["correlation"]
+            counts = prepared["counts"]
+            reasons = prepared["reasons"]
+            if not prepared["has_finite_off_diagonal"]:
+                reason_text = "; ".join(f"{pair}: {reason}" for pair, reason in reasons.items() if pair[0] != pair[1])
+                st.info(f"Correlation heatmap unavailable: no estimable finite off-diagonal pair. {reason_text}")
+                return
+            if any("n=2" in reason for reason in reasons.values()):
+                st.warning(
+                    "Some correlation cells have n=2; Pearson |r| is algebraically forced to 1 and is not substantive evidence."
+                )
+            labels = [
+                [
+                    "n/a"
+                    if pd.isna(corr.iloc[row, col])
+                    else f"r={corr.iloc[row, col]:.2f}, n={int(counts.iloc[row, col])}"
+                    for col in range(len(component_cols))
+                ]
+                for row in range(len(component_cols))
+            ]
             fig = go.Figure(
                 go.Heatmap(
                     z=corr.to_numpy(),
@@ -531,11 +557,13 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     zmax=1,
                     colorscale="RdBu",
                     reversescale=True,
-                    text=np.round(corr.to_numpy(), 2),
+                    text=labels,
                     texttemplate="%{text}",
+                    customdata=np.stack([counts.to_numpy(), np.array(labels, dtype=object)], axis=-1),
+                    hovertemplate="%{y} × %{x}<br>%{customdata[1]}<extra></extra>",
                 )
             )
-            fig.update_layout(title="Target score-component correlation", height=440)
+            fig.update_layout(title="Target score-component correlation (descriptive; pairwise n shown)", height=440)
             _render_plot(
                 fig,
                 ScientificExplanation(
@@ -547,9 +575,59 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     expected_pattern="Components reflect their intended roles without perfect accidental duplication.",
                     failure_interpretation="Near-perfect correlations suggest redundancy; unexpected signs can expose score wiring errors.",
                     evidence_role="oracle/evaluation",
+                    answer="The heatmap is descriptive evidence of linear association between persisted score components, with pair-local support shown for every cell.",
+                    intuition="Pearson r compares centered component values within the same finite pair; it diagnoses redundancy or opposition but does not establish causality.",
+                    visual_encoding="Cell color encodes r from -1 to 1; each annotation and hover label reports r and the exact pairwise finite n.",
+                    uncertainty="Pairs with n=2 are algebraically forced to |r|=1 and are not substantive evidence; missing or constant pairs are withheld.",
+                    external_references=(
+                        (
+                            "SciPy Pearson correlation documentation",
+                            "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html",
+                        ),
+                    ),
+                    definition="Pearson r is the standardized covariance of the same pair-local finite observations.",
                     source_fields=tuple(f"targets/{name}" for name in component_cols),
                 ),
             )
+        elif len(component_cols) == 1:
+            st.info(
+                "Correlation heatmap unavailable: one target-score component has finite observations; at least two components are required."
+            )
+        else:
+            st.info("Correlation heatmap unavailable: no target-score components have finite observations.")
+
+
+def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> dict[str, object]:
+    """Prepare pair-local Pearson evidence without changing reporting semantics."""
+
+    numeric = frame.loc[:, columns].apply(pd.to_numeric, errors="coerce")
+    correlation = pd.DataFrame(np.nan, index=columns, columns=columns, dtype=float)
+    counts = pd.DataFrame(0, index=columns, columns=columns, dtype=int)
+    reasons: dict[tuple[str, str], str] = {}
+    has_finite_off_diagonal = False
+    for left in columns:
+        for right in columns:
+            pair = pd.DataFrame({"left": numeric[left], "right": numeric[right]}).dropna()
+            n = len(pair)
+            counts.loc[left, right] = n
+            if n < 2:
+                reasons[(left, right)] = f"insufficient finite paired rows (n={n}; need n>=2)"
+                continue
+            if pair["left"].nunique() == 1 or pair["right"].nunique() == 1:
+                reasons[(left, right)] = "constant pair value (zero variance)"
+                continue
+            value = float(pair["left"].corr(pair["right"]))
+            correlation.loc[left, right] = value
+            if left != right:
+                has_finite_off_diagonal = True
+                if n == 2:
+                    reasons[(left, right)] = "n=2 is algebraically degenerate: |r|=1 is not substantive evidence"
+    return {
+        "correlation": correlation,
+        "counts": counts,
+        "reasons": reasons,
+        "has_finite_off_diagonal": has_finite_off_diagonal,
+    }
 
 
 def _render_candidate_geometry_diagnostics(

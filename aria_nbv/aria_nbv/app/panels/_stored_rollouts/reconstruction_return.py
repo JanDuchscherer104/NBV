@@ -157,6 +157,17 @@ def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, met
             expected_pattern="The ribbon can be visually narrow at this scale even with nonzero IQR; hover exposes its exact width and factual n.",
             failure_interpretation="Small n, missing later acquisition, a near-zero first-view gain, or divergent traces are data-quality evidence to inspect, not a confidence interval or policy conclusion.",
             evidence_role="oracle/evaluation",
+            answer="Across matched shards, the median trajectory reports the observed return path while the IQR shows descriptive between-row spread.",
+            intuition="Cumulative target-root gain is the fixed-horizon return accumulated from persisted selected steps; it is not a causal estimate of a policy effect.",
+            visual_encoding="Each line is one compatible policy/recipe trajectory; the center is the median and the ribbon is the linear-interpolated IQR across finite rows.",
+            uncertainty="Finite_count/total_count and IQR expose support and variability. IQR is descriptive spread, not a confidence interval, and absent late steps are not imputed.",
+            external_references=(
+                (
+                    "Canonical ARIA-NBV RRI definition",
+                    "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                ),
+            ),
+            definition="RRI is the reconstruction improvement normalized by the baseline reconstruction error; cumulative return preserves the persisted fixed-horizon sum.",
             source_fields=(
                 "reporting.RolloutCorpusSummary.temporal_summary",
                 "inspection.temporal_metric_summary_rows",
