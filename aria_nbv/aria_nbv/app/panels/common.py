@@ -6,6 +6,7 @@ import re
 import traceback
 from dataclasses import asdict
 
+import plotly.graph_objects as go
 import streamlit as st
 
 from ...data_handling.vin_store.diagnostics import VinOfflineDatasetStats
@@ -21,6 +22,27 @@ def _strip_ansi(text: str) -> str:
 def _info_popover(label: str, text: str) -> None:
     with st.popover(f"Info: {label.title()}", icon="ℹ️"):
         st.markdown(text, unsafe_allow_html=True)
+
+
+def _plot_with_y_axis_control(fig: go.Figure, *, key: str) -> tuple[go.Figure, bool]:
+    """Copy a figure and apply one independently keyed linear/log y-axis control.
+
+    Logarithmic Plotly axes do not display zero or negative observations. The
+    control therefore keeps linear scale as the default and emits this caveat
+    beside every opted-in plot.
+    """
+
+    logarithmic = st.toggle(
+        "Logarithmic y-axis",
+        value=False,
+        key=key,
+        help="Useful for positive values spanning orders of magnitude. Zero and negative values are not visible.",
+    )
+    rendered = go.Figure(fig)
+    rendered.update_yaxes(type="log" if logarithmic else "linear")
+    if logarithmic:
+        st.caption("Logarithmic y-axis: zero and negative observations are not visible in this plot.")
+    return rendered, logarithmic
 
 
 def _report_exception(exc: Exception, *, context: str) -> None:
@@ -46,6 +68,7 @@ def _offline_summary_rows(stats: VinOfflineDatasetStats) -> list[dict[str, objec
 __all__ = [
     "_info_popover",
     "_offline_summary_rows",
+    "_plot_with_y_axis_control",
     "_pretty_label",
     "_report_exception",
     "_strip_ansi",

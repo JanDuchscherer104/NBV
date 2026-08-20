@@ -21,6 +21,7 @@ from streamlit.testing.v1 import AppTest
 from aria_nbv.app import panels as panel_dispatcher
 from aria_nbv.app import scene_view
 from aria_nbv.app.panels import _stored_rollouts_page as stored_rollouts_page
+from aria_nbv.app.panels import common as panel_common
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
@@ -439,6 +440,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         "Raw trajectory rollout",
     }
     assert "Download temporal summary CSV" in {button.label for button in app.get("download_button")}
+    assert sum(toggle.label == "Logarithmic y-axis" for toggle in app.toggle) == 2
     grouping_class = next(selectbox for selectbox in app.selectbox if selectbox.label == "Temporal grouping class")
     grouping_class.set_value("Selected-action provenance (descriptive, non-causal)")
     app.session_state["stored_rollouts_section"] = "Evidence"
@@ -946,6 +948,77 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
     assert all(np.asarray(trace.customdata)[:, :2].tolist() == [[3.0, 4.0], [3.0, 4.0]] for trace in median_traces)
     assert sum(trace.fill == "tonexty" for trace in figure.data) == 2
     assert not any("rollout" in str(trace.name).lower() for trace in figure.data)
+
+
+def test_log_y_axis_control_copies_figure_and_preserves_linear_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every opted-in plot gets an independent, non-mutating axis control."""
+
+    original = rollout_panel.go.Figure(rollout_panel.go.Scatter(x=[0, 1], y=[1.0, 10.0]))
+    monkeypatch.setattr(panel_common.st, "toggle", lambda *_args, **_kwargs: False)
+
+    linear, enabled = panel_common._plot_with_y_axis_control(original, key="plot-a")
+
+    assert enabled is False
+    assert linear.layout.yaxis.type == "linear"
+    assert original.layout.yaxis.type is None
+
+
+def test_log_y_axis_control_warns_and_sets_log_scale(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The logarithmic option must disclose its non-positive-value limitation."""
+
+    captions: list[str] = []
+    monkeypatch.setattr(panel_common.st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(panel_common.st, "caption", captions.append)
+
+    rendered, enabled = panel_common._plot_with_y_axis_control(
+        rollout_panel.go.Figure(rollout_panel.go.Scatter(y=[0.0, 1.0, 10.0])),
+        key="plot-b",
+    )
+
+    assert enabled is True
+    assert rendered.layout.yaxis.type == "log"
+    assert captions == ["Logarithmic y-axis: zero and negative observations are not visible in this plot."]
+
+
+def test_live_quality_plot_unifies_context_axis_control_and_chart(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Live over-time plots must use one contextual plotting seam."""
+
+    info: list[tuple[str, str]] = []
+    controls: list[str] = []
+    charts: list[object] = []
+    figure = rollout_panel.go.Figure(rollout_panel.go.Scatter(y=[1.0]))
+    monkeypatch.setattr(rollout_panel, "_info_popover", lambda label, text: info.append((label, text)))
+    monkeypatch.setattr(
+        rollout_panel,
+        "_plot_with_y_axis_control",
+        lambda fig, *, key: controls.append(key) or (fig, False),
+    )
+    monkeypatch.setattr(rollout_panel.st, "plotly_chart", lambda fig, **_kwargs: charts.append(fig))
+
+    rollout_panel._render_live_quality_plot(
+        figure,
+        label="selected return",
+        context="Interpret this trajectory.",
+        log_y_key="plot-c",
+    )
+
+    assert controls == ["plot-c"]
+    assert charts == [figure]
+    assert info[0][0] == "selected return"
+    assert "Axis scale" in info[0][1]
+    assert "zero and negative" in info[0][1]
+
+
+def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
+    """No stored-rollout plot may bypass its scientific explanation popover."""
+
+    source = Path(stored_rollouts_page.__file__).read_text(encoding="utf-8")
+
+    assert source.count("st.plotly_chart(") == 1
+    assert "st.plotly_chart(rendered" in source
+    assert stored_rollouts_page._plot_control_key("summary", "a") != stored_rollouts_page._plot_control_key(
+        "summary", "b"
+    )
 
 
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:
