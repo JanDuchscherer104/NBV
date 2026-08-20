@@ -62,11 +62,11 @@ metadata:
 
 # Python Standards
 
-## OMX Integration
+## Codex Verification Loop
 
-OMX can schedule Python-standard or docstring work as part of implementation
-cleanup, but this skill supplies only Python API-contract guidance. Return the
-changed surface, convention evidence, and targeted lint, test, or docs verification.
+Inspect the changed surface, run the narrowest Ruff, pytest, coverage, and mypy
+proof, then report command, scope, result, and baseline gaps. Targeted success
+never proves package-wide correctness.
 
 ## General Python Conventions
 
@@ -123,27 +123,34 @@ rendering constraints.
 - Keep private-helper docs concise unless their invariant or failure mode is
   needed by callers. Avoid boilerplate and long theory blocks for simple APIs.
 
-## Type-checking Workflow
+## Verification Commands
 
-Use the pinned project configuration and dev tooling through the live Make targets
-from the repository root; each enters the package-local `aria_nbv/`:
+Run from the repository root. `aria_nbv/pyproject.toml` owns Ruff/mypy/pytest/
+coverage configuration, `aria_nbv/uv.lock` pins versions, and `Makefile` owns
+gates/path normalization. Point to these sources, not copied flags or pins.
 
-- `make mypy-contract` checks the passing public API contract.
-- `make mypy-targeted MYPY_PATHS="..."` checks selected source/test roots.
-- `make mypy-full` checks the full package and is currently non-gating because
-  the package baseline is nonzero.
+- `make package-smoke` runs fixed Ruff/pytest smoke surfaces plus the public API
+  typing contract; `make mypy-contract` runs that contract alone.
+- `make mypy-targeted MYPY_PATHS="aria_nbv/<path> tests/<path>"` checks selected roots;
+  `make mypy-full` checks the full package and remains informational while nonzero.
 
 Pass repository-root paths such as `aria_nbv/aria_nbv/<path>` or
-`aria_nbv/tests/<path>`. The target normalizes these to package-relative
-`aria_nbv/<path>` and `tests/<path>`, rejects unrelated paths, and deduplicates
-them. Targeted success is surface-limited; package-wide cleanliness requires a
-successful full run. For an affected public data-handling export, include
+`aria_nbv/tests/<path>`; the target normalizes them to package-relative paths,
+rejects traversal/unrelated paths, and deduplicates them. Targeted success is
+surface-limited. For an affected public data-handling export, include
 `aria_nbv/tests/data_handling/public_api_typing_contract.py`.
+
+```sh
+cd aria_nbv
+uv run --extra dev ruff format --check <changed-paths> && uv run --extra dev ruff check <changed-paths>
+uv run --extra dev pytest --import-mode=importlib <tests> && uv run --extra dev pytest --import-mode=importlib --cov=aria_nbv --cov-report=term-missing <tests>
+```
+
+Targeted Ruff, pytest, coverage, and mypy results apply only to the named surface;
+package-smoke covers its fixed list. Claim package-wide typing only after
+`make mypy-full` succeeds, and package-wide test/coverage only after the full
+test surface.
 
 ## References
 
-- [General Python conventions](./references/general_conventions.md); [Tensor and NumPy shapes](./references/tensor-shapes.md)
-- [Theory-rich docstrings](./references/theory-rich-docstrings.md)
-- [Config and datamodel fields](./references/config-datamodel-fields.md)
-- [Quartodoc contract](./references/quartodoc-contract.md)
-- [Cross-references](./references/cross-references.md)
+- [General Python conventions](./references/general_conventions.md); [Tensor and NumPy shapes](./references/tensor-shapes.md); [Theory-rich docstrings](./references/theory-rich-docstrings.md); [Config and datamodel fields](./references/config-datamodel-fields.md); [Quartodoc contract](./references/quartodoc-contract.md); [Cross-references](./references/cross-references.md)

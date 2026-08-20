@@ -98,9 +98,9 @@ dependencies = [
 
     [project.optional-dependencies]
     dev = [
-        "pytest>=8.4.2",
+        "pytest==9.0.3",
         "pytest-cov>=7.0.0",
-        "ruff>=0.1.0",
+        "ruff==0.15.12",
         "mypy==2.1.0",
         "syrenka>=0.5.7",
         "debugpy>=1.8.17",
@@ -175,8 +175,16 @@ disallow_untyped_defs  = true
 target-version = "py311"
 line-length    = 120
 indent-width   = 4
+# The lockfile resolves this exact version; fail fast if another Ruff runs here.
+required-version = "0.15.12"
+# Preview rules remain opt-in; stable rules are the repository contract.
+preview        = false
+unsafe-fixes   = false
 
     [tool.ruff.lint]
+    # Preserve the existing project policy and add only stable, zero-baseline
+    # families. Broader families remain a deliberate ratchet, not a surprise
+    # package-wide gate.
     select = [
         "E",  # pycodestyle errors
         "W",  # pycodestyle warnings
@@ -187,11 +195,22 @@ indent-width   = 4
         "UP", # pyupgrade (Python 3.11+ features)
         "N",  # pep8-naming
     ]
+    extend-select = [
+        "A",     # flake8-builtins
+        "ASYNC", # flake8-async
+        "G",     # flake8-logging-format
+        "LOG",   # flake8-logging
+        "Q",     # flake8-quotes
+    ]
     ignore = [
         "E501",  # line too long (handled by formatter)
         "UP037",
         "F722",
     ]
+
+    [tool.ruff.lint.per-file-ignores]
+    # This test stub intentionally mirrors the external wandb.Image API.
+    "tests/lightning/test_wandb_logging.py" = ["N802"]
 
     [tool.ruff.format]
     quote-style               = "double"
@@ -213,6 +232,7 @@ source = ["aria_nbv"]
 branch = true
 
 [tool.coverage.report]
+show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -220,8 +240,6 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
 ]
-
-files = ["tests"]
 
 [dependency-groups]
 dev = [

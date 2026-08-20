@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 export MYPY_PATHS
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract mypy-contract mypy-full mypy-targeted
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -137,6 +137,13 @@ QH_CI_TESTS := \
 	../scripts/tests/test_quartodoc_expand_config.py
 QH_CI_PYTHON ?= uv run --extra dev python
 PYTEST_ARGS ?= -n auto
+RUFF_PATHS ?=
+RUFF_CHECK_OUTPUT_FORMAT ?= concise
+RUFF_FIX ?= 0
+RUFF_FIX_FLAG = $(if $(filter 1 true yes,$(RUFF_FIX)),--fix,)
+MYPY_ARGS ?=
+COVERAGE_TESTS ?=
+COVERAGE_ARGS ?=
 
 # Read-only operator inspection defaults.
 OFFLINE_STORE ?= vin_offline
@@ -733,11 +740,33 @@ package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests 
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
+ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
+	@cd $(PKG_DIR) && uv run --extra dev ruff format --check aria_nbv tests
+	@cd $(PKG_DIR) && uv run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests
+
+ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
+	@set -f; paths="$(RUFF_PATHS)"; \
+	if [ -z "$$paths" ]; then echo "RUFF_PATHS is required" >&2; exit 2; fi; \
+	normalized=; \
+	for path in $$paths; do \
+		case "$$path" in \
+			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "RUFF_PATHS contains traversal component: $$path" >&2; exit 2 ;; \
+		esac; \
+		case "$$path" in \
+			$(PKG_DIR)/$(PKG_DIR)/*|$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
+			$(PKG_DIR)/*|$(TEST_DIR)/*) ;; \
+			*) echo "RUFF_PATHS contains unrelated path: $$path" >&2; exit 2 ;; \
+		esac; \
+		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
+	done; \
+	cd $(PKG_DIR) && uv run --extra dev ruff format --check $$normalized && \
+	uv run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) $$normalized
+
 mypy-contract: ## Run the passing public API typing contract
-	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental tests/data_handling/public_api_typing_contract.py
+	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $(MYPY_ARGS) tests/data_handling/public_api_typing_contract.py
 
 mypy-full: ## Run the full package typing check (currently informational)
-	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental aria_nbv
+	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $(MYPY_ARGS) aria_nbv
 
 mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
 	@set -f; paths="$$MYPY_PATHS"; \
@@ -754,7 +783,11 @@ mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
 		esac; \
 		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
 	done; \
-	cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $$normalized
+	cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $(MYPY_ARGS) $$normalized
+
+coverage-targeted: ## Run branch coverage for explicitly supplied tests (set COVERAGE_TESTS)
+	@if [ -z "$(COVERAGE_TESTS)" ]; then echo "COVERAGE_TESTS is required" >&2; exit 2; fi
+	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov=aria_nbv --cov-branch --cov-report=term-missing $(COVERAGE_ARGS) $(COVERAGE_TESTS)
 
 ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 

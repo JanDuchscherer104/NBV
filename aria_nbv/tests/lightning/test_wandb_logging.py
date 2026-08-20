@@ -4,7 +4,6 @@ import types
 import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 
-
 # Stub optional deps so lit_module imports without external packages.
 if "coral_pytorch" not in sys.modules:
     coral_pytorch = types.ModuleType("coral_pytorch")
@@ -42,8 +41,8 @@ if "e3nn" not in sys.modules:
     sys.modules["e3nn"] = e3nn
     sys.modules["e3nn.o3"] = o3
 
-from aria_nbv.lightning.lit_module import VinLightningModule
 import aria_nbv.lightning.lit_module as lit_module
+from aria_nbv.lightning.lit_module import VinLightningModule
 
 
 class DummyExperiment:
