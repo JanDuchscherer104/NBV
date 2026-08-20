@@ -128,7 +128,8 @@ normalization. Point to these sources, not copied flags or pins.
   `make mypy-contract` runs that contract alone.
 - `make ruff-full` or `make ruff-targeted RUFF_PATHS="..."` runs stable Ruff
   gates; `make coverage-targeted COVERAGE_TESTS="tests/<path>"` reports branch
-  coverage. Add `MYPY_ARGS="--junit-xml=/tmp/mypy.xml"` for structured mypy output.
+  coverage. Add `MYPY_JUNIT_XML=/tmp/mypy.xml` or
+  `COVERAGE_JSON=/tmp/coverage.json` for structured output.
 - `make mypy-targeted MYPY_PATHS="aria_nbv/<path> tests/<path>"` checks selected roots;
   `make mypy-full` remains informational while its baseline is nonzero.
 - `coverage-targeted` is intentionally operator-selected rather than a CI gate;
@@ -141,7 +142,7 @@ Include `aria_nbv/tests/data_handling/public_api_typing_contract.py` for affecte
 ```sh
 cd aria_nbv
 uv run --extra dev ruff format --check <changed-paths> && uv run --extra dev ruff check <changed-paths>
-uv run --extra dev pytest --import-mode=importlib <tests> && uv run --extra dev pytest --import-mode=importlib --cov=aria_nbv --cov-report=term-missing <tests>
+uv run --extra dev pytest --import-mode=importlib <tests> && uv run --extra dev pytest --import-mode=importlib --cov <tests>
 ```
 
 Targeted Ruff, pytest, coverage, and mypy results apply only to the named surface;

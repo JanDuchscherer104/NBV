@@ -140,10 +140,12 @@ RUFF_PATHS ?=
 RUFF_CHECK_OUTPUT_FORMAT ?= concise
 RUFF_FIX ?= 0
 RUFF_FIX_FLAG = $(if $(filter 1 true yes,$(RUFF_FIX)),--fix,$(if $(filter 0 false no,$(RUFF_FIX)),,$(error RUFF_FIX must be one of 0, 1, false, true, no, or yes)))
-MYPY_ARGS ?=
+MYPY_JUNIT_XML ?=
 COVERAGE_TESTS ?=
-COVERAGE_ARGS ?=
-export RUFF_PATHS MYPY_PATHS COVERAGE_TESTS RUFF_CHECK_OUTPUT_FORMAT MYPY_ARGS COVERAGE_ARGS
+MYPY_JUNIT_FLAG = $(if $(MYPY_JUNIT_XML),--junit-xml=$$MYPY_JUNIT_XML,)
+COVERAGE_JSON ?=
+COVERAGE_JSON_FLAG = $(if $(COVERAGE_JSON),--cov-report=json:$$COVERAGE_JSON,)
+export RUFF_PATHS MYPY_PATHS COVERAGE_TESTS RUFF_CHECK_OUTPUT_FORMAT MYPY_JUNIT_XML COVERAGE_JSON
 
 # Read-only operator inspection defaults.
 OFFLINE_STORE ?= vin_offline
@@ -764,10 +766,10 @@ ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
 	uv run --extra dev ruff check --output-format "$$RUFF_CHECK_OUTPUT_FORMAT" $(RUFF_FIX_FLAG) $$normalized
 
 mypy-contract: ## Run the passing public API typing contract
-	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $(MYPY_ARGS) tests/data_handling/public_api_typing_contract.py
+	@cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py
 
 mypy-full: ## Run the full package typing check (currently informational)
-	@cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $(MYPY_ARGS) aria_nbv
+	@cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) aria_nbv
 
 mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
 	@set -f; paths="$$MYPY_PATHS"; \
@@ -785,7 +787,7 @@ mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
 		esac; \
 		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
 	done; \
-	cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $$MYPY_ARGS $$normalized
+	cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) $$normalized
 
 coverage-targeted: ## Run branch coverage for explicitly supplied tests (set COVERAGE_TESTS)
 	@set -f; paths="$$COVERAGE_TESTS"; \
@@ -803,7 +805,7 @@ coverage-targeted: ## Run branch coverage for explicitly supplied tests (set COV
 		esac; \
 		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
 	done; \
-	cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov=aria_nbv --cov-branch --cov-report=term-missing $$COVERAGE_ARGS $$normalized
+	cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov $(COVERAGE_JSON_FLAG) $$normalized
 
 ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
