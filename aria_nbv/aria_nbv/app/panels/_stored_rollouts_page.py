@@ -15,12 +15,15 @@ from ...configs import PathConfig
 from ._stored_rollouts import failure_triage, inspect_rerun, session, validity_support
 from ._stored_rollouts import overview_topology as overview
 from ._stored_rollouts import reconstruction_return as reconstruction
-from ._stored_rollouts.shared import download_json, render_stale_store_boundary
+from ._stored_rollouts.shared import (
+    STORED_ROLLOUTS_DIAGNOSE_MODE_KEY,
+    STORED_ROLLOUTS_DIAGNOSE_MODES,
+    STORED_ROLLOUTS_SECTION_KEY,
+    download_json,
+    render_stale_store_boundary,
+)
 
 _SECTIONS = ("Overview", "Reward & reconstruction", "Admission & feasibility", "Diagnose a store")
-_SECTION_KEY = "stored_rollouts_section"
-_DIAGNOSE_MODES = ("Triage failures", "Inspect, export, and Rerun")
-_DIAGNOSE_MODE_KEY = "stored_rollouts_diagnose_mode"
 
 
 def render_stored_rollouts_page() -> None:
@@ -50,8 +53,8 @@ def render_stored_rollouts_page() -> None:
 
     tabs = st.tabs(
         list(_SECTIONS),
-        default=st.session_state.get(_SECTION_KEY, _SECTIONS[0]),
-        key=_SECTION_KEY,
+        default=st.session_state.get(STORED_ROLLOUTS_SECTION_KEY, _SECTIONS[0]),
+        key=STORED_ROLLOUTS_SECTION_KEY,
         on_change="rerun",
         width="stretch",
     )
@@ -101,8 +104,13 @@ def render_stored_rollouts_page() -> None:
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
                 )
             else:
-                mode = st.radio("Diagnose mode", options=_DIAGNOSE_MODES, key=_DIAGNOSE_MODE_KEY, horizontal=True)
-                if mode == _DIAGNOSE_MODES[0]:
+                mode = st.radio(
+                    "Diagnose mode",
+                    options=STORED_ROLLOUTS_DIAGNOSE_MODES,
+                    key=STORED_ROLLOUTS_DIAGNOSE_MODE_KEY,
+                    horizontal=True,
+                )
+                if mode == STORED_ROLLOUTS_DIAGNOSE_MODES[0]:
                     overview._render_corpus_failures(corpus_summary)
                     failure_triage._render_failure_triage(reader)
                 else:

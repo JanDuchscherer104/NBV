@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from contextlib import nullcontext
 from io import StringIO
@@ -27,11 +28,13 @@ from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.app.panels._stored_rollouts import (
     candidate_generation,
+    failure_triage,
     inspect_rerun,
     overview_topology,
     reconstruction_return,
     session,
     shared,
+    validity_support,
 )
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
@@ -1132,6 +1135,41 @@ def test_target_score_correlation_uses_rich_guide_builder() -> None:
     assert 'definition="Pearson r is the standardized covariance' in correlation_block
 
 
+def test_primary_rollout_plot_guides_are_complete_at_each_constructor() -> None:
+    """Primary inspector plots cannot silently regress to the generic guide."""
+
+    required = {"answer", "intuition", "visual_encoding", "uncertainty", "external_references", "definition"}
+    expected_calls = {
+        candidate_generation: 13,
+        overview_topology: 5,
+        reconstruction_return: 8,
+        validity_support: 2,
+    }
+    for module, expected_count in expected_calls.items():
+        tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+        calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "ScientificExplanation"
+        ]
+        assert len(calls) == expected_count
+        for call in calls:
+            supplied = {keyword.arg for keyword in call.keywords if keyword.arg is not None}
+            assert required <= supplied, f"{module.__name__}:{call.lineno} lacks {sorted(required - supplied)}"
+
+
+def test_failure_triage_uses_the_coordinator_state_contract() -> None:
+    """A failure handoff switches the sole coordinator-owned diagnostic state."""
+
+    shared.st.session_state.clear()
+    failure_triage._carry_failure_to_inspect({"rollout_row_id": 2, "step_row_id": 3})
+
+    assert shared.st.session_state[shared.STORED_ROLLOUTS_SECTION_KEY] == shared.STORED_ROLLOUTS_DIAGNOSE_SECTION
+    assert shared.st.session_state[shared.STORED_ROLLOUTS_DIAGNOSE_MODE_KEY] == shared.STORED_ROLLOUTS_DIAGNOSE_MODES[1]
+
+
 def _rich_explanation(*, definition: str | None = "RRI = gain / baseline") -> shared.ScientificExplanation:
     return shared.ScientificExplanation(
         question="How much does the selected view improve reconstruction?",
@@ -1234,6 +1272,16 @@ def test_pairwise_correlation_uses_pair_local_n_and_discloses_degenerate_n2() ->
     assert prepared["counts"].loc["a", "b"] == 2
     assert "n=2" in prepared["reasons"][("a", "b")]
     assert prepared["correlation"].loc["a", "c"] == pytest.approx(-0.5)
+
+
+def test_pairwise_correlation_excludes_positive_and_negative_infinity() -> None:
+    frame = pd.DataFrame({"a": [1.0, np.inf, -np.inf], "b": [2.0, 4.0, 6.0]})
+
+    prepared = candidate_generation._prepare_pairwise_correlation(frame, ["a", "b"])
+
+    assert prepared["counts"].loc["a", "b"] == 1
+    assert pd.isna(prepared["correlation"].loc["a", "b"])
+    assert "insufficient finite paired rows" in prepared["reasons"][("a", "b")]
 
 
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:

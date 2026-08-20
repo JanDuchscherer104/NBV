@@ -23,6 +23,14 @@ _ROLE_COLORS = {
     "provenance": "#6b7280",
 }
 
+# The coordinator and its triage action share these state identifiers.  Keeping
+# them here prevents a failure-to-inspection handoff from depending on copied
+# string literals in two presentation modules.
+STORED_ROLLOUTS_SECTION_KEY = "stored_rollouts_section"
+STORED_ROLLOUTS_DIAGNOSE_MODE_KEY = "stored_rollouts_diagnose_mode"
+STORED_ROLLOUTS_DIAGNOSE_SECTION = "Diagnose a store"
+STORED_ROLLOUTS_DIAGNOSE_MODES = ("Triage failures", "Inspect, export, and Rerun")
+
 
 @dataclass(frozen=True, slots=True)
 class ScientificExplanation:
