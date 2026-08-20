@@ -349,6 +349,7 @@ def _clear_stored_rollout_caches() -> None:
     """Clear only the inspector caches after stores are created or replaced."""
 
     _cached_inventory.clear()
+    _cached_candidate_population_cached.clear()
     _cached_projection_cached.clear()
     _cached_topology_cached.clear()
     _cached_failures_cached.clear()
@@ -356,6 +357,21 @@ def _clear_stored_rollout_caches() -> None:
     _cached_store_bundle_cached.clear()
     _cached_corpus_summary.clear()
     st.session_state.pop(CORPUS_SUMMARY_STATE_KEY, None)
+
+
+def clear_rollout_page_caches() -> None:
+    """Clear every read-only cache used by the rollout supervision pages.
+
+    The training-dataset page owns its own read models, so its clear hook is
+    imported lazily to avoid coupling either page's import path.  Store
+    identities remain part of every cache key; this button is an operator
+    escape hatch after an external artifact change, not the validity mechanism.
+    """
+
+    _clear_stored_rollout_caches()
+    from ..training_dataset import _clear_training_dataset_caches
+
+    _clear_training_dataset_caches()
 
 
 @st.cache_data(show_spinner="Aggregating validated rollout stores…", max_entries=8)
