@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -517,14 +518,8 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     app = app.run()
     assert not app.exception
     assert "Download family support CSV" in {button.label for button in app.get("download_button")}
-    geometry = next(
-        toggle for toggle in app.toggle if toggle.label == "Load bounded candidate geometry and reward plots"
-    )
-    geometry.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Admission & feasibility"
-    app = app.run()
-    assert not app.exception
     assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
+    assert "Load bounded candidate geometry and reward plots" not in {toggle.label for toggle in app.toggle}
 
     app = _set_stored_rollout_workspace(app, "Failures")
     assert not app.exception
@@ -645,12 +640,11 @@ def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolat
     assert not any(number.label == "Candidate preview row limit" for number in app.number_input)
 
 
-def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
+def test_stored_rollouts_default_candidate_geometry_is_visible(
     isolated_path_config,
     tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Opening support flow should not materialize geometry, rewards, or candidate audit rows."""
+    """Admission opens bounded 2D/3D geometry without an extra toggle."""
 
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "flow.zarr",
@@ -658,16 +652,46 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
     )
     session._clear_stored_rollout_caches()
 
-    def fail_heavy_audit(*_args, **_kwargs):
-        raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
-
-    monkeypatch.setattr(session, "candidate_audit_rows", fail_heavy_audit)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Admission & feasibility")
 
     assert not app.exception
     assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
+    assert "Load bounded candidate geometry and reward plots" not in {toggle.label for toggle in app.toggle}
+    assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
+
+
+def test_candidate_geometry_diagnostics_include_root_relative_3d_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default geometry diagnostics retain height instead of hover-only depth."""
+
+    captured: list[object] = []
+    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(candidate_generation.st, "selectbox", lambda _label, options: options[0])
+    monkeypatch.setattr(
+        candidate_generation,
+        "_render_plot",
+        lambda figure, _explanation: captured.append(figure),
+    )
+    candidates = pd.DataFrame({"motion_step_length_m": [0.2]})
+    root_geometry = pd.DataFrame(
+        {
+            "root_relative_x_m": [0.1, 0.2],
+            "root_relative_y_m": [0.3, 0.4],
+            "root_relative_z_m": [0.5, 0.6],
+            "position": ["forward_local", "forward_local"],
+            "selected": [False, True],
+        }
+    )
+
+    candidate_generation._render_candidate_geometry_diagnostics(
+        candidates,
+        root_geometry,
+        total_candidates=2,
+    )
+
+    assert any(trace.type == "scatter3d" for figure in captured for trace in figure.data)
 
 
 def test_stored_rollouts_default_evidence_defers_selected_rank_flow(

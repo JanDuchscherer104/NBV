@@ -109,14 +109,9 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
     ):
         _render_candidate_population_evidence(store_path)
 
-    if st.toggle(
-        "Load bounded candidate geometry and reward plots",
-        value=False,
-        help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
-    ):
-        candidate_rows = _cached_projection(store_path, "candidates", limit=candidate_plot_limit)
-        _render_candidate_geometry_diagnostics(
-            pd.DataFrame(candidate_rows),
-            pd.DataFrame(candidate_rows),
-            total_candidates=int(reader.array("candidates/candidate_row_id").size),
-        )
+    candidate_rows = _cached_projection(store_path, "candidates", limit=candidate_plot_limit)
+    _render_candidate_geometry_diagnostics(
+        pd.DataFrame(candidate_rows),
+        pd.DataFrame(candidate_rows),
+        total_candidates=int(reader.array("candidates/candidate_row_id").size),
+    )

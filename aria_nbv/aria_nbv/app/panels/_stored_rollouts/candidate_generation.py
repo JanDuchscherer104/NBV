@@ -642,6 +642,43 @@ def _render_candidate_geometry_diagnostics(
                     ),
                 ),
             )
+            three_dimensional = root_geometry.dropna(
+                subset=["root_relative_x_m", "root_relative_y_m", "root_relative_z_m"]
+            )
+            if not three_dimensional.empty:
+                fig = px.scatter_3d(
+                    three_dimensional,
+                    x="root_relative_x_m",
+                    y="root_relative_y_m",
+                    z="root_relative_z_m",
+                    color="position" if "position" in three_dimensional else None,
+                    symbol="selected" if "selected" in three_dimensional else None,
+                    hover_data=[
+                        name
+                        for name in ("rollout_row_id", "step_index", "actor_action", "mixture")
+                        if name in three_dimensional
+                    ],
+                    title="Candidate centers relative to each rollout root (3D)",
+                )
+                fig.update_layout(scene={"aspectmode": "data"})
+                _render_plot(
+                    fig,
+                    ScientificExplanation(
+                        question="Do candidate families occupy the intended local three-dimensional motion support?",
+                        population="Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed.",
+                        metric="Root-relative X/Y/Z displacement in metres, with Z as ARIA world up.",
+                        denominator_masks="Rows with finite root-relative X, Y, and Z coordinates; actor validity and selection remain explicit fields.",
+                        comparability="Coordinate convention, generator profile, and plotting row limit must match.",
+                        expected_pattern="Families occupy their intended local volume with selected actions inside actor-valid support.",
+                        failure_interpretation="Flattened, collapsed, or implausibly elevated clusters can expose frame, pose, or generator defects.",
+                        evidence_role="actor-visible",
+                        source_fields=(
+                            "inspection.root_relative_candidate_rows",
+                            "candidate pose_world_cam",
+                            "rollout root_pose_world",
+                        ),
+                    ),
+                )
 
         angle_cols = [
             name
