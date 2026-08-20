@@ -181,7 +181,13 @@ def discover_rollout_store_paths(base_dir: Path, *, pattern: str = "**/*.zarr") 
     root = Path(base_dir).expanduser().resolve()
     if not root.exists():
         return []
-    stores = [path.expanduser().resolve() for path in root.glob(pattern) if path.is_dir()]
+    stores = {path.expanduser().resolve() for path in root.glob(pattern) if path.is_dir()}
+    campaign_markers = ("zarr.json", "manifest.json", "_SUCCESS.json", "_owner.json")
+    stores.update(
+        marker.parent.resolve()
+        for marker in root.glob("**/_SUCCESS.json")
+        if all((marker.parent / name).is_file() for name in campaign_markers)
+    )
     return sorted(stores, key=lambda path: (_path_mtime(path), path.as_posix()), reverse=True)
 
 
