@@ -32,6 +32,7 @@ from aria_nbv.rollouts.manifest import RolloutStoreInvocation, RolloutStoreManif
 from aria_nbv.rollouts.reporting import (
     ANALYSIS_FACT_SIDECAR_VERSION,
     THESIS_REPORT_TABLE_COLUMNS,
+    build_rollout_corpus_summary,
     build_thesis_report_frames,
     serialize_thesis_report_bundle,
     write_thesis_report_bundle,
@@ -58,6 +59,74 @@ def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monk
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
     assert calls == 1
     assert len(frames["candidate_groups"]) > 0
+
+
+def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_support(tmp_path, monkeypatch) -> None:
+    first = write_rollout_zarr_store(
+        tmp_path / "first.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=171)[:1],
+        manifest_context=RolloutStoreManifestContext(writer_config={"profile": "alpha"}),
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "second.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=172)[:1],
+        manifest_context=RolloutStoreManifestContext(writer_config={"profile": "beta"}),
+    )
+    invalid = tmp_path / "invalid.zarr"
+    invalid.mkdir()
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting.suspicious_rollout_rows",
+        lambda _reader: [
+            {
+                "kind": "fixture_warning",
+                "severity": "warning",
+                "rollout_row_id": None,
+                "step_row_id": None,
+                "candidate_row_id": None,
+                "message": "fixture warning",
+            }
+        ],
+    )
+
+    summary = build_rollout_corpus_summary((invalid, second.store_dir, first.store_dir))
+    repeated = build_rollout_corpus_summary((first.store_dir, invalid, second.store_dir))
+
+    assert summary.verdict == "Incomplete"
+    assert summary.totals["selected_store_count"] == 3
+    assert summary.totals["included_store_count"] == 2
+    assert summary.totals["excluded_store_count"] == 1
+    assert summary.totals["rollout_count"] == first.num_rollouts + second.num_rollouts
+    assert summary.totals["step_count"] == first.num_steps + second.num_steps
+    assert summary.totals["candidate_count"] == first.num_candidates + second.num_candidates
+    assert summary.totals["storage_bytes"] is not None and summary.totals["storage_bytes"] > 0
+    assert summary.totals["q_h_state_count"] == summary.totals["step_count"]
+    assert summary.totals["q_h_trainable_count"] is not None
+    assert summary.excluded_stores[0]["path"] == invalid.resolve().as_posix()
+
+    support = summary.candidate_support
+    assert support["generation_cohort_id"].nunique() >= 2
+    assert int(support["allocated_count"].sum()) == summary.totals["candidate_count"]
+    assert "macro_actor_valid_rate" not in support.columns
+    assert "calibration_gap" not in support.columns
+    nonempty = support[support["allocated_count"] > 0]
+    assert np.allclose(nonempty["trainable_rate"], nonempty["trainable_count"] / nonempty["allocated_count"])
+
+    assert set(summary.endpoints["profile"]) == {"alpha", "beta"}
+    assert summary.endpoints["store_id"].nunique() == 2
+    assert summary.endpoints["store_path"].nunique() == 2
+    assert set(summary.endpoints["evidence_class"]) == {"diagnostic_proxy"}
+    assert summary.failure_counts.to_dict("records") == [
+        {"kind": "fixture_warning", "severity": "warning", "count": 2, "store_count": 2}
+    ]
+    assert len(summary.q_h_stores) == 2
+
+    assert summary.totals == repeated.totals
+    assert summary.included_stores == repeated.included_stores
+    assert summary.excluded_stores == repeated.excluded_stores
+    assert_frame_equal(summary.candidate_support, repeated.candidate_support)
+    assert_frame_equal(summary.endpoints, repeated.endpoints)
+    assert_frame_equal(summary.failure_counts, repeated.failure_counts)
 
 
 def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:

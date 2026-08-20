@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -473,6 +474,38 @@ _FACT_SPECS = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class RolloutCorpusSummary:
+    """Safe additive evidence across explicitly selected rollout stores."""
+
+    verdict: Literal["Ready", "Incomplete", "Blocked"]
+    """Whether every selected store contributed validated evidence."""
+
+    selected_paths: tuple[Path, ...]
+    """Normalized requested store paths in deterministic order."""
+
+    included_stores: tuple[dict[str, object], ...]
+    """Validated store identities and profiles included in all totals."""
+
+    excluded_stores: tuple[dict[str, str], ...]
+    """Selected stores excluded with exact validation or projection reasons."""
+
+    totals: dict[str, int | None]
+    """Additive store, rollout, storage, and complete deep-Q_H counts."""
+
+    candidate_support: pd.DataFrame
+    """Additive candidate support grouped by exact generation cohort and family."""
+
+    endpoints: pd.DataFrame
+    """Store-qualified diagnostic endpoint rows, preserving profile, policy, and horizon."""
+
+    failure_counts: pd.DataFrame
+    """Failure counts grouped only by kind and severity."""
+
+    q_h_stores: pd.DataFrame
+    """Per-store deep Q_H counts and any explicit unavailability reason."""
+
+
 def build_thesis_report_frames(
     store_paths: Iterable[Path | str],
     *,
@@ -513,6 +546,247 @@ def build_thesis_report_frames(
         _append_sidecar_rows(rows, sidecar_path, evidence_status=evidence_status)
 
     return {name: _frame(name, table_rows) for name, table_rows in rows.items()}
+
+
+def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCorpusSummary:
+    """Build safe multi-store counts without pooling scientific macro estimates.
+
+    Every store first crosses the canonical report validation and promotion
+    seam. Invalid selections remain visible in :attr:`excluded_stores`. Valid
+    stores contribute additive counts, exact-cohort candidate support, raw
+    store-qualified diagnostic endpoints, and grouped failure counts. Q_H mask
+    totals are reported only when every included store completes the explicit
+    deep count.
+    """
+
+    selected = tuple(sorted({Path(path).expanduser().resolve() for path in store_paths}, key=Path.as_posix))
+    if not selected:
+        raise ValueError("At least one rollout store is required to build a corpus summary.")
+
+    included: list[dict[str, object]] = []
+    excluded: list[dict[str, str]] = []
+    valid_frames: list[dict[str, pd.DataFrame]] = []
+    q_h_rows: list[dict[str, object]] = []
+    for path in selected:
+        try:
+            frames = build_thesis_report_frames((path,), evidence_status="pilot")
+            store_row = frames["stores"].iloc[0]
+            store_id = str(store_row["store_id"])
+            profile = _report_profile(frames, store_id)
+            reader = RolloutZarrStoreReader(path)
+            validation = reader.validate()
+            q_h_row = q_h_evidence_rows(reader, deep_count=True, validation_result=validation)[0]
+        except Exception as exc:
+            excluded.append({"path": path.as_posix(), "reason": f"{type(exc).__name__}: {exc}"})
+            continue
+        included.append(
+            {
+                "path": path.as_posix(),
+                "store_id": store_id,
+                "name": str(store_row["name"]),
+                "profile": profile,
+            }
+        )
+        valid_frames.append(frames)
+        q_h_rows.append({"path": path.as_posix(), "store_id": store_id, **q_h_row})
+
+    stores = _concat_report_frames(valid_frames, "stores")
+    runtime = _concat_report_frames(valid_frames, "runtime_storage")
+    candidate = _candidate_corpus_support(_concat_report_frames(valid_frames, "candidate_composition"))
+    endpoints = _corpus_endpoints(valid_frames, included)
+    failures = _corpus_failure_counts(_concat_report_frames(valid_frames, "failures"))
+    q_h_stores = (
+        pd.DataFrame(q_h_rows).sort_values(["store_id"], kind="stable").reset_index(drop=True)
+        if q_h_rows
+        else pd.DataFrame(
+            columns=(
+                "path",
+                "store_id",
+                "available",
+                "blocking_reason",
+                "deep_count",
+                "state_count",
+                "trainable_count",
+                "padding_count",
+            )
+        )
+    )
+    q_h_complete = bool(q_h_rows) and all(
+        bool(row.get("available"))
+        and bool(row.get("deep_count"))
+        and not bool(row.get("truncated"))
+        and all(_is_nonnegative_int(row.get(field)) for field in ("state_count", "trainable_count", "padding_count"))
+        for row in q_h_rows
+    )
+    totals = {
+        "selected_store_count": len(selected),
+        "included_store_count": len(included),
+        "excluded_store_count": len(excluded),
+        "rollout_count": _frame_int_sum(stores, "rollouts"),
+        "step_count": _frame_int_sum(stores, "steps"),
+        "candidate_count": _frame_int_sum(stores, "candidates"),
+        "target_row_count": _frame_int_sum(stores, "targets"),
+        "source_row_count": _frame_int_sum(stores, "sources"),
+        "storage_bytes": _frame_int_sum(runtime, "total_bytes"),
+        "q_h_state_count": _row_int_sum(q_h_rows, "state_count") if q_h_complete else None,
+        "q_h_trainable_count": _row_int_sum(q_h_rows, "trainable_count") if q_h_complete else None,
+        "q_h_padding_count": _row_int_sum(q_h_rows, "padding_count") if q_h_complete else None,
+    }
+    verdict: Literal["Ready", "Incomplete", "Blocked"]
+    if not included:
+        verdict = "Blocked"
+    elif excluded:
+        verdict = "Incomplete"
+    else:
+        verdict = "Ready"
+    return RolloutCorpusSummary(
+        verdict=verdict,
+        selected_paths=selected,
+        included_stores=tuple(included),
+        excluded_stores=tuple(excluded),
+        totals=totals,
+        candidate_support=candidate,
+        endpoints=endpoints,
+        failure_counts=failures,
+        q_h_stores=q_h_stores,
+    )
+
+
+def _report_profile(frames: Mapping[str, pd.DataFrame], store_id: str) -> str:
+    """Return the first persisted writer-profile spelling for one store."""
+
+    parameters = frames["parameters"]
+    candidates = ("writer_config.profile", "writer_config.recipe_profile", "writer_config.name")
+    for key in candidates:
+        rows = parameters[(parameters["store_id"] == store_id) & (parameters["key"] == key)]
+        if not rows.empty and isinstance(rows.iloc[0]["value_text"], str):
+            return str(rows.iloc[0]["value_text"])
+    return "unknown"
+
+
+def _concat_report_frames(frames: list[dict[str, pd.DataFrame]], name: str) -> pd.DataFrame:
+    """Concatenate one canonical report table in deterministic row order."""
+
+    if not frames:
+        return pd.DataFrame(columns=THESIS_REPORT_TABLE_COLUMNS[name])
+    return (
+        pd.concat([bundle[name] for bundle in frames], ignore_index=True)
+        .sort_values(list(THESIS_REPORT_TABLE_COLUMNS[name]), kind="stable", na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
+    """Recompute additive family support from exact generation cohorts."""
+
+    columns = (
+        "generation_cohort_id",
+        "generation_cohort",
+        "family",
+        "store_count",
+        "allocated_count",
+        "actor_valid_count",
+        "oracle_valid_count",
+        "trainable_count",
+        "selected_count",
+        "actor_valid_rate",
+        "oracle_valid_rate",
+        "trainable_rate",
+        "selected_rate",
+        "aggregation",
+    )
+    source = composition[composition["group_by"] == "mixture"].copy()
+    if source.empty:
+        return pd.DataFrame(columns=columns)
+    count_columns = (
+        "allocated_count",
+        "actor_valid_count",
+        "oracle_valid_count",
+        "trainable_count",
+        "selected_count",
+    )
+    for column in count_columns:
+        source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
+    grouped = (
+        source.groupby(["generation_cohort_id", "family"], dropna=False, sort=True)
+        .agg(
+            generation_cohort=("generation_cohort", "first"),
+            store_count=("store_id", "nunique"),
+            **{column: (column, "sum") for column in count_columns},
+        )
+        .reset_index()
+    )
+    allocated = grouped["allocated_count"].replace(0, np.nan)
+    grouped["actor_valid_rate"] = grouped["actor_valid_count"] / allocated
+    grouped["oracle_valid_rate"] = grouped["oracle_valid_count"] / allocated
+    grouped["trainable_rate"] = grouped["trainable_count"] / allocated
+    grouped["selected_rate"] = grouped["selected_count"] / allocated
+    grouped["aggregation"] = "additive counts within exact generation cohort and family"
+    return (
+        grouped.loc[:, columns]
+        .sort_values(["generation_cohort_id", "family"], kind="stable", na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+def _corpus_endpoints(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+) -> pd.DataFrame:
+    """Retain raw diagnostic endpoints with store and profile identity."""
+
+    rows: list[pd.DataFrame] = []
+    for bundle, store in zip(frames, included, strict=True):
+        frame = bundle["reconstruction_endpoints"].copy()
+        frame.insert(1, "store_path", str(store["path"]))
+        frame.insert(2, "profile", str(store["profile"]))
+        rows.append(frame)
+    columns = ("store_id", "store_path", "profile", *THESIS_REPORT_TABLE_COLUMNS["reconstruction_endpoints"][1:])
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return (
+        pd.concat(rows, ignore_index=True)
+        .loc[:, columns]
+        .sort_values(["profile", "policy", "horizon", "store_id", "rollout_row_id"], kind="stable", na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
+    """Count suspicious rows by kind and severity without pooling causes."""
+
+    columns = ("kind", "severity", "count", "store_count")
+    if failures.empty:
+        return pd.DataFrame(columns=columns)
+    return (
+        failures.groupby(["kind", "severity"], dropna=False, sort=True)
+        .agg(count=("message", "size"), store_count=("store_id", "nunique"))
+        .reset_index()
+        .loc[:, columns]
+    )
+
+
+def _frame_int_sum(frame: pd.DataFrame, column: str) -> int:
+    """Sum one canonical nonnegative count column, treating no rows as zero."""
+
+    if frame.empty:
+        return 0
+    values = pd.to_numeric(frame[column], errors="raise")
+    if values.isna().any() or (values < 0).any():
+        raise ValueError(f"Corpus count column {column!r} must contain nonnegative integers.")
+    return int(values.sum())
+
+
+def _row_int_sum(rows: list[dict[str, object]], field: str) -> int:
+    """Sum a deep-Q_H count after completeness has been proven."""
+
+    return sum(int(row[field]) for row in rows)
+
+
+def _is_nonnegative_int(value: object) -> bool:
+    """Return whether a value is a factual nonnegative integer count."""
+
+    return isinstance(value, int | np.integer) and not isinstance(value, bool) and int(value) >= 0
 
 
 def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
@@ -1058,9 +1332,11 @@ def _json_scalar(value: object, *, table: str, column: str) -> object:
 
 __all__ = [
     "ANALYSIS_FACT_SIDECAR_VERSION",
+    "RolloutCorpusSummary",
     "THESIS_REPORT_BUNDLE_ROLE",
     "THESIS_REPORT_BUNDLE_VERSION",
     "THESIS_REPORT_TABLE_COLUMNS",
+    "build_rollout_corpus_summary",
     "build_thesis_report_frames",
     "serialize_thesis_report_bundle",
     "write_thesis_report_bundle",
