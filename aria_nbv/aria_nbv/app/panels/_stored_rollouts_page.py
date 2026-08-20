@@ -59,7 +59,12 @@ from ...rollouts.inspection import (
     target_audit_rows,
     temporal_metric_summary_rows,
 )
-from ...rollouts.reporting import build_thesis_report_frames, serialize_thesis_report_bundle
+from ...rollouts.reporting import (
+    RolloutCorpusSummary,
+    build_rollout_corpus_summary,
+    build_thesis_report_frames,
+    serialize_thesis_report_bundle,
+)
 from ..rerun_launch import (
     RerunLaunchMode,
     build_rerun_rollout_command,
@@ -74,11 +79,10 @@ from ..rerun_launch import (
 from .common import _report_exception
 
 _SECTIONS = (
-    "Trust & Topology",
-    "Scientific Evidence",
-    "Targets & Action Support",
-    "Failure Triage",
-    "Inspect, Export & Rerun",
+    "Overview",
+    "Evidence",
+    "Failures",
+    "Drill-down",
 )
 _ROLE_COLORS = {
     "actor-visible": "#1f77b4",
@@ -89,6 +93,7 @@ _ROLE_COLORS = {
 _SECTION_KEY = "stored_rollouts_section"
 _LAUNCH_HANDLE_KEY = "stored_rollouts_rerun_handle"
 _ACTIVE_QUERY_STORE_KEY = "stored_rollouts_active_query_store"
+_CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
 _QUERY_SCOPES = ("Rollout summaries", "Factual steps", "Candidates")
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
 _TEMPORAL_METRIC_LABELS = {
@@ -477,10 +482,23 @@ def _clear_stored_rollout_caches() -> None:
     _cached_failures_cached.clear()
     _cached_evidence_bundle_cached.clear()
     _cached_store_bundle_cached.clear()
+    _cached_corpus_summary.clear()
+    st.session_state.pop(_CORPUS_SUMMARY_STATE_KEY, None)
+
+
+@st.cache_data(show_spinner="Aggregating validated rollout stores…", max_entries=8)
+def _cached_corpus_summary(
+    store_paths: tuple[str, ...],
+    store_identities: tuple[str, ...],
+) -> RolloutCorpusSummary:
+    """Build an explicit corpus summary bound to ordered store identities."""
+
+    del store_identities
+    return build_rollout_corpus_summary(Path(path) for path in store_paths)
 
 
 def render_stored_rollouts_page() -> None:
-    """Render the five-workspace stored-rollout inspection workflow."""
+    """Render corpus summaries and one active-store inspection workflow."""
 
     st.header("Rollout Supervision")
     st.caption(
@@ -491,7 +509,7 @@ def render_stored_rollouts_page() -> None:
 
     paths = PathConfig()
     inventory = _cached_inventory(paths.offline_cache_dir.as_posix())
-    store_path = _render_store_selector(paths, inventory)
+    corpus_paths, store_path = _render_store_selector(paths, inventory)
     if store_path is None:
         st.info("No rollout store is selected. Choose a discovered store or enter a path.")
         return
@@ -513,8 +531,17 @@ def render_stored_rollouts_page() -> None:
     )
     current = bool(validation.ok)
 
+    corpus_identity = tuple(_store_projection_identity(path.as_posix()) for path in corpus_paths)
+    corpus_key = (tuple(path.as_posix() for path in corpus_paths), corpus_identity)
+    corpus_state = st.session_state.get(_CORPUS_SUMMARY_STATE_KEY)
+    corpus_summary = corpus_state[1] if corpus_state and corpus_state[0] == corpus_key else None
+
     if tabs[0].open:
         with tabs[0]:
+            if st.button("Build corpus summary", type="primary", width="stretch"):
+                corpus_summary = _cached_corpus_summary(*corpus_key)
+                st.session_state[_CORPUS_SUMMARY_STATE_KEY] = (corpus_key, corpus_summary)
+            _render_corpus_overview(corpus_summary, selected_count=len(corpus_paths))
             _render_trust_and_topology(
                 reader=reader,
                 store_path=store_path,
@@ -523,24 +550,33 @@ def render_stored_rollouts_page() -> None:
                 paths=paths,
                 validation_ok=current,
             )
-    for tab, renderer in zip(
-        tabs[1:],
-        (_render_scientific_evidence, _render_targets_and_support, _render_failure_triage),
-        strict=False,
-    ):
-        if not tab.open:
-            continue
-        with tab:
+    if tabs[1].open:
+        with tabs[1]:
+            _render_corpus_evidence(corpus_summary)
             if current:
-                renderer(reader)
+                with st.expander("Active-store scientific evidence"):
+                    _render_scientific_evidence(reader)
+                with st.expander("Active-store targets and action support"):
+                    _render_targets_and_support(reader)
             else:
                 _render_stale_store_boundary(
                     validation,
                     inventory_row=selected_inventory,
                     manifest_payload=manifest_payload,
                 )
-    if tabs[4].open:
-        with tabs[4]:
+    if tabs[2].open:
+        with tabs[2]:
+            _render_corpus_failures(corpus_summary)
+            if current:
+                _render_failure_triage(reader)
+            else:
+                _render_stale_store_boundary(
+                    validation,
+                    inventory_row=selected_inventory,
+                    manifest_payload=manifest_payload,
+                )
+    if tabs[3].open:
+        with tabs[3]:
             if current:
                 _render_inspect_export_rerun(
                     reader,
@@ -556,14 +592,27 @@ def render_stored_rollouts_page() -> None:
                 )
 
 
-def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]) -> Path | None:
-    """Render compact store selection without materializing candidate evidence."""
+def _render_store_selector(
+    paths: PathConfig,
+    inventory: list[dict[str, object]],
+) -> tuple[tuple[Path, ...], Path | None]:
+    """Select an explicit corpus and one active drill-down store."""
 
     col_store, col_status = st.columns([4, 1])
     selected: Path | None = None
     if inventory:
+        options = [Path(str(item["path"])).expanduser().resolve() for item in inventory]
+        corpus = tuple(
+            col_store.multiselect(
+                "Corpus stores",
+                options=options,
+                default=options[:1],
+                format_func=lambda path: path.name,
+                help="Only selected stores enter the explicit aggregate summary.",
+            )
+        )
         row = col_store.selectbox(
-            "rollouts.zarr store",
+            "Active drill-down store",
             options=inventory,
             format_func=lambda item: (
                 f"{Path(str(item['path'])).name} · {item.get('schema_status', 'unknown')} · "
@@ -575,6 +624,7 @@ def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]
         selected = Path(str(row["path"])).expanduser().resolve()
         col_status.metric("Schema", str(row.get("schema_status", "unknown")).upper())
     else:
+        corpus = ()
         col_store.info(f"No `*.zarr` rollout stores found below `{paths.offline_cache_dir}`.")
 
     with st.expander("Store path override", expanded=not inventory):
@@ -584,10 +634,89 @@ def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]
             if not candidate.is_absolute():
                 candidate = paths.resolve_cache_artifact_dir(manual)
             selected = candidate.resolve()
+            if selected not in corpus:
+                corpus = (*corpus, selected)
     if col_status.button("Refresh stores", help="Clear inspector caches after creating or replacing a store."):
         _clear_stored_rollout_caches()
         st.rerun()
-    return selected
+    if selected is not None and selected not in corpus:
+        corpus = (*corpus, selected)
+    return tuple(dict.fromkeys(corpus)), selected
+
+
+def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_count: int) -> None:
+    """Render only additive corpus counts after explicit aggregation."""
+
+    st.subheader("Corpus overview")
+    if summary is None:
+        st.info(f"{selected_count} store(s) selected. Build the summary to validate and aggregate them.")
+        return
+    totals = summary.totals
+    cols = st.columns(6)
+    cols[0].metric("Included stores", totals["included_store_count"])
+    cols[1].metric("Excluded stores", totals["excluded_store_count"])
+    cols[2].metric("Physical samples", _format_count(totals["physical_sample_count"]))
+    cols[3].metric("Q_H chains", _format_count(totals["q_h_chain_count"]))
+    cols[4].metric("Q_H states", _format_count(totals["q_h_state_count"]))
+    cols[5].metric("Storage", _format_bytes(totals["storage_bytes"]))
+    st.caption(f"Corpus verdict: {summary.verdict}. Counts are additive; scientific macro estimates are not pooled.")
+    if summary.excluded_stores:
+        st.dataframe(pd.DataFrame(summary.excluded_stores), hide_index=True, width="stretch")
+    if not summary.q_h_stores.empty:
+        st.dataframe(summary.q_h_stores, hide_index=True, width="stretch")
+
+
+def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
+    """Render cohort-separated additive support and raw endpoint distributions."""
+
+    st.subheader("Corpus evidence")
+    if summary is None:
+        st.info("Build the corpus summary in Overview before viewing aggregate evidence.")
+        return
+    if summary.candidate_support.empty:
+        st.info("No validated candidate-support rows are available.")
+    else:
+        st.dataframe(summary.candidate_support, hide_index=True, width="stretch")
+    if summary.endpoints.empty:
+        st.info("No validated endpoint rows are available.")
+    else:
+        st.dataframe(summary.endpoints, hide_index=True, width="stretch")
+        metric = next(
+            (
+                name
+                for name in ("endpoint_gain", "target_rri", "cumulative_target_root_gain")
+                if name in summary.endpoints
+            ),
+            None,
+        )
+        if metric is not None:
+            fig = px.box(
+                summary.endpoints,
+                x="profile",
+                y=metric,
+                color="policy",
+                facet_col="horizon",
+                hover_data=["store_id"],
+                title="Store-qualified endpoint distributions",
+            )
+            st.plotly_chart(fig, width="stretch")
+
+
+def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
+    """Render aggregate failure counts before active-store triage."""
+
+    st.subheader("Corpus failures")
+    if summary is None:
+        st.info("Build the corpus summary in Overview before viewing aggregate failures.")
+        return
+    if summary.failure_counts.empty:
+        st.success("No validated aggregate failure rows were reported.")
+        return
+    st.dataframe(summary.failure_counts, hide_index=True, width="stretch")
+    st.plotly_chart(
+        px.bar(summary.failure_counts, x="kind", y="count", color="severity", title="Failures across included stores"),
+        width="stretch",
+    )
 
 
 def _render_role_legend() -> None:
@@ -614,7 +743,7 @@ def _render_trust_and_topology(
     paths: PathConfig,
     validation_ok: bool,
 ) -> None:
-    st.subheader("Trust & Topology")
+    st.subheader("Active-store validation")
     counts = inventory_row or {}
     cols = st.columns(5)
     cols[0].metric("Schema", str(counts.get("schema_status", "unknown")))
@@ -624,6 +753,13 @@ def _render_trust_and_topology(
     cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
     _render_validated_store_header(reader.store_dir.as_posix(), validation_ok=validation_ok)
+
+    if not st.toggle(
+        "Show advanced validation, topology, and raw metadata",
+        value=False,
+        help="Keeps topology discovery and invariant projections off the essential overview until requested.",
+    ):
+        return
 
     try:
         invariants = _cached_projection(reader.store_dir.as_posix(), "invariants")
@@ -777,7 +913,7 @@ def _format_fraction(value: object) -> str:
 
 
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
-    st.subheader("Scientific Evidence")
+    st.subheader("Scientific evidence")
     store_path = reader.store_dir.as_posix()
     _render_reconstruction_summary(store_path)
     cohort = _cached_projection(store_path, "cohorts")
@@ -1250,7 +1386,7 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
 
 
 def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
-    st.subheader("Targets & Action Support")
+    st.subheader("Targets and action support")
     store_path = reader.store_dir.as_posix()
     candidate_plot_limit = int(
         st.number_input(
@@ -2072,7 +2208,7 @@ def _render_candidate_geometry_diagnostics(
 
 
 def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
-    st.subheader("Failure Triage")
+    st.subheader("Active-store failure detail")
     with st.expander("Advanced thresholds"):
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
         dominant = float(st.slider("Dominant invalidity fraction", min_value=0.0, max_value=1.0, value=0.8))
@@ -2125,7 +2261,7 @@ def _carry_failure_to_inspect(row: dict[str, object]) -> None:
         st.session_state["stored_rollout_id"] = int(row["rollout_row_id"])
     if row.get("step_row_id") is not None:
         st.session_state["stored_step_id"] = int(row["step_row_id"])
-    st.session_state[_SECTION_KEY] = "Inspect, Export & Rerun"
+    st.session_state[_SECTION_KEY] = "Drill-down"
 
 
 def _canonical_query_store_identity(store_path: Path) -> str:
@@ -2445,7 +2581,7 @@ def _render_inspect_export_rerun(
     manifest_payload: dict[str, Any],
     paths: PathConfig,
 ) -> None:
-    st.subheader("Inspect, Export & Rerun")
+    st.subheader("Drill-down")
     store_path_key = reader.store_dir.as_posix()
     store_identity = _canonical_query_store_identity(store_path)
     _activate_query_store(st.session_state, store_identity)

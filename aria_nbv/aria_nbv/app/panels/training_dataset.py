@@ -19,14 +19,20 @@ from ...configs import PathConfig
 from ...dataset_bundle import (
     DatasetBundleEvidence,
     DatasetBundleSelection,
+    QhBatchPreview,
+    QhCorpusReadiness,
     build_dataset_bundle_summary,
+    build_qh_corpus_readiness,
     compute_dataset_bundle_deep_statistics,
+    preview_qh_batch,
 )
 from ...dataset_topology import discover_vin_store_dirs
 from ...rollouts.inspection import discover_rollout_store_paths
 
 _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"
+_QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
+_QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
 
 
 def _artifact_identity(path: Path) -> tuple[tuple[str, int, int], ...]:
@@ -59,27 +65,7 @@ def _artifact_identity(path: Path) -> tuple[tuple[str, int, int], ...]:
     return tuple(rows)
 
 
-def _coral_artifact_identity(root: Path) -> tuple[tuple[str, int, int], ...]:
-    """Return identities for narrowly matched CORAL artifacts outside stores."""
-
-    resolved = root.expanduser().resolve()
-    if not resolved.exists():
-        return ()
-    rows: list[tuple[str, int, int]] = []
-    for child in sorted(resolved.glob("**/rri_binner*.json"), key=lambda item: item.as_posix()):
-        try:
-            stat = child.stat()
-        except OSError:
-            continue
-        rows.append((child.as_posix(), stat.st_mtime_ns, stat.st_size))
-    return tuple(rows)
-
-
-def _selection_cache_key(
-    selection: DatasetBundleSelection,
-    *,
-    coral_root: Path,
-) -> tuple[Any, ...]:
+def _selection_cache_key(selection: DatasetBundleSelection) -> tuple[Any, ...]:
     """Return the session-result key for one immutable bundle snapshot."""
 
     return (
@@ -87,7 +73,6 @@ def _selection_cache_key(
         tuple(path.as_posix() for path in selection.rollout_stores),
         _artifact_identity(selection.root_store),
         tuple(_artifact_identity(path) for path in selection.rollout_stores),
-        _coral_artifact_identity(coral_root),
     )
 
 
@@ -96,7 +81,6 @@ def _cached_bundle_summary(
     root_store: str,
     rollout_stores: tuple[str, ...],
     artifact_identity: tuple[Any, ...],
-    coral_root: str,
     *,
     validate_rollouts: bool,
 ) -> DatasetBundleEvidence:
@@ -109,7 +93,6 @@ def _cached_bundle_summary(
     )
     return build_dataset_bundle_summary(
         selection,
-        coral_artifact_roots=(Path(coral_root),),
         validate_rollouts=validate_rollouts,
     )
 
@@ -128,6 +111,46 @@ def _cached_deep_statistics(
         tuple(Path(path) for path in rollout_stores),
     )
     return compute_dataset_bundle_deep_statistics(selection)
+
+
+@st.cache_data(show_spinner="Constructing Q_H datasets and DataModule…", max_entries=8)
+def _cached_qh_readiness(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    artifact_identity: tuple[Any, ...],
+    batch_size: int,
+    seed: int,
+) -> QhCorpusReadiness:
+    """Cross the real Q_H dataset/DataModule seam after explicit request."""
+
+    del artifact_identity
+    return build_qh_corpus_readiness(
+        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        batch_size=batch_size,
+        seed=seed,
+    )
+
+
+@st.cache_data(show_spinner="Reading one Q_H chain and collating one batch…", max_entries=8)
+def _cached_qh_preview(
+    root_store: str,
+    rollout_stores: tuple[str, ...],
+    artifact_identity: tuple[Any, ...],
+    stage: str,
+    chain_index: int,
+    batch_size: int,
+    seed: int,
+) -> QhBatchPreview:
+    """Materialize one bounded chain and DataLoader batch after explicit request."""
+
+    del artifact_identity
+    return preview_qh_batch(
+        DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        stage=stage,
+        chain_index=chain_index,
+        batch_size=batch_size,
+        seed=seed,
+    )
 
 
 def _manual_paths(value: str) -> tuple[Path, ...]:
@@ -327,11 +350,15 @@ def _render_topology(evidence: DatasetBundleEvidence) -> None:
 def _download_payload(
     evidence: DatasetBundleEvidence,
     deep: dict[str, Any] | None,
+    qh_readiness: QhCorpusReadiness | None = None,
+    qh_preview: QhBatchPreview | None = None,
 ) -> bytes:
     """Serialize deterministic, complete bundle evidence for download."""
 
     payload = evidence.to_jsonable()
     payload["deep_statistics"] = deep
+    payload["q_h_readiness"] = None if qh_readiness is None else qh_readiness.to_jsonable()
+    payload["q_h_batch_preview"] = None if qh_preview is None else qh_preview.to_jsonable()
     return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
@@ -347,8 +374,6 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     paths = PathConfig()
     discovered_roots = discover_vin_store_dirs(paths.offline_cache_dir)
     discovered_rollouts = discover_rollout_store_paths(paths.offline_cache_dir)
-    coral_root = paths.root / ".logs" / "vin"
-
     with st.expander("Bundle selection", expanded=True):
         root_store = _select_root_store(discovered_roots)
         rollout_stores = _select_rollout_stores(discovered_rollouts)
@@ -370,14 +395,13 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     except ValueError as exc:
         st.error(str(exc))
         return
-    identity = _selection_cache_key(selection, coral_root=coral_root)
+    identity = _selection_cache_key(selection)
     root_text = selection.root_store.as_posix()
     rollout_texts = tuple(path.as_posix() for path in selection.rollout_stores)
     light = _cached_bundle_summary(
         root_text,
         rollout_texts,
         identity,
-        coral_root.as_posix(),
         validate_rollouts=False,
     )
 
@@ -391,7 +415,6 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 root_text,
                 rollout_texts,
                 identity,
-                coral_root.as_posix(),
                 validate_rollouts=True,
             ),
         )
@@ -405,30 +428,17 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     evidence = validated_state[1] if validated_state and validated_state[0] == identity else light
     deep_state = st.session_state.get(_DEEP_STATE_KEY)
     deep = deep_state[1] if deep_state and deep_state[0] == identity else None
+    qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
+    qh_readiness = qh_state[1] if qh_state and qh_state[0] == identity else None
+    preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
+    qh_preview = preview_state[1] if preview_state and preview_state[0] == identity else None
 
     _render_verdict(evidence)
     _render_summary_metrics(evidence, deep)
 
-    overview_tab, stores_tab, topology_tab, targets_tab, coral_tab, findings_tab = st.tabs(
-        ["Overview", "Stores & splits", "Topology", "Target supervision", "CORAL artifacts", "Findings"]
-    )
-    with overview_tab:
-        st.subheader("Bundle overview")
-        st.write(
-            {
-                "root_store": evidence.root.get("path"),
-                "root_splits": evidence.root.get("split_counts", {}),
-                "materialized_blocks": evidence.root.get("materialized_blocks", {}),
-                "selected_rollout_stores": evidence.aggregate.get("selected_rollout_store_count", 0),
-                "compatible_rollout_stores": evidence.aggregate.get("compatible_rollout_store_count", 0),
-                "combined_compatible_storage": _format_bytes(evidence.aggregate.get("storage_bytes")),
-            }
-        )
-        st.info(
-            "For detailed inspection, use **Training Data → Root Observation Store** or "
-            "**Training Data → Rollout Supervision** in the top navigation."
-        )
-    with stores_tab:
+    readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
+    with readiness_tab:
+        st.subheader("Bundle readiness")
         st.subheader("Root splits")
         split_rows = [
             {"split": split, "samples": count} for split, count in sorted(evidence.root.get("split_counts", {}).items())
@@ -440,40 +450,122 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             st.dataframe(pd.DataFrame(rollout_rows), hide_index=True, width="stretch")
         else:
             st.info("No rollout supervision store is selected.")
-    with topology_tab:
-        st.subheader("Root-store → rollout-store → Q_H dependency")
-        _render_topology(evidence)
-    with targets_tab:
-        st.subheader("Target and Q_H supervision")
-        if deep is None:
-            st.info("Run **Deep statistics / target scan** to count unique persisted target tasks and Q_H rows.")
-        else:
-            st.json(deep)
-        root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
-        if not bool(root_target_scan.get("available")):
-            reason = root_target_scan.get("reason", "deep scan not run")
-            st.warning(
-                "Root target opportunities are counted only from persisted GT-OBB labels and are never inferred "
-                f"from rollout rows. Current status: {reason}."
-            )
-    with coral_tab:
-        st.subheader("Available CORAL binner artifacts")
-        st.caption(f"Catalog is intentionally scoped to {coral_root}.")
-        if evidence.coral_artifacts:
-            st.dataframe(pd.DataFrame(evidence.coral_artifacts), hide_index=True, width="stretch")
-        else:
-            st.info("No rri_binner*.json artifacts were found. Their absence does not block bundle readiness.")
-    with findings_tab:
-        st.subheader("Readiness findings")
         finding_rows = [finding.to_jsonable() for finding in evidence.findings]
         if finding_rows:
+            st.subheader("Blockers and pending evidence")
             st.dataframe(pd.DataFrame(finding_rows), hide_index=True, width="stretch")
         else:
             st.success("No readiness findings.")
+    with qh_tab:
+        st.subheader("Q_H dataset and collation readiness")
+        st.caption(
+            "This action constructs the selected stage datasets and the production QhDataModule. "
+            "It does not create a model or Trainer."
+        )
+        controls = st.columns(3)
+        batch_size = int(controls[0].number_input("Q_H batch size", min_value=1, value=1, step=1))
+        seed = int(controls[1].number_input("Q_H loader seed", min_value=0, value=0, step=1))
+        if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
+            qh_readiness = _cached_qh_readiness(
+                root_text,
+                rollout_texts,
+                identity,
+                batch_size,
+                seed,
+            )
+            st.session_state[_QH_READINESS_STATE_KEY] = (identity, qh_readiness)
+            st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+            qh_preview = None
+        if qh_readiness is None:
+            st.info("Run the preflight to prove stage admission, joins, DataModule construction, and factual counts.")
+        else:
+            renderer = st.success if qh_readiness.verdict == "Ready" else st.error
+            renderer(f"Q_H corpus: {qh_readiness.verdict}")
+            if qh_readiness.blockers:
+                st.dataframe(pd.DataFrame({"blocking_reason": qh_readiness.blockers}), hide_index=True, width="stretch")
+            if qh_readiness.stages:
+                stage_rows = [
+                    {
+                        "stage": row.stage.value,
+                        "included": row.included,
+                        "chains": row.chain_count,
+                        "states": row.state_count,
+                        "trainable_candidates": row.trainable_candidate_count,
+                        "scenes": len(row.scene_ids),
+                        "max_realized_horizon": row.max_horizon,
+                    }
+                    for row in qh_readiness.stages
+                ]
+                st.dataframe(pd.DataFrame(stage_rows), hide_index=True, width="stretch")
+                storage_rows = [
+                    {
+                        "metric": metric.name,
+                        "value": metric.value,
+                        "unit": metric.unit,
+                        "bytes": metric.numerator_bytes,
+                        "denominator": metric.denominator,
+                        "status": metric.reason or "available",
+                    }
+                    for metric in qh_readiness.storage
+                ]
+                st.dataframe(pd.DataFrame(storage_rows), hide_index=True, width="stretch")
+            if qh_readiness.verdict == "Ready":
+                included_stages = [row.stage.value for row in qh_readiness.stages if row.included]
+                preview_controls = st.columns(3)
+                preview_stage = preview_controls[0].selectbox("Preview stage", included_stages)
+                preview_index = int(
+                    preview_controls[1].number_input("Preview chain index", min_value=0, value=0, step=1)
+                )
+                if preview_controls[2].button("Preview one chain and batch", width="stretch"):
+                    try:
+                        qh_preview = _cached_qh_preview(
+                            root_text,
+                            rollout_texts,
+                            identity,
+                            preview_stage,
+                            preview_index,
+                            batch_size,
+                            seed,
+                        )
+                    except Exception as exc:
+                        st.error(f"Q_H preview failed: {type(exc).__name__}: {exc}")
+                    else:
+                        st.session_state[_QH_PREVIEW_STATE_KEY] = (identity, qh_preview)
+            if qh_preview is not None:
+                preview_cols = st.columns(4)
+                preview_cols[0].metric("Selected chain steps", qh_preview.selected_chain_steps)
+                preview_cols[1].metric("Batch trainable", qh_preview.trainable_candidate_count)
+                preview_cols[2].metric("Step padding", qh_preview.step_padding_count)
+                preview_cols[3].metric("Candidate padding", qh_preview.candidate_padding_count)
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {"tensor": name, "shape": list(shape), "dtype": qh_preview.dtypes[name]}
+                            for name, shape in qh_preview.shapes.items()
+                        ]
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                )
+    with details_tab:
+        with st.expander("Topology and raw store evidence"):
+            _render_topology(evidence)
+        with st.expander("Deep target and candidate evidence"):
+            if deep is None:
+                st.info("Run **Deep statistics / target scan** to materialize target and candidate denominators.")
+            else:
+                st.json(deep)
+            root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
+            if not bool(root_target_scan.get("available")):
+                reason = root_target_scan.get("reason", "deep scan not run")
+                st.warning(
+                    "Root target opportunities are counted only from persisted GT-OBB labels and are never inferred "
+                    f"from rollout rows. Current status: {reason}."
+                )
 
     st.download_button(
         "Download resolved bundle evidence JSON",
-        data=lambda: _download_payload(evidence, deep),
+        data=lambda: _download_payload(evidence, deep, qh_readiness, qh_preview),
         file_name="training_dataset_bundle_evidence.json",
         mime="application/json",
         on_click="ignore",
