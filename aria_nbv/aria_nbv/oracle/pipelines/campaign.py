@@ -2787,10 +2787,12 @@ class CudaRolloutCampaign:
         if status.state not in progress["allowed_states"]:
             raise ValueError("campaign status state diverges from canonical events")
         if status.state in {"completed", "completed_with_failures"}:
-            finished = next((event for event in reversed(events) if event.kind == "campaign_finished"), None)
-            if finished is None:
+            elapsed_seconds = self._canonical_campaign_elapsed(events)
+            if elapsed_seconds is None:
                 raise ValueError("terminal campaign status lacks campaign finish evidence")
-            if finished.elapsed_seconds is not None and status.elapsed_seconds != finished.elapsed_seconds:
+            finished = next(event for event in reversed(events) if event.kind == "campaign_finished")
+            legacy_elapsed = finished.elapsed_seconds is None and status.elapsed_seconds == 0.0
+            if not legacy_elapsed and status.elapsed_seconds != elapsed_seconds:
                 raise ValueError("campaign status elapsed time diverges from canonical events")
         if status.current_work_unit != progress["current_work_unit"]:
             raise ValueError("campaign status current work unit diverges from canonical events")

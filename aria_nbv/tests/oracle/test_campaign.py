@@ -1481,6 +1481,10 @@ def test_terminal_status_rebuilds_legacy_null_finish_elapsed_from_timestamps(tmp
     assert rebuilt.state == "completed"
     assert rebuilt.elapsed_seconds >= 0.0
 
+    campaign.write_status(replace(rebuilt, elapsed_seconds=rebuilt.elapsed_seconds + 1.0))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
 
 def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):
     campaign = _campaign(tmp_path)
