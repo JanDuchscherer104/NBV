@@ -486,6 +486,16 @@ def _render_inspect_export_rerun(
                         expected_pattern="Finite depth support aligns with the selected candidate and target evaluation crop.",
                         failure_interpretation="Missing or corrupt depth disables this view only; it does not erase factual rollout rows.",
                         evidence_role="oracle/evaluation",
+                        answer="The selected-depth image shows whether the persisted privileged depth artifact is usable for this selected rollout step.",
+                        intuition="Finite, aligned depth support should agree with the selected candidate's evaluation crop; gaps or invalid pixels indicate artifact limitations rather than actor input.",
+                        visual_encoding="Pixel color encodes depth in metres with invalid pixels masked; the table retains the complete selected-depth row statistics.",
+                        uncertainty="The image is a display preview and may be downsampled; compare only compatible camera calibration and depth contracts, using the persisted validity mask.",
+                        external_references=(
+                            (
+                                "PyTorch3D renderer and camera-coordinate guidance",
+                                "https://pytorch3d.org/docs/renderer_getting_started",
+                            ),
+                        ),
                         source_fields=(
                             "selected_depth/depth_m",
                             "selected_depth/valid_mask",

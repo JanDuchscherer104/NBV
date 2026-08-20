@@ -13,6 +13,7 @@ from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
 _SECTION_KEY = "stored_rollouts_section"
+_DIAGNOSE_MODE_KEY = "stored_rollouts_diagnose_mode"
 
 
 def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
@@ -38,6 +39,16 @@ def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
             expected_pattern="Few hard mask/linkage failures; warnings are sparse and traceable to exact rows.",
             failure_interpretation="Counts prioritize debugging only; they do not estimate policy performance.",
             evidence_role="provenance",
+            answer="The bars rank the persisted failure predicates that deserve operator inspection first; they do not summarize rollout quality.",
+            intuition="A finding is an actionable contract or data-quality signal emitted at its owning rollout grain, so concentration identifies where to trace evidence next.",
+            visual_encoding="Bar height is finding count; color separates severity and the x-axis separates failure kinds.",
+            uncertainty="Counts depend on the selected thresholds and mixed finding grains; they are descriptive triage evidence, not independent samples or confidence intervals.",
+            external_references=(
+                (
+                    "NIST Engineering Statistics Handbook: counts and nonconformities",
+                    "https://www.itl.nist.gov/div898/handbook/toolaids/pff/pmc.pdf",
+                ),
+            ),
             source_fields=(
                 "inspection.suspicious_rollout_rows",
                 "selected depth",
@@ -69,4 +80,5 @@ def _carry_failure_to_inspect(row: dict[str, object]) -> None:
         st.session_state["stored_rollout_id"] = int(row["rollout_row_id"])
     if row.get("step_row_id") is not None:
         st.session_state["stored_step_id"] = int(row["step_row_id"])
-    st.session_state[_SECTION_KEY] = "Drill-down"
+    st.session_state[_SECTION_KEY] = "Diagnose a store"
+    st.session_state[_DIAGNOSE_MODE_KEY] = "Inspect, export, and Rerun"

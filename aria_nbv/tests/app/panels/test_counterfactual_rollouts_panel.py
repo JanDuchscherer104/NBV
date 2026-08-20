@@ -456,8 +456,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         "Overview",
         "Reward & reconstruction",
         "Admission & feasibility",
-        "Failures",
-        "Drill-down",
+        "Diagnose a store",
     ]
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
     assert "Download invariant CSV" not in {button.label for button in app.get("download_button")}
@@ -521,15 +520,19 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
     assert "Load bounded candidate geometry and reward plots" not in {toggle.label for toggle in app.toggle}
 
-    app = _set_stored_rollout_workspace(app, "Failures")
+    app = _set_stored_rollout_workspace(app, "Diagnose a store")
     assert not app.exception
+    assert {radio.label for radio in app.radio} >= {"Diagnose mode"}
     assert "Active-store failure detail" in [subheader.value for subheader in app.subheader]
     assert "Minimum valid fanout" in {item.label for item in app.number_input}
     assert "Dominant invalidity fraction" in {item.label for item in app.slider}
+    assert not any(selectbox.label == "Query scope" for selectbox in app.selectbox)
 
-    app = _set_stored_rollout_workspace(app, "Drill-down")
+    app.session_state["stored_rollouts_diagnose_mode"] = "Inspect, export, and Rerun"
+    app = _set_stored_rollout_workspace(app, "Diagnose a store")
     assert not app.exception
     assert "Drill-down" in [subheader.value for subheader in app.subheader]
+    assert not any(item.label == "Minimum valid fanout" for item in app.number_input)
     assert {selectbox.label for selectbox in app.selectbox} >= {
         "Query scope",
         "Rollout row",
@@ -608,6 +611,12 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
     assert "Download stale-store diagnostics JSON" in {button.label for button in app.get("download_button")}
 
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
+    app = app.run()
+    assert not app.exception
+    assert not any(item.label == "Minimum valid fanout" for item in app.number_input)
+    assert not any(item.label == "Query scope" for item in app.selectbox)
+
 
 def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path_config, tmp_path) -> None:
     result = write_rollout_zarr_store(
@@ -618,7 +627,8 @@ def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path
     root.attrs["selected_depth_enabled"] = False
 
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Drill-down")
+    app.session_state["stored_rollouts_diagnose_mode"] = "Inspect, export, and Rerun"
+    app = _set_stored_rollout_workspace(app, "Diagnose a store")
 
     assert not app.exception
     assert any("No selected-depth row" in info.value for info in app.info)
@@ -960,21 +970,22 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
     )
     session._clear_stored_rollout_caches()
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Drill-down")
+    app.session_state["stored_rollouts_diagnose_mode"] = "Inspect, export, and Rerun"
+    app = _set_stored_rollout_workspace(app, "Diagnose a store")
     scope = next(item for item in app.selectbox if item.label == "Query scope")
     scope.set_value("Candidates")
-    app.session_state["stored_rollouts_section"] = "Drill-down"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     population = next(item for item in app.selectbox if item.label == "Candidate population")
     population.set_value("Explicit full store")
-    app.session_state["stored_rollouts_section"] = "Drill-down"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     assert any("Explicit full-store candidate query selected" in warning.value for warning in app.warning)
 
     expression = next(item for item in app.text_area if item.label == "Pandas query expression")
     expression.set_value("rollout_row_id == 1 and step_index == 1 and selected")
     next(button for button in app.button if button.label == "Apply query").click()
-    app.session_state["stored_rollouts_section"] = "Drill-down"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     assert not app.exception
     assert any("matched rows: 1" in caption.value for caption in app.caption)
@@ -983,14 +994,14 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
     expression = next(item for item in app.text_area if item.label == "Pandas query expression")
     expression.set_value("unknown_column > 0")
     next(button for button in app.button if button.label == "Apply query").click()
-    app.session_state["stored_rollouts_section"] = "Drill-down"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     assert not app.exception
     assert any("last valid result is preserved" in error.value for error in app.error)
     assert any("matched rows: 1" in caption.value for caption in app.caption)
 
     next(button for button in app.button if button.label == "Promote queried row").click()
-    app.session_state["stored_rollouts_section"] = "Drill-down"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
 
     assert not app.exception
