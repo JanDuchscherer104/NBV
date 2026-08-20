@@ -439,6 +439,42 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert len(failure_calls) == 2
 
 
+def test_store_header_renders_compact_cost_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Physical-cost scalars stay readable cards rather than a one-row byte table."""
+
+    header = {
+        "scenes": 1,
+        "targets": 2,
+        "source_rows": 3,
+        "physical_store_bytes": 2 * 1024**2,
+        "physical_bytes_per_rollout": 19_002.25,
+        "physical_bytes_per_candidate": 395.8859,
+        "return_semantics": "cumulative_target_root_gain",
+        "discount_gamma": 1.0,
+        "reference_scene_count": None,
+        "reference_source_row_count": None,
+    }
+    metrics: list[tuple[str, str]] = []
+
+    class Column:
+        def metric(self, label: str, value: str) -> None:
+            metrics.append((label, value))
+
+    monkeypatch.setattr(overview_topology, "_cached_projection", lambda *_args: header)
+    monkeypatch.setattr(overview_topology.st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(overview_topology.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(overview_topology.st, "columns", lambda count: [Column() for _ in range(count)])
+    monkeypatch.setattr(overview_topology, "_download_json", lambda *_args, **_kwargs: None)
+
+    overview_topology._render_store_header_summary("/fixture.zarr")
+
+    assert ("Store size", "2.0 MiB") in metrics
+    assert ("Bytes / rollout", "18.6 KiB") in metrics
+    assert ("Bytes / candidate", "395.9 B") in metrics
+    assert ("Return semantics", "cumulative_target_root_gain") in metrics
+    assert ("Discount gamma", "1") in metrics
+
+
 def _owner_stub(result: object) -> Callable[..., object]:
     def owner(*_args: object, **_kwargs: object) -> object:
         return result
