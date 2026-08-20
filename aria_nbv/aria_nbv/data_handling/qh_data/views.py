@@ -41,34 +41,34 @@ class QhStaticContext:
     """
 
     vin_snippet: VinSnippetView
-    """Root evidence: chain points [P, 3+C_p], lengths [1], trajectory [F,12]; batch [B,P_max,3+C_p], [B,1], [B,F_max,12]."""
+    """``VinSnippetView`` with ``points_world`` ``Tensor["P 3+C_p", float32]`` or ``Tensor["B P_max 3+C_p", float32]``, ``lengths`` ``Tensor["1", int64]`` or ``Tensor["B 1", int64]``, and trajectory ``PoseTW["F 12"]`` or ``PoseTW["B F_max 12"]``."""
 
     t_world_voxel: Tensor | None
-    """Optional world-from-voxel pose: chain Tensor[12, float32]; batch Tensor[B 12, float32]."""
+    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]``: world-from-voxel pose for root EVL evidence."""
 
     voxel_extent: Tensor | None
-    """Optional metric voxel-frame extent: chain Tensor[6, float32]; batch Tensor[B 6, float32]."""
+    """``Tensor["6", float32]`` or ``Tensor["B 6", float32]``: metric voxel-frame extent in metres."""
 
     occ_pr: Tensor | None
-    """Optional occupancy prediction: chain Tensor[1, D_v, H_v, W_v]; batch Tensor[B, 1, D_v_max, H_v_max, W_v_max]."""
+    """``Tensor["1 D_v H_v W_v", float32]`` or ``Tensor["B 1 D_v_max H_v_max W_v_max", float32]``: root EVL occupancy prediction."""
 
     occ_input: Tensor | None
-    """Optional occupied input: chain Tensor[1, D_v, H_v, W_v]; batch Tensor[B, 1, D_v_max, H_v_max, W_v_max]."""
+    """``Tensor["1 D_v H_v W_v", float32]`` or ``Tensor["B 1 D_v_max H_v_max W_v_max", float32]``: voxelized occupied input evidence."""
 
     free_input: Tensor | None
-    """Optional free-space input: chain Tensor[1, D_v, H_v, W_v]; batch Tensor[B, 1, D_v_max, H_v_max, W_v_max]."""
+    """``Tensor["1 D_v H_v W_v", float32]`` or ``Tensor["B 1 D_v_max H_v_max W_v_max", float32]``: voxelized free-space input evidence."""
 
     counts: Tensor | None
-    """Optional observation counts: chain Tensor[D_v, H_v, W_v]; batch Tensor[B, D_v_max, H_v_max, W_v_max]."""
+    """``Tensor["D_v H_v W_v", int64]`` or ``Tensor["B D_v_max H_v_max W_v_max", int64]``: per-voxel observation counts."""
 
     cent_pr: Tensor | None
-    """Optional centerness: chain Tensor[1, D_v, H_v, W_v]; batch Tensor[B, 1, D_v_max, H_v_max, W_v_max]."""
+    """``Tensor["1 D_v H_v W_v", float32]`` or ``Tensor["B 1 D_v_max H_v_max W_v_max", float32]``: root EVL centerness prediction."""
 
     pts_world: Tensor | None
-    """Optional world voxel centres: chain Tensor[V, 3] with V=D_v*H_v*W_v; batch Tensor[B, V_max, 3]."""
+    """``Tensor["V 3", float32]`` or ``Tensor["B V_max 3", float32]``: world voxel centres, where ``V=D_v*H_v*W_v``."""
 
     evl_presence: Tensor
-    """Availability: chain Tensor[8]; batch Tensor[B, 8] for pose, extent, then six optional EVL fields."""
+    """``Tensor["8", bool]`` or ``Tensor["B 8", bool]``: availability for pose, extent, then six optional EVL fields."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,25 +82,25 @@ class QhSelectedObservationPrefix:
     """
 
     depth_m: Tensor
-    """Selected-depth metres: chain Tensor[S, S, H_d, W_d]; batch Tensor[B, S_max, S_max, H_d_max, W_d_max]. Axes are query state s then selected observation j; only j<s is supported."""
+    """``Tensor["S S H_d W_d", float16]`` or ``Tensor["B S_max S_max H_d_max W_d_max", float16]``: selected-depth rasters in metres. Axes are query state ``s`` then selected observation ``j``; only ``j<s`` is supported."""
 
     valid_mask: Tensor
-    """Metric-depth support aligned with depth_m: chain Tensor[S, S, H_d, W_d]; batch Tensor[B, S_max, S_max, H_d_max, W_d_max]."""
+    """``Tensor["S S H_d W_d", bool]`` or ``Tensor["B S_max S_max H_d_max W_d_max", bool]``: valid metric-depth support aligned with ``depth_m``."""
 
     focal_px: Tensor
-    """Focal lengths [f_x,f_y]: chain Tensor[S, S, 2]; batch Tensor[B, S_max, S_max, 2], indexed by query state s and observation j."""
+    """``Tensor["S S 2", float32]`` or ``Tensor["B S_max S_max 2", float32]``: focal lengths ``[f_x,f_y]`` indexed by query state ``s`` and observation ``j``."""
 
     principal_point_px: Tensor
-    """Principal points [c_x,c_y]: chain Tensor[S, S, 2]; batch Tensor[B, S_max, S_max, 2]."""
+    """``Tensor["S S 2", float32]`` or ``Tensor["B S_max S_max 2", float32]``: principal points ``[c_x,c_y]``."""
 
     image_size_hw: Tensor
-    """Raster size [H_d,W_d]: chain Tensor[S, S, 2]; batch Tensor[B, S_max, S_max, 2]."""
+    """``Tensor["S S 2", int64]`` or ``Tensor["B S_max S_max 2", int64]``: raster size ``[H_d,W_d]``."""
 
     camera_pose_relative_root: Tensor
-    """Root-rig-from-selected-camera poses: chain Tensor[S, S, 12]; batch Tensor[B, S_max, S_max, 12]. Entry [s,j] belongs to selected action j."""
+    """``Tensor["S S 12", float32]`` or ``Tensor["B S_max S_max 12", float32]``: root-rig-from-selected-camera poses; entry ``[s,j]`` belongs to selected action ``j``."""
 
     prefix_mask: Tensor
-    """Causal selected-observation support: chain Tensor[S, S]; batch Tensor[B, S_max, S_max]; true exactly for realized j<s pairs."""
+    """``Tensor["S S", bool]`` or ``Tensor["B S_max S_max", bool]``: causal selected-observation support, true exactly for realized ``j<s`` pairs."""
 
     source_protocol: str = "cf_gt"
     """Declared selected-observation protocol; only ``"cf_gt"`` is admitted by this carrier."""
@@ -136,37 +136,37 @@ class QhActorTensors:
     """
 
     vin_snippet: VinSnippetView
-    """Chain-constant VIN root observation: chain points [P,3+C_p], lengths [1], trajectory [F,12]; batch forms are documented on QhStaticContext.vin_snippet."""
+    """``VinSnippetView`` with ``points_world`` ``Tensor["P 3+C_p", float32]`` or ``Tensor["B P_max 3+C_p", float32]``; see :attr:`QhStaticContext.vin_snippet` for complete root fields."""
 
     root_pose_world: Tensor
-    """World-from-root-rig pose: chain Tensor[12]; batch Tensor[B,12]."""
+    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]``: world-from-root-rig pose in ``PoseTW`` storage layout."""
 
     target_pose_relative_root: Tensor
-    """Root-rig-from-target-object pose: chain Tensor[12]; batch Tensor[B,12]."""
+    """``Tensor["12", float32]`` or ``Tensor["B 12", float32]``: root-rig-from-target-object pose in ``PoseTW`` storage layout."""
 
     target_extents: Tensor
-    """Target OBB side lengths [x,y,z] in metres: chain Tensor[3]; batch Tensor[B,3]."""
+    """``Tensor["3", float32]`` or ``Tensor["B 3", float32]``: target object-frame OBB side lengths ``[x,y,z]`` in metres."""
 
     candidate_pose_relative_root: Tensor
-    """Stored candidate poses: chain Tensor[S,N,12]; batch Tensor[B,S_max,N_max,12]. N is per-state candidate width, never a planning-tree branch axis."""
+    """``Tensor["S N 12", float32]`` or ``Tensor["B S_max N_max 12", float32]``: root-rig-from-candidate-rig poses in stored order. ``N`` is per-state width, never a planning-tree branch axis."""
 
     candidate_mask: Tensor
-    """Materialization support: chain Tensor[S,N]; batch Tensor[B,S_max,N_max]. False means stored-row or batch padding."""
+    """``Tensor["S N", bool]`` or ``Tensor["B S_max N_max", bool]``: materialization support; false means stored-row or batch padding."""
 
     action_mask: Tensor
-    """Actor-valid candidate support: chain Tensor[S,N]; batch Tensor[B,S_max,N_max]. It is a subset of candidate_mask."""
+    """``Tensor["S N", bool]`` or ``Tensor["B S_max N_max", bool]``: actor-valid candidate support, a subset of ``candidate_mask``."""
 
     history_pose_relative_root: Tensor
-    """Factual selected-pose prefix: chain Tensor[S,S,12]; batch Tensor[B,S_max,S_max,12]. At query state s, history index j stores selected pose j only when j<s."""
+    """``Tensor["S S 12", float32]`` or ``Tensor["B S_max S_max 12", float32]``: factual selected-pose prefix. At query state ``s``, history index ``j`` stores selected pose ``j`` only when ``j<s``."""
 
     history_mask: Tensor
-    """Factual pose-prefix support: chain Tensor[S,S]; batch Tensor[B,S_max,S_max]; true exactly for realized j<s pairs."""
+    """``Tensor["S S", bool]`` or ``Tensor["B S_max S_max", bool]``: factual-pose-prefix support, true exactly for realized ``j<s`` pairs."""
 
     horizon_remaining: Tensor
-    """Remaining acquisition budget: chain Tensor[S]; batch Tensor[B,S_max]. Each value includes the current factual action."""
+    """``Tensor["S", int64]`` or ``Tensor["B S_max", int64]``: acquisition budget remaining, including the current factual action."""
 
     step_mask: Tensor
-    """Realized-state support: chain Tensor[S] (all true); batch Tensor[B,S_max] (false only for time padding)."""
+    """``Tensor["S", bool]`` or ``Tensor["B S_max", bool]``: realized candidate-bearing states; batch false values are time padding."""
 
     static_context: QhStaticContext | None = None
     """Optional compositional root EVL context; absent only for explicit legacy diagnostic reads."""
@@ -187,19 +187,19 @@ class QhSupervision:
     """
 
     label_mask: Tensor
-    """Reward-label support: chain Tensor[S,N]; batch Tensor[B,S_max,N_max]. It is a subset of action_mask."""
+    """``Tensor["S N", bool]`` or ``Tensor["B S_max N_max", bool]``: reward-label support, a subset of ``action_mask``."""
 
     candidate_reward: Tensor
-    """Persisted immediate rewards: chain Tensor[S,N]; batch Tensor[B,S_max,N_max]. Values matter only where label_mask is true."""
+    """``Tensor["S N", float32]`` or ``Tensor["B S_max N_max", float32]``: persisted immediate rewards; values matter only where ``label_mask`` is true."""
 
     selected_index: Tensor
-    """Factual selected candidate index: chain Tensor[S]; batch Tensor[B,S_max]. Batch-padding rows use -1."""
+    """``Tensor["S", int64]`` or ``Tensor["B S_max", int64]``: factual rollout-policy candidate index; batch-padding rows use ``-1``."""
 
     discount: Tensor
-    """Stored TD discount: chain Tensor[S]; batch Tensor[B,S_max]. It applies only when the learner admits a successor backup."""
+    """``Tensor["S", float32]`` or ``Tensor["B S_max", float32]``: stored TD discount, applied only when the learner admits a successor backup."""
 
     terminal: Tensor
-    """Persisted terminal flag: chain Tensor[S]; batch Tensor[B,S_max]. Batch-padding rows are true and cannot bootstrap."""
+    """``Tensor["S", bool]`` or ``Tensor["B S_max", bool]``: persisted terminal flag; batch-padding rows are true and cannot bootstrap."""
 
 
 @dataclass(frozen=True, slots=True)
