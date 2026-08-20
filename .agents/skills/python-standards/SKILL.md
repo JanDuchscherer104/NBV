@@ -64,37 +64,31 @@ metadata:
 
 ## Codex Verification Loop
 
-Inspect the changed surface, run the narrowest Ruff, pytest, coverage, and mypy
-proof, then report command, scope, result, and baseline gaps. Targeted success
-never proves package-wide correctness.
+Inspect the changed surface, run the narrowest Ruff, pytest, coverage, and mypy proof,
+then report command, scope, result, and baseline gaps. Targeted success never proves
+package-wide correctness.
 
 ## General Python Conventions
 
-Read [references/general_conventions.md](./references/general_conventions.md)
-for typing, paths, config-as-factory behavior, runtime setup, logging, and
-project wrapper conventions. Executable requirements remain owned by source,
-tests, formatter, linter, and type configuration. ARIA-NBV domain semantics
-remain with the nearest package owner.
+Read [references/general_conventions.md](./references/general_conventions.md) for
+typing, paths, config-as-factory behavior, runtime setup, logging, and project
+wrapper conventions. Executable requirements remain owned by source, tests,
+formatter, linter, and type configuration; domain semantics remain with the package owner.
 
 ## Docstring Overview
 
-Write or refactor Python docstrings as API contracts. Prefer concise,
-high-information explanations of behavior, invariants, units, shapes,
-ownership, sequencing, theory, and boundaries. This skill owns field docs,
-tensor-shape display, examples, cross-references, equations, and Quartodoc
-rendering constraints.
+Write or refactor Python docstrings as API contracts. Prefer concise, high-information
+explanations of behavior, invariants, units, shapes, ownership, sequencing, theory,
+and boundaries. This skill owns field docs, tensor-shape display, examples,
+cross-references, equations, and Quartodoc rendering constraints.
 
 ## Docstring Workflow
 
 1. Read the package owner and this skill before editing Python docstrings.
-2. Identify public modules, classes, functions, methods, and typed fields that
-   form an external or cross-module contract.
-3. Choose only useful Google-style sections: `Args:`, `Returns:`, `Yields:`,
-   `Attributes:`, `Examples:`, `Notes:`, or `Theory:`.
-4. Document semantics, invariants, side effects, units, shapes, frames,
-   ownership, lifecycle, theory, and boundaries; do not restate type hints.
-5. Cross-reference with the local Quartodoc role contract or Quarto Markdown;
-   see [references/cross-references.md](./references/cross-references.md).
+2. Identify public modules, classes, functions, methods, and typed fields forming an external or cross-module contract.
+3. Choose only useful Google-style sections: `Args:`, `Returns:`, `Yields:`, `Attributes:`, `Examples:`, `Notes:`, or `Theory:`.
+4. Document semantics, invariants, side effects, units, shapes, frames, ownership, lifecycle, theory, and boundaries; do not restate type hints.
+5. Cross-reference with the local Quartodoc role contract or Quarto Markdown; see [references/cross-references.md](./references/cross-references.md).
 6. For shaped tensors, include `points ``Tensor["N 3", float32]``: ...` and
    see [references/tensor-shapes.md](./references/tensor-shapes.md).
 7. Trim boilerplate and empty sections; avoid `Raises:` unless it is a caller
@@ -125,20 +119,21 @@ rendering constraints.
 
 ## Verification Commands
 
-Run from the repository root. `aria_nbv/pyproject.toml` owns Ruff/mypy/pytest/
-coverage configuration, `aria_nbv/uv.lock` pins versions, and `Makefile` owns
-gates/path normalization. Point to these sources, not copied flags or pins.
+Run from the repository root. `aria_nbv/pyproject.toml` owns Ruff/mypy/pytest/coverage
+configuration, `aria_nbv/uv.lock` pins versions, and `Makefile` owns gates/path
+normalization. Point to these sources, not copied flags or pins.
 
 - `make package-smoke` runs fixed Ruff/pytest smoke surfaces plus the public API
   typing contract; `make mypy-contract` runs that contract alone.
+- `make ruff-full` or `make ruff-targeted RUFF_PATHS="..."` runs stable Ruff
+  gates; `make coverage-targeted COVERAGE_TESTS="tests/<path>"` reports branch
+  coverage. Add `MYPY_ARGS="--junit-xml=/tmp/mypy.xml"` for structured mypy output.
 - `make mypy-targeted MYPY_PATHS="aria_nbv/<path> tests/<path>"` checks selected roots;
-  `make mypy-full` checks the full package and remains informational while nonzero.
+  `make mypy-full` remains informational while its baseline is nonzero.
 
-Pass repository-root paths such as `aria_nbv/aria_nbv/<path>` or
-`aria_nbv/tests/<path>`; the target normalizes them to package-relative paths,
-rejects traversal/unrelated paths, and deduplicates them. Targeted success is
-surface-limited. For an affected public data-handling export, include
-`aria_nbv/tests/data_handling/public_api_typing_contract.py`.
+Pass repository-root paths such as `aria_nbv/aria_nbv/<path>` or `aria_nbv/tests/<path>`;
+the target normalizes, validates, and deduplicates them. Targeted success is surface-limited.
+Include `aria_nbv/tests/data_handling/public_api_typing_contract.py` for affected exports.
 
 ```sh
 cd aria_nbv
@@ -147,9 +142,8 @@ uv run --extra dev pytest --import-mode=importlib <tests> && uv run --extra dev 
 ```
 
 Targeted Ruff, pytest, coverage, and mypy results apply only to the named surface;
-package-smoke covers its fixed list. Claim package-wide typing only after
-`make mypy-full` succeeds, and package-wide test/coverage only after the full
-test surface.
+package-smoke covers its fixed list. Claim package-wide results only after the corresponding
+full surface succeeds; full mypy is currently non-gating.
 
 ## References
 
