@@ -473,6 +473,8 @@ def _read_chain_refs(
     if np.any(candidate_widths < 1):
         raise ValueError(f"Q_H store {path} contains an empty candidate state.")
     rollout_ids = np.asarray(rollout["rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_rollout_ids = np.asarray(root["steps/rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_indices = np.asarray(root["steps/step_index"], dtype=np.int64).reshape(-1)
     source_ids = np.asarray(rollout["source_row_id"], dtype=np.int64).reshape(-1)
     target_ids = np.asarray(rollout["target_row_id"], dtype=np.int64).reshape(-1)
     target_positions = {
@@ -484,8 +486,24 @@ def _read_chain_refs(
     for position, (horizon, rollout_id, source_id, target_id) in enumerate(
         zip(horizons, rollout_ids, source_ids, target_ids, strict=True)
     ):
+        if state_start >= step_rollout_ids.size or int(step_rollout_ids[state_start]) != int(rollout_id):
+            raise ValueError(
+                f"Q_H store {path} rollout_row_id={int(rollout_id)} does not own one ordered factual step run."
+            )
+        state_stop = state_start
+        while state_stop < step_rollout_ids.size and int(step_rollout_ids[state_stop]) == int(rollout_id):
+            state_stop += 1
+        factual_indices = step_indices[state_start:state_stop]
+        expected_indices = np.arange(state_stop - state_start, dtype=np.int64)
+        if not np.array_equal(factual_indices, expected_indices):
+            raise ValueError(
+                f"Q_H store {path} rollout_row_id={int(rollout_id)} has non-contiguous factual step_index values."
+            )
+        if state_stop - state_start > int(horizon):
+            raise ValueError(
+                f"Q_H store {path} rollout_row_id={int(rollout_id)} has more factual steps than its configured horizon."
+            )
         source_ref = source_refs_by_row[int(source_id)]
-        state_stop = state_start + int(horizon)
         chains.append(
             _ChainRef(
                 store_index=store_index,
@@ -499,6 +517,8 @@ def _read_chain_refs(
             )
         )
         state_start = state_stop
+    if state_start != step_rollout_ids.size:
+        raise ValueError(f"Q_H store {path} contains orphaned factual steps after the rollout table.")
     return tuple(chains)
 
 
@@ -530,6 +550,8 @@ def _validate_homogeneous(stores: tuple[_StoreFacts, ...]) -> None:
 def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) -> _StoredChain:
     rows = slice(chain.state_start, chain.state_stop)
     q_h = root["q_h"]
+    step_indices = np.asarray(root["steps/step_index"][rows], dtype=np.int64)
+    configured_horizon = int(root["rollouts/horizon"][chain.rollout_position])
     candidate_ids = np.asarray(q_h["candidate_row_id"][rows], dtype=np.int64)
     widths = np.count_nonzero(candidate_ids >= 0, axis=1)
     root_pose = np.asarray(root["rollouts/root_pose_world"][chain.rollout_position], dtype=np.float32)
@@ -548,7 +570,7 @@ def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) ->
         target_pose_world_object=_readonly(target_pose),
         candidate_pose_relative_root=candidate_poses,
         action_mask=_trim_rows(q_h["valid_action_mask"][rows], widths, np.bool_),
-        horizon_remaining=_readonly(np.arange(len(widths), 0, -1, dtype=np.int64)),
+        horizon_remaining=_readonly(configured_horizon - step_indices),
         label_mask=_trim_rows(q_h["q_train_mask"][rows], widths, np.bool_),
         candidate_reward=_trim_rows(q_h["one_step_target_root_gain"][rows], widths, np.float32),
         selected_index=_readonly(np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)),
