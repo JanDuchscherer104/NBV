@@ -140,7 +140,7 @@ PYTEST_ARGS ?= -n auto
 RUFF_PATHS ?=
 RUFF_CHECK_OUTPUT_FORMAT ?= concise
 RUFF_FIX ?= 0
-RUFF_FIX_FLAG = $(if $(filter 1 true yes,$(RUFF_FIX)),--fix,)
+RUFF_FIX_FLAG = $(if $(filter 1 true yes,$(RUFF_FIX)),--fix,$(if $(filter 0 false no,$(RUFF_FIX)),,$(error RUFF_FIX must be one of 0, 1, false, true, no, or yes)))
 MYPY_ARGS ?=
 COVERAGE_TESTS ?=
 COVERAGE_ARGS ?=
@@ -741,7 +741,7 @@ package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests 
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
 
 ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
-	@cd $(PKG_DIR) && uv run --extra dev ruff format --check aria_nbv tests
+	@cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet aria_nbv tests
 	@cd $(PKG_DIR) && uv run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests
 
 ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
@@ -759,7 +759,7 @@ ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
 		esac; \
 		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
 	done; \
-	cd $(PKG_DIR) && uv run --extra dev ruff format --check $$normalized && \
+	cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet $$normalized && \
 	uv run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) $$normalized
 
 mypy-contract: ## Run the passing public API typing contract
@@ -786,8 +786,22 @@ mypy-targeted: ## Run mypy on space-separated paths under aria_nbv/ or tests/
 	cd $(PKG_DIR) && uv run --extra dev mypy --warn-unused-configs --no-incremental $(MYPY_ARGS) $$normalized
 
 coverage-targeted: ## Run branch coverage for explicitly supplied tests (set COVERAGE_TESTS)
-	@if [ -z "$(COVERAGE_TESTS)" ]; then echo "COVERAGE_TESTS is required" >&2; exit 2; fi
-	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov=aria_nbv --cov-branch --cov-report=term-missing $(COVERAGE_ARGS) $(COVERAGE_TESTS)
+	@set -f; paths="$(COVERAGE_TESTS)"; \
+	if [ -z "$$paths" ]; then echo "COVERAGE_TESTS is required" >&2; exit 2; fi; \
+	normalized=; \
+	for path in $$paths; do \
+		case "$$path" in \
+			*/../*|*/..|../*|..|*/./*|*/.|./*|.) echo "COVERAGE_TESTS contains traversal component: $$path" >&2; exit 2 ;; \
+			*[!A-Za-z0-9_./-]*) echo "COVERAGE_TESTS contains unsupported characters: $$path" >&2; exit 2 ;; \
+		esac; \
+		case "$$path" in \
+			$(PKG_DIR)/$(TEST_DIR)/*) path=$${path#$(PKG_DIR)/} ;; \
+			$(TEST_DIR)/*) ;; \
+			*) echo "COVERAGE_TESTS must name tests under $(TEST_DIR)/: $$path" >&2; exit 2 ;; \
+		esac; \
+		case " $$normalized " in *" $$path "*) ;; *) normalized="$$normalized $$path" ;; esac; \
+	done; \
+	cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib --cov=aria_nbv --cov-branch --cov-report=term-missing $(COVERAGE_ARGS) $$normalized
 
 ci: agents-db-validate ownership-consolidation-contract qmd-frontmatter-check check-agent-memory graphify-skill-upstream-self-test api-docs-self-test package-smoke docs-render-core ## Run the root CI contract
 
