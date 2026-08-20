@@ -577,6 +577,7 @@ def render_stored_rollouts_page() -> None:
                 )
     if tabs[3].open:
         with tabs[3]:
+            _render_corpus_details(corpus_summary)
             if current:
                 _render_inspect_export_rerun(
                     reader,
@@ -655,11 +656,24 @@ def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_co
     cols = st.columns(6)
     cols[0].metric("Included stores", totals["included_store_count"])
     cols[1].metric("Excluded stores", totals["excluded_store_count"])
-    cols[2].metric("Physical samples", _format_count(totals["physical_sample_count"]))
-    cols[3].metric("Q_H chains", _format_count(totals["q_h_chain_count"]))
-    cols[4].metric("Q_H states", _format_count(totals["q_h_state_count"]))
+    cols[2].metric("Q_H chains", _format_count(totals["q_h_chain_count"]))
+    cols[3].metric("Q_H states", _format_count(totals["q_h_state_count"]))
+    cols[4].metric("Trainable candidates", _format_count(totals["q_h_trainable_count"]))
     cols[5].metric("Storage", _format_bytes(totals["storage_bytes"]))
     st.caption(f"Corpus verdict: {summary.verdict}. Counts are additive; scientific macro estimates are not pooled.")
+    if summary.excluded_stores:
+        st.dataframe(pd.DataFrame(summary.excluded_stores), hide_index=True, width="stretch")
+
+
+def _render_corpus_details(summary: RolloutCorpusSummary | None) -> None:
+    """Render store-qualified corpus evidence outside the essential overview."""
+
+    st.subheader("Corpus store details")
+    if summary is None:
+        st.info("Build the corpus summary in Overview to inspect store-qualified inclusion and Q_H evidence.")
+        return
+    if summary.included_stores:
+        st.dataframe(pd.DataFrame(summary.included_stores), hide_index=True, width="stretch")
     if summary.excluded_stores:
         st.dataframe(pd.DataFrame(summary.excluded_stores), hide_index=True, width="stretch")
     if not summary.q_h_stores.empty:
