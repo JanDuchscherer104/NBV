@@ -724,6 +724,10 @@ def _corpus_temporal_summary(
         if steps.empty:
             continue
         contract = _persisted_rollout_contract(bundle, str(store["store_id"]), str(store["profile"]))
+        # A content-derived ``store_id`` can legitimately be equal for two
+        # separately selected shards in a reproducibility fixture. Corpus
+        # presence is about the explicit physical selection, not that digest.
+        steps["corpus_store_path"] = str(store["path"])
         steps["contract_id"] = contract["id"]
         steps["contract"] = contract["label"]
         steps["profile"] = contract["profile"]
@@ -738,13 +742,21 @@ def _corpus_temporal_summary(
     for group_field in groups:
         source[group_field] = source[group_field].map(_temporal_group_scalar)
     store_counts = (
-        source.groupby([*groups, "step_index"], dropna=False, sort=True)["store_id"]
+        source.groupby([*groups, "step_index"], dropna=False, sort=True)["corpus_store_path"]
         .nunique()
         .rename("store_count")
         .reset_index()
     )
     summaries: list[pd.DataFrame] = []
-    for metric in ("cumulative_target_rri", "cumulative_target_root_gain", "valid_fanout", "invalid_fraction"):
+    for metric in (
+        "cumulative_target_root_gain",
+        "selected_target_root_gain",
+        "selected_probability",
+        "selected_entropy",
+        "cumulative_target_rri",
+        "valid_fanout",
+        "invalid_fraction",
+    ):
         rows = temporal_metric_summary_rows(source.to_dict("records"), metric=metric, group_fields=groups)
         if not rows:
             continue
