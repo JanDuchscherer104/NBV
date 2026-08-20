@@ -59,6 +59,16 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
                 expected_pattern="Actor-valid targets may lack GT labels, but such rows remain masked from oracle-label training.",
                 failure_interpretation="Actor-valid/GT-invalid concentration signals evaluation coverage gaps, not low RRI.",
                 evidence_role="oracle/evaluation",
+                answer="The admission bars show whether actor-valid targets also have an unambiguous privileged label; they do not turn rejected targets into low-reward examples.",
+                intuition="Actor validity answers whether the action can be executed, while GT-label validity answers whether privileged evaluation is available; these are distinct masks.",
+                visual_encoding="Bar height is the persisted target count; color and pattern separate actor validity and GT-label validity within each match-status category.",
+                uncertainty="All target rows remain in the denominator, including ambiguous, unmatched, and invalid rows; counts describe protocol coverage rather than effect size.",
+                external_references=(
+                    (
+                        "Canonical ARIA-NBV RRI definition",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+                    ),
+                ),
                 source_fields=(
                     "targets/target_valid_mask",
                     "targets/gt_label_valid_mask",

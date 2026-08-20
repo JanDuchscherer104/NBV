@@ -1112,6 +1112,15 @@ def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
     assert shared.plot_control_key("summary", "a") != shared.plot_control_key("summary", "b")
 
 
+def test_target_score_correlation_uses_rich_guide_builder() -> None:
+    source = Path(candidate_generation.__file__).read_text(encoding="utf-8")
+
+    correlation_start = source.index('title="Target score-component correlation')
+    correlation_block = source[correlation_start : source.index("def _prepare_pairwise_correlation", correlation_start)]
+    assert 'answer="The heatmap is descriptive evidence' in correlation_block
+    assert 'definition="Pearson r is the standardized covariance' in correlation_block
+
+
 def _rich_explanation(*, definition: str | None = "RRI = gain / baseline") -> shared.ScientificExplanation:
     return shared.ScientificExplanation(
         question="How much does the selected view improve reconstruction?",
@@ -1188,6 +1197,32 @@ def test_scientific_explanation_rejects_incomplete_rich_guide() -> None:
             source_fields=("steps/value",),
             answer="Answer",
         )
+
+
+@pytest.mark.parametrize(
+    ("frame", "expected_reason"),
+    [
+        (pd.DataFrame({"a": [1.0], "b": [2.0]}), "n=1"),
+        (pd.DataFrame({"a": [1.0, 2.0], "b": [np.nan, 3.0]}), "n=1"),
+        (pd.DataFrame({"a": [1.0, 1.0, 1.0], "b": [2.0, 3.0, 4.0]}), "constant"),
+    ],
+)
+def test_pairwise_correlation_retains_insufficiency_reasons(frame: pd.DataFrame, expected_reason: str) -> None:
+    prepared = candidate_generation._prepare_pairwise_correlation(frame, ["a", "b"])
+
+    assert prepared["has_finite_off_diagonal"] is False
+    assert any(expected_reason in reason for reason in prepared["reasons"].values())
+
+
+def test_pairwise_correlation_uses_pair_local_n_and_discloses_degenerate_n2() -> None:
+    frame = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [2.0, 4.0, np.nan], "c": [3.0, 1.0, 2.0]})
+
+    prepared = candidate_generation._prepare_pairwise_correlation(frame, ["a", "b", "c"])
+
+    assert prepared["has_finite_off_diagonal"] is True
+    assert prepared["counts"].loc["a", "b"] == 2
+    assert "n=2" in prepared["reasons"][("a", "b")]
+    assert prepared["correlation"].loc["a", "c"] == pytest.approx(-0.5)
 
 
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:
