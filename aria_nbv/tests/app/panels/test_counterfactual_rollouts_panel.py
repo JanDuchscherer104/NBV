@@ -20,7 +20,6 @@ from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app import panels as panel_dispatcher
 from aria_nbv.app import scene_view
-from aria_nbv.app.panels import _stored_rollouts_page as stored_rollouts_page
 from aria_nbv.app.panels import common as panel_common
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
@@ -28,6 +27,7 @@ from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
 from aria_nbv.app.panels._stored_rollouts import (
     candidate_generation,
     inspect_rerun,
+    overview_topology,
     reconstruction_return,
     session,
     shared,
@@ -130,7 +130,7 @@ def _metric_values(app: AppTest) -> dict[str, str]:
 def test_manual_non_zarr_path_is_passed_to_existing_readonly_selector(monkeypatch, tmp_path: Path) -> None:
     """Campaign handoff remains an explicit path override, not discovery."""
     selected = (tmp_path / "campaign-shard").resolve()
-    stored_rollouts_page.st.session_state["rollout_store_manual_path"] = str(selected)
+    overview_topology.st.session_state["rollout_store_manual_path"] = str(selected)
 
     class _Column:
         def selectbox(self, *args, **kwargs):
@@ -152,14 +152,14 @@ def test_manual_non_zarr_path_is_passed_to_existing_readonly_selector(monkeypatc
         def __exit__(self, *args):
             return False
 
-    monkeypatch.setattr(stored_rollouts_page.st, "columns", lambda *_args, **_kwargs: (_Column(), _Column()))
-    monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
+    monkeypatch.setattr(overview_topology.st, "columns", lambda *_args, **_kwargs: (_Column(), _Column()))
+    monkeypatch.setattr(overview_topology.st, "expander", lambda *_args, **_kwargs: _Expander())
     monkeypatch.setattr(
-        stored_rollouts_page.st,
+        overview_topology.st,
         "text_input",
-        lambda _label, value="", **kwargs: stored_rollouts_page.st.session_state[kwargs["key"]],
+        lambda _label, value="", **kwargs: overview_topology.st.session_state[kwargs["key"]],
     )
-    result = stored_rollouts_page._render_store_selector(PathConfig(), [])
+    result = overview_topology._render_store_selector(PathConfig(), [])
     assert result == ((selected,), selected)
 
 
@@ -600,7 +600,7 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
         isolated_path_config.offline_cache_dir / "flow.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=50)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    session._clear_stored_rollout_caches()
 
     def fail_heavy_audit(*_args, **_kwargs):
         raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
@@ -625,7 +625,7 @@ def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
         isolated_path_config.offline_cache_dir / "lazy-heavy.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    session._clear_stored_rollout_caches()
     original_projection = reconstruction_return._cached_projection
     heavy_calls = dict.fromkeys(("candidates", "candidate_group", "ranks", "root_geometry", "tree"), 0)
 
@@ -661,10 +661,10 @@ def test_stored_rollout_evidence_roles_are_explicit() -> None:
         "selected_probability": "actor-visible",
         "selected_entropy": "actor-visible",
     }
-    assert set(stored_rollouts_page._TEMPORAL_METRIC_LABELS.values()) == set(expected)
-    assert {metric: stored_rollouts_page._temporal_evidence_role(metric) for metric in expected} == expected
+    assert set(reconstruction_return._TEMPORAL_METRIC_LABELS.values()) == set(expected)
+    assert {metric: reconstruction_return._temporal_evidence_role(metric) for metric in expected} == expected
     with pytest.raises(ValueError, match="no explicit evidence role"):
-        stored_rollouts_page._temporal_evidence_role("derived_q_h")
+        reconstruction_return._temporal_evidence_role("derived_q_h")
 
 
 def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -747,13 +747,13 @@ def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result
     )
     original = source.copy(deep=True)
     state = {
-        stored_rollouts_page._query_key(step_namespace, "draft_expression"): "gain > 0.5 and actor_action",
-        stored_rollouts_page._query_key(step_namespace, "rollout_widget"): 1,
-        stored_rollouts_page._query_key(step_namespace, "step_widget"): 2,
+        inspect_rerun._query_key(step_namespace, "draft_expression"): "gain > 0.5 and actor_action",
+        inspect_rerun._query_key(step_namespace, "rollout_widget"): 1,
+        inspect_rerun._query_key(step_namespace, "step_widget"): 2,
     }
 
-    stored_rollouts_page._apply_query_state(state, step_namespace, source)
-    result = state[stored_rollouts_page._query_key(step_namespace, "last_valid_result")]
+    inspect_rerun._apply_query_state(state, step_namespace, source)
+    result = state[inspect_rerun._query_key(step_namespace, "last_valid_result")]
 
     pd.testing.assert_frame_equal(source, original)
     assert list(result.columns) == sorted(source.columns)
@@ -762,52 +762,52 @@ def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result
     assert len(pd.read_csv(StringIO(result.to_csv(index=False)))) == 1
     with pytest.raises(Exception, match="secret"):
         secret = 0.5
-        stored_rollouts_page._evaluate_query_frame(source, "gain > @secret")
+        inspect_rerun._evaluate_query_frame(source, "gain > @secret")
     assert secret == 0.5
     valid_result = result.copy()
 
-    state[stored_rollouts_page._query_key(step_namespace, "draft_expression")] = "unknown_column > 0"
-    stored_rollouts_page._apply_query_state(state, step_namespace, source)
+    state[inspect_rerun._query_key(step_namespace, "draft_expression")] = "unknown_column > 0"
+    inspect_rerun._apply_query_state(state, step_namespace, source)
 
     pd.testing.assert_frame_equal(
-        state[stored_rollouts_page._query_key(step_namespace, "last_valid_result")],
+        state[inspect_rerun._query_key(step_namespace, "last_valid_result")],
         valid_result,
     )
-    assert "UndefinedVariableError" in state[stored_rollouts_page._query_key(step_namespace, "last_error")]
-    assert state[stored_rollouts_page._query_key(step_namespace, "rollout_widget")] == 1
-    assert state[stored_rollouts_page._query_key(step_namespace, "step_widget")] == 2
+    assert "UndefinedVariableError" in state[inspect_rerun._query_key(step_namespace, "last_error")]
+    assert state[inspect_rerun._query_key(step_namespace, "rollout_widget")] == 1
+    assert state[inspect_rerun._query_key(step_namespace, "step_widget")] == 2
 
-    stored_rollouts_page._clear_query_state(state, step_namespace)
-    assert state[stored_rollouts_page._query_key(step_namespace, "rollout_widget")] == 1
-    assert state[stored_rollouts_page._query_key(step_namespace, "step_widget")] == 2
-    assert stored_rollouts_page._query_key(step_namespace, "last_valid_result") not in state
+    inspect_rerun._clear_query_state(state, step_namespace)
+    assert state[inspect_rerun._query_key(step_namespace, "rollout_widget")] == 1
+    assert state[inspect_rerun._query_key(step_namespace, "step_widget")] == 2
+    assert inspect_rerun._query_key(step_namespace, "last_valid_result") not in state
 
 
 def test_query_store_change_and_pending_promotion_are_fail_closed() -> None:
     """Store changes should purge prior query state and stale promotion ids should preserve selection."""
 
-    namespace = stored_rollouts_page._query_namespace("store-a", "Candidates", "Selected step")
+    namespace = inspect_rerun._query_namespace("store-a", "Candidates", "Selected step")
     state = {
         "stored_rollouts_active_query_store": "store-a",
-        stored_rollouts_page._query_key(namespace, "draft_expression"): "selected",
-        stored_rollouts_page._query_key(namespace, "last_error"): "old error",
-        stored_rollouts_page._query_key(namespace, "pending_promotion"): {
+        inspect_rerun._query_key(namespace, "draft_expression"): "selected",
+        inspect_rerun._query_key(namespace, "last_error"): "old error",
+        inspect_rerun._query_key(namespace, "pending_promotion"): {
             "rollout_row_id": 4,
             "step_row_id": 9,
         },
     }
 
-    stored_rollouts_page._activate_query_store(state, "store-b")
+    inspect_rerun._activate_query_store(state, "store-b")
 
     assert state == {"stored_rollouts_active_query_store": "store-b"}
 
-    namespace = stored_rollouts_page._query_namespace("store-b", "Candidates", "Explicit full store")
-    rollout_key = stored_rollouts_page._query_key(namespace, "rollout_widget")
-    step_key = stored_rollouts_page._query_key(namespace, "step_widget")
-    pending_key = stored_rollouts_page._query_key(namespace, "pending_promotion")
+    namespace = inspect_rerun._query_namespace("store-b", "Candidates", "Explicit full store")
+    rollout_key = inspect_rerun._query_key(namespace, "rollout_widget")
+    step_key = inspect_rerun._query_key(namespace, "step_widget")
+    pending_key = inspect_rerun._query_key(namespace, "pending_promotion")
     state.update({rollout_key: 0, step_key: 1, pending_key: {"rollout_row_id": 7, "step_row_id": 12}})
 
-    error = stored_rollouts_page._consume_pending_promotion(
+    error = inspect_rerun._consume_pending_promotion(
         state,
         namespace,
         rollout_ids=[0, 7],
@@ -821,7 +821,7 @@ def test_query_store_change_and_pending_promotion_are_fail_closed() -> None:
 
     state[pending_key] = {"rollout_row_id": 7, "step_row_id": 11}
     assert (
-        stored_rollouts_page._consume_pending_promotion(
+        inspect_rerun._consume_pending_promotion(
             state,
             namespace,
             rollout_ids=[0, 7],
@@ -878,7 +878,7 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
         isolated_path_config.offline_cache_dir / "queries.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    session._clear_stored_rollout_caches()
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Drill-down")
     scope = next(item for item in app.selectbox if item.label == "Query scope")
@@ -943,7 +943,7 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
         ]
     )
 
-    figure = stored_rollouts_page._temporal_summary_figure(
+    figure = reconstruction_return._temporal_summary_figure(
         summary,
         group_field="policy",
         metric_label="Selected one-step target root gain",

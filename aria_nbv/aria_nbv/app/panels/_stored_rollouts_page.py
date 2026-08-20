@@ -12,48 +12,10 @@ from pathlib import Path
 import streamlit as st
 
 from ...configs import PathConfig
-from ._stored_rollouts import candidate_generation, failure_triage, inspect_rerun, session, shared, validity_support
+from ._stored_rollouts import failure_triage, inspect_rerun, session, validity_support
 from ._stored_rollouts import overview_topology as overview
 from ._stored_rollouts import reconstruction_return as reconstruction
 from ._stored_rollouts.shared import download_json, render_stale_store_boundary
-
-# Private compatibility aliases keep existing focused callers stable while tests
-# migrate to the owning module.  Production dispatch uses the modules above.
-_render_store_selector = overview._render_store_selector
-_render_corpus_overview = overview._render_corpus_overview
-_render_corpus_details = overview._render_corpus_details
-_render_validated_store_header = overview._render_validated_store_header
-_cached_store_bundle = session._cached_store_bundle
-_cached_store_bundle_cached = session._cached_store_bundle_cached
-_cached_projection = session._cached_projection
-_cached_corpus_summary = session._cached_corpus_summary
-_cached_evidence_bundle = session._cached_evidence_bundle
-_cached_failures = session._cached_failures
-_cached_topology = session._cached_topology
-_store_projection_identity = session._store_projection_identity
-_clear_stored_rollout_caches = session._clear_stored_rollout_caches
-_render_q_h_evidence = inspect_rerun._render_q_h_evidence
-_activate_query_store = inspect_rerun._activate_query_store
-_apply_query_state = inspect_rerun._apply_query_state
-_clear_query_state = inspect_rerun._clear_query_state
-_consume_pending_promotion = inspect_rerun._consume_pending_promotion
-_evaluate_query_frame = inspect_rerun._evaluate_query_frame
-_query_key = inspect_rerun._query_key
-_query_namespace = inspect_rerun._query_namespace
-_query_source_frame = inspect_rerun._query_source_frame
-_candidate_flow_figure = candidate_generation._candidate_flow_figure
-_selected_action_flow_figure = candidate_generation._selected_action_flow_figure
-_selected_action_flow_rows = candidate_generation._selected_action_flow_rows
-_render_branching_evidence = reconstruction._render_branching_evidence
-_render_selected_rank_and_geometry = reconstruction._render_selected_rank_and_geometry
-_TEMPORAL_METRIC_LABELS = reconstruction._TEMPORAL_METRIC_LABELS
-_temporal_evidence_role = reconstruction._temporal_evidence_role
-_temporal_summary_figure = reconstruction._temporal_summary_figure
-_download_frame = shared.download_frame
-_download_json = shared.download_json
-_plot_control_key = shared.plot_control_key
-_serialize_frame_csv = shared.serialize_frame_csv
-_serialize_json = shared.serialize_json
 
 _SECTIONS = ("Overview", "Evidence", "Failures", "Drill-down")
 _SECTION_KEY = "stored_rollouts_section"
