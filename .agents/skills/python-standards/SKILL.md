@@ -125,7 +125,7 @@ normalization. Point to these sources, not copied flags or pins.
 
 - `make package-smoke` runs fixed Ruff/pytest smoke surfaces plus the public API
   typing contract; CI adds `make ruff-full` for the complete stable Ruff surface;
-  `make mypy-contract` runs that contract alone.
+  CI sets `PYTEST_WORKERS=0`; `make mypy-contract` runs that contract alone.
 - `make ruff-full` or `make ruff-targeted RUFF_PATHS="..."` runs stable Ruff
   gates; `make coverage-targeted COVERAGE_TESTS="tests/<path>"` reports branch
   coverage. Add `MYPY_JUNIT_XML=/tmp/mypy.xml` or

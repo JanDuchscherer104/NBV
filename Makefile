@@ -135,16 +135,17 @@ QH_CI_TESTS := \
 	tests/test_config_field_constraints.py \
 	../scripts/tests/test_quartodoc_expand_config.py
 QH_CI_PYTHON ?= uv run --extra dev python
-PYTEST_ARGS ?= -n auto
+PYTEST_WORKERS ?= auto
+PYTEST_WORKERS_FLAG = $(if $(filter auto,$(PYTEST_WORKERS)),-n auto,$(if $(filter 0,$(PYTEST_WORKERS)),,$(error PYTEST_WORKERS must be auto or 0)))
 RUFF_PATHS ?=
 RUFF_CHECK_OUTPUT_FORMAT ?= concise
 RUFF_FIX ?= 0
 RUFF_FIX_FLAG = $(if $(filter 1 true yes,$(RUFF_FIX)),--fix,$(if $(filter 0 false no,$(RUFF_FIX)),,$(error RUFF_FIX must be one of 0, 1, false, true, no, or yes)))
 MYPY_JUNIT_XML ?=
 COVERAGE_TESTS ?=
-MYPY_JUNIT_FLAG = $(if $(MYPY_JUNIT_XML),--junit-xml=$$MYPY_JUNIT_XML,)
+MYPY_JUNIT_FLAG = $(if $(MYPY_JUNIT_XML),--junit-xml="$$MYPY_JUNIT_XML",)
 COVERAGE_JSON ?=
-COVERAGE_JSON_FLAG = $(if $(COVERAGE_JSON),--cov-report=json:$$COVERAGE_JSON,)
+COVERAGE_JSON_FLAG = $(if $(COVERAGE_JSON),--cov-report=json:"$$COVERAGE_JSON",)
 export RUFF_PATHS MYPY_PATHS COVERAGE_TESTS RUFF_CHECK_OUTPUT_FORMAT MYPY_JUNIT_XML COVERAGE_JSON
 
 # Read-only operator inspection defaults.
@@ -735,12 +736,12 @@ docs-render-core: graphify-projection-self-test graphify-projection-live-check q
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff check $(QH_CI_RUFF_PATHS)
-	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_ARGS) $(QH_CI_TESTS)
+	@cd $(PKG_DIR) && PYTHONPATH=.. $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(QH_CI_TESTS)
 
 package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
-	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_ARGS) $(PACKAGE_SMOKE_TESTS)
+	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)
 
 ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet aria_nbv tests
