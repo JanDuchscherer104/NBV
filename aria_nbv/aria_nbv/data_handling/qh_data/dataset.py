@@ -32,7 +32,15 @@ from ..vin_store.format import VinOfflineIndexRecord
 from ..vin_store.store import VinOfflineStoreConfig, VinOfflineStoreReader
 from ..vin_store.views import VinSnippetView
 from .batching import _gather_candidates, _pad
-from .views import QhActorTensors, QhChain, QhChainKey, QhSupervision
+from .views import (
+    QhActorTensors,
+    QhAudit,
+    QhChain,
+    QhChainKey,
+    QhSelectedObservationPrefix,
+    QhStaticContext,
+    QhSupervision,
+)
 
 if TYPE_CHECKING:
     from ...rollouts.qh_reader import _StoredChain
@@ -49,6 +57,12 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
 
     split: Stage | None = None
     """Learning/campaign split admitted by the rollout reader; ``None`` reads all chains."""
+
+    require_rich_modalities: bool = False
+    """Require root EVL evidence and selected CF-GT depth instead of permitting an explicit diagnostic-only legacy read."""
+
+    include_audit: bool = False
+    """Attach CPU-only chain provenance for debugging; never adds payloads to scorer tensors or device transfer."""
 
     @field_validator("split", mode="before")
     @classmethod
@@ -72,9 +86,15 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
         """
 
         return QhDataset(
-            rollout_reader=QhRolloutReader(self.rollout_store_dirs, campaign_split=self.split),
+            rollout_reader=QhRolloutReader(
+                self.rollout_store_dirs,
+                campaign_split=self.split,
+                include_selected_depth=self.require_rich_modalities,
+            ),
             actor_reader=VinOfflineStoreReader(self.actor),
             split=self.split,
+            require_rich_modalities=self.require_rich_modalities,
+            include_audit=self.include_audit,
         )
 
 
@@ -97,6 +117,8 @@ class QhDataset(Dataset[QhChain]):
         rollout_reader: QhRolloutReader,
         actor_reader: VinOfflineStoreReader,
         split: Stage | None = None,
+        require_rich_modalities: bool = False,
+        include_audit: bool = False,
     ) -> None:
         """Validate rollout provenance against the configured immutable actor store.
 
@@ -118,6 +140,8 @@ class QhDataset(Dataset[QhChain]):
                 f"received split={split!r}, reader campaign_split={reader_split!r}."
             )
         self.split = reader_split
+        self.require_rich_modalities = require_rich_modalities
+        self.include_audit = include_audit
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
         # ``split`` selects campaign chains above; actor rows are loaded from
         # the complete immutable index so source_ref.split can validate the
@@ -145,7 +169,20 @@ class QhDataset(Dataset[QhChain]):
         stored = self.rollout_reader[index]
         record = self._record(stored.source_ref)
         snippet = self.actor_reader.read_actor_snippet(record, device="cpu")
-        return _tensor_chain(stored, snippet)
+        static_context = _read_static_context(self.actor_reader, record, snippet)
+        if self.require_rich_modalities and (static_context is None or not bool(static_context.evl_presence.all())):
+            raise ValueError(
+                "Q_H rich training requires every root EVL evidence field; rebuild the VIN offline store with backbone materialization."
+            )
+        return _tensor_chain(
+            stored,
+            snippet,
+            static_context=static_context,
+            require_rich_modalities=self.require_rich_modalities,
+            audit=_audit_for(stored, self.rollout_reader.store_dirs[stored.store_index])
+            if self.include_audit
+            else None,
+        )
 
     @cached_property
     def scenes(self) -> frozenset[str]:
@@ -282,7 +319,14 @@ class QhDataset(Dataset[QhChain]):
         return record
 
 
-def _tensor_chain(stored: _StoredChain, snippet: VinSnippetView) -> QhChain:
+def _tensor_chain(
+    stored: _StoredChain,
+    snippet: VinSnippetView,
+    *,
+    static_context: QhStaticContext | None = None,
+    require_rich_modalities: bool = False,
+    audit: QhAudit | None = None,
+) -> QhChain:
     """Tensorize one stored chain and construct strictly causal selected-pose history.
 
     Candidate rows retain stored widths before batch collation.
@@ -323,6 +367,11 @@ def _tensor_chain(stored: _StoredChain, snippet: VinSnippetView) -> QhChain:
         history_mask[step, :step] = True
     root_pose = PoseTW(_from_numpy(stored.root_pose_world, torch.float32))
     target_pose = PoseTW(_from_numpy(stored.target_pose_world_object, torch.float32))
+    selected_observation_prefix = _selected_observation_prefix(stored, history_pose, history_mask)
+    if require_rich_modalities and selected_observation_prefix is None:
+        raise ValueError(
+            "Q_H rich training requires aligned selected CF-GT depth; rebuild the rollout store with selected depth enabled."
+        )
     return QhChain(
         actor=QhActorTensors(
             vin_snippet=snippet,
@@ -336,6 +385,8 @@ def _tensor_chain(stored: _StoredChain, snippet: VinSnippetView) -> QhChain:
             history_mask=history_mask,
             horizon_remaining=_from_numpy(stored.horizon_remaining, torch.int64),
             step_mask=torch.ones(steps, dtype=torch.bool),
+            static_context=static_context,
+            selected_observation_prefix=selected_observation_prefix,
         ),
         supervision=QhSupervision(
             label_mask=label_mask,
@@ -351,6 +402,105 @@ def _tensor_chain(stored: _StoredChain, snippet: VinSnippetView) -> QhChain:
             scene_id=stored.source_ref.scene_id,
             target_row_id=stored.target_row_id,
         ),
+        audit=audit,
+    )
+
+
+def _read_static_context(
+    actor_reader: VinOfflineStoreReader,
+    record: VinOfflineIndexRecord,
+    snippet: VinSnippetView,
+) -> QhStaticContext | None:
+    """Read root EVL evidence through the VIN-store owner when materialized."""
+
+    read_backbone = getattr(actor_reader, "read_backbone_evidence", None)
+    if not callable(read_backbone):
+        return None
+    backbone = read_backbone(record, device="cpu")
+    if backbone is None:
+        return None
+    values = (
+        backbone.t_world_voxel.tensor(),
+        backbone.voxel_extent,
+        backbone.occ_pr,
+        backbone.occ_input,
+        backbone.free_input,
+        backbone.counts,
+        backbone.cent_pr,
+        backbone.pts_world,
+    )
+    return QhStaticContext(
+        vin_snippet=snippet,
+        t_world_voxel=values[0],
+        voxel_extent=values[1],
+        occ_pr=values[2],
+        occ_input=values[3],
+        free_input=values[4],
+        counts=values[5],
+        cent_pr=values[6],
+        pts_world=values[7],
+        evl_presence=torch.tensor([value is not None for value in values], dtype=torch.bool),
+    )
+
+
+def _selected_observation_prefix(
+    stored: _StoredChain,
+    history_pose: Tensor,
+    history_mask: Tensor,
+) -> QhSelectedObservationPrefix | None:
+    """Materialize a no-future-observation CF-GT prefix for each chain state."""
+
+    values = (
+        getattr(stored, "selected_depth_m", None),
+        getattr(stored, "selected_depth_valid_mask", None),
+        getattr(stored, "selected_depth_focal_px", None),
+        getattr(stored, "selected_depth_principal_point_px", None),
+        getattr(stored, "selected_depth_image_size_hw", None),
+        getattr(stored, "selected_depth_renderer", None),
+    )
+    if all(value is None for value in values):
+        return None
+    if any(value is None for value in values):
+        raise ValueError("Q_H selected CF-GT depth payload is incomplete; rebuild the rollout store.")
+    depth, valid, focal, principal, image_size, renderer = values
+    assert isinstance(depth, np.ndarray)
+    assert isinstance(valid, np.ndarray)
+    assert isinstance(focal, np.ndarray)
+    assert isinstance(principal, np.ndarray)
+    assert isinstance(image_size, np.ndarray)
+    if renderer != "Pytorch3DDepthRenderer":
+        raise ValueError("Q_H selected observation must retain CF-GT Pytorch3D renderer provenance.")
+    steps, height, width = depth.shape
+    prefix_depth = torch.zeros((steps, steps, height, width), dtype=torch.float16)
+    prefix_valid = torch.zeros((steps, steps, height, width), dtype=torch.bool)
+    prefix_focal = torch.zeros((steps, steps, 2), dtype=torch.float32)
+    prefix_principal = torch.zeros((steps, steps, 2), dtype=torch.float32)
+    prefix_size = torch.zeros((steps, steps, 2), dtype=torch.int64)
+    for state in range(1, steps):
+        prefix_depth[state, :state] = _from_numpy(depth[:state], torch.float16)
+        prefix_valid[state, :state] = _from_numpy(valid[:state], torch.bool)
+        prefix_focal[state, :state] = _from_numpy(focal[:state], torch.float32)
+        prefix_principal[state, :state] = _from_numpy(principal[:state], torch.float32)
+        prefix_size[state, :state] = _from_numpy(image_size[:state], torch.int64)
+    return QhSelectedObservationPrefix(
+        depth_m=prefix_depth,
+        valid_mask=prefix_valid,
+        focal_px=prefix_focal,
+        principal_point_px=prefix_principal,
+        image_size_hw=prefix_size,
+        camera_pose_relative_root=history_pose,
+        prefix_mask=history_mask,
+    )
+
+
+def _audit_for(stored: _StoredChain, store_dir: Path) -> QhAudit:
+    """Build CPU-only source and selected-depth provenance for explicit diagnostics."""
+
+    return QhAudit(
+        rollout_store_dir=str(store_dir),
+        actor_store_version=stored.source_ref.actor_store_version,
+        source_manifest_hash=stored.source_ref.source_manifest_hash,
+        selected_depth_renderer=stored.selected_depth_renderer or "not_loaded",
     )
 
 

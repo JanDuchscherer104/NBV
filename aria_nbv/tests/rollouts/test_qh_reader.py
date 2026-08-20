@@ -270,6 +270,36 @@ def test_campaign_bound_store_rejects_all_unknown_campaign_assignments(tmp_path:
         QhRolloutReader((store,))
 
 
+def test_reader_reads_selected_cf_gt_depth_only_when_explicitly_requested(tmp_path: Path) -> None:
+    """Rich Q_H reads retain selected mesh-depth evidence with its alignment metadata."""
+
+    store = _write_store(tmp_path / "rollouts.zarr")
+    chain = QhRolloutReader((store,), include_selected_depth=True)[0]
+
+    assert chain.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert chain.selected_depth_m is not None
+    assert chain.selected_depth_valid_mask is not None
+    assert chain.selected_depth_focal_px is not None
+    assert chain.selected_depth_principal_point_px is not None
+    assert chain.selected_depth_image_size_hw is not None
+    assert chain.selected_depth_m.shape[0] == len(chain.candidate_pose_relative_root)
+    assert chain.selected_depth_m.dtype == np.float16
+    assert chain.selected_depth_valid_mask.dtype == np.bool_
+
+
+def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rich reader must not relabel an unknown selected-depth renderer as CF-GT."""
+
+    store = _write_store(tmp_path / "rollouts.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    root = zarr.open_group(store, mode="a")
+    root.attrs["selected_depth_renderer"] = "UnknownDepthRenderer"
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+
+    with pytest.raises(ValueError, match="CF-GT depth requires"):
+        _ = QhRolloutReader((store,), include_selected_depth=True)[0]
+
+
 def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
     reader = QhRolloutReader((store,))

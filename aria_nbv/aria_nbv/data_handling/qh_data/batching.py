@@ -18,7 +18,7 @@ from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
 from ..vin_store.views import VinSnippetView
-from .views import QhActorTensors, QhChain, QhChainKey, QhSupervision
+from .views import QhActorTensors, QhChain, QhChainKey, QhSelectedObservationPrefix, QhStaticContext, QhSupervision
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +165,11 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
     actors = [chain.actor for chain in chains]
     supervision = [chain.supervision for chain in chains]
     snippets = [actor.vin_snippet for actor in actors]
+    vin_snippet = VinSnippetView(
+        points_world=_pad([value.points_world for value in snippets], float("nan")),
+        lengths=torch.stack([value.lengths for value in snippets]),
+        t_world_rig=PoseTW(_pad([value.t_world_rig.tensor() for value in snippets], 0)),
+    )
     batch = QhBatch(
         actor=QhActorTensors(
             vin_snippet=VinSnippetView(
@@ -183,6 +188,8 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
             history_mask=_pad([value.history_mask for value in actors], False),
             horizon_remaining=_pad([value.horizon_remaining for value in actors], 0),
             step_mask=_pad([value.step_mask for value in actors], False),
+            static_context=_collate_static_context(actors, vin_snippet),
+            selected_observation_prefix=_collate_selected_prefix(actors),
         ),
         supervision=QhSupervision(
             label_mask=_pad([value.label_mask for value in supervision], False),
@@ -198,6 +205,61 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
     if bool((batch.actor.action_mask & ~batch.actor.candidate_mask).any()):
         raise ValueError("Q_H action_mask must imply candidate_mask.")
     return batch
+
+
+def _collate_static_context(actors: list[QhActorTensors], vin_snippet: VinSnippetView) -> QhStaticContext | None:
+    """Collate root EVL evidence when every chain carries the same typed modality pattern."""
+
+    contexts = [actor.static_context for actor in actors]
+    if not any(contexts):
+        return None
+    if any(context is None for context in contexts):
+        raise ValueError("Q_H batches cannot mix rich root contexts with legacy diagnostic chains.")
+    values = [context for context in contexts if context is not None]
+    presence = torch.stack([context.evl_presence for context in values])
+
+    def collate(name: str, fill: int | float = 0) -> Tensor | None:
+        fields = [getattr(context, name) for context in values]
+        if not any(field is not None for field in fields):
+            return None
+        if any(field is None for field in fields):
+            raise ValueError(f"Q_H batches require one shared EVL availability pattern for {name!r}.")
+        return _pad([field for field in fields if field is not None], fill)
+
+    return QhStaticContext(
+        vin_snippet=vin_snippet,
+        t_world_voxel=collate("t_world_voxel"),
+        voxel_extent=collate("voxel_extent"),
+        occ_pr=collate("occ_pr"),
+        occ_input=collate("occ_input"),
+        free_input=collate("free_input"),
+        counts=collate("counts"),
+        cent_pr=collate("cent_pr"),
+        pts_world=collate("pts_world"),
+        evl_presence=presence,
+    )
+
+
+def _collate_selected_prefix(actors: list[QhActorTensors]) -> QhSelectedObservationPrefix | None:
+    """Pad causal CF-GT prefixes without admitting a future observation."""
+
+    prefixes = [actor.selected_observation_prefix for actor in actors]
+    if not any(prefixes):
+        return None
+    if any(prefix is None for prefix in prefixes):
+        raise ValueError("Q_H batches cannot mix selected CF-GT prefix chains with legacy diagnostic chains.")
+    values = [prefix for prefix in prefixes if prefix is not None]
+    if {prefix.source_protocol for prefix in values} != {"cf_gt"}:
+        raise ValueError("Q_H selected-observation batches require one CF-GT source protocol.")
+    return QhSelectedObservationPrefix(
+        depth_m=_pad([value.depth_m for value in values], 0),
+        valid_mask=_pad([value.valid_mask for value in values], False),
+        focal_px=_pad([value.focal_px for value in values], 0),
+        principal_point_px=_pad([value.principal_point_px for value in values], 0),
+        image_size_hw=_pad([value.image_size_hw for value in values], 0),
+        camera_pose_relative_root=_pad([value.camera_pose_relative_root for value in values], 0),
+        prefix_mask=_pad([value.prefix_mask for value in values], False),
+    )
 
 
 def _pad(values: list[Tensor], fill: int | float | bool) -> Tensor:
@@ -278,6 +340,8 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
             history_mask=transform(actor.history_mask),
             horizon_remaining=transform(actor.horizon_remaining),
             step_mask=transform(actor.step_mask),
+            static_context=_transform_static_context(actor.static_context, transformed_snippet, transform),
+            selected_observation_prefix=_transform_selected_prefix(actor.selected_observation_prefix, transform),
         ),
         supervision=QhSupervision(
             label_mask=transform(supervision.label_mask),
@@ -288,6 +352,55 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
         ),
         keys=batch.keys,
     )
+
+
+def _transform_static_context(
+    context: QhStaticContext | None,
+    vin_snippet: VinSnippetView,
+    transform: Callable[[Tensor], Tensor],
+) -> QhStaticContext | None:
+    """Move root EVL tensors while retaining explicit missing-modality values."""
+
+    if context is None:
+        return None
+    return QhStaticContext(
+        vin_snippet=vin_snippet,
+        t_world_voxel=_transform_optional(context.t_world_voxel, transform),
+        voxel_extent=_transform_optional(context.voxel_extent, transform),
+        occ_pr=_transform_optional(context.occ_pr, transform),
+        occ_input=_transform_optional(context.occ_input, transform),
+        free_input=_transform_optional(context.free_input, transform),
+        counts=_transform_optional(context.counts, transform),
+        cent_pr=_transform_optional(context.cent_pr, transform),
+        pts_world=_transform_optional(context.pts_world, transform),
+        evl_presence=transform(context.evl_presence),
+    )
+
+
+def _transform_selected_prefix(
+    prefix: QhSelectedObservationPrefix | None,
+    transform: Callable[[Tensor], Tensor],
+) -> QhSelectedObservationPrefix | None:
+    """Move every selected CF-GT actor tensor while preserving its source tag."""
+
+    if prefix is None:
+        return None
+    return QhSelectedObservationPrefix(
+        depth_m=transform(prefix.depth_m),
+        valid_mask=transform(prefix.valid_mask),
+        focal_px=transform(prefix.focal_px),
+        principal_point_px=transform(prefix.principal_point_px),
+        image_size_hw=transform(prefix.image_size_hw),
+        camera_pose_relative_root=transform(prefix.camera_pose_relative_root),
+        prefix_mask=transform(prefix.prefix_mask),
+        source_protocol=prefix.source_protocol,
+    )
+
+
+def _transform_optional(value: Tensor | None, transform: Callable[[Tensor], Tensor]) -> Tensor | None:
+    """Transform one present tensor without manufacturing absent modality data."""
+
+    return None if value is None else transform(value)
 
 
 __all__ = ["QhBatch", "collate_qh_chains"]

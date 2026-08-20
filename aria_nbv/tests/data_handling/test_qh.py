@@ -22,7 +22,8 @@ from aria_nbv.data_handling.qh_data import (
     QhDatasetConfig,
     collate_qh_chains,
 )
-from aria_nbv.data_handling.qh_data.views import QhChainKey, QhSupervision
+from aria_nbv.data_handling.qh_data.dataset import _tensor_chain
+from aria_nbv.data_handling.qh_data.views import QhAudit, QhChainKey, QhStaticContext, QhSupervision
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.rollouts.qh_reader import QhDataContract, _QhSourceRef
@@ -311,6 +312,59 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
         "campaign_split": Stage.VAL,
     }
     assert result["split"] is Stage.VAL
+
+
+def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None:
+    """CF-GT selected depth may enter only the later states that causally acquired it."""
+
+    stored = _stored(_source_ref())
+    stored.selected_depth_m = np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3)
+    stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
+    stored.selected_depth_focal_px = np.full((2, 2), 10, dtype=np.float32)
+    stored.selected_depth_principal_point_px = np.full((2, 2), 1, dtype=np.float32)
+    stored.selected_depth_image_size_hw = np.tile(np.array([2, 3], dtype=np.int64), (2, 1))
+    stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    context = QhStaticContext(
+        vin_snippet=_snippet(),
+        t_world_voxel=PoseTW().tensor(),
+        voxel_extent=torch.ones(6),
+        occ_pr=torch.ones(1, 1, 1, 1),
+        occ_input=torch.ones(1, 1, 1, 1),
+        free_input=torch.ones(1, 1, 1, 1),
+        counts=torch.ones(1, 1, 1, dtype=torch.int64),
+        cent_pr=torch.ones(1, 1, 1, 1),
+        pts_world=torch.ones(1, 3),
+        evl_presence=torch.ones(8, dtype=torch.bool),
+    )
+    audit = QhAudit("/tmp/rollouts.zarr", "7", "manifest", "Pytorch3DDepthRenderer")
+
+    chain = _tensor_chain(stored, _snippet(), static_context=context, require_rich_modalities=True, audit=audit)
+    prefix = chain.actor.selected_observation_prefix
+    assert prefix is not None
+    assert prefix.source_protocol == "cf_gt"
+    assert not prefix.prefix_mask[0].any()
+    assert prefix.prefix_mask.tolist() == [[False, False], [True, False]]
+    assert not prefix.valid_mask[0].any()
+    assert torch.equal(prefix.depth_m[1, 0], torch.from_numpy(stored.selected_depth_m[0]))
+    assert not prefix.valid_mask[1, 1].any()
+
+    batch = collate_qh_chains([chain]).to("cpu")
+    assert batch.actor.static_context is not None
+    assert batch.actor.selected_observation_prefix is not None
+    assert batch.actor.selected_observation_prefix.prefix_mask.tolist() == [[[False, False], [True, False]]]
+    assert chain.audit is audit
+
+
+def test_rich_dataset_rejects_actor_store_without_root_evl_evidence() -> None:
+    """Legacy source stores remain diagnostic-only and cannot silently enter rich training."""
+
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=_RolloutReader(_source_ref()),
+        actor_reader=_ActorReader(),
+        require_rich_modalities=True,
+    )
+    with pytest.raises(ValueError, match="requires every root EVL evidence field"):
+        _ = dataset[0]
 
 
 @pytest.mark.parametrize(

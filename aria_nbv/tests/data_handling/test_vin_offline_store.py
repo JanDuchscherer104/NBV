@@ -881,6 +881,24 @@ def test_collect_vin_offline_dataset_stats_reports_thesis_diagnostics(tmp_path: 
     assert backbone_by_field["counts"].nz_frac == pytest.approx(1.0)  # noqa: S101
 
 
+def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: Path) -> None:
+    """The lean store reader should expose persisted actor EVL fields without oracle payloads."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True)
+    reader = VinOfflineStoreReader(store_cfg)
+    evidence = reader.read_backbone_evidence(reader.sample_index[0])
+
+    assert evidence is not None  # noqa: S101
+    assert evidence.t_world_voxel.tensor().shape == (1, 12)  # noqa: S101
+    assert evidence.voxel_extent.shape == (6,)  # noqa: S101
+    assert evidence.occ_pr is not None and evidence.occ_pr.shape == (1, 1, 2, 2, 2)  # noqa: S101
+    assert evidence.occ_input is not None  # noqa: S101
+    assert evidence.free_input is not None  # noqa: S101
+    assert evidence.counts is not None  # noqa: S101
+    assert evidence.cent_pr is not None  # noqa: S101
+    assert evidence.pts_world is not None  # noqa: S101
+
+
 def test_collect_vin_offline_dataset_stats_reports_batch_shape_preview(tmp_path: Path) -> None:
     """Offline stats should preview the lean model-facing VIN batch path."""
 

@@ -20,6 +20,99 @@ from ..vin_store.views import VinSnippetView
 
 
 @dataclass(frozen=True, slots=True)
+class QhStaticContext:
+    """Immutable root evidence shared by every realized state in one chain.
+
+    The optional EVL fields are never substituted with numeric zeros. Their
+    corresponding entries in ``evl_presence`` distinguish unavailable source
+    evidence from an observed zero-valued voxel. Rich-training admission owns
+    whether every field must be present.
+    """
+
+    vin_snippet: VinSnippetView
+    """Root semidense actor evidence and trajectory from the immutable VIN source row."""
+
+    t_world_voxel: Tensor | None
+    """Optional ``Tensor["... 12", float32]`` world-from-voxel pose for root EVL evidence."""
+
+    voxel_extent: Tensor | None
+    """Optional ``Tensor["... 6", float32]`` metric EVL voxel-frame extent in metres."""
+
+    occ_pr: Tensor | None
+    """Optional ``Tensor["... 1 D H W", float32]`` root EVL occupancy prediction."""
+
+    occ_input: Tensor | None
+    """Optional ``Tensor["... 1 D H W", float32]`` voxelized occupied input evidence."""
+
+    free_input: Tensor | None
+    """Optional ``Tensor["... 1 D H W", float32]`` voxelized free-space input evidence."""
+
+    counts: Tensor | None
+    """Optional ``Tensor["... D H W", int64]`` root per-voxel observation counts."""
+
+    cent_pr: Tensor | None
+    """Optional ``Tensor["... 1 D H W", float32]`` root EVL centerness prediction."""
+
+    pts_world: Tensor | None
+    """Optional ``Tensor["... V 3", float32]`` world coordinates for root EVL voxel centres."""
+
+    evl_presence: Tensor
+    """``Tensor["8", bool]`` availability for pose, extent, then the six optional EVL fields in declaration order."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhSelectedObservationPrefix:
+    """Strictly causal CF-GT depth history for every realized rollout state.
+
+    Row ``s`` contains only observations acquired by selected actions before
+    state ``s``. Entries outside ``prefix_mask`` are padding, not future
+    observations. The source protocol is fixed to ``"cf_gt"`` for this first
+    rich carrier.
+    """
+
+    depth_m: Tensor
+    """``Tensor["S S H W", float16]`` selected-depth prefix rasters in metres; unsupported rows are zero padding."""
+
+    valid_mask: Tensor
+    """``Tensor["S S H W", bool]`` valid metric-depth support aligned with ``depth_m``."""
+
+    focal_px: Tensor
+    """``Tensor["S S 2", float32]`` focal lengths for each selected prefix observation."""
+
+    principal_point_px: Tensor
+    """``Tensor["S S 2", float32]`` principal points for each selected prefix observation."""
+
+    image_size_hw: Tensor
+    """``Tensor["S S 2", int64]`` raster height and width for each selected prefix observation."""
+
+    camera_pose_relative_root: Tensor
+    """``Tensor["S S 12", float32]`` root-rig-from-selected-camera poses aligned with prefix observations."""
+
+    prefix_mask: Tensor
+    """``Tensor["S S", bool]`` strict lower-triangular causal observation support."""
+
+    source_protocol: str = "cf_gt"
+    """Declared selected-observation protocol; only ``"cf_gt"`` is admitted by this carrier."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhAudit:
+    """CPU-only chain provenance retained when explicit diagnostics are requested."""
+
+    rollout_store_dir: str
+    """Absolute validated rollout-store directory for reopening presentation-only diagnostics."""
+
+    actor_store_version: str
+    """Immutable VIN actor-store version bound to the source row."""
+
+    source_manifest_hash: str
+    """VIN source-manifest digest bound to the chain's immutable source identity."""
+
+    selected_depth_renderer: str
+    """Selected-depth renderer recorded by the validated rollout store."""
+
+
+@dataclass(frozen=True, slots=True)
 class QhActorTensors:
     r"""Actor-visible tensors for one chain or one padded batch.
 
@@ -63,6 +156,12 @@ class QhActorTensors:
 
     step_mask: Tensor
     """``Tensor["... S", bool]`` realized candidate-bearing states; false rows are time-axis padding."""
+
+    static_context: QhStaticContext | None = None
+    """Optional compositional root EVL context; absent only for explicit legacy diagnostic reads."""
+
+    selected_observation_prefix: QhSelectedObservationPrefix | None = None
+    """Optional strictly causal selected CF-GT depth prefix; required by rich-training admission."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +229,9 @@ class QhChain:
     key: QhChainKey
     """CPU-only source identity retained for audit and debugging, never scorer input."""
 
+    audit: QhAudit | None = None
+    """Optional CPU-only diagnostic provenance; batch tensor transfer never touches this payload."""
+
     @property
     def num_steps(self) -> int:
         """Return the number of true entries in the chain's ``step_mask``."""
@@ -137,4 +239,12 @@ class QhChain:
         return int(self.actor.step_mask.sum().item())
 
 
-__all__ = ["QhActorTensors", "QhChain", "QhChainKey", "QhSupervision"]
+__all__ = [
+    "QhActorTensors",
+    "QhAudit",
+    "QhChain",
+    "QhChainKey",
+    "QhSelectedObservationPrefix",
+    "QhStaticContext",
+    "QhSupervision",
+]

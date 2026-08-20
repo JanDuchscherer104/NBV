@@ -57,6 +57,12 @@ class _StoredChain:
     selected_index: np.ndarray
     discount: np.ndarray
     terminal: np.ndarray
+    selected_depth_m: np.ndarray | None
+    selected_depth_valid_mask: np.ndarray | None
+    selected_depth_focal_px: np.ndarray | None
+    selected_depth_principal_point_px: np.ndarray | None
+    selected_depth_image_size_hw: np.ndarray | None
+    selected_depth_renderer: str | None
     store_index: int
     rollout_row_id: int
     target_row_id: int
@@ -108,6 +114,7 @@ class QhRolloutReader:
         store_dirs: tuple[str | Path, ...],
         *,
         campaign_split: Stage | str | None = None,
+        include_selected_depth: bool = False,
     ) -> None:
         """Open compatible stores, optionally selecting one learning split.
 
@@ -125,6 +132,7 @@ class QhRolloutReader:
 
         self.store_dirs = paths
         self.campaign_split = campaign_split
+        self.include_selected_depth = include_selected_depth
         self._stores = tuple(_preflight_store(path, store_index) for store_index, path in enumerate(paths))
         _validate_homogeneous(self._stores)
         source_ref_lookup = _merge_source_refs(self._stores)
@@ -160,6 +168,7 @@ class QhRolloutReader:
             self._root(chain.store_index),
             chain,
             self._source_ref_lookup[chain.source_sample_index],
+            include_selected_depth=self.include_selected_depth,
         )
 
     @property
@@ -547,7 +556,13 @@ def _validate_homogeneous(stores: tuple[_StoreFacts, ...]) -> None:
         raise ValueError(f"Q_H rollout stores are heterogeneous at {store.path}: incompatible {', '.join(mismatches)}.")
 
 
-def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) -> _StoredChain:
+def _read_chain(
+    root: zarr.Group,
+    chain: _ChainRef,
+    source_ref: _QhSourceRef,
+    *,
+    include_selected_depth: bool,
+) -> _StoredChain:
     rows = slice(chain.state_start, chain.state_stop)
     q_h = root["q_h"]
     step_indices = np.asarray(root["steps/step_index"][rows], dtype=np.int64)
@@ -563,6 +578,7 @@ def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) ->
     target_pose = np.asarray(target["target_pose_world_object"][chain.target_position], dtype=np.float32)
     if not (np.isfinite(target_extents).all() and np.isfinite(target_pose).all()):
         raise ValueError(f"Q_H rollout_row_id={chain.rollout_row_id} has an incomplete canonical V0 descriptor.")
+    selected_depth = _read_selected_depth(root, q_h, rows) if include_selected_depth else (None,) * 6
 
     return _StoredChain(
         root_pose_world=_readonly(root_pose),
@@ -576,10 +592,51 @@ def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) ->
         selected_index=_readonly(np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)),
         discount=_readonly(np.asarray(q_h["td_discount"][rows], dtype=np.float32)),
         terminal=_readonly(np.asarray(q_h["td_terminal_mask"][rows], dtype=np.bool_)),
+        selected_depth_m=selected_depth[0],
+        selected_depth_valid_mask=selected_depth[1],
+        selected_depth_focal_px=selected_depth[2],
+        selected_depth_principal_point_px=selected_depth[3],
+        selected_depth_image_size_hw=selected_depth[4],
+        selected_depth_renderer=selected_depth[5],
         store_index=chain.store_index,
         rollout_row_id=chain.rollout_row_id,
         target_row_id=chain.target_row_id,
         source_ref=source_ref,
+    )
+
+
+def _read_selected_depth(
+    root: zarr.Group,
+    q_h: zarr.Group,
+    rows: slice,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
+    """Read one validated selected CF-GT depth row for every realized state."""
+
+    attrs = root.attrs
+    if not bool(attrs.get("selected_depth_enabled", False)):
+        raise ValueError("Q_H rich modality read requires selected_depth_enabled=true; rebuild the rollout store.")
+    if attrs.get("selected_depth_role") != "selected_successor_state_history":
+        raise ValueError("Q_H rich modality read requires selected successor-state depth provenance.")
+    renderer = attrs.get("selected_depth_renderer")
+    if renderer != "Pytorch3DDepthRenderer":
+        raise ValueError("Q_H CF-GT depth requires the recorded Pytorch3D mesh renderer provenance.")
+    selected = root["selected_depth"]
+    step_ids = np.asarray(q_h["state_step_row_id"][rows], dtype=np.int64)
+    selected_ids = np.asarray(selected["step_row_id"], dtype=np.int64)
+    positions = np.searchsorted(selected_ids, step_ids)
+    if np.any(positions >= selected_ids.size) or not np.array_equal(selected_ids[positions], step_ids):
+        raise ValueError("Q_H selected-depth rows do not align exactly with realized state rows.")
+    selected_candidate = np.asarray(selected["candidate_row_id"][positions], dtype=np.int64)
+    expected_candidate = np.asarray(root["steps/selected_candidate_row_id"][rows], dtype=np.int64)
+    if not np.array_equal(selected_candidate, expected_candidate):
+        raise ValueError("Q_H selected-depth candidate rows do not align with selected rollout actions.")
+    return (
+        _readonly(np.asarray(selected["depth_m"][positions], dtype=np.float16)),
+        _readonly(np.asarray(selected["valid_mask"][positions], dtype=np.bool_)),
+        _readonly(np.asarray(selected["focal_px"][positions], dtype=np.float32)),
+        _readonly(np.asarray(selected["principal_point_px"][positions], dtype=np.float32)),
+        _readonly(np.asarray(selected["image_size_hw"][positions], dtype=np.int64)),
+        str(renderer),
     )
 
 
