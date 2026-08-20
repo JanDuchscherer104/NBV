@@ -12,7 +12,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app.panels import training_dataset as panel
-from aria_nbv.app.panels.training_dataset import _artifact_identity, _deep_metric_value, _download_payload
+from aria_nbv.app.panels.training_dataset import _artifact_identity, _download_payload
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
@@ -20,8 +20,15 @@ from aria_nbv.data_handling.vin_store.format import (
     VinOfflineMaterializedBlocks,
 )
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
-from aria_nbv.dataset_bundle import DatasetBundleSelection, build_dataset_bundle_summary
+from aria_nbv.dataset_bundle import (
+    DatasetBundleSelection,
+    NormalizedStorageMetric,
+    QhCorpusReadiness,
+    QhStageReadiness,
+    build_dataset_bundle_summary,
+)
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
+from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 _PATH_CONFIG_FIELDS = (
@@ -161,6 +168,50 @@ def _metrics(app: AppTest) -> dict[str, str]:
     return {metric.label: metric.value for metric in app.metric}
 
 
+def test_admission_metrics_use_only_real_qh_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The compact header derives every admitted value from the Q_H preflight."""
+
+    metrics: dict[str, str] = {}
+
+    class Column:
+        def metric(self, label: str, value: str) -> None:
+            metrics[label] = value
+
+    monkeypatch.setattr(panel.st, "columns", lambda count: [Column() for _ in range(count)])
+    readiness = QhCorpusReadiness(
+        selection=DatasetBundleSelection(Path("/root"), (Path("/rollout.zarr"),)),
+        verdict="Ready",
+        blockers=(),
+        stages=(
+            QhStageReadiness(Stage.TRAIN, True, 3, 12, 40, ("scene-a", "scene-b"), 8, {}),
+            QhStageReadiness(Stage.VAL, True, 1, 4, 9, ("scene-c",), 4, {}),
+        ),
+        contract={},
+        loader_settings={},
+        scene_disjoint=True,
+        storage=(
+            NormalizedStorageMetric(
+                "rollout_bytes_per_trainable_candidate",
+                2048.0,
+                100352,
+                49,
+                "bytes / trainable Q_H candidate",
+                None,
+            ),
+        ),
+    )
+
+    panel._render_summary_metrics(readiness)
+
+    assert metrics == {
+        "Train scenes": "2",
+        "Q_H chains": "4",
+        "Q_H states": "16",
+        "Trainable candidates": "49",
+        "Storage / trainable": "2.0 KiB",
+    }
+
+
 def test_hub_discovers_composes_and_scans_explicit_stores(
     isolated_path_config: PathConfig,
     tmp_path: Path,
@@ -172,11 +223,16 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     assert not app.exception
     assert app.title[0].value == "Training Dataset"
     assert [tab.label for tab in app.tabs] == ["Readiness", "Q_H corpus", "Details"]
-    assert _metrics(app)["Root samples"] == "2"
-    assert _metrics(app)["Compatible rollout stores"] == "0 / 0"
+    assert _metrics(app) == {
+        "Train scenes": "Preflight required",
+        "Q_H chains": "Preflight required",
+        "Q_H states": "Preflight required",
+        "Trainable candidates": "Preflight required",
+        "Storage / trainable": "Preflight required",
+    }
     assert {button.label for button in app.button} >= {
         "Validate bundle",
-        "Deep statistics / target scan",
+        "Run deep target and candidate scan",
         "Preflight Q_H corpus",
     }
     assert "training_dataset_qh_readiness" not in app.session_state
@@ -187,19 +243,15 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     app.multiselect[0].set_value([rollout.as_posix()])
     app = app.run()
     assert not app.exception
-    metrics = _metrics(app)
-    assert metrics["Compatible rollout stores"] == "1 / 1"
-    assert metrics["Rollouts"] == "3"
-    assert metrics["Rollout steps"] == "6"
-    assert metrics["Candidates"] == "24"
+    assert "Root samples" not in _metrics(app)
+    assert "Rollouts" not in _metrics(app)
+    assert "Candidates" not in _metrics(app)
 
-    app.button[1].click()
+    next(button for button in app.button if button.label == "Run deep target and candidate scan").click()
     app = app.run()
     assert not app.exception
-    metrics = _metrics(app)
-    assert metrics["Root target opportunities"] == "Unavailable"
-    assert metrics["Unique persisted target tasks"] == "Unavailable"
-    assert metrics["Q_H trainable candidates"] == "Unavailable"
+    assert "Root target opportunities" not in _metrics(app)
+    assert "Unique persisted target tasks" not in _metrics(app)
     assert root.as_posix() in str(app.session_state)
 
 
@@ -218,8 +270,8 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     app = app.run()
 
     assert not app.exception
-    assert _metrics(app)["Compatible rollout stores"] == "0 / 1"
-    assert _metrics(app)["Rollouts"] == "0"
+    assert "Compatible rollout stores" not in _metrics(app)
+    assert "Rollouts" not in _metrics(app)
     assert any("Blocked" in error.value for error in app.error)
 
 
@@ -279,17 +331,3 @@ def test_artifact_identity_tolerates_metadata_disappearing_during_stat(
     monkeypatch.setattr(Path, "stat", _stat)
 
     assert _artifact_identity(store) == ()
-
-
-def test_deep_metric_value_marks_partial_counts_and_unavailable_failures() -> None:
-    partial = {
-        "q_h_trainable_candidates": 17,
-        "q_h_trainable_candidates_status": "partial",
-    }
-    unavailable = {
-        "q_h_trainable_candidates": None,
-        "q_h_trainable_candidates_status": "unavailable",
-    }
-
-    assert _deep_metric_value(partial, "q_h_trainable_candidates", deep_available=True) == "17 (partial)"
-    assert _deep_metric_value(unavailable, "q_h_trainable_candidates", deep_available=True) == "Unavailable"

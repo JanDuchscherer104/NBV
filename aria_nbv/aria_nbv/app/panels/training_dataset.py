@@ -216,19 +216,6 @@ def _metric_value(value: Any, *, pending: str = "Unavailable") -> str:
     return pending if value is None else f"{int(value):,}"
 
 
-def _deep_metric_value(aggregate: dict[str, Any], key: str, *, deep_available: bool) -> str:
-    """Format one deep denominator together with its completeness status."""
-
-    if not deep_available:
-        return "Deep scan required"
-    value = aggregate.get(key)
-    status = aggregate.get(f"{key}_status", "unavailable")
-    if value is None or status == "unavailable":
-        return "Unavailable"
-    rendered = f"{int(value):,}"
-    return f"{rendered} (partial)" if status == "partial" else rendered
-
-
 def _render_verdict(evidence: DatasetBundleEvidence) -> None:
     """Render the strict bundle verdict with its operational meaning."""
 
@@ -246,55 +233,38 @@ def _render_verdict(evidence: DatasetBundleEvidence) -> None:
 
 
 def _render_summary_metrics(
-    evidence: DatasetBundleEvidence,
-    deep: dict[str, Any] | None,
+    readiness: QhCorpusReadiness | None,
 ) -> None:
-    """Render root, rollout, and target-supervision quantities separately."""
+    """Render only admission quantities established by the real Q_H preflight."""
 
-    root = evidence.root
-    aggregate = evidence.aggregate
-    root_cols = st.columns(5)
-    root_cols[0].metric("Root samples", _metric_value(root.get("sample_count")))
-    root_cols[1].metric("Root snippets", _metric_value(root.get("snippet_count")))
-    root_cols[2].metric("Root scenes", _metric_value(root.get("scene_count")))
-    root_cols[3].metric("Root storage", _format_bytes(root.get("storage_bytes")))
-    root_cols[4].metric("Root schema", str(root.get("schema_version") or "Unavailable"))
+    pending = "Preflight required"
+    train_scenes: str = pending
+    chain_count: str = pending
+    state_count: str = pending
+    trainable_count: str = pending
+    storage_per_trainable: str = pending
+    if readiness is not None and readiness.verdict == "Ready":
+        train = next((row for row in readiness.stages if row.stage.value == "train"), None)
+        train_scenes = _metric_value(None if train is None else len(train.scene_ids))
+        chain_count = _metric_value(sum(row.chain_count for row in readiness.stages))
+        state_count = _metric_value(sum(row.state_count for row in readiness.stages))
+        trainable_count = _metric_value(sum(row.trainable_candidate_count for row in readiness.stages))
+        storage = next(
+            (metric for metric in readiness.storage if metric.name == "rollout_bytes_per_trainable_candidate"),
+            None,
+        )
+        storage_per_trainable = (
+            "Unavailable" if storage is None or storage.value is None else _format_bytes(storage.value)
+        )
+    elif readiness is not None:
+        train_scenes = chain_count = state_count = trainable_count = storage_per_trainable = "Blocked"
 
-    rollout_cols = st.columns(5)
-    rollout_cols[0].metric(
-        "Compatible rollout stores",
-        f"{aggregate.get('compatible_rollout_store_count', 0)} / {aggregate.get('selected_rollout_store_count', 0)}",
-    )
-    rollout_cols[1].metric("Rollouts", _metric_value(aggregate.get("rollout_count")))
-    rollout_cols[2].metric("Rollout steps", _metric_value(aggregate.get("step_count")))
-    rollout_cols[3].metric("Candidates", _metric_value(aggregate.get("candidate_count")))
-    rollout_cols[4].metric("Rollout storage", _format_bytes(aggregate.get("rollout_storage_bytes")))
-
-    deep_aggregate = deep.get("aggregate", {}) if deep is not None else {}
-    target_cols = st.columns(3)
-    target_cols[0].metric(
-        "Root target opportunities",
-        _metric_value(
-            deep_aggregate.get("root_gt_obb_target_opportunities"),
-            pending="Deep scan required" if deep is None else "Unavailable",
-        ),
-    )
-    target_cols[1].metric(
-        "Unique persisted target tasks",
-        _deep_metric_value(
-            deep_aggregate,
-            "persisted_rollout_unique_target_tasks",
-            deep_available=deep is not None,
-        ),
-    )
-    target_cols[2].metric(
-        "Q_H trainable candidates",
-        _deep_metric_value(deep_aggregate, "q_h_trainable_candidates", deep_available=deep is not None),
-    )
-    st.caption(
-        f"Persisted rollout target rows: {int(aggregate.get('persisted_rollout_target_rows') or 0):,}. "
-        "Root opportunities, unique persisted tasks, and candidate-level Q_H supervision are different denominators."
-    )
+    columns = st.columns(5)
+    columns[0].metric("Train scenes", train_scenes)
+    columns[1].metric("Q_H chains", chain_count)
+    columns[2].metric("Q_H states", state_count)
+    columns[3].metric("Trainable candidates", trainable_count)
+    columns[4].metric("Storage / trainable", storage_per_trainable)
 
 
 def _rollout_rows(evidence: DatasetBundleEvidence) -> list[dict[str, Any]]:
@@ -322,29 +292,6 @@ def _rollout_rows(evidence: DatasetBundleEvidence) -> list[dict[str, Any]]:
             }
         )
     return rows
-
-
-def _render_topology(evidence: DatasetBundleEvidence) -> None:
-    """Render a compact root-to-rollout-to-Q_H dependency graph."""
-
-    lines = ["digraph bundle {", 'rankdir="LR";', 'node [shape="box", style="rounded"];']
-    root_label = Path(str(evidence.root.get("path", "VIN root"))).name
-    lines.append(f'root [label="VIN root\\n{root_label}"];')
-    if not evidence.rollouts:
-        lines.append('none [label="No rollout supervision selected", style="rounded,dashed"];')
-        lines.append('root -> none [style="dashed"];')
-    for index, row in enumerate(evidence.rollouts):
-        name = Path(str(row["path"])).name.replace('"', "'")
-        included = bool(row.get("included_in_training_totals"))
-        color = "#2e7d32" if included else "#c62828"
-        style = "solid" if included else "dashed"
-        lines.append(f'rollout_{index} [label="Rollout store\\n{name}", color="{color}"];')
-        lines.append(f'qh_{index} [label="Derived Q_H rows", color="{color}"];')
-        lines.append(f'root -> rollout_{index} [color="{color}", style="{style}"];')
-        lines.append(f'rollout_{index} -> qh_{index} [color="{color}", style="{style}"];')
-    lines.append("}")
-    st.graphviz_chart("\n".join(lines), width="stretch")
-    st.caption("Green paths contribute to aggregate training totals; red dashed paths remain visible but are blocked.")
 
 
 def _download_payload(
@@ -405,9 +352,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         validate_rollouts=False,
     )
 
-    action_cols = st.columns(2)
-    validate = action_cols[0].button("Validate bundle", type="primary", width="stretch")
-    scan = action_cols[1].button("Deep statistics / target scan", width="stretch")
+    validate = st.button("Validate bundle", type="primary", width="stretch")
     if validate:
         st.session_state[_VALIDATED_STATE_KEY] = (
             identity,
@@ -418,12 +363,6 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 validate_rollouts=True,
             ),
         )
-    if scan:
-        st.session_state[_DEEP_STATE_KEY] = (
-            identity,
-            _cached_deep_statistics(root_text, rollout_texts, identity),
-        )
-
     validated_state = st.session_state.get(_VALIDATED_STATE_KEY)
     evidence = validated_state[1] if validated_state and validated_state[0] == identity else light
     deep_state = st.session_state.get(_DEEP_STATE_KEY)
@@ -434,7 +373,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     qh_preview = preview_state[1] if preview_state and preview_state[0] == identity else None
 
     _render_verdict(evidence)
-    _render_summary_metrics(evidence, deep)
+    _render_summary_metrics(qh_readiness)
 
     readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
     with readiness_tab:
@@ -548,11 +487,12 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     width="stretch",
                 )
     with details_tab:
-        with st.expander("Topology and raw store evidence"):
-            _render_topology(evidence)
         with st.expander("Deep target and candidate evidence"):
+            if st.button("Run deep target and candidate scan", width="stretch"):
+                deep = _cached_deep_statistics(root_text, rollout_texts, identity)
+                st.session_state[_DEEP_STATE_KEY] = (identity, deep)
             if deep is None:
-                st.info("Run **Deep statistics / target scan** to materialize target and candidate denominators.")
+                st.info("Run the deep scan to materialize target and candidate denominators.")
             else:
                 st.json(deep)
             root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
@@ -562,6 +502,10 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     "Root target opportunities are counted only from persisted GT-OBB labels and are never inferred "
                     f"from rollout rows. Current status: {reason}."
                 )
+            st.caption(
+                "Use Root Observation Store for source distributions and Rollout Supervision for scientific, "
+                "failure, query, depth, and Rerun inspection."
+            )
 
     st.download_button(
         "Download resolved bundle evidence JSON",

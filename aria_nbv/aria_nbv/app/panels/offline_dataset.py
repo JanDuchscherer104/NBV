@@ -34,6 +34,7 @@ from .common import _offline_summary_rows
 
 _STATS_CACHE_KEY = "vin_offline_dataset_page_stats"
 _COVERAGE_CACHE_KEY = "vin_offline_dataset_page_coverage"
+_SECTIONS = ("Overview", "Content", "Runtime", "Details")
 
 
 def _load_offline_store_from_toml(toml_path: Path) -> VinOfflineStoreConfig:
@@ -373,101 +374,69 @@ def _render_stats(
     col_c.metric("Scenes", stats.num_scenes)
     col_d.metric("Numeric blocks", f"{stats.numeric_bytes / (1024**2):.1f} MiB")
 
-    (
-        tab_overview,
-        tab_blocks,
-        tab_samples,
-        tab_distributions,
-        tab_rri_components,
-        tab_candidate_geometry,
-        tab_batch_memory,
-        tab_backbone,
-        tab_binner,
-        tab_coverage,
-        tab_manifest,
-    ) = st.tabs(
-        [
-            "Overview",
-            "Blocks",
-            "Sample Sanity",
-            "Distributions",
-            "RRI Components",
-            "Candidate Geometry",
-            "Batch & Memory",
-            "Backbone",
-            "Binner",
-            "Coverage",
-            "Manifest",
-        ],
-    )
+    tab_overview, tab_content, tab_runtime, tab_details = st.tabs(list(_SECTIONS))
 
     with tab_overview:
         st.dataframe(_offline_summary_rows(stats), width="stretch", hide_index=True)
         col_l, col_r = st.columns(2)
         col_l.json(stats.split_counts, expanded=True)
         col_r.json(stats.materialized_blocks, expanded=True)
-
-    with tab_blocks:
-        st.dataframe(_block_rows(stats), width="stretch", hide_index=True)
-
-    with tab_samples:
-        st.dataframe(_sample_rows(stats), width="stretch", hide_index=True)
-
-    with tab_distributions:
-        _render_histogram(
-            stats.candidate_count_values,
-            title="Valid Candidate Counts",
-            x_label="candidate_count",
-            nbins=hist_bins,
-            log_y=log_y,
-        )
-        _render_histogram(
-            stats.rri_values,
-            title="Oracle RRI",
-            x_label="rri",
-            nbins=hist_bins,
-            log_y=log_y,
-        )
-        _render_histogram(
-            stats.vin_point_values,
-            title="VIN Point Lengths",
-            x_label="vin_points",
-            nbins=hist_bins,
-            log_y=log_y,
-        )
-
-    with tab_rri_components:
-        _render_rri_components(stats, hist_bins=hist_bins, log_y=log_y)
-
-    with tab_candidate_geometry:
-        _render_candidate_geometry(stats, candidate_bins=candidate_bins, log_y=log_y)
-
-    with tab_batch_memory:
-        _render_batch_memory(stats, log_y=log_y)
-
-    with tab_backbone:
-        _render_backbone(stats, log_y=log_y)
-
-    with tab_binner:
-        _render_binner(stats, binner_classes=binner_classes, hist_bins=hist_bins, log_y=log_y)
-
-    with tab_coverage:
         _render_coverage(coverage)
 
-    with tab_manifest:
-        st.json(
-            {
-                "store_dir": stats.store_dir,
-                "version": stats.version,
-                "num_samples": stats.num_samples,
-                "sampled_samples": stats.sampled_samples,
-                "split_counts": stats.split_counts,
-                "materialized_blocks": stats.materialized_blocks,
-                "block_shapes": stats.block_shapes,
-                "batch_shapes": stats.batch_shapes,
-            },
-            expanded=False,
-        )
+    with tab_content:
+        with st.expander("Core distributions", expanded=True):
+            _render_histogram(
+                stats.candidate_count_values,
+                title="Valid Candidate Counts",
+                x_label="candidate_count",
+                nbins=hist_bins,
+                log_y=log_y,
+            )
+            _render_histogram(
+                stats.rri_values,
+                title="Oracle RRI",
+                x_label="rri",
+                nbins=hist_bins,
+                log_y=log_y,
+            )
+            _render_histogram(
+                stats.vin_point_values,
+                title="VIN Point Lengths",
+                x_label="vin_points",
+                nbins=hist_bins,
+                log_y=log_y,
+            )
+        with st.expander("RRI components"):
+            _render_rri_components(stats, hist_bins=hist_bins, log_y=log_y)
+        with st.expander("Candidate geometry"):
+            _render_candidate_geometry(stats, candidate_bins=candidate_bins, log_y=log_y)
+        with st.expander("Backbone features"):
+            _render_backbone(stats, log_y=log_y)
+
+    with tab_runtime:
+        _render_batch_memory(stats, log_y=log_y)
+
+    with tab_details:
+        with st.expander("Persisted blocks"):
+            st.dataframe(_block_rows(stats), width="stretch", hide_index=True)
+        with st.expander("Sample sanity"):
+            st.dataframe(_sample_rows(stats), width="stretch", hide_index=True)
+        with st.expander("RRI binning"):
+            _render_binner(stats, binner_classes=binner_classes, hist_bins=hist_bins, log_y=log_y)
+        with st.expander("Manifest and shapes"):
+            st.json(
+                {
+                    "store_dir": stats.store_dir,
+                    "version": stats.version,
+                    "num_samples": stats.num_samples,
+                    "sampled_samples": stats.sampled_samples,
+                    "split_counts": stats.split_counts,
+                    "materialized_blocks": stats.materialized_blocks,
+                    "block_shapes": stats.block_shapes,
+                    "batch_shapes": stats.batch_shapes,
+                },
+                expanded=False,
+            )
 
 
 def render_offline_dataset_page() -> None:

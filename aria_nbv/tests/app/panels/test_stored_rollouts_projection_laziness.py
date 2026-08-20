@@ -9,6 +9,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import zarr
 
@@ -17,6 +18,56 @@ from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_sh
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
+
+
+def test_corpus_overview_defers_per_store_qh_rows_to_drill_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Overview stays aggregate-only while drill-down retains store-qualified evidence."""
+
+    metrics: dict[str, object] = {}
+    frames: list[object] = []
+
+    class Column:
+        def metric(self, label: str, value: object) -> None:
+            metrics[label] = value
+
+    summary = page.RolloutCorpusSummary(
+        verdict="Ready",
+        selected_paths=(Path("/fixture.zarr"),),
+        included_stores=({"path": "/fixture.zarr", "store_id": "fixture", "profile": "pilot"},),
+        excluded_stores=(),
+        totals={
+            "included_store_count": 1,
+            "excluded_store_count": 0,
+            "q_h_chain_count": 3,
+            "q_h_state_count": 6,
+            "q_h_trainable_count": 17,
+            "storage_bytes": 1024,
+        },
+        candidate_support=pd.DataFrame(),
+        endpoints=pd.DataFrame(),
+        failure_counts=pd.DataFrame(),
+        q_h_stores=pd.DataFrame([{"store_id": "fixture", "state_count": 6}]),
+    )
+    monkeypatch.setattr(page.st, "subheader", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(page.st, "columns", lambda count: [Column() for _ in range(count)])
+    monkeypatch.setattr(page.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(page.st, "dataframe", lambda frame, **_kwargs: frames.append(frame))
+
+    page._render_corpus_overview(summary, selected_count=1)
+
+    assert metrics == {
+        "Included stores": 1,
+        "Excluded stores": 0,
+        "Q_H chains": "3",
+        "Q_H states": "6",
+        "Trainable candidates": "17",
+        "Storage": "1.0 KiB",
+    }
+    assert frames == []
+
+    page._render_corpus_details(summary)
+
+    assert len(frames) == 2
 
 
 def test_corpus_summary_cache_delegates_only_after_explicit_dispatch_and_preserves_order(
