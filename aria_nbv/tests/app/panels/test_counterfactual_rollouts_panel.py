@@ -25,6 +25,13 @@ from aria_nbv.app.panels import common as panel_common
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
 from aria_nbv.app.panels import stored_rollouts as stored_rollouts_panel
+from aria_nbv.app.panels._stored_rollouts import (
+    candidate_generation,
+    inspect_rerun,
+    reconstruction_return,
+    session,
+    shared,
+)
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutStep
@@ -598,7 +605,7 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
     def fail_heavy_audit(*_args, **_kwargs):
         raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
 
-    monkeypatch.setattr(stored_rollouts_page, "candidate_audit_rows", fail_heavy_audit)
+    monkeypatch.setattr(session, "candidate_audit_rows", fail_heavy_audit)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Evidence")
 
@@ -607,19 +614,19 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
 
 
-def test_stored_rollouts_default_evidence_only_reads_bounded_selected_rank_flow(
+def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
     isolated_path_config,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Evidence defaults may read selected ranks but not full candidate projections."""
+    """Evidence defaults defer all candidate-derived projections until explicitly requested."""
 
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "lazy-heavy.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
     stored_rollouts_page._clear_stored_rollout_caches()
-    original_projection = stored_rollouts_page._cached_projection
+    original_projection = reconstruction_return._cached_projection
     heavy_calls = dict.fromkeys(("candidates", "candidate_group", "ranks", "root_geometry", "tree"), 0)
 
     def spy_projection(store_path: str, projection: str, **kwargs):
@@ -627,7 +634,7 @@ def test_stored_rollouts_default_evidence_only_reads_bounded_selected_rank_flow(
             heavy_calls[projection] += 1
         return original_projection(store_path, projection, **kwargs)
 
-    monkeypatch.setattr(stored_rollouts_page, "_cached_projection", spy_projection)
+    monkeypatch.setattr(reconstruction_return, "_cached_projection", spy_projection)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Evidence")
 
@@ -635,7 +642,7 @@ def test_stored_rollouts_default_evidence_only_reads_bounded_selected_rank_flow(
     assert heavy_calls == {
         "candidates": 0,
         "candidate_group": 0,
-        "ranks": 1,
+        "ranks": 0,
         "root_geometry": 0,
         "tree": 0,
     }
@@ -663,7 +670,7 @@ def test_stored_rollout_evidence_roles_are_explicit() -> None:
 def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest.MonkeyPatch) -> None:
     """The restored branching plot must use the same actor-visible role owner."""
 
-    captured: list[stored_rollouts_page.ScientificExplanation] = []
+    captured: list[shared.ScientificExplanation] = []
     steps = pd.DataFrame(
         [
             {
@@ -676,12 +683,12 @@ def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest
         ]
     )
     monkeypatch.setattr(
-        stored_rollouts_page,
+        reconstruction_return,
         "_render_plot",
         lambda _figure, explanation: captured.append(explanation),
     )
 
-    stored_rollouts_page._render_branching_evidence(steps, pd.DataFrame())
+    reconstruction_return._render_branching_evidence(steps, pd.DataFrame())
 
     assert [explanation.evidence_role for explanation in captured] == ["actor-visible"]
 
@@ -689,7 +696,7 @@ def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest
 def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rank/regret derives from privileged target gain, not a training cache."""
 
-    captured: list[stored_rollouts_page.ScientificExplanation] = []
+    captured: list[shared.ScientificExplanation] = []
 
     def fake_projection(_store_path: str, projection: str, **_kwargs):
         if projection == "ranks":
@@ -710,11 +717,11 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
     def capture_plot(_figure, explanation):
         captured.append(explanation)
 
-    monkeypatch.setattr(stored_rollouts_page, "_cached_projection", fake_projection)
-    monkeypatch.setattr(stored_rollouts_page, "_render_plot", capture_plot)
-    monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(reconstruction_return, "_cached_projection", fake_projection)
+    monkeypatch.setattr(reconstruction_return, "_render_plot", capture_plot)
+    monkeypatch.setattr(reconstruction_return, "_download_frame", lambda *_args, **_kwargs: None)
 
-    stored_rollouts_page._render_selected_rank_and_geometry("store.zarr")
+    reconstruction_return._render_selected_rank_and_geometry("store.zarr")
 
     assert [explanation.evidence_role for explanation in captured] == ["oracle/evaluation"]
 
@@ -722,11 +729,11 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
 def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result() -> None:
     """Query transitions should be explicit, copied, deterministic, and failure-preserving."""
 
-    rollout_namespace = stored_rollouts_page._query_namespace("store-a", "Rollout summaries", "not_applicable")
-    step_namespace = stored_rollouts_page._query_namespace("store-a", "Factual steps", "not_applicable")
-    other_store_namespace = stored_rollouts_page._query_namespace("store-b", "Factual steps", "not_applicable")
+    rollout_namespace = inspect_rerun._query_namespace("store-a", "Rollout summaries", "not_applicable")
+    step_namespace = inspect_rerun._query_namespace("store-a", "Factual steps", "not_applicable")
+    other_store_namespace = inspect_rerun._query_namespace("store-b", "Factual steps", "not_applicable")
     assert len({rollout_namespace, step_namespace, other_store_namespace}) == 3
-    assert stored_rollouts_page._query_key(rollout_namespace, "rollout_widget") != stored_rollouts_page._query_key(
+    assert inspect_rerun._query_key(rollout_namespace, "rollout_widget") != inspect_rerun._query_key(
         step_namespace, "rollout_widget"
     )
 
@@ -845,7 +852,7 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
         calls.append((rollout_row_id, step_row_id))
         return []
 
-    monkeypatch.setattr(stored_rollouts_page, "_cached_projection", fake_projection)
+    monkeypatch.setattr(inspect_rerun, "_cached_projection", fake_projection)
     kwargs = {
         "store_path": "/store.zarr",
         "scope": "Candidates",
@@ -854,9 +861,9 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
         "all_steps": pd.DataFrame(),
     }
 
-    stored_rollouts_page._query_source_frame(**kwargs, candidate_population="Selected step")
-    stored_rollouts_page._query_source_frame(**kwargs, candidate_population="Selected rollout")
-    stored_rollouts_page._query_source_frame(**kwargs, candidate_population="Explicit full store")
+    inspect_rerun._query_source_frame(**kwargs, candidate_population="Selected step")
+    inspect_rerun._query_source_frame(**kwargs, candidate_population="Selected rollout")
+    inspect_rerun._query_source_frame(**kwargs, candidate_population="Explicit full store")
 
     assert calls == [(7, 11), (7, None), (None, None)]
 
@@ -1012,13 +1019,11 @@ def test_live_quality_plot_unifies_context_axis_control_and_chart(monkeypatch: p
 def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
     """No stored-rollout plot may bypass its scientific explanation popover."""
 
-    source = Path(stored_rollouts_page.__file__).read_text(encoding="utf-8")
+    source = Path(shared.__file__).read_text(encoding="utf-8")
 
     assert source.count("st.plotly_chart(") == 1
     assert "st.plotly_chart(rendered" in source
-    assert stored_rollouts_page._plot_control_key("summary", "a") != stored_rollouts_page._plot_control_key(
-        "summary", "b"
-    )
+    assert shared.plot_control_key("summary", "a") != shared.plot_control_key("summary", "b")
 
 
 def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> None:
@@ -1053,7 +1058,7 @@ def test_candidate_flow_figure_preserves_stage_specific_nodes_and_counts() -> No
         ]
     )
 
-    figure = stored_rollouts_page._candidate_flow_figure(flow)
+    figure = candidate_generation._candidate_flow_figure(flow)
     sankey = figure.data[0]
 
     assert figure.layout.title.text == "Candidate provenance and support flow"
@@ -1088,8 +1093,8 @@ def test_selected_action_flow_groups_policy_temperature_and_exact_rri_ranks() ->
         ]
     )
 
-    flow = stored_rollouts_page._selected_action_flow_rows(ranks)
-    figure = stored_rollouts_page._selected_action_flow_figure(flow)
+    flow = candidate_generation._selected_action_flow_rows(ranks)
+    figure = candidate_generation._selected_action_flow_figure(flow)
     sankey = figure.data[0]
 
     assert figure.layout.title.text == "Selected-action policy and target-RRI rank flow"
@@ -1109,8 +1114,8 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
     captions: list[str] = []
     csv_calls = 0
     json_calls = 0
-    serialize_csv = stored_rollouts_page._serialize_frame_csv
-    serialize_json = stored_rollouts_page._serialize_json
+    serialize_csv = shared.serialize_frame_csv
+    serialize_json = shared.serialize_json
 
     def count_csv(frame: pd.DataFrame) -> bytes:
         nonlocal csv_calls
@@ -1122,19 +1127,19 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
         json_calls += 1
         return serialize_json(payload)
 
-    monkeypatch.setattr(stored_rollouts_page, "_serialize_frame_csv", count_csv)
-    monkeypatch.setattr(stored_rollouts_page, "_serialize_json", count_json)
+    monkeypatch.setattr(shared, "serialize_frame_csv", count_csv)
+    monkeypatch.setattr(shared, "serialize_json", count_json)
     monkeypatch.setattr(
-        stored_rollouts_page.st,
+        shared.st,
         "download_button",
         lambda label, **kwargs: downloads.append({"label": label, **kwargs}),
     )
-    monkeypatch.setattr(stored_rollouts_page.st, "caption", captions.append)
+    monkeypatch.setattr(shared.st, "caption", captions.append)
     frame = pd.DataFrame({"rollout_row_id": [2, 3, 5], "note": ["a,b", "line\nbreak", "plain"]})
     payload = {"z": np.int64(2), "a": ["first"]}
 
-    stored_rollouts_page._download_frame("CSV", "rows.csv", frame)
-    stored_rollouts_page._download_json("JSON", "rows.json", payload)
+    shared.download_frame("CSV", "rows.csv", frame)
+    shared.download_json("JSON", "rows.json", payload)
 
     assert csv_calls == 0
     assert json_calls == 0
