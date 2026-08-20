@@ -2200,12 +2200,14 @@ class CudaRolloutCampaign:
                     )
                 )
         if not blocked:
-            self.append_event(self._event(plan, "campaign_finished"))
+            elapsed = self.clock() - started_at
+            self.append_event(self._event(plan, "campaign_finished", elapsed_seconds=elapsed))
             self.write_status(
                 self.status(
                     plan,
                     results,
                     stage="terminal",
+                    elapsed_seconds=elapsed,
                     last_timeout=last_timeout,
                     started_at=started_at_iso,
                     finished_at=self.utc_now().isoformat(),
@@ -2784,6 +2786,14 @@ class CudaRolloutCampaign:
                 raise ValueError("campaign status diverges from canonical events")
         if status.state not in progress["allowed_states"]:
             raise ValueError("campaign status state diverges from canonical events")
+        if status.state in {"completed", "completed_with_failures"}:
+            elapsed_seconds = self._canonical_campaign_elapsed(events)
+            if elapsed_seconds is None:
+                raise ValueError("terminal campaign status lacks campaign finish evidence")
+            finished = next(event for event in reversed(events) if event.kind == "campaign_finished")
+            legacy_elapsed = finished.elapsed_seconds is None and status.elapsed_seconds == 0.0
+            if not legacy_elapsed and status.elapsed_seconds != elapsed_seconds:
+                raise ValueError("campaign status elapsed time diverges from canonical events")
         if status.current_work_unit != progress["current_work_unit"]:
             raise ValueError("campaign status current work unit diverges from canonical events")
         if status.last_work_unit != progress["last_work_unit"]:
@@ -2837,6 +2847,11 @@ class CudaRolloutCampaign:
             (event.timestamp for event in reversed(events) if event.kind == "campaign_finished"),
             None,
         )
+        elapsed_seconds = 0.0
+        if state in {"completed", "completed_with_failures"}:
+            elapsed_seconds = self._canonical_campaign_elapsed(events)
+            if elapsed_seconds is None:
+                raise ValueError("canonical campaign finish lacks elapsed evidence")
         rebuilt = self.status(
             plan,
             results,
@@ -2848,8 +2863,40 @@ class CudaRolloutCampaign:
             active_started_at=progress["active_started_at"],
             started_at=started_at,
             finished_at=finished_at,
+            elapsed_seconds=elapsed_seconds,
         )
         return replace(rebuilt, updated_at=events[-1].timestamp or rebuilt.updated_at)
+
+    @staticmethod
+    def _canonical_campaign_elapsed(events: Sequence[CampaignEvent]) -> float | None:
+        """Return finish timing, with a timestamp fallback for old ledgers."""
+        finish_index = next(
+            (index for index in range(len(events) - 1, -1, -1) if events[index].kind == "campaign_finished"), None
+        )
+        if finish_index is None:
+            return None
+        finished = events[finish_index]
+        if finished.elapsed_seconds is not None:
+            if not math.isfinite(finished.elapsed_seconds) or finished.elapsed_seconds < 0:
+                raise ValueError("campaign_finished requires non-negative elapsed evidence")
+            return finished.elapsed_seconds
+        started = next(
+            (
+                event
+                for event in reversed(events[:finish_index])
+                if event.kind in {"campaign_started", "campaign_resumed"}
+            ),
+            None,
+        )
+        if started is None:
+            return None
+        try:
+            elapsed = (
+                datetime.fromisoformat(finished.timestamp) - datetime.fromisoformat(started.timestamp)
+            ).total_seconds()
+        except (TypeError, ValueError):
+            return None
+        return elapsed if math.isfinite(elapsed) and elapsed >= 0 else None
 
     def _require_validated_terminal_shard(self, plan: CampaignPlan, unit: CampaignWorkUnit) -> dict[str, Any]:
         """Return the plan-bound promoted shard or reject terminal success/skip."""
@@ -3022,6 +3069,10 @@ class CudaRolloutCampaign:
                     raise ValueError("invalid campaign_finished transition")
                 if set(terminal_outcomes) != known_units:
                     raise ValueError("campaign_finished precedes terminal work units")
+                if event.elapsed_seconds is not None and (
+                    not math.isfinite(event.elapsed_seconds) or event.elapsed_seconds < 0
+                ):
+                    raise ValueError("campaign_finished requires non-negative elapsed evidence")
                 run_state = "finished"
                 finished = True
                 current_stage = "terminal"

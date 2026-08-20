@@ -345,7 +345,7 @@ def test_canonical_campaign_freezes_accepted_realistic_batch_profile():
     writer = RolloutDatasetWriterConfig.from_toml(REPO_ROOT / config.writer_config_path)
 
     assert config.frozen_profile == "realistic_core_60"
-    assert writer.target_scorer.depth.renderer.max_views_per_batch == 3
+    assert writer.target_scorer.depth.renderer.max_views_per_batch == 2
 
 
 def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineage(
@@ -396,13 +396,13 @@ def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineag
     assert entry.rows[0].source_shard_row == unit.source_row_payload["source_shard_row"]
 
 
-def test_corrected_v9_pilot_has_fresh_identity_and_unchanged_paired_contract():
+def test_corrected_v10_pilot_has_fresh_identity_and_unchanged_paired_contract():
     config = CudaRolloutCampaignConfig.from_toml(
-        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v9.toml"
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml"
     )
-    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v9"
+    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v10"
     assert not (REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml").exists()
-    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v9")
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v10")
     assert config.mode.value == "pilot"
     assert config.pilot_scene_count == 5
     assert config.temperatures == (0.5, 1.0, 2.0, 4.0)
@@ -1436,6 +1436,54 @@ def test_run_claimed_event_timing_resets_per_unit_and_campaign_elapsed_increases
     assert terminal_events[0].unit_elapsed_seconds is not None
     assert terminal_events[1].unit_elapsed_seconds is not None
     assert terminal_events[1].unit_elapsed_seconds < terminal_events[1].elapsed_seconds
+    terminal_status = campaign.read_status(plan=plan)
+    assert terminal_status.state == "completed"
+    assert terminal_status.elapsed_seconds > 0.0
+    finished = [event for event in campaign.read_events(plan=plan) if event.kind == "campaign_finished"][-1]
+    assert finished.elapsed_seconds == terminal_status.elapsed_seconds
+
+
+def test_terminal_status_rebuild_uses_finish_elapsed_and_rejects_divergence(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_campaign_started(campaign, plan)
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, "insufficient_support")
+    campaign.append_event(campaign._event(plan, "campaign_finished", elapsed_seconds=12.5))
+    campaign.write_status(
+        campaign.status(
+            plan,
+            [{"outcome": "insufficient_support"}] * len(plan.work_units),
+            stage="terminal",
+            elapsed_seconds=12.5,
+            last_unit=plan.work_units[-1],
+        )
+    )
+    status_path = tmp_path / "status.json"
+    status_path.unlink()
+    rebuilt = campaign.read_status(plan=plan)
+    assert rebuilt.elapsed_seconds == 12.5
+
+    campaign.write_status(replace(rebuilt, elapsed_seconds=11.5))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
+
+
+def test_terminal_status_rebuilds_legacy_null_finish_elapsed_from_timestamps(tmp_path):
+    campaign = _campaign(tmp_path)
+    plan = campaign.plan([_row("s0", "k", "t"), _row("s1", "k1", "t1")], source_manifest_hash="source")
+    _append_campaign_started(campaign, plan)
+    for unit in plan.work_units:
+        _append_unit_events(campaign, plan, unit, "insufficient_support")
+    campaign.append_event(campaign._event(plan, "campaign_finished"))
+
+    rebuilt = campaign.read_status(plan=plan)
+    assert rebuilt.state == "completed"
+    assert rebuilt.elapsed_seconds >= 0.0
+
+    campaign.write_status(replace(rebuilt, elapsed_seconds=rebuilt.elapsed_seconds + 1.0))
+    with pytest.raises(ValueError, match="invalid campaign status"):
+        campaign.read_status(plan=plan)
 
 
 def test_public_run_preserves_failed_terminal_identity_inside_first_retry_worker(tmp_path, monkeypatch):
