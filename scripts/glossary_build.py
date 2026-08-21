@@ -24,7 +24,9 @@ DEFAULT_JSONL = ROOT / "docs/_generated/context/glossary.jsonl"
 DEFAULT_SHORTCODE_LUA = (
     ROOT / "docs/_extensions/aria-glossary/glossary_terms.generated.lua"
 )
-DEFAULT_NOTATION = ROOT / "docs/notation.yml"
+DEFAULT_SYMBOLS = ROOT / "docs/typst/shared/symbols.typ"
+DEFAULT_EQUATIONS = ROOT / "docs/typst/shared/equations.typ"
+DEFAULT_NOTATION_YAML = ROOT / "docs/notation.yml"
 DEFAULT_NOTATION_LUA = ROOT / "docs/_extensions/aria-glossary/notation.generated.lua"
 DEFAULT_NOTATION_TYPST = ROOT / "docs/typst/shared/notation.generated.typ"
 
@@ -45,12 +47,12 @@ class GlossaryError(ValueError):
     """Raised when the glossary source is invalid."""
 
 
-def _load_terms(path: Path) -> list[dict[str, Any]]:
+def _query_metadata(path: Path, label: str) -> list[dict[str, Any]]:
     command = [
         "typst",
         "query",
         str(path),
-        "<aria-glossary-term>",
+        f"<{label}>",
         "--field",
         "value",
     ]
@@ -72,13 +74,20 @@ def _load_terms(path: Path) -> list[dict[str, Any]]:
 
     data = json.loads(completed.stdout)
     if not isinstance(data, list):
-        raise GlossaryError(f"{path} query must return a list of term metadata")
-    terms: list[dict[str, Any]] = []
-    for idx, raw in enumerate(data, start=1):
+        raise GlossaryError(f"{path} query must return a list of metadata records")
+    records: list[dict[str, Any]] = []
+    for index, raw in enumerate(data, start=1):
         if not isinstance(raw, dict):
-            raise GlossaryError(f"term #{idx} must be a mapping")
-        terms.append(_normalize_queried_term(raw))
-    return terms
+            raise GlossaryError(f"{path}: metadata record #{index} must be a mapping")
+        records.append(raw)
+    return records
+
+
+def _load_terms(path: Path) -> list[dict[str, Any]]:
+    return [
+        _normalize_queried_term(raw)
+        for raw in _query_metadata(path, "aria-glossary-term")
+    ]
 
 
 def _normalize_queried_term(raw: dict[str, Any]) -> dict[str, Any]:
@@ -142,9 +151,9 @@ def _load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
             entry: dict[str, Any] = {"tex": tex.strip(), "typst": typst.strip()}
             description = raw_entry.get("description")
             if description is not None:
-                if not isinstance(description, str) or not description.strip():
+                if not isinstance(description, str):
                     raise GlossaryError(
-                        f"{path}: {group}.{key}.description must be a non-empty string"
+                        f"{path}: {group}.{key}.description must be a string"
                     )
                 entry["description"] = description.strip()
             thesis_list = raw_entry.get("thesis_list", False)
@@ -165,9 +174,54 @@ def _load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
 
 
 def load_notation(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
-    """Load and validate the canonical shared notation registry."""
+    """Load a generated notation adapter for a read-only consumer."""
 
     return _load_notation(path)
+
+
+def _load_typst_notation(
+    symbols_path: Path, equations_path: Path
+) -> dict[str, dict[str, dict[str, Any]]]:
+    """Derive the canonical notation registry from the two shared Typst facades."""
+
+    notation: dict[str, dict[str, dict[str, Any]]] = {}
+    for group, path, label, facade in (
+        ("symbols", symbols_path, "aria-notation-symbol", "symb"),
+        ("equations", equations_path, "aria-notation-equation", "eqs"),
+    ):
+        notation[group] = {}
+        for index, raw in enumerate(_query_metadata(path, label), start=1):
+            key = raw.get("key")
+            tex = raw.get("tex")
+            description = raw.get("description")
+            thesis_list = raw.get("thesis_list")
+            order = raw.get("order")
+            if not isinstance(key, str) or not key.strip():
+                raise GlossaryError(f"{path}: {label} #{index} has an invalid key")
+            if not isinstance(tex, str) or not tex.strip():
+                raise GlossaryError(
+                    f"{path}: {group}.{key}.tex must be a non-empty string"
+                )
+            if not isinstance(description, str):
+                raise GlossaryError(
+                    f"{path}: {group}.{key}.description must be a string"
+                )
+            if not isinstance(thesis_list, bool):
+                raise GlossaryError(
+                    f"{path}: {group}.{key}.thesis_list must be a boolean"
+                )
+            if isinstance(order, bool) or not isinstance(order, int):
+                raise GlossaryError(f"{path}: {group}.{key}.order must be an integer")
+            if key in notation[group]:
+                raise GlossaryError(f"{path}: duplicate {group} key {key!r}")
+            notation[group][key] = {
+                "tex": tex.strip(),
+                "typst": f"#{facade}.{key}",
+                "description": description.strip(),
+                "thesis_list": thesis_list,
+                "order": order,
+            }
+    return notation
 
 
 def _validate_terms(terms: list[dict[str, Any]]) -> None:
@@ -270,7 +324,7 @@ def _validate_notation_metadata(
         for key, entry in notation[group].items():
             if entry.get("thesis_list") and not entry.get("description"):
                 raise GlossaryError(
-                    f"docs/notation.yml: {group}.{key} has thesis_list: true "
+                    f"canonical {group} metadata: {key} has thesis_list: true "
                     "but no description"
                 )
 
@@ -946,7 +1000,7 @@ def _render_notation_lua(
     notation: dict[str, dict[str, dict[str, Any]]], path: Path
 ) -> None:
     lines = [
-        "-- Generated by scripts/glossary_build.py; edit docs/notation.yml.",
+        "-- Generated by scripts/glossary_build.py; edit docs/typst/shared/symbols.typ or equations.typ.",
         "",
         "return {",
     ]
@@ -970,7 +1024,7 @@ def _render_notation_typst(
     notation: dict[str, dict[str, dict[str, Any]]], path: Path
 ) -> None:
     lines = [
-        "// Generated by scripts/glossary_build.py; edit docs/notation.yml.",
+        "// Generated by scripts/glossary_build.py; edit docs/typst/shared/symbols.typ or equations.typ.",
         "",
         '#import "symbols.typ": symb',
         '#import "equations.typ": eqs',
@@ -1026,6 +1080,37 @@ def _render_notation_typst(
     _write_text(path, "\n".join(lines))
 
 
+def _render_notation_yaml(
+    notation: dict[str, dict[str, dict[str, Any]]], path: Path
+) -> None:
+    """Write the generated Quarto and Graphify notation adapter."""
+
+    lines = [
+        "# Generated by scripts/glossary_build.py; do not edit by hand.",
+        "# Canonical owners: docs/typst/shared/symbols.typ and equations.typ.",
+        "",
+    ]
+    for group in ("symbols", "equations"):
+        lines.append(f"{group}:")
+        for key, entry in notation[group].items():
+            lines += [
+                f"  {key}:",
+                f"    tex: {_yaml_string(entry['tex'])}",
+                f"    typst: {_yaml_string(entry['typst'])}",
+                f"    description: {_yaml_string(entry['description'])}",
+                f"    thesis_list: {str(entry['thesis_list']).lower()}",
+                f"    order: {entry['order']}",
+            ]
+        lines.append("")
+    _write_text(path, "\n".join(lines))
+
+
+def _yaml_string(value: str) -> str:
+    """Render a YAML scalar without reinterpreting TeX escapes."""
+
+    return "'" + value.replace("'", "''") + "'"
+
+
 def _write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -1034,7 +1119,7 @@ def _write_text(path: Path, text: str) -> None:
 def build(args: argparse.Namespace) -> None:
     terms = _load_terms(args.terms)
     _validate_terms(terms)
-    notation = _load_notation(args.notation)
+    notation = _load_typst_notation(args.symbols, args.equations)
     _validate_lookup_refs(terms, notation)
     _validate_notation_metadata(notation)
     _validate_typst_notation_expressions(notation)
@@ -1047,6 +1132,7 @@ def build(args: argparse.Namespace) -> None:
             "render-jsonl",
             "render-compat-yaml",
             "render-shortcode-lua",
+            "render-notation-yaml",
             "render-notation-lua",
             "render-notation-typst",
         }
@@ -1060,6 +1146,8 @@ def build(args: argparse.Namespace) -> None:
         _render_compat_yaml(terms, args.compat_yaml_out)
     if "render-shortcode-lua" in actions:
         _render_shortcode_lua(terms, args.shortcode_lua_out)
+    if "render-notation-yaml" in actions:
+        _render_notation_yaml(notation, args.notation_yaml_out)
     if "render-notation-lua" in actions:
         _render_notation_lua(notation, args.notation_lua_out)
     if "render-notation-typst" in actions:
@@ -1068,7 +1156,8 @@ def build(args: argparse.Namespace) -> None:
         print(f"Validated {len(terms)} glossary terms from {args.terms}")
         print(
             f"Validated {len(notation['symbols'])} symbols and "
-            f"{len(notation['equations'])} equations from {args.notation}"
+            f"{len(notation['equations'])} equations from {args.symbols} and "
+            f"{args.equations}"
         )
 
 
@@ -1086,18 +1175,21 @@ def main() -> None:
             "render-jsonl",
             "render-compat-yaml",
             "render-shortcode-lua",
+            "render-notation-yaml",
             "render-notation-lua",
             "render-notation-typst",
         ],
     )
     parser.add_argument("--terms", type=Path, default=DEFAULT_TERMS)
     parser.add_argument("--compat-yaml-out", type=Path, default=DEFAULT_COMPAT_YAML)
-    parser.add_argument("--notation", type=Path, default=DEFAULT_NOTATION)
+    parser.add_argument("--symbols", type=Path, default=DEFAULT_SYMBOLS)
+    parser.add_argument("--equations", type=Path, default=DEFAULT_EQUATIONS)
     parser.add_argument("--qmd-out", type=Path, default=DEFAULT_QMD)
     parser.add_argument("--typst-out", type=Path, default=DEFAULT_TYPST)
     parser.add_argument("--jsonl-out", type=Path, default=DEFAULT_JSONL)
     parser.add_argument("--shortcode-lua-out", type=Path, default=DEFAULT_SHORTCODE_LUA)
     parser.add_argument("--notation-lua-out", type=Path, default=DEFAULT_NOTATION_LUA)
+    parser.add_argument("--notation-yaml-out", type=Path, default=DEFAULT_NOTATION_YAML)
     parser.add_argument(
         "--notation-typst-out", type=Path, default=DEFAULT_NOTATION_TYPST
     )

@@ -11,9 +11,9 @@ Generated files are projections; open the human-edited owner named below.
 |---|---|---|---|
 | Active thesis prose and section hierarchy | `docs/typst/thesis/main.typ` and its recursive includes | `docs/typst/thesis/development/roadmap.typ`, `docs/typst/thesis/sections/01-research-questions.typ` | `scripts/nbv_typst_includes.py --thesis --mode outline` |
 | Durable term or glossary anchor | `docs/typst/shared/glossary.typ` | `docs/contents/glossary.qmd` is generated public output | `rg -n 'key:|short:|long:|anchor:' docs/typst/shared/glossary.typ` |
-| Reusable Typst symbol body | `docs/typst/shared/symbols.typ` and `docs/typst/shared/symbols/*.typ` | `docs/notation.yml` records cross-format lookup metadata | `rg -n '<term>|#let' docs/typst/shared/symbols*.typ docs/typst/shared/symbols` |
-| Reusable equation body | `docs/typst/shared/equations.typ` and `docs/typst/shared/equations/*.typ` | `docs/notation.yml` records cross-format lookup metadata | `rg -n '<term>|#let' docs/typst/shared/equations*.typ docs/typst/shared/equations` |
-| Printed thesis symbol list | `docs/notation.yml` plus shared symbol/equation bodies | `docs/typst/shared/notation.typ`; `notation.generated.typ` is generated | `rg -n '<term>|thesis_list' docs/notation.yml docs/typst/shared/{symbols,equations}.typ` |
+| Reusable Typst symbol body and metadata | `docs/typst/shared/symbols.typ` and `docs/typst/shared/symbols/*.typ` | `docs/notation.yml` is a generated cross-format adapter | `rg -n '<term>|#let' docs/typst/shared/symbols*.typ docs/typst/shared/symbols` |
+| Reusable equation body and metadata | `docs/typst/shared/equations.typ` and `docs/typst/shared/equations/*.typ` | `docs/notation.yml` is a generated cross-format adapter | `rg -n '<term>|#let' docs/typst/shared/equations*.typ docs/typst/shared/equations` |
+| Printed thesis symbol list | shared symbol/equation facade metadata | `docs/typst/shared/notation.typ`; `notation.generated.typ` is generated | `rg -n '<term>|thesis_list' docs/typst/shared/{symbols,equations}.typ` |
 
 ## Concept-to-source matrix
 

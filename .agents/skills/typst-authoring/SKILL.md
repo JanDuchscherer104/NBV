@@ -38,7 +38,7 @@ metadata:
     - ".agents/references/source_order.md#role-split"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
-    - "docs/notation.yml"
+    - "docs/typst/shared/{symbols,equations}.typ"
     - "docs/typst/shared/style.typ"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
     - ".agents/skills/typst-authoring/references/empirical-reporting-and-reproducibility.md"

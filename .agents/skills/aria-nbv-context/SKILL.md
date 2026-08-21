@@ -111,7 +111,8 @@ implies supersession; ingestion-only dates stay unknown.
    query MemPalace for them.
 3. For thesis-facing sections, terms, symbols, or equations, use the active thesis
    lane in `references/context_map.md`, its include graph, and the smallest shared
-   owner among `glossary.typ`, `symbols.typ`, `equations.typ`, and `docs/notation.yml`;
+   owner among `glossary.typ`, `symbols.typ`, and `equations.typ`; `docs/notation.yml`
+   is a generated consumer adapter, not an owner;
    generated projections are not owners.
 4. When semantic recall is eligible, choose one reviewed wing and normally one
    room through the MemPalace branch above. Search `aria-codex-history` only for

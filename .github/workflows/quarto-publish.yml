@@ -65,6 +65,7 @@ jobs:
             docs/_generated/context/glossary.jsonl \
             docs/_extensions/aria-glossary/glossary_terms.generated.lua \
             docs/_extensions/aria-glossary/notation.generated.lua \
+            docs/notation.yml \
             docs/typst/shared/notation.generated.typ
 
       - name: Render docs site
