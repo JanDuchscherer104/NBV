@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -56,3 +57,40 @@ def test_generated_notation_yaml_is_a_lossless_runtime_adapter(tmp_path: Path) -
     assert "do not edit by hand" in output.read_text(encoding="utf-8")
     assert yaml.safe_load(output.read_text(encoding="utf-8")) == notation
     assert glossary_build.load_notation(output) == notation
+
+
+def test_notation_expression_validation_imports_selected_facades(
+    tmp_path: Path,
+) -> None:
+    """Custom facade metadata is compiled against those same custom facades."""
+
+    symbols = tmp_path / "symbols.typ"
+    equations = tmp_path / "equations.typ"
+    symbols.write_text("#let symb = ()\n", encoding="utf-8")
+    equations.write_text("#let eqs = ()\n", encoding="utf-8")
+    compiled: list[str] = []
+
+    def compile_fixture(command: list[str], **_: object) -> mock.Mock:
+        fixture = Path(command[-2])
+        compiled.append(fixture.read_text(encoding="utf-8"))
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    with mock.patch.object(glossary_build.subprocess, "run", compile_fixture):
+        glossary_build._validate_typst_notation_expressions(
+            {
+                "symbols": {
+                    "custom.value": {
+                        "typst": "#symb.custom.value",
+                    }
+                },
+                "equations": {},
+            },
+            symbols_path=symbols,
+            equations_path=equations,
+        )
+
+    assert len(compiled) == 1
+    source = compiled[0]
+    assert "/tmp/pytest-" in source
+    assert 'symbols.typ": symb' in source
+    assert 'equations.typ": eqs' in source

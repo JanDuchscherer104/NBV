@@ -343,8 +343,11 @@ def normalize_and_validate_metadata(
 
 def _validate_typst_notation_expressions(
     notation: dict[str, dict[str, dict[str, Any]]],
+    *,
+    symbols_path: Path,
+    equations_path: Path,
 ) -> None:
-    """Compile every notation Typst expression against the shared facades."""
+    """Compile every notation expression against the selected Typst facades."""
 
     checks = [
         (group, key, entry["typst"])
@@ -362,12 +365,8 @@ def _validate_typst_notation_expressions(
         tmp_path = Path(tmp_dir)
         fixture = tmp_path / "notation-check.typ"
         output = tmp_path / "notation-check.pdf"
-        rel_symbols = os.path.relpath(
-            ROOT / "docs/typst/shared/symbols.typ", start=tmp_path
-        )
-        rel_equations = os.path.relpath(
-            ROOT / "docs/typst/shared/equations.typ", start=tmp_path
-        )
+        rel_symbols = os.path.relpath(symbols_path.resolve(), start=tmp_path)
+        rel_equations = os.path.relpath(equations_path.resolve(), start=tmp_path)
         lines = [
             f'#import "{rel_symbols}": symb',
             f'#import "{rel_equations}": eqs',
@@ -412,8 +411,8 @@ def _validate_typst_notation_expressions(
         except subprocess.CalledProcessError as exc:
             details = (exc.stderr or exc.stdout or "").strip()
             raise GlossaryError(
-                "docs/notation.yml contains a Typst expression that does not "
-                f"compile against shared symbols/equations:\n{details}"
+                "notation metadata contains a Typst expression that does not "
+                f"compile against the selected symbols/equations facades:\n{details}"
             ) from exc
 
 
@@ -1122,7 +1121,11 @@ def build(args: argparse.Namespace) -> None:
     notation = _load_typst_notation(args.symbols, args.equations)
     _validate_lookup_refs(terms, notation)
     _validate_notation_metadata(notation)
-    _validate_typst_notation_expressions(notation)
+    _validate_typst_notation_expressions(
+        notation,
+        symbols_path=args.symbols,
+        equations_path=args.equations,
+    )
     actions = set(args.actions)
     if "all" in actions:
         actions = {

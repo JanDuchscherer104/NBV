@@ -38,7 +38,8 @@ metadata:
     - ".agents/references/source_order.md#role-split"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/shared"
-    - "docs/typst/shared/{symbols,equations}.typ"
+    - "docs/typst/shared/symbols.typ"
+    - "docs/typst/shared/equations.typ"
     - "docs/typst/shared/style.typ"
     - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
     - ".agents/skills/typst-authoring/references/empirical-reporting-and-reproducibility.md"
@@ -80,7 +81,8 @@ metadata:
 
 ## Task Modes
 
-- `notation-edit`: update shared modules before document-local use; read notation,
+- `notation-edit`: update `docs/typst/shared/symbols.typ` and
+  `docs/typst/shared/equations.typ` before document-local use; read notation,
   math-attachment, and migration references.
 - `prose-draft` / `prose-polish`: read thesis-writing, section-contract, and
   claim-discipline references; use the nested fragment, shape, or beat writing
