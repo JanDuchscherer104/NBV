@@ -1131,15 +1131,26 @@ def _candidate_group_bar(frame: pd.DataFrame, group_by: str, title: str) -> go.F
     )
 
 
-def _direction_count_context(frame: pd.DataFrame, column: str) -> str:
-    """Return a non-duplicated direction denominator for the visible facet."""
+def _direction_count_context(frame: pd.DataFrame) -> dict[str, str]:
+    """Read one repeated typed direction facet without counting bins as rows."""
 
-    if column not in frame:
-        return "unavailable"
-    values = pd.to_numeric(frame[column], errors="coerce").dropna()
-    if values.empty:
-        return "unavailable"
-    return f"{int(values.max()):,}"
+    fields = {
+        "states": "state_count",
+        "candidate directions": "candidate_direction_count",
+        "finite directions": "finite_count",
+        "missing/unavailable": "missing_count",
+    }
+    context: dict[str, str] = {}
+    for label, column in fields.items():
+        if column not in frame:
+            context[label] = "unavailable"
+            continue
+        values = pd.to_numeric(frame[column], errors="coerce").dropna().astype(int).unique()
+        if len(values) != 1 or values[0] < 0:
+            context[label] = "unavailable"
+        else:
+            context[label] = f"{int(values[0]):,}"
+    return context
 
 
 def _render_complete_candidate_support(population: dict[str, object]) -> None:
@@ -1241,12 +1252,13 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
         matrix = selected_density.pivot_table(
             index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
         )
-        total_n = _direction_count_context(selected_density, "total_count")
-        finite_n = _direction_count_context(selected_density, "valid_count")
-        missing_n = _direction_count_context(selected_density, "missing_count")
+        count_context = _direction_count_context(selected_density)
         st.caption(
-            f"Aggregation: {aggregation} · n={total_n} · finite directions={finite_n} · "
-            f"missing/unavailable={missing_n} · protocol: azimuth × sin(elevation) equal-area bins."
+            f"Aggregation: {aggregation} · states={count_context['states']} · "
+            f"candidate directions={count_context['candidate directions']} · "
+            f"finite={count_context['finite directions']} · "
+            f"missing/unavailable={count_context['missing/unavailable']} · "
+            "protocol: azimuth × sin(elevation) equal-area bins."
         )
         fig = px.imshow(
             matrix,

@@ -788,6 +788,7 @@ def test_candidate_direction_heatmap_declares_azimuth_and_sine_elevation_axes(
     from tests.rollouts.test_inspection import _direction_fixture_rows
 
     figures: list[object] = []
+    captions: list[str] = []
 
     class _Expander:
         def __enter__(self):
@@ -797,7 +798,7 @@ def test_candidate_direction_heatmap_declares_azimuth_and_sine_elevation_axes(
             return False
 
     monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
-    monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda value, **_kwargs: captions.append(str(value)))
     monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[0])
     monkeypatch.setattr(
         stored_rollouts_page.st,
@@ -818,6 +819,7 @@ def test_candidate_direction_heatmap_declares_azimuth_and_sine_elevation_axes(
     heatmap = next(figure for figure in figures if "direction" in str(figure.layout.title.text).lower())
     assert "azimuth" in str(heatmap.layout.xaxis.title.text).lower()
     assert "sin" in str(heatmap.layout.yaxis.title.text).lower()
+    assert any("states=2" in caption and "candidate directions=4" in caption for caption in captions)
 
 
 def test_bounded_candidate_helper_only_renders_raw_metric_distribution(monkeypatch: pytest.MonkeyPatch) -> None:
