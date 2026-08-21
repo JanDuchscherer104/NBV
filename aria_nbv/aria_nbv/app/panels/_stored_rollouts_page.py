@@ -1975,19 +1975,6 @@ def _render_raw_candidate_metrics(candidates: pd.DataFrame, *, total_candidates:
             _download_frame("Download raw candidate metric CSV", "candidate-raw-metric.csv", rows)
 
 
-def _render_candidate_geometry_diagnostics(
-    candidates: pd.DataFrame,
-    root_geometry: pd.DataFrame,
-    *,
-    total_candidates: int,
-) -> None:
-    """Compatibility wrapper for the bounded raw metric view."""
-
-    del root_geometry
-    _render_raw_candidate_metrics(candidates, total_candidates=total_candidates)
-    return
-
-
 def _render_failure_triage(
     reader: RolloutZarrStoreReader, *, stored_session: session.StoredRolloutSession | None = None
 ) -> None:

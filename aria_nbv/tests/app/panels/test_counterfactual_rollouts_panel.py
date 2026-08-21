@@ -830,7 +830,7 @@ def test_bounded_candidate_helper_only_renders_raw_metric_distribution(monkeypat
         lambda candidates, *, total_candidates: calls.append((candidates, total_candidates)),
     )
     candidates = pd.DataFrame({"candidate_row_id": [1], "target_root_gain": [0.1]})
-    stored_rollouts_page._render_candidate_geometry_diagnostics(candidates, candidates, total_candidates=1)
+    stored_rollouts_page._render_raw_candidate_metrics(candidates, total_candidates=1)
     assert calls == [(candidates, 1)]
 
 
