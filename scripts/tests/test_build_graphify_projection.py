@@ -41,6 +41,8 @@ class FakeRunner:
         self.links: list[dict[str, object]] = []
         self.headings: list[dict[str, object]] = []
         self.glossary_terms: list[dict[str, object]] = []
+        self.symbols: list[dict[str, object]] = []
+        self.equations: list[dict[str, object]] = []
 
     def __call__(
         self, argv: list[str] | tuple[str, ...], *, cwd: Path
@@ -60,6 +62,8 @@ class FakeRunner:
                 "link": self.links,
                 "heading": self.headings,
                 "<aria-glossary-term>": self.glossary_terms,
+                "<aria-notation-symbol>": self.symbols,
+                "<aria-notation-equation>": self.equations,
             }[command[3]]
             return subprocess.CompletedProcess(command, 0, json.dumps(rows), "")
         if command[1] == "compile":
@@ -111,6 +115,10 @@ class Fixture:
         self.write(
             "docs/typst/shared/glossary.typ", "// queried by the fake Typst runner\n"
         )
+        self.write("docs/typst/shared/symbols.typ", '#import "symbols/rl.typ": rl\n')
+        self.write(
+            "docs/typst/shared/equations.typ", '#import "equations/rl.typ": rl\n'
+        )
         self.write(
             "docs/notation.yml",
             "symbols:\n  rl.qh:\n    tex: Q_H\n    typst: '#symb.rl.qh'\n    description: Q value\n    thesis_list: true\nequations:\n  rl.q_h:\n    tex: Q_H = r\n    typst: '#eqs.rl.q_h'\n    description: Q equation\n    thesis_list: true\n",
@@ -157,6 +165,28 @@ class Fixture:
 
         self.runner = FakeRunner()
         self.runner.citations = [{"key": "PaperA"}, {"key": "QhPaper"}]
+        self.runner.symbols = [
+            {
+                "value": {
+                    "key": "rl.qh",
+                    "tex": "Q_H",
+                    "description": "Q value",
+                    "thesis_list": True,
+                    "order": 1,
+                }
+            }
+        ]
+        self.runner.equations = [
+            {
+                "value": {
+                    "key": "rl.q_h",
+                    "tex": "Q_H = r",
+                    "description": "Q equation",
+                    "thesis_list": True,
+                    "order": 1,
+                }
+            }
+        ]
         self.runner.glossary_terms = [
             {
                 "value": {
@@ -342,9 +372,9 @@ class ProjectionTests(unittest.TestCase):
             {call[0] for call in self.fixture.runner.calls}, {"git", "typst"}
         )
         typst_calls = [call for call in self.fixture.runner.calls if call[0] == "typst"]
-        self.assertEqual(len(typst_calls), 5)
+        self.assertEqual(len(typst_calls), 9)
         for call in typst_calls:
-            expected = 0 if call[2] == "docs/typst/shared/glossary.typ" else 1
+            expected = 0 if call[2].startswith("docs/typst/shared/") else 1
             self.assertEqual(
                 call.count(f"aria-code-ref={self.fixture.code_oid}"), expected
             )
@@ -379,11 +409,18 @@ class ProjectionTests(unittest.TestCase):
             )
             if call[0] == "typst"
         ]
-        self.assertEqual(len(typst_invocations), 5)
+        self.assertEqual(len(typst_invocations), 9)
         for call, cwd in typst_invocations:
-            if call[2] == "docs/typst/shared/glossary.typ":
+            if call[2].startswith("docs/typst/shared/"):
                 self.assertEqual(cwd, self.fixture.root)
-                self.assertEqual(call[3], "<aria-glossary-term>")
+                self.assertIn(
+                    call[3],
+                    {
+                        "<aria-glossary-term>",
+                        "<aria-notation-symbol>",
+                        "<aria-notation-equation>",
+                    },
+                )
                 continue
             self.assertEqual(cwd, self.fixture.root / "docs")
             self.assertEqual(call[2], "typst/thesis/main.typ")
@@ -872,7 +909,8 @@ class ProjectionTests(unittest.TestCase):
         self.assertIn("multiplicity: 2", source)
         self.assertIn("uses_symbol:", source)
         self.assertIn("uses_equation:", source)
-        self.assertIn("docs/notation.yml", rendered)
+        self.assertNotIn("docs/notation.yml", rendered)
+        self.assertIn("docs/typst/shared/symbols.typ", rendered)
         self.assertIn("docs/typst/shared/symbols/rl.typ", rendered)
 
     def test_unknown_section_notation_and_short_glossary_fail_closed(self) -> None:
@@ -897,8 +935,8 @@ class ProjectionTests(unittest.TestCase):
         section = self.fixture.root / "docs/typst/thesis/sections/a.typ"
         section.write_text(
             (
-                '= Introduction\n@PaperA @term-a @term-a:short #symb.rl.qh. '
-                '#eqs.rl.q_h,\n'
+                "= Introduction\n@PaperA @term-a @term-a:short #symb.rl.qh. "
+                "#eqs.rl.q_h,\n"
                 '#raw("#symb.rl.missing")\n'
                 f'#gh("src/model.py", ref: "{self.fixture.code_oid}", line: 1, end: 2)\n'
                 f'#gh("src/model.py", ref: "{self.fixture.code_oid}", line: 1, end: 2)\n'
@@ -928,7 +966,7 @@ class ProjectionTests(unittest.TestCase):
         self.assertIn("related: [glossary-term:term-b]", term)
         self.assertIn("symbol: [symbol:rl.qh]", term)
         self.assertIn("equation: [equation:rl.q_h]", term)
-        self.assertIn("metadata_owner:", symbol)
+        self.assertIn("metadata_owner: [docs/typst/shared/symbols.typ]", symbol)
         self.assertIn("implementation_owner:", symbol)
         index = result.files["index.md"]
         for family in ("glossary", "symbols", "equations"):
@@ -939,12 +977,7 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectionError, r"term-a.*unknown symbol_ref"):
             self.build()
         self.fixture.glossary_value(0)["symbol_refs"] = ["rl.qh"]
-        self.fixture.write(
-            "docs/notation.yml",
-            self.fixture.root.joinpath("docs/notation.yml")
-            .read_text(encoding="utf-8")
-            .replace("#symb.rl.qh", "#symb.rl.missing"),
-        )
+        self.fixture.write("docs/typst/shared/symbols/rl.typ", "#let rl = ()\n")
         with self.assertRaisesRegex(ProjectionError, r"symbols.rl.qh.*declaration"):
             self.build()
 

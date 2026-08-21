@@ -21,7 +21,6 @@ from urllib.parse import urlsplit, urlunsplit
 
 from glossary_build import (
     GlossaryError,
-    load_notation,
     normalize_and_validate_metadata,
 )
 
@@ -42,7 +41,8 @@ class ProjectionConfig:
     thesis_root: Path = Path("docs/typst/thesis/main.typ")
     style_path: Path = Path("docs/typst/shared/style.typ")
     glossary_path: Path = Path("docs/typst/shared/glossary.typ")
-    notation_path: Path = Path("docs/notation.yml")
+    symbols_path: Path = Path("docs/typst/shared/symbols.typ")
+    equations_path: Path = Path("docs/typst/shared/equations.typ")
     bibliography_paths: tuple[Path, ...] = (
         Path("docs/references.bib"),
         Path("docs/references-qh.bib"),
@@ -338,6 +338,71 @@ def _lexical_sources(
     return citations_by_source, macros
 
 
+def _notation_metadata(
+    config: ProjectionConfig, runner: Runner
+) -> dict[str, dict[str, dict[str, object]]]:
+    """Query the canonical Typst facades used by Graphify notation pages."""
+
+    notation: dict[str, dict[str, dict[str, object]]] = {}
+    for group, path, label, facade in (
+        ("symbols", config.symbols_path, "aria-notation-symbol", "symb"),
+        ("equations", config.equations_path, "aria-notation-equation", "eqs"),
+    ):
+        output = _run(
+            runner,
+            [
+                "typst",
+                "query",
+                path.as_posix(),
+                f"<{label}>",
+                "--field",
+                "value",
+                "--format",
+                "json",
+            ],
+            config.repo_root,
+        )
+        try:
+            queried = json.loads(output or "[]")
+        except json.JSONDecodeError as error:
+            raise ProjectionError(
+                f"{group} metadata query returned invalid JSON"
+            ) from error
+        if not isinstance(queried, list) or not all(
+            isinstance(row, dict) for row in queried
+        ):
+            raise ProjectionError(f"{group} metadata query must return a JSON list")
+        entries: dict[str, dict[str, object]] = {}
+        for index, row in enumerate(queried, start=1):
+            entry = dict(row.get("value", row))
+            key = entry.get("key")
+            tex = entry.get("tex")
+            description = entry.get("description")
+            thesis_list = entry.get("thesis_list")
+            order = entry.get("order")
+            if not isinstance(key, str) or not key.strip():
+                raise ProjectionError(f"{group} metadata #{index} has an invalid key")
+            if not isinstance(tex, str) or not tex.strip():
+                raise ProjectionError(f"{group}.{key}: tex must be a non-empty string")
+            if not isinstance(description, str):
+                raise ProjectionError(f"{group}.{key}: description must be a string")
+            if not isinstance(thesis_list, bool):
+                raise ProjectionError(f"{group}.{key}: thesis_list must be a boolean")
+            if isinstance(order, bool) or not isinstance(order, int):
+                raise ProjectionError(f"{group}.{key}: order must be an integer")
+            if key in entries:
+                raise ProjectionError(f"{group}: duplicate notation key {key!r}")
+            entries[key] = {
+                "tex": tex.strip(),
+                "typst": f"#{facade}.{key}",
+                "description": description.strip(),
+                "thesis_list": thesis_list,
+                "order": order,
+            }
+        notation[group] = entries
+    return notation
+
+
 def _glossary_terms(
     config: ProjectionConfig, runner: Runner, bib: Mapping[str, _BibEntry]
 ) -> dict[str, Mapping[str, object]]:
@@ -367,7 +432,7 @@ def _glossary_terms(
         raise ProjectionError("glossary query must return a JSON list of metadata")
     raw = [dict(row.get("value", row)) for row in queried]
     try:
-        notation = load_notation(_owner_path(config, config.notation_path))
+        notation = _notation_metadata(config, runner)
         terms = normalize_and_validate_metadata(raw, notation)
     except GlossaryError as error:
         raise ProjectionError(f"glossary metadata invalid: {error}") from error
@@ -1273,7 +1338,7 @@ def _populate_entity_pages(
                 [
                     f"tex: {entry['tex']}",
                     f"typst: {entry['typst']}",
-                    f"metadata_owner: {_human_link(source_path, config.notation_path.as_posix(), config.notation_path.as_posix())}",
+                    f"metadata_owner: {_human_link(source_path, (config.symbols_path if group == 'symbols' else config.equations_path).as_posix(), (config.symbols_path if group == 'symbols' else config.equations_path).as_posix())}",
                     f"implementation_owner: {_human_link(source_path, owner.as_posix(), owner.as_posix())}",
                 ]
             )
@@ -1288,7 +1353,8 @@ def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path
         *config.bibliography_paths,
         config.manifest_path,
         config.glossary_path,
-        config.notation_path,
+        config.symbols_path,
+        config.equations_path,
     ]
 
 
@@ -1511,12 +1577,13 @@ def build_projection(
         *config.bibliography_paths,
         config.manifest_path,
         config.glossary_path,
-        config.notation_path,
+        config.symbols_path,
+        config.equations_path,
     )
     bib = _bib_entries(config)
     terms = _glossary_terms(config, runner, bib)
     try:
-        notation = load_notation(_owner_path(config, config.notation_path))
+        notation = _notation_metadata(config, runner)
     except GlossaryError as error:
         raise ProjectionError(f"notation metadata invalid: {error}") from error
     notation_owners = _notation_owners(config, notation)
