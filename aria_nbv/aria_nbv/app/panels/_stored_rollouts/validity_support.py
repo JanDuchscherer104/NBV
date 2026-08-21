@@ -7,6 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from ....rollouts import RolloutZarrStoreReader
+from ...scientific_labels import TheoryReferences
 from .candidate_generation import (
     _render_candidate_aggregate_breakdowns,
     _render_candidate_geometry_diagnostics,
@@ -18,7 +19,6 @@ from .session import _cached_projection
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
-from ...scientific_labels import TheoryReferences
 
 
 def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
