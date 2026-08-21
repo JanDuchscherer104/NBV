@@ -7,7 +7,7 @@ topics: [graphify, scaffold, code-review, worktrees]
 confidence: high
 canonical_updates_needed:
   - .agents/references/human_owner_intent.md
-  - .agents/skills/aria-nbv-context/SKILL.md
+  - .agents/references/source_order.md
   - .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md
 files_touched:
   - .agents/skills/graphify/

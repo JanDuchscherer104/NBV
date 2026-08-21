@@ -7,7 +7,7 @@ topics: [mempalace, scaffold, literature, codex, gpu]
 confidence: high
 canonical_updates_needed:
   - .agents/references/human_owner_intent.md
-  - .agents/skills/aria-nbv-context/SKILL.md
+  - .agents/references/source_order.md
 files_touched:
   - AGENTS.md
   - .agents/references/human_owner_intent.md

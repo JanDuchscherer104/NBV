@@ -1130,49 +1130,5 @@ provenance, and fallback rules remain behind the progressive-disclosure
 boundary at `aria-nbv-context/references/graphify-aria-boundary.md`, while the
 upstream skill continues to own its own query, path, and explain procedures.
 
-The measured comparison for the 11 custom skills, excluding the upstream
-Graphify bundle, uses the true pre-migration base commit
-`f79c137dd56c4d240d00f6a5b6d9276666ec4a0a` and the migrated worktree. The
-counting basis includes both YAML frontmatter delimiter lines and every line
-between them in the frontmatter count; the body count includes every remaining
-line after the closing delimiter. Final counts are:
-
-- frontmatter: `533 baseline → 44 current final` lines; reduction `489
-  (91.7%)`;
-- body: `841 baseline → 809 current final` lines after reference pruning;
-  reduction `32 (3.8%)`.
-
-G006 review repairs restored semantic hierarchy distinctions and explicit
-progressive-disclosure pointers, superseding the earlier 773/774 snapshot. The
-11 ARIA-owned custom skill files remain 48–117 lines, all under 150 lines.
-
-The implementation evidence already collected for this target includes the
-intended G001 red phase (focused governance: 2 failures and 4 passes), the
-G001 Graphify integrity result (4 passes and 13 subtests), the G002 scaffold
-self-test (9/9), 11/11 installed skill validations,
-zero-error scaffold audit, G003 governance plus Graphify coverage (25 passes
-and 13 subtests),
-`make check-agent-memory`, Ruff, and `git diff --check`. The routing integration
-fixtures for `rerun-sdk-api-change` and
-`context7-pytorch3d-conceptual-plan` were corrected to name the Context7
-registry reference explicitly as an owner of their positive tool route after
-the metadata registry was removed; local routes continue to forbid Context7
-where it is not needed.
-
-G005 recorded verification in an isolated
-`/tmp/aria-scaffold-ci.NStYzI/venv`
-with the exact `graphifyy==0.9.48` package installed. The scaffold CI suite is
-green: ci-impact 12, worktree seed 11, setup shell PASS, Graphify freshness 8,
-upstream 4, ownership 18, governance 21, and audit 0/0/self-test 24/0. Package
-`ruff-full` and CPU-equivalent `package-smoke` are green (293 + 115 tests);
-the initial host CUDA-exposure mismatch was environmental and resolved with
-`CUDA_VISIBLE_DEVICES=''`, with no code change. Docs
-`qmd-frontmatter-check`, the API docs self-test, and `docs-render-core` are
-green with the expected unresolved API-link warnings. Final independent
-re-review remains pending.
-
-The scaffold-audit self-test result after validator hardening,
-`passed=27 failures=0` (27/0), is a historical intermediate milestone. After
-the pointer-bypass probes, the current final result is `passed=29 failures=0`
-(29/0). The earlier `9/9` and `24/0` results are also historical intermediate
-milestones.
+Verification evidence and measurements belong in dated debriefs or fresh check
+output, not in this durable target-state contract.

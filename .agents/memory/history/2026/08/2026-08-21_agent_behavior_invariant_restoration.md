@@ -6,6 +6,7 @@ status: done
 topics: [agent-scaffold, agent-behavior, progressive-disclosure, guidance]
 confidence: high
 canonical_updates_needed: []
+codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
 files_touched:
   - .agents/skills/agent-behavior/SKILL.md
   - scripts/tests/test_agent_governance_g002.py

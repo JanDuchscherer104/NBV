@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,10 @@ REQUIRED_NATIVE_KEYS = {
     "confidence",
     "canonical_updates_needed",
 }
+NATIVE_THREAD_CUTOFF = date(2026, 8, 21)
+CODEX_THREAD_URI_PATTERN = re.compile(
+    r"^codex://threads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 RETIRED_SOURCE_PATHS = {
     "docs/contents/thesis/roadmap.qmd",
     "docs/contents/thesis/questions.qmd",
@@ -53,6 +58,7 @@ RETIRED_SOURCE_PATHS = {
     ".agents/memory/state/DECISIONS.md",
     ".agents/memory/state/GOTCHAS.md",
     ".agents/memory/state/OPEN_QUESTIONS.md",
+    ".agents/references/source_order.md",
 }
 # This commit is the immutable source tree immediately before the retired
 # owners were removed. CI fetches full history so these object lookups remain
@@ -300,6 +306,20 @@ def check_history_records() -> list[str]:
             )
             continue
 
+        record_date_text = str(frontmatter["date"]).strip()
+        try:
+            record_date = date.fromisoformat(record_date_text)
+        except ValueError:
+            errors.append(f"{rel}: `date` must be an absolute ISO date")
+            continue
+        if record_date >= NATIVE_THREAD_CUTOFF:
+            codex_thread = str(frontmatter.get("codex_thread", "")).strip()
+            if not CODEX_THREAD_URI_PATTERN.fullmatch(codex_thread):
+                errors.append(
+                    f"{rel}: `codex_thread` must be codex://threads/<uuid> "
+                    f"for native records dated on or after {NATIVE_THREAD_CUTOFF}"
+                )
+
         if not isinstance(canonical_updates, list):
             errors.append(f"{rel}: `canonical_updates_needed` must be a list or []")
             continue
@@ -432,9 +452,7 @@ def check_migration_receipt() -> list[str]:
             errors.append(f"{row_id}: deferred-action qualification is incomplete")
             continue
         canonical_owner = row[1].strip("`")
-        expected_owner = deferred_rows.get(row_id, ["", "", "", "", ""])[4].strip(
-            "`"
-        )
+        expected_owner = deferred_rows.get(row_id, ["", "", "", "", ""])[4].strip("`")
         if canonical_owner != expected_owner:
             errors.append(
                 f"{row_id}: qualified canonical owner does not match receipt destination"
