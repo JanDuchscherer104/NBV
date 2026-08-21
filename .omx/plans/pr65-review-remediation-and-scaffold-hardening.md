@@ -132,7 +132,7 @@ debriefs changed by this branch to their cutover blobs:
 - `.agents/memory/history/2026/08/2026-08-01_compositional_mempalace_corpus_and_gpu_runtime.md`
 - `.agents/memory/history/2026/08/2026-08-01_pr45_graphify_review_remediation.md`
 
-Add `.agents/references/source_order.md` to the retired-source set, but accept
+Add the former source-order index to the retired-source set, but accept
 it only when the current record is byte-identical to the existing retirement
 cutover blob (`scripts/validate_agent_memory.py:147-186`). Do not append modern
 successor links to frozen records; the current hierarchy and migration receipt
@@ -448,7 +448,7 @@ Acceptance:
    - final head and current `origin/main` base;
    - actual changed-file/commit surface;
    - native-minimal frontmatter and neutral branch architecture;
-   - complete retirement of `source_order.md`;
+   - complete retirement of the former source-order index;
    - Graphify 0.9.48 and its verified state;
    - `@Context7` plugin ownership and Docker-MCP deprecation;
    - exact fresh static, behavioral, memory, Graphify, and hosted checks;
@@ -514,7 +514,7 @@ Acceptance:
 - Broad rewrites of root/nested `AGENTS.md` beyond conflict integration required
   by current `main`.
 - Rewriting frozen historical debriefs to current language.
-- Reintroducing `source_order.md`, Docker-MCP Context7, or rich routing
+- Reintroducing the former source-order index, Docker-MCP Context7, or rich routing
   frontmatter.
 
 ## Stop condition
