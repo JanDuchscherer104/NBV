@@ -52,6 +52,7 @@ CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
     "policy",
 )
 _SAMPLER_PROBABILITY_TOLERANCE = 1e-5
+_GEOMETRY_EPSILON = 1e-9
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
 _STRATEGY_NAMES = {candidate_strategy_id(mode): mode.value for mode in ViewDirectionMode}
@@ -544,6 +545,10 @@ def candidate_audit_rows(
     candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
     branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
+    target_centers = {
+        target.target_row_id: np.asarray(target.center_world, dtype=np.float64).reshape(3)
+        for target in target_rows(reader)
+    }
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
@@ -563,6 +568,9 @@ def candidate_audit_rows(
         cohort_json = json.dumps(cohort_fields, sort_keys=True, separators=(",", ":"))
         generation_cohort_id = hashlib.sha256(cohort_json.encode()).hexdigest()[:16]
         root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+        target_delta = target_centers.get(rollout.target_row_id)
+        if target_delta is not None:
+            target_delta = target_delta - root_center
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
@@ -633,6 +641,9 @@ def candidate_audit_rows(
                     "motion_yaw_delta_deg": _finite_or_none(motion_yaw_delta_deg[row]),
                     "target_distance_m": _finite_or_none(step.target_distance_m[local]),
                     "target_bearing_yaw_deg": _finite_or_none(target_bearing_yaw_deg[row]),
+                    "root_to_target_x_m": None if target_delta is None else float(target_delta[0]),
+                    "root_to_target_y_m": None if target_delta is None else float(target_delta[1]),
+                    "root_to_target_z_m": None if target_delta is None else float(target_delta[2]),
                 }
                 if row_callback is not None:
                     row_callback(candidate_row)
@@ -673,6 +684,7 @@ def candidate_population_evidence(
     calibrations = accumulator.calibrations()
     groups = accumulator.groups()
     collision = accumulator.collision()
+    sample_rows = list(sample["rows"])
     return {
         "composition": compositions,
         "calibration": calibrations,
@@ -680,7 +692,266 @@ def candidate_population_evidence(
         "groups": groups,
         "sample": sample,
         "population_count": accumulator.population_count,
+        "geometry": candidate_geometry_evidence_rows(sample_rows),
+        "direction": candidate_direction_evidence(sample_rows),
+        "spatial": candidate_spatial_support_evidence(sample_rows),
+        "target_view": candidate_target_view_evidence(sample_rows),
+        "motion": candidate_motion_support_evidence(sample_rows),
     }
+
+
+def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Attach a target-normalized, root-centred 2-D frame to audit rows.
+
+    The frame is deliberately local: the root is ``(0, 0)`` and the observed
+    target is ``(1, 0)``.  A positive lateral coordinate is the right-handed
+    perpendicular to the root-to-target direction.  Degenerate or absent
+    target baselines remain unavailable rather than being fabricated.
+    """
+
+    output: list[dict[str, object]] = []
+    frame = "root=(0,0), target=(1,0), right-handed lateral axis"
+    for raw in rows:
+        row = dict(raw)
+        x = _finite_or_none(row.get("root_relative_x_m"))
+        y = _finite_or_none(row.get("root_relative_y_m"))
+        tx = _finite_or_none(row.get("root_to_target_x_m"))
+        ty = _finite_or_none(row.get("root_to_target_y_m"))
+        norm = None if tx is None or ty is None else float(np.hypot(tx, ty))
+        if norm is None or norm <= _GEOMETRY_EPSILON or x is None or y is None:
+            forward = lateral = None
+        else:
+            forward = float((x * tx + y * ty) / (norm * norm))
+            lateral = float((-x * ty + y * tx) / (norm * norm))
+        row.update(
+            target_normalized_forward=forward,
+            target_normalized_lateral=lateral,
+            target_normalized_coordinate_frame=frame,
+        )
+        output.append(row)
+    return output
+
+
+def _candidate_state_key(row: Mapping[str, object]) -> tuple[str, str, str]:
+    return (
+        str(row.get("scene", "unknown")),
+        str(row.get("rollout_row_id", "unknown")),
+        str(row.get("step_row_id", "unknown")),
+    )
+
+
+def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
+    """Summarize candidate direction support with equal-area angular bins."""
+
+    source = [dict(row) for row in rows]
+    azimuth_bins, elevation_bins = 24, 12
+    states: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in source:
+        states.setdefault(_candidate_state_key(row), []).append(row)
+    density: list[dict[str, object]] = []
+    for state_key, state_rows in sorted(states.items()):
+        counts = np.zeros((azimuth_bins, elevation_bins), dtype=np.int64)
+        valid = 0
+        for row in state_rows:
+            vector = np.asarray(
+                [row.get("root_relative_x_m"), row.get("root_relative_y_m"), row.get("root_relative_z_m")], dtype=object
+            )
+            try:
+                vector = vector.astype(np.float64)
+            except (TypeError, ValueError):
+                continue
+            radius = float(np.linalg.norm(vector))
+            if not np.isfinite(radius) or radius <= _GEOMETRY_EPSILON:
+                continue
+            azimuth = float(np.arctan2(vector[1], vector[0]))
+            sin_elevation = float(np.clip(vector[2] / radius, -1.0, 1.0))
+            ai = min(azimuth_bins - 1, int(((azimuth + np.pi) / (2 * np.pi)) * azimuth_bins))
+            ei = min(elevation_bins - 1, int(((sin_elevation + 1.0) / 2.0) * elevation_bins))
+            counts[ai, ei] += 1
+            valid += 1
+        total = len(state_rows)
+        for ai in range(azimuth_bins):
+            for ei in range(elevation_bins):
+                count = int(counts[ai, ei])
+                density.append(
+                    {
+                        "evidence": "equal_area_direction_density",
+                        "aggregation_level": "state",
+                        "scene": state_key[0],
+                        "rollout_row_id": state_key[1],
+                        "step_row_id": state_key[2],
+                        "azimuth_bin": ai,
+                        "sin_elevation_bin": ei,
+                        "count": count,
+                        "mean_state_fraction": None if valid == 0 else count / valid,
+                        "total_count": total,
+                        "valid_count": valid,
+                        "missing_count": total - valid,
+                        "available": valid > 0,
+                        "units": "solid-angle fraction",
+                        "protocol": {"binning": "azimuth x sin(elevation)"},
+                    }
+                )
+    # Macro levels are means of complete state grids, preventing large shells
+    # from silently dominating the scene/cohort comparison.
+    for level, key_fields in (("scene_macro", (0,)), ("cohort_macro", ())):
+        groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
+        for row in density:
+            key = (row["scene"],) if key_fields else ("all",)
+            groups.setdefault(key, []).append(row)
+        for key, grouped in sorted(groups.items(), key=lambda item: tuple(str(v) for v in item[0])):
+            for ai in range(azimuth_bins):
+                for ei in range(elevation_bins):
+                    cell = [r for r in grouped if r["azimuth_bin"] == ai and r["sin_elevation_bin"] == ei]
+                    density.append(
+                        {
+                            "evidence": "equal_area_direction_density",
+                            "aggregation_level": level,
+                            "scene": key[0] if level == "scene_macro" else None,
+                            "azimuth_bin": ai,
+                            "sin_elevation_bin": ei,
+                            "mean_state_fraction": None
+                            if not cell
+                            else float(np.mean([r["mean_state_fraction"] or 0.0 for r in cell])),
+                            "available": bool(cell),
+                            "missing_count": int(sum(int(r["missing_count"]) for r in cell)),
+                            "units": "solid-angle fraction",
+                            "protocol": {"binning": "azimuth x sin(elevation)"},
+                        }
+                    )
+    cap_rows = [
+        {
+            "evidence": "spherical_cap_support",
+            "available": bool(source),
+            "candidate_count": len(source),
+            "units": "steradians",
+        }
+    ]
+    angular_rows = [
+        {
+            "evidence": "angular_separation",
+            "available": bool(source),
+            "candidate_count": len(source),
+            "units": "degrees",
+        }
+    ]
+    return {"density_rows": density, "cap_rows": cap_rows, "angular_support_rows": angular_rows}
+
+
+def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Summarize root-relative radius and signed height by factual state."""
+
+    source = [dict(row) for row in rows]
+    output: list[dict[str, object]] = []
+    for state, grouped in _group_candidate_rows_by_state(source).items():
+        for metric, values, units in (
+            (
+                "root_xy_radius",
+                [
+                    np.hypot(float(r["root_relative_x_m"]), float(r["root_relative_y_m"]))
+                    for r in grouped
+                    if _finite_or_none(r.get("root_relative_x_m")) is not None
+                    and _finite_or_none(r.get("root_relative_y_m")) is not None
+                ],
+                "m",
+            ),
+            (
+                "root_height",
+                [
+                    float(r["root_relative_z_m"])
+                    for r in grouped
+                    if _finite_or_none(r.get("root_relative_z_m")) is not None
+                ],
+                "m",
+            ),
+        ):
+            output.append(
+                {
+                    "metric": metric,
+                    "aggregation_level": "state",
+                    "scene": state[0],
+                    "rollout_row_id": state[1],
+                    "step_row_id": state[2],
+                    "count": len(grouped),
+                    "finite_count": len(values),
+                    "missing_count": len(grouped) - len(values),
+                    "mean": None if not values else float(np.mean(values)),
+                    "units": units,
+                    "available": bool(values),
+                    "zero_radius_policy": "included" if metric == "root_xy_radius" else None,
+                }
+            )
+    return output
+
+
+def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Expose target distance and explicitly unavailable visibility evidence."""
+
+    source = [dict(row) for row in rows]
+    finite = [_finite_or_none(row.get("target_distance_m")) for row in source]
+    finite = [value for value in finite if value is not None]
+    return [
+        {
+            "evidence": "target_distance",
+            "available": bool(finite),
+            "count": len(source),
+            "finite_count": len(finite),
+            "missing_count": len(source) - len(finite),
+            "mean": None if not finite else float(np.mean(finite)),
+            "units": "m",
+        },
+        {
+            "evidence": "target_line_of_sight",
+            "available": False,
+            "count": len(source),
+            "finite_count": 0,
+            "missing_count": len(source),
+            "units": "boolean",
+            "reason": "line-of-sight visibility is not persisted",
+        },
+    ]
+
+
+def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Summarize motion support while retaining collision/clearance missingness."""
+
+    source = [dict(row) for row in rows]
+
+    def summary(metric: str, units: str) -> dict[str, object]:
+        values = [_finite_or_none(row.get(metric)) for row in source]
+        finite = [value for value in values if value is not None]
+        return {
+            "metric": metric,
+            "available": bool(finite),
+            "count": len(source),
+            "finite_count": len(finite),
+            "missing_count": len(source) - len(finite),
+            "mean": None if not finite else float(np.mean(finite)),
+            "units": units,
+        }
+
+    clearance = summary("path_min_clearance", "m")
+    clearance["metric"] = "path_min_clearance"
+    collisions = [row.get("path_collision") for row in source if row.get("path_collision_evaluated") is True]
+    collision = {
+        "metric": "path_collision_rate",
+        "available": bool(collisions),
+        "count": len(source),
+        "finite_count": len(collisions),
+        "missing_count": len(source) - len(collisions),
+        "collision_rate": None if not collisions else float(np.mean([bool(value) for value in collisions])),
+        "units": "fraction",
+    }
+    return [clearance, collision]
+
+
+def _group_candidate_rows_by_state(
+    rows: Iterable[Mapping[str, object]],
+) -> dict[tuple[str, str, str], list[dict[str, object]]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        grouped.setdefault(_candidate_state_key(row), []).append(dict(row))
+    return grouped
 
 
 def _probability_state_error(state: Mapping[str, object]) -> str | None:

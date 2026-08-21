@@ -29,6 +29,8 @@ from ...rerun_inspector import RolloutLayerName, RolloutLayerPreset
 from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
+    candidate_direction_evidence,
+    candidate_geometry_evidence_rows,
     rollout_endpoint_metric_summary,
     selected_depth_preview,
 )
@@ -1572,6 +1574,72 @@ def _render_candidate_geometry_diagnostics(
             f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
             "Coordinates are root-relative ARIA world metres (RIGHT_HAND_Z_UP), never pooled absolute scene origins."
         )
+        normalized = pd.DataFrame(candidate_geometry_evidence_rows(candidates.to_dict("records")))
+        if {"target_normalized_forward", "target_normalized_lateral"}.issubset(normalized.columns):
+            points = normalized.dropna(subset=["target_normalized_forward", "target_normalized_lateral"])
+            if not points.empty:
+                fig = px.density_heatmap(
+                    points,
+                    x="target_normalized_forward",
+                    y="target_normalized_lateral",
+                    nbinsx=32,
+                    nbinsy=32,
+                    facet_col="position" if "position" in points else None,
+                    title="Target-normalized candidate position support",
+                )
+                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                _render_plot(
+                    fig,
+                    ScientificExplanation(
+                        question="Where do candidate centers lie relative to the rollout root and observed target?",
+                        population="Bounded candidate rows translated into one root=(0,0), target=(1,0) frame per row.",
+                        metric="Dimensionless target-normalized forward/lateral coordinates; positive lateral is right-handed.",
+                        denominator_masks="Only rows with finite, non-degenerate root-to-target baselines enter the heatmap.",
+                        comparability="Target protocol, frame convention, and candidate-generation contract must match.",
+                        expected_pattern="Support forms the intended local shell around the root and does not collapse to one direction.",
+                        failure_interpretation="Offset, mirrored, or collapsed support indicates frame, target-join, or generator defects.",
+                        evidence_role="actor-visible",
+                        source_fields=(
+                            "candidate audit/root_relative_*",
+                            "target center",
+                            "inspection.candidate_geometry_evidence_rows",
+                        ),
+                    ),
+                )
+                with st.expander("Normalized position rows and CSV"):
+                    st.dataframe(points, hide_index=True, width="stretch")
+                    _download_frame(
+                        "Download normalized candidate positions CSV", "candidate-normalized-positions.csv", points
+                    )
+        direction = candidate_direction_evidence(candidates.to_dict("records"))
+        density = pd.DataFrame([row for row in direction["density_rows"] if row["aggregation_level"] == "state"])
+        if not density.empty and density["available"].any():
+            fig = px.imshow(
+                density.pivot_table(
+                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
+                ).fillna(0.0),
+                origin="lower",
+                aspect="auto",
+                labels={"x": "azimuth bin", "y": "sin(elevation) bin", "color": "fraction"},
+                title="Candidate direction density (equal-area angular bins)",
+            )
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Does candidate direction support cover the sphere without solid-angle bias?",
+                    population="Candidate direction vectors grouped by factual state; each state is normalized independently.",
+                    metric="Fraction per azimuth × sin(elevation) bin; dimensionless solid-angle density.",
+                    denominator_masks="Zero-length and missing vectors are explicit missing rows and excluded from directional denominators.",
+                    comparability="Bin resolution, coordinate convention, and candidate profile must match.",
+                    expected_pattern="Equal-area bins reveal genuine directional concentration rather than latitude-area artifacts.",
+                    failure_interpretation="One-sided or polar spikes suggest generator, frame, or orientation-support defects.",
+                    evidence_role="actor-visible",
+                    source_fields=("candidate root-relative vectors", "inspection.candidate_direction_evidence"),
+                ),
+            )
+            with st.expander("Direction density rows and CSV"):
+                st.dataframe(density, hide_index=True, width="stretch")
+                _download_frame("Download candidate direction density CSV", "candidate-direction-density.csv", density)
         metric_options = [
             name
             for name in (

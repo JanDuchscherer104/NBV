@@ -374,8 +374,17 @@ def test_candidate_direction_evidence_uses_complete_equal_area_bins_and_state_sc
     assert {row["evidence"] for row in density} == {"equal_area_direction_density"}
     assert {row["aggregation_level"] for row in density} >= {"state", "scene_macro", "cohort_macro"}
     assert all(row["protocol"]["binning"] == "azimuth x sin(elevation)" for row in density)
-    state_rows = [row for row in density if row["aggregation_level"] == "state" and row["available"]]
-    assert sum(float(row["mean_state_fraction"]) for row in state_rows) == pytest.approx(1.0)
+    state_rows = [
+        row
+        for row in density
+        if row["aggregation_level"] == "state" and row["available"] and row.get("population") in {None, "all"}
+    ]
+    state_fractions: dict[tuple[object, object], float] = {}
+    for row in state_rows:
+        state_id = (row.get("rollout_row_id"), row.get("step_row_id"))
+        state_fractions[state_id] = state_fractions.get(state_id, 0.0) + float(row["mean_state_fraction"])
+    assert len(state_fractions) == 2
+    assert all(value == pytest.approx(1.0) for value in state_fractions.values())
     assert all(row["azimuth_bin"] >= 0 and row["sin_elevation_bin"] >= 0 for row in density)
     assert evidence["cap_rows"] and evidence["angular_support_rows"]
 
@@ -386,7 +395,11 @@ def test_candidate_direction_evidence_excludes_zero_length_and_missing_direction
     from aria_nbv.rollouts.inspection import candidate_direction_evidence
 
     evidence = candidate_direction_evidence(_direction_fixture_rows())
-    state_rows = [row for row in evidence["density_rows"] if row["aggregation_level"] == "state"]
+    state_rows = [
+        row
+        for row in evidence["density_rows"]
+        if row["aggregation_level"] == "state" and row.get("population") in {None, "all"}
+    ]
     assert any(int(row["missing_count"]) > 0 for row in state_rows)
     assert all(row["units"] == "solid-angle fraction" for row in state_rows)
 
@@ -403,22 +416,29 @@ def test_candidate_spatial_support_preserves_zero_radius_and_signed_height() -> 
                 "root_relative_x_m": 0.0,
                 "root_relative_y_m": 0.0,
                 "root_relative_z_m": -0.25,
+                "root_radius_m": 0.0,
             },
             {
                 **_direction_fixture_rows()[1],
+                "rollout_row_id": 1,
+                "step_row_id": 1,
                 "root_relative_x_m": 0.5,
                 "root_relative_y_m": 0.0,
                 "root_relative_z_m": 0.5,
+                "root_radius_m": 0.5,
             },
         ]
     )
 
     evidence = candidate_spatial_support_evidence(rows)
-    origin = next(row for row in evidence if row["metric"] == "root_xy_radius" and row["aggregation_level"] == "state")
-    height = next(row for row in evidence if row["metric"] == "root_height" and row["aggregation_level"] == "state")
+    state_rows = [row for row in evidence if row["aggregation_level"] == "state"]
+    origin = next(row for row in state_rows if row["rollout_row_id"] == "0")
+    offset = next(row for row in state_rows if row["rollout_row_id"] == "1")
+    height = next(row for row in evidence if row["metric"] == "root_height" and row["rollout_row_id"] == "0")
     assert origin["available"] is True
     assert origin["mean"] == pytest.approx(0.0)
     assert origin["zero_radius_policy"] == "included"
+    assert offset["mean"] == pytest.approx(0.5)
     assert height["mean"] == pytest.approx(-0.25)
     assert height["units"] == "m"
 
