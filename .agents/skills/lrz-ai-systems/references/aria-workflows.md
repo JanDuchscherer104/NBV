@@ -1,8 +1,8 @@
 # ARIA Workflows On LRZ
 
-Use this for ARIA-NBV commands. Use `efm3d-aria-workloads.md` when the command
-comes from facebookresearch/efm3d, ASE, ATEK, or EVL rather than an ARIA-NBV
-entry point.
+Use this for ARIA-NBV commands. The decision map selects the dedicated EFM3D
+workload route when a command comes from facebookresearch/efm3d, ASE, ATEK, or
+EVL rather than an ARIA-NBV entry point.
 
 ## Before Filling Commands
 
@@ -62,5 +62,5 @@ LRZ_GPUS=2 \
 
 Keep all generated datasets, oracle caches, VIN stores, checkpoints, logs, W&B runs, temp files, and package/model caches under `$ARIA_DSS`.
 
-Large EFM3D/ASE downloads should be planned from `efm3d-aria-workloads.md`
-before being mixed into ARIA cache or training jobs.
+Large EFM3D/ASE downloads should follow the decision map's dedicated workload
+route before being mixed into ARIA cache or training jobs.

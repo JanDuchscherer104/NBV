@@ -1,60 +1,6 @@
 ---
 name: python-standards
-description: Apply ARIA-NBV Python conventions and write concise, contract-focused docstrings for modules, public classes, functions, methods, protocols, config models, DTOs, wrappers, and streaming or session APIs. Use for typing, configuration, DTO, docstring, shape, lifecycle, cross-reference, and Python API-contract work.
-metadata:
-  mode: implementation
-  not_when:
-    - "public docs, Quarto, or Typst prose not generated from Python APIs"
-    - "implementation behavior changes where Python standards are incidental"
-    - "large API redesign before the target interface is stable"
-  handoff_to:
-    - "aria-grill for unsettled module, interface, or domain-model decisions before implementation"
-    - "nearest docs guide for public narrative, Quarto, or Typst documentation"
-    - "nearest package guide for frame, unit, or tensor-shape semantics"
-    - "simplification for behavior-preserving API cleanup before documentation"
-  evidence_required:
-    - "public API or cross-module contract being changed or documented"
-    - "local package owner and any needed generated-doc cross-reference"
-    - "targeted format, lint, test, or generated-doc evidence"
-  applies_to:
-    - "aria_nbv/aria_nbv/**/*.py"
-  triggers:
-    - "Python standards"
-    - "typing"
-    - "config model"
-    - "DTO"
-    - "docstring"
-    - "API docs"
-    - "shape docs"
-    - "contract docs"
-  must_read:
-    - "aria_nbv/AGENTS.md"
-    - ".agents/skills/python-standards/references/general_conventions.md"
-    - ".agents/skills/python-standards/references/verification.md"
-  canonical_sources:
-    - "aria_nbv/AGENTS.md#completion-criteria"
-    - "aria_nbv/pyproject.toml"
-    - ".agents/skills/python-standards/references/general_conventions.md"
-    - ".agents/skills/python-standards/references/canonical-examples.md"
-    - ".agents/skills/python-standards/references/tensor-shapes.md"
-    - ".agents/skills/python-standards/references/theory-rich-docstrings.md"
-    - ".agents/skills/python-standards/references/config-datamodel-fields.md"
-    - ".agents/skills/python-standards/references/quartodoc-contract.md"
-    - ".agents/skills/python-standards/references/cross-references.md"
-  context7_refs:
-    - "/pytorch/pytorch"
-    - "/pydantic/pydantic"
-  tool_refs:
-    - "mcp__codex_apps__context7_resolve_library_id"
-    - "mcp__codex_apps__context7_query_docs"
-    - "mcp__code_index.search_code_advanced"
-    - "mcp__code_index.get_symbol_body"
-  verification:
-    - "ruff format <file>"
-    - "ruff check <file>"
-    - "cd aria_nbv && uv run pytest <path>"
-    - "make mypy-contract; make mypy-targeted MYPY_PATHS=\"...\"; make mypy-full"
-    - "./scripts/quarto_generate_api_docs.sh when generated API docs are affected"
+description: Apply ARIA-NBV Python conventions and write concise, contract-focused docstrings for modules, public classes, functions, methods, protocols, config models, DTOs, wrappers, and streaming or session APIs; use for typing, configuration, DTO, docstring, shape, lifecycle, cross-reference, and Python API-contract work.
 ---
 
 # Python Standards
@@ -71,6 +17,11 @@ Read [references/general_conventions.md](./references/general_conventions.md) fo
 typing, paths, config-as-factory behavior, runtime setup, logging, and project
 wrapper conventions. Executable requirements remain owned by source, tests,
 formatter, linter, and type configuration; domain semantics remain with the package owner.
+
+For current external dependency API or version uncertainty, route through
+[`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
+[`Context7 registry`](../aria-nbv-context/references/context7_library_ids.md);
+keep this skill focused on ARIA's local contracts.
 
 ## Docstring Overview
 
@@ -135,6 +86,14 @@ Read [references/verification.md](./references/verification.md) for the narrowes
 Ruff, pytest, coverage, mypy, and generated-doc proof. Report exact scope;
 targeted success never proves package-wide correctness.
 
-## References
+## Focused references
 
-- [General conventions](./references/general_conventions.md); [verification](./references/verification.md); [canonical examples](./references/canonical-examples.md); [tensor shapes](./references/tensor-shapes.md); [theory](./references/theory-rich-docstrings.md); [fields](./references/config-datamodel-fields.md); [Quartodoc](./references/quartodoc-contract.md); [cross-references](./references/cross-references.md)
+- Generic typing, runtime, configuration, and logging: read
+  [general conventions](./references/general_conventions.md).
+- Module, theory-rich, config/datamodel, or sequencing examples: read the
+  matching section in [canonical examples](./references/canonical-examples.md).
+- Tensor shape or dtype contracts: read [tensor shapes](./references/tensor-shapes.md).
+- Field documentation: read [config/datamodel fields](./references/config-datamodel-fields.md).
+- Equations or theory: read [theory-rich docstrings](./references/theory-rich-docstrings.md).
+- Quartodoc or local API cross-references: read [the Quartodoc contract](./references/quartodoc-contract.md) and [cross-references](./references/cross-references.md).
+- Verification selection: read [verification](./references/verification.md).

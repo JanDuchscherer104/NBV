@@ -1,32 +1,6 @@
 ---
 name: measured-autoresearch
-description: Measure executable candidates inside an active OMX autoresearch or autoresearch-goal mission. Use when a frozen evaluator can decide an empirical hypothesis; do not use for literature-only work.
-metadata:
-  mode: implementation
-  not_when:
-    - "literature-only research with no executable evaluator"
-    - "no active OMX autoresearch or autoresearch-goal mission"
-  handoff_to:
-    - "nearest owning guide when the evaluator or baseline is failing"
-  evidence_required:
-    - "one unambiguous active mission root"
-    - "a frozen evaluator contract and measured baseline"
-    - "candidate patch, result, artifacts, and restoration evidence"
-  applies_to:
-    - ".omx/specs/autoresearch-*"
-    - ".omx/goals/autoresearch/*"
-  triggers:
-    - "measured autoresearch"
-    - "measurement-gated candidate"
-    - "frozen evaluator"
-  must_read:
-    - ".agents/skills/measured-autoresearch/SKILL.md"
-  canonical_sources:
-    - ".agents/skills/measured-autoresearch/SKILL.md"
-    - ".agents/skills/measured-autoresearch/scripts/experiment.py"
-  verification:
-    - "python3 .agents/skills/measured-autoresearch/scripts/experiment.py --help"
-    - "python3 -m unittest discover -s .agents/skills/measured-autoresearch/tests"
+description: Measure executable candidates inside an active OMX autoresearch or autoresearch-goal mission when a frozen evaluator can decide an empirical hypothesis; do not use for literature-only work.
 ---
 
 # Measured Autoresearch
@@ -45,9 +19,7 @@ sidecar owns measurements under the active mission root.
 - The helper records and renders evidence. It never runs the evaluator, mutates
   OMX state, changes Git state, or declares the enclosing workflow complete.
 
-## Steps
-
-### 1. Resolve one active mission
+## Resolve one active mission
 
 Resolve by owner evidence, in this order:
 
@@ -64,133 +36,42 @@ Never select by recency, glob historical missions, invent a slug, or create a
 second root. Return a blocker unless one existing root and one lifecycle owner
 are unambiguous.
 
-### 2. Freeze and initialize the contract
+## Active mission procedure
 
-Before candidate edits, write a contract JSON containing the evaluator command
-and fingerprint, data/split identity, hard gates, primary metric and tolerance,
-ordered secondary metrics, mutable paths, fixed budget, device, seed, output
-paths, and safe rollback method. Run:
+After resolving one mission, read [the measurement loop](references/measurement-loop.md)
+before initializing the contract or mutating a candidate. It contains the
+branch-specific evaluator, artifact, restoration, inspiration, and handoff
+procedure.
 
-```bash
-python3 <skill>/scripts/experiment.py init \
-  --mission-root <mission> --contract <contract.json>
-```
+## Universal invariants
 
-The command screens unsafe evaluator text, normalizes the contract, fingerprints
-it, and creates `<mission>/measurements/experiments.tsv`. Inspect `--help` and
-`example-contract` for the accepted schema.
+- Freeze the evaluator contract before candidate mutation, and start a new
+  series when its contract changes.
+- Record ownership hashes before mutation and preserve unrelated worktree paths.
+- Measure one falsifiable candidate at a time against the unchanged evaluator.
+- Let the helper compute keep/discard decisions; never hand-author ledger rows.
+- Keep every artifact path inside the mission root unless the manifest records
+  the configured external location, hash, size, and provenance.
+- Return evidence to the enclosing validator or critic; this sidecar never owns
+  lifecycle state or a terminal verdict.
 
-Capture `git status --short` and baseline hashes for every mutable path. Prefer
-an isolated worktree. In a shared worktree, touch only paths proven clean or
-experiment-owned; block on unrelated or uncertain changes. A contract change
-starts a new measurement series and baseline.
+## Verification
 
-Write `<mission>/measurements/ownership.json` with `git_status`, `git_root`, and
-`mutable_paths`, an object mapping every declared path to its pre-mutation SHA-256
-or `MISSING`. Do not store this evidence elsewhere.
-
-Complete when `validate` passes and the declared candidate surface is cleanly
-owned.
-
-### 3. Measure the baseline
-
-Run hard gates and the frozen evaluator with the exact candidate budget. The
-enclosing owner executes commands; the helper does not. Save evaluator output,
-logs, and at least one inspectable sample when the mission generates artifacts.
-Write a result JSON using `example-result`, set `iteration` to `0`, and run:
+Inspect the helper contract before use:
 
 ```bash
-python3 <skill>/scripts/experiment.py append \
-  --mission-root <mission> --result <result.json>
+python3 .agents/skills/measured-autoresearch/scripts/experiment.py --help
+python3 .agents/skills/measured-autoresearch/scripts/experiment.py example-contract
+python3 .agents/skills/measured-autoresearch/scripts/experiment.py example-result
 ```
 
-Complete when `validate` reports one reproducible baseline with an existing
-artifact manifest.
-
-### 4. Measure one falsifiable candidate
-
-State one hypothesis and make its smallest causal change inside the frozen
-surface. Before mutation, copy `ownership.json` to the run directory and refresh
-its hashes/status for the current incumbent. Save the exact candidate diff as
-`runs/<iteration>-<candidate>/candidate.patch`. Run hard gates, then the unchanged
-evaluator. Synchronize asynchronous accelerators before timing and inspect saved
-outputs rather than trusting metrics alone. Include the contract ID and evaluator
-fingerprint printed by `init` in the result JSON, then append it with the same
-command as the baseline. List the ownership snapshot and patch in that run's
-artifact manifest so the helper verifies their paths, sizes, and hashes.
-
-The helper rejects stale contracts, malformed metrics, missing gates, invalid
-artifact paths, non-monotonic iterations, and decisions inconsistent with the
-frozen tolerances. It computes the keep/discard decision; do not hand-author TSV
-rows.
-
-Complete when `append` records a valid result or a classified invalid/crash row.
-
-### 5. Make code match the recorded decision
-
-Keep a candidate only when the helper records `keep`. Otherwise reverse only the
-candidate patch or restore exact baseline bytes for explicitly owned paths.
-Never use repository-wide `reset`, `checkout`, `restore`, `clean`, or stash-based
-rollback against pre-existing work. Never rewrite old rows.
-
-For a discard, write `runs/<iteration>-<candidate>/restore-proof.json` containing
-`before_git_status`, `after_git_status`, and `mutable_paths`; each path maps to
-`{"before_sha256": ..., "after_sha256": ...}`. Every before/after status and hash
-must match. Add the proof to the artifact manifest before validation. For a keep,
-record `restore-proof.json` as `{"status": "retained", "revision": ...}`.
-
-Run:
+After changes to the helper or its procedure, run:
 
 ```bash
-python3 <skill>/scripts/experiment.py validate --mission-root <mission>
+python3 -m unittest discover -s .agents/skills/measured-autoresearch/tests
 ```
 
-Complete when validation passes and the retained bytes match the recorded
-revision.
-
-### 6. Render evidence and return control
-
-Run:
-
-```bash
-python3 <skill>/scripts/experiment.py report --mission-root <mission>
-```
-
-This writes `summary.json`, `summary.md`, and dependency-free `progress.svg`
-under `<mission>/measurements/`. Return their paths, the candidate artifact,
-baseline comparison, tests, metrics, limitations, and every attempted row to the
-enclosing validator or critic. That owner decides whether to continue or finish.
-
-Complete when one fresh measured decision and its rendered evidence have returned
-to the owner without a sidecar-authored lifecycle verdict.
-
-## Inspiration branch
-
-When `summary.json` reports `plateau: true`, or the enclosing owner explicitly
-requests new inspiration, pause candidate mutation:
-
-1. Search scoped code, local `docs/literature/`, and repository literature
-   indexes first.
-2. If they do not yield a testable mechanism, inspect primary public papers and
-   official upstream repositories. Use a bounded `researcher` subagent when it
-   improves coverage; do not switch the active lifecycle to a terminal research
-   workflow.
-3. Append the source path or URL, version/commit, derived hypothesis, mechanism,
-   and confidence to `<mission>/measurements/inspiration.jsonl`.
-
-Research proposes the next falsifiable candidate. It never changes the frozen
-evaluator, counts as an experiment row, or owns lifecycle state.
-
-## Artifact policy
-
-All measurement metadata and small inspectable outputs live in
-`<mission>/measurements/`. Put each run's logs, evaluator result, sample, and
-`artifact-manifest.json` under `runs/<iteration>-<candidate>/`; ledger artifact
-paths must remain inside the mission root. Keep large checkpoints and publishable
-deliverables in their configured external location and record path, hash, size,
-and provenance in the manifest. The enclosing OMX ledger remains reserved for
-workflow and critic events.
-
-For blocked attempts, return the classified row when a run occurred, logs,
-missing-item reasons, and proof that owned paths were restored while unrelated
-paths were preserved.
+For current external dependency API or version uncertainty, route through
+[`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
+[`Context7 registry`](../aria-nbv-context/references/context7_library_ids.md)
+before changing the evaluator contract.

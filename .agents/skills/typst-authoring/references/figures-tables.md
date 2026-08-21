@@ -5,8 +5,8 @@
 Figures and tables are part of the argument. Each one must answer: what should
 the reader learn that prose alone would not convey?
 
-For scientific, geometric, spatial, or 3D figures, also read
-`scientific-visualizations.md` before choosing a renderer.
+Scientific, geometric, spatial, and 3D renderer routing is covered by the
+skill's direct conditional route to `scientific-visualizations.md`.
 
 ## Figure Policy
 

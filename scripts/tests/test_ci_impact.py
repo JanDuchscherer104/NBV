@@ -18,32 +18,18 @@ from ci_impact import FAMILIES, parse_nul_paths, select_families  # noqa: E402
 ALL = set(FAMILIES)
 
 
-def frontmatter_list_items(document: str, key: str) -> list[str]:
-    """Return scalar items from one top-level frontmatter list."""
-    frontmatter = document.split("---", 2)[1]
-    lines = frontmatter.splitlines()
-    key_index = next(
-        index for index, line in enumerate(lines) if line.strip() == f"{key}:"
-    )
-    key_indent = len(lines[key_index]) - len(lines[key_index].lstrip())
-    items: list[str] = []
-    for line in lines[key_index + 1 :]:
-        stripped = line.strip()
-        if not stripped:
-            continue
-        indent = len(line) - len(line.lstrip())
-        if indent <= key_indent:
-            break
-        if not stripped.startswith("- "):
-            continue
-        value = stripped.removeprefix("- ").strip()
-        if value[:1] in {"'", '"'} and value[-1:] == value[:1]:
-            value = value[1:-1]
-        items.append(value)
-    return items
-
-
 class SelectionTests(unittest.TestCase):
+    def test_g006_hardening_inputs_select_scaffold_validation(self) -> None:
+        self.assertEqual(
+            select_families(
+                [
+                    "scripts/scaffold_audit.py",
+                    "scripts/tests/test_agent_governance_g002.py",
+                ]
+            ),
+            {"scaffold"},
+        )
+
     def test_workflow_keeps_stable_unfiltered_ci_identity(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         pull_request_block = workflow.split("  pull_request:\n", 1)[1].split(
@@ -256,29 +242,21 @@ class SelectionTests(unittest.TestCase):
             ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
         )
         boundary_guidance = (REPO_ROOT / boundary_owner).read_text(encoding="utf-8")
-        canonical_sources = frontmatter_list_items(
-            context_guidance, "canonical_sources"
-        )
 
-        self.assertIn("scripts/check_graphify_freshness.py --json", context_guidance)
-        self.assertIn("make graphify-state-check", context_guidance)
+        graphify_branch = context_guidance.split("## Graphify Branch", 1)[1].split(
+            "## Context7 Plugin Branch", 1
+        )[0]
+        self.assertIn(
+            "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
+            graphify_branch,
+        )
+        self.assertIn("scripts/check_graphify_freshness.py --json", boundary_guidance)
+        self.assertIn("make graphify-state-check", boundary_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary_guidance)
         self.assertIn("graphify hook install", boundary_guidance)
+        self.assertIn("## Upstream Lifecycle And Hooks", boundary_guidance)
         self.assertIn(
             "skips hook rebuilds inside linked Git worktrees", boundary_guidance
-        )
-        self.assertIn(boundary_owner, canonical_sources)
-        for scalar in (boundary_owner, f"'{boundary_owner}'", f'"{boundary_owner}"'):
-            with self.subTest(scalar=scalar):
-                fixture = f"---\nmetadata:\n  canonical_sources:\n    - {scalar}\n---\n"
-                self.assertIn(
-                    boundary_owner,
-                    frontmatter_list_items(fixture, "canonical_sources"),
-                )
-        wrong_list = f"---\nmetadata:\n  must_read:\n    - {boundary_owner}\n  canonical_sources:\n    - AGENTS.md\n---\n"
-        self.assertNotIn(
-            boundary_owner,
-            frontmatter_list_items(wrong_list, "canonical_sources"),
         )
         self.assertTrue((REPO_ROOT / boundary_owner).is_file())
         self.assertEqual(

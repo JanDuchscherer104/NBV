@@ -44,4 +44,5 @@ $ARIA_DSS/
 - Prefer tar shards, archives, HDF5, TFRecord, WebDataset-style shards, Zarr, or immutable chunked stores.
 - Avoid millions of loose files and repeated directory scans on GPFS/DSS.
 - Request more DSS quota before filling transitional or small per-user allocations.
-- For EFM3D/ASE work, check `efm3d-aria-workloads.md`; full ASE training data is far beyond `$HOME`.
+- For EFM3D/ASE work, use the decision map's workload route; full ASE training
+  data is far beyond `$HOME`.

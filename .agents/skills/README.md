@@ -1,131 +1,78 @@
 # ARIA-NBV Skill Style Guide
 
-Skills are hot-path agent instructions. Keep them compact, task-specific, and
-activation-oriented. Long details belong in `references/` files.
+Skills are compact agent procedures. Native frontmatter selects the skill;
+the body keeps universal invariants and chooses conditional references.
 
-## Required Frontmatter
+## Frontmatter
+
+Every ARIA-owned `SKILL.md` starts with exactly these two fields:
 
 ```yaml
 ---
 name: skill-name
-description: One sentence describing when to use the skill.
-metadata:
-  mode: "implementation | router | diagnostic | review | maintenance"
-  not_when:
-    - "confusing adjacent task cue"
-  handoff_to:
-    - "skill-name for adjacent ownership"
-  evidence_required:
-    - "artifact, source, command, or trace needed before acting"
-  applies_to:
-    - "repo/glob/**"
-  triggers:
-    - "phrase or task cue"
-  must_read:
-    - "small required source list"
-  canonical_sources:
-    - "repo/path.md#heading-or-stable-anchor"
-  context7_refs:
-    - "/org/project"
-  literature_refs:
-    - "BibTeX-key-or-owner-path"
-  tool_refs:
-    - "mcp__server.tool_name"
-    - "mcp__app_server__tool_name"
-  verification:
-    - "command or review check"
+description: One model-facing sentence describing when to use the skill.
 ---
 ```
 
-Use meaningful routing metadata under `metadata:` so skills stay compatible with
-`make scaffold-audit`. Broad skills may use broad globs, but triggers must
-still be concrete enough for an agent or KG router to distinguish them. Do not
-use ad hoc modes such as `scaffold`; universal preflight or routing skills are
-`router` skills until another accepted mode is added deliberately.
-Keep all routing fields nested under `metadata`; do not add new top-level
-frontmatter keys. Broad/router skills should include `mode`, `not_when`,
-`handoff_to`, and `evidence_required` so lane selection stays machine-readable.
-Every directory under `.agents/skills/` must match the frontmatter `name`.
-Machine-facing `handoff_to` entries should start with a repo-local skill name or
-  declared capability wording, not unresolved plugin namespaces such as `omx:*`,
-  `github:*`, or `oh-my-codex:*`.
-Every skill must declare `metadata.canonical_sources` as relative repo paths.
-Use anchors for Markdown or Quarto owners when a stable section exists. This
-field names where the durable truth lives; the skill body should summarize only
-the activation rule, read-first path, evidence contract, and verification loop.
-Do not put planned but unimplemented research detail in skills. Put it in the
-owning thesis roadmap, research-question page, Quarto theory page, Typst
-section, package `AGENTS.md`, or source code contract instead.
-Use optional `context7_refs`, `literature_refs`, and `tool_refs` only as thin
-routing edges. Context7 refs must already exist in
-their exact upstream identifier; literature refs must resolve to
-BibTeX keys, Quarto/literature paths, local TeX mirror paths, or route labels
-in `aria-nbv-context/references/context_map.md`. Server tool refs use canonical
-`mcp__<server>.<tool_name>` names; plugin/App refs use
-`mcp__<server>__<tool_name>`. Do not point skill metadata at generated context
-indexes as source owners.
+Use the directory name as `name`. Write `description` as one sentence that
+states the skill's outcome and its distinct activation branches. Keep it
+specific enough for autonomous selection and short enough to remain a useful
+always-loaded pointer. Put procedure, evidence, handoffs, and verification in
+the body or a conditional reference.
 
-Byte-identical, separately pinned upstream skill bundles are exempt from ARIA
-frontmatter and hot-path-style requirements. Do not patch upstream frontmatter
-to satisfy this validator. Put repository activation, source-order, safety, and
-verification instructions in the nearest ARIA companion skill, and enforce the
-declared upstream bytes with a separate integrity test.
+## Body
 
-## OMX Sidecar Pattern
+Keep the body below 150 lines. Include only material every invocation needs:
 
-ARIA-NBV skills are sidecars for Codex/OMX orchestration. OMX owns workflow
-state, goals, phase transitions, and review/QA gates; a repo skill owns local
-domain knowledge, exact tool loops, required evidence, and verification choices.
+- the outcome and the smallest safe workflow;
+- universal invariants and ownership boundaries;
+- branch selectors that name the condition and its next reference or handoff;
+- completion criteria that make the required evidence explicit.
 
-- `not_when` should name adjacent work that belongs to another skill or OMX
-  phase.
-- `handoff_to` should name the next local skill or workflow when the current
-  skill is only supporting context.
-- `evidence_required` should state the artifact, command output, source, or
-  trace needed before acting or handing off.
-- Use a short `## OMX Integration` body section only when the role split is not
-  obvious from metadata. Do not duplicate root routing or the full OMX operator
-  manual inside individual skills.
+Use imperative language. Prefer one owner, one purpose, and one proof. Treat
+source files, tests, configuration, and active scientific documents as the
+truth owners; skills route to them without copying their contracts.
 
-## Body Template
+## Conditional references
 
-- Use When
-- Do Not Use When, if confusion is likely
-- Read First, usually 3-5 sources
-- Rules, usually 5-10 bullets
-- Workflow, short and ordered
-- Verification
-- Stop or completion conditions
+Link each branch directly to the smallest existing `references/*.md` file and
+state when to read it. When a branch genuinely has many subtopics, a directly
+linked branch index may route one additional hop to its leaf references; do not
+chain through a second index. Convert weak plain reference-name inventories into
+concise Markdown pointers where practical. Put branch-specific commands, lookup
+tables, examples, version details, and longer procedures in those references.
+Do not create a registry that mirrors the skill set or source ownership.
 
-## Style Rules
+Use the repository's current owner paths for implementation and scientific
+claims. A pointer identifies where to look; it does not make the pointer's
+target authoritative over the source owner. In scientific documentation,
+`docs/typst/shared/glossary.typ` owns durable terms; `docs/typst/glossary/` is
+rendered/modular output; `docs/references.bib` and `docs/references-qh.bib` own
+citation identities; `docs/literature/sources.jsonl` owns acquisition and
+relevance metadata; `docs/contents/literature/` owns review synthesis; and
+`docs/typst/thesis/sections/` owns active claim placement.
 
-- Default skill bodies should stay under about 150 lines unless the skill wraps
-  an operator workflow with unavoidable commands.
-- Avoid duplicating root source order, long command lists, or schema manuals.
-- Prefer references over nested procedural walls.
-- Prefer a canonical-source link over restating formulas, roadmap claims, API
-  contracts, or operator commands already owned elsewhere.
-- Do not add speculative abstractions or future-work instructions unless the
-  task explicitly owns that future-work surface.
-- Every skill should preserve the `agent-behavior` principles: explicit
-  assumptions, simplest sufficient change, surgical edits, and verifiable
-  completion.
-- Do not repeat the full lane-selection policy in every skill. Put routing cues
-  in metadata and keep detailed arbitration in `agent-behavior`.
-- Before deleting a skill or merging router skills, update
-  `scripts/scaffold/fixtures/routing.json` and keep `make scaffold-audit` green.
+## Ownership and handoffs
 
-## Source-Order Review Gate
+Keep local invariants in the skill that governs them. Hand off at the branch
+endpoint to the nearest package guide, docs/Typst owner, failure owner, or
+specialist skill. Record the evidence required for that handoff next to the
+branch that consumes it.
 
-Run the source-order question before adding, deleting, or merging skill prose:
+For an already-known exact owner, open that owner and its nearest `AGENTS.md`
+and stop retrieving. Use optional navigation, recall, or external-document
+references only when their branch condition is active.
 
-1. What source owns this truth?
-2. Is this sentence routing/evidence, or durable project truth?
-3. If this skill disappeared, which owner would still preserve activation,
-   dirty-worktree safety, request traceability, and verification?
+## Upstream skills
 
-`make scaffold-audit` reports semantic-drift warnings when a skill body appears
-to contain formulas, roadmap claims, future-work plans, or implementation
-contracts. Treat those warnings as review prompts first: either move the detail
-to the canonical owner and link it through `metadata.canonical_sources`, or keep
-the sentence only when it is a compact routing cue.
+Byte-identical, separately pinned upstream bundles keep their upstream
+frontmatter and bytes. Put ARIA-specific activation, source-order, safety, and
+verification in the nearest ARIA companion skill; preserve the upstream
+integrity contract separately.
+
+## Review
+
+Before editing a skill, identify the owner of each sentence, classify it as an
+invariant, selector, pointer, or completion criterion, and remove duplicated
+source truth. Check that every pointer exists, every body remains under the
+line budget, and every example or command is verified before publication.

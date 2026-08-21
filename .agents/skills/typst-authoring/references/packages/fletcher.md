@@ -1,7 +1,8 @@
 # Fletcher (diagram package)
 
-Use Fletcher for flow charts and architecture diagrams with arrows. The manual is in
-`references/packages/fletcher-manual.md` (cleaned from `fletcher-manual.typ`).
+Use Fletcher for flow charts and architecture diagrams with arrows. The
+package index routes directly to the cleaned manual when its details are
+needed.
 
 ## Import pattern
 
