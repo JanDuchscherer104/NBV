@@ -237,10 +237,6 @@ def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
     )
 
 
-def cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
-    return _cached_projection(store_path, projection, **kwargs)
-
-
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
 def _cached_topology_cached(
     store_path: str,

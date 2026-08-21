@@ -371,7 +371,7 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert len(failure_calls) == 2
 
 
-def test_open_session_computes_identity_once_and_binds_core_key(
+def test_stored_rollout_session_open_computes_identity_once_and_binds_core_key(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Opening one session performs one identity walk and binds that key to its core."""
@@ -402,7 +402,9 @@ def test_open_session_computes_identity_once_and_binds_core_key(
     assert opened.reader is core
 
 
-def test_session_inventory_row_is_presentation_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_stored_rollout_session_inventory_row_is_presentation_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Changing inventory metadata does not alter identity or bound core inputs."""
 
     store = tmp_path / "selected.zarr"
@@ -425,7 +427,7 @@ def test_session_inventory_row_is_presentation_only(monkeypatch: pytest.MonkeyPa
     ]
 
 
-def test_session_clear_invalidates_every_matrix_owner_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkeypatch: pytest.MonkeyPatch) -> None:
     """Owner-level invalidation clears inventory and candidate population as well as projections."""
 
     names = (
@@ -446,7 +448,9 @@ def test_session_clear_invalidates_every_matrix_owner_once(monkeypatch: pytest.M
     assert cleared == list(names)
 
 
-def test_session_topology_preserves_structured_cache_arguments(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_stored_rollout_session_topology_preserves_structured_cache_arguments(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Topology retains PathConfig, VIN-directory tuple, and selected source row as arguments."""
 
     calls: list[tuple[object, tuple[str, ...], PathConfig, int | None, str]] = []
@@ -470,7 +474,7 @@ def test_session_topology_preserves_structured_cache_arguments(monkeypatch: pyte
     assert calls == [("/selected.zarr", ("/vin-a", "/vin-b"), config, 7, "identity-1")]
 
 
-def test_session_open_does_not_materialize_heavy_projection_owners(
+def test_stored_rollout_session_open_does_not_materialize_heavy_projection_owners(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Opening a session is metadata/core-only and does not read candidate or deep-Q_H evidence."""
@@ -493,7 +497,24 @@ def test_session_open_does_not_materialize_heavy_projection_owners(
     assert heavy_calls == []
 
 
-def test_session_cache_decorator_matrix_is_explicit() -> None:
+def test_stored_rollout_session_candidate_population_uses_captured_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bound session keeps candidate evidence on its opened store identity."""
+
+    calls: list[tuple[str, str, int]] = []
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_population_cached",
+        lambda path, identity, sample_size=500: calls.append((path, identity, sample_size)) or {"sample": []},
+    )
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+
+    assert handle.candidate_population(17) == {"sample": []}
+    assert calls == [("/selected.zarr", "first", 17)]
+
+
+def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
     """The session source keeps the exact cache kinds and bounds from the migration matrix."""
 
     source = Path(session.__file__).read_text(encoding="utf-8")
