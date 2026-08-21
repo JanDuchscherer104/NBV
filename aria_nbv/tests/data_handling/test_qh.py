@@ -309,11 +309,18 @@ class _RolloutReader:
     provenance = {"stores": []}
     store_dirs = (Path("/tmp/rollouts.zarr"),)
 
-    def __init__(self, source_ref: _QhSourceRef, campaign_split: Stage | None = None) -> None:
+    def __init__(
+        self,
+        source_ref: _QhSourceRef,
+        campaign_split: Stage | None = None,
+        *,
+        include_selected_depth: bool = False,
+    ) -> None:
         self.source_refs = (source_ref,)
         self.scenes = frozenset({source_ref.scene_id})
         self.stored = _stored(source_ref)
         self.campaign_split = campaign_split
+        self.include_selected_depth = include_selected_depth
 
     def __len__(self) -> int:
         return 1
@@ -356,7 +363,7 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
             pts_world=torch.ones((1, 8, 3), dtype=torch.float32),
         )
     )
-    rollout_reader = _RolloutReader(_source_ref())
+    rollout_reader = _RolloutReader(_source_ref(), include_selected_depth=True)
     rollout_reader.stored.selected_depth_m = np.ones((2, 2, 3), dtype=np.float16)
     rollout_reader.stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
     rollout_reader.stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
@@ -366,7 +373,8 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
     dataset = QhDataset(  # type: ignore[arg-type]
         rollout_reader=rollout_reader,
         actor_reader=actor_reader,
-        require_rich_modalities=True,
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt",
     )
 
     chain = dataset[0]
@@ -390,6 +398,60 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
     assert actor_reader.backbone_reads == 1
 
 
+def test_root_evl_profile_does_not_require_selected_observations() -> None:
+    """Immutable root EVL is independently usable without privileged CF-GT depth."""
+
+    scalar_grid = torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)
+    actor_reader = _ActorReader(
+        EvlBackboneOutput(
+            t_world_voxel=PoseTW(torch.zeros((1, 12), dtype=torch.float32)),
+            voxel_extent=torch.ones(6),
+            occ_pr=scalar_grid,
+            occ_input=scalar_grid,
+            free_input=scalar_grid,
+            counts=torch.ones((1, 2, 2, 2), dtype=torch.int64),
+            cent_pr=scalar_grid,
+            pts_world=torch.ones((1, 8, 3), dtype=torch.float32),
+        )
+    )
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=_RolloutReader(_source_ref()),
+        actor_reader=actor_reader,
+        root_evl_profile="evl_v1",
+    )
+
+    chain = dataset[0]
+
+    assert chain.actor.static_context is not None
+    assert chain.actor.selected_observation_prefix is None
+    assert dataset.actor_state_contract.root_evl_profile == "evl_v1"
+    assert dataset.actor_state_contract.selected_observation_protocol == "none"
+
+
+def test_selected_observation_protocol_does_not_require_root_evl() -> None:
+    """Privileged selected observations are independently opt-in from root EVL."""
+
+    rollout_reader = _RolloutReader(_source_ref(), include_selected_depth=True)
+    rollout_reader.stored.selected_depth_m = np.ones((2, 2, 3), dtype=np.float16)
+    rollout_reader.stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
+    rollout_reader.stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
+    rollout_reader.stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
+    rollout_reader.stored.selected_depth_image_size_hw = np.tile(np.array([2, 3]), (2, 1))
+    rollout_reader.stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=rollout_reader,
+        actor_reader=_ActorReader(),
+        selected_observation_protocol="cf_gt",
+    )
+
+    chain = dataset[0]
+
+    assert chain.actor.static_context is None
+    assert chain.actor.selected_observation_prefix is not None
+    assert dataset.actor_state_contract.root_evl_profile == "none"
+    assert dataset.actor_state_contract.selected_observation_protocol == "cf_gt"
+
+
 def test_rich_dataset_rejects_non_singleton_source_axis() -> None:
     actor_reader = _ActorReader(
         EvlBackboneOutput(
@@ -400,7 +462,7 @@ def test_rich_dataset_rejects_non_singleton_source_axis() -> None:
     dataset = QhDataset(  # type: ignore[arg-type]
         rollout_reader=_RolloutReader(_source_ref()),
         actor_reader=actor_reader,
-        require_rich_modalities=True,
+        root_evl_profile="evl_v1",
     )
 
     with pytest.raises(ValueError, match="source batch axis must have size 1"):
@@ -456,7 +518,7 @@ def test_collate_rejects_incompatible_selected_depth_geometry() -> None:
         stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
         stored.selected_depth_image_size_hw = np.tile(np.array([height, 3]), (2, 1))
         stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
-        return _tensor_chain(stored, _snippet())
+        return _tensor_chain(stored, _snippet(), selected_observation_protocol="cf_gt")
 
     with pytest.raises(ValueError, match="one raster geometry"):
         collate_qh_chains([rich_chain(2), rich_chain(3)])
@@ -468,6 +530,15 @@ def test_dataset_rejects_split_inconsistent_with_unfiltered_reader() -> None:
             rollout_reader=_RolloutReader(_source_ref()),
             actor_reader=_ActorReader(),
             split=Stage.VAL,
+        )
+
+
+def test_dataset_rejects_selected_observation_protocol_reader_mismatch() -> None:
+    with pytest.raises(ValueError, match="must match rollout-reader loading"):
+        QhDataset(  # type: ignore[arg-type]
+            rollout_reader=_RolloutReader(_source_ref()),
+            actor_reader=_ActorReader(),
+            selected_observation_protocol="cf_gt",
         )
 
 
@@ -492,6 +563,8 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
         "include_selected_depth": False,
     }
     assert result["split"] is Stage.VAL
+    assert result["root_evl_profile"] == "none"
+    assert result["selected_observation_protocol"] == "none"
 
 
 def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None:
@@ -518,7 +591,13 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     )
     audit = QhAudit("/tmp/rollouts.zarr", "7", "manifest", "Pytorch3DDepthRenderer")
 
-    chain = _tensor_chain(stored, _snippet(), static_context=context, require_rich_modalities=True, audit=audit)
+    chain = _tensor_chain(
+        stored,
+        _snippet(),
+        static_context=context,
+        selected_observation_protocol="cf_gt",
+        audit=audit,
+    )
     prefix = chain.actor.selected_observation_prefix
     assert prefix is not None
     assert isinstance(prefix.camera_pose_relative_root, PoseTW)
@@ -558,7 +637,7 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
         pts_world=torch.ones(1, 3),
         evl_presence=torch.ones(8, dtype=torch.bool),
     )
-    chain = _tensor_chain(stored, _snippet(), static_context=context, require_rich_modalities=True)
+    chain = _tensor_chain(stored, _snippet(), static_context=context, selected_observation_protocol="cf_gt")
     batch = collate_qh_chains([chain, chain])
 
     def summary(actor: QhActorTensors) -> dict[str, object]:
@@ -598,9 +677,9 @@ def test_rich_dataset_rejects_actor_store_without_root_evl_evidence() -> None:
     dataset = QhDataset(  # type: ignore[arg-type]
         rollout_reader=_RolloutReader(_source_ref()),
         actor_reader=_ActorReader(),
-        require_rich_modalities=True,
+        root_evl_profile="evl_v1",
     )
-    with pytest.raises(ValueError, match="requires every root EVL evidence field"):
+    with pytest.raises(ValueError, match="requires every EVL evidence field"):
         _ = dataset[0]
 
 

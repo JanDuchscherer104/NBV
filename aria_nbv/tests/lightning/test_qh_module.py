@@ -48,7 +48,7 @@ class _BadShapeScorer(nn.Module):
 
 
 _CONTRACT = QhDataContract("qh-v1", "v0", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
-_ACTOR_CONTRACT = QhActorStateContract("lean", "test-actor-manifest", ())
+_ACTOR_CONTRACT = QhActorStateContract("none", "none", "test-actor-manifest", ())
 
 
 class _ChainDataset(Dataset[QhChain]):
@@ -127,6 +127,23 @@ def test_forward_consumes_actor_tensors_and_requires_exact_batch_shape() -> None
     assert module.online_scorer.calls == 1
     with pytest.raises(ValueError, match=r"must return shape \(2, 2, 3\)"):
         QhLightningModule(module.config, scorer=_BadShapeScorer())(batch.actor)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("root_evl_profile", "evl_v1", "root_evl_profile"),
+        ("selected_observation_protocol", "cf_gt", "selected_observation_protocol"),
+    ),
+)
+def test_scorer_rejects_missing_declared_actor_carrier(field: str, value: str, message: str) -> None:
+    config = QhLightningModuleConfig(lr_scheduler=None, **{field: value})
+    module = QhLightningModule(config, scorer=_TableScorer())
+
+    with pytest.raises(ValueError, match=message):
+        module(_batch().actor)
+
+    assert module.hparams["config"][field] == value
 
 
 def test_exact_double_q_target_and_huber_loss() -> None:

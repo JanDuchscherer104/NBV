@@ -23,7 +23,7 @@ _CONTRACT = QhDataContract(
     reason_code_version="reasons-v1",
     actor_store_version="vin-v1",
 )
-_ACTOR_CONTRACT = QhActorStateContract("lean", "actor-manifest", ())
+_ACTOR_CONTRACT = QhActorStateContract("none", "none", "actor-manifest", ())
 
 
 class _StructuralDataset(Dataset[object]):
@@ -88,7 +88,8 @@ def test_datamodule_rejects_different_semantic_contracts() -> None:
 @pytest.mark.parametrize(
     "actor_contract",
     (
-        replace(_ACTOR_CONTRACT, modality_mode="rich"),
+        replace(_ACTOR_CONTRACT, root_evl_profile="evl_v1"),
+        replace(_ACTOR_CONTRACT, selected_observation_protocol="cf_gt"),
         replace(_ACTOR_CONTRACT, actor_manifest_hash="other-manifest"),
         replace(
             _ACTOR_CONTRACT,

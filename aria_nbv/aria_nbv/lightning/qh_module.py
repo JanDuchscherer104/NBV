@@ -18,6 +18,7 @@ from torch.nn import functional
 from torch.optim import Optimizer
 
 from ..data_handling.qh_data import QhActorTensors, QhBatch
+from ..data_handling.qh_data.views import QhRootEvlProfile, QhSelectedObservationProtocol
 from ..utils import Stage, TargetConfig
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 
@@ -36,6 +37,12 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
 
     target_sync_interval: int = Field(default=100, ge=1)
     """Hard target-copy cadence measured in completed optimizer updates."""
+
+    root_evl_profile: QhRootEvlProfile = "none"
+    """Exact root-EVL carrier the injected scorer accepts."""
+
+    selected_observation_protocol: QhSelectedObservationProtocol = "none"
+    """Exact selected-observation source the injected scorer accepts; privileged CF-GT is opt-in."""
 
     @property
     def target_type(self) -> type["QhLightningModule"]:
@@ -114,7 +121,25 @@ class QhLightningModule(pl.LightningModule):
             ``Tensor["B S N", float]`` candidate values.
         """
 
+        self._validate_actor_profile(actor)
         return self._score(self.online_scorer, actor)
+
+    def _validate_actor_profile(self, actor: QhActorTensors) -> None:
+        """Fail closed when scorer configuration and materialized actor carriers differ."""
+
+        has_evl = actor.static_context is not None
+        expects_evl = self.config.root_evl_profile == "evl_v1"
+        if has_evl != expects_evl:
+            raise ValueError(
+                f"Q_H scorer root_evl_profile={self.config.root_evl_profile!r} does not match actor EVL presence."
+            )
+        has_selected_observation = actor.selected_observation_prefix is not None
+        expects_selected_observation = self.config.selected_observation_protocol == "cf_gt"
+        if has_selected_observation != expects_selected_observation:
+            raise ValueError(
+                "Q_H scorer selected_observation_protocol="
+                f"{self.config.selected_observation_protocol!r} does not match actor selected-observation presence."
+            )
 
     def train(self, mode: bool = True) -> "QhLightningModule":
         """Propagate mode to the online scorer while keeping the target in eval."""

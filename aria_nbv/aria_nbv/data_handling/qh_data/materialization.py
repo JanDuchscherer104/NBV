@@ -25,6 +25,7 @@ from .views import (
     QhChain,
     QhChainKey,
     QhSelectedObservationPrefix,
+    QhSelectedObservationProtocol,
     QhStaticContext,
     QhSupervision,
 )
@@ -38,7 +39,7 @@ def _tensor_chain(
     snippet: VinSnippetView,
     *,
     static_context: QhStaticContext | None = None,
-    require_rich_modalities: bool = False,
+    selected_observation_protocol: QhSelectedObservationProtocol = "none",
     audit: QhAudit | None = None,
 ) -> QhChain:
     """Tensorize one stored chain and construct strictly causal selected-pose history.
@@ -83,10 +84,14 @@ def _tensor_chain(
     root_pose = PoseTW(_from_numpy(stored.root_pose_world, torch.float32))
     target_pose = PoseTW(_from_numpy(stored.target_pose_world_object, torch.float32))
     history_pose_tw = PoseTW(history_pose)
-    selected_observation_prefix = _selected_observation_prefix(stored, history_pose_tw, history_mask)
-    if require_rich_modalities and selected_observation_prefix is None:
+    selected_observation_prefix = (
+        _selected_observation_prefix(stored, history_pose_tw, history_mask)
+        if selected_observation_protocol == "cf_gt"
+        else None
+    )
+    if selected_observation_protocol == "cf_gt" and selected_observation_prefix is None:
         raise ValueError(
-            "Q_H rich training requires aligned selected CF-GT depth; rebuild the rollout store with selected depth enabled."
+            "Q_H cf_gt selected-observation protocol requires aligned rendered depth; rebuild the rollout store with selected depth enabled."
         )
     return QhChain(
         actor=QhActorTensors(

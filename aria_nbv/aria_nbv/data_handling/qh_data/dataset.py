@@ -22,7 +22,7 @@ from ..identifiers import compact_ase_atek_sample_id
 from ..vin_store.format import VinOfflineIndexRecord
 from ..vin_store.store import VinOfflineStoreConfig, VinOfflineStoreReader
 from .materialization import _audit_for, _evl_block_signature, _read_static_context, _tensor_chain
-from .views import QhActorStateContract, QhChain
+from .views import QhActorStateContract, QhChain, QhRootEvlProfile, QhSelectedObservationProtocol
 
 
 class QhDatasetConfig(TargetConfig["QhDataset"]):
@@ -37,8 +37,11 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
     split: Stage | None = None
     """Learning/campaign split admitted by the rollout reader; ``None`` reads all chains."""
 
-    require_rich_modalities: bool = False
-    """Require root EVL evidence and selected CF-GT depth instead of permitting an explicit diagnostic-only legacy read."""
+    root_evl_profile: QhRootEvlProfile = "none"
+    """Root scene-evidence profile; ``evl_v1`` requires the canonical eight-block EVL carrier."""
+
+    selected_observation_protocol: QhSelectedObservationProtocol = "none"
+    """Causal selected-observation source; ``cf_gt`` explicitly enables privileged rendered depth."""
 
     include_audit: bool = False
     """Attach CPU-only chain provenance for debugging; never adds payloads to scorer tensors or device transfer."""
@@ -68,11 +71,12 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
             rollout_reader=QhRolloutReader(
                 self.rollout_store_dirs,
                 campaign_split=self.split,
-                include_selected_depth=self.require_rich_modalities,
+                include_selected_depth=self.selected_observation_protocol == "cf_gt",
             ),
             actor_reader=VinOfflineStoreReader(self.actor),
             split=self.split,
-            require_rich_modalities=self.require_rich_modalities,
+            root_evl_profile=self.root_evl_profile,
+            selected_observation_protocol=self.selected_observation_protocol,
             include_audit=self.include_audit,
         )
 
@@ -96,7 +100,8 @@ class QhDataset(Dataset[QhChain]):
         rollout_reader: QhRolloutReader,
         actor_reader: VinOfflineStoreReader,
         split: Stage | None = None,
-        require_rich_modalities: bool = False,
+        root_evl_profile: QhRootEvlProfile = "none",
+        selected_observation_protocol: QhSelectedObservationProtocol = "none",
         include_audit: bool = False,
     ) -> None:
         """Validate rollout provenance against the configured immutable actor store.
@@ -119,13 +124,21 @@ class QhDataset(Dataset[QhChain]):
                 f"received split={split!r}, reader campaign_split={reader_split!r}."
             )
         self.split = reader_split
-        self.require_rich_modalities = require_rich_modalities
+        reader_protocol: QhSelectedObservationProtocol = "cf_gt" if rollout_reader.include_selected_depth else "none"
+        if selected_observation_protocol != reader_protocol:
+            raise ValueError(
+                "Q_H selected-observation protocol must match rollout-reader loading; "
+                f"received {selected_observation_protocol!r}, reader provides {reader_protocol!r}."
+            )
+        self.root_evl_profile = root_evl_profile
+        self.selected_observation_protocol = selected_observation_protocol
         self.include_audit = include_audit
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
         self._actor_state_contract = QhActorStateContract(
-            modality_mode="rich" if require_rich_modalities else "lean",
+            root_evl_profile=root_evl_profile,
+            selected_observation_protocol=selected_observation_protocol,
             actor_manifest_hash=self._manifest_hash,
-            evl_block_signature=_evl_block_signature(actor_reader) if require_rich_modalities else (),
+            evl_block_signature=_evl_block_signature(actor_reader) if root_evl_profile == "evl_v1" else (),
         )
         self._records = {record.sample_index: record for record in actor_reader.get_split_records(None)}
         self._validate_source_refs()
@@ -151,17 +164,19 @@ class QhDataset(Dataset[QhChain]):
         record = self._record(stored.source_ref)
         snippet = self.actor_reader.read_actor_snippet(record, device="cpu")
         static_context = (
-            _read_static_context(self.actor_reader, record, snippet) if self.require_rich_modalities else None
+            _read_static_context(self.actor_reader, record, snippet) if self.root_evl_profile == "evl_v1" else None
         )
-        if self.require_rich_modalities and (static_context is None or not bool(static_context.evl_presence.all())):
+        if self.root_evl_profile == "evl_v1" and (
+            static_context is None or not bool(static_context.evl_presence.all())
+        ):
             raise ValueError(
-                "Q_H rich training requires every root EVL evidence field; rebuild the VIN offline store with backbone materialization."
+                "Q_H evl_v1 root profile requires every EVL evidence field; rebuild the VIN offline store with backbone materialization."
             )
         return _tensor_chain(
             stored,
             snippet,
             static_context=static_context,
-            require_rich_modalities=self.require_rich_modalities,
+            selected_observation_protocol=self.selected_observation_protocol,
             audit=_audit_for(stored, self.rollout_reader.store_dirs[stored.store_index])
             if self.include_audit
             else None,
