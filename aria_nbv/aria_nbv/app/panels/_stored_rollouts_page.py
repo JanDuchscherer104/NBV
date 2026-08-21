@@ -204,7 +204,7 @@ def render_stored_rollouts_page() -> None:
             continue
         with tab:
             if current:
-                renderer(reader)
+                renderer(reader, stored_session=stored_session)
             else:
                 _render_stale_store_boundary(
                     validation,
@@ -219,6 +219,7 @@ def render_stored_rollouts_page() -> None:
                     store_path=store_path,
                     manifest_payload=manifest_payload,
                     paths=paths,
+                    stored_session=stored_session,
                 )
             else:
                 _render_stale_store_boundary(
@@ -450,8 +451,12 @@ def _format_fraction(value: object) -> str:
     return "n/a" if value is None else f"{float(value):.1%}"
 
 
-def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
+def _render_scientific_evidence(
+    reader: RolloutZarrStoreReader, *, stored_session: session.StoredRolloutSession | None = None
+) -> None:
     st.subheader("Scientific Evidence")
+    stored_session = stored_session or session.open_stored_rollout_session(reader.store_dir)
+    reader = stored_session.reader
     store_path = reader.store_dir.as_posix()
     _render_reconstruction_summary(store_path)
     cohort = session.cached_cohorts(store_path)
@@ -922,8 +927,12 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
             _download_frame("Download branching provenance CSV", "rollout-branching-provenance.csv", tree)
 
 
-def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
+def _render_targets_and_support(
+    reader: RolloutZarrStoreReader, *, stored_session: session.StoredRolloutSession | None = None
+) -> None:
     st.subheader("Targets & Action Support")
+    stored_session = stored_session or session.open_stored_rollout_session(reader.store_dir)
+    reader = stored_session.reader
     store_path = reader.store_dir.as_posix()
     candidate_plot_limit = int(
         st.number_input(
@@ -1742,8 +1751,12 @@ def _render_candidate_geometry_diagnostics(
                 )
 
 
-def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
+def _render_failure_triage(
+    reader: RolloutZarrStoreReader, *, stored_session: session.StoredRolloutSession | None = None
+) -> None:
     st.subheader("Failure Triage")
+    stored_session = stored_session or session.open_stored_rollout_session(reader.store_dir)
+    reader = stored_session.reader
     with st.expander("Advanced thresholds"):
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
         dominant = float(st.slider("Dominant invalidity fraction", min_value=0.0, max_value=1.0, value=0.8))
@@ -2115,8 +2128,11 @@ def _render_inspect_export_rerun(
     store_path: Path,
     manifest_payload: dict[str, Any],
     paths: PathConfig,
+    stored_session: session.StoredRolloutSession | None = None,
 ) -> None:
     st.subheader("Inspect, Export & Rerun")
+    stored_session = stored_session or session.open_stored_rollout_session(store_path)
+    reader = stored_session.reader
     store_path_key = reader.store_dir.as_posix()
     store_identity = _canonical_query_store_identity(store_path)
     _activate_query_store(st.session_state, store_identity)

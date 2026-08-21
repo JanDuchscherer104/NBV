@@ -457,13 +457,6 @@ class StoredRolloutSession:
         self.manifest_payload = manifest_payload
         self.inventory_row = inventory_row
 
-    def projection(self, projection: str, **kwargs: Any) -> Any:
-        """Read a reader-bound projection using this handle's captured identity."""
-
-        return _cached_projection_cached(
-            self.canonical_path.as_posix(), projection, store_identity=self.store_identity, **kwargs
-        )
-
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
         return _cached_candidate_population_cached(self.canonical_path.as_posix(), self.store_identity, sample_size)
 

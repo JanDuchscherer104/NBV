@@ -514,6 +514,43 @@ def test_stored_rollout_session_candidate_population_uses_captured_identity(
     assert calls == [("/selected.zarr", "first", 17)]
 
 
+def test_stored_rollout_session_failure_projection_stays_bound_to_old_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failure evidence uses the opened identity even when the path is later replaced."""
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        session,
+        "_cached_failures_cached",
+        lambda path, _min, _fraction, _distance, *, store_identity: calls.append(store_identity) or [],
+    )
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+
+    assert handle.failures(1, 0.5, 1.0) == []
+    assert calls == ["first"]
+
+
+def test_stored_rollout_session_next_open_observes_replacement(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A later open captures the replacement identity rather than the old handle key."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    identities = iter(("first", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    monkeypatch.setattr(
+        session,
+        "_cached_store_bundle_cached",
+        lambda path, *, store_identity: (store_identity, object(), {}),
+    )
+
+    first = session.open_stored_rollout_session(store)
+    second = session.open_stored_rollout_session(store)
+
+    assert first.store_identity == "first"
+    assert second.store_identity == "second"
+
+
 def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
     """The session source keeps the exact cache kinds and bounds from the migration matrix."""
 
