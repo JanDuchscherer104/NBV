@@ -27,6 +27,8 @@ class _StreamlitFrame:
     def __init__(self) -> None:
         self.pages: dict[str, list[_Page]] | None = None
         self.position: str | None = None
+        self.session_state: dict[str, object] = {}
+        self.segmented_calls: list[dict[str, object]] = []
 
     def set_page_config(self, **_: object) -> None:
         return None
@@ -38,6 +40,10 @@ class _StreamlitFrame:
         self.pages = pages
         self.position = position
         return _Navigation()
+
+    def segmented_control(self, label: str, **kwargs: object) -> str:
+        self.segmented_calls.append({"label": label, **kwargs})
+        return str(kwargs["default"])
 
 
 def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) -> None:
@@ -68,6 +74,15 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
     assert frame.pages[""][0].default is True
     after = {name for name in sys.modules if name.startswith("aria_nbv.app.panels.")}
     assert after == before
+    assert frame.segmented_calls == [
+        {
+            "label": "Scientific labels",
+            "options": ("Symbols", "Text", "Both"),
+            "default": "Both",
+            "key": "nbv_scientific_label_display",
+            "help": "Choose canonical symbols, readable descriptions, or both where a surface supports mathematics.",
+        }
+    ]
 
 
 def test_campaign_generation_callback_imports_and_calls_only_its_renderer(monkeypatch) -> None:

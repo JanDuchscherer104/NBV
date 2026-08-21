@@ -18,7 +18,7 @@ from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import plot_control_key as _plot_control_key
 from .shared import render_plot as _render_plot
-from .theory import TheoryReferences
+from ...scientific_labels import TheoryReferences
 
 _EVIDENCE_REPORTING_REFERENCE = (
     "ARRIVE reporting guidance for individual data and summaries",

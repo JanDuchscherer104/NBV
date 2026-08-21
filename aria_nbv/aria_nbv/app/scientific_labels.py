@@ -1,4 +1,9 @@
-"""Resolve stored-rollout theory references from canonical documentation."""
+"""Canonical scientific labels and theory resolution for the Streamlit app.
+
+The documentation registries are the source of scientific notation.  This
+module provides the small typed boundary used by both plot-capable and plain
+text UI surfaces; it deliberately does not parse Typst at runtime.
+"""
 
 from __future__ import annotations
 
@@ -10,9 +15,11 @@ from typing import Any, Literal
 
 import yaml
 
-from ....configs import PathConfig
+from ..configs import PathConfig
 
 _GITHUB_SOURCE_ROOT = "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main"
+LabelDisplayMode = Literal["Symbols", "Text", "Both"]
+LABEL_DISPLAY_MODES: tuple[LabelDisplayMode, ...] = ("Symbols", "Text", "Both")
 
 
 class TheoryResolutionError(ValueError):
@@ -67,6 +74,12 @@ class ResolvedTheory:
     terms: tuple[ResolvedTerm, ...]
 
 
+def format_identifier(identifier: str) -> str:
+    """Format an identifier for a readable non-mathematical UI surface."""
+
+    return identifier.replace("_", " ").title()
+
+
 def resolve_theory(references: TheoryReferences, *, root: Path | None = None) -> ResolvedTheory:
     """Resolve stable theory identifiers without parsing Typst at runtime."""
 
@@ -97,6 +110,55 @@ def validate_theory_registry(references: TheoryReferences, *, root: Path | None 
     """Fail closed when any requested canonical theory identifier is unavailable."""
 
     resolve_theory(references, root=root)
+
+
+def symbol_label(
+    identifier: str,
+    *,
+    mode: LabelDisplayMode = "Both",
+    math_capable: bool = True,
+    root: Path | None = None,
+) -> str:
+    """Return one registry-backed symbol label for a plot or text surface.
+
+    Plain-text surfaces intentionally receive the readable description even
+    when ``mode`` requests symbols.  This avoids leaking LaTeX source into
+    selectbox, metric, and dataframe labels.
+    """
+
+    readable = format_identifier(identifier)
+    try:
+        resolved = resolve_theory(TheoryReferences(symbol_ids=(identifier,)), root=root).symbols[0]
+    except TheoryResolutionError:
+        return readable
+    description = resolved.description or readable
+    if not math_capable or mode == "Text":
+        return description
+    if mode == "Symbols":
+        return f"${resolved.tex}$"
+    return f"${resolved.tex}$ — {description}"
+
+
+def equation_label(
+    identifier: str,
+    *,
+    mode: LabelDisplayMode = "Both",
+    math_capable: bool = True,
+    root: Path | None = None,
+) -> str:
+    """Return a registry-backed equation label for a UI surface."""
+
+    readable = format_identifier(identifier)
+    try:
+        resolved = resolve_theory(TheoryReferences(equation_ids=(identifier,)), root=root).equations[0]
+    except TheoryResolutionError:
+        return readable
+    description = resolved.description or readable
+    if not math_capable or mode == "Text":
+        return description
+    if mode == "Symbols":
+        return f"${resolved.tex}$"
+    return f"${resolved.tex}$ — {description}"
 
 
 def _file_identity(path: Path) -> tuple[int, int, str]:
@@ -209,3 +271,19 @@ def _notation_source_url(
         raise TheoryResolutionError(f"canonical theory {kind} {identifier!r} has no Typst module")
     directory = "equations" if kind == "equation" else "symbols"
     return f"{_GITHUB_SOURCE_ROOT}/docs/typst/shared/{directory}/{module}.typ"
+
+
+__all__ = [
+    "LABEL_DISPLAY_MODES",
+    "LabelDisplayMode",
+    "ResolvedNotation",
+    "ResolvedTerm",
+    "ResolvedTheory",
+    "TheoryReferences",
+    "TheoryResolutionError",
+    "equation_label",
+    "format_identifier",
+    "resolve_theory",
+    "symbol_label",
+    "validate_theory_registry",
+]

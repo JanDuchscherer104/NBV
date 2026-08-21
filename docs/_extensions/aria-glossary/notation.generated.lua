@@ -195,13 +195,13 @@ return {
       thesis_list = true,
     },
     ["oracle.dist_mp"] = {
-      tex = "D_{M\\\\to P}",
+      tex = "D_{M\\to P}",
       typst = "#symb.oracle.dist_mp",
       description = "Mesh-to-point directional reconstruction error component.",
       thesis_list = true,
     },
     ["oracle.dist_pm"] = {
-      tex = "D_{P\\\\to M}",
+      tex = "D_{P\\to M}",
       typst = "#symb.oracle.dist_pm",
       description = "Point-to-mesh directional reconstruction error component.",
       thesis_list = true,
@@ -297,7 +297,7 @@ return {
       thesis_list = true,
     },
     ["rl.observed_cumulative_root_gain"] = {
-      tex = "G_{0:s,\\\\mathrm{root}}^e",
+      tex = "G_{0:s,\\mathrm{root}}^e",
       typst = "#symb.rl.observed_cumulative_root_gain",
       description = "Observed cumulative target-root gain through factual rollout step s.",
       thesis_list = true,
