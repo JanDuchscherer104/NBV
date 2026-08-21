@@ -20,10 +20,64 @@ from ..configs import PathConfig
 _GITHUB_SOURCE_ROOT = "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main"
 LabelDisplayMode = Literal["Symbols", "Text", "Both"]
 LABEL_DISPLAY_MODES: tuple[LabelDisplayMode, ...] = ("Symbols", "Text", "Both")
+LabelSurface = Literal["markdown", "plain"]
 
 
 class TheoryResolutionError(ValueError):
     """Report unavailable or inconsistent canonical theory metadata."""
+
+
+@dataclass(frozen=True, slots=True)
+class ScientificLabel:
+    """Presentation metadata for one factual scientific field.
+
+    ``identifier`` remains the source/read-model key. ``symbol_key`` is either
+    an exact ``docs/notation.yml`` symbol key or ``None`` when the quantity has
+    no canonical standalone symbol.
+    """
+
+    identifier: str
+    text: str | None = None
+    symbol_key: str | None = None
+    units: str | None = None
+
+
+SCIENTIFIC_LABELS: dict[str, ScientificLabel] = {
+    "rri": ScientificLabel("rri", "Reconstruction improvement", "oracle.rri", "fraction"),
+    "oracle_rri": ScientificLabel("oracle_rri", "Oracle RRI", "oracle.rri", "fraction"),
+    "target_rri": ScientificLabel("target_rri", "Target RRI", "entity.rri_e", "fraction"),
+    "selected_target_rri": ScientificLabel("selected_target_rri", "Selected target RRI", "entity.rri_e", "fraction"),
+    "cumulative_target_rri": ScientificLabel(
+        "cumulative_target_rri", "Cumulative target RRI", "entity.rri_e", "fraction"
+    ),
+    "marginal_target_rri": ScientificLabel("marginal_target_rri", "Marginal target RRI", "entity.rri_e", "fraction"),
+    "selected_target_root_gain": ScientificLabel(
+        "selected_target_root_gain", "Selected one-step target root gain", "entity.target_reward", "fraction"
+    ),
+    "target_root_gain": ScientificLabel(
+        "target_root_gain", "One-step target root gain", "entity.target_reward", "fraction"
+    ),
+    "cumulative_target_root_gain": ScientificLabel(
+        "cumulative_target_root_gain",
+        "Cumulative target root gain",
+        "rl.observed_cumulative_root_gain",
+        "fraction",
+    ),
+    "endpoint_gain": ScientificLabel("endpoint_gain", "Endpoint gain", "entity.endpoint_gain", "fraction"),
+    "log_gain": ScientificLabel("log_gain", "Log endpoint gain", "entity.log_gain"),
+    "q_h": ScientificLabel("q_h", "Finite-horizon action value", "rl.qh"),
+    "qh": ScientificLabel("qh", "Finite-horizon action value", "rl.qh"),
+    "return_h": ScientificLabel("return_h", "Finite-horizon return", "entity.return_h"),
+    "discount_gamma": ScientificLabel("discount_gamma", "Discount factor", "rl.gamma"),
+    "horizon": ScientificLabel("horizon", "Rollout horizon", "rl.H", "steps"),
+    "candidate_table": ScientificLabel("candidate_table", "Candidate set", "rl.candidate_table"),
+    "validity_mask": ScientificLabel("validity_mask", "Candidate validity mask", "rl.validity_mask"),
+    "target_error": ScientificLabel("target_error", "Target error", "entity.target_error"),
+    "target_error_next": ScientificLabel("target_error_next", "Next target error", "entity.target_error_next"),
+    "target_error_0": ScientificLabel("target_error_0", "Root target error", "entity.target_error_0"),
+    "point_to_mesh_error": ScientificLabel("point_to_mesh_error", "Point-to-mesh error", "oracle.dist_pm"),
+    "mesh_to_point_error": ScientificLabel("mesh_to_point_error", "Mesh-to-point error", "oracle.dist_mp"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +132,43 @@ def format_identifier(identifier: str) -> str:
     """Format an identifier for a readable non-mathematical UI surface."""
 
     return identifier.replace("_", " ").title()
+
+
+def scientific_label(identifier: str) -> ScientificLabel:
+    """Return the curated label for a factual field or a text-only fallback."""
+
+    return SCIENTIFIC_LABELS.get(identifier, ScientificLabel(identifier=identifier))
+
+
+def format_scientific_label(
+    label: ScientificLabel | str,
+    *,
+    mode: LabelDisplayMode = "Both",
+    surface: LabelSurface = "plain",
+    root: Path | None = None,
+) -> str:
+    """Format one scientific label without changing its factual identifier.
+
+    Markdown-capable surfaces may render canonical TeX. Plain surfaces always
+    receive readable prose because Plotly selectors, dataframe cells, and
+    several Streamlit widgets display TeX delimiters literally.
+    """
+
+    configured = scientific_label(label) if isinstance(label, str) else label
+    readable = configured.text or format_identifier(configured.identifier)
+    units = f" ({configured.units})" if configured.units else ""
+    if configured.symbol_key is None:
+        return f"{readable}{units}"
+    try:
+        resolved = resolve_theory(TheoryReferences(symbol_ids=(configured.symbol_key,)), root=root).symbols[0]
+    except TheoryResolutionError:
+        return f"{readable}{units}"
+    if surface == "plain" or mode == "Text":
+        return f"{readable}{units}"
+    symbol = f"${resolved.tex}$"
+    if mode == "Symbols":
+        return f"{symbol}{units}"
+    return f"{symbol} — {readable}{units}"
 
 
 def resolve_theory(references: TheoryReferences, *, root: Path | None = None) -> ResolvedTheory:
@@ -280,15 +371,20 @@ def _notation_source_url(
 
 __all__ = [
     "LABEL_DISPLAY_MODES",
+    "SCIENTIFIC_LABELS",
     "LabelDisplayMode",
+    "LabelSurface",
     "ResolvedNotation",
     "ResolvedTerm",
     "ResolvedTheory",
+    "ScientificLabel",
     "TheoryReferences",
     "TheoryResolutionError",
     "equation_label",
+    "format_scientific_label",
     "format_identifier",
     "resolve_theory",
+    "scientific_label",
     "symbol_label",
     "validate_theory_registry",
 ]
