@@ -1248,6 +1248,16 @@ def _render_candidate_geometry_diagnostics(
                         "candidate pose_world_cam",
                         "rollout root_pose_world",
                     ),
+                    theory=TheoryReferences(
+                        equation_ids=("spatial.candidate_root_target_normalization",),
+                        symbol_ids=(
+                            "oracle.candidate_qti",
+                            "oracle.center",
+                            "entity.center",
+                            "spatial.ref_pose",
+                            "rl.target",
+                        ),
+                    ),
                     external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
                 ),
             )
@@ -1342,6 +1352,16 @@ def _render_candidate_geometry_diagnostics(
                             "inspection.root_relative_candidate_rows",
                             "candidate pose_world_cam",
                             "rollout root_pose_world",
+                        ),
+                        theory=TheoryReferences(
+                            equation_ids=("spatial.candidate_root_target_normalization",),
+                            symbol_ids=(
+                                "oracle.candidate_qti",
+                                "oracle.center",
+                                "entity.center",
+                                "spatial.ref_pose",
+                                "rl.target",
+                            ),
                         ),
                         external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
                     ),

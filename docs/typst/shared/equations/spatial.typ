@@ -49,6 +49,25 @@
     =
     bold(R)_(r_t)^top bold(R)_(t,i)
   $,
+  candidate_root_target_normalization: $
+    d_(t,e)^"root-target"
+    =
+    norm(#symb.entity.center - #(symb.oracle.center)_(r_t)^w)_2,
+    quad
+    tilde(bold(c))_(t,i)^w
+    =
+    ((#(symb.oracle.center)_(t,i)^w - #(symb.oracle.center)_(r_t)^w))
+    /
+    d_(t,e)^"root-target",
+    quad
+    tilde(bold(p))_e^w
+    =
+    ((#symb.entity.center - #(symb.oracle.center)_(r_t)^w))
+    /
+    d_(t,e)^"root-target",
+    quad
+    norm(tilde(bold(p))_e^w)_2 = 1
+  $,
   candidate_pose_features: $
     #symb.spatial.candidate_pose_feat (q_(t,i); r_t)
     =

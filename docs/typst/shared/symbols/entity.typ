@@ -19,6 +19,8 @@
   // Actor-visible target/entity descriptor. The encoder map is not named phi;
   // the descriptor vector is phi_e to match the thesis entity-representation convention.
   target_desc: $bold(phi)_e$,
+  // World-space center of the selected target entity.
+  center: $bold(p)_e^w$,
   // Target-specific reconstruction error at rollout step t.
   target_error: $Delta_t^e$,
   // Point-to-mesh component of the target reconstruction error at step t.

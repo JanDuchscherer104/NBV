@@ -123,6 +123,29 @@ def test_cumulative_plot_theory_renders_prefix_equation_and_symbol_context(
     assert "Small positive numerical stabilizer" in joined
 
 
+def test_candidate_geometry_explanations_use_shared_target_normalization_equation() -> None:
+    """The Streamlit geometry popovers must not carry a divergent inline formula."""
+
+    resolved = theory.resolve_theory(
+        theory.TheoryReferences(
+            equation_ids=("spatial.candidate_root_target_normalization",),
+            symbol_ids=("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose", "rl.target"),
+        ),
+        root=PathConfig().root,
+    )
+
+    assert resolved.equations[0].tex.startswith(r"d_{t,e}^{\mathrm{root-target}}")
+    assert r"\tilde{\boldsymbol{c}}_{t,i}^w" in resolved.equations[0].tex
+    assert r"\|\tilde{\boldsymbol{p}}_e^w\|_2=1" in resolved.equations[0].tex
+    assert [symbol.identifier for symbol in resolved.symbols] == [
+        "oracle.candidate_qti",
+        "oracle.center",
+        "entity.center",
+        "spatial.ref_pose",
+        "rl.target",
+    ]
+
+
 @pytest.mark.parametrize("malformation", ["missing", "invalid-yaml", "unknown-key"])
 def test_theory_registry_fails_closed_with_actionable_error(tmp_path: Path, malformation: str) -> None:
     references = theory.TheoryReferences(equation_ids=("demo.identity",))
