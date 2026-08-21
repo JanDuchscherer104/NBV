@@ -13,11 +13,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS
+from ...scientific_labels import TheoryReferences
 from .session import _cached_projection, _cached_store_bundle
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
-from ...scientific_labels import TheoryReferences
 
 _CORRELATION_REFERENCE = (
     "SciPy Pearson correlation documentation",
