@@ -1025,8 +1025,10 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
         traj_sorted = traj_df.sort_values("step")
         color = _ROLLOUT_PLOT_COLORS[int(traj_idx) % len(_ROLLOUT_PLOT_COLORS)]
         selected_metric = traj_sorted["selected_target_rri"]
-        if "selected_target_root_gain" in traj_sorted:
+        selected_identifier = "selected_target_rri"
+        if "selected_target_root_gain" in traj_sorted and traj_sorted["selected_target_root_gain"].notna().any():
             selected_metric = traj_sorted["selected_target_root_gain"].fillna(selected_metric)
+            selected_identifier = "selected_target_root_gain"
         fig.add_trace(
             go.Scatter(
                 x=traj_sorted["step"],
@@ -1056,7 +1058,7 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
                 mode="lines+markers",
                 line={"color": color, "width": 3},
                 marker={"color": color, "size": 7},
-                name=f"traj {traj_idx} selected {_label('selected_target_root_gain')}",
+                name=f"traj {traj_idx} selected {_label(selected_identifier)}",
             )
         )
     fig.update_layout(
