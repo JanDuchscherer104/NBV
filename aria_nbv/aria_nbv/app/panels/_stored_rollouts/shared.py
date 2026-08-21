@@ -14,8 +14,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from ..common import _plot_with_y_axis_control
 from ...scientific_labels import ResolvedNotation, ResolvedTerm, TheoryReferences, TheoryResolutionError, resolve_theory
+from ..common import _plot_with_y_axis_control
 
 _ROLE_COLORS = {
     "actor-visible": "#1f77b4",

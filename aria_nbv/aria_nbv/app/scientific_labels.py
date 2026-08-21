@@ -266,6 +266,11 @@ def _notation_source_url(
     expected_prefix = "#eqs." if kind == "equation" else "#symb."
     if not typst.startswith(expected_prefix):
         raise TheoryResolutionError(f"canonical theory {kind} {identifier!r} has an unsupported Typst reference")
+    expected_reference = f"{expected_prefix}{identifier}"
+    if typst != expected_reference:
+        raise TheoryResolutionError(
+            f"canonical theory {kind} {identifier!r} must use the exact Typst key {expected_reference!r}"
+        )
     module = typst.removeprefix(expected_prefix).split(".", maxsplit=1)[0]
     if not module:
         raise TheoryResolutionError(f"canonical theory {kind} {identifier!r} has no Typst module")
