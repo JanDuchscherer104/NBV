@@ -74,24 +74,6 @@ return {
       description = "Actor-visible target/entity descriptor used to condition target-specific value prediction.",
       thesis_list = true,
     },
-    ["entity.target_error"] = {
-      tex = "\\Delta_t^e",
-      typst = "#symb.entity.target_error",
-      description = "Target-specific reconstruction error at rollout step t.",
-      thesis_list = true,
-    },
-    ["entity.target_error_0"] = {
-      tex = "\\Delta_0^e",
-      typst = "#symb.entity.target_error_0",
-      description = "Target-specific reconstruction error at the rollout start.",
-      thesis_list = true,
-    },
-    ["entity.target_error_next"] = {
-      tex = "\\Delta_{t+1}^e",
-      typst = "#symb.entity.target_error_next",
-      description = "Target-specific reconstruction error after the next observation.",
-      thesis_list = true,
-    },
     ["model.candidate_row"] = {
       tex = "\\boldsymbol{x}_{t,i}",
       typst = "#symb.model.candidate_row",
@@ -252,12 +234,6 @@ return {
       tex = "\\mathcal{Q}_t",
       typst = "#symb.rl.candidate_table",
       description = "Finite candidate-view table at rollout step t.",
-      thesis_list = true,
-    },
-    ["rl.epsilon"] = {
-      tex = "\\varepsilon",
-      typst = "#symb.rl.epsilon",
-      description = "Small positive numerical stabilizer used in denominators and logarithms.",
       thesis_list = true,
     },
     ["rl.gamma"] = {
@@ -664,36 +640,6 @@ return {
       description = "",
       thesis_list = false,
     },
-    ["metrics.categorical_entropy"] = {
-      tex = "H(\\boldsymbol{p})=-\\sum_{i:m_i=1}p_i\\log p_i",
-      typst = "#eqs.metrics.categorical_entropy",
-      description = "",
-      thesis_list = false,
-    },
-    ["metrics.pearson"] = {
-      tex = "r_{x,y}=\\frac{\\sum_i(x_i-\\bar{x})(y_i-\\bar{y})}{\\sqrt{\\sum_i(x_i-\\bar{x})^2\\sum_i(y_i-\\bar{y})^2}}",
-      typst = "#eqs.metrics.pearson",
-      description = "",
-      thesis_list = false,
-    },
-    ["metrics.q_train_mask"] = {
-      tex = "m_{t,i}^{\\mathrm{train}}=m_{t,i}^{\\mathrm{actor}}m_{t,i}^{\\mathrm{oracle}}",
-      typst = "#eqs.metrics.q_train_mask",
-      description = "",
-      thesis_list = false,
-    },
-    ["metrics.selected_oracle_regret"] = {
-      tex = "\\mathrm{Regret}_t=\\max_{i:m_{t,i}=1}g_{t,i}-g_{t,a_t}",
-      typst = "#eqs.metrics.selected_oracle_regret",
-      description = "",
-      thesis_list = false,
-    },
-    ["metrics.selection_rate_given_available"] = {
-      tex = "\\mathrm{SelRate}_f=N_{\\mathrm{selected},f}/N_{\\mathrm{actor-valid},f}",
-      typst = "#eqs.metrics.selection_rate_given_available",
-      description = "",
-      thesis_list = false,
-    },
     ["metrics.spearman"] = {
       tex = "\\rho=\\operatorname{corr}(\\operatorname{rank}(\\hat{r}_i),\\operatorname{rank}(r_i))",
       typst = "#eqs.metrics.spearman",
@@ -787,12 +733,6 @@ return {
     ["rl.nbv_process_tuple"] = {
       tex = "\\mathcal{M}_{\\mathrm{NBV}}=(\\mathcal{S}^{\\mathrm{hist}},\\mathcal{S}^{\\mathrm{cf0}},\\mathcal{S}^{\\mathrm{oracle}},\\{\\mathcal{A}_t\\},T,r_t^e,\\gamma,H)",
       typst = "#eqs.rl.nbv_process_tuple",
-      description = "",
-      thesis_list = false,
-    },
-    ["rl.observed_cumulative_root_gain"] = {
-      tex = "G_{0:s,\\mathrm{root}}^e=\\sum_{k=0}^{s-1}r_{k,\\mathrm{root}}^e",
-      typst = "#eqs.rl.observed_cumulative_root_gain",
       description = "",
       thesis_list = false,
     },
@@ -893,7 +833,7 @@ return {
       thesis_list = false,
     },
     ["rl.target_rri_reward"] = {
-      tex = "r_t^e=(\\Delta_t^e-\\Delta_{t+1}^e)/(\\Delta_0^e+\\varepsilon)",
+      tex = "r_t^e=\\mathrm{RRI}_e(q_t\\mid \\mathcal{P}_t,\\mathcal{M}_e^{\\mathrm{GT}})",
       typst = "#eqs.rl.target_rri_reward",
       description = "",
       thesis_list = false,

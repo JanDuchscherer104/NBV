@@ -322,6 +322,12 @@ def _validate_notation_metadata(
 ) -> None:
     for group in ("symbols", "equations"):
         for key, entry in notation[group].items():
+            expected_typst = f"#{'symb' if group == 'symbols' else 'eqs'}.{key}"
+            if entry.get("typst") != expected_typst:
+                raise GlossaryError(
+                    f"docs/notation.yml: {group}.{key} must use typst "
+                    f"{expected_typst!r}, got {entry.get('typst')!r}"
+                )
             if entry.get("thesis_list") and not entry.get("description"):
                 raise GlossaryError(
                     f"canonical {group} metadata: {key} has thesis_list: true "
