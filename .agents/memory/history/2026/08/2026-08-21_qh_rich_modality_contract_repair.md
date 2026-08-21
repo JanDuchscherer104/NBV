@@ -29,6 +29,10 @@ the scorer-visible actor state without changing persisted schemas or model code.
   fail before DataLoader construction.
 - Preserved recorded renderer provenance in audit views without reading depth
   payloads, and prevented collation from padding incompatible spatial geometry.
+- Preserved SE(3) semantics at the public Q_H view boundary with ``PoseTW`` for
+  root, target, candidate, history, selected-camera, and voxel-frame poses;
+  collation and transfer unwrap only at tensor operations and reconstruct the
+  typed pose container before returning public views.
 
 ## Verification
 

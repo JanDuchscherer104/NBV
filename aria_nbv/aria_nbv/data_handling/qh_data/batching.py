@@ -179,13 +179,17 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
                 t_world_rig=PoseTW(_pad([value.t_world_rig.tensor() for value in snippets], 0)),
                 t_world_snippet=PoseTW(_pad([value.t_world_snippet.tensor() for value in snippets], 0)),
             ),
-            root_pose_world=torch.stack([value.root_pose_world for value in actors]),
-            target_pose_relative_root=torch.stack([value.target_pose_relative_root for value in actors]),
+            root_pose_world=PoseTW(torch.stack([value.root_pose_world.tensor() for value in actors])),
+            target_pose_relative_root=PoseTW(
+                torch.stack([value.target_pose_relative_root.tensor() for value in actors])
+            ),
             target_extents=torch.stack([value.target_extents for value in actors]),
-            candidate_pose_relative_root=_pad([value.candidate_pose_relative_root for value in actors], 0),
+            candidate_pose_relative_root=PoseTW(
+                _pad([value.candidate_pose_relative_root.tensor() for value in actors], 0)
+            ),
             candidate_mask=_pad([value.candidate_mask for value in actors], False),
             action_mask=_pad([value.action_mask for value in actors], False),
-            history_pose_relative_root=_pad([value.history_pose_relative_root for value in actors], 0),
+            history_pose_relative_root=PoseTW(_pad([value.history_pose_relative_root.tensor() for value in actors], 0)),
             history_mask=_pad([value.history_mask for value in actors], False),
             horizon_remaining=_pad([value.horizon_remaining for value in actors], 0),
             step_mask=_pad([value.step_mask for value in actors], False),
@@ -231,7 +235,7 @@ def _collate_static_context(actors: list[QhActorTensors], vin_snippet: VinSnippe
 
     return QhStaticContext(
         vin_snippet=vin_snippet,
-        t_world_voxel=collate("t_world_voxel"),
+        t_world_voxel=_collate_optional_pose([context.t_world_voxel for context in values], name="t_world_voxel"),
         voxel_extent=collate("voxel_extent"),
         occ_pr=collate("occ_pr"),
         occ_input=collate("occ_input"),
@@ -263,7 +267,7 @@ def _collate_selected_prefix(actors: list[QhActorTensors]) -> QhSelectedObservat
         focal_px=_pad([value.focal_px for value in values], 0),
         principal_point_px=_pad([value.principal_point_px for value in values], 0),
         image_size_hw=_pad([value.image_size_hw for value in values], 0),
-        camera_pose_relative_root=_pad([value.camera_pose_relative_root for value in values], 0),
+        camera_pose_relative_root=PoseTW(_pad([value.camera_pose_relative_root.tensor() for value in values], 0)),
         prefix_mask=_pad([value.prefix_mask for value in values], False),
     )
 
@@ -350,13 +354,13 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
                 t_world_rig=PoseTW(transform(snippet.t_world_rig.tensor())),
                 t_world_snippet=PoseTW(transform(snippet.t_world_snippet.tensor())),
             ),
-            root_pose_world=transform(actor.root_pose_world),
-            target_pose_relative_root=transform(actor.target_pose_relative_root),
+            root_pose_world=PoseTW(transform(actor.root_pose_world.tensor())),
+            target_pose_relative_root=PoseTW(transform(actor.target_pose_relative_root.tensor())),
             target_extents=transform(actor.target_extents),
-            candidate_pose_relative_root=transform(actor.candidate_pose_relative_root),
+            candidate_pose_relative_root=PoseTW(transform(actor.candidate_pose_relative_root.tensor())),
             candidate_mask=transform(actor.candidate_mask),
             action_mask=transform(actor.action_mask),
-            history_pose_relative_root=transform(actor.history_pose_relative_root),
+            history_pose_relative_root=PoseTW(transform(actor.history_pose_relative_root.tensor())),
             history_mask=transform(actor.history_mask),
             horizon_remaining=transform(actor.horizon_remaining),
             step_mask=transform(actor.step_mask),
@@ -385,7 +389,7 @@ def _transform_static_context(
         return None
     return QhStaticContext(
         vin_snippet=vin_snippet,
-        t_world_voxel=_transform_optional(context.t_world_voxel, transform),
+        t_world_voxel=_transform_optional_pose(context.t_world_voxel, transform),
         voxel_extent=_transform_optional(context.voxel_extent, transform),
         occ_pr=_transform_optional(context.occ_pr, transform),
         occ_input=_transform_optional(context.occ_input, transform),
@@ -411,7 +415,7 @@ def _transform_selected_prefix(
         focal_px=transform(prefix.focal_px),
         principal_point_px=transform(prefix.principal_point_px),
         image_size_hw=transform(prefix.image_size_hw),
-        camera_pose_relative_root=transform(prefix.camera_pose_relative_root),
+        camera_pose_relative_root=PoseTW(transform(prefix.camera_pose_relative_root.tensor())),
         prefix_mask=transform(prefix.prefix_mask),
         source_protocol=prefix.source_protocol,
     )
@@ -421,6 +425,22 @@ def _transform_optional(value: Tensor | None, transform: Callable[[Tensor], Tens
     """Transform one present tensor without manufacturing absent modality data."""
 
     return None if value is None else transform(value)
+
+
+def _collate_optional_pose(values: list[PoseTW | None], *, name: str) -> PoseTW | None:
+    """Stack one optional pose field without erasing its frame-aware container."""
+
+    if not any(value is not None for value in values):
+        return None
+    if any(value is None for value in values):
+        raise ValueError(f"Q_H batches require one shared pose availability pattern for {name!r}.")
+    return PoseTW(torch.stack([value.tensor() for value in values if value is not None]))
+
+
+def _transform_optional_pose(value: PoseTW | None, transform: Callable[[Tensor], Tensor]) -> PoseTW | None:
+    """Transform one present pose while retaining its frame-aware container."""
+
+    return None if value is None else PoseTW(transform(value.tensor()))
 
 
 __all__ = ["QhBatch", "collate_qh_chains"]

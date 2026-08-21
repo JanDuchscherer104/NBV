@@ -24,11 +24,14 @@ construction.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from torch import Tensor
 
 from ..vin_store.views import VinSnippetView
+
+if TYPE_CHECKING:
+    from efm3d.aria.pose import PoseTW
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,8 +61,8 @@ class QhStaticContext:
     vin_snippet: VinSnippetView
     """``VinSnippetView`` with ``points_world`` ``Tensor["P 3+C_p", float32]``, ``lengths`` ``Tensor["1", int64]``, and trajectory ``PoseTW["F 12"]``."""
 
-    t_world_voxel: Tensor | None
-    """``Tensor["12", float32]``: world-from-voxel pose for root EVL evidence."""
+    t_world_voxel: PoseTW | None
+    """``PoseTW["12"]``: world-from-voxel pose for root EVL evidence; translation is metres."""
 
     voxel_extent: Tensor | None
     """``Tensor["6", float32]``: metric voxel-frame extent in metres."""
@@ -111,8 +114,8 @@ class QhSelectedObservationPrefix:
     image_size_hw: Tensor
     """``Tensor["S S 2", int64]``: raster size ``[H_d,W_d]``."""
 
-    camera_pose_relative_root: Tensor
-    """``Tensor["S S 12", float32]``: root-rig-from-selected-camera poses; entry ``[s,j]`` belongs to selected action ``j``."""
+    camera_pose_relative_root: PoseTW
+    """``PoseTW["S S 12"]``: root-rig-from-selected-camera poses; entry ``[s,j]`` belongs to selected action ``j``."""
 
     prefix_mask: Tensor
     """``Tensor["S S", bool]``: causal selected-observation support, true exactly for realized ``j<s`` pairs."""
@@ -154,17 +157,17 @@ class QhActorTensors:
     vin_snippet: VinSnippetView
     """``VinSnippetView`` with ``points_world`` ``Tensor["P 3+C_p", float32]``; see :attr:`QhStaticContext.vin_snippet` for complete root fields."""
 
-    root_pose_world: Tensor
-    """``Tensor["12", float32]``: world-from-root-rig pose in ``PoseTW`` storage layout."""
+    root_pose_world: PoseTW
+    """``PoseTW["12"]``: world-from-root-rig pose; translation is metres."""
 
-    target_pose_relative_root: Tensor
-    """``Tensor["12", float32]``: root-rig-from-target-object pose in ``PoseTW`` storage layout."""
+    target_pose_relative_root: PoseTW
+    """``PoseTW["12"]``: root-rig-from-target-object pose; translation is metres."""
 
     target_extents: Tensor
     """``Tensor["3", float32]``: target object-frame OBB side lengths ``[x,y,z]`` in metres."""
 
-    candidate_pose_relative_root: Tensor
-    """``Tensor["S N 12", float32]``: root-rig-from-candidate-rig poses in stored order. ``N`` is per-state width, never a planning-tree branch axis."""
+    candidate_pose_relative_root: PoseTW
+    """``PoseTW["S N 12"]``: root-rig-from-candidate-rig poses in stored order. ``N`` is per-state width, never a planning-tree branch axis."""
 
     candidate_mask: Tensor
     """``Tensor["S N", bool]``: materialization support; false means stored-row padding."""
@@ -172,8 +175,8 @@ class QhActorTensors:
     action_mask: Tensor
     """``Tensor["S N", bool]``: actor-valid candidate support, a subset of ``candidate_mask``."""
 
-    history_pose_relative_root: Tensor
-    """``Tensor["S S 12", float32]``: factual selected-pose prefix. At query state ``s``, history index ``j`` stores selected pose ``j`` only when ``j<s``."""
+    history_pose_relative_root: PoseTW
+    """``PoseTW["S S 12"]``: factual selected-pose prefix. At query state ``s``, history index ``j`` stores selected pose ``j`` only when ``j<s``."""
 
     history_mask: Tensor
     """``Tensor["S S", bool]``: factual-pose-prefix support, true exactly for realized ``j<s`` pairs."""

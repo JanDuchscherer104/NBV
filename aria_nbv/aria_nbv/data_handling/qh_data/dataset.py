@@ -362,7 +362,8 @@ def _tensor_chain(
         tensors, bool support/terminal tensors, and strict causal history.
     """
 
-    candidate_pose = _stack_rows(stored.candidate_pose_relative_root, 0, torch.float32)
+    candidate_pose_tensor = _stack_rows(stored.candidate_pose_relative_root, 0, torch.float32)
+    candidate_pose = PoseTW(candidate_pose_tensor)
     action_mask = _stack_rows(stored.action_mask, False, torch.bool)
     label_mask = _stack_rows(stored.label_mask, False, torch.bool)
     reward = _stack_rows(stored.candidate_reward, 0, torch.float32)
@@ -375,13 +376,14 @@ def _tensor_chain(
         raise ValueError("Q_H masks must satisfy label_mask <= action_mask <= candidate_mask.")
     history_pose = torch.zeros((steps, steps, 12), dtype=torch.float32)
     history_mask = torch.zeros((steps, steps), dtype=torch.bool)
-    selected_pose = _gather_candidates(candidate_pose, selected)
+    selected_pose = _gather_candidates(candidate_pose_tensor, selected)
     for step in range(1, steps):
         history_pose[step, :step] = selected_pose[:step]
         history_mask[step, :step] = True
     root_pose = PoseTW(_from_numpy(stored.root_pose_world, torch.float32))
     target_pose = PoseTW(_from_numpy(stored.target_pose_world_object, torch.float32))
-    selected_observation_prefix = _selected_observation_prefix(stored, history_pose, history_mask)
+    history_pose_tw = PoseTW(history_pose)
+    selected_observation_prefix = _selected_observation_prefix(stored, history_pose_tw, history_mask)
     if require_rich_modalities and selected_observation_prefix is None:
         raise ValueError(
             "Q_H rich training requires aligned selected CF-GT depth; rebuild the rollout store with selected depth enabled."
@@ -389,13 +391,13 @@ def _tensor_chain(
     return QhChain(
         actor=QhActorTensors(
             vin_snippet=snippet,
-            root_pose_world=root_pose.tensor(),
-            target_pose_relative_root=root_pose.inverse().compose(target_pose).tensor(),
+            root_pose_world=root_pose,
+            target_pose_relative_root=root_pose.inverse().compose(target_pose),
             target_extents=_from_numpy(stored.target_extents, torch.float32),
             candidate_pose_relative_root=candidate_pose,
             candidate_mask=candidate_mask,
             action_mask=action_mask,
-            history_pose_relative_root=history_pose,
+            history_pose_relative_root=history_pose_tw,
             history_mask=history_mask,
             horizon_remaining=_from_numpy(stored.horizon_remaining, torch.int64),
             step_mask=torch.ones(steps, dtype=torch.bool),
@@ -460,7 +462,7 @@ def _read_static_context(
     _validate_evl_geometry(names, values)
     return QhStaticContext(
         vin_snippet=snippet,
-        t_world_voxel=values[0],
+        t_world_voxel=None if values[0] is None else PoseTW(values[0]),
         voxel_extent=values[1],
         occ_pr=values[2],
         occ_input=values[3],
@@ -474,7 +476,7 @@ def _read_static_context(
 
 def _selected_observation_prefix(
     stored: _StoredChain,
-    history_pose: Tensor,
+    history_pose: PoseTW,
     history_mask: Tensor,
 ) -> QhSelectedObservationPrefix | None:
     """Materialize a no-future-observation CF-GT prefix for each chain state."""

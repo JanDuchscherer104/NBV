@@ -23,7 +23,13 @@ from aria_nbv.data_handling.qh_data import (
     collate_qh_chains,
 )
 from aria_nbv.data_handling.qh_data.dataset import _tensor_chain
-from aria_nbv.data_handling.qh_data.views import QhAudit, QhChainKey, QhStaticContext, QhSupervision
+from aria_nbv.data_handling.qh_data.views import (
+    QhAudit,
+    QhChainKey,
+    QhSelectedObservationPrefix,
+    QhStaticContext,
+    QhSupervision,
+)
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.rollouts.qh_reader import QhDataContract, _QhSourceRef
@@ -66,6 +72,20 @@ def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_ty
     assert not missing
 
 
+def test_qh_pose_fields_preserve_frame_aware_public_types() -> None:
+    """Keep SE(3) views typed as poses instead of exposing raw storage tensors."""
+
+    assert QhStaticContext.__annotations__["t_world_voxel"] == "PoseTW | None"
+    assert QhSelectedObservationPrefix.__annotations__["camera_pose_relative_root"] == "PoseTW"
+    for field in (
+        "root_pose_world",
+        "target_pose_relative_root",
+        "candidate_pose_relative_root",
+        "history_pose_relative_root",
+    ):
+        assert QhActorTensors.__annotations__[field] == "PoseTW"
+
+
 def test_qh_batch_transfer_constructs_owned_dtos_without_reflective_traversal() -> None:
     """Keep batch transfer explicit when owned DTO fields change."""
 
@@ -101,13 +121,13 @@ def _chain(*, steps: int, width: int, offset: int = 0) -> QhChain:
     return QhChain(
         actor=QhActorTensors(
             vin_snippet=_snippet(steps),
-            root_pose_world=PoseTW().tensor(),
-            target_pose_relative_root=PoseTW().tensor(),
+            root_pose_world=PoseTW(),
+            target_pose_relative_root=PoseTW(),
             target_extents=torch.ones(3),
-            candidate_pose_relative_root=poses,
+            candidate_pose_relative_root=PoseTW(poses),
             candidate_mask=torch.ones(steps, width, dtype=torch.bool),
             action_mask=torch.ones(steps, width, dtype=torch.bool),
-            history_pose_relative_root=history,
+            history_pose_relative_root=PoseTW(history),
             history_mask=history_mask,
             horizon_remaining=torch.arange(steps, 0, -1),
             step_mask=torch.ones(steps, dtype=torch.bool),
@@ -127,7 +147,7 @@ def test_collate_mixed_horizons_and_widths_preserves_five_masks_and_causal_histo
     chains = [_chain(steps=1, width=2), _chain(steps=3, width=1, offset=10), _chain(steps=4, width=3, offset=20)]
     batch = collate_qh_chains(chains)
 
-    assert batch.actor.candidate_pose_relative_root.shape == (3, 4, 3, 12)
+    assert batch.actor.candidate_pose_relative_root.tensor().shape == (3, 4, 3, 12)
     assert batch.actor.step_mask.tolist() == [
         [True, False, False, False],
         [True, True, True, False],
@@ -298,7 +318,11 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     chain = dataset[0]
 
     assert chain.key == QhChainKey(0, 4, 0, "scene-0", 5)
-    assert chain.actor.target_pose_relative_root[-3:].tolist() == pytest.approx([1, 2, 3])
+    assert isinstance(chain.actor.root_pose_world, PoseTW)
+    assert isinstance(chain.actor.target_pose_relative_root, PoseTW)
+    assert isinstance(chain.actor.candidate_pose_relative_root, PoseTW)
+    assert isinstance(chain.actor.history_pose_relative_root, PoseTW)
+    assert chain.actor.target_pose_relative_root.tensor()[-3:].tolist() == pytest.approx([1, 2, 3])
     assert chain.actor.history_mask.tolist() == [[False, False], [True, False]]
     assert chain.actor.horizon_remaining.tolist() == [2, 1]
     assert chain.actor.static_context is None
@@ -335,13 +359,13 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
     chain = dataset[0]
     context = chain.actor.static_context
     assert context is not None
-    assert context.t_world_voxel is not None and context.t_world_voxel.shape == (12,)
+    assert context.t_world_voxel is not None and context.t_world_voxel.tensor().shape == (12,)
     assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)
     assert context.counts is not None and context.counts.shape == (2, 2, 2)
     assert context.pts_world is not None and context.pts_world.shape == (8, 3)
     batch_context = collate_qh_chains([chain, chain]).actor.static_context
     assert batch_context is not None
-    assert batch_context.t_world_voxel is not None and batch_context.t_world_voxel.shape == (2, 12)
+    assert batch_context.t_world_voxel is not None and batch_context.t_world_voxel.tensor().shape == (2, 12)
     assert batch_context.occ_pr is not None and batch_context.occ_pr.shape == (2, 1, 2, 2, 2)
     assert batch_context.counts is not None and batch_context.counts.shape == (2, 2, 2, 2)
     assert batch_context.pts_world is not None and batch_context.pts_world.shape == (2, 8, 3)
@@ -385,7 +409,7 @@ def test_audit_reads_renderer_metadata_without_loading_rich_payloads() -> None:
 def test_collate_rejects_incompatible_root_evl_geometry() -> None:
     first_context = QhStaticContext(
         vin_snippet=_snippet(),
-        t_world_voxel=PoseTW().tensor(),
+        t_world_voxel=PoseTW(),
         voxel_extent=torch.ones(6),
         occ_pr=torch.ones(1, 2, 2, 2),
         occ_input=None,
@@ -464,7 +488,7 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
     context = QhStaticContext(
         vin_snippet=_snippet(),
-        t_world_voxel=PoseTW().tensor(),
+        t_world_voxel=PoseTW(),
         voxel_extent=torch.ones(6),
         occ_pr=torch.ones(1, 1, 1, 1),
         occ_input=torch.ones(1, 1, 1, 1),
@@ -479,6 +503,7 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     chain = _tensor_chain(stored, _snippet(), static_context=context, require_rich_modalities=True, audit=audit)
     prefix = chain.actor.selected_observation_prefix
     assert prefix is not None
+    assert isinstance(prefix.camera_pose_relative_root, PoseTW)
     assert prefix.source_protocol == "cf_gt"
     assert not prefix.prefix_mask[0].any()
     assert prefix.prefix_mask.tolist() == [[False, False], [True, False]]
@@ -505,7 +530,7 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
     stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
     context = QhStaticContext(
         vin_snippet=_snippet(),
-        t_world_voxel=PoseTW().tensor(),
+        t_world_voxel=PoseTW(),
         voxel_extent=torch.ones(6),
         occ_pr=torch.ones(1, 1, 1, 1),
         occ_input=torch.ones(1, 1, 1, 1),
@@ -523,15 +548,15 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
         prefix = actor.selected_observation_prefix
         assert static is not None and prefix is not None
         return {
-            "candidate_pose_relative_root": summarize(actor.candidate_pose_relative_root),
-            "history_pose_relative_root": summarize(actor.history_pose_relative_root),
+            "candidate_pose_relative_root": summarize(actor.candidate_pose_relative_root.tensor()),
+            "history_pose_relative_root": summarize(actor.history_pose_relative_root.tensor()),
             "step_mask": summarize(actor.step_mask),
             "vin_points_world": summarize(actor.vin_snippet.points_world),
             "evl_occ_pr": summarize(static.occ_pr),
             "evl_presence": summarize(static.evl_presence),
             "selected_depth_m": summarize(prefix.depth_m),
             "selected_depth_valid_mask": summarize(prefix.valid_mask),
-            "selected_depth_camera_pose_relative_root": summarize(prefix.camera_pose_relative_root),
+            "selected_depth_camera_pose_relative_root": summarize(prefix.camera_pose_relative_root.tensor()),
             "selected_depth_prefix_mask": summarize(prefix.prefix_mask),
         }
 

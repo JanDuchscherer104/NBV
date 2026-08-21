@@ -902,7 +902,7 @@ def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: P
     snippet = reader.read_actor_snippet(reader.sample_index[0])
     context = _read_static_context(reader, reader.sample_index[0], snippet)
     assert context is not None  # noqa: S101
-    assert context.t_world_voxel is not None and context.t_world_voxel.shape == (12,)  # noqa: S101
+    assert context.t_world_voxel is not None and context.t_world_voxel.tensor().shape == (12,)  # noqa: S101
     assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)  # noqa: S101
     assert context.counts is not None and context.counts.shape == (2, 2, 2)  # noqa: S101
     assert context.pts_world is not None and context.pts_world.shape == (8, 3)  # noqa: S101
