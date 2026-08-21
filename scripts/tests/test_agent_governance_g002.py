@@ -628,6 +628,16 @@ def test_capture_and_routing_contracts() -> None:
     assert agent_behavior_path.is_file()
     agent_behavior = _read(agent_behavior_path)
     assert len(agent_behavior.splitlines()) <= 100
+    assert "Load only detail that materially improves" not in agent_behavior
+    for invariant in (
+        "Surface conflicting interpretations, terminology, and",
+        "current owner's smallest interface",
+        "demonstrated variation",
+        "remove only debris created by this change",
+        "report pre-existing cleanup separately",
+        "second source of truth",
+    ):
+        assert invariant in agent_behavior
     assert "**Workpackage completion, Git, or external action:**" in agent_behavior
     reference_paths = {
         link.split("#", 1)[0]
