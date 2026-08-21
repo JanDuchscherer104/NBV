@@ -259,8 +259,8 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     monkeypatch.setattr(page.st, "empty", lambda: status)
     monkeypatch.setattr(page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(page, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        session, "_cached_store_bundle_cached", lambda _path, **_kwargs: (object(), SimpleNamespace(ok=True), {})
+    stored_session = session.StoredRolloutSession(
+        Path("/fixture.zarr"), "fixture", object(), SimpleNamespace(ok=True), {}, None
     )
     callback_results: list[bool] = []
 
@@ -277,7 +277,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
         ]
 
     monkeypatch.setattr(session, "q_h_evidence_rows", q_h)
-    page._render_q_h_evidence("/fixture.zarr")
+    page._render_q_h_evidence(stored_session)
 
     assert callback_results == [False]
     assert progress.calls == [(0.5, "Q_H count: 2/4 state rows")]
@@ -320,6 +320,44 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     assert len(second_steps) > len(first_steps)
     assert second_manifest != first_manifest
     assert second_bundle != first_bundle
+
+
+def test_open_session_binds_real_projections_until_next_open(tmp_path: Path) -> None:
+    """An opened handle stays on its generation while a later open sees the swap."""
+
+    first = write_rollout_zarr_store(
+        tmp_path / "session-first.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=101)[:1],
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "session-second.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=102)[:2],
+    )
+    selected = tmp_path / "session-selected.zarr"
+    selected.symlink_to(first.store_dir, target_is_directory=True)
+    session.clear_stored_rollout_caches()
+
+    old = session.open_stored_rollout_session(selected)
+    old_header = old.header()
+    old_steps = old.steps()
+    old_population = old.candidate_population()
+    old_failures = old.failures(100, 0.0, 1.0)
+
+    replacement = tmp_path / "session-replacement-link.zarr"
+    replacement.symlink_to(second.store_dir, target_is_directory=True)
+    replacement.replace(selected)
+
+    assert old.header() == old_header
+    assert old.steps() == old_steps
+    assert old.candidate_population() == old_population
+    assert old.failures(100, 0.0, 1.0) == old_failures
+
+    new = session.open_stored_rollout_session(selected)
+    assert new.store_identity != old.store_identity
+    assert new.header()["rollouts"] > old_header["rollouts"]
+    assert len(new.steps()) > len(old_steps)
+    assert new.candidate_population()["population_count"] > old_population["population_count"]
+    assert len(new.failures(100, 0.0, 1.0)) > len(old_failures)
 
 
 def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(

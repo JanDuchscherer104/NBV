@@ -288,7 +288,6 @@ def _render_trust_and_topology(
     validation_ok: bool,
     stored_session: session.StoredRolloutSession,
 ) -> None:
-    reader = stored_session.reader
     st.subheader("Trust & Topology")
     counts = inventory_row or {}
     cols = st.columns(5)
@@ -298,10 +297,10 @@ def _render_trust_and_topology(
     cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
     cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
-    _render_validated_store_header(reader.store_dir.as_posix(), validation_ok=validation_ok)
+    _render_validated_store_header(stored_session, validation_ok=validation_ok)
 
     try:
-        invariants = session.cached_invariants(reader.store_dir.as_posix())
+        invariants = stored_session.invariants()
     except Exception as exc:
         invariants = [{"status": "FAIL", "invariant": "invariant projection", "evidence": str(exc)}]
     inv_df = pd.DataFrame(invariants)
@@ -315,8 +314,7 @@ def _render_trust_and_topology(
 
     vin_dirs = discover_vin_store_dirs(paths.offline_cache_dir)
     try:
-        topology = session.cached_topology(
-            store_path.as_posix(),
+        topology = stored_session.topology(
             tuple(path.as_posix() for path in vin_dirs),
             paths,
         )
@@ -363,8 +361,7 @@ def _render_trust_and_topology(
                     ),
                     key="stored_topology_source_row",
                 )
-                topology = session.cached_topology(
-                    store_path.as_posix(),
+                topology = stored_session.topology(
                     tuple(path.as_posix() for path in vin_dirs),
                     paths,
                     int(source_id),
@@ -384,10 +381,10 @@ def _render_trust_and_topology(
     )
 
 
-def _render_store_header_summary(store_path: str) -> None:
+def _render_store_header_summary(stored_session: session.StoredRolloutSession) -> None:
     """Render reference coverage and physical cost without candidate projection."""
 
-    header = session.cached_header(store_path)
+    header = stored_session.header()
     st.markdown("#### Coverage and physical cost")
     coverage_cols = st.columns(4)
     coverage_cols[0].metric("Scenes", _format_count(header.get("scenes")))
@@ -417,13 +414,13 @@ def _render_store_header_summary(store_path: str) -> None:
     _download_json("Download coverage and cost JSON", "rollout-coverage-cost.json", header)
 
 
-def _render_validated_store_header(store_path: str, *, validation_ok: bool) -> None:
+def _render_validated_store_header(stored_session: session.StoredRolloutSession, *, validation_ok: bool) -> None:
     """Render scientific coverage only for a store that passed validation."""
 
     if not validation_ok:
         st.info("Coverage and physical-cost projections are withheld until store validation succeeds.")
         return
-    _render_store_header_summary(store_path)
+    _render_store_header_summary(stored_session)
 
 
 def _format_count(value: object) -> str:
@@ -457,16 +454,15 @@ def _render_scientific_evidence(
     st.subheader("Scientific Evidence")
     stored_session = stored_session or session.open_stored_rollout_session(reader.store_dir)
     reader = stored_session.reader
-    store_path = reader.store_dir.as_posix()
-    _render_reconstruction_summary(store_path)
-    cohort = session.cached_cohorts(store_path)
+    _render_reconstruction_summary(stored_session)
+    cohort = stored_session.cohorts()
     eligibility = bool(cohort.get("eligible"))
     st.metric("Matched comparison eligible", "YES" if eligibility else "NO")
     st.caption(
         "Policies are comparison dimensions only after source sample, target protocol, horizon/budget, candidate/oracle configuration, and branch schedule match."
     )
     if eligibility:
-        comparison = pd.DataFrame(session.cached_paired(store_path))
+        comparison = pd.DataFrame(stored_session.paired())
         if comparison.empty:
             st.info("Matched cohorts exist, but no finite paired endpoint metric is available.")
         else:
@@ -515,9 +511,9 @@ def _render_scientific_evidence(
             st.dataframe(mismatch, hide_index=True, width="stretch")
             _download_frame("Download mismatch evidence CSV", "policy-cohort-mismatches.csv", mismatch)
 
-    steps = pd.DataFrame(session.cached_steps(store_path))
+    steps = pd.DataFrame(stored_session.steps())
     if not steps.empty:
-        _render_temporal_explorer(store_path, steps, matched_cohorts=eligibility)
+        _render_temporal_explorer(stored_session, steps, matched_cohorts=eligibility)
         _download_frame("Download selected-chain CSV", "selected-chain-evidence.csv", steps)
 
     with st.expander("Additional branching and selected-rank evidence", expanded=False):
@@ -526,11 +522,11 @@ def _render_scientific_evidence(
             value=False,
             help="These projections traverse every factual step and candidate shell, then remain cached for this store.",
         ):
-            _render_branching_evidence(steps, pd.DataFrame(session.cached_tree(store_path)))
-            _render_selected_rank_and_geometry(store_path)
+            _render_branching_evidence(steps, pd.DataFrame(stored_session.tree()))
+            _render_selected_rank_and_geometry(stored_session)
 
 
-def _render_reconstruction_summary(store_path: str) -> None:
+def _render_reconstruction_summary(stored_session: session.StoredRolloutSession) -> None:
     """Render frozen reconstruction, return, and headroom rows on demand."""
 
     if not st.toggle(
@@ -540,10 +536,10 @@ def _render_reconstruction_summary(store_path: str) -> None:
     ):
         return
 
-    metric_rows = pd.DataFrame(session.cached_reconstruction_metrics(store_path))
-    endpoint_rows = pd.DataFrame(session.cached_reconstruction_endpoints(store_path))
-    discounted = session.cached_discounted_returns(store_path)
-    headroom = session.cached_headroom(store_path)
+    metric_rows = pd.DataFrame(stored_session.reconstruction_metrics())
+    endpoint_rows = pd.DataFrame(stored_session.reconstruction_endpoints())
+    discounted = stored_session.discounted_returns()
+    headroom = stored_session.headroom()
 
     st.markdown("#### Reconstruction and selection metric plan")
     if metric_rows.empty:
@@ -577,7 +573,9 @@ def _render_reconstruction_summary(store_path: str) -> None:
         st.dataframe(headroom_summary, hide_index=True, width="stretch")
 
 
-def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
+def _render_temporal_explorer(
+    stored_session: session.StoredRolloutSession, steps: pd.DataFrame, *, matched_cohorts: bool
+) -> None:
     """Render one population metric at a time and a one-rollout raw drill-down."""
 
     available_labels = [
@@ -606,8 +604,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
         )
 
     summary = pd.DataFrame(
-        session.cached_temporal(
-            store_path,
+        stored_session.temporal(
             metric=metric,
             group_fields=(group_field,),
         )
@@ -771,10 +768,10 @@ def _temporal_evidence_role(
         raise ValueError(f"Temporal metric {metric!r} has no explicit evidence role.") from exc
 
 
-def _render_selected_rank_and_geometry(store_path: str) -> None:
+def _render_selected_rank_and_geometry(stored_session: session.StoredRolloutSession) -> None:
     """Render expensive selected-rank and complete root-relative evidence on demand."""
 
-    ranks = pd.DataFrame(session.cached_ranks(store_path))
+    ranks = pd.DataFrame(stored_session.ranks())
     if not ranks.empty:
         rank_col = "selected_rank" if "selected_rank" in ranks else next((c for c in ranks if "rank" in c), None)
         regret_col = "regret" if "regret" in ranks else next((c for c in ranks if "regret" in c), None)
@@ -808,7 +805,7 @@ def _render_selected_rank_and_geometry(store_path: str) -> None:
         st.dataframe(ranks, hide_index=True, width="stretch")
         _download_frame("Download selected rank/regret CSV", "selected-rank-regret.csv", ranks)
 
-    geometry = pd.DataFrame(session.cached_root_geometry(store_path))
+    geometry = pd.DataFrame(stored_session.root_geometry())
     if not geometry.empty:
         st.caption(
             "Coordinates are translated by each rollout root. Absolute world coordinates from unrelated scenes are never aggregated."
@@ -933,7 +930,6 @@ def _render_targets_and_support(
     st.subheader("Targets & Action Support")
     stored_session = stored_session or session.open_stored_rollout_session(reader.store_dir)
     reader = stored_session.reader
-    store_path = reader.store_dir.as_posix()
     candidate_plot_limit = int(
         st.number_input(
             "Candidate plot row limit",
@@ -944,7 +940,7 @@ def _render_targets_and_support(
             help="Bounds interactive geometry traces only; aggregate masks and family counts still use the full store.",
         )
     )
-    targets = pd.DataFrame(session.cached_targets(store_path))
+    targets = pd.DataFrame(stored_session.targets())
     if not targets.empty:
         protocol = (
             targets.groupby(["target_valid", "gt_label_valid", "gt_match_status"], dropna=False)
@@ -980,9 +976,9 @@ def _render_targets_and_support(
         _download_frame("Download target protocol CSV", "target-protocol.csv", targets)
         _render_target_score_diagnostics(targets)
 
-    _render_candidate_provenance_flow(store_path)
+    _render_candidate_provenance_flow(stored_session)
 
-    masks = pd.DataFrame(session.cached_masks(store_path))
+    masks = pd.DataFrame(stored_session.masks())
     if not masks.empty:
         label_cols = [c for c in ("actor_action", "oracle_label", "q_train", "selected") if c in masks]
         masks["combination"] = masks[label_cols].astype(str).agg(" · ".join, axis=1)
@@ -1011,21 +1007,21 @@ def _render_targets_and_support(
         value=False,
         help="Builds the heavyweight candidate audit used by the restored family, mask-population, and invalid-reason tables.",
     ):
-        _render_candidate_aggregate_breakdowns(store_path)
+        _render_candidate_aggregate_breakdowns(stored_session)
 
     if st.toggle(
         "Load cohort composition, proposal calibration, and collision support",
         value=False,
         help="Materializes the complete candidate audit only after this explicit request and reuses its cached rows.",
     ):
-        _render_candidate_population_evidence(store_path)
+        _render_candidate_population_evidence(stored_session)
 
     if st.toggle(
         "Load bounded candidate geometry and reward plots",
         value=False,
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
     ):
-        candidate_rows = session.cached_candidates(store_path, limit=candidate_plot_limit)
+        candidate_rows = stored_session.candidates(limit=candidate_plot_limit)
         _render_candidate_geometry_diagnostics(
             pd.DataFrame(candidate_rows),
             pd.DataFrame(candidate_rows),
@@ -1033,11 +1029,11 @@ def _render_targets_and_support(
         )
 
 
-def _render_candidate_population_evidence(store_path: str) -> None:
+def _render_candidate_population_evidence(stored_session: session.StoredRolloutSession) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
-    population = session.cached_candidate_population(store_path, group_by=group_by)
+    population = stored_session.candidate_population()
     composition = pd.DataFrame(population["composition"][group_by])
     calibration = pd.DataFrame(population["calibration"][group_by])
     collision = pd.DataFrame(population["collision"])
@@ -1066,20 +1062,19 @@ def _render_candidate_population_evidence(store_path: str) -> None:
     st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
-def _render_candidate_provenance_flow(store_path: str) -> None:
+def _render_candidate_provenance_flow(stored_session: session.StoredRolloutSession) -> None:
     """Render the lightweight complete-population candidate provenance flow."""
 
-    _, validation, _ = session.cached_store_bundle(store_path)
+    validation = stored_session.validation
     store_candidate_count = int(validation.num_candidates)
-    steps = pd.DataFrame(session.cached_steps(store_path))
+    steps = pd.DataFrame(stored_session.steps())
     policy_options = sorted(str(value) for value in steps.get("policy", pd.Series(dtype=str)).dropna().unique())
     depth_options = sorted(int(value) for value in steps.get("step_index", pd.Series(dtype=int)).dropna().unique())
     col_policy, col_depth = st.columns(2)
     selected_policies = col_policy.multiselect("Flow policies", options=policy_options, default=policy_options)
     selected_depths = col_depth.multiselect("Flow rollout depths", options=depth_options, default=depth_options)
     flow = pd.DataFrame(
-        session.cached_candidate_flow(
-            store_path,
+        stored_session.candidate_flow(
             policies=tuple(selected_policies),
             step_indices=tuple(selected_depths),
         )
@@ -1124,8 +1119,7 @@ def _render_candidate_provenance_flow(store_path: str) -> None:
     _download_frame("Download candidate provenance flow CSV", "candidate-provenance-flow.csv", flow)
 
     ranks = pd.DataFrame(
-        session.cached_ranks(
-            store_path,
+        stored_session.ranks(
             policies=tuple(selected_policies),
             step_indices=tuple(selected_depths),
         )
@@ -1339,10 +1333,10 @@ def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: s
     return figure
 
 
-def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
+def _render_candidate_aggregate_breakdowns(stored_session: session.StoredRolloutSession) -> None:
     """Render restored complete-store candidate audit plots on demand."""
 
-    families = pd.DataFrame(session.cached_candidate_group(store_path, group_by="position"))
+    families = pd.DataFrame(stored_session.candidate_group(group_by="position"))
     if not families.empty:
         families["selection_rate_given_available"] = np.where(
             families["actor_valid"] > 0,
@@ -1384,7 +1378,7 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
         options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
-    breakdown = pd.DataFrame(session.cached_candidate_group(store_path, group_by=breakdown_by))
+    breakdown = pd.DataFrame(stored_session.candidate_group(group_by=breakdown_by))
     count_fields = [name for name in ("actor_valid", "q_train", "selected") if name in breakdown]
     if not breakdown.empty and count_fields:
         long = breakdown.melt(
@@ -1421,8 +1415,8 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
         )
 
     with st.expander("Invalid reasons and valid fanout"):
-        invalid = pd.DataFrame(session.cached_candidate_group(store_path, group_by="invalid_reason"))
-        fanout = pd.DataFrame(session.cached_steps(store_path))
+        invalid = pd.DataFrame(stored_session.candidate_group(group_by="invalid_reason"))
+        fanout = pd.DataFrame(stored_session.steps())
         if not invalid.empty:
             st.dataframe(invalid, hide_index=True, width="stretch")
         if not fanout.empty:
@@ -1761,7 +1755,7 @@ def _render_failure_triage(
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
         dominant = float(st.slider("Dominant invalidity fraction", min_value=0.0, max_value=1.0, value=0.8))
         max_step = float(st.slider("Maximum selected step (m)", min_value=0.1, max_value=5.0, value=1.25))
-    failures = pd.DataFrame(session.cached_failures(reader.store_dir.as_posix(), min_valid, dominant, max_step))
+    failures = pd.DataFrame(stored_session.failures(min_valid, dominant, max_step))
     if failures.empty:
         st.success("No failure rows match the active thresholds.")
         return
@@ -1964,7 +1958,7 @@ def _consume_pending_promotion(
 
 
 def _query_source_frame(
-    store_path: str,
+    stored_session: session.StoredRolloutSession,
     *,
     scope: str,
     candidate_population: str,
@@ -1988,11 +1982,11 @@ def _query_source_frame(
     if scope != "Candidates":
         raise ValueError(f"Unsupported query scope: {scope}")
     if candidate_population == "Selected step":
-        rows = session.cached_candidates(store_path, rollout_row_id=rollout_id, step_row_id=step_id)
+        rows = stored_session.candidates(rollout_row_id=rollout_id, step_row_id=step_id)
     elif candidate_population == "Selected rollout":
-        rows = session.cached_candidates(store_path, rollout_row_id=rollout_id)
+        rows = stored_session.candidates(rollout_row_id=rollout_id)
     elif candidate_population == "Explicit full store":
-        rows = session.cached_candidates(store_path)
+        rows = stored_session.candidates()
     else:
         raise ValueError(f"Unsupported candidate population: {candidate_population}")
     return _normalized_query_frame(pd.DataFrame(rows))
@@ -2133,7 +2127,6 @@ def _render_inspect_export_rerun(
     st.subheader("Inspect, Export & Rerun")
     stored_session = stored_session or session.open_stored_rollout_session(store_path)
     reader = stored_session.reader
-    store_path_key = reader.store_dir.as_posix()
     store_identity = _canonical_query_store_identity(store_path)
     _activate_query_store(st.session_state, store_identity)
     scope_key = f"stored_query:{store_identity}:scope"
@@ -2150,7 +2143,7 @@ def _render_inspect_export_rerun(
     if not rollout_ids:
         st.warning("This store has no rollout rows to inspect or query.")
         return
-    all_steps = pd.DataFrame(session.cached_steps(store_path_key))
+    all_steps = pd.DataFrame(stored_session.steps())
     steps_by_rollout = {
         int(rollout): sorted(group["step_row_id"].astype(int).tolist())
         for rollout, group in all_steps.groupby("rollout_row_id", sort=True)
@@ -2181,7 +2174,7 @@ def _render_inspect_export_rerun(
             key=rollout_widget_key,
         )
     )
-    steps = pd.DataFrame(session.cached_steps(store_path_key, rollout_row_id=rollout_id))
+    steps = pd.DataFrame(stored_session.steps(rollout_row_id=rollout_id))
     step_ids = steps["step_row_id"].astype(int).tolist() if not steps.empty else []
     if not step_ids:
         st.warning("The selected rollout has no persisted steps.")
@@ -2197,7 +2190,7 @@ def _render_inspect_export_rerun(
             "use Selected step or Selected rollout for routine inspection."
         )
     query_source = _query_source_frame(
-        store_path_key,
+        stored_session,
         scope=scope,
         candidate_population=candidate_population,
         rollout_id=rollout_id,
@@ -2212,8 +2205,7 @@ def _render_inspect_export_rerun(
     )
 
     candidates = pd.DataFrame(
-        session.cached_candidates(
-            store_path_key,
+        stored_session.candidates(
             rollout_row_id=rollout_id,
             step_row_id=step_id,
         )
@@ -2228,7 +2220,7 @@ def _render_inspect_export_rerun(
         "Download selected-step candidate CSV", f"rollout-{rollout_id}-step-{step_id}-candidates.csv", candidates
     )
 
-    depth_rows = pd.DataFrame(session.cached_depth_summary(store_path_key, rollout_row_id=rollout_id))
+    depth_rows = pd.DataFrame(stored_session.depth_summary(rollout_row_id=rollout_id))
     selected_depth = depth_rows[depth_rows["step_row_id"] == step_id] if not depth_rows.empty else depth_rows
     with st.expander("Privileged selected-depth evaluation artifact", expanded=not selected_depth.empty):
         st.warning("Selected depth is privileged oracle/evaluation evidence, never actor-visible policy input.")
@@ -2271,12 +2263,12 @@ def _render_inspect_export_rerun(
         st.json(manifest_payload, expanded=False)
         st.dataframe(steps, hide_index=True, width="stretch")
     _download_json("Download selected metadata JSON", f"rollout-{rollout_id}-metadata.json", manifest_payload)
-    _render_q_h_evidence(store_path_key)
-    _render_evidence_bundle_download(store_path)
+    _render_q_h_evidence(stored_session)
+    _render_evidence_bundle_download(stored_session)
     _render_rerun_launcher(store_path=store_path, rollout_id=rollout_id, paths=paths)
 
 
-def _render_q_h_evidence(store_path: str) -> None:
+def _render_q_h_evidence(stored_session: session.StoredRolloutSession) -> None:
     """Render metadata-only Q_H facts and gate mask counts behind an explicit toggle."""
 
     st.markdown("#### Store-local Q_H evidence")
@@ -2305,9 +2297,9 @@ def _render_q_h_evidence(store_path: str) -> None:
     )
     state_limit = None if int(state_limit_value) == 0 else int(state_limit_value)
     if not deep_count:
-        evidence_rows = session.cached_q_h(store_path, deep_count=False)
+        evidence_rows = stored_session.q_h(deep_count=False)
     else:
-        cancel_key = f"q_h_cancel:{Path(store_path).resolve().as_posix()}"
+        cancel_key = f"q_h_cancel:{stored_session.canonical_path.as_posix()}"
         stop_requested = bool(
             st.checkbox(
                 "Stop after the current Q_H chunk",
@@ -2318,7 +2310,8 @@ def _render_q_h_evidence(store_path: str) -> None:
         )
         progress = st.progress(0.0, text="Preparing bounded Q_H count…")
         status = st.empty()
-        reader, validation, _ = session.cached_store_bundle(store_path)
+        reader = stored_session.reader
+        validation = stored_session.validation
 
         def update_progress(completed: int, total: int) -> bool:
             fraction = 1.0 if total <= 0 else min(1.0, float(completed) / float(total))
@@ -2350,7 +2343,7 @@ def _render_q_h_evidence(store_path: str) -> None:
     _download_frame("Download Q_H evidence CSV", "q-h-evidence.csv", rows)
 
 
-def _render_evidence_bundle_download(store_path: Path) -> None:
+def _render_evidence_bundle_download(stored_session: session.StoredRolloutSession) -> None:
     st.markdown("#### Canonical evidence bundle")
     status = st.radio("Evidence status", options=["pilot", "confirmatory"], horizontal=True, key="evidence_status")
     acknowledge = st.checkbox(
@@ -2362,7 +2355,7 @@ def _render_evidence_bundle_download(store_path: Path) -> None:
     if allowed:
         st.download_button(
             "Download deterministic evidence bundle",
-            data=lambda: session.cached_evidence_bundle(store_path.as_posix(), status),
+            data=lambda: stored_session.evidence_bundle(status),
             file_name=f"rollout-evidence-{status}.json",
             mime="application/json",
             on_click="ignore",

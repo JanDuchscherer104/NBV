@@ -107,10 +107,6 @@ def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, 
     return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
 
 
-def cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
-    return _cached_store_bundle(store_path)
-
-
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
 def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
     """Project immutable rollout-store inventory once per cache root."""
@@ -193,7 +189,7 @@ def _cached_projection_cached(
         if group_by is None:
             raise ValueError("candidate_group projection requires group_by")
         if not hasattr(reader, "array"):
-            audit_rows = _cached_projection(store_path, "candidates", limit=limit)
+            audit_rows = _cached_projection(store_path, "candidates", limit=limit, store_identity=store_identity)
             return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
         evidence = _cached_candidate_population_cached(store_path, store_identity)
         return evidence["groups"][group_by]
@@ -232,9 +228,8 @@ def _cached_projection_cached(
 def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
     """Dispatch a demand-backed projection with a fresh identity key."""
 
-    return _cached_projection_cached(
-        store_path, projection, store_identity=_store_projection_identity(store_path), **kwargs
-    )
+    store_identity = kwargs.pop("store_identity", None) or _store_projection_identity(store_path)
+    return _cached_projection_cached(store_path, projection, store_identity=store_identity, **kwargs)
 
 
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
@@ -459,6 +454,84 @@ class StoredRolloutSession:
 
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
         return _cached_candidate_population_cached(self.canonical_path.as_posix(), self.store_identity, sample_size)
+
+    def invariants(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "invariants", store_identity=self.store_identity)
+
+    def header(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "header", store_identity=self.store_identity)
+
+    def cohorts(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "cohorts", store_identity=self.store_identity)
+
+    def paired(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "paired", store_identity=self.store_identity)
+
+    def steps(self, **kwargs: Any) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "steps", store_identity=self.store_identity, **kwargs)
+
+    def reconstruction_metrics(self) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "reconstruction_metrics", store_identity=self.store_identity
+        )
+
+    def reconstruction_endpoints(self) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "reconstruction_endpoints", store_identity=self.store_identity
+        )
+
+    def discounted_returns(self) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "discounted_returns", store_identity=self.store_identity
+        )
+
+    def headroom(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "headroom", store_identity=self.store_identity)
+
+    def temporal(self, **kwargs: Any) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "temporal", store_identity=self.store_identity, **kwargs
+        )
+
+    def candidate_flow(self, **kwargs: Any) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "candidate_flow", store_identity=self.store_identity, **kwargs
+        )
+
+    def ranks(self, **kwargs: Any) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "ranks", store_identity=self.store_identity, **kwargs)
+
+    def targets(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "targets", store_identity=self.store_identity)
+
+    def masks(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "masks", store_identity=self.store_identity)
+
+    def candidates(self, **kwargs: Any) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "candidates", store_identity=self.store_identity, **kwargs
+        )
+
+    def candidate_group(self, **kwargs: Any) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "candidate_group", store_identity=self.store_identity, **kwargs
+        )
+
+    def q_h(self, **kwargs: Any) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "q_h", store_identity=self.store_identity, **kwargs)
+
+    def tree(self) -> Any:
+        return _cached_projection(self.canonical_path.as_posix(), "tree", store_identity=self.store_identity)
+
+    def root_geometry(self, **kwargs: Any) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "root_geometry", store_identity=self.store_identity, **kwargs
+        )
+
+    def depth_summary(self, **kwargs: Any) -> Any:
+        return _cached_projection(
+            self.canonical_path.as_posix(), "depth_summary", store_identity=self.store_identity, **kwargs
+        )
 
     def failures(
         self, min_valid_candidates: int, dominant_invalid_fraction: float, max_step_distance_m: float

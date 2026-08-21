@@ -703,7 +703,8 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
     monkeypatch.setattr(stored_rollouts_page, "_render_plot", capture_plot)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
 
-    stored_rollouts_page._render_selected_rank_and_geometry("store.zarr")
+    handle = stored_rollout_session.StoredRolloutSession(Path("store.zarr"), "fixture", object(), object(), {}, None)
+    stored_rollouts_page._render_selected_rank_and_geometry(handle)
 
     assert [explanation.evidence_role for explanation in captured] == ["oracle/evaluation"]
 
@@ -835,8 +836,9 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
         return []
 
     monkeypatch.setattr(stored_rollout_session, "_cached_projection", fake_projection)
+    handle = stored_rollout_session.StoredRolloutSession(Path("/store.zarr"), "fixture", object(), object(), {}, None)
     kwargs = {
-        "store_path": "/store.zarr",
+        "stored_session": handle,
         "scope": "Candidates",
         "rollout_id": 7,
         "step_id": 11,
