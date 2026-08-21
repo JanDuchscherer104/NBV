@@ -95,8 +95,8 @@ def test_ui_label_warns_and_uses_no_formula_when_registry_resolution_fails(monke
     monkeypatch.setattr(common, "get_label_display_mode", lambda: "Both")
     monkeypatch.setattr(
         common,
-        "validate_theory_registry",
-        lambda references: (_ for _ in ()).throw(TheoryResolutionError("missing canonical symbol")),
+        "format_scientific_label",
+        lambda *args, **kwargs: (_ for _ in ()).throw(TheoryResolutionError("missing canonical symbol")),
     )
     monkeypatch.setattr(common.st, "warning", warnings.append)
 
