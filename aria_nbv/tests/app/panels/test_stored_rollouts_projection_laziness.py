@@ -262,6 +262,22 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
     assert identities[2] != identities[0]
 
 
+def test_root_geometry_projection_bumps_its_cache_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A changed root-geometry row shape must not reuse an old cache entry."""
+
+    revisions: list[int] = []
+
+    def cached_projection(_path: str, _projection: str, *, projection_revision: int, **_kwargs: object) -> object:
+        revisions.append(projection_revision)
+        return []
+
+    monkeypatch.setattr(session, "_cached_projection_cached", cached_projection)
+    session._cached_projection("/fixture.zarr", "header")
+    session._cached_projection("/fixture.zarr", "root_geometry")
+
+    assert revisions == [1, 2]
+
+
 def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

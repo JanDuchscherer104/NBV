@@ -906,9 +906,83 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> _P
     }
 
 
+def _add_root_target_pose_anchors(fig: go.Figure, anchors: pd.DataFrame) -> None:
+    """Overlay root/target centers and orientation triads in normalized root coordinates."""
+
+    if anchors.empty:
+        return
+    roots = anchors.drop_duplicates("rollout_row_id")
+    fig.add_trace(
+        go.Scatter3d(
+            x=[0.0],
+            y=[0.0],
+            z=[0.0],
+            mode="markers",
+            name="Rollout root (all at origin)",
+            marker={"size": 7, "symbol": "cross", "color": "white"},
+            hovertemplate="Root center: (0, 0, 0) target distances<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter3d(
+            x=roots["target_relative_x_target_distance"],
+            y=roots["target_relative_y_target_distance"],
+            z=roots["target_relative_z_target_distance"],
+            mode="markers",
+            name="Observed target pose origin",
+            marker={"size": 7, "symbol": "diamond-open", "color": "#F4D03F"},
+            customdata=roots[["rollout_row_id", "target_id"]],
+            hovertemplate="rollout=%{customdata[0]}<br>target=%{customdata[1]}<br>distance = 1.0<extra></extra>",
+        )
+    )
+    for prefix, label, origin_columns in (
+        (
+            "root",
+            "Root pose axes",
+            ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m"),
+        ),
+        (
+            "target",
+            "Target pose axes",
+            (
+                "target_relative_x_target_distance",
+                "target_relative_y_target_distance",
+                "target_relative_z_target_distance",
+            ),
+        ),
+    ):
+        for axis_name, color in (("x", "#E74C3C"), ("y", "#2ECC71"), ("z", "#3498DB")):
+            x_values: list[float | None] = []
+            y_values: list[float | None] = []
+            z_values: list[float | None] = []
+            for anchor in roots.to_dict("records"):
+                origin = np.asarray([anchor[column] for column in origin_columns], dtype=np.float64)
+                if prefix == "root":
+                    origin = np.zeros(3, dtype=np.float64)
+                direction = np.asarray(anchor[f"{prefix}_axis_{axis_name}"], dtype=np.float64)
+                endpoint = origin + 0.12 * direction
+                x_values.extend((float(origin[0]), float(endpoint[0]), None))
+                y_values.extend((float(origin[1]), float(endpoint[1]), None))
+                z_values.extend((float(origin[2]), float(endpoint[2]), None))
+            fig.add_trace(
+                go.Scatter3d(
+                    x=x_values,
+                    y=y_values,
+                    z=z_values,
+                    mode="lines",
+                    name=f"{label} (RGB)",
+                    legendgroup=label,
+                    showlegend=axis_name == "x",
+                    line={"color": color, "width": 4},
+                    hoverinfo="skip",
+                )
+            )
+
+
 def _render_candidate_geometry_diagnostics(
     candidates: pd.DataFrame,
     root_geometry: pd.DataFrame,
+    anchors: pd.DataFrame | None = None,
     *,
     total_candidates: int,
 ) -> None:
@@ -917,9 +991,25 @@ def _render_candidate_geometry_diagnostics(
     if candidates.empty:
         return
     with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
+        normalized_coordinate_columns = {
+            "root_relative_x_target_distance",
+            "root_relative_y_target_distance",
+            "root_relative_z_target_distance",
+        }
+        missing_geometry_columns = normalized_coordinate_columns.difference(root_geometry.columns)
+        if not root_geometry.empty and missing_geometry_columns:
+            st.warning(
+                "Candidate geometry is temporarily unavailable because its cached projection predates the "
+                "target-distance-normalized coordinate contract. Refresh rollout caches or rerun the page."
+            )
+            root_geometry = pd.DataFrame()
+        rollout_count = int(candidates["rollout_row_id"].nunique()) if "rollout_row_id" in candidates else 0
+        step_count = int(candidates["step_row_id"].nunique()) if "step_row_id" in candidates else 0
         st.caption(
             f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
-            "Coordinates are root-relative ARIA world metres (RIGHT_HAND_Z_UP), never pooled absolute scene origins."
+            f"They cover {step_count:,} factual step(s) from {rollout_count:,} rollout(s), including multiple "
+            "steps from one rollout when present. Coordinates are root-relative ARIA world directions scaled by "
+            "each rollout's initial root-to-target distance (target distance = 1), never pooled absolute scene origins."
         )
         metric_options = [
             name
@@ -1011,18 +1101,26 @@ def _render_candidate_geometry_diagnostics(
         if not root_geometry.empty:
             fig = px.scatter(
                 root_geometry,
-                x="root_relative_x_m",
-                y="root_relative_y_m",
+                x="root_relative_x_target_distance",
+                y="root_relative_y_target_distance",
                 color="position" if "position" in root_geometry else None,
                 symbol="selected" if "selected" in root_geometry else None,
                 hover_data=[
                     name
-                    for name in ("rollout_row_id", "step_index", "root_relative_z_m", "actor_action", "mixture")
+                    for name in (
+                        "rollout_row_id",
+                        "step_index",
+                        "initial_target_distance_m",
+                        "root_relative_z_target_distance",
+                        "actor_action",
+                        "mixture",
+                    )
                     if name in root_geometry
                 ],
-                title="Candidate centers relative to each rollout root (ground plane)",
+                title="Candidate centers relative to each rollout root (ground plane; target distance normalized)",
             )
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            fig.update_traces(marker={"size": 4, "opacity": 0.8})
             _render_plot(
                 fig,
                 ScientificExplanation(
@@ -1035,12 +1133,14 @@ def _render_candidate_geometry_diagnostics(
                                 "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed."
                             )
                             + "\n\n"
-                            + ("Root-relative X/Y displacement in metres; Z-up height is available on hover.")
+                            + (
+                                "Root-relative X/Y displacement divided by the initial root-to-target distance; Z-up is available on hover."
+                            )
                             + "\n\n"
                             + ("Bounded full candidate shell; actor validity and selection remain explicit fields.")
                             + "\n\n"
                             + (
-                                "Each point is one candidate center in root-relative metres; color is family and symbol retains whether the candidate was selected."
+                                "Each point is one candidate center in target-distance units; color is family and symbol retains whether the candidate was selected."
                             ),
                         ),
                         ExplanationSection(
@@ -1052,7 +1152,7 @@ def _render_candidate_geometry_diagnostics(
                             )
                             + "\n\n"
                             + (
-                                "Subtracting every rollout root makes local candidate motion comparable without mixing unrelated scene-world origins."
+                                "Subtracting every rollout root and dividing by that rollout's initial target distance makes local candidate motion comparable without mixing scene-world origins or target ranges."
                             )
                             + "\n\n"
                             + (
@@ -1066,7 +1166,7 @@ def _render_candidate_geometry_diagnostics(
                             )
                             + "\n\n"
                             + (
-                                "Root-relative position = candidate camera center in world coordinates minus the selected rollout root camera center, expressed in metres."
+                                "Root-relative position = (candidate camera center − rollout root center) / ||target center − rollout root center||. The target marker therefore lies one normalized distance from the root."
                             ),
                         ),
                     ),
@@ -1080,14 +1180,18 @@ def _render_candidate_geometry_diagnostics(
                 ),
             )
             three_dimensional = root_geometry.dropna(
-                subset=["root_relative_x_m", "root_relative_y_m", "root_relative_z_m"]
+                subset=[
+                    "root_relative_x_target_distance",
+                    "root_relative_y_target_distance",
+                    "root_relative_z_target_distance",
+                ]
             )
             if not three_dimensional.empty:
                 fig = px.scatter_3d(
                     three_dimensional,
-                    x="root_relative_x_m",
-                    y="root_relative_y_m",
-                    z="root_relative_z_m",
+                    x="root_relative_x_target_distance",
+                    y="root_relative_y_target_distance",
+                    z="root_relative_z_target_distance",
                     color="position" if "position" in three_dimensional else None,
                     symbol="selected" if "selected" in three_dimensional else None,
                     hover_data=[
@@ -1095,9 +1199,11 @@ def _render_candidate_geometry_diagnostics(
                         for name in ("rollout_row_id", "step_index", "actor_action", "mixture")
                         if name in three_dimensional
                     ],
-                    title="Candidate centers relative to each rollout root (3D)",
+                    title="Candidate centers relative to each rollout root (3D; target distance normalized)",
                 )
                 fig.update_layout(scene={"aspectmode": "data"})
+                fig.update_traces(marker={"size": 4, "opacity": 0.8})
+                _add_root_target_pose_anchors(fig, anchors if anchors is not None else pd.DataFrame())
                 _render_plot(
                     fig,
                     ScientificExplanation(
@@ -1110,14 +1216,16 @@ def _render_candidate_geometry_diagnostics(
                                     "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed."
                                 )
                                 + "\n\n"
-                                + ("Root-relative X/Y/Z displacement in metres, with Z as ARIA world up.")
+                                + (
+                                    "Root-relative X/Y/Z displacement divided by each rollout's initial root-to-target distance, with Z as ARIA world up."
+                                )
                                 + "\n\n"
                                 + (
                                     "Rows with finite root-relative X, Y, and Z coordinates; actor validity and selection remain explicit fields."
                                 )
                                 + "\n\n"
                                 + (
-                                    "Each point is one finite root-relative candidate center; x, y, and z are metres, color is family, and symbol retains selection state."
+                                    "Each point is one finite root-relative candidate center; x, y, and z are target-distance units, color is family, and symbol retains selection state."
                                 ),
                             ),
                             ExplanationSection(
@@ -1143,7 +1251,7 @@ def _render_candidate_geometry_diagnostics(
                                 )
                                 + "\n\n"
                                 + (
-                                    "ARIA uses a right-handed Z-up world convention here; the plotted coordinates are local differences, not absolute scene positions."
+                                    "ARIA uses a right-handed Z-up world convention here; the plotted coordinates are local differences normalized by each rollout's initial target distance, not absolute scene positions."
                                 ),
                             ),
                         ),

@@ -42,6 +42,7 @@ from aria_nbv.rollouts.inspection import (
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
     root_relative_candidate_rows,
+    root_relative_rollout_anchor_rows,
     selected_candidate_rank_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
@@ -1610,7 +1611,42 @@ def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_pa
     assert first["root_relative_x_m"] == pytest.approx(float(world_pose[9] - root_pose[9]))
     assert first["root_relative_y_m"] == pytest.approx(float(world_pose[10] - root_pose[10]))
     assert first["root_relative_z_m"] == pytest.approx(float(world_pose[11] - root_pose[11]))
+    target_pose = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
+    target_distance = float(np.linalg.norm(target_pose[9:12] - root_pose[9:12]))
+    assert first["initial_target_distance_m"] == pytest.approx(target_distance)
+    assert first["root_relative_x_target_distance"] == pytest.approx(first["root_relative_x_m"] / target_distance)
     assert "center_x" not in first
+
+
+def test_root_relative_rollout_anchors_preserve_root_target_pose_frame(tmp_path) -> None:
+    """Pose anchors retain orientation and target origin in the candidate plot frame."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=61)[:1]
+    root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
+    root_tensor[9:12] = root_tensor.new_tensor([1.0, 2.0, 3.0])
+    records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    anchor = root_relative_rollout_anchor_rows(reader, rollout_row_ids=(0,))[0]
+    root_pose = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float64)
+    target_pose = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
+
+    assert anchor["root_relative_x_m"] == 0.0
+    assert anchor["root_relative_y_m"] == 0.0
+    assert anchor["root_relative_z_m"] == 0.0
+    assert anchor["target_relative_x_m"] == pytest.approx(float(target_pose[9] - root_pose[9]))
+    assert anchor["target_relative_y_m"] == pytest.approx(float(target_pose[10] - root_pose[10]))
+    assert anchor["target_relative_z_m"] == pytest.approx(float(target_pose[11] - root_pose[11]))
+    assert anchor["initial_target_distance_m"] == pytest.approx(np.linalg.norm(target_pose[9:12] - root_pose[9:12]))
+    assert np.linalg.norm(
+        [
+            anchor["target_relative_x_target_distance"],
+            anchor["target_relative_y_target_distance"],
+            anchor["target_relative_z_target_distance"],
+        ]
+    ) == pytest.approx(1.0)
+    assert anchor["root_axis_x"] == pytest.approx(tuple(root_pose[:9].reshape(3, 3)[:, 0]))
 
 
 def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:

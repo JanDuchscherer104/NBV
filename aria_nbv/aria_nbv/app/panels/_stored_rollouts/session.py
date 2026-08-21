@@ -34,6 +34,7 @@ from ....rollouts.inspection import (
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
     root_relative_candidate_rows,
+    root_relative_rollout_anchor_rows,
     selected_candidate_rank_rows,
     selected_depth_summary_rows,
     store_invariant_rows,
@@ -49,6 +50,12 @@ from ....rollouts.reporting import (
 )
 
 CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
+_PROJECTION_CACHE_REVISIONS = {
+    # Root geometry gained target-distance normalized coordinates.  Keep an
+    # existing Streamlit process from serving the prior projection shape.
+    "root_geometry": 2,
+    "root_anchors": 2,
+}
 
 
 @st.cache_resource(show_spinner=False)
@@ -107,10 +114,12 @@ def _cached_projection_cached(
     metric: str | None = None,
     group_fields: tuple[str, ...] = (),
     policies: tuple[str, ...] | None = None,
+    rollout_row_ids: tuple[int, ...] | None = None,
     step_indices: tuple[int, ...] | None = None,
     deep_count: bool = False,
     q_h_chunk_size: int = 1024,
     q_h_state_limit: int | None = None,
+    projection_revision: int = 1,
     store_identity: str = "",
 ) -> Any:
     """Cache serializable inspection projections for one validated store identity."""
@@ -197,6 +206,8 @@ def _cached_projection_cached(
     if projection == "root_geometry":
         rows = root_relative_candidate_rows(reader, actor_valid_only=False)
         return rows if limit is None else rows[:limit]
+    if projection == "root_anchors":
+        return root_relative_rollout_anchor_rows(reader, rollout_row_ids=rollout_row_ids)
     if projection == "depth_summary":
         return selected_depth_summary_rows(reader, rollout_row_id=rollout_row_id, limit=limit)
     raise ValueError(f"Unknown cached rollout projection: {projection}")
@@ -246,6 +257,7 @@ def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
     return _cached_projection_cached(
         store_path,
         projection,
+        projection_revision=_PROJECTION_CACHE_REVISIONS.get(projection, 1),
         store_identity=_store_projection_identity(store_path),
         **kwargs,
     )
