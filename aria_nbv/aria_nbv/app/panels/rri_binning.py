@@ -20,7 +20,17 @@ from ...configs import PathConfig
 from ...data_handling import VinOfflineDatasetConfig, VinOfflineStoreConfig
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ...utils.plotting import _histogram_overlay
+from ..scientific_labels import format_scientific_label, scientific_label
+from ..state import get_label_display_mode
 from .common import _info_popover, _pretty_label, _report_exception
+
+
+def _rri_label() -> str:
+    return format_scientific_label(
+        scientific_label("rri"),
+        mode=get_label_display_mode(),
+        surface="plain",
+    )
 
 
 def render_rri_binning_page() -> None:
@@ -134,10 +144,10 @@ def render_rri_binning_page() -> None:
 
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Samples", rri_stats["samples"])
-    col2.metric("Mean RRI", f"{rri_stats['mean']:.4f}")
-    col3.metric("Median RRI", f"{rri_stats['median']:.4f}")
-    col4.metric("Min RRI", f"{rri_stats['min']:.4f}")
-    col5.metric("Max RRI", f"{rri_stats['max']:.4f}")
+    col2.metric(f"Mean {_rri_label()}", f"{rri_stats['mean']:.4f}")
+    col3.metric(f"Median {_rri_label()}", f"{rri_stats['median']:.4f}")
+    col4.metric(f"Min {_rri_label()}", f"{rri_stats['min']:.4f}")
+    col5.metric(f"Max {_rri_label()}", f"{rri_stats['max']:.4f}")
 
     random_coral_loss = float(max(1, num_classes - 1) * math.log(2.0))
     col_a, col_b = st.columns(2)
@@ -155,7 +165,7 @@ def render_rri_binning_page() -> None:
     )
 
     rri_np = rri.cpu().numpy()
-    x_title = "rri"
+    x_title = _rri_label()
     edge_values = edges.detach().cpu().numpy()
     midpoint_values = binner.class_midpoints().detach().cpu().numpy()
     cdf_sorter: np.ndarray | None = None
@@ -178,7 +188,7 @@ def render_rri_binning_page() -> None:
             rri_np = np.zeros_like(rri_np)
             edge_values = np.zeros_like(edge_values)
             midpoint_values = np.zeros_like(midpoint_values)
-        x_title = "rri (quantile)"
+        x_title = f"{_rri_label()} (quantile)"
 
     series = [("rri", rri_np)]
     fig_hist = _histogram_overlay(
@@ -292,7 +302,7 @@ def render_rri_binning_page() -> None:
     fig_means.update_layout(
         title=_pretty_label("Bin means (±1 std) vs midpoints"),
         xaxis_title="class",
-        yaxis_title="rri",
+        yaxis_title=_rri_label(),
     )
     if log_y:
         for trace in fig_means.data:
@@ -323,7 +333,7 @@ def render_rri_binning_page() -> None:
     fig_stds.update_layout(
         title=_pretty_label("Bin stds vs uniform baseline"),
         xaxis_title="class",
-        yaxis_title="rri std",
+        yaxis_title=f"{_rri_label()} std",
     )
     if log_y:
         for trace in fig_stds.data:

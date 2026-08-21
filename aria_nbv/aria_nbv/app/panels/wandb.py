@@ -40,12 +40,28 @@ from ...utils.wandb_utils import (
     plot_dynamics_scatter,
     plot_metric_curves,
 )
+from ..scientific_labels import format_scientific_label, scientific_label
+from ..state import get_label_display_mode
 from .common import _info_popover, _pretty_label, _report_exception
 
 _ENTITY_CACHE_TTL_S = 300
 _DEFAULT_METRIC_FILTER = (
     "train/coral_loss_rel_random_step|train/pred_rri_mean_epoch|val-aux/spearman|val/coral_loss_rel_random"
 )
+
+
+def _wandb_metric_label(metric: str) -> str:
+    """Format only recognized RRI metrics; preserve arbitrary W&B keys."""
+
+    normalized = metric.rsplit("/", maxsplit=1)[-1].lower()
+    if normalized in {"rri", "oracle_rri", "pred_rri_mean_epoch"}:
+        identifier = "oracle_rri" if normalized != "pred_rri_mean_epoch" else "target_rri"
+        return format_scientific_label(
+            scientific_label(identifier),
+            mode=get_label_display_mode(),
+            surface="plain",
+        )
+    return _pretty_label(metric)
 
 
 @st.cache_data(ttl=_ENTITY_CACHE_TTL_S)
@@ -487,7 +503,7 @@ def render_wandb_analysis_page() -> None:
         fig.update_layout(
             title=_pretty_label(f"{metric_choice} across runs"),
             xaxis_title=_pretty_label(x_axis_label),
-            yaxis_title=_pretty_label(metric_choice),
+            yaxis_title=_wandb_metric_label(metric_choice),
         )
         st.plotly_chart(fig, width="stretch")
 
