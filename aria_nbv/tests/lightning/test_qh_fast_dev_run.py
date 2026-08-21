@@ -14,7 +14,7 @@ from lightning_fabric.utilities.exceptions import MisconfigurationException
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from tests.data_handling.test_qh import _chain
-from tests.lightning.test_qh_module import _ChainDataset, _TableScorer
+from tests.lightning.test_qh_module import _CF0_ACTOR_HASH, _ChainDataset, _TableScorer
 
 
 def _trainer(*, devices: int = 1, fast_dev_run: bool = True, **kwargs: Any) -> pl.Trainer:
@@ -40,9 +40,10 @@ def test_fast_dev_run_executes_exactly_one_injected_scorer_transaction(
         ),
         batch_size=len(horizons),
         seed=17,
+        experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(target_sync_interval=1),
+        QhLightningModuleConfig(target_sync_interval=1, actor_state_contract_hash=_CF0_ACTOR_HASH),
         scorer=_TableScorer(),
     )
     trainer = _trainer()
@@ -70,9 +71,10 @@ def test_fast_dev_run_global_empty_batch_is_exact_noop(monkeypatch: pytest.Monke
         train=_ChainDataset([sample]),
         batch_size=1,
         seed=17,
+        experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(target_sync_interval=1),
+        QhLightningModuleConfig(target_sync_interval=1, actor_state_contract_hash=_CF0_ACTOR_HASH),
         scorer=_TableScorer(),
     )
     initial_state = deepcopy(module.state_dict())
@@ -109,9 +111,10 @@ def test_trainer_rejects_gradient_accumulation_before_scorer_execution() -> None
         train=_ChainDataset([_chain(steps=2, width=3)]),
         batch_size=1,
         seed=17,
+        experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(lr_scheduler=None),
+        QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash=_CF0_ACTOR_HASH),
         scorer=_TableScorer(),
     )
     initial_state = deepcopy(module.state_dict())

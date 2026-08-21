@@ -43,22 +43,22 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
     target_sync_interval: int = Field(default=100, ge=1)
     """Hard target-copy cadence measured in completed optimizer updates."""
 
-    root_evl_profile: QhRootEvlProfile = "none"
+    root_evl_profile: QhRootEvlProfile = "evl_v1"
     """Exact root-EVL carrier the injected scorer accepts."""
 
     selected_observation_protocol: QhSelectedObservationProtocol = "none"
     """Exact selected-observation source the injected scorer accepts; privileged CF-GT is opt-in."""
 
-    experiment_profile: QhExperimentProfile | None = None
-    """Closed named role; ``None`` retains legacy diagnostic-only construction."""
+    experiment_profile: QhExperimentProfile = "qh_cf0_v1"
+    """Closed deployable role; CF+ is explicit and privileged."""
 
     privileged: bool = False
     """Allow the CF+ upper-bound role; deployable modules must leave this false."""
 
-    actor_state_contract_hash: str | None = None
-    """Expected stable hash of the admitted DataModule actor-state contract."""
+    actor_state_contract_hash: str = Field(min_length=1)
+    """Required stable hash of the admitted DataModule actor-state contract."""
 
-    geometry_contract_hash: str | None = None
+    geometry_contract_hash: str | None = Field(default=None, min_length=1)
     """Expected selected-depth geometry hash; required only for CF+ admission."""
 
     @property
@@ -113,19 +113,14 @@ class QhLightningModule(pl.LightningModule):
 
     def __init__(self, config: QhLightningModuleConfig, *, scorer: nn.Module) -> None:
         super().__init__()
-        if config.selected_observation_protocol == "cf_gt" and config.experiment_profile is None:
-            raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
-        if config.experiment_profile is not None:
-            validate_experiment_profile(
-                config.experiment_profile,
-                root_evl_profile=config.root_evl_profile,
-                selected_observation_protocol=config.selected_observation_protocol,
-                privileged=config.privileged,
-            )
-            if config.actor_state_contract_hash is None:
-                raise ValueError("Named Q_H modules require an exact actor_state_contract_hash.")
-            if config.experiment_profile == "qh_cfplus_gt_depth_v1" and config.geometry_contract_hash is None:
-                raise ValueError("CF+ Q_H modules require an exact geometry_contract_hash.")
+        validate_experiment_profile(
+            config.experiment_profile,
+            root_evl_profile=config.root_evl_profile,
+            selected_observation_protocol=config.selected_observation_protocol,
+            privileged=config.privileged,
+        )
+        if config.experiment_profile == "qh_cfplus_gt_depth_v1" and config.geometry_contract_hash is None:
+            raise ValueError("CF+ Q_H modules require an exact geometry_contract_hash.")
         self.config = config
         self.automatic_optimization = False
         self.online_scorer = scorer
@@ -171,12 +166,11 @@ class QhLightningModule(pl.LightningModule):
                 f"{self.config.selected_observation_protocol!r} does not match actor selected-observation presence."
             )
 
-        if self.config.experiment_profile is not None:
-            if actor.static_context is None:
-                raise ValueError("Named Q_H experiment profiles require compact root EVL actor context.")
-            expected_selected = self.config.experiment_profile == "qh_cfplus_gt_depth_v1"
-            if (actor.selected_observation_prefix is not None) != expected_selected:
-                raise ValueError(f"Q_H actor does not match experiment profile {self.config.experiment_profile!r}.")
+        if actor.static_context is None:
+            raise ValueError("Named Q_H experiment profiles require compact root EVL actor context.")
+        expected_selected = self.config.experiment_profile == "qh_cfplus_gt_depth_v1"
+        if (actor.selected_observation_prefix is not None) != expected_selected:
+            raise ValueError(f"Q_H actor does not match experiment profile {self.config.experiment_profile!r}.")
 
     def train(self, mode: bool = True) -> "QhLightningModule":
         """Propagate mode to the online scorer while keeping the target in eval."""
@@ -198,14 +192,9 @@ class QhLightningModule(pl.LightningModule):
     def _validate_datamodule_contract(self, data_module: object) -> None:
         """Reject DataModule profile/hash drift before the first training batch."""
 
-        if self.config.experiment_profile is not None and getattr(data_module, "experiment_profile", None) != (
-            self.config.experiment_profile
-        ):
+        if getattr(data_module, "experiment_profile", None) != self.config.experiment_profile:
             raise ValueError("Q_H module and DataModule experiment profiles must match exactly.")
-        if (
-            self.config.actor_state_contract_hash is not None
-            and getattr(data_module, "actor_state_contract_hash", None) != self.config.actor_state_contract_hash
-        ):
+        if getattr(data_module, "actor_state_contract_hash", None) != self.config.actor_state_contract_hash:
             raise ValueError("Q_H module and DataModule actor-state contract hashes must match exactly.")
         if self.config.experiment_profile == "qh_cfplus_gt_depth_v1":
             expected = self.config.geometry_contract_hash

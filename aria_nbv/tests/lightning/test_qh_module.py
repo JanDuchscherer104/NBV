@@ -50,7 +50,26 @@ class _BadShapeScorer(nn.Module):
 
 
 _CONTRACT = QhDataContract("qh-v1", "v0", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
-_ACTOR_CONTRACT = QhActorStateContract("none", "none", "test-actor-manifest", ())
+_ACTOR_CONTRACT = QhActorStateContract("evl_v1", "none", "test-actor-manifest", (), experiment_profile="qh_cf0_v1")
+_CF0_ACTOR_HASH = stable_msgspec_hash(_ACTOR_CONTRACT)
+
+
+def _cf0_chain(chain: QhChain) -> QhChain:
+    """Attach the compact EVL carrier required by the deployable CF0 module."""
+
+    static_context = QhStaticContext(
+        vin_snippet=_snippet(),
+        t_world_voxel=PoseTW(),
+        voxel_extent=torch.ones(6),
+        occ_pr=torch.ones(1, 1, 1, 1),
+        occ_input=torch.ones(1, 1, 1, 1),
+        free_input=torch.ones(1, 1, 1, 1),
+        counts=torch.ones(1, 1, 1, dtype=torch.int64),
+        cent_pr=torch.ones(1, 1, 1, 1),
+        pts_world=torch.ones(1, 3),
+        evl_presence=torch.ones(8, dtype=torch.bool),
+    )
+    return replace(chain, actor=replace(chain.actor, static_context=static_context))
 
 
 class _ChainDataset(Dataset[QhChain]):
@@ -72,11 +91,11 @@ class _ChainDataset(Dataset[QhChain]):
         return len(self.chains)
 
     def __getitem__(self, index: int) -> QhChain:
-        return self.chains[index]
+        return _cf0_chain(self.chains[index])
 
 
 def _training_chain(*, bootstrap: bool = True) -> QhChain:
-    chain = _chain(steps=2, width=3)
+    chain = _cf0_chain(_chain(steps=2, width=3))
     supervision = replace(
         chain.supervision,
         candidate_reward=torch.tensor([[0.0, 0.5, 0.0], [2.0, 0.0, 0.0]]),
@@ -93,7 +112,11 @@ def _batch(*, bootstrap: bool = True) -> QhBatch:
 
 def _module(sync_interval: int = 2) -> QhLightningModule:
     return QhLightningModule(
-        QhLightningModuleConfig(target_sync_interval=sync_interval, lr_scheduler=None),
+        QhLightningModuleConfig(
+            target_sync_interval=sync_interval,
+            lr_scheduler=None,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+        ),
         scorer=_TableScorer(),
     )
 
@@ -108,7 +131,9 @@ def _install_manual_step(module: QhLightningModule, monkeypatch: pytest.MonkeyPa
 
 def test_scorer_is_required_and_not_part_of_config() -> None:
     with pytest.raises(TypeError, match="scorer"):
-        QhLightningModule(QhLightningModuleConfig(lr_scheduler=None))  # type: ignore[call-arg]
+        QhLightningModule(  # type: ignore[call-arg]
+            QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash=_CF0_ACTOR_HASH)
+        )
 
 
 def test_named_cfplus_rejects_deployable_module_before_scorer_construction() -> None:
@@ -117,6 +142,7 @@ def test_named_cfplus_rejects_deployable_module_before_scorer_construction() -> 
         experiment_profile="qh_cfplus_gt_depth_v1",
         root_evl_profile="evl_v1",
         selected_observation_protocol="cf_gt",
+        actor_state_contract_hash="actor",
     )
     with pytest.raises(ValueError, match="rejects privileged"):
         QhLightningModule(config, scorer=_TableScorer())
@@ -138,27 +164,19 @@ def test_named_cfplus_allows_explicit_privileged_module() -> None:
     assert module.config.experiment_profile == "qh_cfplus_gt_depth_v1"
 
 
-@pytest.mark.parametrize("privileged", [False, True])
-def test_module_rejects_unnamed_cf_gt_before_scorer_construction(privileged: bool) -> None:
+def test_module_rejects_unnamed_cf_gt_before_scorer_construction() -> None:
     config = QhLightningModuleConfig(
         lr_scheduler=None,
         selected_observation_protocol="cf_gt",
-        privileged=privileged,
+        actor_state_contract_hash=_CF0_ACTOR_HASH,
     )
     with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
         QhLightningModule(config, scorer=_TableScorer())
 
 
 def test_named_cf0_requires_actor_state_contract_hash() -> None:
-    with pytest.raises(ValueError, match="actor_state_contract_hash"):
-        QhLightningModule(
-            QhLightningModuleConfig(
-                lr_scheduler=None,
-                experiment_profile="qh_cf0_v1",
-                root_evl_profile="evl_v1",
-            ),
-            scorer=_TableScorer(),
-        )
+    with pytest.raises(ValidationError, match="actor_state_contract_hash"):
+        QhLightningModuleConfig(lr_scheduler=None)
 
 
 def test_named_cfplus_requires_geometry_contract_hash() -> None:
@@ -182,7 +200,9 @@ def test_module_rejects_actor_contract_hash_mismatch_before_training() -> None:
         scorer=_TableScorer(),
     )
     with pytest.raises(ValueError, match="actor-state contract hashes"):
-        module._validate_datamodule_contract(type("Data", (), {"actor_state_contract_hash": "actual"})())
+        module._validate_datamodule_contract(
+            type("Data", (), {"experiment_profile": "qh_cf0_v1", "actor_state_contract_hash": "actual"})()
+        )
 
 
 def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None:
@@ -235,13 +255,13 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), "inf"])
 def test_huber_delta_rejects_nonfinite_values(value: float | str) -> None:
     with pytest.raises(ValidationError) as error:
-        QhLightningModuleConfig(huber_delta=value)
+        QhLightningModuleConfig(huber_delta=value, actor_state_contract_hash=_CF0_ACTOR_HASH)
 
     assert error.value.errors()[0]["loc"] == ("huber_delta",)
 
 
 def test_forward_consumes_actor_tensors_and_requires_exact_batch_shape() -> None:
-    batch = collate_qh_chains([_chain(steps=1, width=3), _chain(steps=2, width=3, offset=10)])
+    batch = collate_qh_chains([_cf0_chain(_chain(steps=1, width=3)), _cf0_chain(_chain(steps=2, width=3, offset=10))])
     module = _module()
 
     values = module(batch.actor)
@@ -269,9 +289,15 @@ def test_scorer_rejects_missing_declared_actor_carrier(field: str, value: str, m
             actor_state_contract_hash="actor",
             geometry_contract_hash="geometry",
         )
-    config = QhLightningModuleConfig(lr_scheduler=None, **config_values)
+    config = QhLightningModuleConfig(
+        lr_scheduler=None,
+        actor_state_contract_hash=config_values.pop("actor_state_contract_hash", _CF0_ACTOR_HASH),
+        **config_values,
+    )
     module = QhLightningModule(config, scorer=_TableScorer())
     batch = _batch()
+    if field == "root_evl_profile":
+        batch = replace(batch, actor=replace(batch.actor, static_context=None))
     if field == "selected_observation_protocol":
         batch = replace(
             batch,
