@@ -981,7 +981,12 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ProjectionError, r"term-a.*unknown symbol_ref"):
             self.build()
         self.fixture.glossary_value(0)["symbol_refs"] = ["rl.qh"]
-        self.fixture.write("docs/typst/shared/symbols/rl.typ", "#let rl = ()\n")
+        self.fixture.write(
+            "docs/typst/shared/symbols/rl.typ",
+            self.fixture.root.joinpath("docs/typst/shared/symbols/rl.typ")
+            .read_text(encoding="utf-8")
+            .replace("qh:", "missing:"),
+        )
         with self.assertRaisesRegex(ProjectionError, r"symbols.rl.qh.*declaration"):
             self.build()
 
