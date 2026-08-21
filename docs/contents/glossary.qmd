@@ -194,7 +194,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <td><a href="#term-target-rri-reward">reward - Target-RRI Reward</a></td>
 <td>Quality-only immediate reward equal to root-normalized target gain for the selected candidate.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_e$</span><code>entity.rri_e</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}_e^{\mathrm{GT}}$</span><code>ase.mesh_target</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})$</span><code>rl.target_rri_reward</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/(\Delta_0^e+\varepsilon)$</span><code>rl.target_rri_reward</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-finite-horizon-return">return - Finite-Horizon Return</a></td>
@@ -1032,7 +1032,7 @@ $$
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_e$</span><code>entity.rri_e</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}_e^{\mathrm{GT}}$</span><code>ase.mesh_target</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})$</span><code>rl.target_rri_reward</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/(\Delta_0^e+\varepsilon)$</span><code>rl.target_rri_reward</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Quality-only immediate reward equal to root-normalized target gain for the selected candidate.</p>

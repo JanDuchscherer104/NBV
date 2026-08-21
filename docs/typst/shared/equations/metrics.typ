@@ -1,6 +1,25 @@
 #import "../symbols.typ": symb
 
 #let metrics = (
+    pearson: $
+      r_(x,y)
+      =
+      (sum_i (x_i - bar(x)) (y_i - bar(y)))
+      /
+      sqrt(sum_i (x_i - bar(x))^2 sum_i (y_i - bar(y))^2)
+    $,
+    categorical_entropy: $
+      H(bold(p)) = - sum_(i : m_i = 1) p_i log(p_i)
+    $,
+    selection_rate_given_available: $
+      "SelRate"_f = N_("selected",f) / N_("actor-valid",f)
+    $,
+    q_train_mask: $
+      m_(t,i)^"train" = m_(t,i)^"actor" dot m_(t,i)^"oracle"
+    $,
+    selected_oracle_regret: $
+      "Regret"_t = max_(i : m_(t,i) = 1) g_(t,i) - g_(t,a_t)
+    $,
     spearman: $
       rho = "corr"("rank"(#(symb.vin.rri_hat) _i), "rank"(#(symb.vin.rri) _i))
     $,
