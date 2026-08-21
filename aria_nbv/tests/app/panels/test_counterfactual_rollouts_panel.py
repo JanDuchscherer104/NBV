@@ -20,6 +20,7 @@ from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app import panels as panel_dispatcher
 from aria_nbv.app import scene_view
+from aria_nbv.app.panels import _stored_rollout_session as stored_rollout_session
 from aria_nbv.app.panels import _stored_rollouts_page as stored_rollouts_page
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
@@ -587,12 +588,12 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
         isolated_path_config.offline_cache_dir / "flow.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=50)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    stored_rollout_session.clear_stored_rollout_caches()
 
     def fail_heavy_audit(*_args, **_kwargs):
         raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
 
-    monkeypatch.setattr(stored_rollouts_page, "candidate_audit_rows", fail_heavy_audit)
+    monkeypatch.setattr(stored_rollout_session, "candidate_audit_rows", fail_heavy_audit)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Targets & Action Support")
 
@@ -612,8 +613,8 @@ def test_stored_rollouts_unopened_heavy_evidence_calls_are_exactly_zero(
         isolated_path_config.offline_cache_dir / "lazy-heavy.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
-    original_projection = stored_rollouts_page._cached_projection
+    stored_rollout_session.clear_stored_rollout_caches()
+    original_projection = stored_rollout_session._cached_projection
     heavy_calls = dict.fromkeys(("candidates", "candidate_group", "ranks", "root_geometry", "tree"), 0)
 
     def spy_projection(store_path: str, projection: str, **kwargs):
@@ -621,7 +622,7 @@ def test_stored_rollouts_unopened_heavy_evidence_calls_are_exactly_zero(
             heavy_calls[projection] += 1
         return original_projection(store_path, projection, **kwargs)
 
-    monkeypatch.setattr(stored_rollouts_page, "_cached_projection", spy_projection)
+    monkeypatch.setattr(stored_rollout_session, "_cached_projection", spy_projection)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Scientific Evidence")
 
@@ -698,7 +699,7 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
     def capture_plot(_figure, explanation):
         captured.append(explanation)
 
-    monkeypatch.setattr(stored_rollouts_page, "_cached_projection", fake_projection)
+    monkeypatch.setattr(stored_rollout_session, "_cached_projection", fake_projection)
     monkeypatch.setattr(stored_rollouts_page, "_render_plot", capture_plot)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
 
@@ -833,7 +834,7 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
         calls.append((rollout_row_id, step_row_id))
         return []
 
-    monkeypatch.setattr(stored_rollouts_page, "_cached_projection", fake_projection)
+    monkeypatch.setattr(stored_rollout_session, "_cached_projection", fake_projection)
     kwargs = {
         "store_path": "/store.zarr",
         "scope": "Candidates",
@@ -859,7 +860,7 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
         isolated_path_config.offline_cache_dir / "queries.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    stored_rollout_session.clear_stored_rollout_caches()
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Inspect, Export & Rerun")
     scope = next(item for item in app.selectbox if item.label == "Query scope")

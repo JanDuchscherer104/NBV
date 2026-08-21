@@ -13,7 +13,6 @@ import json
 from collections import Counter
 from collections.abc import MutableMapping
 from dataclasses import asdict, dataclass
-from functools import wraps
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
@@ -25,41 +24,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ...configs import PathConfig
-from ...dataset_topology import build_dataset_topology, discover_vin_store_dirs
+from ...dataset_topology import discover_vin_store_dirs
 from ...rerun_inspector import RolloutLayerName, RolloutLayerPreset
 from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
-    RolloutSuspiciousQueryConfig,
-    candidate_audit_rows,
-    candidate_flow_rows,
     candidate_group_summary_rows,  # noqa: F401 - retained for projection test compatibility
-    candidate_population_evidence,
-    comparable_policy_cohorts,
-    discounted_rollout_return_rows,
-    discover_rollout_store_paths,
-    mask_combination_rows,
-    oracle_headroom_evidence,
-    paired_policy_comparison_rows,
-    promoted_store_validation_error,
-    q_h_evidence_rows,
-    reconstruction_endpoint_summary_rows,
-    reconstruction_metric_summary_rows,
     rollout_endpoint_metric_summary,
-    rollout_header_summary,
-    rollout_step_objective_rows,
-    rollout_store_inventory_rows,
-    rollout_tree_summary_rows,
-    root_relative_candidate_rows,
-    selected_candidate_rank_rows,
     selected_depth_preview,
-    selected_depth_summary_rows,
-    store_invariant_rows,
-    suspicious_rollout_rows,
-    target_audit_rows,
-    temporal_metric_summary_rows,
 )
-from ...rollouts.reporting import build_thesis_report_frames, serialize_thesis_report_bundle
 from ..rerun_launch import (
     RerunLaunchMode,
     build_rerun_rollout_command,
@@ -71,8 +44,8 @@ from ..rerun_launch import (
     start_rerun_launch,
     stop_rerun_launch,
 )
-from .common import _report_exception
 from . import _stored_rollout_session as session
+from .common import _report_exception
 
 _SECTIONS = (
     "Trust & Topology",
@@ -175,306 +148,6 @@ class ScientificExplanation:
             raise ValueError("Scientific explanations require every interpretation field and at least one source.")
 
 
-@st.cache_resource(show_spinner=False)
-def _cached_store_bundle_cached(
-    store_path: str, *, store_identity: str = ""
-) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
-    """Open and validate one replacement-sensitive rollout store identity."""
-
-    reader = RolloutZarrStoreReader(Path(store_path))
-    validation = reader.validate()
-    try:
-        manifest_payload = reader.manifest()
-    except Exception:
-        manifest_payload = {"root_attrs": {}, "manifest": {}}
-    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
-        validation.errors.append(promotion_error)
-    return reader, validation, manifest_payload
-
-
-@wraps(_cached_store_bundle_cached.__wrapped__)
-def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
-    """Open one store through a cache key that changes when its manifest is replaced."""
-
-    return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
-
-
-@st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
-def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
-    """Project the immutable rollout-store inventory once per cache root."""
-
-    return rollout_store_inventory_rows(
-        discover_rollout_store_paths(Path(cache_root)),
-        validate=False,
-    )
-
-
-@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-def _cached_candidate_population_cached(
-    store_path: str, store_identity: str, sample_size: int = 500
-) -> dict[str, object]:
-    """Build the complete candidate bundle once per immutable store identity."""
-
-    reader, _, _ = _cached_store_bundle(store_path)
-    return candidate_population_evidence(reader, sample_size=sample_size)
-
-
-@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-def _cached_projection_cached(
-    store_path: str,
-    projection: str,
-    *,
-    rollout_row_id: int | None = None,
-    step_row_id: int | None = None,
-    limit: int | None = None,
-    group_by: str | None = None,
-    metric: str | None = None,
-    group_fields: tuple[str, ...] = (),
-    policies: tuple[str, ...] | None = None,
-    step_indices: tuple[int, ...] | None = None,
-    deep_count: bool = False,
-    q_h_chunk_size: int = 1024,
-    q_h_state_limit: int | None = None,
-    store_identity: str = "",
-) -> Any:
-    """Cache serializable inspection projections for one validated store identity."""
-
-    reader, _, manifest_payload = _cached_store_bundle(store_path)
-    if projection == "invariants":
-        return store_invariant_rows(reader, manifest_payload=manifest_payload)
-    if projection == "header":
-        return rollout_header_summary(reader, manifest_payload=manifest_payload)
-    if projection == "cohorts":
-        return comparable_policy_cohorts(reader)
-    if projection == "paired":
-        return paired_policy_comparison_rows(reader)
-    if projection == "steps":
-        return rollout_step_objective_rows(reader, rollout_row_id=rollout_row_id)
-    if projection == "reconstruction_metrics":
-        return reconstruction_metric_summary_rows(reader)
-    if projection == "reconstruction_endpoints":
-        return reconstruction_endpoint_summary_rows(reader)
-    if projection == "discounted_returns":
-        root_attrs = manifest_payload.get("root_attrs", {})
-        root_attrs = root_attrs if isinstance(root_attrs, dict) else {}
-        return discounted_rollout_return_rows(
-            reader,
-            return_semantics=root_attrs.get("return_semantics"),
-            discount_gamma=root_attrs.get("discount_gamma"),
-        )
-    if projection == "headroom":
-        return oracle_headroom_evidence(reader)
-    if projection == "temporal":
-        if metric is None:
-            raise ValueError("temporal projection requires metric")
-        return temporal_metric_summary_rows(reader, metric=metric, group_fields=group_fields)
-    if projection == "candidate_flow":
-        return candidate_flow_rows(reader, policies=policies, step_indices=step_indices)
-    if projection == "ranks":
-        return selected_candidate_rank_rows(reader, policies=policies, step_indices=step_indices)
-    if projection == "targets":
-        return target_audit_rows(reader)
-    if projection == "masks":
-        return mask_combination_rows(reader)
-    if projection == "candidates":
-        rows: list[dict[str, object]] = []
-        candidate_audit_rows(
-            reader,
-            rollout_row_id=rollout_row_id,
-            step_row_id=step_row_id,
-            limit=limit,
-            row_callback=rows.append,
-        )
-        return rows
-    if projection == "candidate_group":
-        if group_by is None:
-            raise ValueError("candidate_group projection requires group_by")
-        if not hasattr(reader, "array"):
-            audit_rows = _cached_projection(store_path, "candidates", limit=limit)
-            return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
-        return _cached_candidate_population_cached(store_path, store_identity)["groups"][group_by]
-    if projection in {"candidate_composition", "candidate_calibration"}:
-        if group_by is None:
-            raise ValueError(f"{projection} projection requires group_by")
-        evidence = _cached_candidate_population_cached(store_path, store_identity)
-        key = "composition" if projection == "candidate_composition" else "calibration"
-        return evidence[key][group_by]
-    if projection == "candidate_collision":
-        return _cached_candidate_population_cached(store_path, store_identity)["collision"]
-    if projection == "candidate_sample":
-        return _cached_candidate_population_cached(store_path, store_identity, 500 if limit is None else limit)[
-            "sample"
-        ]
-    if projection == "candidate_population":
-        return _cached_candidate_population_cached(store_path, store_identity)
-    if projection == "q_h":
-        _, validation, _ = _cached_store_bundle(store_path)
-        return q_h_evidence_rows(
-            reader,
-            deep_count=deep_count,
-            chunk_size=q_h_chunk_size,
-            state_row_limit=q_h_state_limit,
-            validation_result=validation,
-        )
-    if projection == "tree":
-        return rollout_tree_summary_rows(reader)
-    if projection == "root_geometry":
-        rows = root_relative_candidate_rows(reader, actor_valid_only=False)
-        return rows if limit is None else rows[:limit]
-    if projection == "depth_summary":
-        return selected_depth_summary_rows(reader, rollout_row_id=rollout_row_id, limit=limit)
-    raise ValueError(f"Unknown cached rollout projection: {projection}")
-
-
-def _store_projection_identity(store_path: str) -> str:
-    """Return a replacement-sensitive identity without reading Zarr payloads."""
-
-    path = Path(store_path)
-    try:
-        digest = hashlib.sha256()
-        for child in sorted(
-            (candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()
-        ):
-            relative = child.relative_to(path).as_posix().encode()
-            stat = child.stat()
-            digest.update(len(relative).to_bytes(8, "big"))
-            digest.update(relative)
-            digest.update(stat.st_size.to_bytes(8, "big"))
-            digest.update(stat.st_mtime_ns.to_bytes(8, "big"))
-            digest.update(stat.st_ctime_ns.to_bytes(8, "big"))
-            digest.update(stat.st_ino.to_bytes(8, "big"))
-        success = _read_json_mapping(path / "_SUCCESS.json")
-        seal = success.get("rollout_store_content_sha256") if success is not None else None
-        identity = f"store:{seal or 'unpromoted'}:{digest.hexdigest()}"
-    except OSError:
-        try:
-            stat = path.stat()
-            identity = f"store:{stat.st_size}:{stat.st_mtime_ns}"
-        except OSError:
-            identity = "missing"
-    return identity
-
-
-def _read_json_mapping(path: Path) -> dict[str, object] | None:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-@wraps(_cached_projection_cached.__wrapped__)
-def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
-    """Dispatch through the projection cache with a replacement-sensitive store key."""
-
-    return _cached_projection_cached(
-        store_path,
-        projection,
-        store_identity=_store_projection_identity(store_path),
-        **kwargs,
-    )
-
-
-@st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
-def _cached_topology_cached(
-    store_path: str,
-    vin_store_dirs: tuple[str, ...],
-    paths: PathConfig,
-    selected_source_row_id: int | None = None,
-    *,
-    store_identity: str = "",
-) -> Any:
-    """Resolve one replacement-sensitive cross-store topology and reuse its Rich tree."""
-
-    return build_dataset_topology(
-        rollout_store_dir=Path(store_path),
-        vin_store_dirs=[Path(value) for value in vin_store_dirs],
-        path_config=paths,
-        selected_source_row_id=selected_source_row_id,
-    )
-
-
-@wraps(_cached_topology_cached.__wrapped__)
-def _cached_topology(
-    store_path: str,
-    vin_store_dirs: tuple[str, ...],
-    paths: PathConfig,
-    selected_source_row_id: int | None = None,
-) -> Any:
-    """Resolve topology through a cache key bound to the selected store identity."""
-
-    return _cached_topology_cached(
-        store_path,
-        vin_store_dirs,
-        paths,
-        selected_source_row_id,
-        store_identity=_store_projection_identity(store_path),
-    )
-
-
-@st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
-def _cached_failures_cached(
-    store_path: str,
-    min_valid_candidates: int,
-    dominant_invalid_fraction: float,
-    max_step_distance_m: float,
-    *,
-    store_identity: str = "",
-) -> list[dict[str, object]]:
-    """Cache failure triage for one replacement-sensitive store and threshold tuple."""
-
-    reader, _, _ = _cached_store_bundle(store_path)
-    config = RolloutSuspiciousQueryConfig(
-        min_valid_candidates=min_valid_candidates,
-        dominant_invalid_fraction=dominant_invalid_fraction,
-        max_step_distance_m=max_step_distance_m,
-    )
-    return suspicious_rollout_rows(reader, config=config)
-
-
-@wraps(_cached_failures_cached.__wrapped__)
-def _cached_failures(
-    store_path: str,
-    min_valid_candidates: int,
-    dominant_invalid_fraction: float,
-    max_step_distance_m: float,
-) -> list[dict[str, object]]:
-    """Evaluate failure triage through a cache key bound to the selected store identity."""
-
-    return _cached_failures_cached(
-        store_path,
-        min_valid_candidates,
-        dominant_invalid_fraction,
-        max_step_distance_m,
-        store_identity=_store_projection_identity(store_path),
-    )
-
-
-@st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
-def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, store_identity: str = "") -> bytes:
-    """Build one deterministic bundle for a replacement-sensitive store identity."""
-
-    frames = build_thesis_report_frames([Path(store_path)], evidence_status=evidence_status)
-    return serialize_thesis_report_bundle(frames)
-
-
-@wraps(_cached_evidence_bundle_cached.__wrapped__)
-def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
-    """Build a report bundle through the replacement-sensitive store cache key."""
-
-    return _cached_evidence_bundle_cached(
-        store_path,
-        evidence_status,
-        store_identity=_store_projection_identity(store_path),
-    )
-
-
-def _clear_stored_rollout_caches() -> None:
-    """Clear only the inspector caches after stores are created or replaced."""
-
-    session.clear_stored_rollout_caches()
-
-
 def render_stored_rollouts_page() -> None:
     """Render the five-workspace stored-rollout inspection workflow."""
 
@@ -486,7 +159,7 @@ def render_stored_rollouts_page() -> None:
     _render_role_legend()
 
     paths = PathConfig()
-    inventory = _cached_inventory(paths.offline_cache_dir.as_posix())
+    inventory = session.cached_inventory(paths.offline_cache_dir.as_posix())
     store_path = _render_store_selector(paths, inventory)
     if store_path is None:
         st.info("No rollout store is selected. Choose a discovered store or enter a path.")
@@ -494,7 +167,7 @@ def render_stored_rollouts_page() -> None:
 
     selected_inventory = next((row for row in inventory if Path(str(row["path"])) == store_path), None)
     try:
-        reader, validation, manifest_payload = _cached_store_bundle(store_path.as_posix())
+        reader, validation, manifest_payload = session.cached_store_bundle(store_path.as_posix())
     except Exception as exc:
         st.error(f"The selected store cannot be opened: {type(exc).__name__}: {exc}")
         _download_json("Download store identity JSON", "rollout-store-identity.json", selected_inventory or {})
@@ -581,7 +254,7 @@ def _render_store_selector(paths: PathConfig, inventory: list[dict[str, object]]
                 candidate = paths.resolve_cache_artifact_dir(manual)
             selected = candidate.resolve()
     if col_status.button("Refresh stores", help="Clear inspector caches after creating or replacing a store."):
-        _clear_stored_rollout_caches()
+        session.clear_stored_rollout_caches()
         st.rerun()
     return selected
 
@@ -622,7 +295,7 @@ def _render_trust_and_topology(
     _render_validated_store_header(reader.store_dir.as_posix(), validation_ok=validation_ok)
 
     try:
-        invariants = _cached_projection(reader.store_dir.as_posix(), "invariants")
+        invariants = session.cached_projection(reader.store_dir.as_posix(), "invariants")
     except Exception as exc:
         invariants = [{"status": "FAIL", "invariant": "invariant projection", "evidence": str(exc)}]
     inv_df = pd.DataFrame(invariants)
@@ -636,7 +309,7 @@ def _render_trust_and_topology(
 
     vin_dirs = discover_vin_store_dirs(paths.offline_cache_dir)
     try:
-        topology = _cached_topology(
+        topology = session.cached_topology(
             store_path.as_posix(),
             tuple(path.as_posix() for path in vin_dirs),
             paths,
@@ -684,7 +357,7 @@ def _render_trust_and_topology(
                     ),
                     key="stored_topology_source_row",
                 )
-                topology = _cached_topology(
+                topology = session.cached_topology(
                     store_path.as_posix(),
                     tuple(path.as_posix() for path in vin_dirs),
                     paths,
@@ -708,7 +381,7 @@ def _render_trust_and_topology(
 def _render_store_header_summary(store_path: str) -> None:
     """Render reference coverage and physical cost without candidate projection."""
 
-    header = _cached_projection(store_path, "header")
+    header = session.cached_projection(store_path, "header")
     st.markdown("#### Coverage and physical cost")
     coverage_cols = st.columns(4)
     coverage_cols[0].metric("Scenes", _format_count(header.get("scenes")))
@@ -776,14 +449,14 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
     st.subheader("Scientific Evidence")
     store_path = reader.store_dir.as_posix()
     _render_reconstruction_summary(store_path)
-    cohort = _cached_projection(store_path, "cohorts")
+    cohort = session.cached_projection(store_path, "cohorts")
     eligibility = bool(cohort.get("eligible"))
     st.metric("Matched comparison eligible", "YES" if eligibility else "NO")
     st.caption(
         "Policies are comparison dimensions only after source sample, target protocol, horizon/budget, candidate/oracle configuration, and branch schedule match."
     )
     if eligibility:
-        comparison = pd.DataFrame(_cached_projection(store_path, "paired"))
+        comparison = pd.DataFrame(session.cached_projection(store_path, "paired"))
         if comparison.empty:
             st.info("Matched cohorts exist, but no finite paired endpoint metric is available.")
         else:
@@ -832,7 +505,7 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
             st.dataframe(mismatch, hide_index=True, width="stretch")
             _download_frame("Download mismatch evidence CSV", "policy-cohort-mismatches.csv", mismatch)
 
-    steps = pd.DataFrame(_cached_projection(store_path, "steps"))
+    steps = pd.DataFrame(session.cached_projection(store_path, "steps"))
     if not steps.empty:
         _render_temporal_explorer(store_path, steps, matched_cohorts=eligibility)
         _download_frame("Download selected-chain CSV", "selected-chain-evidence.csv", steps)
@@ -843,7 +516,7 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
             value=False,
             help="These projections traverse every factual step and candidate shell, then remain cached for this store.",
         ):
-            _render_branching_evidence(steps, pd.DataFrame(_cached_projection(store_path, "tree")))
+            _render_branching_evidence(steps, pd.DataFrame(session.cached_projection(store_path, "tree")))
             _render_selected_rank_and_geometry(store_path)
 
 
@@ -857,10 +530,10 @@ def _render_reconstruction_summary(store_path: str) -> None:
     ):
         return
 
-    metric_rows = pd.DataFrame(_cached_projection(store_path, "reconstruction_metrics"))
-    endpoint_rows = pd.DataFrame(_cached_projection(store_path, "reconstruction_endpoints"))
-    discounted = _cached_projection(store_path, "discounted_returns")
-    headroom = _cached_projection(store_path, "headroom")
+    metric_rows = pd.DataFrame(session.cached_projection(store_path, "reconstruction_metrics"))
+    endpoint_rows = pd.DataFrame(session.cached_projection(store_path, "reconstruction_endpoints"))
+    discounted = session.cached_projection(store_path, "discounted_returns")
+    headroom = session.cached_projection(store_path, "headroom")
 
     st.markdown("#### Reconstruction and selection metric plan")
     if metric_rows.empty:
@@ -923,7 +596,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
         )
 
     summary = pd.DataFrame(
-        _cached_projection(
+        session.cached_projection(
             store_path,
             "temporal",
             metric=metric,
@@ -1092,7 +765,7 @@ def _temporal_evidence_role(
 def _render_selected_rank_and_geometry(store_path: str) -> None:
     """Render expensive selected-rank and complete root-relative evidence on demand."""
 
-    ranks = pd.DataFrame(_cached_projection(store_path, "ranks"))
+    ranks = pd.DataFrame(session.cached_projection(store_path, "ranks"))
     if not ranks.empty:
         rank_col = "selected_rank" if "selected_rank" in ranks else next((c for c in ranks if "rank" in c), None)
         regret_col = "regret" if "regret" in ranks else next((c for c in ranks if "regret" in c), None)
@@ -1126,7 +799,7 @@ def _render_selected_rank_and_geometry(store_path: str) -> None:
         st.dataframe(ranks, hide_index=True, width="stretch")
         _download_frame("Download selected rank/regret CSV", "selected-rank-regret.csv", ranks)
 
-    geometry = pd.DataFrame(_cached_projection(store_path, "root_geometry"))
+    geometry = pd.DataFrame(session.cached_projection(store_path, "root_geometry"))
     if not geometry.empty:
         st.caption(
             "Coordinates are translated by each rollout root. Absolute world coordinates from unrelated scenes are never aggregated."
@@ -1258,7 +931,7 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             help="Bounds interactive geometry traces only; aggregate masks and family counts still use the full store.",
         )
     )
-    targets = pd.DataFrame(_cached_projection(store_path, "targets"))
+    targets = pd.DataFrame(session.cached_projection(store_path, "targets"))
     if not targets.empty:
         protocol = (
             targets.groupby(["target_valid", "gt_label_valid", "gt_match_status"], dropna=False)
@@ -1296,7 +969,7 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
 
     _render_candidate_provenance_flow(store_path)
 
-    masks = pd.DataFrame(_cached_projection(store_path, "masks"))
+    masks = pd.DataFrame(session.cached_projection(store_path, "masks"))
     if not masks.empty:
         label_cols = [c for c in ("actor_action", "oracle_label", "q_train", "selected") if c in masks]
         masks["combination"] = masks[label_cols].astype(str).agg(" · ".join, axis=1)
@@ -1339,7 +1012,7 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
         value=False,
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
     ):
-        candidate_rows = _cached_projection(store_path, "candidates", limit=candidate_plot_limit)
+        candidate_rows = session.cached_projection(store_path, "candidates", limit=candidate_plot_limit)
         _render_candidate_geometry_diagnostics(
             pd.DataFrame(candidate_rows),
             pd.DataFrame(candidate_rows),
@@ -1351,7 +1024,7 @@ def _render_candidate_population_evidence(store_path: str) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
-    population = _cached_projection(store_path, "candidate_population", group_by=group_by)
+    population = session.cached_projection(store_path, "candidate_population", group_by=group_by)
     composition = pd.DataFrame(population["composition"][group_by])
     calibration = pd.DataFrame(population["calibration"][group_by])
     collision = pd.DataFrame(population["collision"])
@@ -1383,16 +1056,16 @@ def _render_candidate_population_evidence(store_path: str) -> None:
 def _render_candidate_provenance_flow(store_path: str) -> None:
     """Render the lightweight complete-population candidate provenance flow."""
 
-    _, validation, _ = _cached_store_bundle(store_path)
+    _, validation, _ = session.cached_store_bundle(store_path)
     store_candidate_count = int(validation.num_candidates)
-    steps = pd.DataFrame(_cached_projection(store_path, "steps"))
+    steps = pd.DataFrame(session.cached_projection(store_path, "steps"))
     policy_options = sorted(str(value) for value in steps.get("policy", pd.Series(dtype=str)).dropna().unique())
     depth_options = sorted(int(value) for value in steps.get("step_index", pd.Series(dtype=int)).dropna().unique())
     col_policy, col_depth = st.columns(2)
     selected_policies = col_policy.multiselect("Flow policies", options=policy_options, default=policy_options)
     selected_depths = col_depth.multiselect("Flow rollout depths", options=depth_options, default=depth_options)
     flow = pd.DataFrame(
-        _cached_projection(
+        session.cached_projection(
             store_path,
             "candidate_flow",
             policies=tuple(selected_policies),
@@ -1439,7 +1112,7 @@ def _render_candidate_provenance_flow(store_path: str) -> None:
     _download_frame("Download candidate provenance flow CSV", "candidate-provenance-flow.csv", flow)
 
     ranks = pd.DataFrame(
-        _cached_projection(
+        session.cached_projection(
             store_path,
             "ranks",
             policies=tuple(selected_policies),
@@ -1658,7 +1331,7 @@ def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: s
 def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
     """Render restored complete-store candidate audit plots on demand."""
 
-    families = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by="position"))
+    families = pd.DataFrame(session.cached_projection(store_path, "candidate_group", group_by="position"))
     if not families.empty:
         families["selection_rate_given_available"] = np.where(
             families["actor_valid"] > 0,
@@ -1700,7 +1373,7 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
         options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
-    breakdown = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by=breakdown_by))
+    breakdown = pd.DataFrame(session.cached_projection(store_path, "candidate_group", group_by=breakdown_by))
     count_fields = [name for name in ("actor_valid", "q_train", "selected") if name in breakdown]
     if not breakdown.empty and count_fields:
         long = breakdown.melt(
@@ -1737,8 +1410,8 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
         )
 
     with st.expander("Invalid reasons and valid fanout"):
-        invalid = pd.DataFrame(_cached_projection(store_path, "candidate_group", group_by="invalid_reason"))
-        fanout = pd.DataFrame(_cached_projection(store_path, "steps"))
+        invalid = pd.DataFrame(session.cached_projection(store_path, "candidate_group", group_by="invalid_reason"))
+        fanout = pd.DataFrame(session.cached_projection(store_path, "steps"))
         if not invalid.empty:
             st.dataframe(invalid, hide_index=True, width="stretch")
         if not fanout.empty:
@@ -2073,7 +1746,7 @@ def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
         dominant = float(st.slider("Dominant invalidity fraction", min_value=0.0, max_value=1.0, value=0.8))
         max_step = float(st.slider("Maximum selected step (m)", min_value=0.1, max_value=5.0, value=1.25))
-    failures = pd.DataFrame(_cached_failures(reader.store_dir.as_posix(), min_valid, dominant, max_step))
+    failures = pd.DataFrame(session.cached_failures(reader.store_dir.as_posix(), min_valid, dominant, max_step))
     if failures.empty:
         st.success("No failure rows match the active thresholds.")
         return
@@ -2300,11 +1973,11 @@ def _query_source_frame(
     if scope != "Candidates":
         raise ValueError(f"Unsupported query scope: {scope}")
     if candidate_population == "Selected step":
-        rows = _cached_projection(store_path, "candidates", rollout_row_id=rollout_id, step_row_id=step_id)
+        rows = session.cached_projection(store_path, "candidates", rollout_row_id=rollout_id, step_row_id=step_id)
     elif candidate_population == "Selected rollout":
-        rows = _cached_projection(store_path, "candidates", rollout_row_id=rollout_id)
+        rows = session.cached_projection(store_path, "candidates", rollout_row_id=rollout_id)
     elif candidate_population == "Explicit full store":
-        rows = _cached_projection(store_path, "candidates")
+        rows = session.cached_projection(store_path, "candidates")
     else:
         raise ValueError(f"Unsupported candidate population: {candidate_population}")
     return _normalized_query_frame(pd.DataFrame(rows))
@@ -2459,7 +2132,7 @@ def _render_inspect_export_rerun(
     if not rollout_ids:
         st.warning("This store has no rollout rows to inspect or query.")
         return
-    all_steps = pd.DataFrame(_cached_projection(store_path_key, "steps"))
+    all_steps = pd.DataFrame(session.cached_projection(store_path_key, "steps"))
     steps_by_rollout = {
         int(rollout): sorted(group["step_row_id"].astype(int).tolist())
         for rollout, group in all_steps.groupby("rollout_row_id", sort=True)
@@ -2490,7 +2163,7 @@ def _render_inspect_export_rerun(
             key=rollout_widget_key,
         )
     )
-    steps = pd.DataFrame(_cached_projection(store_path_key, "steps", rollout_row_id=rollout_id))
+    steps = pd.DataFrame(session.cached_projection(store_path_key, "steps", rollout_row_id=rollout_id))
     step_ids = steps["step_row_id"].astype(int).tolist() if not steps.empty else []
     if not step_ids:
         st.warning("The selected rollout has no persisted steps.")
@@ -2521,7 +2194,7 @@ def _render_inspect_export_rerun(
     )
 
     candidates = pd.DataFrame(
-        _cached_projection(
+        session.cached_projection(
             store_path_key,
             "candidates",
             rollout_row_id=rollout_id,
@@ -2538,7 +2211,7 @@ def _render_inspect_export_rerun(
         "Download selected-step candidate CSV", f"rollout-{rollout_id}-step-{step_id}-candidates.csv", candidates
     )
 
-    depth_rows = pd.DataFrame(_cached_projection(store_path_key, "depth_summary", rollout_row_id=rollout_id))
+    depth_rows = pd.DataFrame(session.cached_projection(store_path_key, "depth_summary", rollout_row_id=rollout_id))
     selected_depth = depth_rows[depth_rows["step_row_id"] == step_id] if not depth_rows.empty else depth_rows
     with st.expander("Privileged selected-depth evaluation artifact", expanded=not selected_depth.empty):
         st.warning("Selected depth is privileged oracle/evaluation evidence, never actor-visible policy input.")
@@ -2615,7 +2288,7 @@ def _render_q_h_evidence(store_path: str) -> None:
     )
     state_limit = None if int(state_limit_value) == 0 else int(state_limit_value)
     if not deep_count:
-        evidence_rows = _cached_projection(store_path, "q_h", deep_count=False)
+        evidence_rows = session.cached_projection(store_path, "q_h", deep_count=False)
     else:
         cancel_key = f"q_h_cancel:{Path(store_path).resolve().as_posix()}"
         stop_requested = bool(
@@ -2628,7 +2301,7 @@ def _render_q_h_evidence(store_path: str) -> None:
         )
         progress = st.progress(0.0, text="Preparing bounded Q_H count…")
         status = st.empty()
-        reader, validation, _ = _cached_store_bundle(store_path)
+        reader, validation, _ = session.cached_store_bundle(store_path)
 
         def update_progress(completed: int, total: int) -> bool:
             fraction = 1.0 if total <= 0 else min(1.0, float(completed) / float(total))
@@ -2638,7 +2311,7 @@ def _render_q_h_evidence(store_path: str) -> None:
             )
             return not stop_requested
 
-        evidence_rows = q_h_evidence_rows(
+        evidence_rows = session.q_h_evidence_rows(
             reader,
             deep_count=True,
             chunk_size=chunk_size,
@@ -2672,7 +2345,7 @@ def _render_evidence_bundle_download(store_path: Path) -> None:
     if allowed:
         st.download_button(
             "Download deterministic evidence bundle",
-            data=lambda: _cached_evidence_bundle(store_path.as_posix(), status),
+            data=lambda: session.cached_evidence_bundle(store_path.as_posix(), status),
             file_name=f"rollout-evidence-{status}.json",
             mime="application/json",
             on_click="ignore",

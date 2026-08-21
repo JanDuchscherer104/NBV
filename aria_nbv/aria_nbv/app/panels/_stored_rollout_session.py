@@ -21,6 +21,7 @@ from ...rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_flow_rows,
+    candidate_group_summary_rows,
     candidate_population_evidence,
     comparable_policy_cohorts,
     discounted_rollout_return_rows,
@@ -106,6 +107,10 @@ def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, 
     return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
 
 
+def cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
+    return _cached_store_bundle(store_path)
+
+
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
 def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
     """Project immutable rollout-store inventory once per cache root."""
@@ -187,6 +192,9 @@ def _cached_projection_cached(
     if projection == "candidate_group":
         if group_by is None:
             raise ValueError("candidate_group projection requires group_by")
+        if not hasattr(reader, "array"):
+            audit_rows = _cached_projection(store_path, "candidates", limit=limit)
+            return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
         evidence = _cached_candidate_population_cached(store_path, store_identity)
         return evidence["groups"][group_by]
     if projection in {"candidate_composition", "candidate_calibration"}:
@@ -229,6 +237,10 @@ def _cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
     )
 
 
+def cached_projection(store_path: str, projection: str, **kwargs: Any) -> Any:
+    return _cached_projection(store_path, projection, **kwargs)
+
+
 @st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)
 def _cached_topology_cached(
     store_path: str,
@@ -254,6 +266,12 @@ def _cached_topology(
     return _cached_topology_cached(
         store_path, vin_store_dirs, paths, selected_source_row_id, store_identity=_store_projection_identity(store_path)
     )
+
+
+def cached_topology(
+    store_path: str, vin_store_dirs: tuple[str, ...], paths: PathConfig, selected_source_row_id: int | None = None
+) -> Any:
+    return _cached_topology(store_path, vin_store_dirs, paths, selected_source_row_id)
 
 
 @st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
@@ -290,6 +308,12 @@ def _cached_failures(
     )
 
 
+def cached_failures(
+    store_path: str, min_valid_candidates: int, dominant_invalid_fraction: float, max_step_distance_m: float
+) -> list[dict[str, object]]:
+    return _cached_failures(store_path, min_valid_candidates, dominant_invalid_fraction, max_step_distance_m)
+
+
 @st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
 def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, store_identity: str = "") -> bytes:
     """Build one deterministic report bundle for a replacement-sensitive store."""
@@ -303,6 +327,10 @@ def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
     return _cached_evidence_bundle_cached(
         store_path, evidence_status, store_identity=_store_projection_identity(store_path)
     )
+
+
+def cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
+    return _cached_evidence_bundle(store_path, evidence_status)
 
 
 def _named_projection(store_path: str, projection: str, **kwargs: Any) -> Any:

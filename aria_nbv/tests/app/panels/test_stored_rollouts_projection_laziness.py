@@ -49,15 +49,15 @@ def test_lightweight_dispatch_does_not_materialize_candidate_audit(
 
     reader = object()
     expected = [{"projection": projection}]
-    monkeypatch.setattr(page, "_cached_store_bundle", lambda _path: (reader, object(), {}))
+    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (reader, object(), {}))
     monkeypatch.setattr(
-        page,
+        session,
         "candidate_audit_rows",
         lambda *_args, **_kwargs: pytest.fail(f"{projection} materialized candidate_audit_rows"),
     )
-    monkeypatch.setattr(page, owner_name, _owner_stub(expected))
+    monkeypatch.setattr(session, owner_name, _owner_stub(expected))
 
-    result = page._cached_projection.__wrapped__("/fixture.zarr", projection, **kwargs)
+    result = session._cached_projection.__wrapped__("/fixture.zarr", projection, **kwargs)
 
     assert result == expected
 
@@ -71,9 +71,9 @@ def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_ro
     candidate_rows = [{"candidate_row_id": 7}, {"candidate_row_id": 11}]
     recursive_calls: list[tuple[str, int | None]] = []
     summary_calls: list[tuple[object, str, object]] = []
-    dispatch = page._cached_projection.__wrapped__
+    dispatch = session._cached_projection.__wrapped__
 
-    monkeypatch.setattr(page, "_cached_store_bundle", lambda _path: (reader, object(), {}))
+    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (reader, object(), {}))
 
     def recursive_projection(
         _store_path: str,
@@ -95,8 +95,8 @@ def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_ro
         summary_calls.append((source, group_by, audit_rows))
         return [{"family": "fixture", "candidate_count": len(candidate_rows)}]
 
-    monkeypatch.setattr(page, "_cached_projection", recursive_projection)
-    monkeypatch.setattr(page, "candidate_group_summary_rows", summarize)
+    monkeypatch.setattr(session, "_cached_projection", recursive_projection)
+    monkeypatch.setattr(session, "candidate_group_summary_rows", summarize)
 
     result = dispatch(
         "/fixture.zarr",
@@ -137,11 +137,11 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
         identities.append(store_identity)
         return []
 
-    monkeypatch.setattr(page, "_cached_projection_cached", cached_projection)
-    page._cached_projection(store.as_posix(), "header")
-    page._cached_projection(store.as_posix(), "header")
+    monkeypatch.setattr(session, "_cached_projection_cached", cached_projection)
+    session._cached_projection(store.as_posix(), "header")
+    session._cached_projection(store.as_posix(), "header")
     manifest.write_text('{"generation": "second"}', encoding="utf-8")
-    page._cached_projection(store.as_posix(), "header")
+    session._cached_projection(store.as_posix(), "header")
 
     assert identities[0] == identities[1]
     assert identities[2] != identities[0]
@@ -162,17 +162,17 @@ def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat
         identities.append(store_identity)
         return []
 
-    monkeypatch.setattr(page, "_cached_projection_cached", cached_projection)
+    monkeypatch.setattr(session, "_cached_projection_cached", cached_projection)
     original_read_bytes = Path.read_bytes
     monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
-    page._cached_projection(result.store_dir.as_posix(), "header")
+    session._cached_projection(result.store_dir.as_posix(), "header")
     monkeypatch.setattr(Path, "read_bytes", original_read_bytes)
     root = zarr.open_group(result.store_dir, mode="a")
     candidate_ids = root["candidates/candidate_row_id"]
     candidate_ids[0] = int(candidate_ids[0]) + 1
     os.utime(manifest, ns=(manifest_stat.st_atime_ns, manifest_stat.st_mtime_ns))
     monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
-    page._cached_projection(result.store_dir.as_posix(), "header")
+    session._cached_projection(result.store_dir.as_posix(), "header")
 
     assert identities[1] != identities[0]
 
@@ -189,7 +189,7 @@ def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path:
     )
     (result.store_dir / "post-promotion.txt").write_text("tampered", encoding="utf-8")
 
-    _, validation, _ = page._cached_store_bundle_cached.__wrapped__(
+    _, validation, _ = session._cached_store_bundle_cached.__wrapped__(
         result.store_dir.as_posix(), store_identity="changed"
     )
 
@@ -208,8 +208,8 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
     )
     store_path = result.final_dir.as_posix()
     mtimes = {path: path.stat().st_mtime_ns for path in result.final_dir.rglob("*") if path.is_file()}
-    first_identity = page._store_projection_identity(store_path)
-    _, first_validation, _ = page._cached_store_bundle(store_path)
+    first_identity = session._store_projection_identity(store_path)
+    _, first_validation, _ = session._cached_store_bundle(store_path)
     assert first_validation.ok
 
     root = zarr.open_group(result.final_dir, mode="a")
@@ -218,14 +218,14 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
     for path, mtime_ns in mtimes.items():
         os.utime(path, ns=(path.stat().st_atime_ns, mtime_ns))
 
-    second_identity = page._store_projection_identity(store_path)
-    _, second_validation, _ = page._cached_store_bundle(store_path)
+    second_identity = session._store_projection_identity(store_path)
+    _, second_validation, _ = session._cached_store_bundle(store_path)
 
     assert second_identity != first_identity
     assert not second_validation.ok
     assert "canonical store content" in "; ".join(second_validation.errors)
     with pytest.raises(ValueError, match="promotion validation"):
-        page.build_thesis_report_frames([result.final_dir], evidence_status="pilot")
+        session.build_thesis_report_frames([result.final_dir], evidence_status="pilot")
 
 
 def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -259,7 +259,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     monkeypatch.setattr(page.st, "empty", lambda: status)
     monkeypatch.setattr(page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(page, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(page, "_cached_store_bundle", lambda _path: (object(), object(), {}))
+    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (object(), object(), {}))
     callback_results: list[bool] = []
 
     def q_h(_reader, **kwargs):
@@ -274,7 +274,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
             }
         ]
 
-    monkeypatch.setattr(page, "q_h_evidence_rows", q_h)
+    monkeypatch.setattr(session, "q_h_evidence_rows", q_h)
     page._render_q_h_evidence("/fixture.zarr")
 
     assert callback_results == [False]
@@ -297,9 +297,9 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     selected.symlink_to(first.store_dir, target_is_directory=True)
 
     path = selected.as_posix()
-    first_reader, first_validation, first_manifest = page._cached_store_bundle(path)
-    first_steps = page._cached_projection(path, "steps")
-    first_bundle = page._cached_evidence_bundle(path, "pilot")
+    first_reader, first_validation, first_manifest = session._cached_store_bundle(path)
+    first_steps = session._cached_projection(path, "steps")
+    first_bundle = session._cached_evidence_bundle(path, "pilot")
     assert first_validation.ok
     assert first_reader.store_dir == selected.resolve()
     assert first_manifest == first_reader.manifest()
@@ -309,9 +309,9 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     replacement.symlink_to(second.store_dir, target_is_directory=True)
     replacement.replace(selected)
 
-    second_reader, second_validation, second_manifest = page._cached_store_bundle(path)
-    second_steps = page._cached_projection(path, "steps")
-    second_bundle = page._cached_evidence_bundle(path, "pilot")
+    second_reader, second_validation, second_manifest = session._cached_store_bundle(path)
+    second_steps = session._cached_projection(path, "steps")
+    second_bundle = session._cached_evidence_bundle(path, "pilot")
     assert second_validation.ok
     assert second_reader.store_dir == selected.resolve()
     assert second_manifest == second_reader.manifest()
@@ -339,29 +339,29 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     failure_calls: list[str] = []
 
     def topology(*, rollout_store_dir: Path, **_kwargs: object) -> dict[str, str]:
-        manifest = page._cached_store_bundle(rollout_store_dir.as_posix())[2]
+        manifest = session._cached_store_bundle(rollout_store_dir.as_posix())[2]
         marker = json.dumps(manifest, sort_keys=True)
         topology_calls.append(marker)
         return {"manifest": marker}
 
     def failures(reader: object, *, config: object) -> list[dict[str, str]]:
-        marker = page._cached_store_bundle(reader.store_dir.as_posix())[2]  # type: ignore[attr-defined]
+        marker = session._cached_store_bundle(reader.store_dir.as_posix())[2]  # type: ignore[attr-defined]
         value = json.dumps(marker, sort_keys=True)
         failure_calls.append(value)
         return [{"manifest": value}]
 
-    monkeypatch.setattr(page, "build_dataset_topology", topology)
-    monkeypatch.setattr(page, "suspicious_rollout_rows", failures)
+    monkeypatch.setattr(session, "build_dataset_topology", topology)
+    monkeypatch.setattr(session, "suspicious_rollout_rows", failures)
     path = selected.as_posix()
-    topology_first = page._cached_topology(path, (), None)
-    failure_first = page._cached_failures(path, 1, 0.5, 1.0)
+    topology_first = session._cached_topology(path, (), None)
+    failure_first = session._cached_failures(path, 1, 0.5, 1.0)
 
     replacement = tmp_path / "replacement-link.zarr"
     replacement.symlink_to(second.store_dir, target_is_directory=True)
     replacement.replace(selected)
 
-    topology_second = page._cached_topology(path, (), None)
-    failure_second = page._cached_failures(path, 1, 0.5, 1.0)
+    topology_second = session._cached_topology(path, (), None)
+    failure_second = session._cached_failures(path, 1, 0.5, 1.0)
 
     assert topology_first != topology_second
     assert failure_first != failure_second
