@@ -1,9 +1,11 @@
 # ARIA-NBV Source Order (Deprecated Compatibility Pointer)
 
-Current hierarchy, conflict resolution, and capture routing are owned by
-[`aria-nbv-context`](../skills/aria-nbv-context/SKILL.md#owner-hierarchy).
-This file retains legacy anchors for backlog, debrief, and external links; do
-not add policy here.
+[`aria-nbv-context`](../skills/aria-nbv-context/SKILL.md#owner-hierarchy) owns
+current hierarchy, conflicts, and capture. This file keeps links; do not add policy here.
+
+## Role Split
+
+Use the [`Owner Hierarchy`](../skills/aria-nbv-context/SKILL.md#owner-hierarchy).
 
 ## Compositional Owner Tree
 

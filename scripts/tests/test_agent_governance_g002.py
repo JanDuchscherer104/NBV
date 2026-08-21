@@ -143,6 +143,10 @@ def test_mempalace_routing_scenarios() -> None:
         assert _fixture_owner_paths_exist(ROOT, fixture)
         assert fixture["required_outcomes"]
         assert fixture["forbidden_outcomes"]
+        assert (
+            ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md"
+            in fixture["expected_owner_paths"]
+        )
     assert (
         "primary-source route is available"
         in fixtures["semantic-recall-literature-primary"]["required_outcomes"]
@@ -231,7 +235,7 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
         ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md"
     )
     assert "Use a supplied exact ID directly; otherwise call" in context
-    assert "Do not use the\ndeprecated MCP-Docker Context7 tools" in context
+    assert "Do not use Docker MCP Context7" in context
     assert "/graphify-labs/graphify" in registry
     assert "seed menu, not one broad\nquery" in registry
     assert "exact resolved" in provenance
@@ -249,7 +253,7 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     supersession = "## Accepted 2026-08-14 Mandatory Graphify Supersession"
     lifecycle = "## Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession"
     context_hierarchy = (
-        "## Accepted 2026-08-19 Context Hierarchy And Context7 App Supersession"
+        "## Accepted 2026-08-19 Context Hierarchy And Context7 Plugin Supersession"
     )
     assert spec.index(amendment) < spec.index(supersession)
     assert spec.index(supersession) < spec.index(lifecycle)
@@ -259,9 +263,15 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     assert "upstream Graphify `query`, `path`, or\n`explain` before raw search" in spec
     assert "single current owner of\nthe hierarchical source map" in spec
     assert "mcp__codex_apps__context7_query_docs" in spec
+    amendment_text = spec.split(amendment, 1)[1].split(supersession, 1)[0]
+    assert "Graphify 0.9.31" in amendment_text
+    assert "4fe11092ccbe9f543608f140c790f68d5d83cae4" in amendment_text
+    lifecycle_text = spec.split(lifecycle, 1)[1].split(context_hierarchy, 1)[0]
+    assert "Graphify\n0.9.48" in lifecycle_text
+    assert "b2cd36267456c166788c95be6e68574064a92a42" in lifecycle_text
 
     root_guidance = _read(ROOT / "AGENTS.md")
-    assert "## Graphify And Context7 App" in root_guidance
+    assert "## Graphify And Context7 Plugin" in root_guidance
     assert "upstream Graphify `query`, `path`, and `explain`" in root_guidance
     optional_tools = root_guidance.split("## Optional Tools And Capture", maxsplit=1)[1]
     assert "Graphify" not in optional_tools
@@ -270,9 +280,9 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
     intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
     assert "## Graphify Branch" in context
-    assert "## Context7 App Branch" in context
+    assert "## Context7 Plugin Branch" in context
     assert "Deprecated Compatibility Pointer" in source_order
-    assert "do\nnot add policy here" in source_order
+    assert "do not add policy here" in source_order
     assert (
         "Require the Graphify executable and usable graph artifacts as navigation"
         in intent
@@ -312,7 +322,7 @@ Rules:
         assert "optional Graphify" not in _read(owner)
 
     root_guidance = _read(ROOT / "AGENTS.md")
-    assert "## Graphify And Context7 App" in root_guidance
+    assert "## Graphify And Context7 Plugin" in root_guidance
     assert "then opens exact owners before consequential" in root_guidance
 
 
@@ -346,6 +356,20 @@ def test_route_only_domain_skill_contract() -> None:
         "aria_nbv/aria_nbv/data_handling/AGENTS.md"
     ]
     fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    assert "entity-rri-implementation" not in fixtures
+    assert fixtures["target-admission-protocol"]["expected_owner_paths"] == [
+        "aria_nbv/AGENTS.md",
+        "aria_nbv/aria_nbv/targets/protocol.py",
+    ]
+    assert "aria_nbv/aria_nbv/oracle/labels.py" in fixtures[
+        "oracle-label-generation"
+    ]["expected_owner_paths"]
+    assert fixtures["rri-metric-semantics"]["expected_owner_paths"] == [
+        "aria_nbv/aria_nbv/rri_metrics/AGENTS.md"
+    ]
+    assert fixtures["vin-scorer-input-fields"]["expected_owner_paths"] == [
+        "aria_nbv/aria_nbv/vin/AGENTS.md"
+    ]
     assert fixtures["python-docstring-contract"]["stable_skill_ids"] == [
         "python-standards"
     ]
@@ -663,6 +687,8 @@ def test_thesis_context_and_context7_routing() -> None:
         "docs/typst/shared/equations.typ",
         "docs/notation.yml",
         ".agents/skills/aria-nbv-context/references/context7_library_ids.md",
+        ".agents/skills/aria-nbv-context/references/context_map.md",
+        ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md",
     ):
         assert owner in canonical_sources
         assert (ROOT / owner.partition("#")[0]).is_file()
@@ -676,6 +702,43 @@ def test_thesis_context_and_context7_routing() -> None:
         / "context_map.md"
     )
     assert "scripts/nbv_typst_includes.py --thesis --mode outline" in context_map
+    assert "Derived Context Route Index" in context_map
+    assert "never owns the facts it locates" in context_map
+
+    indexed_paths = {
+        token.split()[0].split("#", 1)[0].rstrip("/")
+        for token in re.findall(r"`((?:docs|aria_nbv|scripts)/[^`]+)`", context_map)
+    }
+    for indexed_path in indexed_paths:
+        if "*" in indexed_path:
+            assert list(ROOT.glob(indexed_path)), indexed_path
+        else:
+            assert (ROOT / indexed_path).exists(), indexed_path
+
+    literature_table = context_map.split("## Literature evidence routing", 1)[1]
+    route_labels = {
+        cells[0].strip("` ")
+        for line in literature_table.splitlines()
+        if line.startswith("|") and "---" not in line
+        for cells in [[cell.strip() for cell in line.strip("|").split("|")]]
+        if cells[0] != "Concept route"
+    }
+    declared_routes = {
+        ref
+        for skill_path in (ROOT / ".agents" / "skills").glob("*/SKILL.md")
+        for ref in (load_frontmatter(skill_path).get("metadata", {}).get("literature_refs") or [])
+    }
+    assert route_labels <= declared_routes
+
+
+def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
+    forbidden = {
+        "mcp__MCP_DOCKER.resolve_library_id",
+        "mcp__MCP_DOCKER.get_library_docs",
+    }
+    for skill in (ROOT / ".agents" / "skills").glob("*/SKILL.md"):
+        text = _read(skill)
+        assert not (forbidden & {ref for ref in forbidden if ref in text}), skill
 
     context7_registry = _read(
         ROOT
@@ -703,7 +766,7 @@ def test_thesis_context_and_context7_routing() -> None:
     for graphify_seed in (
         "query, path, and explain command selection and output contracts",
         "post-commit and post-checkout hook installation behavior",
-        "incremental code refresh versus semantic invalidation for changed docs",
+        "incremental code and Markdown quick-scan behavior versus explicit semantic refresh",
     ):
         assert graphify_seed in context7_registry
 

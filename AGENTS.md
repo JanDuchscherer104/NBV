@@ -33,12 +33,12 @@ tests, configuration, and Typst own behavior and scientific claims.
   rollout inspection work uses `rerun-nbv-inspector`. Package README files,
   code, configuration, and tests remain behavioral owners.
 
-## Graphify And Context7 App
+## Graphify And Context7 Plugin
 
 - For architecture, relationships, ownership, or broad project context, use
   `aria-nbv-context`. It treats upstream Graphify `query`, `path`, and `explain`
   as the primary navigation map, then opens exact owners before consequential
-  claims or edits. It also routes the Context7 App only for current external API
+  claims or edits. It also routes the `@Context7` plugin only for current external API
   or version evidence. Worktree setup, freshness, fallback, exact library IDs,
   and focused query recipes stay behind that route.
 

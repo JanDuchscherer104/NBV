@@ -18,15 +18,15 @@ CONTEXT_SKILL = ROOT / ".agents/skills/aria-nbv-context/SKILL.md"
 ARIA_BOUNDARY = (
     ROOT / ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
 )
-UPSTREAM_COMMIT = "b14b52e94ec3d9840413d81777f4c134eac0a40d"
+UPSTREAM_COMMIT = "b2cd36267456c166788c95be6e68574064a92a42"
 UPSTREAM_BLOBS = {
-    ".graphify_version": "ff301c44524cb8e0ad806f65a0484c4d6d6eb4ab",
+    ".graphify_version": "2d72c8d340b915a70b4c553e2a7fe6c8a9b7ea35",
     "SKILL.md": "af3f723c7878b8ca9252af511270511002086ed4",
     "references/add-watch.md": "77844343e140553b7f1bf419e32640568c2014ff",
     "references/exports.md": "242ff868e015b158504dda3ea1992e4cd9686843",
-    "references/extraction-spec.md": "388df7674f2d25e83f87041864bbe7635aa15e75",
+    "references/extraction-spec.md": "4b278b28d3681400286c66af4d61ca2e48bcc211",
     "references/github-and-merge.md": "a41ea06e17c1676483356a2a06504a1bfb0870e4",
-    "references/hooks.md": "3fb74d1545394154c30ee052f24da8dd07dd9e9f",
+    "references/hooks.md": "438b8b16be18480a1e77759b3e74fc8a9e97eae7",
     "references/query.md": "56565eb782951a1f0e1279f851b8a022292f3ac3",
     "references/transcribe.md": "b967f8379998b890945706b3c95fef23b2ec402f",
     "references/update.md": "3632fd41266964bdcf04b58d4359f9364cedfbce",
@@ -62,9 +62,17 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         context = CONTEXT_SKILL.read_text(encoding="utf-8")
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
         self.assertIn("references/graphify-aria-boundary.md", context)
-        self.assertIn("Graphify 0.9.47 writes `graphify-out/needs_update`", boundary)
+        self.assertIn("Graphify 0.9.48 writes `graphify-out/needs_update`", boundary)
         self.assertRegex(boundary, r"Remove\s+`graphify-out/needs_update` only after")
         self.assertIn("leave it after partial, failed, or unverified work", boundary)
+
+    def test_hook_boundary_preserves_upstream_bytes_and_runtime_caveat(self) -> None:
+        hooks = (SKILL_ROOT / "references/hooks.md").read_text(encoding="utf-8")
+        boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
+        self.assertIn("Doc/image changes are ignored by the hook", hooks)
+        self.assertIn("AST-quick-scan changed Markdown headings", boundary)
+        self.assertIn("refresh those semantic inputs explicitly", boundary)
+        self.assertNotIn("marks changed documents", boundary)
 
     def test_mandatory_worktree_route_stays_outside_upstream_bundle(self) -> None:
         root_guidance = ROOT_GUIDANCE.read_text(encoding="utf-8")
@@ -72,7 +80,7 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
         target_state = TARGET_STATE.read_text(encoding="utf-8")
 
-        self.assertIn("## Graphify And Context7", root_guidance)
+        self.assertIn("## Graphify And Context7 Plugin", root_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary)
         self.assertIn("scripts/check_graphify_freshness.py --json", context)
         self.assertIn(

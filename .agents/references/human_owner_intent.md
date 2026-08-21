@@ -113,8 +113,8 @@ or repeatable workflows.
   key, add repository or CI secrets, introduce a Graphify fork or skill overlay,
   repository-owned package import, hook/freshness lifecycle, or patch generated
   graph output.
-- The optional upstream Git hook is only a local incremental-code accelerator
-  and semantic-invalidation aid. Mandatory routing comes from worktree setup
+- The optional upstream Git hook is only a local incremental-code accelerator;
+  document and image semantic refresh remains explicit. Mandatory routing comes from worktree setup
   plus the ARIA freshness preflight, not hook success. The hook remains neither
   freshness authority nor lifecycle owner; `aria-nbv-context` owns the detailed
   ARIA-NBV operational route while upstream Graphify owns its lifecycle.

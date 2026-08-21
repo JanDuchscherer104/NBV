@@ -1,18 +1,18 @@
-# Context7 App Library IDs And Query Seeds
+# Context7 Plugin Library IDs And Query Seeds
 
 Use this fallback only when no narrower skill owns the external API question.
-Open the local owner and installed call site first. In the Context7 App, use a
+Open the local owner and installed call site first. Through the `@Context7` plugin, use a
 supplied exact ID directly; otherwise resolve the library, then issue one
 focused query per concept. Each backticked list is a seed menu, not one broad
 query. Verify consequential answers against the installed version, local
-source/tests, and exact ARIA owner. MCP-Docker Context7 tools are deprecated.
+source/tests, and exact ARIA owner. Docker MCP Context7 is deprecated.
 
 ## Navigation And Publication
 
 - `/graphify-labs/graphify`
   - `query, path, and explain command selection and output contracts`
   - `post-commit and post-checkout hook installation behavior`
-  - `incremental code refresh versus semantic invalidation for changed docs`
+  - `incremental code and Markdown quick-scan behavior versus explicit semantic refresh`
 - `/websites/typst_app` — `labels, references, imports, context, show rules, and
   compile behavior for the exact Typst construct in use`.
 - `/typst-community/glossarium` — `term registration, short forms, references,

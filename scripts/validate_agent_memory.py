@@ -65,6 +65,7 @@ RECEIPT_DISPOSITIONS = {
     "code-owned",
     "test-owned",
 }
+NONCANONICAL_RECEIPT_DESTINATIONS = {".agents/references/source_order.md"}
 RECEIPT_SOURCE_COUNTS = {
     "docs/contents/thesis/roadmap.qmd": 10,
     "docs/contents/thesis/questions.qmd": 13,
@@ -390,6 +391,11 @@ def check_migration_receipt() -> list[str]:
         if row[3] == "removed" and destination.startswith(
             "Git history/debrief provenance"
         ):
+            continue
+        if destination in NONCANONICAL_RECEIPT_DESTINATIONS:
+            errors.append(
+                f"{row[0]}: receipt destination is a compatibility pointer, not a canonical owner: {destination}"
+            )
             continue
         if "#" not in destination_ref:
             errors.append(f"{row[0]}: destination path/anchor is missing: {row[4]}")

@@ -170,9 +170,16 @@ def test_context_skill_owns_hierarchy_and_initialization_map() -> None:
     for heading in ("## Owner Hierarchy", "## Conflict Rule", "## Capture Rule"):
         assert heading in context
     assert "Deprecated Compatibility Pointer" in pointer
-    assert "do\nnot add policy here" in pointer
+    assert "do not add policy here" in pointer
     assert "../skills/aria-nbv-context/SKILL.md#owner-hierarchy" in pointer
     assert len(pointer.splitlines()) <= 20
+    for anchor in (
+        "## Role Split",
+        "## Compositional Owner Tree",
+        "## Conflict Rule",
+        "## Capture Rule",
+    ):
+        assert anchor in pointer
 
 
 def test_theory_pages_are_deprecated_navigation() -> None:
