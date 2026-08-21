@@ -1264,14 +1264,35 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
         if frame.empty:
             continue
         if "aggregation_level" in frame:
-            frame = frame[frame["aggregation_level"].eq("state")]
+            levels = [
+                level for level in ("cohort_macro", "scene_macro", "state") if level in set(frame["aggregation_level"])
+            ]
+            level = st.selectbox(f"{title} aggregation", options=levels, key=f"{key}_aggregation")
+            frame = frame[frame["aggregation_level"].eq(level)]
         if frame.empty or value not in frame:
             continue
         if "generation_cohort_id" not in frame:
             frame = frame.assign(generation_cohort_id="unknown")
         if "population" not in frame:
             frame = frame.assign(population="all")
-        if "radius_deg" in frame:
+        if key == "direction-angular":
+            measures = [measure for measure in ("nearest_neighbor_deg", "covering_radius_deg") if measure in frame]
+            long = frame.melt(
+                id_vars=[column for column in ("generation_cohort_id", "population") if column in frame],
+                value_vars=measures,
+                var_name="angular_measure",
+                value_name="degrees",
+            )
+            fig = px.bar(
+                long,
+                x="angular_measure",
+                y="degrees",
+                color="population",
+                facet_col="generation_cohort_id",
+                barmode="group",
+                title=title,
+            )
+        elif "radius_deg" in frame:
             fig = px.line(
                 frame,
                 x="radius_deg",
@@ -1316,7 +1337,11 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
         if frame.empty:
             continue
         if "aggregation_level" in frame:
-            frame = frame[frame["aggregation_level"].eq("state")]
+            levels = [
+                level for level in ("cohort_macro", "scene_macro", "state") if level in set(frame["aggregation_level"])
+            ]
+            level = st.selectbox(f"{title} aggregation", options=levels, key=f"{key}_aggregation")
+            frame = frame[frame["aggregation_level"].eq(level)]
         if "generation_cohort_id" not in frame:
             frame = frame.assign(generation_cohort_id="unknown")
         if "population" not in frame:
@@ -1381,48 +1406,88 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
 
     collision = pd.DataFrame(population.get("collision", []))
     if not collision.empty:
-        counts = [
+        if "generation_cohort_id" not in collision:
+            collision = collision.assign(generation_cohort_id="unknown")
+        rate_columns = [
             column
             for column in (
-                "collision_available_count",
-                "collision_not_applicable_count",
-                "collision_unavailable_count",
-                "collision_count",
-                "clearance_finite_count",
+                "population_collision_rate",
+                "collision_rate",
+                "population_clearance_mean_m",
+                "clearance_mean_m",
             )
             if column in collision
         ]
-        if counts:
-            plot_rows = collision.melt(
-                id_vars=[c for c in ("generation_cohort_id",) if c in collision],
-                value_vars=counts,
-                var_name="state",
-                value_name="count",
+        if rate_columns:
+            rates = collision.melt(
+                id_vars=["generation_cohort_id"], value_vars=rate_columns, var_name="measure", value_name="value"
             )
-            fig = px.bar(
-                plot_rows,
-                x="state",
-                y="count",
-                color="generation_cohort_id" if "generation_cohort_id" in plot_rows else None,
-                title="Collision applicability and clearance evidence",
+            rate_fig = px.bar(
+                rates,
+                x="measure",
+                y="value",
+                color="generation_cohort_id",
                 barmode="group",
+                title="Collision rate and mean clearance",
             )
             _render_plot(
-                fig,
+                rate_fig,
                 _candidate_population_explanation(
-                    "Were collision and clearance outcomes actually evaluated?",
-                    "Complete candidate audit rows grouped by exact generation cohort.",
-                    "Counts and collision rate; finite clearance is in metres.",
-                    "Applicable, evaluated, not-applicable, and unevaluated rows remain separate.",
-                    "Most applicable rows are evaluated and collision rates stay within physical expectations.",
-                    "Unevaluated or not-applicable concentration indicates missing evaluator support, not safe free space.",
+                    "What collision rate and clearance does the evaluated candidate population exhibit?",
+                    "Validated candidate collision/clearance summaries, separated by generation cohort.",
+                    "Collision rates are fractions; clearance means are metres. Population and macro measures are distinct.",
+                    "Collision rate uses the evaluated denominator; clearance mean uses finite-clearance rows only.",
+                    "Rates remain low while clearance stays positive under the configured path contract.",
+                    "High collision or low clearance requires checking applicable support and evaluator coverage below.",
                     "candidate diagnostics/path collision and clearance",
                     "actor-visible",
                 ),
             )
-            with st.expander("Collision and clearance rows and CSV"):
-                st.dataframe(collision, hide_index=True, width="stretch")
-                _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
+        count_columns = [
+            column
+            for column in (
+                "collision_available_count",
+                "collision_evaluated_count",
+                "collision_not_applicable_count",
+                "collision_unavailable_count",
+                "collision_count",
+                "clearance_finite_count",
+                "collision_denominator",
+                "clearance_denominator",
+            )
+            if column in collision
+        ]
+        if count_columns:
+            counts = collision.melt(
+                id_vars=["generation_cohort_id"],
+                value_vars=count_columns,
+                var_name="denominator_state",
+                value_name="count",
+            )
+            count_fig = px.bar(
+                counts,
+                x="denominator_state",
+                y="count",
+                color="generation_cohort_id",
+                barmode="group",
+                title="Collision applicability, evaluation, and denominators",
+            )
+            _render_plot(
+                count_fig,
+                _candidate_population_explanation(
+                    "Which candidate rows are applicable, evaluated, unevaluated, or not applicable?",
+                    "Validated collision and clearance rows by generation cohort.",
+                    "Counts; denominator columns are shown explicitly alongside applicable/evaluated states.",
+                    "Applicable evaluated, applicable unevaluated, not-applicable, collision, and finite-clearance counts are not interchangeable.",
+                    "Evaluated counts account for most applicable rows and denominators are reproducible.",
+                    "Unevaluated or missing-denominator rows indicate evaluator coverage gaps, not safe free space.",
+                    "candidate diagnostics/path collision and clearance",
+                    "actor-visible",
+                ),
+            )
+        with st.expander("Collision and clearance rows and CSV"):
+            st.dataframe(collision, hide_index=True, width="stretch")
+            _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
 
 
 def _render_candidate_provenance_flow(stored_session: session.StoredRolloutSession) -> None:

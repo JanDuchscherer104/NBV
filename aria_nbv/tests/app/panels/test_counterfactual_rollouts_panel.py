@@ -834,6 +834,86 @@ def test_bounded_candidate_helper_only_renders_raw_metric_distribution(monkeypat
     assert calls == [(candidates, 1)]
 
 
+def test_candidate_support_ui_preserves_angular_measures_and_macro_facets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Support views expose covering evidence, macro aggregation, and collision denominators."""
+
+    figures: list[object] = []
+    select_options: list[tuple[str, ...]] = []
+
+    class _Expander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
+    monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
+
+    def _selectbox(_label, options, **_kwargs):
+        select_options.append(tuple(str(option) for option in options))
+        return options[0]
+
+    monkeypatch.setattr(stored_rollouts_page.st, "selectbox", _selectbox)
+    monkeypatch.setattr(
+        stored_rollouts_page.st,
+        "columns",
+        lambda *_args, **_kwargs: (SimpleNamespace(selectbox=_selectbox),) * 2,
+    )
+    population = {
+        "geometry": [],
+        "direction": {
+            "density_rows": [],
+            "cap_rows": [],
+            "angular_support_rows": [
+                {
+                    "aggregation_level": "cohort_macro",
+                    "generation_cohort_id": "cohort-a",
+                    "population": "all",
+                    "nearest_neighbor_deg": 12.0,
+                    "covering_radius_deg": 34.0,
+                }
+            ],
+        },
+        "spatial": [
+            {
+                "aggregation_level": "cohort_macro",
+                "generation_cohort_id": "cohort-a",
+                "population": "all",
+                "metric": "root_xy_radius",
+                "mean": 1.0,
+            }
+        ],
+        "target_view": [],
+        "motion": [],
+        "collision": [
+            {
+                "generation_cohort_id": "cohort-a",
+                "population_collision_rate": 0.1,
+                "collision_rate": 0.1,
+                "population_clearance_mean_m": 0.2,
+                "clearance_mean_m": 0.2,
+                "collision_available_count": 8,
+                "collision_evaluated_count": 8,
+                "collision_unavailable_count": 2,
+                "collision_not_applicable_count": 1,
+                "collision_count": 1,
+                "clearance_finite_count": 8,
+                "collision_denominator": 8,
+                "clearance_denominator": 8,
+            }
+        ],
+    }
+    stored_rollouts_page._render_complete_candidate_support(population)
+    angular = next(figure for figure in figures if "Angular nearest" in str(figure.layout.title.text))
+    assert set(angular.data[0].x) == {"nearest_neighbor_deg", "covering_radius_deg"}
+    assert any("cohort_macro" in options for options in select_options)
+    assert any("Collision rate" in str(figure.layout.title.text) for figure in figures)
+
+
 def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result() -> None:
     """Query transitions should be explicit, copied, deterministic, and failure-preserving."""
 
