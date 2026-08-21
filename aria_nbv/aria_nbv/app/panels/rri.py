@@ -15,7 +15,19 @@ from ...data_handling import EfmSnippetView
 from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...rri_metrics.rri import RriResult
+from ..scientific_labels import format_scientific_label
+from ..state import get_label_display_mode
 from .common import _info_popover, _pretty_label
+
+
+def _label(identifier: str, *, math_capable: bool = False) -> str:
+    """Render a canonical scientific label at the final UI boundary."""
+
+    return format_scientific_label(
+        identifier,
+        mode=get_label_display_mode(),
+        surface="markdown" if math_capable else "plain",
+    )
 
 
 def render_rri_page(
@@ -56,7 +68,7 @@ def render_rri_page(
             rri,
             labels,
             bar_color_map,
-            title=_pretty_label("Oracle RRI per candidate"),
+            title=_label("oracle_rri", math_capable=True) + " per candidate",
         ),
         width="stretch",
     )
@@ -73,7 +85,9 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_pretty_label("Chamfer-like (bidirectional)"),
+            title=_label("point_to_mesh_error", math_capable=True)
+            + " and "
+            + _label("mesh_to_point_error", math_capable=True),
         ),
         width="stretch",
     )
@@ -89,7 +103,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_pretty_label("Point→Mesh (accuracy)"),
+            title=_label("point_to_mesh_error", math_capable=True),
         ),
         width="stretch",
     )
@@ -105,7 +119,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_pretty_label("Mesh→Point (completeness)"),
+            title=_label("mesh_to_point_error", math_capable=True),
         ),
         width="stretch",
     )

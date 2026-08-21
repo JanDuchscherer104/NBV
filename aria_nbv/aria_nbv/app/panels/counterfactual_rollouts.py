@@ -71,9 +71,22 @@ from ...rollouts.replay.state import CounterfactualStepResult
 from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
+from ..scientific_labels import format_scientific_label
+from ..state import get_label_display_mode
 from ..state_types import config_signature
 from .common import _info_popover, _plot_with_y_axis_control, _pretty_label, _report_exception, _strip_ansi
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
+
+
+def _label(identifier: str, *, math_capable: bool = False) -> str:
+    """Render a canonical scientific label only at the presentation boundary."""
+
+    return format_scientific_label(
+        identifier,
+        mode=get_label_display_mode(),
+        surface="markdown" if math_capable else "plain",
+    )
+
 
 _SOURCE_TARGET_INFO = """
 This block chooses the immutable VIN offline root and the oracle-specified target tasks.
@@ -851,7 +864,7 @@ def _render_live_step_candidate_diagnostics(
                 color="position",
                 symbol="selected",
                 hover_data=hover_cols,
-                title=f"Selection Score vs {score_metric}",
+                title=f"Selection score vs {_label(score_metric, math_capable=True)}",
             ),
             width="stretch",
         )
@@ -864,7 +877,7 @@ def _render_live_step_candidate_diagnostics(
                 color="selected",
                 points="outliers",
                 hover_data=hover_cols,
-                title=f"{score_metric} by Position Family",
+                title=f"{_label(score_metric, math_capable=True)} by Position Family",
             ),
             width="stretch",
         )
@@ -1036,13 +1049,13 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
                 mode="lines+markers",
                 line={"color": color, "width": 3},
                 marker={"color": color, "size": 7},
-                name=f"traj {traj_idx} selected target_root_gain",
+                name=f"traj {traj_idx} selected {_label('selected_target_root_gain', math_capable=True)}",
             )
         )
     fig.update_layout(
         title="Valid-candidate empirical central 95% range",
         xaxis_title="rollout step",
-        yaxis_title="candidate target root gain / target RRI",
+        yaxis_title=f"{_label('target_root_gain', math_capable=True)} / {_label('target_rri', math_capable=True)}",
     )
     return fig
 
@@ -1909,8 +1922,8 @@ def _render_live_rollout_metric_dashboard(
     j_endpoint = pd.to_numeric(rows_df["J_endpoint"], errors="coerce")
     best_idx = int(cumulative_score.idxmax())
     metric_cols[0].metric("Best branch", int(rows_df.loc[best_idx, "trajectory"]))
-    metric_cols[1].metric("Best G_0^(H)", _format_optional_metric(g_target.max()))
-    metric_cols[2].metric("Best J_e^(H)", _format_optional_metric(j_endpoint.max()))
+    metric_cols[1].metric(_label("return_h"), _format_optional_metric(g_target.max()))
+    metric_cols[2].metric(_label("endpoint_gain"), _format_optional_metric(j_endpoint.max()))
     mean_fanout = None if step_df.empty else step_df["valid_candidates"].mean()
     metric_cols[3].metric("Mean valid fanout", _format_optional_metric(mean_fanout))
     _info_popover("trajectory objective metrics", _LIVE_TRAJECTORY_OBJECTIVE_INFO)
@@ -1926,7 +1939,7 @@ def _render_live_rollout_metric_dashboard(
                 x=traj_df["step"],
                 y=traj_df["selected_target_root_gain"].fillna(traj_df["selected_target_rri"]),
                 mode="lines+markers",
-                name=f"traj {traj_idx} selected target_root_gain",
+                name=f"traj {traj_idx} selected {_label('selected_target_root_gain', math_capable=True)}",
             )
         )
         rri_fig.add_trace(
@@ -1934,14 +1947,14 @@ def _render_live_rollout_metric_dashboard(
                 x=traj_df["step"],
                 y=traj_df["G_target"],
                 mode="lines+markers",
-                name=f"traj {traj_idx} G_0 prefix",
+                name=f"traj {traj_idx} {_label('cumulative_target_root_gain', math_capable=True)} prefix",
                 line={"dash": "dash"},
             )
         )
     rri_fig.update_layout(
         title="Selected target return by rollout step",
         xaxis_title="rollout step",
-        yaxis_title="target root gain / cumulative return",
+        yaxis_title=f"{_label('target_root_gain', math_capable=True)} / {_label('return_h', math_capable=True)}",
     )
 
     fanout_fig = _build_fanout_band_figure(step_df)
@@ -1990,9 +2003,9 @@ def _render_live_rollout_metric_dashboard(
                 )
             )
         top_fig.update_layout(
-            title="Top-k valid candidate target root gain / RRI per step",
+            title=f"Top-k valid candidate {_label('target_root_gain', math_capable=True)} / {_label('target_rri', math_capable=True)} per step",
             xaxis_title="rollout step",
-            yaxis_title="target root gain / target RRI",
+            yaxis_title=f"{_label('target_root_gain', math_capable=True)} / {_label('target_rri', math_capable=True)}",
         )
         _render_live_quality_plot(
             top_fig,
@@ -2003,8 +2016,12 @@ def _render_live_rollout_metric_dashboard(
 
     if rows_df["J_endpoint"].notna().any() or rows_df["log_gain"].notna().any():
         endpoint_fig = go.Figure()
-        endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["J_endpoint"], name="J_e,Delta^(H)"))
-        endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["log_gain"], name="log gain"))
+        endpoint_fig.add_trace(
+            go.Bar(x=rows_df["trajectory"], y=rows_df["J_endpoint"], name=_label("endpoint_gain", math_capable=True))
+        )
+        endpoint_fig.add_trace(
+            go.Bar(x=rows_df["trajectory"], y=rows_df["log_gain"], name=_label("log_gain", math_capable=True))
+        )
         endpoint_fig.update_layout(
             title="Endpoint target-quality metrics",
             xaxis_title="trajectory",
