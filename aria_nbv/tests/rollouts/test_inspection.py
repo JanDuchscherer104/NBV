@@ -383,7 +383,7 @@ def test_candidate_direction_evidence_uses_complete_equal_area_bins_and_state_sc
     for row in state_rows:
         state_id = (row.get("rollout_row_id"), row.get("step_row_id"))
         state_fractions[state_id] = state_fractions.get(state_id, 0.0) + float(row["mean_state_fraction"])
-    assert len(state_fractions) == 2
+    assert set(state_fractions) == {("0", "0"), ("1", "1")}
     assert all(value == pytest.approx(1.0) for value in state_fractions.values())
     assert all(row["azimuth_bin"] >= 0 and row["sin_elevation_bin"] >= 0 for row in density)
     assert evidence["cap_rows"] and evidence["angular_support_rows"]
