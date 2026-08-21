@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from ...data_handling import EfmSnippetView
     from ...pose_generation import CandidateViewGeneratorConfig
     from ...pose_generation.types import CandidateSamplingResult
-from .common import _info_popover, _pretty_label
+from .common import _info_popover, _pretty_label, render_scientific_notation
 
 
 def _label(identifier: str, *, math_capable: bool = False) -> str:
@@ -397,6 +397,7 @@ def _render_live_candidates_page(
                 .finalize()
             )
             st.plotly_chart(cand_fig, width="stretch")
+            render_scientific_notation("validity_mask")
         else:
             st.warning("EFM snippet not attached; rendering candidates without mesh.")
             st.plotly_chart(
@@ -406,6 +407,7 @@ def _render_live_candidates_page(
                 ),
                 width="stretch",
             )
+            render_scientific_notation("validity_mask")
         provenance_rows = _candidate_provenance_preview(candidates)
         if provenance_rows:
             with st.expander("Position / strategy provenance", expanded=False):

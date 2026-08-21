@@ -17,7 +17,7 @@ from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...rri_metrics.rri import RriResult
 from ..scientific_labels import format_scientific_label
 from ..state import get_label_display_mode
-from .common import _info_popover, _pretty_label
+from .common import _info_popover, _pretty_label, render_scientific_notation
 
 
 def _label(identifier: str, *, math_capable: bool = False) -> str:
@@ -72,6 +72,7 @@ def render_rri_page(
         ),
         width="stretch",
     )
+    render_scientific_notation("oracle_rri")
 
     _info_popover(
         "pm dist",
@@ -89,6 +90,7 @@ def render_rri_page(
         ),
         width="stretch",
     )
+    render_scientific_notation("point_to_mesh_error", "mesh_to_point_error")
 
     _info_popover(
         "pm acc",
@@ -105,6 +107,7 @@ def render_rri_page(
         ),
         width="stretch",
     )
+    render_scientific_notation("point_to_mesh_error")
 
     _info_popover(
         "pm comp",
@@ -121,6 +124,7 @@ def render_rri_page(
         ),
         width="stretch",
     )
+    render_scientific_notation("mesh_to_point_error")
 
     col1, col2 = st.columns(2)
     with col1:
