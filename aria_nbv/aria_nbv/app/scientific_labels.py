@@ -77,6 +77,8 @@ SCIENTIFIC_LABELS: dict[str, ScientificLabel] = {
     "target_error_0": ScientificLabel("target_error_0", "Root target error", "entity.target_error_0"),
     "point_to_mesh_error": ScientificLabel("point_to_mesh_error", "Point-to-mesh error", "oracle.dist_pm"),
     "mesh_to_point_error": ScientificLabel("mesh_to_point_error", "Mesh-to-point error", "oracle.dist_mp"),
+    "pm_acc_after": ScientificLabel("pm_acc_after", "Point-to-mesh error", "oracle.dist_pm"),
+    "pm_comp_after": ScientificLabel("pm_comp_after", "Mesh-to-point error", "oracle.dist_mp"),
 }
 
 
@@ -159,10 +161,7 @@ def format_scientific_label(
     units = f" ({configured.units})" if configured.units else ""
     if configured.symbol_key is None:
         return f"{readable}{units}"
-    try:
-        resolved = resolve_theory(TheoryReferences(symbol_ids=(configured.symbol_key,)), root=root).symbols[0]
-    except TheoryResolutionError:
-        return f"{readable}{units}"
+    resolved = resolve_theory(TheoryReferences(symbol_ids=(configured.symbol_key,)), root=root).symbols[0]
     if surface == "plain" or mode == "Text":
         return f"{readable}{units}"
     symbol = f"${resolved.tex}$"
@@ -218,10 +217,7 @@ def symbol_label(
     """
 
     readable = format_identifier(identifier)
-    try:
-        resolved = resolve_theory(TheoryReferences(symbol_ids=(identifier,)), root=root).symbols[0]
-    except TheoryResolutionError:
-        return readable
+    resolved = resolve_theory(TheoryReferences(symbol_ids=(identifier,)), root=root).symbols[0]
     description = resolved.description or readable
     if not math_capable or mode == "Text":
         return description
@@ -240,10 +236,7 @@ def equation_label(
     """Return a registry-backed equation label for a UI surface."""
 
     readable = format_identifier(identifier)
-    try:
-        resolved = resolve_theory(TheoryReferences(equation_ids=(identifier,)), root=root).equations[0]
-    except TheoryResolutionError:
-        return readable
+    resolved = resolve_theory(TheoryReferences(equation_ids=(identifier,)), root=root).equations[0]
     description = resolved.description or readable
     if not math_capable or mode == "Text":
         return description

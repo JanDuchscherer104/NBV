@@ -14,6 +14,7 @@ import streamlit as st
 
 from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS
 from ...scientific_labels import TheoryReferences
+from ..common import current_scientific_label, render_scientific_notation
 from .session import _cached_projection, _cached_store_bundle
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
@@ -937,14 +938,20 @@ def _render_candidate_geometry_diagnostics(
             if name in candidates and candidates[name].notna().any()
         ]
         if metric_options:
-            metric = st.selectbox("Geometry / label distribution", options=metric_options)
+            metric = st.selectbox(
+                "Geometry / label distribution",
+                options=metric_options,
+                format_func=current_scientific_label,
+            )
             metric_rows = candidates.dropna(subset=[metric])
+            render_scientific_notation(metric)
             fig = px.histogram(
                 metric_rows,
                 x=metric,
                 color="invalid_reason" if "invalid_reason" in metric_rows else None,
                 marginal="box",
-                title=f"{metric} distribution",
+                labels={metric: current_scientific_label(metric)},
+                title=f"{current_scientific_label(metric)} distribution",
             )
             _render_plot(
                 fig,
@@ -1291,13 +1298,15 @@ def _render_candidate_geometry_diagnostics(
         if {"target_root_gain", "position", "selected"}.issubset(candidates.columns):
             rewards = candidates.dropna(subset=["target_root_gain"])
             if not rewards.empty:
+                render_scientific_notation("target_root_gain")
                 fig = px.box(
                     rewards,
                     x="position",
                     y="target_root_gain",
                     color="selected",
                     points="outliers",
-                    title="Target root gain by candidate family and selection",
+                    labels={"target_root_gain": current_scientific_label("target_root_gain")},
+                    title=(f"{current_scientific_label('target_root_gain')} by candidate family and selection"),
                 )
                 _render_plot(
                     fig,

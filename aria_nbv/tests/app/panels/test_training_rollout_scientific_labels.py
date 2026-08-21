@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import inspect
+
 import pandas as pd
 import pytest
 
+from aria_nbv.app.panels._stored_rollouts import candidate_generation
 from aria_nbv.app.panels._stored_rollouts.reconstruction_return import _temporal_summary_figure
 from aria_nbv.app.scientific_labels import format_scientific_label, scientific_label
 
@@ -58,7 +61,7 @@ def test_temporal_figure_keeps_raw_schema_and_uses_canonical_axis_label() -> Non
     )
     original_columns = rows.columns.tolist()
 
-    figure = _temporal_summary_figure(rows, group_field="trajectory", metric_label="ignored")
+    figure = _temporal_summary_figure(rows, group_field="trajectory")
 
     assert rows.columns.tolist() == original_columns
     assert "Cumulative target root gain" in str(figure.layout.title.text)
@@ -67,3 +70,12 @@ def test_temporal_figure_keeps_raw_schema_and_uses_canonical_axis_label() -> Non
     assert "\\" not in str(figure.layout.title.text)
     assert "$" not in str(figure.layout.yaxis.title.text)
     assert "\\" not in str(figure.layout.yaxis.title.text)
+
+
+def test_stored_candidate_reward_views_use_shared_scientific_labels() -> None:
+    source = inspect.getsource(candidate_generation._render_candidate_geometry_diagnostics)
+
+    assert "format_func=current_scientific_label" in source
+    assert "render_scientific_notation(metric)" in source
+    assert 'render_scientific_notation("target_root_gain")' in source
+    assert 'labels={"target_root_gain": current_scientific_label("target_root_gain")}' in source

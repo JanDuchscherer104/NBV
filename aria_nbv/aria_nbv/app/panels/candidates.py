@@ -41,8 +41,6 @@ from ...pose_generation.utils import (
 from ...rollouts.inspection import decode_position_id, decode_strategy_id
 from ...rollouts.trace import _candidate_invalid_reasons
 from ...utils.frames import world_up_tensor
-from ..scientific_labels import format_scientific_label
-from ..state import get_label_display_mode
 
 if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
@@ -50,17 +48,7 @@ if TYPE_CHECKING:
     from ...data_handling import EfmSnippetView
     from ...pose_generation import CandidateViewGeneratorConfig
     from ...pose_generation.types import CandidateSamplingResult
-from .common import _info_popover, _pretty_label, render_scientific_notation
-
-
-def _label(identifier: str, *, math_capable: bool = False) -> str:
-    """Render a canonical scientific label at the final UI boundary."""
-
-    return format_scientific_label(
-        identifier,
-        mode=get_label_display_mode(),
-        surface="markdown" if math_capable else "plain",
-    )
+from .common import _info_popover, _pretty_label, current_scientific_label, render_scientific_notation
 
 
 def _target_point_from_config(cand_cfg: CandidateViewGeneratorConfig | None) -> torch.Tensor | None:
@@ -113,7 +101,7 @@ def _full_shell_color_payload(candidates: CandidateSamplingResult, mode: str) ->
 
     mask_valid = candidates.mask_valid.detach().cpu().reshape(-1)
     if mode == "validity":
-        return mask_valid.to(dtype=torch.float32), _label("validity_mask")
+        return mask_valid.to(dtype=torch.float32), current_scientific_label("validity_mask")
     if mode == "position_family" and candidates.position_id is not None:
         return candidates.position_id.detach().cpu().to(dtype=torch.float32).reshape(-1), "position_id"
     if mode == "strategy" and candidates.strategy_id is not None:

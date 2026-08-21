@@ -40,9 +40,13 @@ from ...utils.wandb_utils import (
     plot_dynamics_scatter,
     plot_metric_curves,
 )
-from ..scientific_labels import format_scientific_label, scientific_label
-from ..state import get_label_display_mode
-from .common import _info_popover, _pretty_label, _report_exception, render_scientific_notation
+from .common import (
+    _info_popover,
+    _pretty_label,
+    _report_exception,
+    current_scientific_label,
+    render_scientific_notation,
+)
 
 _ENTITY_CACHE_TTL_S = 300
 _DEFAULT_METRIC_FILTER = (
@@ -56,11 +60,7 @@ def _wandb_metric_label(metric: str) -> str:
     normalized = metric.rsplit("/", maxsplit=1)[-1].lower()
     if normalized in {"rri", "oracle_rri", "pred_rri_mean_epoch"}:
         identifier = "oracle_rri" if normalized != "pred_rri_mean_epoch" else "target_rri"
-        return format_scientific_label(
-            scientific_label(identifier),
-            mode=get_label_display_mode(),
-            surface="plain",
-        )
+        return current_scientific_label(identifier)
     return _pretty_label(metric)
 
 
