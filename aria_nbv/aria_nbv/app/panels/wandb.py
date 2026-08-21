@@ -42,7 +42,7 @@ from ...utils.wandb_utils import (
 )
 from ..scientific_labels import format_scientific_label, scientific_label
 from ..state import get_label_display_mode
-from .common import _info_popover, _pretty_label, _report_exception
+from .common import _info_popover, _pretty_label, _report_exception, render_scientific_notation
 
 _ENTITY_CACHE_TTL_S = 300
 _DEFAULT_METRIC_FILTER = (
@@ -451,6 +451,8 @@ def render_wandb_analysis_page() -> None:
     else:
         col_m1, col_m2, col_m3 = st.columns([2, 1, 1])
         metric_choice = col_m1.selectbox("Metric", options=metric_choices, index=0)
+        if metric_choice.rsplit("/", maxsplit=1)[-1].lower() in {"rri", "oracle_rri", "pred_rri_mean_epoch"}:
+            render_scientific_notation("target_rri" if "pred_rri" in metric_choice else "oracle_rri")
         ema_alpha = col_m2.slider(
             "EMA alpha",
             min_value=0.0,

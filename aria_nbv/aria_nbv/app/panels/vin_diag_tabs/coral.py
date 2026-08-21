@@ -15,7 +15,7 @@ from ....utils.plotting import _histogram_overlay
 from ....vin.ordinal import coral_loss, coral_monotonicity_violation_rate
 from ...scientific_labels import format_scientific_label, scientific_label
 from ...state import get_label_display_mode
-from ..common import _info_popover, _pretty_label
+from ..common import _info_popover, _pretty_label, render_scientific_notation
 from .context import VinDiagContext
 
 
@@ -44,6 +44,7 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
         "probabilities, bin representatives, and per-candidate loss/entropy. "
         "Use it to validate bin calibration and monotonicity.",
     )
+    render_scientific_notation("rri")
     binner = getattr(state.module, "_binner", None)
     head_coral = getattr(state.module.vin, "head_coral", None) if state.module is not None else None
 
