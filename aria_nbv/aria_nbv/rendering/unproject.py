@@ -26,8 +26,30 @@ from typing import TYPE_CHECKING
 import torch
 from pytorch3d.renderer.cameras import PerspectiveCameras  # type: ignore[import-untyped]
 
+from .pytorch3d_depth_renderer import camera_tw_to_pytorch3d
+
 if TYPE_CHECKING:
-    pass
+    from efm3d.aria.camera import CameraTW
+    from efm3d.aria.pose import PoseTW
+
+
+def backproject_depths_camera_tw_batch(
+    depths: torch.Tensor,
+    mask_valid: torch.Tensor,
+    camera: CameraTW,
+    pose_world_camera: PoseTW,
+    *,
+    stride: int = 1,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Back-project stored camera-z depth through the canonical PyTorch3D adapter."""
+
+    cameras = camera_tw_to_pytorch3d(
+        camera,
+        pose_world_camera,
+        device=depths.device,
+        dtype=depths.dtype,
+    )
+    return backproject_depths_p3d_batch(depths, mask_valid, cameras, stride=stride)
 
 
 def backproject_depths_p3d_batch(
@@ -97,4 +119,4 @@ def backproject_depths_p3d_batch(
     return padded, lengths
 
 
-__all__ = ["backproject_depths_p3d_batch"]
+__all__ = ["backproject_depths_camera_tw_batch", "backproject_depths_p3d_batch"]

@@ -108,6 +108,21 @@ class QhDataContract:
     selected_depth_source_resolution: str | None = None
     """Recorded resolution policy used to produce selected depth."""
 
+    selected_depth_projection_model: str | None = None
+    """Versioned camera model implied by the schema and renderer provenance."""
+
+    selected_depth_value_semantics: str | None = None
+    """Meaning of each finite depth value; the supported contract is camera-frame z in metres."""
+
+    selected_depth_pixel_convention: str | None = None
+    """Pixel sampling convention used by rendering and PyTorch3D backprojection."""
+
+    selected_depth_camera_axes: str | None = None
+    """Physical camera-axis convention used by the selected render."""
+
+    selected_depth_pose_convention: str | None = None
+    """Direction of the aligned selected camera pose stored elsewhere in the rollout."""
+
 
 @dataclass(frozen=True, slots=True)
 class _StoreFacts:
@@ -417,6 +432,11 @@ def _read_contract(root: zarr.Group) -> QhDataContract:
         selected_depth_znear_m=_optional_finite_float(selected("selected_depth_znear_m")),
         selected_depth_zfar_m=_optional_finite_float(selected("selected_depth_zfar_m")),
         selected_depth_source_resolution=_optional_string(selected("selected_depth_source_resolution")),
+        selected_depth_projection_model="linear_pinhole_screen" if selected_depth_enabled else None,
+        selected_depth_value_semantics="camera_z_m" if selected_depth_enabled else None,
+        selected_depth_pixel_convention="half_pixel_centers_in_ndc_false" if selected_depth_enabled else None,
+        selected_depth_camera_axes="left_up_forward" if selected_depth_enabled else None,
+        selected_depth_pose_convention="root_from_camera" if selected_depth_enabled else None,
     )
 
 
@@ -619,6 +639,11 @@ def _effective_contract(contract: QhDataContract, *, include_selected_depth: boo
         selected_depth_znear_m=None,
         selected_depth_zfar_m=None,
         selected_depth_source_resolution=None,
+        selected_depth_projection_model=None,
+        selected_depth_value_semantics=None,
+        selected_depth_pixel_convention=None,
+        selected_depth_camera_axes=None,
+        selected_depth_pose_convention=None,
     )
 
 
@@ -631,6 +656,21 @@ def _validate_rich_selected_depth_contract(contract: QhDataContract) -> None:
         raise ValueError("Q_H rich modality read requires selected successor-state depth provenance.")
     if contract.selected_depth_renderer != "Pytorch3DDepthRenderer":
         raise ValueError("Q_H CF-GT depth requires the recorded Pytorch3D mesh renderer provenance.")
+    expected_semantics = (
+        contract.selected_depth_projection_model,
+        contract.selected_depth_value_semantics,
+        contract.selected_depth_pixel_convention,
+        contract.selected_depth_camera_axes,
+        contract.selected_depth_pose_convention,
+    )
+    if expected_semantics != (
+        "linear_pinhole_screen",
+        "camera_z_m",
+        "half_pixel_centers_in_ndc_false",
+        "left_up_forward",
+        "root_from_camera",
+    ):
+        raise ValueError("Q_H selected depth has an unsupported camera/depth semantic contract.")
     if contract.selected_depth_image_size_hw is None or any(size < 1 for size in contract.selected_depth_image_size_hw):
         raise ValueError("Q_H rich modality read requires a positive selected-depth raster size.")
     if contract.selected_depth_dtype != "float16" or contract.selected_depth_units != "m":

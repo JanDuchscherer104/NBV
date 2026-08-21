@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
 import aria_nbv.data_handling.qh_data.dataset as qh_dataset_module
@@ -77,6 +78,7 @@ def test_qh_pose_fields_preserve_frame_aware_public_types() -> None:
     """Keep SE(3) views typed as poses instead of exposing raw storage tensors."""
 
     assert QhStaticContext.__annotations__["t_world_voxel"] == "PoseTW | None"
+    assert QhSelectedObservationPrefix.__annotations__["camera"] == "CameraTW"
     assert QhSelectedObservationPrefix.__annotations__["camera_pose_relative_root"] == "PoseTW"
     for field in (
         "root_pose_world",
@@ -573,8 +575,8 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     stored = _stored(_source_ref())
     stored.selected_depth_m = np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3)
     stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
-    stored.selected_depth_focal_px = np.full((2, 2), 10, dtype=np.float32)
-    stored.selected_depth_principal_point_px = np.full((2, 2), 1, dtype=np.float32)
+    stored.selected_depth_focal_px = np.tile(np.array([10, 12], dtype=np.float32), (2, 1))
+    stored.selected_depth_principal_point_px = np.tile(np.array([0.75, 1.25], dtype=np.float32), (2, 1))
     stored.selected_depth_image_size_hw = np.tile(np.array([2, 3], dtype=np.int64), (2, 1))
     stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
     context = QhStaticContext(
@@ -600,6 +602,13 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     )
     prefix = chain.actor.selected_observation_prefix
     assert prefix is not None
+    assert isinstance(prefix.camera, CameraTW)
+    assert prefix.camera.is_linear
+    assert prefix.camera.tensor().shape == (2, 2, 22)
+    assert prefix.camera.size[1, 0].tolist() == pytest.approx([3.0, 2.0])
+    assert prefix.camera.f[1, 0].tolist() == pytest.approx([10.0, 12.0])
+    assert prefix.camera.c[1, 0].tolist() == pytest.approx([0.75, 1.25])
+    assert torch.allclose(prefix.camera.T_camera_rig[1, 0].tensor(), PoseTW().tensor())
     assert isinstance(prefix.camera_pose_relative_root, PoseTW)
     assert prefix.source_protocol == "cf_gt"
     assert not prefix.prefix_mask[0].any()
@@ -653,6 +662,7 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
             "evl_presence": summarize(static.evl_presence),
             "selected_depth_m": summarize(prefix.depth_m),
             "selected_depth_valid_mask": summarize(prefix.valid_mask),
+            "selected_depth_camera": summarize(prefix.camera.tensor()),
             "selected_depth_camera_pose_relative_root": summarize(prefix.camera_pose_relative_root.tensor()),
             "selected_depth_prefix_mask": summarize(prefix.prefix_mask),
         }

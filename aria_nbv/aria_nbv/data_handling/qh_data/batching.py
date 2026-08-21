@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
@@ -259,9 +260,7 @@ def _collate_selected_prefix(actors: list[QhActorTensors]) -> QhSelectedObservat
     return QhSelectedObservationPrefix(
         depth_m=_pad([value.depth_m for value in values], 0),
         valid_mask=_pad([value.valid_mask for value in values], False),
-        focal_px=_pad([value.focal_px for value in values], 0),
-        principal_point_px=_pad([value.principal_point_px for value in values], 0),
-        image_size_hw=_pad([value.image_size_hw for value in values], 0),
+        camera=CameraTW(_pad([value.camera.tensor() for value in values], 0)),
         camera_pose_relative_root=PoseTW(_pad([value.camera_pose_relative_root.tensor() for value in values], 0)),
         prefix_mask=_pad([value.prefix_mask for value in values], False),
     )
@@ -403,9 +402,7 @@ def _transform_selected_prefix(
     return QhSelectedObservationPrefix(
         depth_m=transform(prefix.depth_m),
         valid_mask=transform(prefix.valid_mask),
-        focal_px=transform(prefix.focal_px),
-        principal_point_px=transform(prefix.principal_point_px),
-        image_size_hw=transform(prefix.image_size_hw),
+        camera=CameraTW(transform(prefix.camera.tensor())),
         camera_pose_relative_root=PoseTW(transform(prefix.camera_pose_relative_root.tensor())),
         prefix_mask=transform(prefix.prefix_mask),
         source_protocol=prefix.source_protocol,

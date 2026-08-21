@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
@@ -205,23 +206,46 @@ def _selected_observation_prefix(
     steps, height, width = depth.shape
     prefix_depth = torch.zeros((steps, steps, height, width), dtype=torch.float16)
     prefix_valid = torch.zeros((steps, steps, height, width), dtype=torch.bool)
-    prefix_focal = torch.zeros((steps, steps, 2), dtype=torch.float32)
-    prefix_principal = torch.zeros((steps, steps, 2), dtype=torch.float32)
-    prefix_size = torch.zeros((steps, steps, 2), dtype=torch.int64)
+    cameras = _linear_camera_rows(focal, principal, image_size)
+    prefix_camera = torch.zeros((steps, steps, cameras.tensor().shape[-1]), dtype=torch.float32)
     for state in range(1, steps):
         prefix_depth[state, :state] = _from_numpy(depth[:state], torch.float16)
         prefix_valid[state, :state] = _from_numpy(valid[:state], torch.bool)
-        prefix_focal[state, :state] = _from_numpy(focal[:state], torch.float32)
-        prefix_principal[state, :state] = _from_numpy(principal[:state], torch.float32)
-        prefix_size[state, :state] = _from_numpy(image_size[:state], torch.int64)
+        prefix_camera[state, :state] = cameras.tensor()[:state]
     return QhSelectedObservationPrefix(
         depth_m=prefix_depth,
         valid_mask=prefix_valid,
-        focal_px=prefix_focal,
-        principal_point_px=prefix_principal,
-        image_size_hw=prefix_size,
+        camera=CameraTW(prefix_camera),
         camera_pose_relative_root=history_pose,
         prefix_mask=history_mask,
+    )
+
+
+def _linear_camera_rows(focal: np.ndarray, principal: np.ndarray, image_size_hw: np.ndarray) -> CameraTW:
+    """Reconstruct linear cameras from persisted post-resize pinhole calibration rows."""
+
+    if focal.shape != principal.shape or focal.ndim != 2 or focal.shape[1] != 2:
+        raise ValueError("Q_H selected-depth focal and principal-point rows must both have shape (S,2).")
+    if image_size_hw.shape != focal.shape:
+        raise ValueError("Q_H selected-depth raster rows must align with focal and principal-point rows.")
+    focal_tensor = _from_numpy(focal, torch.float32)
+    principal_tensor = _from_numpy(principal, torch.float32)
+    size_tensor = _from_numpy(image_size_hw, torch.float32)
+    rows = int(focal.shape[0])
+    zeros = torch.zeros((rows, 1), dtype=torch.float32)
+    return CameraTW.from_parameters(
+        width=size_tensor[:, 1:2],
+        height=size_tensor[:, 0:1],
+        fx=focal_tensor[:, 0:1],
+        fy=focal_tensor[:, 1:2],
+        cx=principal_tensor[:, 0:1],
+        cy=principal_tensor[:, 1:2],
+        gain=zeros,
+        exposure_s=zeros,
+        valid_radiusx=size_tensor[:, 1:2],
+        valid_radiusy=size_tensor[:, 0:1],
+        T_camera_rig=PoseTW().tensor().reshape(1, 12).expand(rows, -1),
+        dist_params=torch.empty((rows, 0), dtype=torch.float32),
     )
 
 

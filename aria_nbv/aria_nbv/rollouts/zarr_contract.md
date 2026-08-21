@@ -287,6 +287,19 @@ source-resolution policy, units, invalid-fill value, and codec; row metadata
 records selected camera intrinsics. Selected-depth metadata must not be folded
 into target-RRI labels or invalidity reasons.
 
+For schema `2.0-target-rollout-provenance` with renderer provenance
+`Pytorch3DDepthRenderer`, these arrays have one fixed semantic contract:
+`focal_px` and `principal_point_px` describe a linear pinhole camera in
+physical screen pixels; `image_size_hw` is `[height,width]`; pixel samples use
+half-pixel centres; PyTorch3D is configured with `in_ndc=False`; and finite
+`depth_m` values are camera-frame `+Z` distances in metres. The physical camera
+axes are left/up/forward, so image-right and image-down are negative camera X
+and Y in the PyTorch3D adapter. The aligned selected pose is root-from-camera.
+Invalid pixels equal the declared `0.0` fill and valid pixels lie within the
+declared near/far clip range. Readers reconstruct a distortion-free, identity-
+extrinsic `CameraTW` from these primitive rows; `PerspectiveCameras` remains a
+derived runtime object owned by `pytorch3d_depth_renderer.py`.
+
 ## Candidate Table
 
 `candidates/candidate_index` columns:

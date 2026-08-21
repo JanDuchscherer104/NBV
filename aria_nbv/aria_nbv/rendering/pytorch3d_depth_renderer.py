@@ -24,6 +24,70 @@ if TYPE_CHECKING:
     from efm3d.aria import CameraTW, PoseTW
 
 
+def camera_tw_to_pytorch3d(
+    camera: CameraTW,
+    pose_world_camera: PoseTW,
+    *,
+    device: torch.device,
+    dtype: torch.dtype = torch.float32,
+) -> PerspectiveCameras:
+    """Convert calibrated world-from-camera poses to the project's PyTorch3D convention.
+
+    This is the sole adapter for persisted linear ``CameraTW`` calibration and
+    rendered ``camera_z`` depth. PyTorch3D uses row-vector world-to-view
+    transforms, so the inverse ``PoseTW`` rotation is transposed explicitly.
+    """
+
+    camera = camera.to(device)
+    pose_camera_world = pose_world_camera.inverse().to(device)
+    batch_size = int(pose_camera_world.shape[0])
+    _width, _height, focal, principal, image_size = _camera_intrinsics(
+        camera,
+        device=device,
+        dtype=dtype,
+        batch_size=batch_size,
+    )
+    return PerspectiveCameras(
+        device=device,
+        R=pose_camera_world.R.transpose(-1, -2).contiguous(),
+        T=pose_camera_world.t,
+        focal_length=focal,
+        principal_point=principal,
+        image_size=image_size,
+        in_ndc=False,
+    )
+
+
+def _camera_intrinsics(
+    camera: CameraTW,
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+    batch_size: int,
+) -> tuple[int, int, Tensor, Tensor, Tensor]:
+    """Return physical-image intrinsics aligned to a pose batch."""
+
+    size_all = camera.size.reshape(-1, 2).to(device=device, dtype=torch.float32)
+    if size_all.shape[0] not in (1, batch_size):
+        raise ValueError(f"Camera size batch {size_all.shape[0]} does not match poses batch {batch_size}")
+    size_base = size_all[0]
+    if not torch.allclose(size_all, size_base):
+        raise ValueError("Per-candidate varying image sizes are not supported.")
+    width = int(size_base[0].item())
+    height = int(size_base[1].item())
+
+    focal_all = camera.f.reshape(-1, 2).to(device=device, dtype=dtype)
+    principal_all = camera.c.reshape(-1, 2).to(device=device, dtype=dtype)
+    if focal_all.shape[0] == 1 and batch_size > 1:
+        focal_all = focal_all.expand(batch_size, -1)
+        principal_all = principal_all.expand(batch_size, -1)
+        size_all = size_all.expand(batch_size, -1)
+    elif focal_all.shape[0] != batch_size:
+        raise ValueError(f"Camera focal batch {focal_all.shape[0]} does not match poses batch {batch_size}")
+    image_size = torch.stack((size_all[:, 1], size_all[:, 0]), dim=-1).to(dtype=dtype)
+    return width, height, focal_all, principal_all, image_size
+
+
 class Pytorch3DDepthRendererConfig(TargetConfig["Pytorch3DDepthRenderer"]):
     """Configuration for `Pytorch3DDepthRenderer`."""
 
@@ -128,9 +192,16 @@ class Pytorch3DDepthRenderer:
         }[self.config.dtype]
 
         cam_single = self._slice_camera(camera, frame_index)
-        width, height, focal_length, principal_point, image_size = self._camera_intrinsics(
-            cam_single, dtype=dtype, batch_size=poses.shape[0]
+        cameras = camera_tw_to_pytorch3d(
+            cam_single,
+            poses,
+            device=self.device,
+            dtype=dtype,
         )
+        focal_length = cameras.focal_length
+        principal_point = cameras.principal_point
+        image_size = cameras.image_size
+        height, width = (int(value.item()) for value in image_size[0])
         self.console.plog(
             {
                 "image_size": image_size[0, :],
@@ -143,31 +214,12 @@ class Pytorch3DDepthRenderer:
 
         poses_cw = poses.inverse().to(self.device)
         self.console.dbg_summary("poses_cw", poses_cw)
-        # PoseTW stores rotations in the standard (column-vector) convention.
-        # PyTorch3D's world→view transform uses row-vectors: X_cam = X_world R + T.
-        # Therefore we pass R^T here so the induced mapping matches PoseTW.
-        rotations = poses_cw.R.transpose(-1, -2).contiguous()
-        translations = poses_cw.t
-        batch_size = rotations.shape[0]
-        if focal_length.shape[0] == 1 and batch_size > 1:
-            focal_length = focal_length.expand(batch_size, -1)
-            principal_point = principal_point.expand(batch_size, -1)
-            image_size = image_size.expand(batch_size, -1)
+        batch_size = poses_cw.shape[0]
 
         # Keep one base mesh and replicate it only for each bounded view batch.
         verts_t, faces_t = mesh
 
         mesh_struct_single = Meshes(verts=[verts_t.to(self.device)], faces=[faces_t.to(self.device)])
-
-        cameras = PerspectiveCameras(
-            device=self.device,
-            R=rotations,
-            T=translations,
-            focal_length=focal_length,
-            principal_point=principal_point,
-            image_size=image_size,
-            in_ndc=False,
-        )
         raster_settings = RasterizationSettings(
             image_size=(int(height), int(width)),
             blur_radius=self.config.blur_radius,
@@ -221,44 +273,3 @@ class Pytorch3DDepthRenderer:
         idx = data.shape[0] - 1 if frame_index is None else frame_index
         idx = max(-data.shape[0], min(data.shape[0] - 1, idx))
         return camera[idx]
-
-    def _camera_intrinsics(
-        self,
-        camera: CameraTW,
-        *,
-        dtype: torch.dtype,
-        batch_size: int,
-    ) -> tuple[int, int, Tensor, Tensor, Tensor]:
-        """Return intrinsics ready for ``PerspectiveCameras``.
-
-        Args:
-            camera: Single-frame ``CameraTW`` on the target device.
-            dtype: Torch dtype to use for focal/principal/image_size tensors.
-
-        Returns:
-            Tuple of ``(width_px, height_px, focal_length, principal_point, image_size)`` where
-            the last three items are shaped ``(B, 2)`` on ``self.device`` with the provided dtype.
-        """
-
-        size_all = camera.size.reshape(-1, 2).to(device=self.device, dtype=torch.float32)
-        if size_all.shape[0] not in (1, batch_size):
-            raise ValueError(f"Camera size batch {size_all.shape[0]} does not match poses batch {batch_size}")
-        size_base = size_all[0]
-        if not torch.allclose(size_all, size_base):
-            raise ValueError("Per-candidate varying image sizes are not supported.")
-        width = int(size_base[0].item())
-        height = int(size_base[1].item())
-
-        focal_all = camera.f.reshape(-1, 2).to(device=self.device, dtype=dtype)
-        principal_all = camera.c.reshape(-1, 2).to(device=self.device, dtype=dtype)
-
-        if focal_all.shape[0] == 1 and batch_size > 1:
-            focal_all = focal_all.expand(batch_size, -1)
-            principal_all = principal_all.expand(batch_size, -1)
-            size_all = size_all.expand(batch_size, -1)
-        elif focal_all.shape[0] != batch_size:
-            raise ValueError(f"Camera focal batch {focal_all.shape[0]} does not match poses batch {batch_size}")
-
-        image_size = torch.stack((size_all[:, 1], size_all[:, 0]), dim=-1).to(dtype=dtype)
-
-        return width, height, focal_all, principal_all, image_size

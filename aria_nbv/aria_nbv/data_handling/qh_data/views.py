@@ -31,6 +31,7 @@ from torch import Tensor
 from ..vin_store.views import VinSnippetView
 
 if TYPE_CHECKING:
+    from efm3d.aria.camera import CameraTW
     from efm3d.aria.pose import PoseTW
 
 QhRootEvlProfile = Literal["none", "evl_v1"]
@@ -111,14 +112,8 @@ class QhSelectedObservationPrefix:
     valid_mask: Tensor
     """``Tensor["S S H_d W_d", bool]``: valid metric-depth support aligned with ``depth_m``."""
 
-    focal_px: Tensor
-    """``Tensor["S S 2", float32]``: focal lengths ``[f_x,f_y]`` indexed by query state ``s`` and observation ``j``."""
-
-    principal_point_px: Tensor
-    """``Tensor["S S 2", float32]``: principal points ``[c_x,c_y]``."""
-
-    image_size_hw: Tensor
-    """``Tensor["S S 2", int64]``: raster size ``[H_d,W_d]``."""
+    camera: CameraTW
+    """Linear ``CameraTW["S S 22"]`` reconstructed from the exact persisted focal, principal-point, and raster rows; masked slots are padding."""
 
     camera_pose_relative_root: PoseTW
     """``PoseTW["S S 12"]``: root-rig-from-selected-camera poses; entry ``[s,j]`` belongs to selected action ``j``."""

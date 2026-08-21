@@ -1104,6 +1104,29 @@ class _RolloutZarrValidator:
         for name in ("focal_px", "principal_point_px", "image_size_hw"):
             if tuple(group[name].shape) != (int(step_row_id.shape[0]), 2):
                 self.errors.append(f"selected_depth/{name} must have shape (num_steps, 2).")
+        focal = np.asarray(group["focal_px"], dtype=np.float32)
+        principal = np.asarray(group["principal_point_px"], dtype=np.float32)
+        image_size = np.asarray(group["image_size_hw"], dtype=np.int64)
+        if not np.isfinite(focal).all() or np.any(focal <= 0):
+            self.errors.append("selected_depth/focal_px must contain finite positive pinhole focal lengths.")
+        if not np.isfinite(principal).all():
+            self.errors.append("selected_depth/principal_point_px must contain finite pixel coordinates.")
+        expected_size = np.asarray(expected_shape[1:], dtype=np.int64)
+        if image_size.shape == (int(step_row_id.shape[0]), 2) and not np.all(image_size == expected_size):
+            self.errors.append("selected_depth/image_size_hw must equal the persisted depth raster size on every row.")
+        depth_values = np.asarray(depth_m, dtype=np.float32)
+        valid_values = np.asarray(valid_mask, dtype=np.bool_)
+        invalid_fill = float(self.root.attrs.get("selected_depth_invalid_fill_value", np.nan))
+        if np.any(valid_values & ~np.isfinite(depth_values)):
+            self.errors.append("selected_depth valid pixels must contain finite camera-z depth.")
+        if np.any(~valid_values & (depth_values != invalid_fill)):
+            self.errors.append("selected_depth invalid pixels must equal the declared invalid fill value.")
+        znear = float(self.root.attrs.get("selected_depth_znear_m", np.nan))
+        zfar = float(self.root.attrs.get("selected_depth_zfar_m", np.nan))
+        if not np.isfinite([znear, zfar]).all() or not 0 < znear < zfar:
+            self.errors.append("selected_depth clip planes must be finite, positive, and ordered.")
+        elif np.any(valid_values & ((depth_values < znear) | (depth_values > zfar))):
+            self.errors.append("selected_depth valid camera-z values must lie within the declared clip range.")
 
     def _validate_target_eval_crops(self) -> None:
         if "target_eval_crops" not in self.root:

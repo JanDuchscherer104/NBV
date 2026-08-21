@@ -316,6 +316,38 @@ def test_reader_contract_records_selected_depth_geometry(tmp_path: Path) -> None
     assert contract.selected_depth_units == "m"
     assert contract.selected_depth_znear_m == pytest.approx(1e-3)
     assert contract.selected_depth_zfar_m == pytest.approx(20.0)
+    assert contract.selected_depth_projection_model == "linear_pinhole_screen"
+    assert contract.selected_depth_value_semantics == "camera_z_m"
+    assert contract.selected_depth_pixel_convention == "half_pixel_centers_in_ndc_false"
+    assert contract.selected_depth_camera_axes == "left_up_forward"
+    assert contract.selected_depth_pose_convention == "root_from_camera"
+
+
+def test_reader_round_trips_non_square_off_axis_selected_calibration(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    for step in records[0].evaluated.result.trajectories[0].steps:
+        evidence = records[0].evaluated.step(0, step.step_index).evaluation.evidence
+        evidence.selected_depth_m = np.full((3, 5), 2.0, dtype=np.float32)
+        evidence.selected_depth_valid_mask = np.ones((3, 5), dtype=np.bool_)
+        evidence.selected_depth_focal_px = (7.0, 8.0)
+        evidence.selected_depth_principal_point_px = (1.25, 0.75)
+        evidence.selected_depth_image_size_hw = (3, 5)
+    store = write_rollout_zarr_store(
+        tmp_path / "off-axis.zarr",
+        records,
+        selected_depth_width_px=5,
+        selected_depth_height_px=3,
+    ).store_dir
+
+    chain = QhRolloutReader((store,), include_selected_depth=True)[0]
+
+    assert chain.selected_depth_m is not None and chain.selected_depth_m.shape == (2, 3, 5)
+    assert chain.selected_depth_focal_px is not None
+    assert chain.selected_depth_principal_point_px is not None
+    assert chain.selected_depth_image_size_hw is not None
+    assert chain.selected_depth_focal_px.tolist() == [[7.0, 8.0], [7.0, 8.0]]
+    assert chain.selected_depth_principal_point_px.tolist() == [[1.25, 0.75], [1.25, 0.75]]
+    assert chain.selected_depth_image_size_hw.tolist() == [[3, 5], [3, 5]]
 
 
 def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -6,6 +6,7 @@ from pytorch3d.structures import Meshes
 from aria_nbv.rendering.pytorch3d_depth_renderer import (
     Pytorch3DDepthRenderer,
     Pytorch3DDepthRendererConfig,
+    camera_tw_to_pytorch3d,
 )
 
 
@@ -21,6 +22,40 @@ def _test_camera(size: int = 64, fx: float = 50.0) -> CameraTW:
         cy=torch.tensor([c]),
         dist_params=torch.zeros(0),
     )
+
+
+def test_camera_tw_adapter_preserves_off_axis_intrinsics_and_pose() -> None:
+    """The public adapter must retain non-square calibration and PoseTW frame semantics."""
+
+    camera = CameraTW.from_parameters(
+        width=torch.tensor([80.0]),
+        height=torch.tensor([40.0]),
+        fx=torch.tensor([70.0]),
+        fy=torch.tensor([60.0]),
+        cx=torch.tensor([21.5]),
+        cy=torch.tensor([13.25]),
+        dist_params=torch.zeros(0),
+    )
+    angle = torch.tensor(0.3)
+    rotation = torch.tensor(
+        [
+            [torch.cos(angle), -torch.sin(angle), 0.0],
+            [torch.sin(angle), torch.cos(angle), 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    ).unsqueeze(0)
+    pose = PoseTW.from_Rt(rotation, torch.tensor([[1.0, -0.5, 0.2]]))
+
+    converted = camera_tw_to_pytorch3d(camera, pose, device=torch.device("cpu"))
+
+    assert converted.in_ndc() is False
+    assert torch.equal(converted.image_size, torch.tensor([[40.0, 80.0]]))
+    assert torch.equal(converted.focal_length, torch.tensor([[70.0, 60.0]]))
+    assert torch.equal(converted.principal_point, torch.tensor([[21.5, 13.25]]))
+    points_world = torch.randn(1, 8, 3)
+    expected = pose.inverse().transform(points_world)
+    actual = converted.get_world_to_view_transform().transform_points(points_world)
+    assert torch.allclose(actual, expected, atol=1e-5)
 
 
 def test_depth_renderer_plane_constant_depth_cpu():
