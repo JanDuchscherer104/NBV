@@ -113,12 +113,23 @@ class SelectionTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("python3 scripts/tests/test_agent_governance_g002.py", workflow)
+        self.assertIn(
+            "python3 -m pytest -q scripts/tests/test_routing_trials.py", workflow
+        )
         self.assertIn("python3 scripts/tests/test_graphify_worktree_seed.py", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
         self.assertIn('"scripts/scaffold_audit.py"', workflow)
-        self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)
+        for path in (
+            "scripts/scaffold/run_routing_trials.py",
+            "scripts/scaffold/fixtures/routing_prompts.jsonl",
+            "scripts/scaffold/fixtures/routing.json",
+            "scripts/scaffold/fixtures/routing_trial_report.schema.json",
+            "scripts/scaffold/fixtures/routing_verdict.schema.json",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(f'"{path}"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
         self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
@@ -134,6 +145,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn(
             '"scripts/tests/test_ownership_consolidation_contract.py"', workflow
         )
+        self.assertIn('"scripts/tests/test_routing_trials.py"', workflow)
         self.assertIn('"scripts/tests/test_validate_agent_memory_retired.py"', workflow)
         self.assertIn('"scripts/tests/test_validate_agent_memory_threads.py"', workflow)
         self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
@@ -197,12 +209,17 @@ class SelectionTests(unittest.TestCase):
             "scripts/graphify_worktree_seed.py": {"scaffold"},
             "scripts/scaffold_audit.py": {"scaffold"},
             "scripts/scaffold/fixtures/routing.json": {"scaffold"},
+            "scripts/scaffold/run_routing_trials.py": {"scaffold"},
+            "scripts/scaffold/fixtures/routing_prompts.jsonl": {"scaffold"},
+            "scripts/scaffold/fixtures/routing_trial_report.schema.json": {"scaffold"},
+            "scripts/scaffold/fixtures/routing_verdict.schema.json": {"scaffold"},
             "scripts/setup_worktree_env.sh": {"scaffold"},
             "scripts/debrief_index.py": {"scaffold"},
             "scripts/debrief_nudge.sh": {"scaffold"},
             "scripts/new_debrief.py": {"scaffold"},
             "scripts/tests/test_agent_governance_g002.py": {"scaffold"},
             "scripts/tests/test_debrief_index.py": {"scaffold"},
+            "scripts/tests/test_routing_trials.py": {"scaffold"},
             "scripts/tests/test_graphify_freshness.py": {"scaffold"},
             "scripts/tests/test_graphify_upstream_skill.py": {"scaffold"},
             "scripts/tests/test_graphify_worktree_seed.py": {"scaffold"},
