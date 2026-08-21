@@ -18,7 +18,7 @@ from .session import _cached_projection
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
-from .theory import TheoryReferences
+from ...scientific_labels import TheoryReferences
 
 
 def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:

@@ -13,6 +13,7 @@ import streamlit as st
 
 from ..data_handling import AseEfmDatasetConfig
 from ..oracle.pipelines.scene_labels import OracleRriLabelerConfig
+from .scientific_labels import LABEL_DISPLAY_MODES, LabelDisplayMode
 from .state_types import (
     AppState,
     CandidatesCache,
@@ -33,6 +34,29 @@ STATE_KEY = "nbv_app_state_v2"
 
 VIN_DIAG_STATE_KEY = "vin_diag_state_v1"
 """Streamlit session key for the independent VIN diagnostics cache."""
+
+LABEL_DISPLAY_MODE_KEY = "nbv_label_display_mode_v1"
+"""Streamlit session key for the app-wide scientific label display preference."""
+
+
+def get_label_display_mode() -> LabelDisplayMode:
+    """Return the validated app-wide label display preference."""
+
+    raw = st.session_state.get(LABEL_DISPLAY_MODE_KEY, "Both")
+    if raw in LABEL_DISPLAY_MODES:
+        return cast(LabelDisplayMode, raw)
+    st.session_state[LABEL_DISPLAY_MODE_KEY] = "Both"
+    return "Both"
+
+
+def set_label_display_mode(mode: str) -> LabelDisplayMode:
+    """Persist a valid label display preference and return it."""
+
+    if mode not in LABEL_DISPLAY_MODES:
+        raise ValueError(f"Unsupported label display mode: {mode!r}")
+    selected = cast(LabelDisplayMode, mode)
+    st.session_state[LABEL_DISPLAY_MODE_KEY] = selected
+    return selected
 
 
 def get_state(default_dataset: AseEfmDatasetConfig, default_labeler: OracleRriLabelerConfig) -> AppState:
@@ -112,15 +136,18 @@ __all__ = [
     "DepthCache",
     "PointCloudCache",
     "RriCache",
+    "LABEL_DISPLAY_MODE_KEY",
     "STATE_KEY",
     "candidates_key",
     "clear_state",
     "config_signature",
     "depths_key",
     "get_cached_state",
+    "get_label_display_mode",
     "get_state",
     "pcs_key",
     "safe_rerun",
     "sample_key",
+    "set_label_display_mode",
     "store_state",
 ]

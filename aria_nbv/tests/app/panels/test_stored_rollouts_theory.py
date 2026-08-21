@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from aria_nbv.app.panels._stored_rollouts import reconstruction_return, shared, theory
+from aria_nbv.app import scientific_labels as theory
+from aria_nbv.app.panels._stored_rollouts import reconstruction_return, shared
 from aria_nbv.configs import PathConfig
 
 

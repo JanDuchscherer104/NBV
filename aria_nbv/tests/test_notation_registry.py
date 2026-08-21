@@ -24,3 +24,10 @@ def test_notation_keys_match_their_typst_facades() -> None:
         "rl.observed_cumulative_root_gain",
     } <= notation["symbols"].keys()
     assert "rl.observed_cumulative_root_gain" in notation["equations"]
+
+    for key in (
+        "oracle.dist_pm",
+        "oracle.dist_mp",
+        "rl.observed_cumulative_root_gain",
+    ):
+        assert "\\\\" not in notation["symbols"][key]["tex"]
