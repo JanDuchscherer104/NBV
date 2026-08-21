@@ -313,9 +313,10 @@ def _gather_candidates(values: Tensor, indices: Tensor) -> Tensor:
         factual masks to establish whether an index is valid.
     """
 
-    safe = indices.clamp(0, max(values.shape[-1] - 1, 0))
     if values.ndim == indices.ndim + 1:
+        safe = indices.clamp(0, max(values.shape[-1] - 1, 0))
         return values.gather(-1, safe.unsqueeze(-1)).squeeze(-1)
+    safe = indices.clamp(0, max(values.shape[-2] - 1, 0))
     expanded = safe.unsqueeze(-1).unsqueeze(-1).expand(*safe.shape, 1, values.shape[-1])
     return values.gather(-2, expanded).squeeze(-2)
 

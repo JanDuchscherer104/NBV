@@ -22,6 +22,7 @@ from aria_nbv.data_handling.qh_data import (
     QhDatasetConfig,
     collate_qh_chains,
 )
+from aria_nbv.data_handling.qh_data.batching import _gather_candidates
 from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
 from aria_nbv.data_handling.qh_data.views import (
     QhAudit,
@@ -141,6 +142,17 @@ def _chain(*, steps: int, width: int, offset: int = 0) -> QhChain:
         ),
         key=QhChainKey(offset, offset, offset, f"scene-{offset}", offset),
     )
+
+
+def test_candidate_gather_uses_candidate_axis_for_sixty_vector_rows() -> None:
+    """Selected poses must not clamp factual indices to the pose feature width."""
+
+    indices = torch.tensor([0, 11, 12, 59], dtype=torch.int64)
+    scalar = torch.arange(4 * 60, dtype=torch.float32).reshape(4, 60)
+    vector = torch.arange(4 * 60 * 12, dtype=torch.float32).reshape(4, 60, 12)
+
+    assert torch.equal(_gather_candidates(scalar, indices), scalar[torch.arange(4), indices])
+    assert torch.equal(_gather_candidates(vector, indices), vector[torch.arange(4), indices])
 
 
 def test_collate_mixed_horizons_and_widths_preserves_five_masks_and_causal_history() -> None:
