@@ -907,7 +907,13 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> _P
     }
 
 
-def _add_geometry_anchors(fig: go.Figure, frames: pd.DataFrame, *, three_dimensional: bool) -> None:
+def _add_geometry_anchors(
+    fig: go.Figure,
+    frames: pd.DataFrame,
+    *,
+    three_dimensional: bool,
+    axis_frames: pd.DataFrame | None = None,
+) -> None:
     """Overlay normalized origins, targets, and bounded pose-axis context."""
 
     if frames.empty:
@@ -941,7 +947,9 @@ def _add_geometry_anchors(fig: go.Figure, frames: pd.DataFrame, *, three_dimensi
     if not three_dimensional:
         return
 
-    bounded = frames.head(32)
+    bounded = frames.head(32) if axis_frames is None else axis_frames.head(32)
+    if bounded.empty:
+        return
     reference_centers = np.zeros((len(bounded), 3), dtype=float)
     target_centers = bounded.loc[:, ["target_x", "target_y", "target_z"]].to_numpy(dtype=float)
     for prefix, label, centers in (
@@ -1015,6 +1023,7 @@ def _render_geometry_projection(
     projection: GeometryProjection,
     geometry: pd.DataFrame,
     frames: pd.DataFrame,
+    axis_frames: pd.DataFrame | None = None,
 ) -> None:
     """Render matched ground-plane and 3D views from one typed projection."""
 
@@ -1063,7 +1072,7 @@ def _render_geometry_projection(
         _add_selected_candidate_overlay(figure, plotted, three_dimensional=False)
     else:
         _add_trajectory_paths(figure, geometry, three_dimensional=False)
-    _add_geometry_anchors(figure, frames, three_dimensional=False)
+    _add_geometry_anchors(figure, frames, three_dimensional=False, axis_frames=axis_frames)
     _render_plot(figure, explanation)
 
     figure_3d = px.scatter_3d(
@@ -1089,8 +1098,224 @@ def _render_geometry_projection(
         _add_selected_candidate_overlay(figure_3d, plotted, three_dimensional=True)
     else:
         _add_trajectory_paths(figure_3d, geometry, three_dimensional=True)
-    _add_geometry_anchors(figure_3d, frames, three_dimensional=True)
+    _add_geometry_anchors(figure_3d, frames, three_dimensional=True, axis_frames=axis_frames)
     _render_plot(figure_3d, _geometry_explanation(projection, three_dimensional=True))
+
+
+def _pose_axis_frames(
+    frames: pd.DataFrame,
+    *,
+    mode: str,
+    frame_id: str | None = None,
+) -> pd.DataFrame:
+    """Return the bounded orientation frames requested by the presentation."""
+
+    if mode == "Hidden":
+        return frames.iloc[0:0]
+    if mode == "One frame":
+        if frame_id is None:
+            raise ValueError("One-frame pose orientation requires a frame_id.")
+        selected = frames.loc[frames["frame_id"] == frame_id]
+        if len(selected) != 1:
+            raise ValueError(f"Pose orientation frame {frame_id!r} is missing or ambiguous.")
+        return selected
+    if mode == "All frames":
+        return frames.head(32)
+    raise ValueError(f"Unsupported pose orientation overlay mode: {mode!r}.")
+
+
+def _select_pose_axis_frames(frames: pd.DataFrame) -> pd.DataFrame:
+    """Render minimal orientation controls and return the selected frame rows."""
+
+    mode = st.segmented_control(
+        "Pose orientation overlay",
+        options=("Hidden", "One frame", "All frames"),
+        default="Hidden",
+        help=(
+            "Pose triads are diagnostic, not additional plot coordinate systems. Hide them for support shape; "
+            "inspect one factual frame for orientation; use all frames only to diagnose population spread."
+        ),
+    )
+    if mode == "One frame":
+        labels = {
+            str(row.frame_id): (
+                f"Rollout {int(row.rollout_row_id)} · "
+                + ("initial frame" if pd.isna(row.step_index) else f"acquisition {int(row.step_index) + 1}")
+            )
+            for row in frames.itertuples(index=False)
+        }
+        frame_id = st.selectbox(
+            "Orientation frame",
+            options=tuple(labels),
+            format_func=labels.__getitem__,
+        )
+        return _pose_axis_frames(frames, mode=mode, frame_id=str(frame_id))
+    selected = _pose_axis_frames(frames, mode=str(mode))
+    if mode == "All frames" and len(frames) > len(selected):
+        st.caption(f"Orientation overlay is capped at the first {len(selected):,} deterministic frame(s).")
+    return selected
+
+
+def _normalized_radius_figure(geometry: pd.DataFrame) -> go.Figure:
+    """Build proposal-radius distributions by factual depth and positional family."""
+
+    rows = geometry.dropna(subset=["normalized_radius", "step_index"])
+    figure = px.box(
+        rows,
+        x="step_index",
+        y="normalized_radius",
+        color="position" if rows["position"].notna().any() else None,
+        points=False,
+        title="Proposal radius / remaining target distance by rollout depth",
+        labels={"step_index": "Factual rollout depth", "normalized_radius": "Normalized proposal radius"},
+    )
+    figure.add_hline(
+        y=1.0,
+        line_dash="dash",
+        line_color="rgba(255, 255, 255, 0.55)",
+        annotation_text="step equals remaining target distance",
+    )
+    return figure
+
+
+def _orientation_diagnostic_rows(geometry: pd.DataFrame, frames: pd.DataFrame) -> pd.DataFrame:
+    """Return comparable angle diagnostics without pooling their populations."""
+
+    frame_columns = ["rollout_row_id", "step_index"]
+    parts: list[pd.DataFrame] = []
+    for field, label in (
+        ("rig_target_yaw_error_deg", "Rig-to-target yaw error"),
+        ("target_elevation_deg", "Target elevation"),
+    ):
+        if field not in frames:
+            continue
+        rows = frames.loc[:, [*frame_columns, field]].dropna(subset=[field]).rename(columns={field: "angle_deg"})
+        rows["diagnostic"] = label
+        rows["position"] = "frame-level"
+        parts.append(rows)
+    required = {"selected", "target_facing_error_deg", "rollout_row_id", "step_index", "position"}
+    if required.issubset(geometry.columns):
+        selected = geometry.loc[
+            geometry["selected"].astype(bool),
+            ["rollout_row_id", "step_index", "position", "target_facing_error_deg"],
+        ].dropna(subset=["target_facing_error_deg"])
+        selected = selected.rename(columns={"target_facing_error_deg": "angle_deg"})
+        selected["position"] = selected["position"].fillna("unknown")
+        selected["diagnostic"] = "Selected camera-to-target error"
+        parts.append(selected)
+    if not parts:
+        return pd.DataFrame(columns=[*frame_columns, "position", "angle_deg", "diagnostic"])
+    return pd.concat(parts, ignore_index=True)
+
+
+def _orientation_diagnostic_figure(rows: pd.DataFrame) -> go.Figure:
+    """Build depth-wise orientation distributions with one facet per estimand."""
+
+    figure = px.box(
+        rows,
+        x="step_index",
+        y="angle_deg",
+        color="diagnostic",
+        facet_row="diagnostic",
+        points="all",
+        title="Orientation diagnostics by rollout depth",
+        labels={"step_index": "Factual rollout depth", "angle_deg": "Angle (degrees)"},
+        hover_data=["position"],
+    )
+    figure.update_yaxes(matches=None)
+    return figure
+
+
+def _render_proposal_geometry_quality(geometry: pd.DataFrame, frames: pd.DataFrame) -> None:
+    """Render actionable normalized-radius and orientation diagnostics."""
+
+    radius_rows = geometry.dropna(subset=["normalized_radius", "step_index"])
+    if not radius_rows.empty:
+        _render_plot(
+            _normalized_radius_figure(radius_rows),
+            ScientificExplanation(
+                question="Do fixed-metre proposal families become aggressive relative to the target range remaining?",
+                answer=(
+                    "Each box summarizes candidate displacement divided by current expansion-pose-to-target "
+                    "distance, separated by factual depth and positional family."
+                ),
+                sections=(
+                    ExplanationSection(
+                        "Population and denominator",
+                        "Every retained candidate row contributes its Euclidean expansion-relative displacement. "
+                        "The denominator is the current 3D target distance for that factual step; no missing depth is zero-filled.",
+                    ),
+                    ExplanationSection(
+                        "Reading the threshold",
+                        "A value of 1 means the proposal step is as long as the remaining target distance. "
+                        "Increasing late-depth values reveal fixed physical radii becoming relatively aggressive; "
+                        "they are diagnostic and do not by themselves make a candidate invalid.",
+                    ),
+                ),
+                evidence_role="actor-visible",
+                source_fields=(
+                    "inspection.proposal_support_geometry.normalized_radius",
+                    "candidates/pose_world_cam",
+                    "targets/target_pose_world_object",
+                ),
+                theory=TheoryReferences(equation_ids=("spatial.candidate_proposal_support_normalization",)),
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+            ),
+        )
+        with st.expander("Normalized proposal-radius rows and CSV", expanded=False):
+            columns = [
+                "rollout_row_id",
+                "step_index",
+                "candidate_row_id",
+                "position",
+                "strategy",
+                "selected",
+                "displacement_m",
+                "normalization_distance_m",
+                "normalized_radius",
+            ]
+            table = radius_rows.loc[:, [column for column in columns if column in radius_rows]]
+            st.dataframe(table, hide_index=True, width="stretch")
+            _download_frame("Download normalized proposal-radius CSV", "proposal-normalized-radius.csv", table)
+
+    orientation_rows = _orientation_diagnostic_rows(geometry, frames)
+    if not orientation_rows.empty:
+        _render_plot(
+            _orientation_diagnostic_figure(orientation_rows),
+            ScientificExplanation(
+                question="How do rig heading, target elevation, and selected camera aim evolve with rollout depth?",
+                answer=(
+                    "Separate facets report one frame-level rig yaw error, one frame-level target elevation, and "
+                    "one selected-action camera-to-target error for every finite factual observation."
+                ),
+                sections=(
+                    ExplanationSection(
+                        "Populations",
+                        "Rig yaw and target elevation contain one row per valid proposal frame. Selected target-facing "
+                        "error contains only the factual selected candidate at that step; alternative candidates are excluded.",
+                    ),
+                    ExplanationSection(
+                        "Interpretation",
+                        "Small rig yaw means the expansion rig already faces the target horizontally. Target elevation "
+                        "is signed relative to world-up. Small selected camera error means the selected optical forward "
+                        "axis points toward the target; forward-rig strategies can legitimately remain offset.",
+                    ),
+                ),
+                evidence_role="actor-visible",
+                source_fields=(
+                    "inspection.proposal_support_geometry.rig_target_yaw_error_deg",
+                    "inspection.proposal_support_geometry.target_elevation_deg",
+                    "inspection.proposal_support_geometry.target_facing_error_deg",
+                ),
+                theory=TheoryReferences(
+                    equation_ids=("spatial.candidate_pose_features", "spatial.candidate_target_relation")
+                ),
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+            ),
+        )
+        with st.expander("Orientation diagnostic rows and CSV", expanded=False):
+            st.dataframe(orientation_rows, hide_index=True, width="stretch")
+            _download_frame("Download proposal orientation CSV", "proposal-orientation.csv", orientation_rows)
 
 
 def _geometry_explanation(
@@ -1259,6 +1484,11 @@ def _render_candidate_geometry_diagnostics(
                 else "No frame exclusions."
             )
         )
+        axis_frames = _select_pose_axis_frames(frames)
+        _render_geometry_projection(projection, geometry, frames, axis_frames)
+        if projection.view == "proposal_support":
+            _render_proposal_geometry_quality(geometry, frames)
+
         metric_options = [
             name
             for name in (
@@ -1346,8 +1576,6 @@ def _render_candidate_geometry_diagnostics(
                     external_references=(_EVIDENCE_REPORTING_REFERENCE,),
                 ),
             )
-        _render_geometry_projection(projection, geometry, frames)
-
         angle_cols = [
             name
             for name in ("target_bearing_yaw_deg", "motion_yaw_delta_deg")

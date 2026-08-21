@@ -1297,7 +1297,7 @@ def test_rollout_plot_guides_use_the_narrative_contract_without_legacy_fields() 
         "Definition",
     }
     expected_calls = {
-        candidate_generation: 13,
+        candidate_generation: 15,
         overview_topology: 5,
         reconstruction_return: 8,
         validity_support: 2,

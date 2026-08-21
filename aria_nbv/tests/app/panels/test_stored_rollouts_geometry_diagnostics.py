@@ -1,0 +1,131 @@
+"""Focused presentation tests for stored-rollout geometry diagnostics."""
+
+# ruff: noqa: S101, SLF001
+
+from __future__ import annotations
+
+from dataclasses import asdict, replace
+
+import numpy as np
+import pandas as pd
+import pytest
+
+pytest.importorskip("efm3d")
+
+from aria_nbv.app.panels._stored_rollouts import candidate_generation
+from aria_nbv.rollouts.inspection import GeometryFrame
+
+
+def _frame(frame_id: str = "proposal:7:10:target_aligned_z_up", *, step_index: int = 0) -> GeometryFrame:
+    identity = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    return GeometryFrame(
+        frame_id=frame_id,
+        rollout_row_id=7,
+        step_row_id=10 + step_index,
+        step_index=step_index,
+        origin_kind="expansion_pose",
+        expansion_pose_source="root" if step_index == 0 else "previous_selected",
+        scale_kind="current_target_distance",
+        alignment="target_aligned_z_up",
+        scale_m=2.0,
+        initial_scale_m=2.0,
+        target_x=1.0,
+        target_y=0.0,
+        target_z=0.0,
+        reference_axis_x=identity[0],
+        reference_axis_y=identity[1],
+        reference_axis_z=identity[2],
+        target_axis_x=identity[0],
+        target_axis_y=identity[1],
+        target_axis_z=identity[2],
+        rig_target_yaw_error_deg=15.0 + step_index,
+        target_elevation_deg=5.0 + step_index,
+    )
+
+
+def test_pose_axis_frames_hide_by_default_and_bound_advanced_overlay() -> None:
+    frames = pd.DataFrame(
+        [
+            asdict(
+                replace(
+                    _frame(),
+                    frame_id=f"proposal:7:{index}:target_aligned_z_up",
+                    step_index=index,
+                )
+            )
+            for index in range(40)
+        ]
+    )
+
+    assert candidate_generation._pose_axis_frames(frames, mode="Hidden").empty
+    selected = candidate_generation._pose_axis_frames(
+        frames,
+        mode="One frame",
+        frame_id="proposal:7:9:target_aligned_z_up",
+    )
+    assert selected["frame_id"].tolist() == ["proposal:7:9:target_aligned_z_up"]
+    assert len(candidate_generation._pose_axis_frames(frames, mode="All frames")) == 32
+
+
+def test_geometry_anchors_can_withhold_pose_triads_without_hiding_context() -> None:
+    frame_rows = pd.DataFrame([asdict(_frame())])
+    figure = candidate_generation.go.Figure()
+
+    candidate_generation._add_geometry_anchors(
+        figure,
+        frame_rows,
+        three_dimensional=True,
+        axis_frames=frame_rows.iloc[0:0],
+    )
+
+    assert {trace.name for trace in figure.data if trace.name is not None} == {
+        "Reference pose (all at origin)",
+        "Observed target center",
+    }
+
+
+def test_normalized_radius_figure_exposes_unit_target_range_threshold() -> None:
+    geometry = pd.DataFrame(
+        {
+            "step_index": [0, 0, 1, 1],
+            "position": ["forward_local", "forward_local", "lateral_target_bypass", "lateral_target_bypass"],
+            "normalized_radius": [0.2, 0.4, 0.8, 1.2],
+        }
+    )
+
+    figure = candidate_generation._normalized_radius_figure(geometry)
+
+    assert sorted(float(value) for trace in figure.data for value in trace.y) == [0.2, 0.4, 0.8, 1.2]
+    assert any(shape.y0 == 1.0 and shape.y1 == 1.0 for shape in figure.layout.shapes)
+
+
+def test_orientation_diagnostics_keep_frame_and_selected_populations_explicit() -> None:
+    frames = pd.DataFrame(
+        [
+            asdict(_frame()),
+            asdict(replace(_frame(), frame_id="proposal:7:11:x", step_index=1)),
+        ]
+    )
+    geometry = pd.DataFrame(
+        {
+            "rollout_row_id": [7, 7, 7],
+            "step_index": [0, 0, 1],
+            "position": ["forward_local", "target_bearing_local", "local_refinement"],
+            "selected": [False, True, True],
+            "target_facing_error_deg": [90.0, 2.0, 4.0],
+        }
+    )
+
+    rows = candidate_generation._orientation_diagnostic_rows(geometry, frames)
+
+    assert rows.groupby("diagnostic", dropna=False).size().to_dict() == {
+        "Rig-to-target yaw error": 2,
+        "Selected camera-to-target error": 2,
+        "Target elevation": 2,
+    }
+    selected = rows.loc[rows["diagnostic"] == "Selected camera-to-target error"]
+    assert selected["angle_deg"].tolist() == [2.0, 4.0]
+    assert np.isfinite(selected["angle_deg"]).all()
+
+    figure = candidate_generation._orientation_diagnostic_figure(rows)
+    assert sum(len(trace.y) for trace in figure.data) == len(rows)

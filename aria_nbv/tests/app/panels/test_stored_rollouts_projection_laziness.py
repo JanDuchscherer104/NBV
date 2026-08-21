@@ -277,7 +277,7 @@ def test_geometry_projections_have_explicit_cache_contracts(monkeypatch: pytest.
     session._cached_projection("/fixture.zarr", "proposal_geometry")
     session._cached_projection("/fixture.zarr", "trajectory_geometry")
 
-    assert revisions == [1, 1, 1]
+    assert revisions == [1, 2, 2]
 
 
 def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat(

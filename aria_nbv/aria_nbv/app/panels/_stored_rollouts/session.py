@@ -52,8 +52,8 @@ from ....rollouts.reporting import (
 
 CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
 _PROJECTION_CACHE_REVISIONS = {
-    "proposal_geometry": 1,
-    "trajectory_geometry": 1,
+    "proposal_geometry": 2,
+    "trajectory_geometry": 2,
 }
 
 
