@@ -15,9 +15,19 @@ from ....data_handling import VinSnippetView
 from ....vin.diagnostics import build_alignment_figures
 from ....vin.diagnostics.plotting import build_geometry_overview_figure, build_semidense_projection_figure
 from ....vin.ordinal import coral_loss
+from ...scientific_labels import format_scientific_label, scientific_label
+from ...state import get_label_display_mode
 from ..common import _info_popover
 from ..data import scene_plot_options_ui
 from .context import VinDiagContext
+
+
+def _rri_label() -> str:
+    return format_scientific_label(
+        scientific_label("rri"),
+        mode=get_label_display_mode(),
+        surface="plain",
+    )
 
 
 def render_geometry_tab(ctx: VinDiagContext) -> None:
@@ -353,7 +363,7 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             else:
                 candidate_plot_mode = "scalar"
                 candidate_color_values = batch.rri
-                candidate_color_title = "oracle_rri"
+                candidate_color_title = _rri_label()
         case "voxel_valid_frac":
             values = pred.voxel_valid_frac
             if values is None:

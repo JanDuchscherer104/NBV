@@ -23,9 +23,24 @@ except ImportError:  # pragma: no cover - optional dependency guard
     optuna = None
 
 from ...configs import OptunaConfig, PathConfig
+from ..scientific_labels import format_scientific_label, scientific_label
+from ..state import get_label_display_mode
 from .common import _info_popover, _pretty_label, _report_exception
 
 _CACHE_TTL_S = 120
+
+
+def _optuna_field_label(field: str) -> str:
+    """Format a known scientific field without changing arbitrary parameters."""
+
+    if field in {"rri", "oracle_rri", "target_rri"}:
+        identifier = "target_rri" if field == "target_rri" else "oracle_rri"
+        return format_scientific_label(
+            scientific_label(identifier),
+            mode=get_label_display_mode(),
+            surface="plain",
+        )
+    return _pretty_label(field)
 
 
 def _safe_key(value: str) -> str:
@@ -226,7 +241,7 @@ def _plot_param_effect(
             hover_data=["trial", param],
             title=f"Objective vs {param}",
         )
-        fig.update_layout(xaxis_title=_pretty_label(param))
+        fig.update_layout(xaxis_title=_optuna_field_label(param))
         if np.isfinite(mean_value):
             x_min = float(data["param_numeric"].min())
             x_max = float(data["param_numeric"].max())
@@ -271,7 +286,7 @@ def _plot_param_effect(
         hover_data=["trial", param],
         title=f"Objective vs {param}",
     )
-    fig.update_layout(xaxis_title=_pretty_label(param))
+    fig.update_layout(xaxis_title=_optuna_field_label(param))
     summary = (
         data.groupby("param_cat", dropna=True)["value"]
         .agg(["count", "mean", "median", "min", "max"])
