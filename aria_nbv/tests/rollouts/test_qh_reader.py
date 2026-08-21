@@ -293,6 +293,9 @@ def test_reader_reads_selected_cf_gt_depth_only_when_explicitly_requested(tmp_pa
     assert chain.selected_depth_m.shape[0] == len(chain.candidate_pose_relative_root)
     assert chain.selected_depth_m.dtype == np.float16
     assert chain.selected_depth_valid_mask.dtype == np.bool_
+    assert len(chain.one_step_target_rri) == len(chain.candidate_pose_relative_root)
+    for values, mask in zip(chain.one_step_target_rri, chain.label_mask, strict=True):
+        assert np.isfinite(values[mask]).all()
 
 
 def test_reader_preserves_renderer_metadata_without_loading_selected_depth(tmp_path: Path) -> None:

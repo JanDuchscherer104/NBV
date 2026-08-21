@@ -54,6 +54,7 @@ class _StoredChain:
     horizon_remaining: np.ndarray
     label_mask: tuple[np.ndarray, ...]
     candidate_reward: tuple[np.ndarray, ...]
+    one_step_target_rri: tuple[np.ndarray, ...]
     selected_index: np.ndarray
     discount: np.ndarray
     terminal: np.ndarray
@@ -758,6 +759,7 @@ def _read_chain(
         horizon_remaining=_readonly(configured_horizon - step_indices),
         label_mask=_trim_rows(q_h["q_train_mask"][rows], widths, np.bool_),
         candidate_reward=_trim_rows(q_h["one_step_target_root_gain"][rows], widths, np.float32),
+        one_step_target_rri=_trim_rows(q_h["one_step_target_rri"][rows], widths, np.float32),
         selected_index=_readonly(np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)),
         discount=_readonly(np.asarray(q_h["td_discount"][rows], dtype=np.float32)),
         terminal=_readonly(np.asarray(q_h["td_terminal_mask"][rows], dtype=np.bool_)),

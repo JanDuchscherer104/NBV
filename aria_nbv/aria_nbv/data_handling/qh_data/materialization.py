@@ -69,6 +69,8 @@ def _tensor_chain(
     action_mask = _stack_rows(stored.action_mask, False, torch.bool)
     label_mask = _stack_rows(stored.label_mask, False, torch.bool)
     reward = _stack_rows(stored.candidate_reward, 0, torch.float32)
+    target_rri = _stack_rows(stored.one_step_target_rri, float("nan"), torch.float32)
+    target_rri = torch.where(label_mask, target_rri, torch.full_like(target_rri, float("nan")))
     selected = _from_numpy(stored.selected_index, torch.int64)
     steps, width = action_mask.shape
     candidate_mask = torch.zeros((steps, width), dtype=torch.bool)
@@ -113,6 +115,7 @@ def _tensor_chain(
         supervision=QhSupervision(
             label_mask=label_mask,
             candidate_reward=reward,
+            one_step_target_rri=target_rri,
             selected_index=selected,
             discount=_from_numpy(stored.discount, torch.float32),
             terminal=_from_numpy(stored.terminal, torch.bool),

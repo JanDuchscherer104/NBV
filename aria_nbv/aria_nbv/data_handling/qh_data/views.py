@@ -212,6 +212,9 @@ class QhSupervision:
     candidate_reward: Tensor
     """``Tensor["S N", float32]``: persisted immediate rewards; values matter only where ``label_mask`` is true."""
 
+    one_step_target_rri: Tensor
+    """``Tensor["S N", float32]``: supervision-only target RRI, finite only where ``label_mask`` is true; never an actor input or root-gain replacement."""
+
     selected_index: Tensor
     """``Tensor["S", int64]``: factual rollout-policy candidate index."""
 

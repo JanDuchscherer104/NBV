@@ -138,6 +138,9 @@ def _chain(*, steps: int, width: int, offset: int = 0) -> QhChain:
         supervision=QhSupervision(
             label_mask=torch.ones(steps, width, dtype=torch.bool),
             candidate_reward=torch.arange(offset, offset + steps * width, dtype=torch.float32).reshape(steps, width),
+            one_step_target_rri=torch.arange(offset + 100, offset + 100 + steps * width, dtype=torch.float32).reshape(
+                steps, width
+            ),
             selected_index=selected,
             discount=discount,
             terminal=terminal,
@@ -288,6 +291,7 @@ def _stored(source_ref: _QhSourceRef) -> SimpleNamespace:
         action_mask=(np.array([True, False]), np.array([True])),
         label_mask=(np.array([True, False]), np.array([True])),
         candidate_reward=(np.array([0.4, 0.0], dtype=np.float32), np.array([0.6], dtype=np.float32)),
+        one_step_target_rri=(np.array([0.2, np.nan], dtype=np.float32), np.array([0.3], dtype=np.float32)),
         selected_index=np.array([0, 0]),
         horizon_remaining=np.array([2, 1]),
         discount=np.array([0.95, 0], dtype=np.float32),
@@ -347,6 +351,9 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert chain.actor.target_pose_relative_root.tensor()[-3:].tolist() == pytest.approx([1, 2, 3])
     assert chain.actor.history_mask.tolist() == [[False, False], [True, False]]
     assert chain.actor.horizon_remaining.tolist() == [2, 1]
+    assert chain.supervision.one_step_target_rri[:, 0].tolist() == pytest.approx([0.2, 0.3])
+    assert torch.isnan(chain.supervision.one_step_target_rri[0, 1])
+    assert not hasattr(chain.actor, "one_step_target_rri")
     assert chain.actor.static_context is None
     assert actor_reader.backbone_reads == 0
 
@@ -569,7 +576,9 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
     assert result["selected_observation_protocol"] == "none"
 
 
-def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None:
+def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """CF-GT selected depth may enter only the later states that causally acquired it."""
 
     stored = _stored(_source_ref())
@@ -622,6 +631,10 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only() -> None
     assert batch.actor.selected_observation_prefix is not None
     assert batch.actor.selected_observation_prefix.prefix_mask.tolist() == [[[False, False], [True, False]]]
     assert chain.audit is audit
+    assert batch.audits == (audit,)
+    assert batch.audits[0] is audit
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    assert batch.pin_memory().audits[0] is audit
 
 
 def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:

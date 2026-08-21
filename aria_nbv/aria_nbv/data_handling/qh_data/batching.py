@@ -19,7 +19,15 @@ from efm3d.aria.pose import PoseTW
 from torch import Tensor
 
 from ..vin_store.views import VinSnippetView
-from .views import QhActorTensors, QhChain, QhChainKey, QhSelectedObservationPrefix, QhStaticContext, QhSupervision
+from .views import (
+    QhActorTensors,
+    QhAudit,
+    QhChain,
+    QhChainKey,
+    QhSelectedObservationPrefix,
+    QhStaticContext,
+    QhSupervision,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +49,9 @@ class QhBatch:
 
     keys: tuple[QhChainKey, ...]
     """Length-``B`` CPU-only audit keys in input order; never transferred or exposed to the scorer."""
+
+    audits: tuple[QhAudit | None, ...]
+    """Length-``B`` optional diagnostic records aligned with ``keys`` and preserved by identity during transfer."""
 
     @property
     def num_steps(self) -> Tensor:
@@ -195,11 +206,13 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
         supervision=QhSupervision(
             label_mask=_pad([value.label_mask for value in supervision], False),
             candidate_reward=_pad([value.candidate_reward for value in supervision], 0),
+            one_step_target_rri=_pad([value.one_step_target_rri for value in supervision], float("nan")),
             selected_index=_pad([value.selected_index for value in supervision], -1),
             discount=_pad([value.discount for value in supervision], 0),
             terminal=_pad([value.terminal for value in supervision], True),
         ),
         keys=tuple(chain.key for chain in chains),
+        audits=tuple(chain.audit for chain in chains),
     )
     if bool((batch.supervision.label_mask & ~batch.actor.action_mask).any()):
         raise ValueError("Q_H label_mask must imply action_mask.")
@@ -360,11 +373,13 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
         supervision=QhSupervision(
             label_mask=transform(supervision.label_mask),
             candidate_reward=transform(supervision.candidate_reward),
+            one_step_target_rri=transform(supervision.one_step_target_rri),
             selected_index=transform(supervision.selected_index),
             discount=transform(supervision.discount),
             terminal=transform(supervision.terminal),
         ),
         keys=batch.keys,
+        audits=batch.audits,
     )
 
 
