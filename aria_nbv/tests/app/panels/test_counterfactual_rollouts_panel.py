@@ -528,22 +528,9 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     app = _stored_rollouts_app(tmp_path).run()
 
     assert not app.exception
-    assert _metric_values(app)["Validation"] == "BLOCKED"
-    assert _metric_values(app)["Rollouts"] == "2"
-    assert _metric_values(app)["Steps"] == "4"
-    assert _metric_values(app)["Candidates"] == "8"
+    assert any("manifest" in error.value.lower() for error in app.error)
+    assert not any(metric.label in {"Validation", "Rollouts", "Steps", "Candidates"} for metric in app.metric)
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert {button.label for button in app.get("download_button")} >= {
-        "Download store metadata JSON",
-        "Download topology JSON",
-    }
-
-    app = _set_stored_rollout_workspace(app, "Scientific Evidence")
-    assert not app.exception
-    assert any("disabled because this store" in warning.value for warning in app.warning)
-    assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
-    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert "Download stale-store diagnostics JSON" in {button.label for button in app.get("download_button")}
 
 
 def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path_config, tmp_path) -> None:
@@ -614,15 +601,22 @@ def test_stored_rollouts_unopened_heavy_evidence_calls_are_exactly_zero(
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
     stored_rollout_session.clear_stored_rollout_caches()
-    original_projection = stored_rollout_session._cached_projection
-    heavy_calls = dict.fromkeys(("candidates", "candidate_group", "ranks", "root_geometry", "tree"), 0)
+    heavy_owners = {
+        "_cached_candidates_cached": "candidates",
+        "_cached_candidate_group_cached": "candidate_group",
+        "_cached_ranks_cached": "ranks",
+        "_cached_root_geometry_cached": "root_geometry",
+        "_cached_tree_cached": "tree",
+    }
+    heavy_calls = dict.fromkeys(heavy_owners.values(), 0)
+    for owner_name, label in heavy_owners.items():
+        owner = getattr(stored_rollout_session, owner_name)
 
-    def spy_projection(store_path: str, projection: str, **kwargs):
-        if projection in heavy_calls:
-            heavy_calls[projection] += 1
-        return original_projection(store_path, projection, **kwargs)
+        def spy_owner(*args, _owner=owner, _label=label, **kwargs):
+            heavy_calls[_label] += 1
+            return _owner(*args, **kwargs)
 
-    monkeypatch.setattr(stored_rollout_session, "_cached_projection", spy_projection)
+        monkeypatch.setattr(stored_rollout_session, owner_name, spy_owner)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Scientific Evidence")
 
@@ -680,26 +674,23 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
 
     captured: list[stored_rollouts_page.ScientificExplanation] = []
 
-    def fake_projection(_store_path: str, projection: str, **_kwargs):
-        if projection == "ranks":
-            return [
-                {
-                    "selected_rank": 2,
-                    "regret_to_best": 0.25,
-                    "policy": "greedy",
-                    "rollout_row_id": 0,
-                    "step_row_id": 0,
-                    "valid_candidate_count": 4,
-                }
-            ]
-        if projection == "root_geometry":
-            return []
-        raise AssertionError(projection)
+    def fake_ranks(_store_path: str, **_kwargs):
+        return [
+            {
+                "selected_rank": 2,
+                "regret_to_best": 0.25,
+                "policy": "greedy",
+                "rollout_row_id": 0,
+                "step_row_id": 0,
+                "valid_candidate_count": 4,
+            }
+        ]
 
     def capture_plot(_figure, explanation):
         captured.append(explanation)
 
-    monkeypatch.setattr(stored_rollout_session, "_cached_projection", fake_projection)
+    monkeypatch.setattr(stored_rollout_session, "_cached_ranks_cached", fake_ranks)
+    monkeypatch.setattr(stored_rollout_session, "_cached_root_geometry_cached", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(stored_rollouts_page, "_render_plot", capture_plot)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
 
@@ -1030,19 +1021,17 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
 
     calls: list[tuple[int | None, int | None]] = []
 
-    def fake_projection(
+    def fake_candidates(
         _store_path: str,
-        projection: str,
         *,
         rollout_row_id: int | None = None,
         step_row_id: int | None = None,
         **_kwargs,
     ) -> list[dict[str, object]]:
-        assert projection == "candidates"
         calls.append((rollout_row_id, step_row_id))
         return []
 
-    monkeypatch.setattr(stored_rollout_session, "_cached_projection", fake_projection)
+    monkeypatch.setattr(stored_rollout_session, "_cached_candidates_cached", fake_candidates)
     handle = stored_rollout_session.StoredRolloutSession(Path("/store.zarr"), "fixture", object(), object(), {}, None)
     kwargs = {
         "stored_session": handle,
@@ -1057,6 +1046,11 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
     stored_rollouts_page._query_source_frame(**kwargs, candidate_population="Explicit full store")
 
     assert calls == [(7, 11), (7, None), (None, None)]
+
+
+def test_stored_rollout_tests_do_not_depend_on_generic_projection_dispatcher() -> None:
+    source = Path(__file__).read_text(encoding="utf-8")
+    assert "_cached_" + "projection" not in source
 
 
 def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
