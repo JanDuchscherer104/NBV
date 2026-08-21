@@ -183,7 +183,7 @@ class SelectionTests(unittest.TestCase):
     def test_representative_narrow_and_overlap_paths(self) -> None:
         cases = {
             "docs/index.qmd": {"docs"},
-            ".agents/references/source_order.md": {"scaffold"},
+            ".agents/skills/aria-nbv-context/SKILL.md": {"scaffold"},
             ".agents/example.qmd": {"scaffold"},
             ".agents/skills/typst-authoring/SKILL.md": {"docs"},
             ".agents/skills/typst-authoring/references/workflow.md": {"docs"},

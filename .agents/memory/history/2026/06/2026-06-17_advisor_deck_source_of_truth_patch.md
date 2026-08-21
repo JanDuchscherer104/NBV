@@ -6,10 +6,9 @@ status: done
 topics: [thesis, typst, advisor, source-truth]
 confidence: high
 canonical_updates_needed:
-  - .agents/references/source_order.md
-  - docs/contents/thesis/questions.qmd
-  - docs/contents/thesis/roadmap.qmd
-  - .agents/memory/state/PROJECT_STATE.md
+  - .agents/skills/aria-nbv-context/SKILL.md
+  - docs/typst/thesis/sections/01-research-questions.typ
+  - docs/typst/thesis/development/roadmap.typ
 files_touched:
   - docs/typst/thesis/advisor_meeting_2026_05_22.typ
 artifacts:
@@ -50,4 +49,3 @@ Used the Typst authoring workflow and the autoresearch report to add source gove
 ## Canonical State Impact
 
 The deck now has the advisor-facing contract language, but repo routing still needs a later mirror pass after acceptance: `source_order.md`, `questions.qmd`, `roadmap.qmd`, and `PROJECT_STATE.md` should be updated to say the May 22 deck is the highest current advisor source.
-

@@ -195,6 +195,16 @@ deprecated and may appear only in migration prohibitions or historical
 evidence. Exact IDs and one-concept query seeds remain progressively disclosed
 in `aria-nbv-context/references/context7_library_ids.md`.
 
+## Accepted 2026-08-21 Source-Order Compatibility Pointer Retirement
+
+The human owner now retires `.agents/references/source_order.md` completely.
+Its hierarchy, conflict rule, and capture rule already live in
+`aria-nbv-context`; active guidance and backlog records must link directly to
+that skill or to the exact scientific, implementation, configuration, or test
+owner. Historical plans, reports, debriefs, and negative validator fixtures may
+retain the old path as provenance, but it is neither a compatibility surface
+nor a valid capture destination.
+
 ## Intent
 
 Build an agent scaffold that helps agents find the correct owner, load only the
