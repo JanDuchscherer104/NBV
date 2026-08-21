@@ -142,6 +142,52 @@ def test_module_rejects_actor_contract_hash_mismatch_before_training() -> None:
     )
     with pytest.raises(ValueError, match="actor-state contract hashes"):
         module._validate_datamodule_contract(type("Data", (), {"actor_state_contract_hash": "actual"})())
+
+
+def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None:
+    """Reloaded module hparams keep geometry admission bound before fit."""
+
+    actor = replace(
+        _ACTOR_CONTRACT,
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt",
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        geometry_contract_hash="geom-v1",
+    )
+    config = QhLightningModuleConfig(
+        lr_scheduler=None,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt",
+        privileged=True,
+        actor_state_contract_hash=stable_msgspec_hash(actor),
+        geometry_contract_hash="geom-v1",
+    )
+    reloaded = QhLightningModuleConfig.model_validate(config.model_dump())
+    module = QhLightningModule(reloaded, scorer=_TableScorer())
+    module._validate_datamodule_contract(
+        type(
+            "Data",
+            (),
+            {
+                "experiment_profile": "qh_cfplus_gt_depth_v1",
+                "actor_state_contract_hash": stable_msgspec_hash(actor),
+                "geometry_contract_hash": "geom-v1",
+            },
+        )()
+    )
+    with pytest.raises(ValueError, match="geometry hashes"):
+        module._validate_datamodule_contract(
+            type(
+                "Data",
+                (),
+                {
+                    "experiment_profile": "qh_cfplus_gt_depth_v1",
+                    "actor_state_contract_hash": stable_msgspec_hash(actor),
+                    "geometry_contract_hash": "tampered",
+                },
+            )()
+        )
     assert stable_msgspec_hash(_ACTOR_CONTRACT) != "expected"
 
 

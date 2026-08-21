@@ -16,6 +16,7 @@ import numpy as np
 import zarr
 from zarr.storage import LocalStore
 
+from ..data_handling.qh_data.views import QhGeometryContract
 from ..targets.protocol import (
     ORACLE_GT_TARGET_SOURCE,
     ActorVisibleTargetSource,
@@ -26,7 +27,11 @@ from ..targets.protocol import (
 )
 from ..utils import Stage
 from .shard_manifest import build_rollout_split_manifest_hash
-from .zarr_store import DEFAULT_RETURN_SEMANTICS, RolloutZarrStoreReader
+from .zarr_store import (
+    DEFAULT_RETURN_SEMANTICS,
+    SELECTED_DEPTH_INVALID_FILL_VALUE,
+    RolloutZarrStoreReader,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +128,9 @@ class QhDataContract:
 
     selected_depth_pose_convention: str | None = None
     """Direction of the aligned selected camera pose stored elsewhere in the rollout."""
+
+    selected_depth_geometry: QhGeometryContract | None = None
+    """Complete validated geometry facts for selected depth, when enabled."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -414,6 +422,7 @@ def _read_contract(root: zarr.Group) -> QhDataContract:
 
     selected_height = _optional_int(selected("selected_depth_height_px"))
     selected_width = _optional_int(selected("selected_depth_width_px"))
+    geometry = _read_selected_depth_geometry(root) if selected_depth_enabled else None
     return QhDataContract(
         schema_version=str(root.attrs["schema_version"]),
         target_protocol=str(root.attrs["target_protocol_version"]),
@@ -439,6 +448,53 @@ def _read_contract(root: zarr.Group) -> QhDataContract:
         selected_depth_pixel_convention="half_pixel_centers_in_ndc_false" if selected_depth_enabled else None,
         selected_depth_camera_axes="left_up_forward" if selected_depth_enabled else None,
         selected_depth_pose_convention="root_from_camera" if selected_depth_enabled else None,
+        selected_depth_geometry=geometry,
+    )
+
+
+def _read_selected_depth_geometry(root: zarr.Group) -> QhGeometryContract:
+    """Read and cross-check persisted calibration rows before payload admission."""
+
+    group = root["selected_depth"]
+    focal = np.asarray(group["focal_px"], dtype=np.float64)
+    principal = np.asarray(group["principal_point_px"], dtype=np.float64)
+    sizes = np.asarray(group["image_size_hw"], dtype=np.int64)
+    if focal.ndim != 2 or focal.shape[0] == 0 or focal.shape[1] != 2:
+        raise ValueError("Q_H selected-depth geometry requires non-empty focal_px rows of shape (steps, 2).")
+    if principal.shape != focal.shape or sizes.shape != focal.shape:
+        raise ValueError("Q_H selected-depth calibration rows must have one aligned (x,y) pair per step.")
+    if not np.isfinite(focal).all() or np.any(focal <= 0) or not np.isfinite(principal).all():
+        raise ValueError("Q_H selected-depth calibration must be finite, with positive focal lengths.")
+    if not np.all(focal == focal[0]) or not np.all(principal == principal[0]) or not np.all(sizes == sizes[0]):
+        raise ValueError("Q_H selected-depth geometry must be homogeneous across every persisted step.")
+    attrs = root.attrs
+    invalid_fill = float(attrs.get("selected_depth_invalid_fill_value", np.nan))
+    znear = float(attrs.get("selected_depth_znear_m", np.nan))
+    zfar = float(attrs.get("selected_depth_zfar_m", np.nan))
+    if invalid_fill != SELECTED_DEPTH_INVALID_FILL_VALUE:
+        raise ValueError("Q_H selected-depth geometry requires the canonical versioned invalid fill value.")
+    if not np.isfinite(invalid_fill) or not np.isfinite(znear) or not np.isfinite(zfar) or not 0 < znear < zfar:
+        raise ValueError("Q_H selected-depth geometry requires finite ordered clip planes and invalid fill.")
+    return QhGeometryContract(
+        projection_model="linear_pinhole_screen",
+        linearization="camera_z_metres",
+        camera_pose="root_from_camera",
+        depth_semantics="camera_z_m",
+        focal_px=tuple(float(value) for value in focal[0]),
+        principal_point_px=tuple(float(value) for value in principal[0]),
+        image_size_hw=tuple(int(value) for value in sizes[0]),
+        camera_axes="left_up_forward",
+        camera_forward="+z",
+        camera_handedness="right",
+        pixel_convention="half_pixel_centers",
+        in_ndc=False,
+        znear_m=znear,
+        zfar_m=zfar,
+        invalid_fill_value=invalid_fill,
+        dtype=str(attrs.get("selected_depth_dtype", "")),
+        renderer=str(attrs.get("selected_depth_renderer", "")),
+        source_role="selected_successor_state_history",
+        selected_identity="selected_depth.step_row_id==steps.step_row_id;selected_depth.candidate_row_id==steps.selected_candidate_row_id",
     )
 
 
@@ -646,6 +702,7 @@ def _effective_contract(contract: QhDataContract, *, include_selected_depth: boo
         selected_depth_pixel_convention=None,
         selected_depth_camera_axes=None,
         selected_depth_pose_convention=None,
+        selected_depth_geometry=None,
     )
 
 
@@ -673,6 +730,11 @@ def _validate_rich_selected_depth_contract(contract: QhDataContract) -> None:
         "root_from_camera",
     ):
         raise ValueError("Q_H selected depth has an unsupported camera/depth semantic contract.")
+    geometry = contract.selected_depth_geometry
+    if geometry is None or geometry.renderer != "Pytorch3DDepthRenderer" or geometry.in_ndc:
+        raise ValueError("Q_H rich modality read requires a complete screen-space geometry contract.")
+    if geometry.image_size_hw != contract.selected_depth_image_size_hw:
+        raise ValueError("Q_H selected-depth geometry raster disagrees with root metadata.")
     if contract.selected_depth_image_size_hw is None or any(size < 1 for size in contract.selected_depth_image_size_hw):
         raise ValueError("Q_H rich modality read requires a positive selected-depth raster size.")
     if contract.selected_depth_dtype != "float16" or contract.selected_depth_units != "m":

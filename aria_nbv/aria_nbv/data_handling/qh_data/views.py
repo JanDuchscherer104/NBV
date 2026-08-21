@@ -39,6 +39,31 @@ QhSelectedObservationProtocol = Literal["none", "cf_gt"]
 QhExperimentProfile = Literal["qh_cf0_v1", "qh_cfplus_gt_depth_v1"]
 
 
+@dataclass(frozen=True, slots=True)
+class QhGeometryContract:
+    """Persisted, immutable geometry facts for selected CF-GT depth."""
+
+    projection_model: str
+    linearization: str
+    camera_pose: str
+    depth_semantics: str
+    focal_px: tuple[float, float]
+    principal_point_px: tuple[float, float]
+    image_size_hw: tuple[int, int]
+    camera_axes: str
+    camera_forward: str
+    camera_handedness: str
+    pixel_convention: str
+    in_ndc: bool
+    znear_m: float
+    zfar_m: float
+    invalid_fill_value: float
+    dtype: str
+    renderer: str
+    source_role: str
+    selected_identity: str
+
+
 def validate_experiment_profile(
     profile: QhExperimentProfile,
     *,
@@ -75,6 +100,9 @@ class QhActorStateContract:
 
     experiment_profile: QhExperimentProfile | None = None
     """Named CF0/CF+ role, or ``None`` for legacy diagnostic-only construction."""
+
+    geometry_contract_hash: str | None = None
+    """Stable selected-depth geometry hash; absent for CF0 and legacy actors."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -58,6 +58,9 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
     actor_state_contract_hash: str | None = None
     """Expected stable hash of the admitted DataModule actor-state contract."""
 
+    geometry_contract_hash: str | None = None
+    """Expected selected-depth geometry hash; required only for CF+ admission."""
+
     @property
     def target_type(self) -> type["QhLightningModule"]:
         """Return the runtime module type used by config-as-factory setup."""
@@ -198,6 +201,11 @@ class QhLightningModule(pl.LightningModule):
             and getattr(data_module, "actor_state_contract_hash", None) != self.config.actor_state_contract_hash
         ):
             raise ValueError("Q_H module and DataModule actor-state contract hashes must match exactly.")
+        if self.config.experiment_profile == "qh_cfplus_gt_depth_v1":
+            expected = self.config.geometry_contract_hash
+            actual = getattr(data_module, "geometry_contract_hash", None)
+            if expected is None or actual != expected:
+                raise ValueError("Q_H module and DataModule selected-depth geometry hashes must match exactly.")
 
     def training_step(self, batch: QhBatch, batch_idx: int) -> Tensor | None:
         """Execute one globally admitted optimizer transaction or an exact no-op."""

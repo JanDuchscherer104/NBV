@@ -328,6 +328,14 @@ def test_reader_contract_records_selected_depth_geometry(tmp_path: Path) -> None
     assert contract.selected_depth_value_semantics == "camera_z_m"
     assert contract.selected_depth_pixel_convention == "half_pixel_centers_in_ndc_false"
     assert contract.selected_depth_camera_axes == "left_up_forward"
+    geometry = contract.selected_depth_geometry
+    assert geometry is not None
+    assert geometry.focal_px == pytest.approx((120.0, 120.0))
+    assert geometry.principal_point_px == pytest.approx((120.0, 120.0))
+    assert geometry.image_size_hw == (240, 240)
+    assert geometry.in_ndc is False
+    assert geometry.invalid_fill_value == pytest.approx(0.0)
+    assert geometry.selected_identity.startswith("selected_depth.step_row_id")
     assert contract.selected_depth_pose_convention == "root_from_camera"
 
 
@@ -368,6 +376,25 @@ def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monk
     monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
 
     with pytest.raises(ValueError, match="CF-GT depth requires"):
+        QhRolloutReader((store,), include_selected_depth=True)
+
+
+def test_reader_rejects_noncanonical_invalid_fill_even_when_payload_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Changing both provenance and invalid pixels cannot redefine versioned fill semantics."""
+
+    store = _write_store(tmp_path / "rollouts.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    root = zarr.open_group(store, mode="a")
+    root.attrs["selected_depth_invalid_fill_value"] = 42.0
+    valid_mask = np.asarray(root["selected_depth/valid_mask"])
+    depth = np.asarray(root["selected_depth/depth_m"])
+    depth[~valid_mask] = 42.0
+    root["selected_depth/depth_m"][:] = depth
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+
+    with pytest.raises(ValueError, match="canonical versioned invalid fill"):
         QhRolloutReader((store,), include_selected_depth=True)
 
 

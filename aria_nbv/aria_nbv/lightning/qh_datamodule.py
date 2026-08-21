@@ -82,6 +82,7 @@ class QhDataModule(pl.LightningDataModule):
         if any(dataset.contract != train.contract for dataset in stages.values()):
             raise ValueError("Q_H corpus stages have incompatible learning contracts.")
         self.actor_state_contract_hash = stable_msgspec_hash(train.actor_state_contract)
+        self.geometry_contract_hash = train.actor_state_contract.geometry_contract_hash
         if experiment_profile is not None:
             for name, dataset in stages.items():
                 if dataset.actor_state_contract.experiment_profile != experiment_profile:

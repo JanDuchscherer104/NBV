@@ -168,6 +168,11 @@ class QhDataset(Dataset[QhChain]):
             actor_manifest_hash=self._manifest_hash,
             evl_block_signature=_evl_block_signature(actor_reader) if root_evl_profile == "evl_v1" else (),
             experiment_profile=experiment_profile,
+            geometry_contract_hash=(
+                stable_msgspec_hash(rollout_reader.contract.selected_depth_geometry)
+                if experiment_profile == "qh_cfplus_gt_depth_v1"
+                else None
+            ),
         )
         self._records = {record.sample_index: record for record in actor_reader.get_split_records(None)}
         self._validate_source_refs()
