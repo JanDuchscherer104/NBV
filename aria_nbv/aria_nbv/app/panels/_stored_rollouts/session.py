@@ -14,6 +14,7 @@ from ....configs import PathConfig
 from ....dataset_topology import build_dataset_topology
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import (
+    ProposalAlignment,
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_flow_rows,
@@ -26,15 +27,15 @@ from ....rollouts.inspection import (
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
     promoted_store_validation_error,
+    proposal_support_geometry,
     q_h_evidence_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
     rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_trajectory_geometry,
     rollout_tree_summary_rows,
-    root_relative_candidate_rows,
-    root_relative_rollout_anchor_rows,
     selected_candidate_rank_rows,
     selected_depth_summary_rows,
     store_invariant_rows,
@@ -51,10 +52,8 @@ from ....rollouts.reporting import (
 
 CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
 _PROJECTION_CACHE_REVISIONS = {
-    # Root geometry gained target-distance normalized coordinates.  Keep an
-    # existing Streamlit process from serving the prior projection shape.
-    "root_geometry": 3,
-    "root_anchors": 2,
+    "proposal_geometry": 1,
+    "trajectory_geometry": 1,
 }
 
 
@@ -115,6 +114,7 @@ def _cached_projection_cached(
     group_fields: tuple[str, ...] = (),
     policies: tuple[str, ...] | None = None,
     rollout_row_ids: tuple[int, ...] | None = None,
+    alignment: str | None = None,
     step_indices: tuple[int, ...] | None = None,
     deep_count: bool = False,
     q_h_chunk_size: int = 1024,
@@ -203,11 +203,16 @@ def _cached_projection_cached(
         )
     if projection == "tree":
         return rollout_tree_summary_rows(reader)
-    if projection == "root_geometry":
-        rows = root_relative_candidate_rows(reader, actor_valid_only=False)
-        return rows if limit is None else rows[:limit]
-    if projection == "root_anchors":
-        return root_relative_rollout_anchor_rows(reader, rollout_row_ids=rollout_row_ids)
+    if projection == "proposal_geometry":
+        selected_alignment = ProposalAlignment(alignment or ProposalAlignment.TARGET_ALIGNED_Z_UP.value)
+        return proposal_support_geometry(
+            reader,
+            alignment=selected_alignment,
+            rollout_row_ids=rollout_row_ids,
+            max_candidates=limit,
+        )
+    if projection == "trajectory_geometry":
+        return rollout_trajectory_geometry(reader, rollout_row_ids=rollout_row_ids)
     if projection == "depth_summary":
         return selected_depth_summary_rows(reader, rollout_row_id=rollout_row_id, limit=limit)
     raise ValueError(f"Unknown cached rollout projection: {projection}")

@@ -12,7 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS
+from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS, GeometryProjection, ProposalAlignment
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
@@ -907,92 +907,73 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> _P
     }
 
 
-def _add_root_target_pose_anchors(fig: go.Figure, anchors: pd.DataFrame) -> None:
-    """Overlay root/target centers and orientation triads in normalized root coordinates."""
+def _add_geometry_anchors(fig: go.Figure, frames: pd.DataFrame, *, three_dimensional: bool) -> None:
+    """Overlay normalized origins, targets, and bounded pose-axis context."""
 
-    if anchors.empty:
+    if frames.empty:
         return
-    roots = anchors.drop_duplicates("rollout_row_id")
-    fig.add_trace(
-        go.Scatter3d(
-            x=[0.0],
-            y=[0.0],
-            z=[0.0],
-            mode="markers",
-            name="Rollout root (all at origin)",
-            marker={"size": 7, "symbol": "cross", "color": "white"},
-            hovertemplate="Root center: (0, 0, 0) target distances<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter3d(
-            x=roots["target_relative_x_target_distance"],
-            y=roots["target_relative_y_target_distance"],
-            z=roots["target_relative_z_target_distance"],
-            mode="markers",
-            name="Observed target pose origin",
-            marker={"size": 7, "symbol": "diamond-open", "color": "#F4D03F"},
-            customdata=roots[["rollout_row_id", "target_id"]],
-            hovertemplate="rollout=%{customdata[0]}<br>target=%{customdata[1]}<br>distance = 1.0<extra></extra>",
-        )
-    )
-    root_centers = np.zeros((len(roots), 3), dtype=float)
-    target_centers = roots.loc[
-        :,
-        [
-            "target_relative_x_target_distance",
-            "target_relative_y_target_distance",
-            "target_relative_z_target_distance",
-        ],
-    ].to_numpy(dtype=float)
+    marker_type = go.Scatter3d if three_dimensional else go.Scatter
+    origin: dict[str, object] = {
+        "x": [0.0],
+        "y": [0.0],
+        "mode": "markers",
+        "name": "Reference pose (all at origin)",
+        "marker": {"size": 7, "symbol": "cross", "color": "white"},
+        "hovertemplate": "Reference center: (0, 0, 0)<extra></extra>",
+    }
+    target: dict[str, object] = {
+        "x": frames["target_x"],
+        "y": frames["target_y"],
+        "mode": "markers",
+        "name": "Observed target center",
+        "marker": {"size": 7, "symbol": "diamond-open", "color": "#F4D03F"},
+        "customdata": frames[["rollout_row_id", "step_index", "scale_m"]],
+        "hovertemplate": (
+            "rollout=%{customdata[0]}<br>step=%{customdata[1]}<br>"
+            "normalization distance=%{customdata[2]:.3f} m<br>normalized target norm=1<extra></extra>"
+        ),
+    }
+    if three_dimensional:
+        origin["z"] = [0.0]
+        target["z"] = frames["target_z"]
+    fig.add_trace(marker_type(**origin))
+    fig.add_trace(marker_type(**target))
+    if not three_dimensional:
+        return
+
+    bounded = frames.head(32)
+    reference_centers = np.zeros((len(bounded), 3), dtype=float)
+    target_centers = bounded.loc[:, ["target_x", "target_y", "target_z"]].to_numpy(dtype=float)
     for prefix, label, centers in (
-        ("root", "Root pose axes (RGB)", root_centers),
+        ("reference", "Reference pose axes (RGB)", reference_centers),
         ("target", "Target pose axes (RGB)", target_centers),
     ):
         axes = np.stack(
-            [np.asarray(roots[f"{prefix}_axis_{axis}"].tolist(), dtype=float) for axis in ("x", "y", "z")],
+            [np.asarray(bounded[f"{prefix}_axis_{axis}"].tolist(), dtype=float) for axis in ("x", "y", "z")],
             axis=1,
         )
-        add_pose_axes_to_figure(fig, centers, axes, title=label, scale=0.12, line_width=4)
+        add_pose_axes_to_figure(fig, centers, axes, title=label, scale=0.12, line_width=3)
 
 
-def _add_selected_rollout_chains(fig: go.Figure, geometry: pd.DataFrame, *, three_dimensional: bool) -> None:
-    """Overlay factual root-to-selected-action paths without joining proposal alternatives."""
+def _add_trajectory_paths(fig: go.Figure, geometry: pd.DataFrame, *, three_dimensional: bool) -> None:
+    """Connect only root and factual selected actions in their shared trajectory frame."""
 
-    required_columns = {
-        "selected",
-        "rollout_row_id",
-        "step_row_id",
-        "step_index",
-        "root_relative_x_target_distance",
-        "root_relative_y_target_distance",
-        "root_relative_z_target_distance",
-    }
-    if not required_columns.issubset(geometry.columns):
+    if geometry.empty or not {"rollout_row_id", "path_order", "x", "y", "z"}.issubset(geometry.columns):
         return
-    selected = geometry.loc[geometry["selected"].astype(bool)].copy()
-    if selected.empty:
-        return
-    columns = [
-        "root_relative_x_target_distance",
-        "root_relative_y_target_distance",
-        "root_relative_z_target_distance",
-    ]
-    for chain_index, (_, chain) in enumerate(selected.groupby("rollout_row_id", sort=True)):
-        chain = chain.sort_values(["step_index", "step_row_id"]).drop_duplicates("step_row_id")
-        coordinates = np.vstack((np.zeros((1, 3), dtype=float), chain.loc[:, columns].to_numpy(dtype=float)))
+    for chain_index, (_, chain) in enumerate(geometry.groupby("rollout_row_id", sort=True)):
+        chain = chain.sort_values("path_order")
         trace_kwargs = {
             "mode": "lines",
             "line": {"color": "rgba(230, 230, 230, 0.55)", "width": 2},
-            "name": "Selected rollout chain (root → action)",
-            "legendgroup": "selected-rollout-chain",
+            "name": "Factual selected trajectory",
+            "legendgroup": "selected-rollout-trajectory",
             "showlegend": chain_index == 0,
             "hoverinfo": "skip",
         }
         if three_dimensional:
-            fig.add_trace(go.Scatter3d(x=coordinates[:, 0], y=coordinates[:, 1], z=coordinates[:, 2], **trace_kwargs))
+            fig.add_trace(go.Scatter3d(x=chain["x"], y=chain["y"], z=chain["z"], **trace_kwargs))
         else:
-            fig.add_trace(go.Scatter(x=coordinates[:, 0], y=coordinates[:, 1], **trace_kwargs))
+            fig.add_trace(go.Scatter(x=chain["x"], y=chain["y"], **trace_kwargs))
 
 
 def _add_selected_candidate_overlay(fig: go.Figure, geometry: pd.DataFrame, *, three_dimensional: bool) -> None:
@@ -1004,27 +985,20 @@ def _add_selected_candidate_overlay(fig: go.Figure, geometry: pd.DataFrame, *, t
         "step_index",
         "position",
         "strategy",
-        "root_relative_x_target_distance",
-        "root_relative_y_target_distance",
-        "root_relative_z_target_distance",
+        "x",
+        "y",
+        "z",
     }
     if not required_columns.issubset(geometry.columns):
         return
     selected = geometry.loc[geometry["selected"].astype(bool)]
     if selected.empty:
         return
-    coordinates = selected.loc[
-        :,
-        [
-            "root_relative_x_target_distance",
-            "root_relative_y_target_distance",
-            "root_relative_z_target_distance",
-        ],
-    ].to_numpy(dtype=float)
+    coordinates = selected.loc[:, ["x", "y", "z"]].to_numpy(dtype=float)
     trace_kwargs = {
         "mode": "markers",
         "name": "Selected candidate",
-        "marker": {"size": 8 if three_dimensional else 10, "color": "white", "symbol": "circle-open"},
+        "marker": {"size": 7 if three_dimensional else 8, "color": "white", "symbol": "circle-open"},
         "customdata": selected[["rollout_row_id", "step_index", "position", "strategy"]],
         "hovertemplate": (
             "selected<br>rollout=%{customdata[0]}<br>step=%{customdata[1]}<br>"
@@ -1037,45 +1011,253 @@ def _add_selected_candidate_overlay(fig: go.Figure, geometry: pd.DataFrame, *, t
         fig.add_trace(go.Scatter(x=coordinates[:, 0], y=coordinates[:, 1], **trace_kwargs))
 
 
+def _render_geometry_projection(
+    projection: GeometryProjection,
+    geometry: pd.DataFrame,
+    frames: pd.DataFrame,
+) -> None:
+    """Render matched ground-plane and 3D views from one typed projection."""
+
+    if geometry.empty or frames.empty:
+        st.warning("No scientifically valid geometry frames are available for this selection.")
+        return
+    proposal = projection.view == "proposal_support"
+    plotted = geometry if proposal else geometry.loc[geometry["role"] == "selected_action"]
+    if plotted.empty:
+        st.warning("The selected geometry view has no factual points to plot.")
+        return
+    color = "position" if plotted["position"].notna().any() else None
+    symbol = "strategy" if plotted["strategy"].notna().any() else None
+    hover_fields = [
+        name
+        for name in (
+            "rollout_row_id",
+            "step_index",
+            "normalization_distance_m",
+            "initial_target_distance_m",
+            "displacement_m",
+            "z",
+            "actor_action",
+            "position",
+            "strategy",
+            "mixture",
+        )
+        if name in plotted
+    ]
+    view_title = "Proposal support" if proposal else "Factual selected rollout trajectory"
+    axis_prefix = "Current target distance" if proposal else "Initial target distance"
+    explanation = _geometry_explanation(projection, three_dimensional=False)
+    figure = px.scatter(
+        plotted,
+        x="x",
+        y="y",
+        color=color,
+        symbol=symbol,
+        hover_data=hover_fields,
+        title=f"{view_title} (ground plane; target-distance normalized)",
+    )
+    figure.update_yaxes(scaleanchor="x", scaleratio=1, title=f"Left / {axis_prefix.lower()}")
+    figure.update_xaxes(title=f"Forward / {axis_prefix.lower()}")
+    figure.update_traces(marker={"size": 3, "opacity": 0.75})
+    if proposal:
+        _add_selected_candidate_overlay(figure, plotted, three_dimensional=False)
+    else:
+        _add_trajectory_paths(figure, geometry, three_dimensional=False)
+    _add_geometry_anchors(figure, frames, three_dimensional=False)
+    _render_plot(figure, explanation)
+
+    figure_3d = px.scatter_3d(
+        plotted,
+        x="x",
+        y="y",
+        z="z",
+        color=color,
+        symbol=symbol,
+        hover_data=hover_fields,
+        title=f"{view_title} (3D; target-distance normalized)",
+    )
+    configure_3d_scene(
+        figure_3d,
+        axis_titles=(
+            f"Forward / {axis_prefix.lower()}",
+            f"Left / {axis_prefix.lower()}",
+            f"World up / {axis_prefix.lower()}",
+        ),
+    )
+    figure_3d.update_traces(marker={"size": 3, "opacity": 0.75})
+    if proposal:
+        _add_selected_candidate_overlay(figure_3d, plotted, three_dimensional=True)
+    else:
+        _add_trajectory_paths(figure_3d, geometry, three_dimensional=True)
+    _add_geometry_anchors(figure_3d, frames, three_dimensional=True)
+    _render_plot(figure_3d, _geometry_explanation(projection, three_dimensional=True))
+
+
+def _geometry_explanation(
+    projection: GeometryProjection,
+    *,
+    three_dimensional: bool,
+) -> ScientificExplanation:
+    """Describe exactly the population, frame, scale, and marker encodings."""
+
+    rollout_count = len({point.rollout_row_id for point in projection.points})
+    frame_count = len(projection.frames)
+    issue_counts = Counter(issue.code for issue in projection.issues)
+    evidence_state = (
+        f"This projection contains {len(projection.points):,} point(s) from {rollout_count:,} rollout(s) "
+        f"across {frame_count:,} valid frame(s). "
+        f"Whole-shell truncation is {'active' if projection.truncated else 'not active'}; "
+        f"explicit exclusions are {dict(sorted(issue_counts.items())) if issue_counts else 'none'}."
+    )
+    if projection.view == "proposal_support":
+        alignment = projection.frames[0].alignment if projection.frames else "unavailable"
+        dimensional_context = (
+            "The 3D view additionally preserves normalized world-up displacement."
+            if three_dimensional
+            else "The ground-plane view omits Z from the axes but retains it in hover data."
+        )
+        return ScientificExplanation(
+            question="What support did the generator offer around the factual pose that expanded each step?",
+            answer=(
+                "Every complete factual candidate shell is centered on its own expansion pose and scaled by the "
+                "target distance remaining at that step. Proposal alternatives are never connected."
+            ),
+            sections=(
+                ExplanationSection(
+                    "Population and transformation",
+                    "Step 0 uses the persisted rollout root; step t>0 uses the previous factual selected pose. "
+                    "Each candidate displacement is divided by that reference pose's current 3D target distance. "
+                    f"The yaw-only alignment is `{alignment}` and always preserves world +Z. {dimensional_context}",
+                ),
+                ExplanationSection(
+                    "Target and marker context",
+                    "The white cross is the reference origin and yellow diamonds are observed target centers. "
+                    "Under target alignment, targets lie in the X-Z plane with unit norm; elevation remains visible. "
+                    "Color encodes positional family, marker shape encodes directional strategy, and a white ring "
+                    "marks the selected candidate.",
+                ),
+                ExplanationSection(
+                    "Interpretation limits",
+                    "Coordinates are dimensionless target-distance units, while hover/export retains physical "
+                    "displacement and normalization distance in metres. Truncation retains complete shells; "
+                    f"degenerate target or heading frames are reported rather than silently re-aligned. {evidence_state}",
+                ),
+            ),
+            evidence_role="actor-visible",
+            source_fields=(
+                "inspection.proposal_support_geometry",
+                "steps/selected_candidate_row_id",
+                "candidates/pose_world_cam",
+                "targets/target_pose_world_object",
+            ),
+            theory=TheoryReferences(
+                equation_ids=("spatial.candidate_proposal_support_normalization",),
+                symbol_ids=("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose"),
+            ),
+            external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
+        )
+    return ScientificExplanation(
+        question="Where did the factual selected rollout move relative to its initial target range?",
+        answer=(
+            "Each path contains only the initial rollout root and ordered factual selected actions, connected in one "
+            "initial target-aligned Z-up frame."
+        ),
+        sections=(
+            ExplanationSection(
+                "Population and transformation",
+                "All path points subtract the persisted initial root, use one initial root-to-target denominator, "
+                "and use one initial target-aligned yaw frame. The shared frame makes connecting lines geometric; "
+                "candidate alternatives are excluded.",
+            ),
+            ExplanationSection(
+                "Target and marker context",
+                "The white cross is the initial root and the yellow diamond is the observed target center. "
+                "Targets lie in the X-Z plane with unit norm. Point color is the selected positional family and "
+                "marker shape is its directional strategy.",
+            ),
+            ExplanationSection(
+                "Interpretation limits",
+                "Only persisted factual steps are shown, so early termination shortens a path without fabricated "
+                "continuity. Coordinates are initial target-distance units; physical displacement remains in hover "
+                f"and export fields. {evidence_state}",
+            ),
+        ),
+        evidence_role="actor-visible",
+        source_fields=(
+            "inspection.rollout_trajectory_geometry",
+            "rollouts/root_pose_world",
+            "steps/selected_candidate_row_id",
+            "candidates/pose_world_cam",
+        ),
+        theory=TheoryReferences(
+            equation_ids=("spatial.rollout_trajectory_normalization",),
+            symbol_ids=("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose"),
+        ),
+        external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
+    )
+
+
 def _render_candidate_geometry_diagnostics(
     candidates: pd.DataFrame,
-    root_geometry: pd.DataFrame,
-    anchors: pd.DataFrame | None = None,
+    store_path: str,
     *,
     total_candidates: int,
+    candidate_plot_limit: int,
 ) -> None:
-    """Restore bounded candidate plots in scientifically valid root-relative coordinates."""
+    """Render explicit proposal-support or factual-trajectory geometry."""
 
     if candidates.empty:
         return
     with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
-        normalized_coordinate_columns = {
-            "root_relative_x_target_distance",
-            "root_relative_y_target_distance",
-            "root_relative_z_target_distance",
-        }
-        missing_geometry_columns = normalized_coordinate_columns.difference(root_geometry.columns)
-        if not root_geometry.empty and missing_geometry_columns:
-            st.warning(
-                "Candidate geometry is temporarily unavailable because its cached projection predates the "
-                "target-distance-normalized coordinate contract. Refresh rollout caches or rerun the page."
-            )
-            root_geometry = pd.DataFrame()
-        connect_selected_chains = st.toggle(
-            "Connect selected rollout chains",
-            value=False,
+        view = st.segmented_control(
+            "Geometry view",
+            options=("Proposal support", "Rollout trajectory"),
+            default="Proposal support",
             help=(
-                "Draws only factual root-to-selected-action paths, ordered by rollout step. "
-                "It never connects the alternative candidates in a proposal shell."
+                "Proposal support compares complete candidate shells in each step's factual expansion frame. "
+                "Rollout trajectory shows only the initial root and factual selected actions in one fixed frame."
             ),
         )
-        rollout_count = int(candidates["rollout_row_id"].nunique()) if "rollout_row_id" in candidates else 0
-        step_count = int(candidates["step_row_id"].nunique()) if "step_row_id" in candidates else 0
+        if view == "Rollout trajectory":
+            projection = _cached_projection(store_path, "trajectory_geometry")
+        else:
+            alignment_label = st.segmented_control(
+                "Proposal alignment",
+                options=("Target-aligned Z-up", "Rig-forward Z-up"),
+                default="Target-aligned Z-up",
+                help=(
+                    "Both choices keep gravity as +Z. Target alignment removes horizontal target-bearing variation; "
+                    "rig-forward alignment exposes forward, backward, and lateral proposal support."
+                ),
+            )
+            alignment = (
+                ProposalAlignment.RIG_FORWARD_Z_UP
+                if alignment_label == "Rig-forward Z-up"
+                else ProposalAlignment.TARGET_ALIGNED_Z_UP
+            )
+            projection = _cached_projection(
+                store_path,
+                "proposal_geometry",
+                alignment=alignment.value,
+                limit=candidate_plot_limit,
+            )
+        if not isinstance(projection, GeometryProjection):
+            st.error("Candidate geometry cache returned an unsupported projection shape. Refresh rollout caches.")
+            return
+        geometry = pd.DataFrame(projection.point_rows())
+        frames = pd.DataFrame(projection.frame_rows())
+        issue_counts = Counter(issue.code for issue in projection.issues)
+        rollout_count = int(geometry["rollout_row_id"].nunique()) if "rollout_row_id" in geometry else 0
+        step_count = int(geometry["step_row_id"].nunique()) if "step_row_id" in geometry else 0
         st.caption(
-            f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
-            f"They cover {step_count:,} factual step(s) from {rollout_count:,} rollout(s), including multiple "
-            "steps from one rollout when present. Coordinates are root-relative ARIA world directions scaled by "
-            "each rollout's initial root-to-target distance (target distance = 1), never pooled absolute scene origins."
+            f"This {projection.view.replace('_', ' ')} projection contains {len(geometry):,} plotted point(s) "
+            f"from {rollout_count:,} rollout(s) and {step_count:,} factual step(s). "
+            f"The underlying store has {total_candidates:,} candidate rows. "
+            + (
+                f"Excluded/truncated frames: {dict(sorted(issue_counts.items()))}."
+                if issue_counts
+                else "No frame exclusions."
+            )
         )
         metric_options = [
             name
@@ -1164,208 +1346,7 @@ def _render_candidate_geometry_diagnostics(
                     external_references=(_EVIDENCE_REPORTING_REFERENCE,),
                 ),
             )
-        if not root_geometry.empty:
-            fig = px.scatter(
-                root_geometry,
-                x="root_relative_x_target_distance",
-                y="root_relative_y_target_distance",
-                color="position" if "position" in root_geometry else None,
-                symbol="strategy" if "strategy" in root_geometry else None,
-                hover_data=[
-                    name
-                    for name in (
-                        "rollout_row_id",
-                        "step_index",
-                        "initial_target_distance_m",
-                        "root_relative_z_target_distance",
-                        "actor_action",
-                        "strategy",
-                        "mixture",
-                    )
-                    if name in root_geometry
-                ],
-                title="Candidate centers relative to each rollout root (ground plane; target distance normalized)",
-            )
-            fig.update_yaxes(scaleanchor="x", scaleratio=1)
-            fig.update_xaxes(title="Root-relative X / initial target distance")
-            fig.update_yaxes(title="Root-relative Y / initial target distance")
-            fig.update_traces(marker={"size": 4, "opacity": 0.8})
-            if connect_selected_chains:
-                _add_selected_rollout_chains(fig, root_geometry, three_dimensional=False)
-            _add_selected_candidate_overlay(fig, root_geometry, three_dimensional=False)
-            _render_plot(
-                fig,
-                ScientificExplanation(
-                    question="Do candidate families cover the intended local motion support around each rollout root?",
-                    answer="The ground-plane map tests whether each candidate family occupies its intended local support around its own rollout root.",
-                    sections=(
-                        ExplanationSection(
-                            title="Following the population",
-                            body=(
-                                "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed."
-                            )
-                            + "\n\n"
-                            + (
-                                "Root-relative X/Y displacement divided by the initial root-to-target distance; Z-up is available on hover."
-                            )
-                            + "\n\n"
-                            + ("Bounded full candidate shell; actor validity and selection remain explicit fields.")
-                            + "\n\n"
-                            + (
-                                "Each point is one candidate center in target-distance units; color is family and symbol retains whether the candidate was selected."
-                            ),
-                        ),
-                        ExplanationSection(
-                            title="Reading the evidence",
-                            body=("Coordinate convention, generator profile, and plotting row limit must match.")
-                            + "\n\n"
-                            + (
-                                "Families occupy their intended local regions with selected actions inside actor-valid support."
-                            )
-                            + "\n\n"
-                            + (
-                                "Subtracting every rollout root and dividing by that rollout's initial target distance makes local candidate motion comparable without mixing scene-world origins or target ranges."
-                            )
-                            + "\n\n"
-                            + (
-                                "Only bounded plotted rows with finite coordinates appear, so this supports geometric diagnosis rather than an exhaustive count or an uncertainty estimate."
-                            ),
-                        ),
-                        ExplanationSection(
-                            title="What to investigate",
-                            body=(
-                                "Collapsed clusters, extreme radii, or family overlap can expose pose, frame, or generator defects."
-                            )
-                            + "\n\n"
-                            + (
-                                "Root-relative position = (candidate camera center − rollout root center) / ||target center − rollout root center||. The target marker therefore lies one normalized distance from the root."
-                            ),
-                        ),
-                    ),
-                    evidence_role="actor-visible",
-                    source_fields=(
-                        "inspection.root_relative_candidate_rows",
-                        "candidate pose_world_cam",
-                        "rollout root_pose_world",
-                    ),
-                    theory=TheoryReferences(
-                        equation_ids=("spatial.candidate_root_target_normalization",),
-                        symbol_ids=(
-                            "oracle.candidate_qti",
-                            "oracle.center",
-                            "entity.center",
-                            "spatial.ref_pose",
-                            "rl.target",
-                        ),
-                    ),
-                    external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
-                ),
-            )
-            three_dimensional = root_geometry.dropna(
-                subset=[
-                    "root_relative_x_target_distance",
-                    "root_relative_y_target_distance",
-                    "root_relative_z_target_distance",
-                ]
-            )
-            if not three_dimensional.empty:
-                fig = px.scatter_3d(
-                    three_dimensional,
-                    x="root_relative_x_target_distance",
-                    y="root_relative_y_target_distance",
-                    z="root_relative_z_target_distance",
-                    color="position" if "position" in three_dimensional else None,
-                    symbol="strategy" if "strategy" in three_dimensional else None,
-                    hover_data=[
-                        name
-                        for name in ("rollout_row_id", "step_index", "actor_action", "strategy", "mixture")
-                        if name in three_dimensional
-                    ],
-                    title="Candidate centers relative to each rollout root (3D; target distance normalized)",
-                )
-                configure_3d_scene(
-                    fig,
-                    axis_titles=(
-                        "Root-relative X / initial target distance",
-                        "Root-relative Y / initial target distance",
-                        "Root-relative Z / initial target distance",
-                    ),
-                )
-                fig.update_traces(marker={"size": 4, "opacity": 0.8})
-                if connect_selected_chains:
-                    _add_selected_rollout_chains(fig, three_dimensional, three_dimensional=True)
-                _add_selected_candidate_overlay(fig, three_dimensional, three_dimensional=True)
-                _add_root_target_pose_anchors(fig, anchors if anchors is not None else pd.DataFrame())
-                _render_plot(
-                    fig,
-                    ScientificExplanation(
-                        question="Do candidate families occupy the intended local three-dimensional motion support?",
-                        answer="The three-dimensional view tests the same root-relative candidate support while making vertical displacement visible rather than hover-only.",
-                        sections=(
-                            ExplanationSection(
-                                title="Following the population",
-                                body=(
-                                    "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed."
-                                )
-                                + "\n\n"
-                                + (
-                                    "Root-relative X/Y/Z displacement divided by each rollout's initial root-to-target distance, with Z as ARIA world up."
-                                )
-                                + "\n\n"
-                                + (
-                                    "Rows with finite root-relative X, Y, and Z coordinates; actor validity and selection remain explicit fields."
-                                )
-                                + "\n\n"
-                                + (
-                                    "Each point is one finite root-relative candidate center; x, y, and z are target-distance units, color is family, and symbol retains selection state."
-                                ),
-                            ),
-                            ExplanationSection(
-                                title="Reading the evidence",
-                                body=("Coordinate convention, generator profile, and plotting row limit must match.")
-                                + "\n\n"
-                                + (
-                                    "Families occupy their intended local volume with selected actions inside actor-valid support."
-                                )
-                                + "\n\n"
-                                + (
-                                    "A family can appear plausible in the ground plane but still collapse or drift vertically, so the Z-up dimension is a separate geometry check."
-                                )
-                                + "\n\n"
-                                + (
-                                    "The display is bounded to interactive rows and preserves only finite coordinates; it is a diagnostic projection, not a rendered reconstruction or coverage proof."
-                                ),
-                            ),
-                            ExplanationSection(
-                                title="What to investigate",
-                                body=(
-                                    "Flattened, collapsed, or implausibly elevated clusters can expose frame, pose, or generator defects."
-                                )
-                                + "\n\n"
-                                + (
-                                    "ARIA uses a right-handed Z-up world convention here; the plotted coordinates are local differences normalized by each rollout's initial target distance, not absolute scene positions."
-                                ),
-                            ),
-                        ),
-                        evidence_role="actor-visible",
-                        source_fields=(
-                            "inspection.root_relative_candidate_rows",
-                            "candidate pose_world_cam",
-                            "rollout root_pose_world",
-                        ),
-                        theory=TheoryReferences(
-                            equation_ids=("spatial.candidate_root_target_normalization",),
-                            symbol_ids=(
-                                "oracle.candidate_qti",
-                                "oracle.center",
-                                "entity.center",
-                                "spatial.ref_pose",
-                                "rl.target",
-                            ),
-                        ),
-                        external_references=(_PYTORCH3D_RENDERING_REFERENCE,),
-                    ),
-                )
+        _render_geometry_projection(projection, geometry, frames)
 
         angle_cols = [
             name

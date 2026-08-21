@@ -17,6 +17,7 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
+    ProposalAlignment,
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_collision_support_rows,
@@ -33,6 +34,7 @@ from aria_nbv.rollouts.inspection import (
     mask_combination_rows,
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    proposal_support_geometry,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
@@ -40,9 +42,8 @@ from aria_nbv.rollouts.inspection import (
     rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_trajectory_geometry,
     rollout_tree_summary_rows,
-    root_relative_candidate_rows,
-    root_relative_rollout_anchor_rows,
     selected_candidate_rank_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
@@ -52,6 +53,7 @@ from aria_nbv.rollouts.inspection import (
     temporal_metric_summary_rows,
     validity_waterfall_rows,
 )
+from aria_nbv.rollouts.read_model import rollout_at, rollout_steps
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
@@ -1590,64 +1592,104 @@ def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailabl
     assert row["target_rri_rank_label"] == "unavailable"
 
 
-def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_path) -> None:
-    """Geometry projection should never expose cross-scene absolute centers as comparison axes."""
+def test_proposal_support_geometry_uses_factual_expansion_pose_and_current_target_scale(tmp_path) -> None:
+    """Each proposal shell must use the state that actually generated it."""
 
-    records = build_rollout_records(horizon=1, num_samples=6, seed=59)[:1]
-    root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
-    root_tensor[9:12] = root_tensor.new_tensor([1.0, 2.0, 3.0])
-    records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
-    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=59)[1:2],
+    )
     reader = RolloutZarrStoreReader(result.store_dir)
 
-    rows = root_relative_candidate_rows(reader, rollout_row_id=0)
-    first = rows[0]
-    world_pose = np.asarray(reader.array("candidates/pose_world_cam")[0], dtype=np.float32)
-    root_pose = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float32)
+    projection = proposal_support_geometry(reader)
+    frames = {frame.step_index: frame for frame in projection.frames}
+    steps = rollout_steps(reader, rollout_at(reader, 0))
+    root = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float64)
+    target = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
+    selected_zero = np.asarray(steps[0].pose_world_cam[steps[0].selected_local_index], dtype=np.float64)
 
-    assert len(rows) == result.num_candidates
-    assert first["coordinate_frame"] == "root-centered ARIA world (RIGHT_HAND_Z_UP)"
-    assert first["units"] == "m"
-    assert first["root_relative_x_m"] == pytest.approx(float(world_pose[9] - root_pose[9]))
-    assert first["root_relative_y_m"] == pytest.approx(float(world_pose[10] - root_pose[10]))
-    assert first["root_relative_z_m"] == pytest.approx(float(world_pose[11] - root_pose[11]))
-    assert first["strategy"] != "unknown"
-    target_pose = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
-    target_distance = float(np.linalg.norm(target_pose[9:12] - root_pose[9:12]))
-    assert first["initial_target_distance_m"] == pytest.approx(target_distance)
-    assert first["root_relative_x_target_distance"] == pytest.approx(first["root_relative_x_m"] / target_distance)
-    assert "center_x" not in first
+    assert len(projection.points) == result.num_candidates
+    assert frames[0].expansion_pose_source == "root"
+    assert frames[1].expansion_pose_source == "previous_selected"
+    assert frames[0].scale_m == pytest.approx(np.linalg.norm(target[9:12] - root[9:12]))
+    assert frames[1].scale_m == pytest.approx(np.linalg.norm(target[9:12] - selected_zero[9:12]))
+    assert frames[1].scale_m != pytest.approx(frames[0].scale_m)
+    for frame in projection.frames:
+        assert np.linalg.norm([frame.target_x, frame.target_y, frame.target_z]) == pytest.approx(1.0)
+        assert frame.target_y == pytest.approx(0.0, abs=1e-7)
+    assert all(point.strategy != "unknown" for point in projection.points)
 
 
-def test_root_relative_rollout_anchors_preserve_root_target_pose_frame(tmp_path) -> None:
-    """Pose anchors retain orientation and target origin in the candidate plot frame."""
+def test_proposal_support_rig_alignment_maps_reference_forward_to_positive_x(tmp_path) -> None:
+    """Rig-forward comparison must retain Z-up while aligning LUF forward."""
 
-    records = build_rollout_records(horizon=1, num_samples=6, seed=61)[:1]
+    records = build_rollout_records(horizon=1, num_samples=6, seed=61)[1:2]
     root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
-    root_tensor[9:12] = root_tensor.new_tensor([1.0, 2.0, 3.0])
+    root_tensor[:9] = root_tensor.new_tensor([0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
     records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+
+    projection = proposal_support_geometry(
+        RolloutZarrStoreReader(result.store_dir),
+        alignment=ProposalAlignment.RIG_FORWARD_Z_UP,
+    )
+
+    assert len(projection.frames) == 1
+    assert projection.frames[0].reference_axis_z == pytest.approx((1.0, 0.0, 0.0), abs=1e-7)
+    assert projection.frames[0].alignment == ProposalAlignment.RIG_FORWARD_Z_UP.value
+
+
+def test_rollout_trajectory_geometry_contains_only_root_and_factual_selected_path(tmp_path) -> None:
+    """Trajectory comparison must not leak alternative proposal candidates."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=63)[1:2],
+    )
+    projection = rollout_trajectory_geometry(RolloutZarrStoreReader(result.store_dir))
+    frame = projection.frames[0]
+
+    assert [point.role for point in projection.points] == ["root", "selected_action", "selected_action"]
+    assert [point.path_order for point in projection.points] == [0, 1, 2]
+    assert {point.normalization_distance_m for point in projection.points} == {frame.initial_scale_m}
+    assert np.linalg.norm([frame.target_x, frame.target_y, frame.target_z]) == pytest.approx(1.0)
+    assert frame.target_y == pytest.approx(0.0, abs=1e-7)
+
+
+def test_geometry_projection_preserves_complete_shells_and_rejects_malformed_steps(tmp_path) -> None:
+    """Soft limits retain whole shells and factual step partitions fail closed."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=65)[1:2],
+    )
     reader = RolloutZarrStoreReader(result.store_dir)
 
-    anchor = root_relative_rollout_anchor_rows(reader, rollout_row_ids=(0,))[0]
-    root_pose = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float64)
-    target_pose = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
+    bounded = proposal_support_geometry(reader, max_candidates=1)
+    assert bounded.truncated is True
+    assert len(bounded.points) == int(reader.array("steps/num_candidates")[0])
+    assert {point.step_index for point in bounded.points} == {0}
 
-    assert anchor["root_relative_x_m"] == 0.0
-    assert anchor["root_relative_y_m"] == 0.0
-    assert anchor["root_relative_z_m"] == 0.0
-    assert anchor["target_relative_x_m"] == pytest.approx(float(target_pose[9] - root_pose[9]))
-    assert anchor["target_relative_y_m"] == pytest.approx(float(target_pose[10] - root_pose[10]))
-    assert anchor["target_relative_z_m"] == pytest.approx(float(target_pose[11] - root_pose[11]))
-    assert anchor["initial_target_distance_m"] == pytest.approx(np.linalg.norm(target_pose[9:12] - root_pose[9:12]))
-    assert np.linalg.norm(
-        [
-            anchor["target_relative_x_target_distance"],
-            anchor["target_relative_y_target_distance"],
-            anchor["target_relative_z_target_distance"],
-        ]
-    ) == pytest.approx(1.0)
-    assert anchor["root_axis_x"] == pytest.approx(tuple(root_pose[:9].reshape(3, 3)[:, 0]))
+    root = zarr.open_group(result.store_dir, mode="a")
+    root["steps/step_index"][1] = np.asarray(2, dtype=np.int32)
+    with pytest.raises(ValueError, match="non-contiguous factual step indices"):
+        rollout_trajectory_geometry(reader)
+
+
+def test_geometry_projection_rejects_invalid_pose_rotation(tmp_path) -> None:
+    """Geometry frames must fail closed instead of plotting malformed rotations."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=66)[1:2],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    malformed = np.asarray(root["rollouts/root_pose_world"][0], dtype=np.float32)
+    malformed[:9] = 0.0
+    root["rollouts/root_pose_world"][0] = malformed
+
+    with pytest.raises(ValueError, match="invalid rotation matrix"):
+        proposal_support_geometry(RolloutZarrStoreReader(result.store_dir))
 
 
 def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:

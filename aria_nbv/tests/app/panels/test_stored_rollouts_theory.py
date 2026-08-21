@@ -123,20 +123,34 @@ def test_cumulative_plot_theory_renders_prefix_equation_and_symbol_context(
     assert "Small positive numerical stabilizer" in joined
 
 
-def test_candidate_geometry_explanations_use_shared_target_normalization_equation() -> None:
-    """The Streamlit geometry popovers must not carry a divergent inline formula."""
+@pytest.mark.parametrize(
+    "equation_id, expected_terms",
+    [
+        (
+            "spatial.candidate_proposal_support_normalization",
+            (r"d_{t,e}^{\mathrm{current}}", r"\tilde{\boldsymbol{c}}_{t,i}^{\mathrm{support}}"),
+        ),
+        (
+            "spatial.rollout_trajectory_normalization",
+            (r"d_{0,e}^{\mathrm{initial}}", r"\tilde{\boldsymbol{x}}_{r,t}^{\mathrm{trajectory}}"),
+        ),
+    ],
+)
+def test_candidate_geometry_explanations_use_shared_normalization_equations(
+    equation_id: str,
+    expected_terms: tuple[str, str],
+) -> None:
+    """Geometry popovers resolve the canonical proposal and trajectory equations."""
 
     resolved = theory.resolve_theory(
         theory.TheoryReferences(
-            equation_ids=("spatial.candidate_root_target_normalization",),
+            equation_ids=(equation_id,),
             symbol_ids=("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose", "rl.target"),
         ),
         root=PathConfig().root,
     )
 
-    assert resolved.equations[0].tex.startswith(r"d_{t,e}^{\mathrm{root-target}}")
-    assert r"\tilde{\boldsymbol{c}}_{t,i}^w" in resolved.equations[0].tex
-    assert r"\|\tilde{\boldsymbol{p}}_e^w\|_2=1" in resolved.equations[0].tex
+    assert all(term in resolved.equations[0].tex for term in expected_terms)
     assert [symbol.identifier for symbol in resolved.symbols] == [
         "oracle.candidate_qti",
         "oracle.center",

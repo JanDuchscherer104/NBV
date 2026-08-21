@@ -7,6 +7,7 @@ from __future__ import annotations
 import ast
 import json
 from contextlib import nullcontext
+from dataclasses import asdict
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,7 +54,7 @@ from aria_nbv.rollouts import (
     CounterfactualTrajectory,
     RolloutZarrStoreReader,
 )
-from aria_nbv.rollouts.inspection import candidate_audit_rows
+from aria_nbv.rollouts.inspection import GeometryFrame, GeometryProjection, candidate_audit_rows
 from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
 from aria_nbv.rollouts.replay.state import CounterfactualStepResult
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
@@ -443,7 +444,7 @@ def test_live_depth_target_overlays_project_descriptor_target() -> None:
 def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config, tmp_path) -> None:
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "current.zarr",
-        build_rollout_records(horizon=1, num_samples=6, seed=47)[:1],
+        build_rollout_records(horizon=1, num_samples=6, seed=47)[1:2],
     )
 
     app = _stored_rollouts_app(tmp_path).run()
@@ -491,7 +492,9 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert not app.exception
     assert any("descriptive and post-selection" in warning.value for warning in app.warning)
     extra_evidence = next(
-        toggle for toggle in app.toggle if toggle.label == "Load branching, rank/regret, and root-relative evidence"
+        toggle
+        for toggle in app.toggle
+        if toggle.label == "Load branching, rank/regret, and factual trajectory evidence"
     )
     extra_evidence.set_value(True)
     app.session_state["stored_rollouts_section"] = "Reward & reconstruction"
@@ -500,7 +503,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert {button.label for button in app.get("download_button")} >= {
         "Download branching provenance CSV",
         "Download selected rank/regret CSV",
-        "Download root-relative geometry CSV",
+        "Download factual trajectory geometry CSV",
     }
 
     app = _set_stored_rollout_workspace(app, "Admission & feasibility")
@@ -673,110 +676,114 @@ def test_stored_rollouts_default_candidate_geometry_is_visible(
     assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
     assert "Load bounded candidate geometry and reward plots" not in {toggle.label for toggle in app.toggle}
-    chain_toggle = next(toggle for toggle in app.toggle if toggle.label == "Connect selected rollout chains")
-    assert chain_toggle.value is False
+    assert "Connect selected rollout chains" not in {toggle.label for toggle in app.toggle}
+    assert {control.label for control in app.segmented_control} >= {"Geometry view", "Proposal alignment"}
     assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
 
 
-def test_candidate_geometry_diagnostics_include_root_relative_3d_view(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The default geometry diagnostics retain height instead of hover-only depth."""
+def _geometry_frame_fixture() -> GeometryFrame:
+    identity_axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    return GeometryFrame(
+        frame_id="proposal:7:10:target_aligned_z_up",
+        rollout_row_id=7,
+        step_row_id=10,
+        step_index=0,
+        origin_kind="expansion_pose",
+        expansion_pose_source="root",
+        scale_kind="current_target_distance",
+        alignment="target_aligned_z_up",
+        scale_m=2.0,
+        initial_scale_m=2.0,
+        target_x=1.0,
+        target_y=0.0,
+        target_z=0.0,
+        reference_axis_x=identity_axes[0],
+        reference_axis_y=identity_axes[1],
+        reference_axis_z=identity_axes[2],
+        target_axis_x=identity_axes[0],
+        target_axis_y=identity_axes[1],
+        target_axis_z=identity_axes[2],
+    )
+
+
+def test_candidate_geometry_diagnostics_include_matched_2d_and_3d_views(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both views must consume the same normalized coordinates."""
 
     captured: list[object] = []
-    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
-    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(candidate_generation.st, "selectbox", lambda _label, options, **_kwargs: options[0])
     monkeypatch.setattr(
         candidate_generation,
         "_render_plot",
         lambda figure, _explanation: captured.append(figure),
     )
-    candidates = pd.DataFrame({"motion_step_length_m": [0.2]})
-    root_geometry = pd.DataFrame(
+    geometry = pd.DataFrame(
         {
-            "root_relative_x_m": [0.1, 0.2],
-            "root_relative_y_m": [0.3, 0.4],
-            "root_relative_z_m": [0.5, 0.6],
-            "root_relative_x_target_distance": [0.05, 0.1],
-            "root_relative_y_target_distance": [0.15, 0.2],
-            "root_relative_z_target_distance": [0.25, 0.3],
+            "role": ["candidate", "candidate"],
+            "rollout_row_id": [7, 7],
+            "step_index": [0, 0],
+            "x": [0.05, 0.1],
+            "y": [0.15, 0.2],
+            "z": [0.25, 0.3],
             "position": ["forward_local", "forward_local"],
+            "strategy": ["target_point", "target_point"],
             "selected": [False, True],
         }
     )
+    frame = _geometry_frame_fixture()
+    projection = GeometryProjection("proposal_support", (), (frame,), ())
 
-    candidate_generation._render_candidate_geometry_diagnostics(
-        candidates,
-        root_geometry,
-        total_candidates=2,
-    )
+    candidate_generation._render_geometry_projection(projection, geometry, pd.DataFrame([asdict(frame)]))
 
     assert any(trace.type == "scatter3d" for figure in captured for trace in figure.data)
     ground_plane = next(figure for figure in captured if any(trace.type == "scatter" for trace in figure.data))
     three_dimensional = next(figure for figure in captured if any(trace.type == "scatter3d" for trace in figure.data))
     ground_plane_points = sorted(
-        (float(x), float(y)) for trace in ground_plane.data for x, y in zip(trace.x, trace.y, strict=True)
+        (float(x), float(y))
+        for trace in ground_plane.data
+        if str(trace.name).startswith("forward_local")
+        for x, y in zip(trace.x, trace.y, strict=True)
     )
-    three_dimensional_x = sorted(float(x) for trace in three_dimensional.data for x in trace.x)
+    three_dimensional_x = sorted(
+        float(x) for trace in three_dimensional.data if str(trace.name).startswith("forward_local") for x in trace.x
+    )
     assert ground_plane_points == [(0.05, 0.15), (0.1, 0.2)]
     assert three_dimensional_x == [0.05, 0.1]
-    assert three_dimensional.layout.scene.xaxis.title.text == "Root-relative X / initial target distance"
+    assert three_dimensional.layout.scene.xaxis.title.text == "Forward / current target distance"
 
 
-def test_root_target_pose_anchors_overlay_markers_and_orientation_triads() -> None:
+def test_geometry_anchors_overlay_markers_and_orientation_triads() -> None:
     """The 3D plot makes its root and target pose context inspectable."""
 
     figure = candidate_generation.go.Figure()
-    anchors = pd.DataFrame(
-        {
-            "rollout_row_id": [7],
-            "target_id": ["target-7"],
-            "root_relative_x_m": [0.0],
-            "root_relative_y_m": [0.0],
-            "root_relative_z_m": [0.0],
-            "target_relative_x_m": [1.0],
-            "target_relative_y_m": [2.0],
-            "target_relative_z_m": [3.0],
-            "target_relative_x_target_distance": [1.0 / (14.0**0.5)],
-            "target_relative_y_target_distance": [2.0 / (14.0**0.5)],
-            "target_relative_z_target_distance": [3.0 / (14.0**0.5)],
-            "root_axis_x": [(1.0, 0.0, 0.0)],
-            "root_axis_y": [(0.0, 1.0, 0.0)],
-            "root_axis_z": [(0.0, 0.0, 1.0)],
-            "target_axis_x": [(1.0, 0.0, 0.0)],
-            "target_axis_y": [(0.0, 1.0, 0.0)],
-            "target_axis_z": [(0.0, 0.0, 1.0)],
-        }
-    )
+    frame = _geometry_frame_fixture()
+    anchors = pd.DataFrame([asdict(frame)])
 
-    candidate_generation._add_root_target_pose_anchors(figure, anchors)
+    candidate_generation._add_geometry_anchors(figure, anchors, three_dimensional=True)
 
     assert {trace.name for trace in figure.data if trace.name is not None} == {
-        "Rollout root (all at origin)",
-        "Observed target pose origin",
-        "Root pose axes (RGB)",
+        "Reference pose (all at origin)",
+        "Observed target center",
+        "Reference pose axes (RGB)",
         "Target pose axes (RGB)",
     }
-    target_trace = next(trace for trace in figure.data if trace.name == "Observed target pose origin")
+    target_trace = next(trace for trace in figure.data if trace.name == "Observed target center")
     assert np.linalg.norm([target_trace.x[0], target_trace.y[0], target_trace.z[0]]) == pytest.approx(1.0)
 
 
-def test_selected_rollout_chains_connect_only_factual_selected_actions() -> None:
-    """A chain starts at its root and never joins unselected shell alternatives."""
+def test_trajectory_paths_connect_only_ordered_factual_points() -> None:
+    """Trajectory lines follow the root and selected actions already admitted by the projection."""
 
     geometry = pd.DataFrame(
         {
             "rollout_row_id": [7, 7, 7],
-            "step_row_id": [10, 10, 11],
-            "step_index": [0, 0, 1],
-            "selected": [False, True, True],
-            "root_relative_x_target_distance": [9.0, 0.2, 0.4],
-            "root_relative_y_target_distance": [9.0, 0.3, 0.5],
-            "root_relative_z_target_distance": [9.0, 0.1, 0.2],
+            "path_order": [2, 0, 1],
+            "x": [0.4, 0.0, 0.2],
+            "y": [0.5, 0.0, 0.3],
+            "z": [0.2, 0.0, 0.1],
         }
     )
     figure = candidate_generation.go.Figure()
 
-    candidate_generation._add_selected_rollout_chains(figure, geometry, three_dimensional=False)
+    candidate_generation._add_trajectory_paths(figure, geometry, three_dimensional=False)
 
     assert len(figure.data) == 1
     assert list(figure.data[0].x) == [0.0, 0.2, 0.4]
@@ -788,20 +795,23 @@ def test_candidate_geometry_stale_projection_is_withheld_instead_of_crashing(
 ) -> None:
     """An old cached geometry row shape must prompt a refresh, not raise in Plotly."""
 
-    warnings: list[str] = []
+    errors: list[str] = []
     monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(candidate_generation.st, "warning", warnings.append)
+    monkeypatch.setattr(candidate_generation.st, "error", errors.append)
     monkeypatch.setattr(candidate_generation.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(candidate_generation.st, "segmented_control", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(candidate_generation, "_cached_projection", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(candidate_generation, "_render_plot", lambda *_args, **_kwargs: None)
 
     candidate_generation._render_candidate_geometry_diagnostics(
         pd.DataFrame({"motion_step_length_m": [0.2]}),
-        pd.DataFrame({"root_relative_x_m": [0.1], "root_relative_y_m": [0.2]}),
+        "store.zarr",
         total_candidates=1,
+        candidate_plot_limit=1,
     )
 
-    assert warnings and "cached projection predates" in warnings[0]
+    assert errors and "unsupported projection shape" in errors[0]
 
 
 def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
@@ -817,7 +827,7 @@ def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
     )
     session._clear_stored_rollout_caches()
     original_projection = reconstruction_return._cached_projection
-    heavy_calls = dict.fromkeys(("candidates", "candidate_group", "ranks", "root_geometry", "tree"), 0)
+    heavy_calls = dict.fromkeys(("candidates", "candidate_group", "ranks", "trajectory_geometry", "tree"), 0)
 
     def spy_projection(store_path: str, projection: str, **kwargs):
         if projection in heavy_calls:
@@ -833,7 +843,7 @@ def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
         "candidates": 0,
         "candidate_group": 0,
         "ranks": 0,
-        "root_geometry": 0,
+        "trajectory_geometry": 0,
         "tree": 0,
     }
 
@@ -900,8 +910,8 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
                     "valid_candidate_count": 4,
                 }
             ]
-        if projection == "root_geometry":
-            return []
+        if projection == "trajectory_geometry":
+            return GeometryProjection("rollout_trajectory", (), (), ())
         raise AssertionError(projection)
 
     def capture_plot(_figure, explanation):

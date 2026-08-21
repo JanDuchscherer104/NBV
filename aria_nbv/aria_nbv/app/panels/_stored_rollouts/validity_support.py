@@ -151,16 +151,9 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
 
     candidate_rows = _cached_projection(store_path, "candidates", limit=candidate_plot_limit)
     candidate_frame = pd.DataFrame(candidate_rows)
-    root_geometry = pd.DataFrame(_cached_projection(store_path, "root_geometry", limit=candidate_plot_limit))
-    rollout_row_ids = (
-        tuple(sorted(root_geometry["rollout_row_id"].dropna().astype(int).unique()))
-        if "rollout_row_id" in root_geometry
-        else ()
-    )
-    anchors = pd.DataFrame(_cached_projection(store_path, "root_anchors", rollout_row_ids=rollout_row_ids))
     _render_candidate_geometry_diagnostics(
         candidate_frame,
-        root_geometry,
-        anchors,
+        store_path,
         total_candidates=int(reader.array("candidates/candidate_row_id").size),
+        candidate_plot_limit=candidate_plot_limit,
     )

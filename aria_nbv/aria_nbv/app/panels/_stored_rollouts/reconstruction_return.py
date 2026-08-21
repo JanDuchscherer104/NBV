@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ....rollouts import RolloutZarrStoreReader
-from ....rollouts.inspection import rollout_endpoint_metric_summary
+from ....rollouts.inspection import GeometryProjection, rollout_endpoint_metric_summary
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import LabelSurface, TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
@@ -309,7 +309,7 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
 
     with st.expander("Additional branching and selected-rank evidence", expanded=False):
         if st.toggle(
-            "Load branching, rank/regret, and root-relative evidence",
+            "Load branching, rank/regret, and factual trajectory evidence",
             value=False,
             help="These projections traverse every factual step and candidate shell, then remain cached for this store.",
         ):
@@ -603,7 +603,7 @@ def _temporal_evidence_role(
 
 
 def _render_selected_rank_and_geometry(store_path: str) -> None:
-    """Render expensive selected-rank and complete root-relative evidence on demand."""
+    """Render expensive selected-rank and factual trajectory evidence on demand."""
 
     ranks = pd.DataFrame(_cached_projection(store_path, "ranks"))
     if not ranks.empty:
@@ -653,14 +653,15 @@ def _render_selected_rank_and_geometry(store_path: str) -> None:
         st.dataframe(ranks, hide_index=True, width="stretch")
         _download_frame("Download selected rank/regret CSV", "selected-rank-regret.csv", ranks)
 
-    geometry = pd.DataFrame(_cached_projection(store_path, "root_geometry"))
+    projection = _cached_projection(store_path, "trajectory_geometry")
+    geometry = pd.DataFrame(projection.point_rows()) if isinstance(projection, GeometryProjection) else pd.DataFrame()
     if not geometry.empty:
         st.caption(
-            "Coordinates are translated by each rollout root. Absolute world coordinates from unrelated scenes are never aggregated."
+            "Factual selected paths use one initial target-aligned Z-up frame and initial target-distance scale per rollout."
         )
         st.dataframe(geometry.head(500), hide_index=True, width="stretch")
         st.caption(f"Showing {min(500, len(geometry)):,} of {len(geometry):,}; export is complete.")
-        _download_frame("Download root-relative geometry CSV", "root-relative-candidates.csv", geometry)
+        _download_frame("Download factual trajectory geometry CSV", "factual-rollout-trajectories.csv", geometry)
 
 
 def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:

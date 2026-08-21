@@ -105,7 +105,8 @@ def test_corpus_summary_cache_delegates_only_after_explicit_dispatch_and_preserv
         ("targets", "target_audit_rows", {}),
         ("masks", "mask_combination_rows", {}),
         ("tree", "rollout_tree_summary_rows", {}),
-        ("root_geometry", "root_relative_candidate_rows", {}),
+        ("proposal_geometry", "proposal_support_geometry", {}),
+        ("trajectory_geometry", "rollout_trajectory_geometry", {}),
         ("depth_summary", "selected_depth_summary_rows", {}),
     ],
 )
@@ -262,8 +263,8 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
     assert identities[2] != identities[0]
 
 
-def test_root_geometry_projection_bumps_its_cache_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A changed root-geometry row shape must not reuse an old cache entry."""
+def test_geometry_projections_have_explicit_cache_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """View-specific geometry projections must not reuse retired cache entries."""
 
     revisions: list[int] = []
 
@@ -273,9 +274,10 @@ def test_root_geometry_projection_bumps_its_cache_contract(monkeypatch: pytest.M
 
     monkeypatch.setattr(session, "_cached_projection_cached", cached_projection)
     session._cached_projection("/fixture.zarr", "header")
-    session._cached_projection("/fixture.zarr", "root_geometry")
+    session._cached_projection("/fixture.zarr", "proposal_geometry")
+    session._cached_projection("/fixture.zarr", "trajectory_geometry")
 
-    assert revisions == [1, 3]
+    assert revisions == [1, 1, 1]
 
 
 def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat(
