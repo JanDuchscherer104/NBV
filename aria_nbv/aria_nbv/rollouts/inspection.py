@@ -744,7 +744,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
     """Summarize candidate direction support with equal-area angular bins."""
 
     source = [dict(row) for row in rows]
-    azimuth_bins, elevation_bins = 24, 12
+    azimuth_bins, elevation_bins = 12, 6
     states: dict[tuple[str, str, str], list[dict[str, object]]] = {}
     for row in source:
         states.setdefault(_candidate_state_key(row), []).append(row)
