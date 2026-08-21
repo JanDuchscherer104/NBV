@@ -208,6 +208,85 @@ def _flatten_edges_for_plotly(edges: np.ndarray) -> tuple[np.ndarray, np.ndarray
     return flat[:, 0], flat[:, 1], flat[:, 2]
 
 
+def add_pose_axes_to_figure(
+    fig: go.Figure,
+    centers: np.ndarray,
+    axes: np.ndarray,
+    *,
+    title: str = "Pose axes",
+    scale: float = 1.0,
+    line_width: int = 8,
+) -> go.Figure:
+    """Add RGB coordinate triads for one or more pose centers to a Plotly figure.
+
+    This is deliberately independent of :class:`EfmSnippetView`: callers own
+    their pose decoding and provide finite ``(N, 3)`` centers plus ordered
+    local X/Y/Z directions of shape ``(N, 3, 3)``.  It is the shared 3D
+    presentation seam used by snippet and persisted-rollout diagnostics.
+    """
+
+    centers = np.asarray(centers, dtype=float)
+    axes = np.asarray(axes, dtype=float)
+    if centers.ndim == 1:
+        centers = centers.reshape(1, 3)
+    if axes.ndim == 2:
+        axes = axes.reshape(1, 3, 3)
+    if centers.ndim != 2 or centers.shape[1] != 3:
+        raise ValueError(f"centers must have shape (N, 3), got {centers.shape}")
+    if axes.ndim != 3 or axes.shape[1:] != (3, 3) or axes.shape[0] != centers.shape[0]:
+        raise ValueError(f"axes must have shape ({centers.shape[0]}, 3, 3), got {axes.shape}")
+
+    for axis, color in enumerate(("red", "green", "blue")):
+        segments = np.stack((centers, centers + axes[:, axis] * scale), axis=1)
+        x, y, z = _flatten_edges_for_plotly(segments)
+        fig.add_trace(
+            go.Scatter3d(
+                x=x,
+                y=y,
+                z=z,
+                mode="lines",
+                line={"color": color, "width": line_width},
+                name=title if axis == 0 else None,
+                legendgroup=title,
+                showlegend=axis == 0,
+                hoverinfo="skip",
+            )
+        )
+    return fig
+
+
+def configure_3d_scene(
+    fig: go.Figure,
+    *,
+    title: str | None = None,
+    height: int | None = None,
+    axis_titles: tuple[str, str, str] = ("X", "Y", "Z"),
+    scene_ranges: dict | None = None,
+) -> go.Figure:
+    """Apply equal-scale 3D axes and an optional bounded scene range.
+
+    The helper does not interpret coordinates or convert units.  Callers pass
+    axis labels appropriate to their already-decoded frame, for example metres
+    for snippets or target-distance units for rollout geometry.
+    """
+
+    scene = {
+        "aspectmode": "data",
+        "xaxis": {"title": axis_titles[0]},
+        "yaxis": {"title": axis_titles[1]},
+        "zaxis": {"title": axis_titles[2]},
+    }
+    if scene_ranges is not None:
+        scene.update(scene_ranges)
+    layout: dict[str, object] = {"scene": scene}
+    if title is not None:
+        layout["title"] = title
+    if height is not None:
+        layout["height"] = height
+    fig.update_layout(**layout)
+    return fig
+
+
 def mesh_to_plotly(
     mesh: trimesh.Trimesh,
 ) -> go.Mesh3d:
@@ -604,31 +683,7 @@ class SnippetPlotBuilder:
         fig: go.Figure, cam_centers: np.ndarray, cam_axes: np.ndarray, title: str = "Camera axes", scale: float = 1.0
     ) -> go.Figure:
         """Add LUF axes for multiple cameras in one go."""
-
-        if cam_centers.ndim == 1:
-            cam_centers = cam_centers.reshape(1, 3)
-        if cam_axes.ndim == 2:
-            cam_axes = cam_axes.reshape(1, 3, 3)
-
-        axis_colors = ["red", "green", "blue"]
-        for axis, color in enumerate(axis_colors):
-            axis_start = cam_centers
-            axis_end = cam_centers + cam_axes[:, axis] * scale
-            seg = np.stack([axis_start, axis_end], axis=1)  # (K, 2, 3)
-            seg = np.concatenate([seg, np.full((seg.shape[0], 1, 3), np.nan, dtype=float)], axis=1).reshape(-1, 3)
-            fig.add_trace(
-                go.Scatter3d(
-                    x=seg[:, 0],
-                    y=seg[:, 1],
-                    z=seg[:, 2],
-                    mode="lines",
-                    line={"color": color, "width": 8},
-                    name=title if axis == 0 else None,
-                    showlegend=axis == 0,
-                )
-            )
-
-        return fig
+        return add_pose_axes_to_figure(fig, cam_centers, cam_axes, title=title, scale=scale)
 
     def _add_camera_axes(self, cam_centers: np.ndarray, cam_axes: np.ndarray, title: str = "Camera axes") -> Self:
         """Add LUF axes for multiple cameras in one go."""
@@ -1011,8 +1066,13 @@ class SnippetPlotBuilder:
 
     def finalize(self) -> go.Figure:
         """Apply equal world-axis scaling and return the accumulated figure."""
-        self.fig.update_layout(title=self.title, scene=dict(aspectmode="data", **self.scene_ranges), height=self.height)
-        return self.fig
+        return configure_3d_scene(
+            self.fig,
+            title=self.title,
+            height=self.height,
+            axis_titles=("X (m)", "Y (m)", "Z (m)"),
+            scene_ranges=self.scene_ranges,
+        )
 
 
 def _to_uint8_image(img: torch.Tensor) -> np.ndarray:

@@ -26,7 +26,13 @@ from aria_nbv.rendering.candidate_pointclouds import CandidatePointClouds
 from aria_nbv.rendering.plotting import plot_candidate_pointcloud_scene
 from aria_nbv.rri_metrics.rri import RriResult
 from aria_nbv.utils import plotting as utils_plotting
-from aria_nbv.utils.data_plotting import pose_world_cam, semidense_points_for_frame
+from aria_nbv.utils.data_plotting import (
+    SnippetPlotBuilder,
+    add_pose_axes_to_figure,
+    configure_3d_scene,
+    pose_world_cam,
+    semidense_points_for_frame,
+)
 from aria_nbv.vin.diagnostics.plotting import _parameter_distribution
 
 
@@ -251,3 +257,20 @@ def test_data_plotting_helpers() -> None:
 
     pts_frame = semidense_points_for_frame(sample, None, all_frames=False)
     assert pts_frame.shape[0] == 2
+
+
+def test_snippet_and_rollout_3d_helpers_share_pose_axes_and_scene_layout() -> None:
+    """The generic helpers must not require a snippet instance."""
+
+    centers = np.asarray([[0.0, 0.0, 0.0]])
+    axes = np.eye(3)[None, ...]
+    figure = configure_3d_scene(
+        add_pose_axes_to_figure(go.Figure(), centers, axes, title="Rollout pose axes", scale=0.12),
+        axis_titles=("X / target distance", "Y / target distance", "Z / target distance"),
+    )
+
+    assert len(figure.data) == 3
+    assert figure.data[0].name == "Rollout pose axes"
+    assert figure.layout.scene.aspectmode == "data"
+    assert figure.layout.scene.xaxis.title.text == "X / target distance"
+    assert SnippetPlotBuilder.add_frame_axes_to_fig(go.Figure(), centers, axes).data

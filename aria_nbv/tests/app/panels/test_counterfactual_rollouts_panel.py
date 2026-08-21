@@ -709,6 +709,15 @@ def test_candidate_geometry_diagnostics_include_root_relative_3d_view(monkeypatc
     )
 
     assert any(trace.type == "scatter3d" for figure in captured for trace in figure.data)
+    ground_plane = next(figure for figure in captured if any(trace.type == "scatter" for trace in figure.data))
+    three_dimensional = next(figure for figure in captured if any(trace.type == "scatter3d" for trace in figure.data))
+    ground_plane_points = sorted(
+        (float(x), float(y)) for trace in ground_plane.data for x, y in zip(trace.x, trace.y, strict=True)
+    )
+    three_dimensional_x = sorted(float(x) for trace in three_dimensional.data for x in trace.x)
+    assert ground_plane_points == [(0.05, 0.15), (0.1, 0.2)]
+    assert three_dimensional_x == [0.05, 0.1]
+    assert three_dimensional.layout.scene.xaxis.title.text == "Root-relative X / initial target distance"
 
 
 def test_root_target_pose_anchors_overlay_markers_and_orientation_triads() -> None:
@@ -739,7 +748,7 @@ def test_root_target_pose_anchors_overlay_markers_and_orientation_triads() -> No
 
     candidate_generation._add_root_target_pose_anchors(figure, anchors)
 
-    assert {trace.name for trace in figure.data} == {
+    assert {trace.name for trace in figure.data if trace.name is not None} == {
         "Rollout root (all at origin)",
         "Observed target pose origin",
         "Root pose axes (RGB)",

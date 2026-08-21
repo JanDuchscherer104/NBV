@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS
+from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
 from .session import _cached_projection, _cached_store_bundle
@@ -935,48 +936,24 @@ def _add_root_target_pose_anchors(fig: go.Figure, anchors: pd.DataFrame) -> None
             hovertemplate="rollout=%{customdata[0]}<br>target=%{customdata[1]}<br>distance = 1.0<extra></extra>",
         )
     )
-    for prefix, label, origin_columns in (
-        (
-            "root",
-            "Root pose axes",
-            ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m"),
-        ),
-        (
-            "target",
-            "Target pose axes",
-            (
-                "target_relative_x_target_distance",
-                "target_relative_y_target_distance",
-                "target_relative_z_target_distance",
-            ),
-        ),
+    root_centers = np.zeros((len(roots), 3), dtype=float)
+    target_centers = roots.loc[
+        :,
+        [
+            "target_relative_x_target_distance",
+            "target_relative_y_target_distance",
+            "target_relative_z_target_distance",
+        ],
+    ].to_numpy(dtype=float)
+    for prefix, label, centers in (
+        ("root", "Root pose axes (RGB)", root_centers),
+        ("target", "Target pose axes (RGB)", target_centers),
     ):
-        for axis_name, color in (("x", "#E74C3C"), ("y", "#2ECC71"), ("z", "#3498DB")):
-            x_values: list[float | None] = []
-            y_values: list[float | None] = []
-            z_values: list[float | None] = []
-            for anchor in roots.to_dict("records"):
-                origin = np.asarray([anchor[column] for column in origin_columns], dtype=np.float64)
-                if prefix == "root":
-                    origin = np.zeros(3, dtype=np.float64)
-                direction = np.asarray(anchor[f"{prefix}_axis_{axis_name}"], dtype=np.float64)
-                endpoint = origin + 0.12 * direction
-                x_values.extend((float(origin[0]), float(endpoint[0]), None))
-                y_values.extend((float(origin[1]), float(endpoint[1]), None))
-                z_values.extend((float(origin[2]), float(endpoint[2]), None))
-            fig.add_trace(
-                go.Scatter3d(
-                    x=x_values,
-                    y=y_values,
-                    z=z_values,
-                    mode="lines",
-                    name=f"{label} (RGB)",
-                    legendgroup=label,
-                    showlegend=axis_name == "x",
-                    line={"color": color, "width": 4},
-                    hoverinfo="skip",
-                )
-            )
+        axes = np.stack(
+            [np.asarray(roots[f"{prefix}_axis_{axis}"].tolist(), dtype=float) for axis in ("x", "y", "z")],
+            axis=1,
+        )
+        add_pose_axes_to_figure(fig, centers, axes, title=label, scale=0.12, line_width=4)
 
 
 def _render_candidate_geometry_diagnostics(
@@ -1120,6 +1097,8 @@ def _render_candidate_geometry_diagnostics(
                 title="Candidate centers relative to each rollout root (ground plane; target distance normalized)",
             )
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            fig.update_xaxes(title="Root-relative X / initial target distance")
+            fig.update_yaxes(title="Root-relative Y / initial target distance")
             fig.update_traces(marker={"size": 4, "opacity": 0.8})
             _render_plot(
                 fig,
@@ -1201,7 +1180,14 @@ def _render_candidate_geometry_diagnostics(
                     ],
                     title="Candidate centers relative to each rollout root (3D; target distance normalized)",
                 )
-                fig.update_layout(scene={"aspectmode": "data"})
+                configure_3d_scene(
+                    fig,
+                    axis_titles=(
+                        "Root-relative X / initial target distance",
+                        "Root-relative Y / initial target distance",
+                        "Root-relative Z / initial target distance",
+                    ),
+                )
                 fig.update_traces(marker={"size": 4, "opacity": 0.8})
                 _add_root_target_pose_anchors(fig, anchors if anchors is not None else pd.DataFrame())
                 _render_plot(
