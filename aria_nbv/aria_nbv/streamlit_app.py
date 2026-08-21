@@ -22,7 +22,7 @@ __all__ = ["NbvStreamlitApp", "NbvStreamlitAppConfig", "main", "streamlit_entry"
 
 _FILE_WATCHER_ENV = "STREAMLIT_SERVER_FILE_WATCHER_TYPE"
 _FILE_WATCHER_FLAG = "--server.fileWatcherType"
-_DEFAULT_FILE_WATCHER_TYPE = "none"
+_DEFAULT_FILE_WATCHER_TYPE = "auto"
 
 
 def main() -> None:  # pragma: no cover - Streamlit runner
@@ -72,10 +72,10 @@ def _build_streamlit_argv(app_path: Path, forwarded_args: Sequence[str]) -> list
 def streamlit_entry() -> None:  # pragma: no cover - console script
     """Launch via `nbv-st` console entry.
 
-    The wrapper disables Streamlit's watchdog watcher by default because the
-    ARIA-NBV package imports enough source directories to exhaust low inotify
-    limits. Set ``STREAMLIT_SERVER_FILE_WATCHER_TYPE`` or pass
-    ``--server.fileWatcherType`` before ``--`` to override this default.
+    The wrapper uses Streamlit's ``auto`` watcher by default: watchdog when it
+    is available, otherwise polling. Set ``STREAMLIT_SERVER_FILE_WATCHER_TYPE``
+    or pass ``--server.fileWatcherType`` before ``--`` to force ``poll`` or
+    disable watching for constrained long-running sessions.
     """
 
     from streamlit.web.cli import main as st_main
