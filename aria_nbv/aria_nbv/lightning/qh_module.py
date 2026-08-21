@@ -113,6 +113,8 @@ class QhLightningModule(pl.LightningModule):
 
     def __init__(self, config: QhLightningModuleConfig, *, scorer: nn.Module) -> None:
         super().__init__()
+        if config.selected_observation_protocol == "cf_gt" and config.experiment_profile is None:
+            raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
         if config.experiment_profile is not None:
             validate_experiment_profile(
                 config.experiment_profile,

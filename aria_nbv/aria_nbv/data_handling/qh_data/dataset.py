@@ -78,6 +78,8 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
             the configured actor manifest, split, and source rows.
         """
 
+        if self.selected_observation_protocol == "cf_gt" and self.experiment_profile is None:
+            raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
         if self.experiment_profile is not None:
             validate_experiment_profile(
                 self.experiment_profile,
@@ -151,6 +153,8 @@ class QhDataset(Dataset[QhChain]):
             )
         self.root_evl_profile = root_evl_profile
         self.selected_observation_protocol = selected_observation_protocol
+        if selected_observation_protocol == "cf_gt" and experiment_profile is None:
+            raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
         if experiment_profile is not None:
             validate_experiment_profile(
                 experiment_profile,
