@@ -751,20 +751,19 @@ def _read_selected_depth(
         raise ValueError("Q_H CF-GT depth requires the recorded Pytorch3D mesh renderer provenance.")
     selected = root["selected_depth"]
     step_ids = np.asarray(q_h["state_step_row_id"][rows], dtype=np.int64)
-    selected_ids = np.asarray(selected["step_row_id"], dtype=np.int64)
-    positions = np.searchsorted(selected_ids, step_ids)
-    if np.any(positions >= selected_ids.size) or not np.array_equal(selected_ids[positions], step_ids):
+    selected_ids = np.asarray(selected["step_row_id"][rows], dtype=np.int64)
+    if not np.array_equal(selected_ids, step_ids):
         raise ValueError("Q_H selected-depth rows do not align exactly with realized state rows.")
-    selected_candidate = np.asarray(selected["candidate_row_id"][positions], dtype=np.int64)
+    selected_candidate = np.asarray(selected["candidate_row_id"][rows], dtype=np.int64)
     expected_candidate = np.asarray(root["steps/selected_candidate_row_id"][rows], dtype=np.int64)
     if not np.array_equal(selected_candidate, expected_candidate):
         raise ValueError("Q_H selected-depth candidate rows do not align with selected rollout actions.")
     return (
-        _readonly(np.asarray(selected["depth_m"][positions], dtype=np.float16)),
-        _readonly(np.asarray(selected["valid_mask"][positions], dtype=np.bool_)),
-        _readonly(np.asarray(selected["focal_px"][positions], dtype=np.float32)),
-        _readonly(np.asarray(selected["principal_point_px"][positions], dtype=np.float32)),
-        _readonly(np.asarray(selected["image_size_hw"][positions], dtype=np.int64)),
+        _readonly(np.asarray(selected["depth_m"][rows], dtype=np.float16)),
+        _readonly(np.asarray(selected["valid_mask"][rows], dtype=np.bool_)),
+        _readonly(np.asarray(selected["focal_px"][rows], dtype=np.float32)),
+        _readonly(np.asarray(selected["principal_point_px"][rows], dtype=np.float32)),
+        _readonly(np.asarray(selected["image_size_hw"][rows], dtype=np.int64)),
         str(renderer),
     )
 

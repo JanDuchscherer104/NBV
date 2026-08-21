@@ -434,8 +434,7 @@ class VinOfflineStoreReader:
         represented as ``None`` by :class:`EvlBackboneOutput`.
         """
 
-        materialized = getattr(self.manifest, "materialized_blocks", None)
-        if materialized is None or not bool(getattr(materialized, "backbone", False)):
+        if not self.manifest.materialized_blocks.backbone:
             return None
         shard = self._shards.get(record.shard_id)
         if shard is None:

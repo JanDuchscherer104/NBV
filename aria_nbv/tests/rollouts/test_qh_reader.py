@@ -698,7 +698,7 @@ def test_reader_rejects_broken_canonical_chain(tmp_path: Path, array_path: str, 
 
 
 def test_reader_uses_bounded_payload_slices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),))
+    reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),), include_selected_depth=True)
     reads: list[tuple[str, object]] = []
     original = zarr.Array.__getitem__
 
@@ -710,7 +710,9 @@ def test_reader_uses_bounded_payload_slices(tmp_path: Path, monkeypatch: pytest.
     chain = reader[0]
 
     assert len(chain.candidate_pose_relative_root) == 2
-    payload_reads = [(path, selection) for path, selection in reads if path.startswith(("q_h/", "candidates/"))]
+    payload_reads = [
+        (path, selection) for path, selection in reads if path.startswith(("q_h/", "candidates/", "selected_depth/"))
+    ]
     assert payload_reads
     assert all(selection != slice(None) for _, selection in payload_reads)
 
