@@ -24,6 +24,7 @@ from aria_nbv.data_handling.qh_data import (
     collate_qh_chains,
 )
 from aria_nbv.data_handling.qh_data.batching import _gather_candidates
+from aria_nbv.data_handling.qh_data.dataset import _require_named_profile_store
 from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
 from aria_nbv.data_handling.qh_data.views import (
     QhAudit,
@@ -646,6 +647,48 @@ def test_named_cf0_requires_root_evl_and_does_not_load_selected_depth(tmp_path: 
     ).setup_target()
     assert captured["include_selected_depth"] is False
     assert result["experiment_profile"] == "qh_cf0_v1"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        ("x_m", "renamed", "m"),
+        ("inv_dist_std", "m", "m"),
+        ("x_m", "float64", "m"),
+    ],
+)
+def test_named_profile_admission_rejects_point_schema_mutations(mutation: tuple[str, str, str]) -> None:
+    schema = [
+        {"name": "x_m", "dtype": "float32", "unit": "m", "version": "vin_points_v1"},
+        {"name": "y_m", "dtype": "float32", "unit": "m", "version": "vin_points_v1"},
+        {"name": "z_m", "dtype": "float32", "unit": "m", "version": "vin_points_v1"},
+        {"name": "inv_dist_std", "dtype": "float32", "unit": "m^-1", "version": "vin_points_v1"},
+    ]
+    field, value, unit = mutation
+    schema[next(index for index, item in enumerate(schema) if item["name"] == field)] = {
+        "name": value if value in {"renamed", "m"} else field,
+        "dtype": value if value == "float64" else "float32",
+        "unit": unit,
+        "version": "vin_points_v1",
+    }
+    manifest = SimpleNamespace(
+        version=9,
+        vin={
+            "include_obs_count": False,
+            "point_feature_schema": schema,
+            "point_feature_schema_hash": stable_msgspec_hash(schema),
+            "backbone_block_signature": [],
+        },
+        shards=[],
+    )
+    with pytest.raises(ValueError, match="canonical|semantics|units"):
+        _require_named_profile_store(SimpleNamespace(manifest=manifest))
+
+
+def test_named_profile_rejects_v8_with_rebuild_guidance() -> None:
+    manifest = SimpleNamespace(version=8, vin={}, shards=[])
+    with pytest.raises(ValueError, match="version 9|Rebuild"):
+        _require_named_profile_store(SimpleNamespace(manifest=manifest))
 
 
 def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(

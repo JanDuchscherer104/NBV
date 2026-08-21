@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, SequentialSampler
 import aria_nbv.lightning.qh_datamodule as qh_datamodule
 from aria_nbv.data_handling.qh_data.views import QhActorStateContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
+from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 _CONTRACT = QhDataContract(
     schema_version="qh-v1",
@@ -127,5 +128,6 @@ def test_datamodule_requires_exact_named_experiment_profile() -> None:
     qh = _StructuralDataset("train", actor_state_contract=actor)
     data = qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cf0_v1")  # type: ignore[arg-type]
     assert data.experiment_profile == "qh_cf0_v1"
+    assert data.actor_state_contract_hash == stable_msgspec_hash(actor)
     with pytest.raises(ValueError, match="experiment profile"):
         qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cfplus_gt_depth_v1")  # type: ignore[arg-type]

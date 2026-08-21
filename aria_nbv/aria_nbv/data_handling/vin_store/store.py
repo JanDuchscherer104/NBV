@@ -35,7 +35,7 @@ from .format import (
 )
 from .views import VinSnippetView
 
-OFFLINE_DATASET_VERSION = 8
+OFFLINE_DATASET_VERSION = 9
 """Version of the immutable VIN offline dataset format."""
 
 _ACTOR_SNIPPET_BLOCKS = (

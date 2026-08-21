@@ -22,6 +22,7 @@ from aria_nbv.data_handling.qh_data import (
 from aria_nbv.data_handling.qh_data.views import QhActorStateContract
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
+from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from tests.data_handling.test_qh import _chain
 
 
@@ -132,6 +133,16 @@ def test_named_cfplus_allows_explicit_privileged_module() -> None:
         scorer=_TableScorer(),
     )
     assert module.config.experiment_profile == "qh_cfplus_gt_depth_v1"
+
+
+def test_module_rejects_actor_contract_hash_mismatch_before_training() -> None:
+    module = QhLightningModule(
+        QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash="expected"),
+        scorer=_TableScorer(),
+    )
+    with pytest.raises(ValueError, match="actor-state contract hashes"):
+        module._validate_datamodule_contract(type("Data", (), {"actor_state_contract_hash": "actual"})())
+    assert stable_msgspec_hash(_ACTOR_CONTRACT) != "expected"
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), "inf"])

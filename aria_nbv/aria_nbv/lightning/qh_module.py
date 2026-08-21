@@ -55,6 +55,9 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
     privileged: bool = False
     """Allow the CF+ upper-bound role; deployable modules must leave this false."""
 
+    actor_state_contract_hash: str | None = None
+    """Expected stable hash of the admitted DataModule actor-state contract."""
+
     @property
     def target_type(self) -> type["QhLightningModule"]:
         """Return the runtime module type used by config-as-factory setup."""
@@ -181,11 +184,20 @@ class QhLightningModule(pl.LightningModule):
         for scheduler in self.trainer.lr_scheduler_configs:
             if scheduler.interval != "step" or scheduler.reduce_on_plateau:
                 raise ValueError("Q_H supports only non-plateau per-step learning-rate schedulers.")
-        data_module = self.trainer.datamodule
+        self._validate_datamodule_contract(self.trainer.datamodule)
+
+    def _validate_datamodule_contract(self, data_module: object) -> None:
+        """Reject DataModule profile/hash drift before the first training batch."""
+
         if self.config.experiment_profile is not None and getattr(data_module, "experiment_profile", None) != (
             self.config.experiment_profile
         ):
             raise ValueError("Q_H module and DataModule experiment profiles must match exactly.")
+        if (
+            self.config.actor_state_contract_hash is not None
+            and getattr(data_module, "actor_state_contract_hash", None) != self.config.actor_state_contract_hash
+        ):
+            raise ValueError("Q_H module and DataModule actor-state contract hashes must match exactly.")
 
     def training_step(self, batch: QhBatch, batch_idx: int) -> Tensor | None:
         """Execute one globally admitted optimizer transaction or an exact no-op."""

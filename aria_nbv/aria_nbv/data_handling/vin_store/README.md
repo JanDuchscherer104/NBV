@@ -34,8 +34,16 @@ Inventory generated: `2026-07-10T16:19:49.706440+00:00`
 
 `VinSnippetView` includes the persisted `t_world_snippet` (`PoseTW[1, 12]`)
 world-from-snippet gauge alongside the historical `t_world_rig` trajectory.
-VIN offline format version 8 requires the corresponding `vin.t_world_snippet`
+VIN offline format version 9 requires the corresponding `vin.t_world_snippet`
 numeric shard block; version-7 or incomplete stores must be rebuilt.
+
+Version 9 compact-EVL rows contain exactly `backbone.t_world_voxel`,
+`backbone.voxel_extent`, `backbone.occ_pr`, `backbone.occ_input`,
+`backbone.free_input`, `backbone.counts`, `backbone.cent_pr`, and
+`backbone.pts_world` for every selected row. Present all-zero tensors remain
+valid when their dtype and canonical row shape match. The manifest also hashes
+the ordered point schema (`x_m`, `y_m`, `z_m`, `inv_dist_std`, and optional
+`observation_count`) with units and semantic version.
 
 ## Symbol Ownership Matrix
 

@@ -479,7 +479,16 @@ def test_flush_vin_offline_payloads_normalizes_numpy_scalars(tmp_path: Path) -> 
         include_candidate_pcs=False,
         include_backbone=True,
         include_diagnostic_payloads=True,
-        backbone_numeric_keep_fields={"t_world_voxel", "voxel_extent", "occ_pr", "counts"},
+        backbone_numeric_keep_fields={
+            "t_world_voxel",
+            "voxel_extent",
+            "occ_pr",
+            "occ_input",
+            "free_input",
+            "counts",
+            "cent_pr",
+            "pts_world",
+        },
         backbone_payload_keep_fields={"obb_pred_sem_id_to_name"},
         sample_key="sample-0",
     )
@@ -558,6 +567,42 @@ def test_flush_preserves_present_all_zero_backbone_block(tmp_path: Path) -> None
     )
 
     assert "backbone.occ_pr" in shard_spec.blocks  # noqa: S101
+
+
+@pytest.mark.parametrize("mutation", ["dtype", "shape", "all_float64", "counts_dtype"])
+def test_flush_rejects_heterogeneous_compact_evl_dtype_or_row_shape(tmp_path: Path, mutation: str) -> None:
+    rows = [
+        prepare_vin_offline_sample(
+            scene_id=f"scene-{index}",
+            snippet_id=f"snippet-{index:03d}",
+            vin_snippet=_make_vin_snippet(offset=float(index)),
+            candidates=None,
+            depths=_make_stub_depths(2, offset=float(index)),
+            rri=_make_stub_rri(2),
+            candidate_pcs=None,
+            backbone_out=_make_stub_backbone(),
+            max_candidates=4,
+            include_depths=True,
+            include_candidate_pcs=False,
+            include_backbone=True,
+            sample_key=f"sample-{index}",
+        )
+        for index in range(2)
+    ]
+    block = "backbone.occ_pr"
+    value = rows[1].numeric_blocks[block]
+    if mutation == "all_float64":
+        for name in rows[1].numeric_blocks:
+            if name.startswith("backbone."):
+                rows[1].numeric_blocks[name] = rows[1].numeric_blocks[name].astype(np.float64)
+    elif mutation == "counts_dtype":
+        rows[1].numeric_blocks["backbone.counts"] = rows[1].numeric_blocks["backbone.counts"].astype(np.float32)
+    else:
+        rows[1].numeric_blocks[block] = (
+            value.astype(np.float64) if mutation == "dtype" else np.concatenate([value, value], axis=0)
+        )
+    with pytest.raises(ValueError, match="canonical dtype|heterogeneous canonical dtype/row shape"):
+        flush_prepared_samples_to_shard(shard_index=0, shard_dir=tmp_path / "shard-000000", rows=rows)
 
 
 def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_path: Path) -> None:
@@ -1403,7 +1448,7 @@ def test_vin_offline_manifest_omits_counterfactual_placeholders(tmp_path: Path) 
     store_cfg = _write_test_store(tmp_path)
     manifest_payload = json.loads(store_cfg.manifest_path.read_text(encoding="utf-8"))
 
-    assert OFFLINE_DATASET_VERSION == 8  # noqa: S101
+    assert OFFLINE_DATASET_VERSION == 9  # noqa: S101
     assert "counterfactuals" not in manifest_payload  # noqa: S101
     assert "counterfactuals" not in manifest_payload["materialized_blocks"]  # noqa: S101
 

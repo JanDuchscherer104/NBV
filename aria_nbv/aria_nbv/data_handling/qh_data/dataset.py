@@ -20,7 +20,8 @@ from ...utils import Stage, TargetConfig
 from ...utils.fingerprints import stable_msgspec_hash
 from ..identifiers import compact_ase_atek_sample_id
 from ..vin_store.format import VinOfflineIndexRecord
-from ..vin_store.store import VinOfflineStoreConfig, VinOfflineStoreReader
+from ..vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
+from ..vin_store.writer import REQUIRED_COMPACT_EVL_NUMERIC_FIELDS
 from .materialization import _audit_for, _evl_block_signature, _read_static_context, _tensor_chain
 from .views import (
     QhActorStateContract,
@@ -158,6 +159,8 @@ class QhDataset(Dataset[QhChain]):
             )
         self.experiment_profile = experiment_profile
         self.include_audit = include_audit
+        if experiment_profile is not None:
+            _require_named_profile_store(actor_reader)
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
         self._actor_state_contract = QhActorStateContract(
             root_evl_profile=root_evl_profile,
@@ -328,3 +331,42 @@ class QhDataset(Dataset[QhChain]):
         if actual != expected:
             raise ValueError(f"VIN source identity does not match rollout chain. {self._REBUILD_GUIDANCE}")
         return record
+
+
+def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> None:
+    """Require version-9 EVL and semantic point evidence for named profiles."""
+
+    manifest = actor_reader.manifest
+    if manifest.version != OFFLINE_DATASET_VERSION:
+        raise ValueError(
+            "Named Q_H profiles require VIN offline dataset version 9 with compact EVL semantics; "
+            f"found version {manifest.version}. Rebuild the VIN offline store."
+        )
+    vin = manifest.vin
+    schema = vin.get("point_feature_schema")
+    schema_hash = vin.get("point_feature_schema_hash")
+    if not isinstance(schema, list) or schema_hash != stable_msgspec_hash(schema):
+        raise ValueError("Named Q_H profiles require a hashed ordered VIN point-feature schema; rebuild the store.")
+    expected_names = ["x_m", "y_m", "z_m", "inv_dist_std"]
+    if bool(vin.get("include_obs_count")):
+        expected_names.append("observation_count")
+    if [field.get("name") if isinstance(field, dict) else None for field in schema] != expected_names:
+        raise ValueError("Named Q_H profiles require the canonical ordered point-feature schema; rebuild the store.")
+    expected_units = {"x_m": "m", "y_m": "m", "z_m": "m", "inv_dist_std": "m^-1", "observation_count": "count"}
+    for field in schema:
+        if not isinstance(field, dict) or set(field) != {"name", "dtype", "unit", "version"}:
+            raise ValueError("Named Q_H profiles require complete point-feature schema fields; rebuild the store.")
+        if field["dtype"] != "float32" or field["version"] != "vin_points_v1":
+            raise ValueError("Named Q_H profiles require versioned float32 point-feature semantics; rebuild the store.")
+        if field["unit"] != expected_units[field["name"]]:
+            raise ValueError("Named Q_H profiles require canonical point-feature units; rebuild the store.")
+    signature = vin.get("backbone_block_signature")
+    expected_names = sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS)
+    if not isinstance(signature, list) or [item.get("name") for item in signature] != expected_names:
+        raise ValueError("Named Q_H profiles require the exact eight compact EVL blocks; rebuild the store.")
+    for shard in manifest.shards:
+        names = sorted(name for name in shard.blocks if name.startswith("backbone."))
+        if names != expected_names:
+            raise ValueError(
+                f"Named Q_H profile shard {shard.shard_id!r} lacks homogeneous compact EVL blocks; rebuild the store."
+            )
