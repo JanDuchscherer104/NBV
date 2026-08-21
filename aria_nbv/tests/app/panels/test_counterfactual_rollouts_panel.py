@@ -694,6 +694,9 @@ def test_candidate_geometry_diagnostics_include_root_relative_3d_view(monkeypatc
             "root_relative_x_m": [0.1, 0.2],
             "root_relative_y_m": [0.3, 0.4],
             "root_relative_z_m": [0.5, 0.6],
+            "root_relative_x_target_distance": [0.05, 0.1],
+            "root_relative_y_target_distance": [0.15, 0.2],
+            "root_relative_z_target_distance": [0.25, 0.3],
             "position": ["forward_local", "forward_local"],
             "selected": [False, True],
         }
@@ -706,6 +709,65 @@ def test_candidate_geometry_diagnostics_include_root_relative_3d_view(monkeypatc
     )
 
     assert any(trace.type == "scatter3d" for figure in captured for trace in figure.data)
+
+
+def test_root_target_pose_anchors_overlay_markers_and_orientation_triads() -> None:
+    """The 3D plot makes its root and target pose context inspectable."""
+
+    figure = candidate_generation.go.Figure()
+    anchors = pd.DataFrame(
+        {
+            "rollout_row_id": [7],
+            "target_id": ["target-7"],
+            "root_relative_x_m": [0.0],
+            "root_relative_y_m": [0.0],
+            "root_relative_z_m": [0.0],
+            "target_relative_x_m": [1.0],
+            "target_relative_y_m": [2.0],
+            "target_relative_z_m": [3.0],
+            "target_relative_x_target_distance": [1.0 / (14.0**0.5)],
+            "target_relative_y_target_distance": [2.0 / (14.0**0.5)],
+            "target_relative_z_target_distance": [3.0 / (14.0**0.5)],
+            "root_axis_x": [(1.0, 0.0, 0.0)],
+            "root_axis_y": [(0.0, 1.0, 0.0)],
+            "root_axis_z": [(0.0, 0.0, 1.0)],
+            "target_axis_x": [(1.0, 0.0, 0.0)],
+            "target_axis_y": [(0.0, 1.0, 0.0)],
+            "target_axis_z": [(0.0, 0.0, 1.0)],
+        }
+    )
+
+    candidate_generation._add_root_target_pose_anchors(figure, anchors)
+
+    assert {trace.name for trace in figure.data} == {
+        "Rollout root (all at origin)",
+        "Observed target pose origin",
+        "Root pose axes (RGB)",
+        "Target pose axes (RGB)",
+    }
+    target_trace = next(trace for trace in figure.data if trace.name == "Observed target pose origin")
+    assert np.linalg.norm([target_trace.x[0], target_trace.y[0], target_trace.z[0]]) == pytest.approx(1.0)
+
+
+def test_candidate_geometry_stale_projection_is_withheld_instead_of_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An old cached geometry row shape must prompt a refresh, not raise in Plotly."""
+
+    warnings: list[str] = []
+    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(candidate_generation.st, "warning", warnings.append)
+    monkeypatch.setattr(candidate_generation.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(candidate_generation, "_render_plot", lambda *_args, **_kwargs: None)
+
+    candidate_generation._render_candidate_geometry_diagnostics(
+        pd.DataFrame({"motion_step_length_m": [0.2]}),
+        pd.DataFrame({"root_relative_x_m": [0.1], "root_relative_y_m": [0.2]}),
+        total_candidates=1,
+    )
+
+    assert warnings and "cached projection predates" in warnings[0]
 
 
 def test_stored_rollouts_default_evidence_defers_selected_rank_flow(

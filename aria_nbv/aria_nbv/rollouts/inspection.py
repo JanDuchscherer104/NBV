@@ -2878,6 +2878,7 @@ def root_relative_candidate_rows(
         units and ``RIGHT_HAND_Z_UP`` as the frame convention.
     """
 
+    targets = {target.target_row_id: target for target in target_rows(reader)}
     rows: list[dict[str, object]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
@@ -2885,6 +2886,11 @@ def root_relative_candidate_rows(
         if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
         root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+        target = targets.get(rollout.target_row_id)
+        target_center = None if target is None else np.asarray(target.pose_world_object[9:12], dtype=np.float64)
+        target_distance = None if target_center is None else float(np.linalg.norm(target_center - root_center))
+        if target_distance is not None and (not np.isfinite(target_distance) or target_distance <= 0.0):
+            target_distance = None
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
@@ -2892,6 +2898,7 @@ def root_relative_candidate_rows(
                 if actor_valid_only and not bool(step.actor_action_mask[local]):
                     continue
                 relative = np.asarray(step.pose_world_cam[local, 9:12], dtype=np.float64) - root_center
+                normalized = None if target_distance is None else relative / target_distance
                 rows.append(
                     {
                         "candidate_row_id": int(candidate_row_id),
@@ -2910,10 +2917,76 @@ def root_relative_candidate_rows(
                         "root_relative_y_m": float(relative[1]),
                         "root_relative_z_m": float(relative[2]),
                         "root_distance_m": float(np.linalg.norm(relative)),
+                        "initial_target_distance_m": target_distance,
+                        "root_relative_x_target_distance": None if normalized is None else float(normalized[0]),
+                        "root_relative_y_target_distance": None if normalized is None else float(normalized[1]),
+                        "root_relative_z_target_distance": None if normalized is None else float(normalized[2]),
                         "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
                         "units": "m",
+                        "normalized_units": "initial root-to-target distance",
                     }
                 )
+    return rows
+
+
+def root_relative_rollout_anchor_rows(
+    reader: RolloutZarrStoreReader,
+    *,
+    rollout_row_ids: Iterable[int] | None = None,
+) -> list[dict[str, object]]:
+    """Return one root and observed-target pose anchor per requested rollout.
+
+    Anchors use the same root-centered ARIA world frame as
+    :func:`root_relative_candidate_rows`.  They make a candidate cloud's
+    local origin and its observed target auditable without exposing absolute
+    scene coordinates.
+    """
+
+    requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
+    targets = {target.target_row_id: target for target in target_rows(reader)}
+    rows: list[dict[str, object]] = []
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
+            continue
+        target = targets.get(rollout.target_row_id)
+        if target is None:
+            continue
+        root_pose = np.asarray(rollout.root_pose_world, dtype=np.float64).reshape(12)
+        target_pose = np.asarray(target.pose_world_object, dtype=np.float64).reshape(12)
+        root_center = root_pose[9:12]
+        target_relative = target_pose[9:12] - root_center
+        target_distance = float(np.linalg.norm(target_relative))
+        if not np.isfinite(target_distance) or target_distance <= 0.0:
+            continue
+        root_rotation = root_pose[:9].reshape(3, 3)
+        target_rotation = target_pose[:9].reshape(3, 3)
+        rows.append(
+            {
+                "rollout_row_id": rollout.rollout_row_id,
+                "target_row_id": target.target_row_id,
+                "target_id": target.target_id,
+                "root_relative_x_m": 0.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.0,
+                "target_relative_x_m": float(target_relative[0]),
+                "target_relative_y_m": float(target_relative[1]),
+                "target_relative_z_m": float(target_relative[2]),
+                "initial_target_distance_m": target_distance,
+                "target_relative_x_target_distance": float(target_relative[0] / target_distance),
+                "target_relative_y_target_distance": float(target_relative[1] / target_distance),
+                "target_relative_z_target_distance": float(target_relative[2] / target_distance),
+                "root_axis_x": tuple(float(value) for value in root_rotation[:, 0]),
+                "root_axis_y": tuple(float(value) for value in root_rotation[:, 1]),
+                "root_axis_z": tuple(float(value) for value in root_rotation[:, 2]),
+                "target_axis_x": tuple(float(value) for value in target_rotation[:, 0]),
+                "target_axis_y": tuple(float(value) for value in target_rotation[:, 1]),
+                "target_axis_z": tuple(float(value) for value in target_rotation[:, 2]),
+                "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                "units": "m",
+            }
+        )
     return rows
 
 
