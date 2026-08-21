@@ -83,7 +83,8 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
 
         self.assertIn("## Graphify And Context7 Plugin", root_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary)
-        self.assertIn("## Graphify Branch", context)
+        self.assertIn("## Branch Index", context)
+        self.assertNotIn("## Graphify Branch", context)
         self.assertIn(
             "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
             context,

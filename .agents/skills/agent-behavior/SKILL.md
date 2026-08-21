@@ -44,9 +44,9 @@ explicit.
  [`references/durable-capture.md`](references/durable-capture.md) and apply
   its exclusions for quoted material, markup tags, code, and tool output, plus
   its owner checks.
-- **Workpackage completion, Git, or external action:** Before staging, committing,
-  pushing, changing a pull request, publishing review comments, retargeting,
-  or releasing, read
+- **Workpackage completion, Git, or external action:** After completing a durable
+  workpackage, or before staging, committing, pushing, changing a pull request,
+  publishing review comments, retargeting, or releasing, read
   [`references/external-actions.md`](references/external-actions.md).
 - **Failure-first diagnosis:** For a bug, regression, suspicious metric, or
   failing check, read the failure-first section of
