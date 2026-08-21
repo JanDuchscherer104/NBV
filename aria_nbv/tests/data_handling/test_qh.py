@@ -668,6 +668,23 @@ def test_dataset_rejects_selected_observation_protocol_reader_mismatch() -> None
         )
 
 
+def test_dataset_rejects_unnamed_cf_gt_before_reader_materialization() -> None:
+    with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
+        QhDataset(  # type: ignore[arg-type]
+            rollout_reader=_RolloutReader(_source_ref(), include_selected_depth=True),
+            actor_reader=_ActorReader(),
+            selected_observation_protocol="cf_gt",
+        )
+
+
+def test_dataset_config_rejects_unnamed_cf_gt_before_reader_construction(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
+        QhDatasetConfig(
+            rollout_store_dirs=(tmp_path / "rollouts.zarr",),
+            selected_observation_protocol="cf_gt",
+        ).setup_target()
+
+
 def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -759,6 +776,23 @@ def test_named_profile_rejects_v8_with_rebuild_guidance() -> None:
     manifest = SimpleNamespace(version=8, vin={}, shards=[])
     with pytest.raises(ValueError, match="version 9|Rebuild"):
         _require_named_profile_store(SimpleNamespace(manifest=manifest))
+
+
+@pytest.mark.parametrize("mutation", ["dtype", "shape"])
+def test_named_profile_rejects_declared_evl_signature_drift(tmp_path: Path, mutation: str) -> None:
+    config = _write_test_store(tmp_path / "vin", include_backbone=True)
+    reader = VinOfflineStoreReader(config)
+    signature = _compact_evl_block_signature(reader.manifest.shards)
+    signature[0][mutation] = "float64" if mutation == "dtype" else [999]
+    reader.manifest.vin.update(
+        point_feature_schema=_point_feature_schema(include_obs_count=False),
+        point_feature_schema_hash=stable_msgspec_hash(_point_feature_schema(include_obs_count=False)),
+        include_inv_dist_std=True,
+        include_obs_count=False,
+        backbone_block_signature=signature,
+    )
+    with pytest.raises(ValueError, match="EVL|signature|shape|dtype"):
+        _require_named_profile_store(reader)
 
 
 def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(

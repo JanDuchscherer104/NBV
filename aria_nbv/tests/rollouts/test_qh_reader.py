@@ -681,6 +681,74 @@ def test_reader_materialization_preserves_n60_identity_across_packed_chains(
     assert transferred.keys[0].rollout_row_id != transferred.keys[1].rollout_row_id
 
 
+def test_writer_backed_n60_cfplus_identity_survives_depth_and_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A writer-produced selected-depth chain keeps candidate 59 factual identity."""
+
+    record = build_rollout_records(horizon=3, num_samples=60, seed=7)[0]
+    trajectory = record.evaluated.result.trajectories[0]
+    selected_shell_indices = (12, 59, 0)
+    for step_index, selected_shell_index in enumerate(selected_shell_indices):
+        step = trajectory.steps[step_index]
+        step.selected_shell_index = selected_shell_index
+        step.selected_valid_index = selected_shell_index
+        evidence = record.evaluated.step(0, step.step_index).evaluation.evidence  # type: ignore[union-attr]
+        evidence.selected_depth_m = torch.full((240, 240), float(step_index + 1), dtype=torch.float32)
+        evidence.selected_depth_valid_mask = torch.ones((240, 240), dtype=torch.bool)
+        evidence.selected_depth_focal_px = (100.0, 200.0)
+        evidence.selected_depth_principal_point_px = (4.0, 4.0)
+        evidence.selected_depth_image_size_hw = (240, 240)
+    store = write_rollout_zarr_store(
+        tmp_path / "n60-rich.zarr",
+        [record],
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+        selected_depth_enabled=True,
+    ).store_dir
+    root = zarr.open_group(store, mode="r")
+    q_h = root["q_h"]
+    selected = np.asarray(selected_shell_indices, dtype=np.int64)
+    assert np.array_equal(np.asarray(q_h["selected_candidate_index"]), selected)
+    selected_rows = np.asarray(q_h["td_selected_candidate_row_id"], dtype=np.int64)
+    assert RolloutZarrStoreReader(store).validate().ok
+    assert np.array_equal(np.asarray(root["steps/selected_candidate_row_id"]), selected_rows)
+    assert np.array_equal(np.asarray(root["selected_depth/candidate_row_id"]), selected_rows)
+    assert np.array_equal(np.asarray(root["q_h/td_selected_candidate_row_id"]), selected_rows)
+    source_candidate = np.asarray(root["candidates/pose_relative_root"])[selected_rows]
+    source_depth = np.asarray(root["selected_depth/depth_m"])
+    source_focal = np.asarray(root["selected_depth/focal_px"])
+    assert [float(source_depth[index, 0, 0]) for index in range(3)] == [1.0, 2.0, 3.0]
+    reader = QhRolloutReader((store,), include_selected_depth=True)
+    stored = reader[0]
+    snippet = VinSnippetView(
+        points_world=torch.zeros(2, 3),
+        lengths=torch.tensor([2]),
+        t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
+        t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
+    )
+    chain = _tensor_chain(stored, snippet, selected_observation_protocol="cf_gt")
+    expected_candidate = torch.from_numpy(source_candidate[1]).to(dtype=torch.float32)
+    expected_depth = torch.from_numpy(source_depth[1]).to(dtype=torch.float16)
+    expected_focal = torch.from_numpy(source_focal[1]).to(dtype=torch.float32)
+    expected_camera_pose = expected_candidate
+    assert torch.equal(chain.actor.candidate_pose_relative_root.tensor()[1, 59], expected_candidate)
+    assert torch.equal(chain.actor.selected_observation_prefix.depth_m[2, 1], expected_depth)  # type: ignore[union-attr]
+    assert torch.equal(chain.actor.selected_observation_prefix.camera.f[2, 1], expected_focal)  # type: ignore[union-attr]
+    assert torch.equal(chain.actor.history_pose_relative_root.tensor()[2, 1], expected_candidate)
+    batch = collate_qh_chains([chain])
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    transferred = batch.pin_memory().to("cpu")
+    prefix = transferred.actor.selected_observation_prefix
+    assert prefix is not None
+    assert torch.equal(transferred.actor.history_pose_relative_root.tensor()[0, 2, 1], expected_candidate)
+    assert torch.equal(prefix.depth_m[0, 2, 1], expected_depth)
+    assert torch.equal(prefix.camera.f[0, 2, 1], expected_focal)
+    assert torch.equal(prefix.camera_pose_relative_root.tensor()[0, 2, 1], expected_camera_pose)
+
+
 @pytest.mark.parametrize(
     "step_rollout_ids",
     (

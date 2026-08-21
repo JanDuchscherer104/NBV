@@ -137,6 +137,44 @@ def test_named_cfplus_allows_explicit_privileged_module() -> None:
     assert module.config.experiment_profile == "qh_cfplus_gt_depth_v1"
 
 
+@pytest.mark.parametrize("privileged", [False, True])
+def test_module_rejects_unnamed_cf_gt_before_scorer_construction(privileged: bool) -> None:
+    config = QhLightningModuleConfig(
+        lr_scheduler=None,
+        selected_observation_protocol="cf_gt",
+        privileged=privileged,
+    )
+    with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
+        QhLightningModule(config, scorer=_TableScorer())
+
+
+def test_named_cf0_requires_actor_state_contract_hash() -> None:
+    with pytest.raises(ValueError, match="actor_state_contract_hash"):
+        QhLightningModule(
+            QhLightningModuleConfig(
+                lr_scheduler=None,
+                experiment_profile="qh_cf0_v1",
+                root_evl_profile="evl_v1",
+            ),
+            scorer=_TableScorer(),
+        )
+
+
+def test_named_cfplus_requires_geometry_contract_hash() -> None:
+    with pytest.raises(ValueError, match="geometry_contract_hash"):
+        QhLightningModule(
+            QhLightningModuleConfig(
+                lr_scheduler=None,
+                experiment_profile="qh_cfplus_gt_depth_v1",
+                root_evl_profile="evl_v1",
+                selected_observation_protocol="cf_gt",
+                privileged=True,
+                actor_state_contract_hash="actor",
+            ),
+            scorer=_TableScorer(),
+        )
+
+
 def test_module_rejects_actor_contract_hash_mismatch_before_training() -> None:
     module = QhLightningModule(
         QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash="expected"),
