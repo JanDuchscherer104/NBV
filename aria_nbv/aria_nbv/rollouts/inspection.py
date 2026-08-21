@@ -954,7 +954,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 [],
             ).append(row)
         for key, grouped in sorted(groups.items()):
-            state_facets: dict[tuple[str, str], dict[str, object]] = {}
+            state_facets: dict[tuple[str, str, str], dict[str, object]] = {}
             for row in grouped:
                 state_key = (str(row["scene"]), str(row["rollout_row_id"]), str(row["step_row_id"]))
                 state_facets.setdefault(state_key, row)
