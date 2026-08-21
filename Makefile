@@ -268,7 +268,8 @@ check-agent-memory: _check_python ## 🗺️ Validate agent memory scaffolding a
 
 new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/memory/history/ (set TITLE='...')
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi
-	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)"
+	@if [ -z "$(CODEX_THREAD_ID)" ]; then echo "usage: make new-debrief TITLE='short title' CODEX_THREAD_ID='<thread-id>'" >&2; exit 2; fi
+	@$(PYTHON_INTERPRETER) scripts/new_debrief.py "$(TITLE)" --thread-id "$(CODEX_THREAD_ID)"
 
 install-git-hooks: ## 🪝 Symlink normal scripts/git_hooks/* into .git/hooks/
 	@HOOK_DIR="$$(git rev-parse --git-path hooks 2>/dev/null)"; \
