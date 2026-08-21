@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ARIA-NBV routing trial report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "loaded_guides",
+    "selected_skill",
+    "opened_references",
+    "tool_calls",
+    "exact_owner",
+    "handoff",
+    "selected_verification",
+    "outcome"
+  ],
+  "properties": {
+    "loaded_guides": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "selected_skill": {
+      "type": ["string", "null"]
+    },
+    "opened_references": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "exact_owner": {
+      "type": ["string", "null"]
+    },
+    "handoff": {
+      "type": ["string", "null"]
+    },
+    "selected_verification": {
+      "type": ["string", "null"]
+    },
+    "outcome": {
+      "type": "string"
+    }
+  }
+}
