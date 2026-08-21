@@ -13,7 +13,13 @@ from pydantic import ValidationError
 from torch import nn
 from torch.utils.data import Dataset
 
-from aria_nbv.data_handling.qh_data import QhActorTensors, QhBatch, QhChain, collate_qh_chains
+from aria_nbv.data_handling.qh_data import (
+    QhActorTensors,
+    QhBatch,
+    QhChain,
+    collate_qh_chains,
+)
+from aria_nbv.data_handling.qh_data.views import QhActorStateContract
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from tests.data_handling.test_qh import _chain
@@ -42,14 +48,22 @@ class _BadShapeScorer(nn.Module):
 
 
 _CONTRACT = QhDataContract("qh-v1", "v0", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
+_ACTOR_CONTRACT = QhActorStateContract("lean", "test-actor-manifest", ())
 
 
 class _ChainDataset(Dataset[QhChain]):
-    def __init__(self, chains: list[QhChain], *, scene: str = "train-scene") -> None:
+    def __init__(
+        self,
+        chains: list[QhChain],
+        *,
+        scene: str = "train-scene",
+        actor_state_contract: QhActorStateContract = _ACTOR_CONTRACT,
+    ) -> None:
         self.chains = chains
         self.scenes = frozenset({scene})
         self.max_horizon = max(chain.num_steps for chain in chains)
         self.contract = _CONTRACT
+        self.actor_state_contract = actor_state_contract
         self.provenance: dict[str, object] = {"scene": scene}
 
     def __len__(self) -> int:
