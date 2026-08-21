@@ -163,6 +163,8 @@ class GeometryFrame:
     target_axis_x: tuple[float, float, float]
     target_axis_y: tuple[float, float, float]
     target_axis_z: tuple[float, float, float]
+    rig_target_yaw_error_deg: float | None = None
+    target_elevation_deg: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +189,8 @@ class GeometryPoint:
     displacement_m: float
     normalization_distance_m: float
     initial_target_distance_m: float
+    normalized_radius: float = 0.0
+    target_facing_error_deg: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -3057,7 +3061,11 @@ def proposal_support_geometry(
                 )
             )
             for local, candidate_row_id in enumerate(step.candidate_row_ids.tolist()):
-                candidate_center = np.asarray(step.pose_world_cam[local, 9:12], dtype=np.float64)
+                candidate_pose = _geometry_pose(
+                    step.pose_world_cam[local],
+                    role=f"step {step.step_row_id} candidate {int(candidate_row_id)} pose",
+                )
+                candidate_center = candidate_pose[9:12]
                 displacement = candidate_center - reference_center
                 normalized = basis.T @ displacement / scale
                 points.append(
@@ -3080,6 +3088,8 @@ def proposal_support_geometry(
                         displacement_m=float(np.linalg.norm(displacement)),
                         normalization_distance_m=scale,
                         initial_target_distance_m=initial_scale,
+                        normalized_radius=float(np.linalg.norm(normalized)),
+                        target_facing_error_deg=_target_facing_error_deg(candidate_pose, target_center),
                     )
                 )
             reference_pose = selected_pose
@@ -3171,6 +3181,8 @@ def rollout_trajectory_geometry(
                 displacement_m=0.0,
                 normalization_distance_m=scale,
                 initial_target_distance_m=scale,
+                normalized_radius=0.0,
+                target_facing_error_deg=None,
             )
         )
         for path_order, step in enumerate(steps, start=1):
@@ -3199,6 +3211,8 @@ def rollout_trajectory_geometry(
                     displacement_m=float(np.linalg.norm(displacement)),
                     normalization_distance_m=scale,
                     initial_target_distance_m=scale,
+                    normalized_radius=float(np.linalg.norm(normalized)),
+                    target_facing_error_deg=_target_facing_error_deg(selected_pose, target_center),
                 )
             )
     return GeometryProjection("rollout_trajectory", tuple(points), tuple(frames), tuple(issues))
@@ -3240,6 +3254,31 @@ def _geometry_pose(pose: Any, *, role: str) -> np.ndarray:
 def _positive_distance(delta: np.ndarray) -> float | None:
     distance = float(np.linalg.norm(np.asarray(delta, dtype=np.float64)))
     return distance if np.isfinite(distance) and distance > _GEOMETRY_EPSILON else None
+
+
+def _target_facing_error_deg(pose: np.ndarray, target_center: np.ndarray) -> float | None:
+    """Return the unsigned 3D angle from LUF camera forward to the target."""
+
+    target_direction = np.asarray(target_center, dtype=np.float64) - pose[9:12]
+    target_distance = _positive_distance(target_direction)
+    if target_distance is None:
+        return None
+    forward = pose[:9].reshape(3, 3)[:, 2]
+    cosine = float(np.dot(forward, target_direction / target_distance))
+    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+
+
+def _horizontal_angle_deg(left: np.ndarray, right: np.ndarray) -> float | None:
+    """Return the unsigned angle between two horizontal directions."""
+
+    left_xy = np.asarray(left, dtype=np.float64).reshape(3)[:2]
+    right_xy = np.asarray(right, dtype=np.float64).reshape(3)[:2]
+    left_norm = float(np.linalg.norm(left_xy))
+    right_norm = float(np.linalg.norm(right_xy))
+    if min(left_norm, right_norm) <= _GEOMETRY_EPSILON:
+        return None
+    cosine = float(np.dot(left_xy / left_norm, right_xy / right_norm))
+    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
 
 
 def _proposal_basis(
@@ -3287,6 +3326,10 @@ def _geometry_frame(
 ) -> GeometryFrame:
     local_reference = basis.T @ reference_rotation
     local_target = basis.T @ target_rotation
+    target_delta_local = np.asarray(target_normalized, dtype=np.float64)
+    target_horizontal = float(np.linalg.norm(target_delta_local[:2]))
+    target_elevation = float(np.degrees(np.arctan2(target_delta_local[2], target_horizontal)))
+    rig_target_yaw_error = _horizontal_angle_deg(reference_rotation[:, 2], basis @ target_delta_local)
 
     def axis(rotation: np.ndarray, index: int) -> tuple[float, float, float]:
         return tuple(float(value) for value in rotation[:, index])
@@ -3311,6 +3354,8 @@ def _geometry_frame(
         target_axis_x=axis(local_target, 0),
         target_axis_y=axis(local_target, 1),
         target_axis_z=axis(local_target, 2),
+        rig_target_yaw_error_deg=rig_target_yaw_error,
+        target_elevation_deg=target_elevation,
     )
 
 

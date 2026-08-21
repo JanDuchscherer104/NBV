@@ -1617,6 +1617,13 @@ def test_proposal_support_geometry_uses_factual_expansion_pose_and_current_targe
     for frame in projection.frames:
         assert np.linalg.norm([frame.target_x, frame.target_y, frame.target_z]) == pytest.approx(1.0)
         assert frame.target_y == pytest.approx(0.0, abs=1e-7)
+        assert frame.rig_target_yaw_error_deg is None or 0.0 <= frame.rig_target_yaw_error_deg <= 180.0
+        assert frame.target_elevation_deg == pytest.approx(
+            np.degrees(np.arctan2(frame.target_z, np.hypot(frame.target_x, frame.target_y)))
+        )
+    for point in projection.points:
+        assert point.normalized_radius == pytest.approx(point.displacement_m / point.normalization_distance_m)
+        assert point.target_facing_error_deg is not None
     assert all(point.strategy != "unknown" for point in projection.points)
 
 
