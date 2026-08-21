@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import tempfile
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,23 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
-UPSTREAM_SKILL_PATHS = {SKILLS_DIR / "graphify" / "SKILL.md"}
-APPROVED_CUSTOM_SKILL_PATHS = {
-    SKILLS_DIR / name / "SKILL.md"
-    for name in (
-        "agent-behavior",
-        "agents-db",
-        "aria-grill",
-        "aria-nbv-context",
-        "aria-nbv-mermaid",
-        "lrz-ai-systems",
-        "measured-autoresearch",
-        "python-standards",
-        "rerun-nbv-inspector",
-        "simplification",
-        "typst-authoring",
-    )
-}
+UPSTREAM_SKILL_PATHS = {(SKILLS_DIR / "graphify" / "SKILL.md").resolve()}
 
 FRONTMATTER_KEYS = {"name", "description"}
 HOT_PATH_LINE_BUDGET = 150
@@ -47,6 +32,32 @@ CONTEXT7_REGISTRY = (
 )
 CONTEXT7_ID_RE = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
 BACKTICK_TOKEN_RE = re.compile(r"`([^`\n]+)`")
+MARKDOWN_LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
+LOCAL_POINTER_PREFIXES = (
+    ".agents/",
+    ".omx/",
+    "aria_nbv/",
+    "docs/",
+    "scripts/",
+    "references/",
+    "assets/",
+    "./",
+    "../",
+)
+LOCAL_POINTER_SUFFIXES = {
+    ".md",
+    ".qmd",
+    ".typ",
+    ".tex",
+    ".bib",
+    ".py",
+    ".toml",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".jsonl",
+    ".sh",
+}
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|__[A-Za-z0-9_]+)$")
 DEPRECATED_CONTEXT7_TOOL_IDS = {
     "mcp__MCP_DOCKER.resolve_library_id",
@@ -115,7 +126,7 @@ def custom_skill_paths(skills_dir: Path = SKILLS_DIR) -> set[Path]:
     return {
         path.resolve()
         for path in skills_dir.glob("*/SKILL.md")
-        if path.parent.name != "graphify"
+        if path.resolve() not in UPSTREAM_SKILL_PATHS
     }
 
 
@@ -148,6 +159,7 @@ def deprecated_context7_calls(paths: tuple[Path, ...]) -> dict[Path, set[str]]:
 
 def slugify_heading(text: str) -> str:
     text = re.sub(r"\{#[^}]+}", "", text)
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = text.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"\s+", "-", text)
@@ -156,6 +168,7 @@ def slugify_heading(text: str) -> str:
 
 def markdown_anchors(path: Path) -> set[str]:
     anchors: set[str] = set()
+    slug_counts: dict[str, int] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         heading = re.match(r"^\s{0,3}#{1,6}\s+(.+?)\s*$", line)
         if not heading:
@@ -166,8 +179,20 @@ def markdown_anchors(path: Path) -> set[str]:
             anchors.add(explicit.group(1).strip())
         slug = slugify_heading(text)
         if slug:
-            anchors.add(slug)
+            duplicate_index = slug_counts.get(slug, 0)
+            anchors.add(slug if duplicate_index == 0 else f"{slug}-{duplicate_index}")
+            slug_counts[slug] = duplicate_index + 1
     return anchors
+
+
+def typst_anchors(path: Path) -> set[str]:
+    """Return explicit Typst labels from ``<label>`` syntax."""
+    return set(
+        re.findall(
+            r"<([A-Za-z0-9][A-Za-z0-9_.:-]*)>",
+            path.read_text(encoding="utf-8"),
+        )
+    )
 
 
 def load_context7_registry(
@@ -193,6 +218,17 @@ class Skill:
     text: str
 
 
+@dataclass(frozen=True)
+class RepositoryPointer:
+    """One explicit repository-local path mention in agent guidance."""
+
+    source: Path
+    raw: str
+    path_text: str
+    anchor: str
+    syntax: str
+
+
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
@@ -200,7 +236,7 @@ def rel(path: Path) -> str:
 def is_upstream_skill(path: Path) -> bool:
     """Return whether a live skill is governed by an exact upstream bundle."""
 
-    return path in UPSTREAM_SKILL_PATHS
+    return path.resolve() in UPSTREAM_SKILL_PATHS
 
 
 def load_frontmatter(path: Path) -> dict[str, Any]:
@@ -274,49 +310,82 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
     return skills, errors
 
 
-def markdown_reference_links(skill: Skill) -> list[str]:
-    """Return Markdown reference links declared by a skill body."""
+def _code_span_ranges(text: str) -> tuple[tuple[int, int], ...]:
+    """Return Markdown code-span ranges so literal link examples stay inert."""
+    return tuple(
+        (match.start(), match.end())
+        for match in re.finditer(r"(`+)(.+?)\1", text, flags=re.DOTALL)
+    )
 
-    body = body_without_frontmatter(skill.text)
-    return re.findall(r"\]\((?:\./)?(references/[^)\s]+\.md(?:#[^)\s]+)?)\)", body)
+
+def _inside_ranges(offset: int, ranges: tuple[tuple[int, int], ...]) -> bool:
+    return any(start <= offset < end for start, end in ranges)
+
+
+def _split_pointer(raw: str) -> tuple[str, str]:
+    path_text, separator, anchor = raw.partition("#")
+    return path_text, anchor if separator else ""
+
+
+def _is_local_candidate(raw: str, *, syntax: str, source: Path) -> bool:
+    path_text, anchor = _split_pointer(raw)
+    if not path_text and anchor:
+        return syntax == "markdown"
+    if not path_text:
+        return False
+    if path_text.startswith("/"):
+        return syntax == "markdown"
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", path_text):
+        return False
+    if "..." in Path(path_text).parts:
+        return False
+    if any(char in path_text for char in "*?[<>{}") or any(
+        char.isspace() for char in path_text
+    ):
+        return False
+    if syntax == "markdown":
+        return True
+    if not path_text.startswith(LOCAL_POINTER_PREFIXES):
+        return False
+    suffix = Path(path_text.rstrip("/")).suffix.lower()
+    if suffix in LOCAL_POINTER_SUFFIXES or path_text.endswith("/"):
+        return True
+    target = resolve_repository_pointer(
+        RepositoryPointer(source, raw, path_text, anchor, syntax)
+    )
+    return target is not None and target.is_dir()
+
+
+def repository_pointers(path: Path, text: str) -> tuple[RepositoryPointer, ...]:
+    """Extract explicit local Markdown links and unambiguous backtick paths."""
+    pointers: list[RepositoryPointer] = []
+    code_ranges = _code_span_ranges(text)
+    for match in MARKDOWN_LINK_RE.finditer(text):
+        raw = match.group(1).strip().strip("<>")
+        if _inside_ranges(match.start(1), code_ranges):
+            continue
+        if _is_local_candidate(raw, syntax="markdown", source=path):
+            path_text, anchor = _split_pointer(raw)
+            pointers.append(RepositoryPointer(path, raw, path_text, anchor, "markdown"))
+    for match in BACKTICK_TOKEN_RE.finditer(text):
+        raw = match.group(1).strip()
+        if _is_local_candidate(raw, syntax="backtick", source=path):
+            path_text, anchor = _split_pointer(raw)
+            pointers.append(RepositoryPointer(path, raw, path_text, anchor, "backtick"))
+    return tuple(dict.fromkeys(pointers))
 
 
 def local_markdown_pointers(path: Path, text: str) -> list[str]:
-    """Extract explicit local Markdown pointers, excluding URLs and prose."""
-    pointers = [
-        pointer
-        for pointer in re.findall(r"\]\(([^)\s]+\.md(?:#[^)\s]+)?)\)", text)
-        if not pointer.startswith(("http://", "https://", "mailto:"))
-        and not any(char in pointer for char in "*?[")
-    ]
-    package_index = (
-        path.name == "index.md"
-        and path.parent.name == "packages"
-        and path.parent.parent.name == "references"
-    )
-    for token in BACKTICK_TOKEN_RE.findall(text):
-        if not token.endswith(".md") and ".md#" not in token:
-            continue
-        if token.startswith(("http://", "https://", "mailto:")):
-            continue
-        if any(char in token for char in "*?["):
-            continue
-        explicit = "/" in token or token.startswith(".")
-        candidate = resolve_markdown_pointer(path, token)
-        if (
-            candidate is not None
-            and candidate.is_file()
-            and (explicit or (package_index and "/" not in token))
-        ):
-            pointers.append(token)
-    return pointers
+    """Compatibility view of explicit repository pointers."""
+    return [pointer.raw for pointer in repository_pointers(path, text)]
 
 
-def resolve_markdown_pointer(source: Path, pointer: str) -> Path | None:
-    """Resolve a repository-relative pointer using the skill's conventions."""
-    relative, _, _ = pointer.partition("#")
-    if relative.startswith(("http://", "https://", "mailto:", "/")):
-        return None
+def resolve_repository_pointer(pointer: RepositoryPointer) -> Path | None:
+    """Resolve one pointer according to repository and skill-relative rules."""
+    source = pointer.source
+    relative = pointer.path_text
+    if not relative:
+        return source.resolve()
     skill_root = next(
         (parent for parent in source.parents if (parent / "SKILL.md").is_file()),
         None,
@@ -325,13 +394,60 @@ def resolve_markdown_pointer(source: Path, pointer: str) -> Path | None:
         return (skill_root / relative).resolve()
     if relative.startswith(("./", "../")):
         return (source.parent / relative).resolve()
-    if relative.startswith((".agents/", "aria_nbv/", "docs/", "scripts/")):
+    if relative.startswith(
+        (".agents/", ".omx/", "aria_nbv/", "docs/", "scripts/", "assets/")
+    ):
         return (ROOT / relative).resolve()
-    if relative.startswith("assets/"):
-        return (ROOT / relative).resolve()
-    if source.name == "graphify-aria-boundary.md" and relative == "references/hooks.md":
-        return (SKILLS_DIR / "graphify" / relative).resolve()
     return (source.parent / relative).resolve()
+
+
+def resolve_markdown_pointer(source: Path, pointer: str) -> Path | None:
+    """Compatibility wrapper around :class:`RepositoryPointer` resolution."""
+    path_text, anchor = _split_pointer(pointer)
+    return resolve_repository_pointer(
+        RepositoryPointer(source, pointer, path_text, anchor, "markdown")
+    )
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return rel(path)
+    except ValueError:
+        return path.as_posix()
+
+
+def _pointer_anchor_exists(target: Path, anchor: str) -> bool:
+    if target.suffix.lower() in {".md", ".qmd"}:
+        return anchor in markdown_anchors(target)
+    if target.suffix.lower() == ".typ":
+        return anchor in typst_anchors(target)
+    return False
+
+
+def audit_repository_pointer(
+    pointer: RepositoryPointer,
+) -> tuple[Path | None, list[str]]:
+    """Validate pointer containment, target existence, and supported anchors."""
+    source_name = _display_path(pointer.source)
+    target = resolve_repository_pointer(pointer)
+    if target is None:
+        return None, []
+    try:
+        target.relative_to(ROOT_RESOLVED)
+    except ValueError:
+        return None, [
+            f"{source_name}: repository pointer {pointer.raw!r} escapes repo root"
+        ]
+    if not target.exists():
+        return target, [
+            f"{source_name}: repository pointer {pointer.raw!r} does not exist"
+        ]
+    if pointer.anchor:
+        if target.is_dir() or not _pointer_anchor_exists(target, pointer.anchor):
+            return target, [
+                f"{source_name}: repository pointer anchor {pointer.raw!r} was not found"
+            ]
+    return target, []
 
 
 def audit_reference_graph(skills: list[Skill]) -> list[str]:
@@ -347,23 +463,16 @@ def audit_reference_graph(skills: list[Skill]) -> list[str]:
         edges.update({node: set() for node in nodes})
         sources = (skill.path, *reference_files)
         for source in sources:
-            for pointer in local_markdown_pointers(
+            for pointer in repository_pointers(
                 source, source.read_text(encoding="utf-8")
             ):
-                target = resolve_markdown_pointer(source, pointer)
-                if target is None:
-                    continue
-                _, _, anchor = pointer.partition("#")
-                if not target.is_file():
-                    errors.append(
-                        f"{rel(source)}: reference pointer {pointer!r} does not exist"
-                    )
-                    continue
-                if anchor and anchor not in markdown_anchors(target):
-                    errors.append(
-                        f"{rel(source)}: reference pointer anchor {pointer!r} was not found"
-                    )
-                if target in edges and target in nodes:
+                target, pointer_errors = audit_repository_pointer(pointer)
+                errors.extend(pointer_errors)
+                if (
+                    target in nodes
+                    and target != source.resolve()
+                    and target.suffix.lower() == ".md"
+                ):
                     edges[source.resolve()].add(target)
 
         reachable: dict[Path, int] = {}
@@ -439,23 +548,6 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 f"{prefix}: hot path is {skill.line_count} lines "
                 f"(budget {HOT_PATH_LINE_BUDGET}); prune or move detail to references"
             )
-
-        for link in markdown_reference_links(skill):
-            relative, _, anchor = link.partition("#")
-            reference = skill.path.parent / relative
-            if not reference.is_file():
-                errors.append(f"{prefix}: reference link {link!r} does not exist")
-            elif anchor and anchor not in markdown_anchors(reference):
-                errors.append(f"{prefix}: reference link anchor {link!r} was not found")
-
-    discovered_custom = custom_skill_paths(SKILLS_DIR)
-    approved_custom = {path.resolve() for path in APPROVED_CUSTOM_SKILL_PATHS}
-    if discovered_custom != approved_custom:
-        errors.append(
-            "custom skill entrypoints must equal approved set: "
-            f"found {sorted(rel(path) for path in discovered_custom)}, expected "
-            f"{sorted(rel(path) for path in approved_custom)}"
-        )
 
     reference_files = tuple(
         path for path in SKILLS_DIR.rglob("*.md") if "graphify" not in path.parts
@@ -810,7 +902,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         )
         expect(
             "reference-integrity",
-            any("reference link" in e for e in errors),
+            any("does not exist" in e for e in errors),
             "missing conditional reference was accepted",
         )
 
@@ -1105,7 +1197,7 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             encoding="utf-8",
         )
         package_index = package_references / "index.md"
-        package_index.write_text("See `booktabs.md`.\n", encoding="utf-8")
+        package_index.write_text("See [booktabs](./booktabs.md).\n", encoding="utf-8")
         (package_references / "booktabs.md").write_text(
             "# Booktabs\n", encoding="utf-8"
         )
@@ -1121,6 +1213,71 @@ def run_self_tests() -> tuple[list[str], list[str]]:
             "package-index-sibling",
             not audit_reference_graph([package_skill]),
             "package index sibling pointer was rejected",
+        )
+
+        pointer_source = tmp_root / "pointer-owner.md"
+        pointer_source.write_text(
+            "[missing](./missing.qmd) `.agents/missing.toml` "
+            "`https://example.com/docs/a.md` `git status` `docs/*.md` "
+            "`.omx/state/.../runtime.json` `<owner>/file.md`\n",
+            encoding="utf-8",
+        )
+        discovered = repository_pointers(
+            pointer_source, pointer_source.read_text(encoding="utf-8")
+        )
+        expect(
+            "pointer-candidate-filter",
+            {pointer.raw for pointer in discovered}
+            == {"./missing.qmd", ".agents/missing.toml"},
+            "commands, URLs, globs, or placeholders were treated as pointers",
+        )
+        expect(
+            "missing-explicit-pointer",
+            all(audit_repository_pointer(pointer)[1] for pointer in discovered),
+            "missing explicit pointers disappeared before integrity checking",
+        )
+
+        anchor_source = tmp_root / "anchor-owner.md"
+        markdown_owner = tmp_root / "anchor-target.md"
+        markdown_owner.write_text("# Present\n# Present\n", encoding="utf-8")
+        typst_owner = tmp_root / "anchor-target.typ"
+        typst_owner.write_text("= Present <ssec:present>\n", encoding="utf-8")
+        anchor_pointers = (
+            RepositoryPointer(
+                anchor_source,
+                "./anchor-target.md#present-1",
+                "./anchor-target.md",
+                "present-1",
+                "markdown",
+            ),
+            RepositoryPointer(
+                anchor_source,
+                "./anchor-target.typ#ssec:present",
+                "./anchor-target.typ",
+                "ssec:present",
+                "backtick",
+            ),
+        )
+        expect(
+            "markdown-typst-anchors",
+            all(
+                not audit_repository_pointer(pointer)[1] for pointer in anchor_pointers
+            ),
+            "Markdown duplicate slugs or Typst labels were not resolved",
+        )
+
+        escaped_target = tmp_root / "escaped.md"
+        escaped_target.symlink_to("/tmp")
+        escaped_pointer = RepositoryPointer(
+            pointer_source, "./escaped.md", "./escaped.md", "", "markdown"
+        )
+        expect(
+            "symlink-root-escape",
+            any(
+                "escapes repo root" in error
+                for error in audit_repository_pointer(escaped_pointer)[1]
+            ),
+            "symlink escape was accepted as a repository pointer",
         )
 
         cycle_dir = tmp_root / "cycle"

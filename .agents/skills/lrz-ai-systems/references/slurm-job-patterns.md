@@ -55,6 +55,6 @@ srun --ntasks=1 \
 
 Use the wrapper scripts for ordinary ARIA runs:
 
-- `scripts/lrz-sbatch-cpu.sh`
-- `scripts/lrz-sbatch-single-gpu.sh`
-- `scripts/lrz-sbatch-multigpu.sh`
+- `../scripts/lrz-sbatch-cpu.sh`
+- `../scripts/lrz-sbatch-single-gpu.sh`
+- `../scripts/lrz-sbatch-multigpu.sh`

@@ -149,7 +149,7 @@ Anti-patterns to avoid:
 - Pasting Typst math syntax into Markdown answers.
 
 Distilled transcript evidence in
-`.agents/memory/transcripts/distilled/2026-05-11/candidate_decisions.jsonl`
+`.agents/memory/transcripts/distilled/2026-05-09/candidate_decisions.jsonl`
 also records recurring user feedback: line breaks did not render as expected,
 symbols should follow shared Typst notation, code names and symbols should be
 visually separated, edges should be meaningful, and compute/data/result nodes

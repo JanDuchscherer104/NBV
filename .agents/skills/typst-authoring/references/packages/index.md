@@ -26,14 +26,18 @@ URL, and compile command in the relevant package reference.
 
 Current package notes:
 
-- `booktabs.md` and `booktabs-*.typ` - table rules and examples.
-- `cetz.md` - native scientific geometry figures.
-- `scenery.md` and `scenery-smoke.typ` - fixture-gated sparse 3D geometry.
-- `maquette.md`, `maquette-smoke.typ`, and `maquette-octahedron.obj` -
-  fixture-gated local mesh rendering.
-- `fletcher.md` and `fletcher-*.typ` - diagram rules and examples.
-- `fletcher-manual.md` - cleaned Fletcher manual for detailed package syntax.
-- `neural-netz.md` and `neural-netz-example.typ` - simple network schematic
+- [booktabs](./booktabs.md) and its local `./booktabs-01-basic.typ` and
+  `./booktabs-02-grouped.typ` fixtures - table rules and examples.
+- [CeTZ](./cetz.md) - native scientific geometry figures.
+- [Scenery](./scenery.md) and `../../assets/fixtures/scenery-smoke.typ` -
+  fixture-gated sparse 3D geometry.
+- [Maquette](./maquette.md), `../../assets/fixtures/maquette-smoke.typ`, and
+  `../../assets/fixtures/maquette-octahedron.obj` - fixture-gated local mesh rendering.
+- [Fletcher](./fletcher.md) and the local `./fletcher-01-ml-architecture.typ`,
+  `./fletcher-02-residual-block.typ`, and `./fletcher-03-unet.typ` fixtures -
+  diagram rules and examples.
+- [Fletcher manual](./fletcher-manual.md) - cleaned detailed package syntax.
+- [neural-netz](./neural-netz.md) and `./neural-netz-example.typ` - simple network schematic
   fallback.
 - `slides.md` - local slide template, Touying reveal controls, and slide QA
   expectations.

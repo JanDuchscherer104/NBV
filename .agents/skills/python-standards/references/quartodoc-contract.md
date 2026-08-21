@@ -10,7 +10,7 @@ ARIA-NBV generates Python API documentation with Quartodoc through
 - `quartodoc.parser: google`
 - `filters` includes `_extensions/aria-python-roles/aria-python-roles.lua`
   so Sphinx/Python-domain roles in generated API pages link against
-  `docs/objects.json`
+  the generated `objects.json` inventory
 - public private/import filtering is controlled by the `quartodoc.options`
   block and section-level overrides
 - `include_attributes: true` means attribute and field docs matter for rendered
