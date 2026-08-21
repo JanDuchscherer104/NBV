@@ -651,6 +651,135 @@ def test_candidate_motion_support_reports_all_motion_fields_and_collision_applic
     assert collision["collision_count"] == 1
 
 
+def test_direction_macros_exclude_unavailable_states_instead_of_zero_filling() -> None:
+    """A state without finite directions must not dilute a valid state's macro fraction."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    rows = [
+        {**_direction_fixture_rows()[0], "rollout_row_id": 0, "root_relative_x_m": 1.0},
+        {
+            **_direction_fixture_rows()[0],
+            "rollout_row_id": 1,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+        },
+    ]
+    density = candidate_direction_evidence(rows)["density_rows"]
+    valid_state = next(
+        row
+        for row in density
+        if row["aggregation_level"] == "state"
+        and row["rollout_row_id"] == "0"
+        and row["azimuth_bin"] == 6
+        and row["sin_elevation_bin"] == 3
+    )
+    assert valid_state["available"] is True
+    macro = next(
+        row
+        for row in density
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["azimuth_bin"] == 6
+        and row["sin_elevation_bin"] == 3
+    )
+    assert macro["mean_state_fraction"] == pytest.approx(1.0)
+
+
+def test_direction_cap_and_angular_rows_keep_protocol_cohort_and_population_context() -> None:
+    """Support diagnostics retain fixed references and the same cohort/population facets."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    rows = [
+        {**_direction_fixture_rows()[0], "generation_cohort_id": "cohort-a"},
+        {**_direction_fixture_rows()[1], "generation_cohort_id": "cohort-a"},
+    ]
+    evidence = candidate_direction_evidence(rows)
+    cap = evidence["cap_rows"]
+    angular = evidence["angular_support_rows"]
+    assert {row["population"] for row in cap + angular} >= {"all", "actor_valid"}
+    assert {row["generation_cohort_id"] for row in cap + angular} == {"cohort-a"}
+    assert {row["aggregation_level"] for row in cap + angular} >= {"state", "scene_macro", "cohort_macro"}
+    assert all(row["protocol"]["reference"] == "fixed Fibonacci sphere" for row in cap)
+    assert all(row["protocol"]["reference_count"] == 128 for row in cap)
+    assert all(row["protocol"]["covering_reference_count"] == 512 for row in angular)
+    assert {row["radius_deg"] for row in cap} == {30, 60, 90, 120, 150}
+
+
+def test_angular_support_singleton_and_antipodal_values_are_geometrically_defined() -> None:
+    """Nearest-neighbor and covering diagnostics are computed, not placeholder counts."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    singleton = candidate_direction_evidence(
+        [{**_direction_fixture_rows()[0], "root_relative_x_m": 1.0, "root_relative_y_m": 0.0, "root_relative_z_m": 0.0}]
+    )["angular_support_rows"]
+    assert any(row.get("nearest_neighbor_deg") == pytest.approx(0.0) for row in singleton)
+
+    antipodal = candidate_direction_evidence(
+        [
+            {
+                **_direction_fixture_rows()[0],
+                "root_relative_x_m": 1.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.0,
+            },
+            {
+                **_direction_fixture_rows()[1],
+                "root_relative_x_m": -1.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.0,
+            },
+        ]
+    )["angular_support_rows"]
+    assert any(row.get("nearest_neighbor_deg") == pytest.approx(180.0) for row in antipodal)
+    assert any(row.get("covering_radius_deg") == pytest.approx(180.0) for row in antipodal)
+
+
+def test_spatial_macros_preserve_shell_and_population_facets() -> None:
+    """Spatial scene/cohort summaries remain separated by persisted shell and population."""
+
+    from aria_nbv.rollouts.inspection import candidate_spatial_support_evidence
+
+    rows = [
+        {
+            **_direction_fixture_rows()[0],
+            "position": "forward_local",
+            "root_relative_x_m": 0.1,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+        },
+        {
+            **_direction_fixture_rows()[1],
+            "position": "backtrack",
+            "root_relative_x_m": 1.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+        },
+    ]
+    evidence = candidate_spatial_support_evidence(rows)
+    macro = [row for row in evidence if row["aggregation_level"] in {"scene_macro", "cohort_macro"}]
+    assert {row["declared_shell"] for row in macro} >= {"forward_local", "backtrack"}
+    assert {row["population"] for row in macro} >= {"all", "actor_valid"}
+    assert all(row["generation_cohort_id"] == "cohort-a" for row in macro)
+
+
+def test_target_view_and_motion_facets_preserve_cohort_population_and_macro_levels() -> None:
+    """Target-view and motion diagnostics use the same state-to-cohort evidence grammar."""
+
+    from aria_nbv.rollouts.inspection import candidate_motion_support_evidence, candidate_target_view_evidence
+
+    rows = [{**_direction_fixture_rows()[0], "target_distance_m": 2.0, "generation_cohort_id": "cohort-a"}]
+    target = candidate_target_view_evidence(rows)
+    motion = candidate_motion_support_evidence(rows)
+    for evidence in (target, motion):
+        assert all(row["generation_cohort_id"] == "cohort-a" for row in evidence)
+        assert {row["population"] for row in evidence} >= {"all", "actor_valid"}
+        assert {row["aggregation_level"] for row in evidence} >= {"state", "scene_macro", "cohort_macro"}
+
+
 def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path) -> None:
     """Suspicious-row predicates should find low fanout, missing labels, and motion outliers."""
 
