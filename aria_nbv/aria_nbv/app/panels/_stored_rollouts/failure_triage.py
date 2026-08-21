@@ -13,6 +13,7 @@ from .shared import (
     STORED_ROLLOUTS_DIAGNOSE_MODES,
     STORED_ROLLOUTS_DIAGNOSE_SECTION,
     STORED_ROLLOUTS_SECTION_KEY,
+    ExplanationSection,
     ScientificExplanation,
 )
 from .shared import download_frame as _download_frame
@@ -35,17 +36,22 @@ def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
         fig,
         ScientificExplanation(
             question="Which contract or data-quality failures dominate this store, and where should inspection begin?",
-            population="One emitted triage finding per rollout, step, candidate, target, or store-level condition.",
-            metric="Finding count by severity and predicate; counts are not independent scientific samples.",
-            denominator_masks="All rows checked by the active threshold configuration.",
-            comparability="Thresholds and store schema must match before comparing counts across stores.",
-            expected_pattern="Few hard mask/linkage failures; warnings are sparse and traceable to exact rows.",
-            failure_interpretation="Counts prioritize debugging only; they do not estimate policy performance.",
+            sections=(
+                ExplanationSection(
+                    "Reading the bars",
+                    "Each bar counts emitted triage findings by severity and predicate. A finding may be attached to a rollout, step, candidate, target, or store-level condition, so counts are not independent scientific samples.",
+                ),
+                ExplanationSection(
+                    "Scope and comparison",
+                    "The denominator is every row checked by the active threshold configuration. Compare stores only when thresholds and schema contracts match.",
+                ),
+                ExplanationSection(
+                    "Investigate next",
+                    "Use concentration to prioritize operator inspection. Counts are descriptive debugging evidence and do not estimate policy performance.",
+                ),
+            ),
             evidence_role="provenance",
             answer="The bars rank the persisted failure predicates that deserve operator inspection first; they do not summarize rollout quality.",
-            intuition="A finding is an actionable contract or data-quality signal emitted at its owning rollout grain, so concentration identifies where to trace evidence next.",
-            visual_encoding="Bar height is finding count; color separates severity and the x-axis separates failure kinds.",
-            uncertainty="Counts depend on the selected thresholds and mixed finding grains; they are descriptive triage evidence, not independent samples or confidence intervals.",
             external_references=(
                 (
                     "NIST Engineering Statistics Handbook: counts and nonconformities",

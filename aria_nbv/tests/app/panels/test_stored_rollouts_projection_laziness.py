@@ -220,8 +220,8 @@ def test_failure_promotion_preserves_ids_and_selects_inspection_route(monkeypatc
         (inspect_rerun, "https://pytorch3d.org/docs/renderer_getting_started"),
     ],
 )
-def test_diagnose_plot_guides_are_rich(module: object, reference: str) -> None:
-    """Diagnostic plot renderers opt into the reader-intent guide contract."""
+def test_diagnose_plot_guides_use_narrative_sections(module: object, reference: str) -> None:
+    """Diagnostic plots retain focused narrative guidance and their source."""
 
     tree = ast.parse(inspect.getsource(module))
     calls = [
@@ -232,7 +232,8 @@ def test_diagnose_plot_guides_are_rich(module: object, reference: str) -> None:
     assert calls
     for call in calls:
         fields = {keyword.arg for keyword in call.keywords}
-        assert {"answer", "intuition", "visual_encoding", "uncertainty", "external_references"} <= fields
+        assert {"question", "answer", "sections", "evidence_role", "source_fields", "external_references"} <= fields
+        assert {"intuition", "visual_encoding", "uncertainty", "definition"}.isdisjoint(fields)
         assert reference in ast.get_source_segment(inspect.getsource(module), call)
 
 

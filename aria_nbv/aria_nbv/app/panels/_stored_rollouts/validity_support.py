@@ -15,9 +15,10 @@ from .candidate_generation import (
     _render_target_score_diagnostics,
 )
 from .session import _cached_projection
-from .shared import ScientificExplanation
+from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
+from .theory import TheoryReferences
 
 
 def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
@@ -52,24 +53,29 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             fig,
             ScientificExplanation(
                 question="Are actor target choices and privileged GT evaluation labels being kept distinct?",
-                population="One persisted target row grouped by actor task validity, GT-label validity, and match status.",
-                metric="Target count; no scientific effect units.",
-                denominator_masks="All target rows; neither invalid population is silently removed.",
-                comparability="Compare target protocols only when target selection and GT matching configuration agree.",
-                expected_pattern="Actor-valid targets may lack GT labels, but such rows remain masked from oracle-label training.",
-                failure_interpretation="Actor-valid/GT-invalid concentration signals evaluation coverage gaps, not low RRI.",
+                sections=(
+                    ExplanationSection(
+                        "Reading the bars",
+                        "Each bar counts persisted target rows grouped by actor task validity, GT-label validity, and match status. Actor-valid targets may lack GT labels, and those rows remain distinct from oracle-label training evidence.",
+                    ),
+                    ExplanationSection(
+                        "Scope and comparison",
+                        "All target rows remain in the denominator, including ambiguous, unmatched, and invalid rows. Compare stores only when target selection and GT matching configuration agree.",
+                    ),
+                    ExplanationSection(
+                        "Investigate next",
+                        "A concentration of actor-valid but GT-invalid rows signals an evaluation-coverage gap, not low RRI or poor actor behavior.",
+                    ),
+                ),
                 evidence_role="oracle/evaluation",
                 answer="The admission bars show whether actor-valid targets also have an unambiguous privileged label; they do not turn rejected targets into low-reward examples.",
-                intuition="Actor validity answers whether the action can be executed, while GT-label validity answers whether privileged evaluation is available; these are distinct masks.",
-                visual_encoding="Bar height is the persisted target count; color and pattern separate actor validity and GT-label validity within each match-status category.",
-                uncertainty="All target rows remain in the denominator, including ambiguous, unmatched, and invalid rows; counts describe protocol coverage rather than effect size.",
+                theory=TheoryReferences(term_ids=("observed-target-selection", "ground-truth-target-evaluation")),
                 external_references=(
                     (
                         "Canonical observed-target admission",
                         "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/target_selection.py#L96-L169",
                     ),
                 ),
-                definition="Actor target validity describes whether the target can drive an action; GT-label validity describes whether exactly one qualifying privileged match exists for oracle supervision.",
                 source_fields=(
                     "targets/target_valid_mask",
                     "targets/gt_label_valid_mask",
@@ -91,17 +97,26 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
             fig,
             ScientificExplanation(
                 question="Which actor, oracle, training, and selection mask combinations actually occur?",
-                population="One candidate row summarized by its exact four-mask bit pattern.",
-                metric="Candidate count and fraction of the full sampled shell.",
-                denominator_masks="All persisted candidate rows; selected must imply actor_action, while q_train is not a selection stage.",
-                comparability="Compare stores only under the same candidate-shell generation and label-availability protocol.",
-                expected_pattern="No selected/actor_action violation; selected-but-not-q_train may legitimately occur.",
-                failure_interpretation="A selected actor-invalid row is a hard contract failure; missing q_train is a label/cache issue, not invalid action support.",
+                sections=(
+                    ExplanationSection(
+                        "Reading the bars",
+                        "Each bar is the exact count of one four-bit mask pattern across the full persisted candidate shell. The masks encode distinct contracts: a candidate must be executable to be selected, while trainability additionally requires valid privileged label evidence.",
+                    ),
+                    ExplanationSection(
+                        "Scope and comparison",
+                        "All persisted candidate rows are included. Compare stores only under the same candidate-shell generation and label-availability protocol; overlapping masks are a contract audit, not a reward distribution or policy comparison.",
+                    ),
+                    ExplanationSection(
+                        "Investigate next",
+                        "A selected actor-invalid row is a hard contract failure. A missing training mask is a label or cache issue, while selected-but-not-trainable rows may be legitimate.",
+                    ),
+                ),
                 evidence_role="derived training data",
                 answer="The bars make every observed combination of action validity, oracle-label validity, Q_H trainability, and selection explicit.",
-                intuition="The masks encode distinct contracts: a candidate must be executable to be selected, while trainability additionally requires valid privileged label evidence.",
-                visual_encoding="Each bar is the exact count of one four-bit mask pattern across the full persisted candidate shell.",
-                uncertainty="Counts are exact within this store and the masks overlap by design; the display is a contract audit, not a reward distribution or a policy comparison.",
+                theory=TheoryReferences(
+                    equation_ids=("metrics.q_train_mask",),
+                    term_ids=("observed-target-selection", "ground-truth-target-evaluation", "candidate-view"),
+                ),
                 external_references=(
                     (
                         "Canonical V1 target-label admission",
@@ -112,7 +127,6 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
                         "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/zarr_store.py#L1386-L1429",
                     ),
                 ),
-                definition="q_train_mask = actor_action_mask AND oracle_label_mask for valid V1 evidence; selection is not itself a trainability condition.",
                 source_fields=("candidates/actor_action_mask", "oracle_label_mask", "q_train_mask", "selected_mask"),
             ),
         )
