@@ -516,10 +516,13 @@ class RolloutZarrStoreReader:
 
         return np.asarray(self.root[path])
 
-    def validate(self) -> RolloutZarrValidationResult:
-        """Validate row linkage, masks, and initial ``Q_H`` target availability."""
+    def validate(self, *, validate_selected_depth_payload: bool = True) -> RolloutZarrValidationResult:
+        """Validate persisted contracts, optionally skipping unconsumed depth payloads."""
 
-        return validate_rollout_zarr_store(self.store_dir)
+        return validate_rollout_zarr_store(
+            self.store_dir,
+            validate_selected_depth_payload=validate_selected_depth_payload,
+        )
 
     def manifest(self) -> dict[str, Any]:
         """Read root attrs and the top-level sidecar manifest without payload arrays."""
@@ -839,22 +842,30 @@ class _RolloutZarrWriteSession:
         )
 
 
-def validate_rollout_zarr_store(store_dir: Path | str) -> RolloutZarrValidationResult:
-    """Validate a standalone rollout replay store and return all discovered errors."""
+def validate_rollout_zarr_store(
+    store_dir: Path | str,
+    *,
+    validate_selected_depth_payload: bool = True,
+) -> RolloutZarrValidationResult:
+    """Validate a rollout store, optionally omitting unconsumed selected-depth rows."""
 
-    return _RolloutZarrValidator(store_dir).validate()
+    return _RolloutZarrValidator(
+        store_dir,
+        validate_selected_depth_payload=validate_selected_depth_payload,
+    ).validate()
 
 
 class _RolloutZarrValidator:
     """Validate one rollout store without mixing checks into the public facade."""
 
-    def __init__(self, store_dir: Path | str) -> None:
+    def __init__(self, store_dir: Path | str, *, validate_selected_depth_payload: bool) -> None:
         self.store_dir = Path(store_dir).expanduser().resolve()
         self.root = zarr.open_group(
             store=LocalStore(str(self.store_dir), read_only=True),
             mode="r",
         )
         self.errors: list[str] = []
+        self.validate_selected_depth_payload = validate_selected_depth_payload
 
     def validate(self) -> RolloutZarrValidationResult:
         """Validate row linkage, masks, target validity, and lineage."""
@@ -944,7 +955,7 @@ class _RolloutZarrValidator:
 
     def _validate_q_h(self, candidate_row_id: np.ndarray) -> None:
         derived = _build_q_h_arrays(
-            _read_tables_from_root(self.root),
+            _read_tables_from_root(self.root, include_selected_depth=False),
             gamma=float(self.root.attrs.get("discount_gamma", 1.0)),
         )
         persisted = _read_q_h_arrays_if_present(self.root)
@@ -1077,59 +1088,97 @@ class _RolloutZarrValidator:
             self.errors.append(f"Missing selected_depth arrays: {missing}.")
             return
 
-        step_row_id = np.asarray(self.root["steps/step_row_id"], dtype=np.int64)
-        selected_candidate_row_id = np.asarray(self.root["steps/selected_candidate_row_id"], dtype=np.int64)
-        depth_step_row_id = np.asarray(group["step_row_id"], dtype=np.int64)
-        depth_candidate_row_id = np.asarray(group["candidate_row_id"], dtype=np.int64)
-        if not np.array_equal(depth_step_row_id, step_row_id):
-            self.errors.append("selected_depth/step_row_id must contain exactly one row for every rollout step.")
-        if not np.array_equal(depth_candidate_row_id, selected_candidate_row_id):
-            self.errors.append("selected_depth/candidate_row_id must align with steps/selected_candidate_row_id.")
-
+        num_steps = int(self.root["steps/step_row_id"].shape[0])
         expected_shape = (
-            int(step_row_id.shape[0]),
+            num_steps,
             int(self.root.attrs.get("selected_depth_height_px", -1)),
             int(self.root.attrs.get("selected_depth_width_px", -1)),
         )
         depth_m = group["depth_m"]
         valid_mask = group["valid_mask"]
+        structural_errors = 0
         if tuple(depth_m.shape) != expected_shape:
             self.errors.append(f"selected_depth/depth_m shape {depth_m.shape} must equal {expected_shape}.")
+            structural_errors += 1
         if tuple(valid_mask.shape) != expected_shape:
             self.errors.append(f"selected_depth/valid_mask shape {valid_mask.shape} must equal {expected_shape}.")
+            structural_errors += 1
         if np.dtype(depth_m.dtype) != np.dtype(np.float16):
             self.errors.append("selected_depth/depth_m must be float16.")
+            structural_errors += 1
         if np.dtype(valid_mask.dtype) != np.dtype(np.bool_):
             self.errors.append("selected_depth/valid_mask must be bool.")
-        for name in ("focal_px", "principal_point_px", "image_size_hw"):
-            if tuple(group[name].shape) != (int(step_row_id.shape[0]), 2):
-                self.errors.append(f"selected_depth/{name} must have shape (num_steps, 2).")
-        focal = np.asarray(group["focal_px"], dtype=np.float32)
-        principal = np.asarray(group["principal_point_px"], dtype=np.float32)
-        image_size = np.asarray(group["image_size_hw"], dtype=np.int64)
-        if not np.isfinite(focal).all() or np.any(focal <= 0):
-            self.errors.append("selected_depth/focal_px must contain finite positive pinhole focal lengths.")
-        if not np.isfinite(principal).all():
-            self.errors.append("selected_depth/principal_point_px must contain finite pixel coordinates.")
-        expected_size = np.asarray(expected_shape[1:], dtype=np.int64)
-        if image_size.shape == (int(step_row_id.shape[0]), 2) and not np.all(image_size == expected_size):
-            self.errors.append("selected_depth/image_size_hw must equal the persisted depth raster size on every row.")
-        depth_values = np.asarray(depth_m, dtype=np.float32)
-        valid_values = np.asarray(valid_mask, dtype=np.bool_)
+            structural_errors += 1
+        for table_field in SELECTED_DEPTH_TABLE.fields:
+            expected_field_shape = (
+                (num_steps, 2)
+                if table_field.name
+                in {
+                    "focal_px",
+                    "principal_point_px",
+                    "image_size_hw",
+                }
+                else (num_steps,)
+            )
+            array = group[table_field.name]
+            if tuple(array.shape) != expected_field_shape:
+                self.errors.append(
+                    f"selected_depth/{table_field.name} shape {array.shape} must equal {expected_field_shape}."
+                )
+                structural_errors += 1
+            if np.dtype(array.dtype) != np.dtype(table_field.dtype):
+                self.errors.append(
+                    f"selected_depth/{table_field.name} dtype {array.dtype} must be {np.dtype(table_field.dtype)}."
+                )
+                structural_errors += 1
+
         invalid_fill = float(self.root.attrs.get("selected_depth_invalid_fill_value", np.nan))
-        if depth_values.shape == valid_values.shape:
-            if np.any(valid_values & ~np.isfinite(depth_values)):
-                self.errors.append("selected_depth valid pixels must contain finite camera-z depth.")
-            if np.any(~valid_values & (depth_values != invalid_fill)):
-                self.errors.append("selected_depth invalid pixels must equal the declared invalid fill value.")
         znear = float(self.root.attrs.get("selected_depth_znear_m", np.nan))
         zfar = float(self.root.attrs.get("selected_depth_zfar_m", np.nan))
         if not np.isfinite([znear, zfar]).all() or not 0 < znear < zfar:
             self.errors.append("selected_depth clip planes must be finite, positive, and ordered.")
-        elif depth_values.shape == valid_values.shape and np.any(
-            valid_values & ((depth_values < znear) | (depth_values > zfar))
-        ):
-            self.errors.append("selected_depth valid camera-z values must lie within the declared clip range.")
+
+        if structural_errors or not self.validate_selected_depth_payload:
+            return
+
+        chunk_rows = int(depth_m.chunks[0])
+        if chunk_rows < 1:
+            self.errors.append("selected_depth/depth_m must declare a positive first-axis chunk width.")
+            return
+        expected_size = np.asarray(expected_shape[1:], dtype=np.int64)
+        step_rows = self.root["steps/step_row_id"]
+        selected_candidate_rows = self.root["steps/selected_candidate_row_id"]
+        for start in range(0, num_steps, chunk_rows):
+            rows = slice(start, min(start + chunk_rows, num_steps))
+            step_row_id = np.asarray(step_rows[rows], dtype=np.int64)
+            selected_candidate_row_id = np.asarray(selected_candidate_rows[rows], dtype=np.int64)
+            depth_step_row_id = np.asarray(group["step_row_id"][rows], dtype=np.int64)
+            depth_candidate_row_id = np.asarray(group["candidate_row_id"][rows], dtype=np.int64)
+            if not np.array_equal(depth_step_row_id, step_row_id):
+                self.errors.append("selected_depth/step_row_id must contain exactly one row for every rollout step.")
+            if not np.array_equal(depth_candidate_row_id, selected_candidate_row_id):
+                self.errors.append("selected_depth/candidate_row_id must align with steps/selected_candidate_row_id.")
+
+            focal = np.asarray(group["focal_px"][rows], dtype=np.float32)
+            principal = np.asarray(group["principal_point_px"][rows], dtype=np.float32)
+            image_size = np.asarray(group["image_size_hw"][rows], dtype=np.int64)
+            if not np.isfinite(focal).all() or np.any(focal <= 0):
+                self.errors.append("selected_depth/focal_px must contain finite positive pinhole focal lengths.")
+            if not np.isfinite(principal).all():
+                self.errors.append("selected_depth/principal_point_px must contain finite pixel coordinates.")
+            if not np.all(image_size == expected_size):
+                self.errors.append(
+                    "selected_depth/image_size_hw must equal the persisted depth raster size on every row."
+                )
+
+            depth_values = np.asarray(depth_m[rows], dtype=np.float32)
+            valid_values = np.asarray(valid_mask[rows], dtype=np.bool_)
+            if np.any(valid_values & ~np.isfinite(depth_values)):
+                self.errors.append("selected_depth valid pixels must contain finite camera-z depth.")
+            if np.any(~valid_values & (depth_values != invalid_fill)):
+                self.errors.append("selected_depth invalid pixels must equal the declared invalid fill value.")
+            if 0 < znear < zfar and np.any(valid_values & ((depth_values < znear) | (depth_values > zfar))):
+                self.errors.append("selected_depth valid camera-z values must lie within the declared clip range.")
 
     def _validate_target_eval_crops(self) -> None:
         if "target_eval_crops" not in self.root:
@@ -3226,7 +3275,7 @@ def _rows_to_numpy_target_eval_crop_table(
     return table
 
 
-def _read_tables_from_root(root: Any) -> _RolloutTables:
+def _read_tables_from_root(root: Any, *, include_selected_depth: bool = True) -> _RolloutTables:
     return _RolloutTables(
         sources=_read_group_table(root, SOURCE_TABLE),
         rollouts=_read_group_table(root, ROLLOUT_TABLE),
@@ -3234,7 +3283,7 @@ def _read_tables_from_root(root: Any) -> _RolloutTables:
         steps=_read_group_table(root, STEP_TABLE),
         candidates=_read_group_table(root, CANDIDATE_TABLE),
         candidate_diagnostics=_read_group_table(root, CANDIDATE_DIAGNOSTIC_TABLE),
-        selected_depth=_read_selected_depth_table(root),
+        selected_depth=_read_selected_depth_table(root) if include_selected_depth else {},
         target_eval_crops=_read_target_eval_crop_table(root),
     )
 

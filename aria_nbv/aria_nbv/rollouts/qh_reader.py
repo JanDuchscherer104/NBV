@@ -183,7 +183,14 @@ class QhRolloutReader:
         self.store_dirs = paths
         self.campaign_split = campaign_split
         self.include_selected_depth = include_selected_depth
-        self._stores = tuple(_preflight_store(path, store_index) for store_index, path in enumerate(paths))
+        self._stores = tuple(
+            _preflight_store(
+                path,
+                store_index,
+                include_selected_depth=include_selected_depth,
+            )
+            for store_index, path in enumerate(paths)
+        )
         _validate_homogeneous(self._stores, include_selected_depth=include_selected_depth)
         if include_selected_depth:
             _validate_rich_selected_depth_contract(self._stores[0].contract)
@@ -285,12 +292,12 @@ class QhRolloutReader:
         return root
 
 
-def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
+def _preflight_store(path: Path, store_index: int, *, include_selected_depth: bool) -> _StoreFacts:
     if not path.is_dir():
         raise ValueError(f"Q_H rollout store does not exist: {path}.")
 
     reader = RolloutZarrStoreReader(path)
-    validation = reader.validate()
+    validation = reader.validate(validate_selected_depth_payload=include_selected_depth)
     if not validation.ok:
         details = "; ".join(validation.errors[:5])
         raise ValueError(
@@ -301,7 +308,7 @@ def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
     _validate_reader_admission(root)
     source_refs_by_row = _read_source_refs(root, path)
     chains = _read_chain_refs(root, path, store_index, source_refs_by_row)
-    contract = _read_contract(root)
+    contract = _read_contract(root, include_selected_depth=include_selected_depth)
     return _StoreFacts(
         path=path,
         manifest_hash=str(root.attrs["manifest_sha256"]),
@@ -413,9 +420,9 @@ def _validate_target_labels(
             raise ValueError(f"targets/gt_label_valid_mask row {row} disagrees with canonical target evidence.")
 
 
-def _read_contract(root: zarr.Group) -> QhDataContract:
+def _read_contract(root: zarr.Group, *, include_selected_depth: bool) -> QhDataContract:
     q_h = root["q_h"]
-    selected_depth_enabled = bool(root.attrs.get("selected_depth_enabled", False))
+    selected_depth_enabled = include_selected_depth and bool(root.attrs.get("selected_depth_enabled", False))
 
     def selected(name: str) -> object | None:
         return root.attrs.get(name) if selected_depth_enabled else None
@@ -456,17 +463,34 @@ def _read_selected_depth_geometry(root: zarr.Group) -> QhGeometryContract:
     """Read and cross-check persisted calibration rows before payload admission."""
 
     group = root["selected_depth"]
-    focal = np.asarray(group["focal_px"], dtype=np.float64)
-    principal = np.asarray(group["principal_point_px"], dtype=np.float64)
-    sizes = np.asarray(group["image_size_hw"], dtype=np.int64)
-    if focal.ndim != 2 or focal.shape[0] == 0 or focal.shape[1] != 2:
+    num_steps = int(group["focal_px"].shape[0])
+    if num_steps == 0:
         raise ValueError("Q_H selected-depth geometry requires non-empty focal_px rows of shape (steps, 2).")
-    if principal.shape != focal.shape or sizes.shape != focal.shape:
-        raise ValueError("Q_H selected-depth calibration rows must have one aligned (x,y) pair per step.")
-    if not np.isfinite(focal).all() or np.any(focal <= 0) or not np.isfinite(principal).all():
-        raise ValueError("Q_H selected-depth calibration must be finite, with positive focal lengths.")
-    if not np.all(focal == focal[0]) or not np.all(principal == principal[0]) or not np.all(sizes == sizes[0]):
-        raise ValueError("Q_H selected-depth geometry must be homogeneous across every persisted step.")
+    chunk_rows = int(group["depth_m"].chunks[0])
+    reference_focal: np.ndarray | None = None
+    reference_principal: np.ndarray | None = None
+    reference_size: np.ndarray | None = None
+    for start in range(0, num_steps, chunk_rows):
+        rows = slice(start, min(start + chunk_rows, num_steps))
+        focal = np.asarray(group["focal_px"][rows], dtype=np.float64)
+        principal = np.asarray(group["principal_point_px"][rows], dtype=np.float64)
+        sizes = np.asarray(group["image_size_hw"][rows], dtype=np.int64)
+        if focal.ndim != 2 or focal.shape[1] != 2 or principal.shape != focal.shape or sizes.shape != focal.shape:
+            raise ValueError("Q_H selected-depth calibration rows must have one aligned (x,y) pair per step.")
+        if not np.isfinite(focal).all() or np.any(focal <= 0) or not np.isfinite(principal).all():
+            raise ValueError("Q_H selected-depth calibration must be finite, with positive focal lengths.")
+        if reference_focal is None:
+            reference_focal = focal[0]
+            reference_principal = principal[0]
+            reference_size = sizes[0]
+        if (
+            not np.all(focal == reference_focal)
+            or not np.all(principal == reference_principal)
+            or not np.all(sizes == reference_size)
+        ):
+            raise ValueError("Q_H selected-depth geometry must be homogeneous across every persisted step.")
+    if reference_focal is None or reference_principal is None or reference_size is None:
+        raise ValueError("Q_H selected-depth geometry requires at least one calibration row.")
     attrs = root.attrs
     invalid_fill = float(attrs.get("selected_depth_invalid_fill_value", np.nan))
     znear = float(attrs.get("selected_depth_znear_m", np.nan))
@@ -480,9 +504,9 @@ def _read_selected_depth_geometry(root: zarr.Group) -> QhGeometryContract:
         linearization="camera_z_metres",
         camera_pose="root_from_camera",
         depth_semantics="camera_z_m",
-        focal_px=tuple(float(value) for value in focal[0]),
-        principal_point_px=tuple(float(value) for value in principal[0]),
-        image_size_hw=tuple(int(value) for value in sizes[0]),
+        focal_px=tuple(float(value) for value in reference_focal),
+        principal_point_px=tuple(float(value) for value in reference_principal),
+        image_size_hw=tuple(int(value) for value in reference_size),
         camera_axes="left_up_forward",
         camera_forward="+z",
         camera_handedness="right",

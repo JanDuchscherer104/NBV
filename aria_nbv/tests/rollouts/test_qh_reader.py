@@ -69,6 +69,7 @@ def _write_store(
     records: int = 1,
     source_row_id: int | None = None,
     selected_depth_enabled: bool = True,
+    selected_depth_chunk_steps: int = 16,
 ) -> Path:
     rollout_records = build_rollout_records(horizon=horizon, num_samples=6, seed=7)[:records]
     if source_row_id is not None:
@@ -85,6 +86,7 @@ def _write_store(
         source_offline_store_version="7",
         split_manifest_hash="fixture-split-manifest",
         selected_depth_enabled=selected_depth_enabled,
+        selected_depth_chunk_steps=selected_depth_chunk_steps,
     ).store_dir
 
 
@@ -313,6 +315,92 @@ def test_reader_preserves_renderer_metadata_without_loading_selected_depth(tmp_p
     assert disabled.selected_depth_m is None
 
 
+def test_lean_reader_preflight_never_reads_selected_depth_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    original_getitem = zarr.Array.__getitem__
+    original_array = zarr.Array.__array__
+
+    def guarded_getitem(array: zarr.Array, selection: object) -> object:
+        if str(array.path).startswith("selected_depth/"):
+            pytest.fail(f"CF0 preflight read unconsumed {array.path} with {selection!r}")
+        return original_getitem(array, selection)
+
+    def guarded_array(array: zarr.Array, *args: object, **kwargs: object) -> np.ndarray:
+        if str(array.path).startswith("selected_depth/"):
+            pytest.fail(f"CF0 preflight materialized unconsumed {array.path}")
+        return original_array(array, *args, **kwargs)
+
+    monkeypatch.setattr(zarr.Array, "__getitem__", guarded_getitem)
+    monkeypatch.setattr(zarr.Array, "__array__", guarded_array)
+
+    reader = QhRolloutReader((store,), include_selected_depth=False)
+
+    assert len(reader) == 1
+
+
+def test_rich_reader_preflight_reads_selected_depth_in_persisted_chunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _write_store(
+        tmp_path / "rollouts.zarr",
+        horizon=3,
+        selected_depth_chunk_steps=2,
+    )
+    depth_chunk_rows = int(zarr.open_group(store, mode="r")["selected_depth/depth_m"].chunks[0])
+    reads: list[tuple[str, slice]] = []
+    original_getitem = zarr.Array.__getitem__
+
+    def guarded_getitem(array: zarr.Array, selection: object) -> object:
+        if str(array.path).startswith("selected_depth/"):
+            assert isinstance(selection, slice)
+            assert selection != slice(None)
+            assert selection.start is not None and selection.stop is not None
+            assert selection.stop - selection.start <= depth_chunk_rows
+            reads.append((str(array.path), selection))
+        return original_getitem(array, selection)
+
+    monkeypatch.setattr(zarr.Array, "__getitem__", guarded_getitem)
+
+    reader = QhRolloutReader((store,), include_selected_depth=True)
+
+    assert len(reader) == 1
+    assert {(selection.start, selection.stop) for path, selection in reads if path == "selected_depth/depth_m"} == {
+        (0, 2),
+        (2, 3),
+    }
+
+
+def test_rich_reader_preflight_reports_corruption_in_final_depth_chunk(tmp_path: Path) -> None:
+    store = _write_store(
+        tmp_path / "rollouts.zarr",
+        horizon=3,
+        selected_depth_chunk_steps=2,
+    )
+    root = zarr.open_group(store, mode="a")
+    final_row = 2
+    root["selected_depth/focal_px"][final_row, 0] = 0.0
+    root["selected_depth/principal_point_px"][final_row, 0] = np.inf
+    root["selected_depth/image_size_hw"][final_row] = np.asarray([120, 240], dtype=np.int32)
+    root["selected_depth/valid_mask"][final_row, 0, 0] = True
+    root["selected_depth/depth_m"][final_row, 0, 0] = 0.0
+    root["selected_depth/valid_mask"][final_row, 0, 1] = False
+    root["selected_depth/depth_m"][final_row, 0, 1] = 1.0
+
+    with pytest.raises(ValueError, match="canonical validation") as error:
+        QhRolloutReader((store,), include_selected_depth=True)
+
+    message = str(error.value)
+    assert "finite positive pinhole focal" in message
+    assert "finite pixel coordinates" in message
+    assert "persisted depth raster size" in message
+    assert "declared invalid fill value" in message
+    assert "declared clip range" in message
+
+
 def test_reader_contract_records_selected_depth_geometry(tmp_path: Path) -> None:
     contract = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),), include_selected_depth=True).contract
 
@@ -373,7 +461,7 @@ def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monk
     validation = RolloutZarrStoreReader(store).validate()
     root = zarr.open_group(store, mode="a")
     root.attrs["selected_depth_renderer"] = "UnknownDepthRenderer"
-    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
 
     with pytest.raises(ValueError, match="CF-GT depth requires"):
         QhRolloutReader((store,), include_selected_depth=True)
@@ -392,7 +480,7 @@ def test_reader_rejects_noncanonical_invalid_fill_even_when_payload_matches(
     depth = np.asarray(root["selected_depth/depth_m"])
     depth[~valid_mask] = 42.0
     root["selected_depth/depth_m"][:] = depth
-    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
 
     with pytest.raises(ValueError, match="canonical versioned invalid fill"):
         QhRolloutReader((store,), include_selected_depth=True)
@@ -428,7 +516,7 @@ def test_reader_rejects_mixed_selected_depth_contracts_during_preflight(
     monkeypatch.setattr(
         RolloutZarrStoreReader,
         "validate",
-        lambda reader: validations[reader.store_dir],
+        lambda reader, **_kwargs: validations[reader.store_dir],
     )
 
     with pytest.raises(ValueError, match=f"incompatible {field}"):
@@ -642,7 +730,7 @@ def test_reader_materialization_preserves_n60_identity_across_packed_chains(
     selected_rows = candidate_rows[np.arange(selected.size), selected]
     root["steps/selected_candidate_row_id"][:] = selected_rows
     q_h["td_selected_candidate_row_id"][:] = selected_rows
-    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
 
     reader = QhRolloutReader((store,))
     chains = [
@@ -765,7 +853,7 @@ def test_reader_rejects_invalid_factual_rollout_partition(
     store = _write_packed_early_terminal_store(tmp_path / "early.zarr")
     validation = RolloutZarrStoreReader(store).validate()
     zarr.open_group(store, mode="a")["steps/rollout_row_id"][:] = np.asarray(step_rollout_ids, dtype=np.int64)
-    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
 
     with pytest.raises(ValueError, match="ordered factual step run|non-contiguous factual|orphaned factual steps"):
         QhRolloutReader((store,))
@@ -822,9 +910,13 @@ def test_reader_validates_each_store_exactly_once(tmp_path: Path, monkeypatch: p
     calls: list[Path] = []
     original = RolloutZarrStoreReader.validate
 
-    def recording_validate(reader: RolloutZarrStoreReader) -> RolloutZarrValidationResult:
+    def recording_validate(
+        reader: RolloutZarrStoreReader,
+        *,
+        validate_selected_depth_payload: bool = True,
+    ) -> RolloutZarrValidationResult:
         calls.append(reader.store_dir)
-        return original(reader)
+        return original(reader, validate_selected_depth_payload=validate_selected_depth_payload)
 
     monkeypatch.setattr(RolloutZarrStoreReader, "validate", recording_validate)
     reader = QhRolloutReader(stores)
@@ -840,7 +932,7 @@ def test_reader_rejects_failed_canonical_validation_before_preflight(
     store = _write_store(tmp_path / "rollouts.zarr")
     errors = [f"validation error {index}" for index in range(6)]
     result = RolloutZarrValidationResult(store, 0, 0, 0, errors)
-    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: result)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: result)
 
     with pytest.raises(ValueError) as raised:
         QhRolloutReader((store,))
