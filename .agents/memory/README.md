@@ -28,8 +28,10 @@ metadata; it is not a narrative owner.
 ## Debrief Contract
 
 Native debriefs use absolute ISO dates and include `id`, `date`, `title`,
-`status`, `topics`, `confidence`, and `canonical_updates_needed`. Use
-`make new-debrief TITLE="..."` to create the canonical frontmatter and body.
+`status`, `topics`, `confidence`, `canonical_updates_needed`, and the
+originating Codex thread as `codex_thread: codex://threads/<thread-id>`. Use
+`make new-debrief TITLE="..." CODEX_THREAD_ID="<thread-id>"` to create the
+canonical frontmatter and body. Existing historical records are grandfathered.
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.
@@ -50,6 +52,7 @@ status: done
 topics: [scaffold, codex, memory]
 confidence: high
 canonical_updates_needed: []
+codex_thread: codex://threads/<thread-id>
 ---
 ```
 
@@ -66,6 +69,7 @@ confidence: high
 canonical_updates_needed:
   - docs/typst/thesis/development/roadmap.typ
   - aria_nbv/aria_nbv/<owner>.py
+codex_thread: codex://threads/<thread-id>
 ---
 ```
 
