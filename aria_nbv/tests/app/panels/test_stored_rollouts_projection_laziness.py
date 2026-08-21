@@ -8,11 +8,14 @@ import json
 import os
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import zarr
 
+from aria_nbv.app.panels import _stored_rollout_session as session
 from aria_nbv.app.panels import _stored_rollouts_page as page
+from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
@@ -364,6 +367,140 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert failure_first != failure_second
     assert len(topology_calls) == 2
     assert len(failure_calls) == 2
+
+
+def test_open_session_computes_identity_once_and_binds_core_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Opening one session performs one identity walk and binds that key to its core."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    identity_calls: list[str] = []
+    bundle_calls: list[tuple[str, str]] = []
+    core = object()
+
+    def identity(path: str) -> str:
+        identity_calls.append(path)
+        return "identity-1"
+
+    def bundle(path: str, *, store_identity: str) -> tuple[object, object, dict[str, object]]:
+        bundle_calls.append((path, store_identity))
+        return core, object(), {}
+
+    monkeypatch.setattr(session, "_store_projection_identity", identity)
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", bundle)
+
+    opened = session.open_stored_rollout_session(store)
+
+    assert identity_calls == [store.resolve().as_posix()]
+    assert bundle_calls == [(store.resolve().as_posix(), "identity-1")]
+    assert opened.canonical_path == store.resolve()
+    assert opened.store_identity == "identity-1"
+    assert opened.reader is core
+
+
+def test_session_inventory_row_is_presentation_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Changing inventory metadata does not alter identity or bound core inputs."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    bundle_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "identity-1")
+    monkeypatch.setattr(
+        session,
+        "_cached_store_bundle_cached",
+        lambda path, *, store_identity: bundle_calls.append((path, store_identity)) or (object(), object(), {}),
+    )
+
+    first = session.open_stored_rollout_session(store, inventory_row={"candidate_count": 1})
+    second = session.open_stored_rollout_session(store, inventory_row={"candidate_count": 99})
+
+    assert first.store_identity == second.store_identity == "identity-1"
+    assert bundle_calls == [
+        (store.resolve().as_posix(), "identity-1"),
+        (store.resolve().as_posix(), "identity-1"),
+    ]
+
+
+def test_session_clear_invalidates_every_matrix_owner_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Owner-level invalidation clears inventory and candidate population as well as projections."""
+
+    names = (
+        "_cached_inventory",
+        "_cached_store_bundle_cached",
+        "_cached_projection_cached",
+        "_cached_candidate_population_cached",
+        "_cached_topology_cached",
+        "_cached_failures_cached",
+        "_cached_evidence_bundle_cached",
+    )
+    cleared: list[str] = []
+    for name in names:
+        monkeypatch.setattr(session, name, SimpleNamespace(clear=lambda name=name: cleared.append(name)))
+
+    session.clear_stored_rollout_caches()
+
+    assert cleared == list(names)
+
+
+def test_session_topology_preserves_structured_cache_arguments(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Topology retains PathConfig, VIN-directory tuple, and selected source row as arguments."""
+
+    calls: list[tuple[object, tuple[str, ...], PathConfig, int | None, str]] = []
+    config = PathConfig(root=tmp_path)
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "identity-1")
+
+    def cached_topology(
+        path: str,
+        vin_dirs: tuple[str, ...],
+        paths: PathConfig,
+        selected_source_row_id: int | None = None,
+        *,
+        store_identity: str,
+    ) -> object:
+        calls.append((path, vin_dirs, paths, selected_source_row_id, store_identity))
+        return object()
+
+    monkeypatch.setattr(session, "_cached_topology_cached", cached_topology)
+    session._cached_topology("/selected.zarr", ("/vin-a", "/vin-b"), config, 7)
+
+    assert calls == [("/selected.zarr", ("/vin-a", "/vin-b"), config, 7, "identity-1")]
+
+
+def test_session_open_does_not_materialize_heavy_projection_owners(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Opening a session is metadata/core-only and does not read candidate or deep-Q_H evidence."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    heavy_calls: list[str] = []
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "identity-1")
+    monkeypatch.setattr(
+        session,
+        "_cached_store_bundle_cached",
+        lambda *_args, **_kwargs: (object(), object(), {}),
+    )
+    for name in ("candidate_audit_rows", "candidate_population_evidence", "q_h_evidence_rows", "rollout_statistics"):
+        if hasattr(session, name):
+            monkeypatch.setattr(session, name, lambda *args, name=name, **kwargs: heavy_calls.append(name))
+
+    session.open_stored_rollout_session(store)
+
+    assert heavy_calls == []
+
+
+def test_session_cache_decorator_matrix_is_explicit() -> None:
+    """The session source keeps the exact cache kinds and bounds from the migration matrix."""
+
+    source = Path(session.__file__).read_text(encoding="utf-8")
+    assert "@st.cache_resource(show_spinner=False)" in source
+    assert '@st.cache_resource(show_spinner="Resolving dataset topology…", max_entries=16)' in source
+    assert '@st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)' in source
+    assert source.count('@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)') >= 2
+    assert '@st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)' in source
+    assert '@st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)' in source
 
 
 def _owner_stub(result: object) -> Callable[..., object]:
