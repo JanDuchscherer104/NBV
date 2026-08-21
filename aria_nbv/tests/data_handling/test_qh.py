@@ -622,6 +622,32 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
     assert result["selected_observation_protocol"] == "none"
 
 
+def test_named_cf0_requires_root_evl_and_does_not_load_selected_depth(tmp_path: Path, monkeypatch) -> None:
+    config = QhDatasetConfig(
+        rollout_store_dirs=(tmp_path / "rollouts.zarr",),
+        experiment_profile="qh_cf0_v1",
+    )
+    with pytest.raises(ValueError, match="requires compact root EVL"):
+        config.setup_target()
+
+    captured: dict[str, object] = {}
+
+    class _Reader:
+        def __init__(self, store_dirs, *, campaign_split, include_selected_depth):
+            captured["include_selected_depth"] = include_selected_depth
+
+    monkeypatch.setattr(qh_dataset_module, "QhRolloutReader", _Reader)
+    monkeypatch.setattr(qh_dataset_module, "VinOfflineStoreReader", lambda actor: "actor-reader")
+    monkeypatch.setattr(qh_dataset_module, "QhDataset", lambda **kwargs: kwargs)
+    result = QhDatasetConfig(
+        rollout_store_dirs=(tmp_path / "rollouts.zarr",),
+        experiment_profile="qh_cf0_v1",
+        root_evl_profile="evl_v1",
+    ).setup_target()
+    assert captured["include_selected_depth"] is False
+    assert result["experiment_profile"] == "qh_cf0_v1"
+
+
 def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

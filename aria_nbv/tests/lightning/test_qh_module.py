@@ -109,6 +109,31 @@ def test_scorer_is_required_and_not_part_of_config() -> None:
         QhLightningModule(QhLightningModuleConfig(lr_scheduler=None))  # type: ignore[call-arg]
 
 
+def test_named_cfplus_rejects_deployable_module_before_scorer_construction() -> None:
+    config = QhLightningModuleConfig(
+        lr_scheduler=None,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt",
+    )
+    with pytest.raises(ValueError, match="rejects privileged"):
+        QhLightningModule(config, scorer=_TableScorer())
+
+
+def test_named_cfplus_allows_explicit_privileged_module() -> None:
+    module = QhLightningModule(
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            experiment_profile="qh_cfplus_gt_depth_v1",
+            root_evl_profile="evl_v1",
+            selected_observation_protocol="cf_gt",
+            privileged=True,
+        ),
+        scorer=_TableScorer(),
+    )
+    assert module.config.experiment_profile == "qh_cfplus_gt_depth_v1"
+
+
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), "inf"])
 def test_huber_delta_rejects_nonfinite_values(value: float | str) -> None:
     with pytest.raises(ValidationError) as error:

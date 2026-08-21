@@ -36,6 +36,25 @@ if TYPE_CHECKING:
 
 QhRootEvlProfile = Literal["none", "evl_v1"]
 QhSelectedObservationProtocol = Literal["none", "cf_gt"]
+QhExperimentProfile = Literal["qh_cf0_v1", "qh_cfplus_gt_depth_v1"]
+
+
+def validate_experiment_profile(
+    profile: QhExperimentProfile,
+    *,
+    root_evl_profile: QhRootEvlProfile,
+    selected_observation_protocol: QhSelectedObservationProtocol,
+    privileged: bool = True,
+) -> None:
+    """Validate one named Q_H profile before dataset or scorer construction."""
+
+    if root_evl_profile != "evl_v1":
+        raise ValueError(f"Q_H profile {profile!r} requires compact root EVL profile 'evl_v1'.")
+    expected_observation = "none" if profile == "qh_cf0_v1" else "cf_gt"
+    if selected_observation_protocol != expected_observation:
+        raise ValueError(f"Q_H profile {profile!r} requires selected_observation_protocol={expected_observation!r}.")
+    if profile == "qh_cfplus_gt_depth_v1" and not privileged:
+        raise ValueError("Deployable Q_H configuration rejects privileged qh_cfplus_gt_depth_v1.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +72,9 @@ class QhActorStateContract:
 
     evl_block_signature: tuple[tuple[str, str, tuple[int, ...]], ...]
     """Sorted ``(block, dtype, canonical row shape)`` facts for root EVL tensors."""
+
+    experiment_profile: QhExperimentProfile | None = None
+    """Named CF0/CF+ role, or ``None`` for legacy diagnostic-only construction."""
 
 
 @dataclass(frozen=True, slots=True)

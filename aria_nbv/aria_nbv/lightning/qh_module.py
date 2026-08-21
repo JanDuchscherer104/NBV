@@ -18,7 +18,12 @@ from torch.nn import functional
 from torch.optim import Optimizer
 
 from ..data_handling.qh_data import QhActorTensors, QhBatch
-from ..data_handling.qh_data.views import QhRootEvlProfile, QhSelectedObservationProtocol
+from ..data_handling.qh_data.views import (
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,
+)
 from ..utils import Stage, TargetConfig
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 
@@ -43,6 +48,12 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
 
     selected_observation_protocol: QhSelectedObservationProtocol = "none"
     """Exact selected-observation source the injected scorer accepts; privileged CF-GT is opt-in."""
+
+    experiment_profile: QhExperimentProfile | None = None
+    """Closed named role; ``None`` retains legacy diagnostic-only construction."""
+
+    privileged: bool = False
+    """Allow the CF+ upper-bound role; deployable modules must leave this false."""
 
     @property
     def target_type(self) -> type["QhLightningModule"]:
@@ -96,6 +107,13 @@ class QhLightningModule(pl.LightningModule):
 
     def __init__(self, config: QhLightningModuleConfig, *, scorer: nn.Module) -> None:
         super().__init__()
+        if config.experiment_profile is not None:
+            validate_experiment_profile(
+                config.experiment_profile,
+                root_evl_profile=config.root_evl_profile,
+                selected_observation_protocol=config.selected_observation_protocol,
+                privileged=config.privileged,
+            )
         self.config = config
         self.automatic_optimization = False
         self.online_scorer = scorer
@@ -141,6 +159,13 @@ class QhLightningModule(pl.LightningModule):
                 f"{self.config.selected_observation_protocol!r} does not match actor selected-observation presence."
             )
 
+        if self.config.experiment_profile is not None:
+            if actor.static_context is None:
+                raise ValueError("Named Q_H experiment profiles require compact root EVL actor context.")
+            expected_selected = self.config.experiment_profile == "qh_cfplus_gt_depth_v1"
+            if (actor.selected_observation_prefix is not None) != expected_selected:
+                raise ValueError(f"Q_H actor does not match experiment profile {self.config.experiment_profile!r}.")
+
     def train(self, mode: bool = True) -> "QhLightningModule":
         """Propagate mode to the online scorer while keeping the target in eval."""
 
@@ -156,6 +181,11 @@ class QhLightningModule(pl.LightningModule):
         for scheduler in self.trainer.lr_scheduler_configs:
             if scheduler.interval != "step" or scheduler.reduce_on_plateau:
                 raise ValueError("Q_H supports only non-plateau per-step learning-rate schedulers.")
+        data_module = self.trainer.datamodule
+        if self.config.experiment_profile is not None and getattr(data_module, "experiment_profile", None) != (
+            self.config.experiment_profile
+        ):
+            raise ValueError("Q_H module and DataModule experiment profiles must match exactly.")
 
     def training_step(self, batch: QhBatch, batch_idx: int) -> Tensor | None:
         """Execute one globally admitted optimizer transaction or an exact no-op."""

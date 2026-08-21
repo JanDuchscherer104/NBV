@@ -22,7 +22,14 @@ from ..identifiers import compact_ase_atek_sample_id
 from ..vin_store.format import VinOfflineIndexRecord
 from ..vin_store.store import VinOfflineStoreConfig, VinOfflineStoreReader
 from .materialization import _audit_for, _evl_block_signature, _read_static_context, _tensor_chain
-from .views import QhActorStateContract, QhChain, QhRootEvlProfile, QhSelectedObservationProtocol
+from .views import (
+    QhActorStateContract,
+    QhChain,
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,
+)
 
 
 class QhDatasetConfig(TargetConfig["QhDataset"]):
@@ -42,6 +49,9 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
 
     selected_observation_protocol: QhSelectedObservationProtocol = "none"
     """Causal selected-observation source; ``cf_gt`` explicitly enables privileged rendered depth."""
+
+    experiment_profile: QhExperimentProfile | None = None
+    """Closed CF0/CF+ role; ``None`` retains legacy diagnostic-only setup."""
 
     include_audit: bool = False
     """Attach CPU-only chain provenance for debugging; never adds payloads to scorer tensors or device transfer."""
@@ -67,6 +77,12 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
             the configured actor manifest, split, and source rows.
         """
 
+        if self.experiment_profile is not None:
+            validate_experiment_profile(
+                self.experiment_profile,
+                root_evl_profile=self.root_evl_profile,
+                selected_observation_protocol=self.selected_observation_protocol,
+            )
         return QhDataset(
             rollout_reader=QhRolloutReader(
                 self.rollout_store_dirs,
@@ -77,6 +93,7 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
             split=self.split,
             root_evl_profile=self.root_evl_profile,
             selected_observation_protocol=self.selected_observation_protocol,
+            experiment_profile=self.experiment_profile,
             include_audit=self.include_audit,
         )
 
@@ -102,6 +119,7 @@ class QhDataset(Dataset[QhChain]):
         split: Stage | None = None,
         root_evl_profile: QhRootEvlProfile = "none",
         selected_observation_protocol: QhSelectedObservationProtocol = "none",
+        experiment_profile: QhExperimentProfile | None = None,
         include_audit: bool = False,
     ) -> None:
         """Validate rollout provenance against the configured immutable actor store.
@@ -132,6 +150,13 @@ class QhDataset(Dataset[QhChain]):
             )
         self.root_evl_profile = root_evl_profile
         self.selected_observation_protocol = selected_observation_protocol
+        if experiment_profile is not None:
+            validate_experiment_profile(
+                experiment_profile,
+                root_evl_profile=root_evl_profile,
+                selected_observation_protocol=selected_observation_protocol,
+            )
+        self.experiment_profile = experiment_profile
         self.include_audit = include_audit
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
         self._actor_state_contract = QhActorStateContract(
@@ -139,6 +164,7 @@ class QhDataset(Dataset[QhChain]):
             selected_observation_protocol=selected_observation_protocol,
             actor_manifest_hash=self._manifest_hash,
             evl_block_signature=_evl_block_signature(actor_reader) if root_evl_profile == "evl_v1" else (),
+            experiment_profile=experiment_profile,
         )
         self._records = {record.sample_index: record for record in actor_reader.get_split_records(None)}
         self._validate_source_refs()

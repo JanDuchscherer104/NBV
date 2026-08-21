@@ -20,7 +20,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
-from ..data_handling.qh_data.views import QhActorStateContract
+from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProfile
 from ..rollouts.qh_reader import QhDataContract
 
 
@@ -59,6 +59,7 @@ class QhDataModule(pl.LightningDataModule):
         pin_memory: bool = False,
         persistent_workers: bool = False,
         seed: int,
+        experiment_profile: QhExperimentProfile | None = None,
     ) -> None:
         super().__init__()
         self.train_dataset = train
@@ -69,6 +70,7 @@ class QhDataModule(pl.LightningDataModule):
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers and num_workers > 0
         self.seed = seed
+        self.experiment_profile = experiment_profile
 
         stages = {
             name: dataset for name, dataset in (("train", train), ("val", val), ("test", test)) if dataset is not None
@@ -78,6 +80,13 @@ class QhDataModule(pl.LightningDataModule):
             raise ValueError(f"Q_H configured corpus stages must contain at least one chain: {empty}.")
         if any(dataset.contract != train.contract for dataset in stages.values()):
             raise ValueError("Q_H corpus stages have incompatible learning contracts.")
+        if experiment_profile is not None:
+            for name, dataset in stages.items():
+                if dataset.actor_state_contract.experiment_profile != experiment_profile:
+                    raise ValueError(
+                        f"Q_H {name} stage has experiment profile "
+                        f"{dataset.actor_state_contract.experiment_profile!r}, expected {experiment_profile!r}."
+                    )
         for name, dataset in stages.items():
             if dataset.actor_state_contract == train.actor_state_contract:
                 continue

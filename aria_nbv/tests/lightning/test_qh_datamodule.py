@@ -120,3 +120,12 @@ def test_datamodule_uses_seeded_train_shuffle_and_sequential_evaluation() -> Non
     assert list(first.train_dataloader().sampler) == list(second.train_dataloader().sampler)
     assert isinstance(first.val_dataloader().sampler, SequentialSampler)  # type: ignore[union-attr]
     assert isinstance(first.test_dataloader().sampler, SequentialSampler)  # type: ignore[union-attr]
+
+
+def test_datamodule_requires_exact_named_experiment_profile() -> None:
+    actor = replace(_ACTOR_CONTRACT, experiment_profile="qh_cf0_v1")
+    qh = _StructuralDataset("train", actor_state_contract=actor)
+    data = qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cf0_v1")  # type: ignore[arg-type]
+    assert data.experiment_profile == "qh_cf0_v1"
+    with pytest.raises(ValueError, match="experiment profile"):
+        qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cfplus_gt_depth_v1")  # type: ignore[arg-type]
