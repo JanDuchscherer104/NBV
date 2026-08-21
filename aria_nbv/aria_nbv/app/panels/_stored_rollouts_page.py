@@ -1383,6 +1383,28 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             frame = frame.assign(generation_cohort_id="unknown")
         if "population" not in frame:
             frame = frame.assign(population="all")
+        if "state_count" in frame:
+            state_values = pd.to_numeric(frame["state_count"], errors="coerce").dropna().astype(int).unique()
+            defined_values = (
+                pd.to_numeric(frame["defined_state_count"], errors="coerce").dropna().astype(int).unique()
+                if "defined_state_count" in frame
+                else []
+            )
+            scene_values = (
+                pd.to_numeric(frame["scene_count"], errors="coerce").dropna().astype(int).unique()
+                if "scene_count" in frame
+                else []
+            )
+            candidate_values = (
+                pd.to_numeric(frame["candidate_total_count"], errors="coerce").dropna().astype(int).unique()
+                if "candidate_total_count" in frame
+                else []
+            )
+            if len(state_values) == len(defined_values) == len(scene_values) == len(candidate_values) == 1:
+                st.caption(
+                    f"{level}: {candidate_values[0]:,} candidate rows across {state_values[0]:,} factual states "
+                    f"({defined_values[0]:,} with finite support) and {scene_values[0]:,} scene(s)."
+                )
         y = "mean" if "mean" in frame else "count"
         x = "metric" if "metric" in frame else "evidence"
         fig = px.bar(

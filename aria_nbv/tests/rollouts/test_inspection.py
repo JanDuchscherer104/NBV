@@ -477,7 +477,7 @@ def test_candidate_motion_support_reports_clearance_and_collision_missingness() 
         }
     ]
     evidence = candidate_motion_support_evidence(rows)
-    clearance = next(row for row in evidence if row["metric"] == "path_min_clearance")
+    clearance = next(row for row in evidence if row["metric"] == "path_min_clearance_m")
     collision = next(row for row in evidence if row["metric"] == "path_collision_rate")
     assert clearance["available"] is False
     assert clearance["missing_count"] == 1
@@ -863,6 +863,98 @@ def test_direction_macro_state_dedup_includes_scene_identity() -> None:
     assert macro["candidate_direction_count"] == 4
     assert macro["total_count"] == 4
     assert macro["finite_count"] + macro["missing_count"] == 4
+
+
+def test_support_macros_expose_candidate_and_macro_denominators_without_pooling() -> None:
+    """Unequal fan-out and reused local ids retain truthful state/scene facets."""
+
+    from aria_nbv.rollouts.inspection import (
+        candidate_direction_evidence,
+        candidate_motion_support_evidence,
+        candidate_spatial_support_evidence,
+        candidate_target_view_evidence,
+    )
+
+    common = {**_direction_fixture_rows()[0], "generation_cohort_id": "cohort-a"}
+    rows = [
+        {
+            **common,
+            "scene": "scene-a",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "candidate_row_id": 0,
+            "target_distance_m": 1.0,
+        },
+        {
+            **common,
+            "scene": "scene-a",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "candidate_row_id": 1,
+            "target_distance_m": None,
+        },
+        {
+            **common,
+            "scene": "scene-b",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "candidate_row_id": 2,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+            "target_distance_m": 2.0,
+        },
+    ]
+
+    spatial = next(
+        row
+        for row in candidate_spatial_support_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["metric"] == "root_xy_radius"
+    )
+    assert spatial["state_count"] == 2
+    assert spatial["scene_count"] == 2
+    assert spatial["candidate_total_count"] == 3
+    assert spatial["candidate_finite_count"] == 3
+    assert spatial["candidate_missing_count"] == 0
+
+    target = next(
+        row
+        for row in candidate_target_view_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["evidence"] == "target_distance"
+    )
+    assert target["state_count"] == 2
+    assert target["scene_count"] == 2
+    assert target["candidate_total_count"] == 3
+    assert target["candidate_finite_count"] == 2
+    assert target["candidate_missing_count"] == 1
+
+    direction = next(
+        row
+        for row in candidate_direction_evidence(rows)["cap_rows"]
+        if row["aggregation_level"] == "cohort_macro" and row["population"] == "all" and row["radius_deg"] == 30
+    )
+    assert direction["state_count"] == 2
+    assert direction["scene_count"] == 2
+    assert direction["total_count"] == 3
+    assert direction["finite_count"] == 2
+    assert direction["missing_count"] == 1
+
+    motion = next(
+        row
+        for row in candidate_motion_support_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["metric"] == "path_min_clearance_m"
+    )
+    assert motion["state_count"] == 2
+    assert motion["scene_count"] == 2
+    assert motion["candidate_total_count"] == 3
+    assert motion["candidate_finite_count"] == 0
+    assert motion["candidate_missing_count"] == 3
 
 
 def test_angular_covering_cohort_macro_aggregates_scene_values() -> None:

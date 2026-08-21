@@ -823,6 +823,8 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
             "valid_count": valid,
             "finite_count": valid,
             "missing_count": len(state_rows) - valid,
+            "defined_state_count": int(valid > 0),
+            "scene_count": 1,
             "candidate_direction_count": len(state_rows),
             "units": "solid-angle fraction",
             "protocol": {"binning": "azimuth x sin(elevation)"},
@@ -982,6 +984,8 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     "aggregation_level": level,
                     "scene": key[1],
                     "state_count": len(facet_rows),
+                    "defined_state_count": sum(int(row.get("available", False)) for row in facet_rows),
+                    "scene_count": len({str(row.get("scene", "unknown")) for row in facet_rows}),
                     "total_count": total_count,
                     "candidate_direction_count": total_count,
                     "valid_count": valid_count,
@@ -996,7 +1000,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
         for level in ("scene_macro", "cohort_macro"):
             groups: dict[tuple[str, str, str, object], list[dict[str, object]]] = {}
             for row in rows_out:
-                if row["aggregation_level"] != "state" or not row["available"]:
+                if row["aggregation_level"] != "state":
                     continue
                 scene = str(row["scene"]) if level == "scene_macro" else "all"
                 facet = row.get("radius_deg", metric_name)
@@ -1031,6 +1035,15 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                         **grouped[0],
                         "aggregation_level": level,
                         "scene": key[1],
+                        "state_count": len(grouped),
+                        "defined_state_count": sum(
+                            int(row.get(value_key) is not None or row.get("covering_radius_deg") is not None)
+                            for row in grouped
+                        ),
+                        "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
+                        "total_count": sum(int(row.get("total_count", row.get("valid_count", 0))) for row in grouped),
+                        "finite_count": sum(int(row.get("valid_count", 0)) for row in grouped),
+                        "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
                         "value": None if not values else float(np.mean(values)),
                         value_key: None if not values else float(np.mean(values)),
                         "covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
@@ -1082,8 +1095,15 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "declared_shell": shell,
                     "population": population,
                     "count": len(grouped),
+                    "total_count": len(grouped),
                     "finite_count": len(vals),
                     "missing_count": len(grouped) - len(vals),
+                    "candidate_total_count": len(grouped),
+                    "candidate_finite_count": len(vals),
+                    "candidate_missing_count": len(grouped) - len(vals),
+                    "state_count": 1,
+                    "defined_state_count": int(bool(vals)),
+                    "scene_count": 1,
                     "mean": None if not vals else float(np.mean(vals)),
                     "units": "m",
                     "available": bool(vals),
@@ -1093,7 +1113,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
     for level in ("scene_macro", "cohort_macro"):
         groups_macro: dict[tuple[str, str, str, str, str], list[dict[str, object]]] = {}
         for row in output:
-            if row["aggregation_level"] != "state" or not row["available"]:
+            if row["aggregation_level"] != "state":
                 continue
             scene = str(row["scene"]) if level == "scene_macro" else "all"
             groups_macro.setdefault(
@@ -1121,7 +1141,22 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "aggregation_level": level,
                     "scene": key[1],
                     "mean": None if not values else float(np.mean(values)),
-                    "finite_count": len(values),
+                    "count": sum(int(row.get("count", 0)) for row in grouped),
+                    "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
+                    "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
+                    "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                    "candidate_total_count": sum(
+                        int(row.get("candidate_total_count", row.get("count", 0))) for row in grouped
+                    ),
+                    "candidate_finite_count": sum(
+                        int(row.get("candidate_finite_count", row.get("finite_count", 0))) for row in grouped
+                    ),
+                    "candidate_missing_count": sum(
+                        int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
+                    ),
+                    "state_count": len(grouped),
+                    "defined_state_count": len(values),
+                    "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
                     "available": bool(values),
                 }
             )
@@ -1148,8 +1183,15 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                 "aggregation_level": "state",
                 "available": bool(finite),
                 "count": len(grouped),
+                "total_count": len(grouped),
                 "finite_count": len(finite),
                 "missing_count": len(grouped) - len(finite),
+                "candidate_total_count": len(grouped),
+                "candidate_finite_count": len(finite),
+                "candidate_missing_count": len(grouped) - len(finite),
+                "state_count": 1,
+                "defined_state_count": int(bool(finite)),
+                "scene_count": 1,
                 "mean": None if not finite else float(np.mean(finite)),
                 "units": "m",
             }
@@ -1166,8 +1208,15 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                     "aggregation_level": "state",
                     "available": False,
                     "count": len(grouped),
+                    "total_count": len(grouped),
                     "finite_count": 0,
                     "missing_count": len(grouped),
+                    "candidate_total_count": len(grouped),
+                    "candidate_finite_count": 0,
+                    "candidate_missing_count": len(grouped),
+                    "state_count": 1,
+                    "defined_state_count": 0,
+                    "scene_count": 1,
                     "units": "boolean" if name == "target_line_of_sight" else "px/degrees",
                     "reason": "optical calibration or visibility is not persisted",
                 }
@@ -1198,8 +1247,21 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                     "mean": None if not finite else float(np.mean(finite)),
                     "available": bool(finite),
                     "count": sum(int(row["count"]) for row in grouped),
-                    "finite_count": len(finite),
-                    "missing_count": sum(int(row["missing_count"]) for row in grouped),
+                    "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
+                    "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
+                    "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                    "candidate_total_count": sum(
+                        int(row.get("candidate_total_count", row.get("count", 0))) for row in grouped
+                    ),
+                    "candidate_finite_count": sum(
+                        int(row.get("candidate_finite_count", row.get("finite_count", 0))) for row in grouped
+                    ),
+                    "candidate_missing_count": sum(
+                        int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
+                    ),
+                    "state_count": len(grouped),
+                    "defined_state_count": len(finite),
+                    "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
                 }
             )
     return result
@@ -1228,22 +1290,26 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
             "population": population,
             "aggregation_level": "state",
             "count": len(grouped),
+            "total_count": len(grouped),
+            "candidate_total_count": len(grouped),
+            "scene_count": 1,
         }
         for metric, units in metrics:
             values = [value for row in grouped if (value := _finite_or_none(row.get(metric))) is not None]
             result.append(
                 {
                     **base,
-                    "metric": "path_min_clearance" if metric == "path_min_clearance_m" else metric,
+                    "metric": metric,
                     "available": bool(values),
                     "finite_count": len(values),
                     "missing_count": len(grouped) - len(values),
+                    "candidate_finite_count": len(values),
+                    "candidate_missing_count": len(grouped) - len(values),
+                    "defined_state_count": int(bool(values)),
                     "mean": None if not values else float(np.mean(values)),
                     "units": units,
                 }
             )
-            if metric == "path_min_clearance_m":
-                result.append({**result[-1], "metric": metric})
         applicable = [row for row in grouped if row.get("path_collision_applicable") is True]
         evaluated = [row for row in applicable if row.get("path_collision_evaluated") is True]
         collisions = [row for row in evaluated if row.get("path_collision") is True]
@@ -1252,7 +1318,11 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                 **base,
                 "metric": "path_collision_rate",
                 "available": bool(evaluated),
+                "finite_count": len(evaluated),
                 "missing_count": len(grouped) - len(evaluated),
+                "candidate_finite_count": len(evaluated),
+                "candidate_missing_count": len(grouped) - len(evaluated),
+                "defined_state_count": int(bool(evaluated)),
                 "applicable_count": len(applicable),
                 "evaluated_count": len(evaluated),
                 "collision_count": len(collisions),
@@ -1277,8 +1347,23 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                 "aggregation_level": level,
                 "scene": key[1],
                 "count": sum(int(row["count"]) for row in grouped),
+                "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
                 "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
                 "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                "candidate_total_count": sum(
+                    int(row.get("candidate_total_count", row.get("count", 0))) for row in grouped
+                ),
+                "candidate_finite_count": sum(
+                    int(row.get("candidate_finite_count", row.get("finite_count", 0))) for row in grouped
+                ),
+                "candidate_missing_count": sum(
+                    int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
+                ),
+                "state_count": len(grouped),
+                "defined_state_count": sum(
+                    int(row.get("defined_state_count", row.get("available", False))) for row in grouped
+                ),
+                "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
             }
             if key[3] == "path_collision_rate":
                 applicable = sum(int(row.get("applicable_count", 0)) for row in grouped)
