@@ -74,7 +74,14 @@ from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene
 from ..scientific_labels import format_scientific_label
 from ..state import get_label_display_mode
 from ..state_types import config_signature
-from .common import _info_popover, _plot_with_y_axis_control, _pretty_label, _report_exception, _strip_ansi
+from .common import (
+    _info_popover,
+    _plot_with_y_axis_control,
+    _pretty_label,
+    _report_exception,
+    _strip_ansi,
+    render_scientific_notation,
+)
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 
@@ -1958,6 +1965,13 @@ def _render_live_rollout_metric_dashboard(
     )
 
     fanout_fig = _build_fanout_band_figure(step_df)
+    render_scientific_notation(
+        "selected_target_root_gain",
+        "cumulative_target_root_gain",
+        "return_h",
+        "endpoint_gain",
+        "log_gain",
+    )
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
