@@ -30,6 +30,7 @@ from ...dataset_topology import discover_vin_store_dirs
 from ...rollouts.inspection import discover_rollout_store_paths
 from ..scientific_labels import format_scientific_label, scientific_label
 from ..state import get_label_display_mode
+from .common import render_scientific_notation
 
 _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"
@@ -437,6 +438,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             f"This action constructs the selected stage datasets and the production {_scientific_label('q_h')}DataModule. "
             "It does not create a model or Trainer."
         )
+        render_scientific_notation("q_h", "return_h", "horizon")
         controls = st.columns(3)
         batch_size = int(controls[0].number_input("Q_H batch size", min_value=1, value=1, step=1))
         seed = int(controls[1].number_input("Q_H loader seed", min_value=0, value=0, step=1))

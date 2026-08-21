@@ -15,6 +15,7 @@ from ....rollouts.inspection import rollout_endpoint_metric_summary
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import LabelSurface, TheoryReferences, format_scientific_label, scientific_label
 from ...state import get_label_display_mode
+from ..common import render_scientific_notation
 from .session import _cached_projection
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
@@ -195,6 +196,7 @@ def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, met
     cols[0].metric("Validated shards", store_count)
     cols[1].metric("Observed rows", f"{int(rows['finite_count'].sum()):,} / {int(rows['total_count'].sum()):,}")
     cols[2].metric("Maximum IQR width", "n/a" if pd.isna(iqr_width) else f"{float(iqr_width):.3g}")
+    render_scientific_notation(metric)
     _render_plot(
         _temporal_summary_figure(rows, group_field="trajectory", metric_label=label),
         ScientificExplanation(
@@ -406,6 +408,8 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
             f"Policy trajectories are descriptive here; exact matched-cohort inference is {comparison_status} "
             "and remains a separate surface above."
         )
+
+    render_scientific_notation(metric)
 
     summary = pd.DataFrame(
         _cached_projection(

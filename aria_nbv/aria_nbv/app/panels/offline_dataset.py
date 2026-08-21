@@ -32,7 +32,7 @@ from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
 from ..scientific_labels import LabelSurface, format_scientific_label, scientific_label
 from ..state import get_label_display_mode
-from .common import _offline_summary_rows
+from .common import _offline_summary_rows, render_scientific_notation
 
 _STATS_CACHE_KEY = "vin_offline_dataset_page_stats"
 _COVERAGE_CACHE_KEY = "vin_offline_dataset_page_coverage"
@@ -167,6 +167,7 @@ def _render_rri_components(stats: VinOfflineDatasetStats, *, hist_bins: int, log
     else:
         st.info("No RRI component blocks available.")
         return
+    render_scientific_notation("rri", "point_to_mesh_error", "mesh_to_point_error")
 
     for name, values in sorted(stats.rri_component_values.items()):
         _render_histogram(
@@ -319,6 +320,7 @@ def _render_binner(stats: VinOfflineDatasetStats, *, binner_classes: int, hist_b
         title=f"Raw {_scientific_label('oracle_rri')} with Quantile Edges",
         labels={"x": _scientific_label("oracle_rri"), "y": "count"},
     )
+    render_scientific_notation("oracle_rri")
     if log_y:
         fig.update_yaxes(type="log")
     for edge in binner.edges.cpu().tolist():
