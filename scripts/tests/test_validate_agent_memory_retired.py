@@ -19,6 +19,7 @@ from validate_agent_memory import (
 def test_only_frozen_retired_sources_are_accepted_as_historical_receipts() -> None:
     assert "docs/contents/thesis/roadmap.qmd" in RETIRED_SOURCE_PATHS
     assert ".agents/memory/state/DECISIONS.md" in RETIRED_SOURCE_PATHS
+    assert ".agents/references/source_order.md" in RETIRED_SOURCE_PATHS
     assert "docs/contents/thesis/current.qmd" not in RETIRED_SOURCE_PATHS
     assert ".agents/memory/state/NEW_STATE.md" not in RETIRED_SOURCE_PATHS
 
@@ -28,13 +29,17 @@ def test_only_exact_historical_records_can_target_retired_paths(
 ) -> None:
     retired = ".agents/memory/state/DECISIONS.md"
     root = Path(__file__).resolve().parents[2]
-    known_path = root / ".agents/memory/history/2026/03/2026-03-30_quarto_agent_scaffold_pages.md"
+    known_path = (
+        root
+        / ".agents/memory/history/2026/03/2026-03-30_quarto_agent_scaffold_pages.md"
+    )
     assert allows_retired_canonical_update({}, retired, known_path)
 
-    active_path = root / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
-    assert not allows_retired_canonical_update(
-        {}, retired, active_path
+    active_path = (
+        root
+        / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
     )
+    assert not allows_retired_canonical_update({}, retired, active_path)
 
     backdated = tmp_path / "backdated.md"
     backdated.write_text(
@@ -85,7 +90,9 @@ def test_same_path_modified_record_is_rejected(tmp_path: Path, monkeypatch) -> N
     ).stdout.strip()
     monkeypatch.setattr(validator, "REPO_ROOT", repo)
     monkeypatch.setattr(validator, "RETIREMENT_CUTOVER_COMMIT", cutover)
-    assert allows_retired_canonical_update({}, ".agents/memory/state/DECISIONS.md", record)
+    assert allows_retired_canonical_update(
+        {}, ".agents/memory/state/DECISIONS.md", record
+    )
     record.write_text("modified\n", encoding="utf-8")
     assert not allows_retired_canonical_update(
         {}, ".agents/memory/state/DECISIONS.md", record

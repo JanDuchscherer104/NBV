@@ -21,6 +21,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
+CODEX_THREAD_ID_PATTERN = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+)
 
 
 def slugify(title: str) -> str:
@@ -81,12 +84,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not re.fullmatch(r"[A-Za-z0-9-]+", args.thread_id):
+    if not CODEX_THREAD_ID_PATTERN.fullmatch(args.thread_id):
         parser.error("--thread-id must be a Codex thread ID")
 
     file_path, body = render(date.today(), args.title, args.thread_id)
     if file_path.exists() and not args.force:
-        print(f"debrief already exists: {file_path.relative_to(REPO_ROOT)}", file=sys.stderr)
+        print(
+            f"debrief already exists: {file_path.relative_to(REPO_ROOT)}",
+            file=sys.stderr,
+        )
         print("re-run with --force to overwrite", file=sys.stderr)
         return 1
     file_path.write_text(body, encoding="utf-8")

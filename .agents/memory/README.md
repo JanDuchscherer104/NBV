@@ -29,9 +29,10 @@ metadata; it is not a narrative owner.
 
 Native debriefs use absolute ISO dates and include `id`, `date`, `title`,
 `status`, `topics`, `confidence`, `canonical_updates_needed`, and the
-originating Codex thread as `codex_thread: codex://threads/<thread-id>`. Use
-`make new-debrief TITLE="..." CODEX_THREAD_ID="<thread-id>"` to create the
-canonical frontmatter and body. Existing historical records are grandfathered.
+originating Codex thread as `codex_thread: codex://threads/<thread-id>`. This
+field is required for native records dated on or after 2026-08-21. Use `make
+new-debrief TITLE="..." CODEX_THREAD_ID="<thread-id>"` to create the canonical
+frontmatter and body. Earlier historical records are grandfathered.
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.
