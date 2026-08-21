@@ -357,6 +357,23 @@ def test_rollout_zarr_validation_requires_selected_depth_when_enabled(tmp_path) 
     assert any("selected_depth/step_row_id" in error or "selected-depth" in error for error in validation.errors)
 
 
+def test_rollout_zarr_validation_reports_mismatched_selected_depth_shapes(tmp_path) -> None:
+    """Malformed depth/mask shapes must return structured validation errors, not broadcast exceptions."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=9)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    valid_mask = root["selected_depth/valid_mask"]
+    valid_mask.resize((valid_mask.shape[0], valid_mask.shape[1] - 1, valid_mask.shape[2]))
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+
+    assert not validation.ok
+    assert any("selected_depth/valid_mask shape" in error for error in validation.errors)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     (

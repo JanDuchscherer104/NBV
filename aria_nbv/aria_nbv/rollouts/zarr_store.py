@@ -1117,15 +1117,18 @@ class _RolloutZarrValidator:
         depth_values = np.asarray(depth_m, dtype=np.float32)
         valid_values = np.asarray(valid_mask, dtype=np.bool_)
         invalid_fill = float(self.root.attrs.get("selected_depth_invalid_fill_value", np.nan))
-        if np.any(valid_values & ~np.isfinite(depth_values)):
-            self.errors.append("selected_depth valid pixels must contain finite camera-z depth.")
-        if np.any(~valid_values & (depth_values != invalid_fill)):
-            self.errors.append("selected_depth invalid pixels must equal the declared invalid fill value.")
+        if depth_values.shape == valid_values.shape:
+            if np.any(valid_values & ~np.isfinite(depth_values)):
+                self.errors.append("selected_depth valid pixels must contain finite camera-z depth.")
+            if np.any(~valid_values & (depth_values != invalid_fill)):
+                self.errors.append("selected_depth invalid pixels must equal the declared invalid fill value.")
         znear = float(self.root.attrs.get("selected_depth_znear_m", np.nan))
         zfar = float(self.root.attrs.get("selected_depth_zfar_m", np.nan))
         if not np.isfinite([znear, zfar]).all() or not 0 < znear < zfar:
             self.errors.append("selected_depth clip planes must be finite, positive, and ordered.")
-        elif np.any(valid_values & ((depth_values < znear) | (depth_values > zfar))):
+        elif depth_values.shape == valid_values.shape and np.any(
+            valid_values & ((depth_values < znear) | (depth_values > zfar))
+        ):
             self.errors.append("selected_depth valid camera-z values must lie within the declared clip range.")
 
     def _validate_target_eval_crops(self) -> None:
