@@ -30,6 +30,7 @@ metadata:
   must_read:
     - "aria_nbv/AGENTS.md"
     - ".agents/skills/python-standards/references/general_conventions.md"
+    - ".agents/skills/python-standards/references/verification.md"
   canonical_sources:
     - "aria_nbv/AGENTS.md#completion-criteria"
     - "aria_nbv/pyproject.toml"
@@ -130,36 +131,10 @@ config/datamodel, or sequencing examples, load the matching section in
 
 ## Verification Commands
 
-Run from the repository root. `aria_nbv/pyproject.toml` owns Ruff/mypy/pytest/coverage
-configuration, `aria_nbv/uv.lock` pins versions, and `Makefile` owns gates/path
-normalization. Point to these sources, not copied flags or pins.
-
-- `make package-smoke` runs fixed Ruff/pytest smoke surfaces plus the public API
-  typing contract; CI adds `make ruff-full` for the complete stable Ruff surface;
-  CI sets `PYTEST_WORKERS=0`; `make mypy-contract` runs that contract alone.
-- `make ruff-full` or `make ruff-targeted RUFF_PATHS="..."` runs stable Ruff
-  gates; `make coverage-targeted COVERAGE_TESTS="tests/<path>"` reports branch
-  coverage. Add `MYPY_JUNIT_XML=/tmp/mypy.xml` or
-  `COVERAGE_JSON=/tmp/coverage.json` for structured output.
-- `make mypy-targeted MYPY_PATHS="aria_nbv/<path> tests/<path>"` checks selected roots;
-  `make mypy-full` remains informational while its baseline is nonzero.
-- `coverage-targeted` is intentionally operator-selected rather than a CI gate;
-  it has no representative repository-wide threshold yet.
-
-Pass repository-root paths such as `aria_nbv/aria_nbv/<path>` or `aria_nbv/tests/<path>`;
-the target normalizes, validates, and deduplicates them. Targeted success is surface-limited.
-Include `aria_nbv/tests/data_handling/public_api_typing_contract.py` for affected exports.
-
-```sh
-cd aria_nbv
-uv run --extra dev ruff format --check <changed-paths> && uv run --extra dev ruff check <changed-paths>
-uv run --extra dev pytest --import-mode=importlib <tests> && uv run --extra dev pytest --import-mode=importlib --cov <tests>
-```
-
-Targeted Ruff, pytest, coverage, and mypy results apply only to the named surface;
-package-smoke covers its fixed list. Claim package-wide results only after the corresponding
-full surface succeeds; full mypy is currently non-gating.
+Read [references/verification.md](./references/verification.md) for the narrowest
+Ruff, pytest, coverage, mypy, and generated-doc proof. Report exact scope;
+targeted success never proves package-wide correctness.
 
 ## References
 
-- [General Python conventions](./references/general_conventions.md); [Tensor and NumPy shapes](./references/tensor-shapes.md); [Theory-rich docstrings](./references/theory-rich-docstrings.md); [Config and datamodel fields](./references/config-datamodel-fields.md); [Quartodoc contract](./references/quartodoc-contract.md); [Cross-references](./references/cross-references.md)
+- [General conventions](./references/general_conventions.md); [verification](./references/verification.md); [canonical examples](./references/canonical-examples.md); [tensor shapes](./references/tensor-shapes.md); [theory](./references/theory-rich-docstrings.md); [fields](./references/config-datamodel-fields.md); [Quartodoc](./references/quartodoc-contract.md); [cross-references](./references/cross-references.md)

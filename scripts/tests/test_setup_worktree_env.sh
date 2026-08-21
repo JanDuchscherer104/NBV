@@ -37,7 +37,7 @@ git -C "${SHARED_ROOT}" commit -qm fixture
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 cat >"${SHARED_ROOT}/fake-graphify-python" <<'EOF'
 #!/usr/bin/env sh
-printf '%s\n' 0.9.47
+printf '%s\n' 0.9.48
 EOF
 chmod +x "${SHARED_ROOT}/fake-graphify-python"
 git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"

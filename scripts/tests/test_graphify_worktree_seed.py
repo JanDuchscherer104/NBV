@@ -33,7 +33,7 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         self.git("worktree", "add", "--detach", str(self.destination), "HEAD")
         self.graphify_python = self.sandbox / "fake-graphify-python"
         self.graphify_python.write_text(
-            "#!/usr/bin/env sh\nprintf '%s\\n' 0.9.47\n",
+            "#!/usr/bin/env sh\nprintf '%s\\n' 0.9.48\n",
             encoding="utf-8",
         )
         self.graphify_python.chmod(0o755)

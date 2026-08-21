@@ -107,6 +107,25 @@ def test_legacy_imported_record_cannot_introduce_retired_reference(
     assert any("retired canonical update" in error for error in check_history_records())
 
 
+def test_migration_receipt_rejects_compatibility_pointer_destinations(
+    tmp_path: Path, monkeypatch
+) -> None:
+    receipt = tmp_path / "receipt.md"
+    text = validator.MIGRATION_RECEIPT.read_text(encoding="utf-8")
+    text = text.replace(
+        ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy",
+        ".agents/references/source_order.md#compositional-owner-tree",
+        1,
+    )
+    receipt.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(validator, "MIGRATION_RECEIPT", receipt)
+
+    assert any(
+        "compatibility pointer, not a canonical owner" in error
+        for error in validator.check_migration_receipt()
+    )
+
+
 def test_generated_omx_outputs_cannot_be_tracked() -> None:
     assert check_tracked_omx_records([".omx/plans/current.md"]) == []
     assert (

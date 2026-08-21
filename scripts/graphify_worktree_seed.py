@@ -23,7 +23,7 @@ ROOT = Path("graphify-out/.graphify_root")
 SENTINEL = Path("graphify-out/.aria-worktree-seed.json")
 CACHE = Path("graphify-out/cache")
 GRAPHIFY_DISTRIBUTION = "graphifyy"
-PINNED_GRAPHIFY_VERSION = "0.9.47"
+PINNED_GRAPHIFY_VERSION = "0.9.48"
 
 
 def fail(message: str) -> None:

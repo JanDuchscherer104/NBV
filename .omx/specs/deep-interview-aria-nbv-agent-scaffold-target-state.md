@@ -99,8 +99,8 @@ this operational detail, while root `AGENTS.md` remains a compact pointer.
 This amendment supersedes the two ownership sentences above that place an
 ARIA-NBV preflight or operational detail inside the project-installed Graphify
 skill. The complete skill bundle under `.agents/skills/graphify/` remains
-byte-identical to upstream Graphify 0.9.47 at commit
-`b14b52e94ec3d9840413d81777f4c134eac0a40d`; `aria-nbv-context` owns all
+byte-identical to upstream Graphify 0.9.31 at commit
+`4fe11092ccbe9f543608f140c790f68d5d83cae4`; `aria-nbv-context` owns all
 ARIA-NBV-specific eligibility, projection, freshness, exact-source fallback,
 and current-client compatibility instructions.
 
@@ -158,10 +158,11 @@ It then opens the exact owner; Graphify remains navigation evidence, never the
 owner it locates.
 
 The project-installed bundle advances to byte-identical upstream Graphify
-0.9.47 at commit `b14b52e94ec3d9840413d81777f4c134eac0a40d`. Upstream Git hooks are the
+0.9.48 at commit `b2cd36267456c166788c95be6e68574064a92a42`. Upstream Git hooks are the
 default local accelerator for primary-checkout post-commit and post-checkout
-code refresh. Hook presence or success does not prove semantic-document
-freshness, and upstream hooks intentionally skip linked worktrees; ARIA's
+code refresh. Document and image changes require explicit semantic refresh;
+hook presence or success does not prove semantic-document freshness, and upstream
+hooks intentionally skip linked worktrees; ARIA's
 worktree initialization, freshness classification, repair, and degraded route
 therefore remain behind `aria-nbv-context`.
 
@@ -172,7 +173,7 @@ context reference instead of root guidance. Current external docs remain
 supporting evidence and cannot override installed behavior, focused tests, or
 ARIA's exact owner.
 
-## Accepted 2026-08-19 Context Hierarchy And Context7 App Supersession
+## Accepted 2026-08-19 Context Hierarchy And Context7 Plugin Supersession
 
 The human owner now selects `aria-nbv-context` as the single current owner of
 the hierarchical source map, conflict rule, capture destinations, Graphify
@@ -187,9 +188,9 @@ bibliographies, paper reviews, and the active thesis sections that consume
 them. These descriptions route agents; the named files remain the scientific,
 bibliographic, review, or narrative owners.
 
-Current external-library retrieval uses the Context7 App calls
+Current external-library retrieval uses the `@Context7` plugin calls
 `mcp__codex_apps__context7_resolve_library_id` and
-`mcp__codex_apps__context7_query_docs`. MCP-Docker's Context7 calls are
+`mcp__codex_apps__context7_query_docs`. Docker MCP Context7 calls are
 deprecated and may appear only in migration prohibitions or historical
 evidence. Exact IDs and one-concept query seeds remain progressively disclosed
 in `aria-nbv-context/references/context7_library_ids.md`.

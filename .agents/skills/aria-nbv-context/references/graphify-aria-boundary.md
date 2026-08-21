@@ -39,11 +39,15 @@ navigation, and require direct verification of affected sources.
 
 ## Upstream Lifecycle And Hooks
 
-- ARIA pins Graphify 0.9.47 and keeps the Codex skill byte-identical to upstream
-  commit `b14b52e94ec3d9840413d81777f4c134eac0a40d`.
+- ARIA pins Graphify 0.9.48 and keeps the Codex skill byte-identical to upstream
+  commit `b2cd36267456c166788c95be6e68574064a92a42`.
 - `graphify hook install` is the upstream post-commit and post-checkout
-  accelerator. It refreshes changed code without semantic extraction and marks
-  changed documents, papers, or images for a later semantic update.
+  no-LLM accelerator. It refreshes changed code and the pinned executable may
+  AST-quick-scan changed Markdown headings. It does not semantically refresh
+  documents or images or prove their freshness; refresh those semantic inputs explicitly.
+- The vendored `references/hooks.md` still says document and image changes are
+  ignored. Preserve that upstream byte, but follow verified `0.9.48` executable
+  behavior and treat either outcome as non-semantic navigation only.
 - Upstream intentionally skips hook rebuilds inside linked Git worktrees. ARIA
   therefore keeps worktree-local seeding, state classification, and repair in
   this route; hook presence or success never proves worktree freshness.
@@ -76,7 +80,7 @@ navigation, and require direct verification of affected sources.
 
 ## Marker And Worktree Rules
 
-- Graphify 0.9.47 writes `graphify-out/needs_update`, while the host-agent
+- Graphify 0.9.48 writes `graphify-out/needs_update`, while the host-agent
   runbook also clears the historical `.needs_update` spelling. Remove
   `graphify-out/needs_update` only after refresh, coverage, and reconciliation
   all pass; leave it after partial, failed, or unverified work.

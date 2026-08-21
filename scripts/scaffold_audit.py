@@ -55,6 +55,8 @@ CONTEXT7_REGISTRY = (
 CONTEXT7_ID_RE = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|__[A-Za-z0-9_]+)$")
 AUDIT_OWNED_TOOL_REFS = {
+    "mcp__codex_apps__context7_query_docs",
+    "mcp__codex_apps__context7_resolve_library_id",
     "mcp__MCP_DOCKER.analyze_python_file",
     "mcp__MCP_DOCKER.analyze_python_package",
     "mcp__MCP_DOCKER.analyze_security_and_patterns",
@@ -97,7 +99,6 @@ AUDIT_OWNED_TOOL_REFS = {
     "mcp__openaiDeveloperDocs.get_openapi_spec",
     "mcp__openaiDeveloperDocs.list_openai_docs",
 }
-OPTIONAL_TOOL_REF_PREFIXES = {"mcp__codex_apps__"}
 CONTEXT7_TRIGGER_RE = re.compile(
     r"\b(Context7|official docs?|external librar(?:y|ies)|API|SDK|"
     r"PyTorch3D|PyTorch|Rerun|Streamlit|Gymnasium|SB3|Stable Baselines3|"
@@ -201,7 +202,7 @@ def load_context_map_routes(path: Path = CONTEXT_MAP) -> tuple[set[str], list[st
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        return set(), [f"{rel(path)}: cannot read context map: {exc}"]
+        return set(), [f"{rel(path)}: cannot read derived context-route index: {exc}"]
     routes: set[str] = set()
     for line in lines:
         stripped = line.strip()
@@ -514,7 +515,7 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 else:
                     errors.append(
                         f"{prefix}: metadata.literature_refs entry {ref!r} is not a BibTeX key, "
-                        "context-map route label, or existing repo path"
+                        "derived context-route label, or existing repo path"
                     )
 
         tool_refs = skill.metadata.get("tool_refs") or []
@@ -527,12 +528,15 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                         f"{prefix}: metadata.tool_refs entry {ref!r} must use canonical "
                         "mcp__<server>.<tool_name> or app mcp__<server>__<tool_name> form"
                     )
-                elif ref not in AUDIT_OWNED_TOOL_REFS and not any(
-                    ref.startswith(prefix) for prefix in OPTIONAL_TOOL_REF_PREFIXES
-                ):
-                    warnings.append(
-                        f"{prefix}: metadata.tool_refs entry {ref!r} is not in the audit-owned tool registry"
+                elif ref not in AUDIT_OWNED_TOOL_REFS:
+                    message = (
+                        f"{prefix}: metadata.tool_refs entry {ref!r} is not in "
+                        "the audit-owned tool registry"
                     )
+                    if "__" in ref.removeprefix("mcp__"):
+                        errors.append(message)
+                    else:
+                        warnings.append(message)
 
         trigger_text = " ".join(
             [skill.description]
@@ -855,6 +859,28 @@ def run_self_tests() -> tuple[list[str], list[str]]:
         skills, load_errors = load_skills(SKILLS_DIR)
         skills_by_name = {skill.name: skill for skill in skills}
         expect("live-skills-load", not load_errors, "; ".join(load_errors))
+
+        typo_text = self_test_skill_text(
+            "plugin-tool-typo",
+            [".agents/skills/aria-nbv-context/SKILL.md#context7-plugin-branch"],
+            "Use this test body for plugin tool reference validation.",
+            extra_metadata='  tool_refs:\n    - "mcp__codex_apps__context7_query_doc"',
+        )
+        typo_path = write_self_test_skill(tmp_root, "plugin-tool-typo", typo_text)
+        typo_skills, load_errors = load_skills(tmp_root / "skills")
+        errors, _ = audit_skills(typo_skills)
+        expect(
+            "unknown-plugin-tool-ref",
+            not load_errors
+            and any(
+                "mcp__codex_apps__context7_query_doc" in error
+                and "not in the audit-owned tool registry" in error
+                for error in errors
+            ),
+            "unknown plugin/App tool reference was not rejected",
+        )
+        typo_path.unlink()
+        typo_path.parent.rmdir()
 
         malformed_path = tmp_root / "skills" / "malformed-yaml" / "SKILL.md"
         malformed_path.parent.mkdir(parents=True, exist_ok=True)

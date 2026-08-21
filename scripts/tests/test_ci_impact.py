@@ -61,7 +61,7 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertNotIn("ci-gate", workflow)
         self.assertIn(
-            'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.47"',
+            'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.48"',
             workflow,
         )
         self.assertIn(
@@ -283,7 +283,7 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue((REPO_ROOT / boundary_owner).is_file())
         self.assertEqual(
             (skill_root / ".graphify_version").read_text(encoding="utf-8").strip(),
-            "0.9.47",
+            "0.9.48",
         )
         self.assertTrue((skill_root / "references/query.md").is_file())
 
@@ -393,7 +393,7 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertNotIn("/home/jd/repos/ARIA-NBV", fixture)
         self.assertIn('ROOT / "graphify-out/.graphify_python"', fixture)
-        self.assertIn("Graphify 0.9.47 is required", fixture)
+        self.assertIn("Graphify 0.9.48 is required", fixture)
 
 
 if __name__ == "__main__":

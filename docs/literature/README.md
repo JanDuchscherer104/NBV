@@ -76,8 +76,8 @@ python3 scripts/build_graphify_projection.py \
 ```
 
 The repository includes the upstream project skill at
-`.agents/skills/graphify/SKILL.md` byte-identical to Graphify 0.9.47 at upstream
-commit `b14b52e94ec3d9840413d81777f4c134eac0a40d`. It owns only upstream
+`.agents/skills/graphify/SKILL.md` byte-identical to Graphify 0.9.48 at upstream
+commit `b2cd36267456c166788c95be6e68574064a92a42`. It owns only upstream
 Graphify commands. `aria-nbv-context` owns the ARIA-NBV freshness,
 exact-source-fallback, corpus, projection, and client-compatibility preflight;
 project instructions must never be inserted into the upstream bundle. The

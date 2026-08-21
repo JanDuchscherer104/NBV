@@ -1,6 +1,6 @@
 ---
 name: aria-nbv-context
-description: Use for hierarchical ARIA-NBV owner localization, Graphify-first project relationships, scientific-source initialization, or current Context7 App evidence before handing work to an exact owner.
+description: Use for hierarchical ARIA-NBV owner localization, Graphify-first project relationships, scientific-source initialization, reviewed semantic recall, or current Context7 plugin evidence before handing work to an exact owner.
 metadata:
   mode: router
   not_when:
@@ -30,6 +30,8 @@ metadata:
     - "AGENTS.md"
     - ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
     - ".agents/skills/aria-nbv-context/references/context7_library_ids.md"
+    - ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md"
+    - ".agents/skills/aria-nbv-context/references/context_map.md"
     - "docs/typst/thesis/main.typ"
     - "docs/typst/thesis/sections/01-research-questions.typ"
     - "docs/typst/thesis/development/roadmap.typ"
@@ -42,11 +44,7 @@ metadata:
     - "docs/references.bib"
     - "docs/contents/literature/index.qmd"
     - "docs/typst/thesis/sections/02-foundations/02-01-related-work.typ"
-  literature_refs:
-    - "docs/contents/literature/index.qmd"
-    - "docs/literature/sources.jsonl"
-    - "quality-driven-rri"
-    - "finite-candidate-rl"
+  literature_refs: ["docs/contents/literature/index.qmd", "docs/literature/sources.jsonl", "quality-driven-rri", "finite-candidate-rl", "continuous-nbv-bridge", "radiance-field-nbv-bridge", "semantic-scene-memory-bridge"]
   context7_refs: ["/graphify-labs/graphify", "/websites/typst_app", "/facebookresearch/atek", "/websites/facebookresearch_github_io_projectaria_tools", "/facebookresearch/efm3d", "/facebookresearch/pytorch3d", "/websites/zarr_readthedocs_io_en_stable", "/rerun-io/rerun"]
   tool_refs:
     - "mcp__codex_apps__context7_resolve_library_id"
@@ -61,9 +59,8 @@ metadata:
 
 # ARIA-NBV Context
 
-Select the smallest hierarchy leaf, use navigation only when it helps, open the
-exact owner, then hand off. Derived, retrieved, generated, and historical
-material may locate truth but cannot replace its owner.
+Select the smallest hierarchy leaf, open the exact owner, then hand off. Derived,
+retrieved, generated, and historical material may locate truth but cannot replace its owner.
 
 ## Owner Hierarchy
 
@@ -124,16 +121,20 @@ once, then report it and use direct sources if repair fails. Read
 [`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)
 for freshness, repair, lifecycle, and fallback rules.
 
-## Context7 App Branch
+## Derived Route And Semantic Recall Branches
 
-Use the Context7 App only after locating the local owner and installed call
-site. Use a supplied exact ID directly; otherwise call
+Use derived [`context_map.md`](references/context_map.md) only to reveal exact
+owners for non-obvious routes. Apply the fail-closed reviewed-drawer procedure in
+[`semantic-memory-boundary.md`](references/semantic-memory-boundary.md).
+
+## Context7 Plugin Branch
+
+Use the `@Context7` plugin only after locating the local owner and installed
+call site. Use a supplied exact ID directly; otherwise call
 `mcp__codex_apps__context7_resolve_library_id`, then issue one concept per
-`mcp__codex_apps__context7_query_docs` call. Verify against the installed
-version and local source/tests. The IDs above are initialization seeds; read
-[`references/context7_library_ids.md`](references/context7_library_ids.md) for
-their concise scopes, the full registry, and focused query menus. Do not use the
-deprecated MCP-Docker Context7 tools.
+`mcp__codex_apps__context7_query_docs` call. Verify against installed source and
+tests. [`context7_library_ids.md`](references/context7_library_ids.md) owns seed
+IDs and query menus. Do not use Docker MCP Context7.
 
 ## Workflow
 
@@ -142,8 +143,8 @@ deprecated MCP-Docker Context7 tools.
    smallest shared glossary, symbol, or equation owner; treat `docs/notation.yml`
    as a generated consumer.
 3. Use Graphify first for eligible broad context, subject to its state contract.
-4. Use the Context7 App only for consequential current external behavior.
-5. Use reviewed semantic memory only when prior decisions or failed approaches
-   materially help; chronology never implies supersession.
+4. Use reviewed semantic memory only through its boundary when prior decisions
+   or failed approaches materially help; chronology never implies supersession.
+5. Use the Context7 plugin only for consequential current external behavior.
 6. Open the exact owner, reject conflicting navigation evidence, hand off, and
    stop retrieving when the owner and proof are explicit.
