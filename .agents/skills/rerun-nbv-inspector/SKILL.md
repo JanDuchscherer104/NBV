@@ -1,49 +1,6 @@
 ---
 name: rerun-nbv-inspector
 description: Use for ARIA-NBV Rerun SDK integration, offline-sample or rollout-Zarr visual inspection, saved .rrd evidence, entity and sink review, camera/depth logging, blueprints, or display-frame diagnostics.
-metadata:
-  mode: implementation
-  not_when:
-    - "the store is invalid before Rerun receives a compatible sample"
-    - "geometry semantics change outside the observer or display boundary"
-    - "generic Streamlit behavior has no Rerun artifact or launch path"
-  handoff_to:
-    - "nearest data-handling or rollout guide for store validity and schema"
-    - "nearest geometry owner for pose, camera, projection, frame, or unit semantics"
-    - "agent-behavior for a concrete launch failure with an exact reproducer"
-  evidence_required:
-    - "exact inspector branch, command, entity path, or SDK call under review"
-    - "package-owner evidence for data, geometry, validity, and rollout meaning"
-    - "focused test or saved .rrd smoke artifact, or the exact blocker"
-  applies_to:
-    - "aria_nbv/aria_nbv/rerun_inspector/**"
-    - "aria_nbv/tests/rerun_inspector/**"
-    - ".configs/rerun_*.toml"
-  triggers:
-    - "Rerun SDK"
-    - "nbv-rerun-inspect"
-    - ".rrd"
-    - "Rerun entity tree"
-    - "Pinhole or DepthImage logging"
-  must_read:
-    - "aria_nbv/aria_nbv/rerun_inspector/README.md"
-    - "aria_nbv/AGENTS.md"
-  canonical_sources:
-    - "aria_nbv/aria_nbv/rerun_inspector/README.md"
-    - "aria_nbv/aria_nbv/rerun_inspector/_cli.py"
-    - "aria_nbv/aria_nbv/rerun_inspector/_session.py"
-    - "aria_nbv/aria_nbv/rerun_inspector/_geometry.py"
-    - "aria_nbv/aria_nbv/rerun_inspector/_loggers.py"
-    - "aria_nbv/aria_nbv/rerun_inspector/_rollout_zarr.py"
-  context7_refs:
-    - "/rerun-io/rerun"
-  tool_refs:
-    - "mcp__codex_apps__context7_resolve_library_id"
-    - "mcp__codex_apps__context7_query_docs"
-    - "mcp__code_index.search_code_advanced"
-  verification:
-    - "cd aria_nbv && uv run pytest tests/rerun_inspector -q"
-    - "saved one-sample .rrd smoke from the package README when a compatible store is available"
 ---
 
 # Rerun NBV Inspector
@@ -64,9 +21,11 @@ skill owns only activation, evidence routing, review order, and preferences.
    candidate prefix and hard validity, frame and transform direction, camera
    parameter ordering, metric-depth interpretation, and display-only transforms.
    Do not restate or revise those meanings here.
-4. For uncertain or changed Rerun APIs, read
-   [`references/context7-queries.md`](references/context7-queries.md) and request
-   the smallest current official-doc slice. Use
+4. For uncertain or changed Rerun APIs, hand off through
+   [`aria-nbv-context`](../aria-nbv-context/SKILL.md), read its
+   [Context7 registry](../aria-nbv-context/references/context7_library_ids.md),
+   then read [`references/context7-queries.md`](references/context7-queries.md)
+   and request the smallest current official-doc slice. Use
    [`references/official-examples-map.md`](references/official-examples-map.md)
    only to choose a current upstream example; verify installed signatures and
    local call sites before changing code.

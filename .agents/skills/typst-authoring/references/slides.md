@@ -45,9 +45,11 @@ Ecosystem integrations:
 - `tiaoma` for QR codes
 - `showybox` + `tableau-icons` for block styling
 
-## Touying essentials (Context7)
+## Touying essentials
 
-Context7 ID: `/touying-typ/touying`
+For current Touying behavior, use the
+[`aria-nbv-context` Context7 registry](../../aria-nbv-context/references/context7_library_ids.md)
+and verify the installed package before relying on these notes.
 
 Key Touying capabilities to use inside our theme:
 

@@ -1,77 +1,26 @@
 ---
 name: aria-grill
-description: Stress-test vague, high-impact, research-facing, advisor-facing, or cross-surface ARIA-NBV decisions before implementation; use as the ARIA gateway for progressively disclosed architecture, interface, static-diagram, and interactive-visualization capabilities.
-metadata:
-  mode: router
-  not_when:
-    - "a concrete failing command, traceback, or metric owns the task"
-    - "the edit is already localized and low impact"
-    - "the user asks for code review of concrete diffs"
-  handoff_to:
-    - "nearest owning guide for concrete failures"
-    - "aria-nbv-context when the affected surface is unknown"
-    - "nearest owning guide for concrete diff review"
-    - "nearest docs guide for public narrative edits after the decision"
-  evidence_required:
-    - "source-order owner for the decision"
-    - "success criteria, in/out of scope, and deferred decisions"
-    - "direct-source evidence for advisor-facing claims"
-    - "source ladder and explicit claim strength for theory-rich mode"
-  applies_to:
-    - "**"
-  triggers:
-    - "advisor-facing decision"
-    - "thesis scope"
-    - "high-impact refactor"
-    - "scaffold ownership"
-    - "theory-rich plan"
-    - "conceptual plan"
-    - "--conceptual"
-    - "elaborate plan"
-    - "rich context"
-    - "option tradeoffs"
-    - "literature-grounded plan"
-  must_read:
-    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
-    - "references/plan-mode-theory-patterns.md when using theory-rich or elaborate modifiers"
-  canonical_sources:
-    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
-    - "docs/typst/thesis/main.typ"
-    - "docs/typst/thesis/development/roadmap.typ"
-    - "docs/typst/thesis/sections/01-research-questions.typ"
-    - ".agents/skills/aria-grill/references/plan-mode-theory-patterns.md"
-  context7_refs:
-    - "/pytorch/pytorch"
-    - "/facebookresearch/pytorch3d"
-    - "/websites/typst_app"
-    - "/websites/quarto"
-  literature_refs:
-    - "docs/contents/literature/index.qmd"
-    - "finite-candidate-rl"
-    - "quality-driven-rri"
-    - "egocentric-aria-substrate"
-  tool_refs:
-    - "mcp__codex_apps__context7_resolve_library_id"
-    - "mcp__codex_apps__context7_query_docs"
-    - "mcp__code_index.search_code_advanced"
-  verification:
-    - "decision-complete plan with assumptions and deferred decisions"
+description: Stress-test vague, high-impact, research-facing, advisor-facing, or cross-surface ARIA-NBV decisions, including thesis scope, theory-rich plans, option tradeoffs, and architecture, interface, or visualization choices, before implementation.
 ---
 
 # Aria Grill
 
 ## Grounding
 
-Before asking, resolve discoverable facts from the `aria-nbv-context` hierarchy
+Before asking, resolve discoverable facts from the
+[`aria-nbv-context` owner hierarchy](../aria-nbv-context/SKILL.md#owner-hierarchy)
 and the exact decision owner. Use `docs/typst/shared/glossary.typ` for overloaded
 terms and the nearest `AGENTS.md` for touched code or docs.
 
-For thesis-scope decisions, read the thesis owner, roadmap, and research
-questions in `canonical_sources`; non-thesis branches skip them. Theory-rich or
-elaborate modifiers additionally load `references/plan-mode-theory-patterns.md`.
+For thesis-scope decisions, read the active thesis, roadmap, and research-question
+owners; non-thesis branches skip them. Theory-rich or elaborate modifiers
+additionally load [`references/plan-mode-theory-patterns.md`](references/plan-mode-theory-patterns.md).
 
 For optional upstream questioning patterns, see
-`references/upstream-mattpocock.md`; keep ARIA source-order owners canonical.
+[`references/upstream-mattpocock.md`](references/upstream-mattpocock.md); keep
+ARIA source-order owners canonical. For external API or version uncertainty,
+hand off through [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and read its
+[Context7 registry](../aria-nbv-context/references/context7_library_ids.md).
 
 ## Progressive Capability Routing
 
@@ -99,8 +48,8 @@ Keep the default path concise unless one of these modifiers applies.
   answer option before asking the next question. Do not perform a literature
   sweep unless a claim is research-facing or high impact.
 - `theory-rich`: when the user explicitly asks for theory, rich context,
-  literature/API grounding, diagrams, equations, or advisor-facing rationale,
-  read `references/plan-mode-theory-patterns.md`. Ground theory in the source
+  external-evidence grounding, diagrams, equations, or research rationale,
+  read [`references/plan-mode-theory-patterns.md`](references/plan-mode-theory-patterns.md). Ground theory in the source
   ladder, state claim strength, and include option tradeoffs before questions.
 - `conceptual`: when the user asks for `--conceptual`, conceptual planning,
   systems thinking, or architectural explanation, start with the system
@@ -108,8 +57,9 @@ Keep the default path concise unless one of these modifiers applies.
   truth owners and horizontal evidence sources, include a Mermaid diagram for
   non-trivial plans, link implementation-facing Python plans to
   `python-standards` and the nearest `aria_nbv/**/AGENTS.md`,
-  use local literature owners before web search for thesis claims, and use
-  Context7 only for external library/API behavior after local owner inspection.
+  use local literature owners before web search for thesis claims, and use the
+  `aria-nbv-context` external-evidence branch only for library/API
+  behavior after local owner inspection.
   Keep `$plan`, `$ralplan`, and `$prometheus-strict` as workflow owners; this
   skill is the ARIA sidecar that teaches why the routing matters.
 - Use Codex-app-safe Markdown/KaTeX equations when they clarify the decision:
@@ -119,8 +69,8 @@ Keep the default path concise unless one of these modifiers applies.
   fenced code blocks. Use fenced `mermaid` blocks for diagrams, and keep math
   out of Mermaid labels unless it is plain text. For committed `.mmd` assets,
   hand off to `aria-nbv-mermaid` and validate locally.
-- Treat Wikipedia as orientation only. Do not use it as advisor-facing,
-  proposal-critical, or thesis-claim evidence.
+- Treat Wikipedia as orientation only; ground proposal and thesis evidence in
+  cited primary sources.
 
 ## Interview Rules
 
