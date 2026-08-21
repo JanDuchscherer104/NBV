@@ -835,6 +835,36 @@ def test_direction_and_spatial_cohort_macros_weight_scenes_equally() -> None:
     assert distance["mean"] == pytest.approx(0.55)
 
 
+def test_direction_macro_state_dedup_includes_scene_identity() -> None:
+    """Local rollout/step identifiers may repeat across distinct scenes."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    common = {
+        **_direction_fixture_rows()[0],
+        "generation_cohort_id": "cohort-a",
+        "root_relative_x_m": 1.0,
+        "root_relative_y_m": 0.0,
+    }
+    rows = [
+        {**common, "scene": scene, "rollout_row_id": 0, "step_row_id": 0, "candidate_row_id": index}
+        for scene, index in (("scene-a", 0), ("scene-a", 1), ("scene-b", 2), ("scene-b", 3))
+    ]
+    density = candidate_direction_evidence(rows)["density_rows"]
+    macro = next(
+        row
+        for row in density
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["azimuth_bin"] == 6
+        and row["sin_elevation_bin"] == 3
+    )
+    assert macro["state_count"] == 2
+    assert macro["candidate_direction_count"] == 4
+    assert macro["total_count"] == 4
+    assert macro["finite_count"] + macro["missing_count"] == 4
+
+
 def test_angular_covering_cohort_macro_aggregates_scene_values() -> None:
     """Angular macros aggregate covering radii as scene summaries."""
 
