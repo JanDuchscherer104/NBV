@@ -275,7 +275,7 @@ def test_root_geometry_projection_bumps_its_cache_contract(monkeypatch: pytest.M
     session._cached_projection("/fixture.zarr", "header")
     session._cached_projection("/fixture.zarr", "root_geometry")
 
-    assert revisions == [1, 2]
+    assert revisions == [1, 3]
 
 
 def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat(
