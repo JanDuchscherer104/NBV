@@ -71,7 +71,7 @@ class QhBatch:
         selected = self.supervision.selected_index
         width = self.actor.candidate_mask.shape[-1]
         valid_index = selected.ge(0) & selected.lt(width)
-        safe = selected.clamp(0, max(width - 1, 0))
+        safe = torch.where(valid_index, selected, torch.zeros_like(selected))
         return (
             self.actor.step_mask
             & valid_index
@@ -321,15 +321,33 @@ def _gather_candidates(values: Tensor, indices: Tensor) -> Tensor:
 
     Returns:
         ``Tensor["...", dtype]`` or ``Tensor["... D", dtype]`` selected rows.
-        Indices are clamped for memory-safe gathering only; callers must use
-        factual masks to establish whether an index is valid.
+    Raises:
+        ValueError: If the candidate table and index tensor have an unsupported
+            rank relationship, or an index is outside the candidate axis.
     """
 
-    if values.ndim == indices.ndim + 1:
-        safe = indices.clamp(0, max(values.shape[-1] - 1, 0))
-        return values.gather(-1, safe.unsqueeze(-1)).squeeze(-1)
-    safe = indices.clamp(0, max(values.shape[-2] - 1, 0))
-    expanded = safe.unsqueeze(-1).unsqueeze(-1).expand(*safe.shape, 1, values.shape[-1])
+    rank_delta = values.ndim - indices.ndim
+    if rank_delta not in (1, 2):
+        raise ValueError(
+            "Q_H candidate gather requires scalar or vector candidate tables "
+            f"with values.ndim == indices.ndim + 1 or +2; got values.ndim={values.ndim}, "
+            f"indices.ndim={indices.ndim}."
+        )
+    candidate_axis = -1 if rank_delta == 1 else -2
+    candidate_width = values.shape[candidate_axis]
+    if candidate_width < 1:
+        raise ValueError("Q_H candidate gather cannot select from an empty candidate axis.")
+    invalid = indices.lt(0) | indices.ge(candidate_width)
+    if bool(invalid.any()):
+        first = tuple(int(value) for value in torch.nonzero(invalid, as_tuple=False)[0].tolist())
+        value = int(indices[first])
+        raise ValueError(
+            "Q_H candidate gather received an out-of-range factual index "
+            f"{value} for candidate width {candidate_width} at index position {first}."
+        )
+    if rank_delta == 1:
+        return values.gather(-1, indices.unsqueeze(-1)).squeeze(-1)
+    expanded = indices.unsqueeze(-1).unsqueeze(-1).expand(*indices.shape, 1, values.shape[-1])
     return values.gather(-2, expanded).squeeze(-2)
 
 

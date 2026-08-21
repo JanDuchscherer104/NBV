@@ -212,6 +212,7 @@ class QhRolloutReader:
             self._root(chain.store_index),
             chain,
             self._source_ref_lookup[chain.source_sample_index],
+            store_path=self._stores[chain.store_index].path,
             include_selected_depth=self.include_selected_depth,
         )
 
@@ -727,6 +728,7 @@ def _read_chain(
     chain: _ChainRef,
     source_ref: _QhSourceRef,
     *,
+    store_path: Path,
     include_selected_depth: bool,
 ) -> _StoredChain:
     rows = slice(chain.state_start, chain.state_stop)
@@ -735,6 +737,13 @@ def _read_chain(
     configured_horizon = int(root["rollouts/horizon"][chain.rollout_position])
     candidate_ids = np.asarray(q_h["candidate_row_id"][rows], dtype=np.int64)
     widths = np.count_nonzero(candidate_ids >= 0, axis=1)
+    selected_index = np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)
+    _validate_selected_indices(
+        selected_index,
+        widths,
+        store_path=store_path,
+        rollout_row_id=chain.rollout_row_id,
+    )
     root_pose = np.asarray(root["rollouts/root_pose_world"][chain.rollout_position], dtype=np.float32)
     candidate_poses = tuple(
         _read_candidate_poses(root, ids[:width]) for ids, width in zip(candidate_ids, widths, strict=True)
@@ -760,7 +769,7 @@ def _read_chain(
         label_mask=_trim_rows(q_h["q_train_mask"][rows], widths, np.bool_),
         candidate_reward=_trim_rows(q_h["one_step_target_root_gain"][rows], widths, np.float32),
         one_step_target_rri=_trim_rows(q_h["one_step_target_rri"][rows], widths, np.float32),
-        selected_index=_readonly(np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)),
+        selected_index=_readonly(selected_index),
         discount=_readonly(np.asarray(q_h["td_discount"][rows], dtype=np.float32)),
         terminal=_readonly(np.asarray(q_h["td_terminal_mask"][rows], dtype=np.bool_)),
         selected_depth_m=selected_depth[0],
@@ -819,6 +828,26 @@ def _read_candidate_poses(
     rows = slice(start, start + len(candidate_ids))
     relative = np.asarray(candidates["pose_relative_root"][rows], dtype=np.float32)
     return _readonly(relative)
+
+
+def _validate_selected_indices(
+    selected_index: np.ndarray,
+    widths: np.ndarray,
+    *,
+    store_path: Path,
+    rollout_row_id: int,
+) -> None:
+    """Reject invalid factual ordinals with enough identity to repair the store."""
+
+    invalid = (selected_index < 0) | (selected_index >= widths)
+    if not np.any(invalid):
+        return
+    step = int(np.flatnonzero(invalid)[0])
+    raise ValueError(
+        "Q_H factual selected candidate index is out of range: "
+        f"store={store_path}, rollout_row_id={rollout_row_id}, step={step}, "
+        f"selected_index={int(selected_index[step])}, candidate_width={int(widths[step])}."
+    )
 
 
 def _trim_rows(values: Any, widths: np.ndarray, dtype: np.dtype[Any]) -> tuple[np.ndarray, ...]:

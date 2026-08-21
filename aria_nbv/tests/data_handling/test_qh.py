@@ -160,6 +160,52 @@ def test_candidate_gather_uses_candidate_axis_for_sixty_vector_rows() -> None:
     assert torch.equal(_gather_candidates(vector, indices), vector[torch.arange(4), indices])
 
 
+def test_candidate_gather_rejects_unsupported_ranks_and_invalid_indices() -> None:
+    values = torch.zeros(2, 3, 4, 5)
+    with pytest.raises(ValueError, match="unsupported.*rank|values.ndim"):
+        _gather_candidates(values, torch.zeros(2, dtype=torch.int64))
+    with pytest.raises(ValueError, match="out-of-range.*candidate width 4"):
+        _gather_candidates(torch.zeros(2, 4), torch.tensor([4, 0]))
+
+
+def test_sixty_candidate_identity_survives_materialization_collation_and_transfer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A full-width chain keeps candidate 59 distinct through every tensor seam."""
+
+    steps, width = 5, 60
+    identity = PoseTW().tensor().numpy()
+    poses = np.repeat(identity[None, None, :], steps * width, axis=0).reshape(steps, width, -1)
+    poses[..., -3] = np.arange(width, dtype=np.float32)[None, :]
+    stored = _stored(_source_ref())
+    stored.candidate_pose_relative_root = tuple(poses[row] for row in range(steps))
+    stored.action_mask = tuple(np.ones(width, dtype=np.bool_) for _ in range(steps))
+    stored.label_mask = tuple(np.ones(width, dtype=np.bool_) for _ in range(steps))
+    stored.candidate_reward = tuple(np.ones(width, dtype=np.float32) for _ in range(steps))
+    stored.one_step_target_rri = tuple(np.ones(width, dtype=np.float32) for _ in range(steps))
+    stored.selected_index = np.array([0, 11, 12, 59, 0], dtype=np.int64)
+    stored.horizon_remaining = np.arange(steps, 0, -1)
+    stored.discount = np.full(steps, 0.95, dtype=np.float32)
+    stored.terminal = np.array([False, False, False, False, True])
+
+    chain = _tensor_chain(stored, _snippet())
+    batch = collate_qh_chains([chain, _chain(steps=2, width=3)])
+    selected = batch.actor.history_pose_relative_root.tensor()[0, 4, 3, -3]
+    assert selected.item() == pytest.approx(59.0)
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    pinned = batch.pin_memory()
+    assert pinned.actor.history_pose_relative_root.tensor()[0, 4, 3, -3].item() == pytest.approx(59.0)
+    transferred = batch.to("cpu")
+    assert transferred.actor.history_pose_relative_root.tensor()[0, 4, 3, -3].item() == pytest.approx(59.0)
+
+
+def test_materialization_rejects_invalid_factual_index_with_chain_context() -> None:
+    stored = _stored(_source_ref())
+    stored.selected_index = np.array([0, 1], dtype=np.int64)
+    with pytest.raises(ValueError, match="store_index=0.*rollout_row_id=4.*step=1.*candidate_width=1"):
+        _tensor_chain(stored, _snippet())
+
+
 def test_collate_mixed_horizons_and_widths_preserves_five_masks_and_causal_history() -> None:
     chains = [_chain(steps=1, width=2), _chain(steps=3, width=1, offset=10), _chain(steps=4, width=3, offset=20)]
     batch = collate_qh_chains(chains)

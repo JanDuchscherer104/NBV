@@ -10,10 +10,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 import zarr
+from efm3d.aria.pose import PoseTW
 
 pytest.importorskip("efm3d")
 
+from aria_nbv.data_handling.qh_data.batching import collate_qh_chains
+from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
+from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.rollouts.inspection import q_h_evidence_rows
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
@@ -132,7 +137,7 @@ def _write_v1_store(path: Path) -> Path:
 
 
 def _write_packed_early_terminal_store(path: Path) -> Path:
-    records = build_rollout_records(horizon=4, num_samples=6, seed=7)[:3]
+    records = build_rollout_records(horizon=4, num_samples=60, seed=7)[:3]
     factual_lengths = (3, 1, 2)
     for record, factual_length in zip(records, factual_lengths, strict=True):
         trajectory = record.evaluated.result.trajectories[0]
@@ -594,6 +599,59 @@ def test_reader_indexes_packed_early_terminal_chains_by_factual_steps(tmp_path: 
     assert [chain.rollout_row_id for chain in chains] == [0, 1, 2]
     assert [chain.horizon_remaining.tolist() for chain in chains] == [[4, 3, 2], [4], [4, 3]]
     assert reader.max_horizon == 3
+
+
+def test_reader_materialization_preserves_n60_identity_across_packed_chains(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _write_packed_early_terminal_store(tmp_path / "early-n60.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    root = zarr.open_group(store, mode="a")
+    q_h = root["q_h"]
+    candidate_rows = np.asarray(q_h["candidate_row_id"], dtype=np.int64)
+    selected = np.asarray([0, 11, 12, 59, 0, 11], dtype=np.int64)
+    q_h["selected_candidate_index"][:] = selected
+    selected_rows = candidate_rows[np.arange(selected.size), selected]
+    root["steps/selected_candidate_row_id"][:] = selected_rows
+    q_h["td_selected_candidate_row_id"][:] = selected_rows
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
+
+    reader = QhRolloutReader((store,))
+    chains = [
+        _tensor_chain(
+            reader[index],
+            VinSnippetView(
+                points_world=torch.zeros(2, 3),
+                lengths=torch.tensor([2]),
+                t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
+                t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
+            ),
+        )
+        for index in range(len(reader))
+    ]
+    assert [len(chain.supervision.selected_index) for chain in chains] == [3, 1, 2]
+    for chain in chains:
+        for step, index in enumerate(chain.supervision.selected_index.tolist()):
+            if step + 1 < len(chain.supervision.selected_index):
+                assert torch.equal(
+                    chain.actor.history_pose_relative_root.tensor()[step + 1, step],
+                    chain.actor.candidate_pose_relative_root.tensor()[step, index],
+                )
+    selected_59 = [
+        chain.actor.candidate_pose_relative_root.tensor()[step, index]
+        for chain in chains
+        for step, index in enumerate(chain.supervision.selected_index.tolist())
+        if index == 59
+    ]
+    assert len(selected_59) == 1
+    chain_with_59 = next(chain for chain in chains if 59 in chain.supervision.selected_index.tolist())
+    assert not torch.equal(selected_59[0], chain_with_59.actor.candidate_pose_relative_root.tensor()[0, 11])
+    batch = collate_qh_chains(chains)
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    transferred = batch.pin_memory().to("cpu")
+    assert transferred.actor.step_mask.tolist() == [[True, True, True], [True, False, False], [True, True, False]]
+    assert transferred.keys[0].rollout_row_id != transferred.keys[1].rollout_row_id
 
 
 @pytest.mark.parametrize(

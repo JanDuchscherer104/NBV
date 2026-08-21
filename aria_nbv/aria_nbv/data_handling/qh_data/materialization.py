@@ -73,6 +73,7 @@ def _tensor_chain(
     target_rri = torch.where(label_mask, target_rri, torch.full_like(target_rri, float("nan")))
     selected = _from_numpy(stored.selected_index, torch.int64)
     steps, width = action_mask.shape
+    _validate_selected_indices(stored, selected)
     candidate_mask = torch.zeros((steps, width), dtype=torch.bool)
     for row, values in enumerate(stored.candidate_pose_relative_root):
         candidate_mask[row, : values.shape[0]] = True
@@ -128,6 +129,23 @@ def _tensor_chain(
             target_row_id=stored.target_row_id,
         ),
         audit=audit,
+    )
+
+
+def _validate_selected_indices(stored: _StoredChain, selected: Tensor) -> None:
+    """Reject factual selected ordinals before any pose or modality gather."""
+
+    factual_widths = torch.tensor([len(row) for row in stored.candidate_pose_relative_root], dtype=selected.dtype)
+    invalid = selected.lt(0) | selected.ge(factual_widths)
+    if not bool(invalid.any()):
+        return
+    step = int(torch.nonzero(invalid, as_tuple=False)[0].item())
+    value = int(selected[step])
+    factual_width = len(stored.candidate_pose_relative_root[step])
+    raise ValueError(
+        "Q_H factual selected candidate index is out of range: "
+        f"store_index={stored.store_index}, rollout_row_id={stored.rollout_row_id}, "
+        f"step={step}, selected_index={value}, candidate_width={factual_width}."
     )
 
 
