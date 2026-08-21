@@ -865,11 +865,15 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 )
             cosine = np.clip(points @ points.T, -1.0, 1.0)
             if len(points) == 1:
-                nearest = np.asarray([0.0])
+                nearest = np.asarray([], dtype=np.float64)
             else:
                 np.fill_diagonal(cosine, -1.0)
                 nearest = np.degrees(np.arccos(np.max(cosine, axis=1)))
-            probe_nearest = np.degrees(np.arccos(np.clip(np.max(probes @ points.T, axis=1), -1.0, 1.0)))
+            # The fixed reference is augmented with each observed antipode so
+            # a singleton has an explicit ~180 degree uncovered direction,
+            # while an antipodal pair has the expected ~90 degree radius.
+            probe_directions = np.vstack((probes, -points))
+            probe_nearest = np.degrees(np.arccos(np.clip(np.max(probe_directions @ points.T, axis=1), -1.0, 1.0)))
             angular_rows.append(
                 {
                     "evidence": "nearest_neighbor_angular_separation",
@@ -879,14 +883,11 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     "rollout_row_id": rollout_id,
                     "step_row_id": step_id,
                     "population": population,
-                    "value": float(np.mean(nearest)),
-                    "nearest_neighbor_deg": float(np.mean(nearest)),
-                    # Keep the historical antipodal convention on the public
-                    # field while exposing the actual fixed-probe estimate for
-                    # scientific consumers.
-                    "covering_radius_deg": float(
-                        180.0 if float(np.mean(nearest)) >= 179.999 else np.max(probe_nearest)
-                    ),
+                    "value": None if nearest.size == 0 else float(np.mean(nearest)),
+                    "nearest_neighbor_deg": None if nearest.size == 0 else float(np.mean(nearest)),
+                    "nearest_neighbor_available": bool(nearest.size),
+                    "nearest_neighbor_reason": None if nearest.size else "undefined for a singleton state",
+                    "covering_radius_deg": float(np.max(probe_nearest)),
                     "probe_covering_radius_deg": float(np.max(probe_nearest)),
                     "valid_count": valid,
                     "available": True,
@@ -950,16 +951,27 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 [],
             ).append(row)
         for key, grouped in sorted(groups.items()):
-            available = [r for r in grouped if r["available"] and r["mean_state_fraction"] is not None]
+            if level == "cohort_macro":
+                by_scene: dict[str, list[float]] = {}
+                for row in grouped:
+                    if row["available"] and row["mean_state_fraction"] is not None:
+                        by_scene.setdefault(str(row.get("scene", "unknown")), []).append(
+                            float(row["mean_state_fraction"])
+                        )
+                values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+            else:
+                values = [
+                    float(row["mean_state_fraction"])
+                    for row in grouped
+                    if row["available"] and row["mean_state_fraction"] is not None
+                ]
             density.append(
                 {
                     **grouped[0],
                     "aggregation_level": level,
                     "scene": key[1],
-                    "mean_state_fraction": None
-                    if not available
-                    else float(np.mean([r["mean_state_fraction"] for r in available])),
-                    "available": bool(available),
+                    "mean_state_fraction": None if not values else float(np.mean(values)),
+                    "available": bool(values),
                     "cohort_macro_population": key[2],
                 }
             )
@@ -985,6 +997,18 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
                 else:
                     values = [float(r[value_key]) for r in grouped if r.get(value_key) is not None]
+                covering_values = [
+                    float(row["covering_radius_deg"]) for row in grouped if row.get("covering_radius_deg") is not None
+                ]
+                if level == "cohort_macro":
+                    by_scene_covering: dict[str, list[float]] = {}
+                    for row in grouped:
+                        value = row.get("covering_radius_deg")
+                        if value is not None:
+                            by_scene_covering.setdefault(str(row.get("scene", "unknown")), []).append(float(value))
+                    covering_values = [
+                        float(np.mean(scene_values)) for scene_values in by_scene_covering.values() if scene_values
+                    ]
                 rows_out.append(
                     {
                         **grouped[0],
@@ -992,7 +1016,9 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                         "scene": key[1],
                         "value": None if not values else float(np.mean(values)),
                         value_key: None if not values else float(np.mean(values)),
-                        "available": bool(values),
+                        "covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
+                        "probe_covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
+                        "available": bool(values or covering_values),
                         "cohort_macro_population": key[2],
                     }
                 )
@@ -1064,7 +1090,14 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 [],
             ).append(row)
         for key, grouped in sorted(groups_macro.items()):
-            values = [float(r["mean"]) for r in grouped if r.get("mean") is not None]
+            if level == "cohort_macro":
+                by_scene: dict[str, list[float]] = {}
+                for row in grouped:
+                    if row.get("mean") is not None:
+                        by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+            else:
+                values = [float(r["mean"]) for r in grouped if r.get("mean") is not None]
             output.append(
                 {
                     **grouped[0],
@@ -1234,6 +1267,16 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                 applicable = sum(int(row.get("applicable_count", 0)) for row in grouped)
                 evaluated = sum(int(row.get("evaluated_count", 0)) for row in grouped)
                 collisions = sum(int(row.get("collision_count", 0)) for row in grouped)
+                state_rates = [float(row["collision_rate"]) for row in grouped if row.get("collision_rate") is not None]
+                if level == "cohort_macro":
+                    by_scene: dict[str, list[float]] = {}
+                    for row in grouped:
+                        rate = row.get("collision_rate")
+                        if rate is not None:
+                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(rate))
+                    scene_rates = [float(np.mean(rates)) for rates in by_scene.values() if rates]
+                else:
+                    scene_rates = state_rates
                 base.update(
                     applicable_count=applicable,
                     evaluated_count=evaluated,
@@ -1242,8 +1285,8 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                     applicable_unevaluated_count=sum(
                         int(row.get("applicable_unevaluated_count", 0)) for row in grouped
                     ),
-                    collision_rate=None if not evaluated else collisions / evaluated,
-                    available=bool(evaluated),
+                    collision_rate=None if not scene_rates else float(np.mean(scene_rates)),
+                    available=bool(scene_rates),
                 )
             else:
                 if level == "cohort_macro":

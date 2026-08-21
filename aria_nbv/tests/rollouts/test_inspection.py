@@ -716,7 +716,10 @@ def test_angular_support_singleton_and_antipodal_values_are_geometrically_define
     singleton = candidate_direction_evidence(
         [{**_direction_fixture_rows()[0], "root_relative_x_m": 1.0, "root_relative_y_m": 0.0, "root_relative_z_m": 0.0}]
     )["angular_support_rows"]
-    assert any(row.get("nearest_neighbor_deg") == pytest.approx(0.0) for row in singleton)
+    singleton_row = next(row for row in singleton if row["aggregation_level"] == "state")
+    assert singleton_row["nearest_neighbor_deg"] is None
+    assert singleton_row["nearest_neighbor_available"] is False
+    assert singleton_row["covering_radius_deg"] == pytest.approx(180.0, abs=1e-6)
 
     antipodal = candidate_direction_evidence(
         [
@@ -735,7 +738,9 @@ def test_angular_support_singleton_and_antipodal_values_are_geometrically_define
         ]
     )["angular_support_rows"]
     assert any(row.get("nearest_neighbor_deg") == pytest.approx(180.0) for row in antipodal)
-    assert any(row.get("covering_radius_deg") == pytest.approx(180.0) for row in antipodal)
+    antipodal_row = next(row for row in antipodal if row["aggregation_level"] == "state")
+    assert antipodal_row["nearest_neighbor_deg"] == pytest.approx(180.0)
+    assert antipodal_row["covering_radius_deg"] == pytest.approx(90.0, abs=2.0)
 
 
 def test_spatial_macros_preserve_shell_and_population_facets() -> None:
@@ -764,6 +769,107 @@ def test_spatial_macros_preserve_shell_and_population_facets() -> None:
     assert {row["declared_shell"] for row in macro} >= {"forward_local", "backtrack"}
     assert {row["population"] for row in macro} >= {"all", "actor_valid"}
     assert all(row["generation_cohort_id"] == "cohort-a" for row in macro)
+
+
+def test_direction_and_spatial_cohort_macros_weight_scenes_equally() -> None:
+    """Uneven state counts cannot make one scene dominate a cohort macro."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence, candidate_spatial_support_evidence
+
+    common = {**_direction_fixture_rows()[0], "generation_cohort_id": "cohort-a", "position": "forward_local"}
+    rows = [
+        {
+            **common,
+            "scene": "scene-a",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "root_relative_x_m": 1.0,
+            "root_relative_y_m": 0.0,
+        },
+        {
+            **common,
+            "scene": "scene-a",
+            "rollout_row_id": 1,
+            "step_row_id": 0,
+            "root_relative_x_m": 1.0,
+            "root_relative_y_m": 0.0,
+        },
+        {
+            **common,
+            "scene": "scene-b",
+            "rollout_row_id": 2,
+            "step_row_id": 0,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 1.0,
+        },
+    ]
+    direction = candidate_direction_evidence(rows)["density_rows"]
+    x_cell = next(
+        row
+        for row in direction
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["azimuth_bin"] == 6
+        and row["sin_elevation_bin"] == 3
+    )
+    assert x_cell["mean_state_fraction"] == pytest.approx(0.5)
+    spatial = candidate_spatial_support_evidence(
+        [
+            {**row, "root_relative_x_m": 0.1 if row["scene"] == "scene-a" else 1.0, "root_relative_y_m": 0.0}
+            for row in rows
+        ]
+    )
+    distance = next(
+        row
+        for row in spatial
+        if row["aggregation_level"] == "cohort_macro"
+        and row["metric"] == "root_xy_radius"
+        and row["population"] == "all"
+    )
+    assert distance["mean"] == pytest.approx(0.55)
+
+
+def test_angular_covering_cohort_macro_aggregates_scene_values() -> None:
+    """Angular macros aggregate covering radii as scene summaries."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    common = {**_direction_fixture_rows()[0], "generation_cohort_id": "cohort-a"}
+    rows = [
+        {**common, "scene": "scene-a", "rollout_row_id": 0, "root_relative_x_m": 1.0, "root_relative_y_m": 0.0},
+        {**common, "scene": "scene-b", "rollout_row_id": 1, "root_relative_x_m": 1.0, "root_relative_y_m": 0.0},
+        {**common, "scene": "scene-b", "rollout_row_id": 1, "root_relative_x_m": -1.0, "root_relative_y_m": 0.0},
+    ]
+    angular = candidate_direction_evidence(rows)["angular_support_rows"]
+    macro = next(row for row in angular if row["aggregation_level"] == "cohort_macro" and row["population"] == "all")
+    assert macro["covering_radius_deg"] == pytest.approx(135.0, abs=2.0)
+
+
+def test_collision_cohort_macro_weights_state_rates_by_scene() -> None:
+    """Collision rates use equal-state then equal-scene weighting."""
+
+    from aria_nbv.rollouts.inspection import candidate_motion_support_evidence
+
+    common = {
+        **_direction_fixture_rows()[0],
+        "generation_cohort_id": "cohort-a",
+        "path_collision_applicable": True,
+        "path_collision_evaluated": True,
+    }
+    rows = [
+        {**common, "scene": "scene-a", "rollout_row_id": 0, "path_collision": False},
+        {**common, "scene": "scene-a", "rollout_row_id": 1, "path_collision": True},
+        {**common, "scene": "scene-b", "rollout_row_id": 2, "path_collision": True},
+    ]
+    collision = candidate_motion_support_evidence(rows)
+    macro = next(
+        row
+        for row in collision
+        if row["aggregation_level"] == "cohort_macro"
+        and row["metric"] == "path_collision_rate"
+        and row["population"] == "all"
+    )
+    assert macro["collision_rate"] == pytest.approx(0.75)
 
 
 def test_target_view_and_motion_facets_preserve_cohort_population_and_macro_levels() -> None:
