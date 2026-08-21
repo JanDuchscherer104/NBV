@@ -473,10 +473,17 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
 
     app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
+    assert "Scientific evidence" not in [subheader.value for subheader in app.subheader]
+    assert not any(selectbox.label == "Temporal metric" for selectbox in app.selectbox)
+
+    app = _set_stored_rollout_workspace(app, "Diagnose a store")
+    next(item for item in app.radio if item.label == "Diagnose mode").set_value("Inspect, export, and Rerun")
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
+    app = app.run()
     assert "Scientific evidence" in [subheader.value for subheader in app.subheader]
     assert _metric_values(app)["Matched comparison eligible"] == "NO"
     assert any("comparison is blocked" in warning.value for warning in app.warning)
-    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
+    assert any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
     assert {selectbox.label for selectbox in app.selectbox} >= {
         "Temporal metric",
         "Temporal grouping class",
@@ -487,7 +494,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert sum(toggle.label == "Logarithmic y-axis" for toggle in app.toggle) == 2
     grouping_class = next(selectbox for selectbox in app.selectbox if selectbox.label == "Temporal grouping class")
     grouping_class.set_value("Selected-action provenance (descriptive, non-causal)")
-    app.session_state["stored_rollouts_section"] = "Reward & reconstruction"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     assert not app.exception
     assert any("descriptive and post-selection" in warning.value for warning in app.warning)
@@ -497,7 +504,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         if toggle.label == "Load branching, rank/regret, and factual trajectory evidence"
     )
     extra_evidence.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Reward & reconstruction"
+    app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     assert not app.exception
     assert {button.label for button in app.get("download_button")} >= {
@@ -585,6 +592,62 @@ def test_stored_rollouts_corpus_reward_and_admission_are_plot_first(isolated_pat
     assert any("Target-admission rows and CSV" == expander.label for expander in app.expander)
 
 
+def test_corpus_reward_renders_incompatible_contracts_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Different generators share one corpus surface without being statistically pooled."""
+
+    rows = pd.DataFrame(
+        [
+            {
+                "metric": metric,
+                "contract_id": contract_id,
+                "contract": contract,
+                "policy": "temperature_softmax",
+                "temperature": 2.0,
+                "horizon": 8,
+                "branch_factor": 1,
+                "beam_width": 1,
+            }
+            for metric in ("cumulative_target_root_gain", "selected_target_root_gain", "selected_probability")
+            for contract_id, contract in (("a", "realistic · candidate aaa"), ("b", "rich · candidate bbb"))
+        ]
+    )
+    summary = SimpleNamespace(
+        temporal_summary=rows,
+        included_stores=({}, {}),
+        selected_paths=(Path("a"), Path("b")),
+    )
+    rendered: list[tuple[str, set[str]]] = []
+    monkeypatch.setattr(reconstruction_return.st, "subheader", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(reconstruction_return.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(reconstruction_return.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(reconstruction_return.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(reconstruction_return, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(reconstruction_return, "render_explanation_popover", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        reconstruction_return,
+        "_render_corpus_temporal_plot",
+        lambda frame, *, metric, label: rendered.append((metric, set(frame["contract_id"]))),
+    )
+
+    reconstruction_return._render_corpus_temporal_evidence(summary)
+
+    assert rendered == [
+        ("cumulative_target_root_gain", {"a", "b"}),
+        ("selected_target_root_gain", {"a", "b"}),
+    ]
+
+
+def test_corpus_quality_cards_use_percent_only_and_canonical_selection_theory() -> None:
+    assert reconstruction_return._format_percent(0.002274) == "0.2274%"
+    assert reconstruction_return._format_percent(0.167696) == "16.77%"
+    assert reconstruction_return._format_percent(1.0) == "100%"
+    assert reconstruction_return._format_percent(float("nan")) == "n/a"
+
+    references = reconstruction_return._SELECTION_DIAGNOSTIC_THEORY
+    assert "action.robust_temperature_softmax" in references.equation_ids
+    assert "metrics.categorical_entropy" in references.equation_ids
+
+
 def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_path_config, tmp_path) -> None:
     stale_path = isolated_path_config.offline_cache_dir / "stale.zarr"
     stale_root = zarr.open_group(stale_path, mode="w")
@@ -613,14 +676,15 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
 
     app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
-    assert any("disabled because this store" in warning.value for warning in app.warning)
-    assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
+    assert not any("disabled because this store" in warning.value for warning in app.warning)
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert "Download stale-store diagnostics JSON" in {button.label for button in app.get("download_button")}
 
     app.session_state["stored_rollouts_section"] = "Diagnose a store"
     app = app.run()
     assert not app.exception
+    assert any("disabled because this store" in warning.value for warning in app.warning)
+    assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
+    assert "Download stale-store diagnostics JSON" in {button.label for button in app.get("download_button")}
     assert not any(item.label == "Minimum valid fanout" for item in app.number_input)
     assert not any(item.label == "Query scope" for item in app.selectbox)
 
@@ -1299,7 +1363,7 @@ def test_rollout_plot_guides_use_the_narrative_contract_without_legacy_fields() 
     expected_calls = {
         candidate_generation: 15,
         overview_topology: 5,
-        reconstruction_return: 8,
+        reconstruction_return: 9,
         validity_support: 2,
         failure_triage: 1,
         inspect_rerun: 1,

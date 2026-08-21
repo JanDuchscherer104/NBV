@@ -153,6 +153,7 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
     )
 
     summary = build_rollout_corpus_summary((incompatible.store_dir, second.store_dir, first.store_dir))
+    first_only = build_rollout_corpus_summary((first.store_dir,))
     temporal = summary.temporal_summary
     matching = temporal[
         (temporal["metric"] == "cumulative_target_root_gain") & (temporal["profile"] == "realistic_core_60")
@@ -165,7 +166,27 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
     assert matching["finite_count"].tolist() == [2, 2]
     assert matching["missing_count"].tolist() == [0, 0]
     assert np.allclose(matching["iqr_width"], matching["q75"] - matching["q25"])
+    expected = first_only.temporal_summary[first_only.temporal_summary["metric"] == "cumulative_target_root_gain"]
+    assert np.allclose(matching["median"], expected["median"])
     assert {"selected_target_root_gain", "selected_probability", "selected_entropy"}.issubset(set(temporal["metric"]))
+    assert summary.endpoints["contract_id"].nunique() == 2
+    assert summary.endpoints.groupby("contract_id", sort=True)["store_path"].nunique().tolist() == [2, 1]
+
+
+def test_report_profile_falls_back_to_explicit_campaign_profile_hash() -> None:
+    import aria_nbv.rollouts.reporting as reporting
+
+    parameters = pd.DataFrame(
+        [
+            {
+                "store_id": "store",
+                "key": "shard.campaign_binding.profile_hash",
+                "value_text": "3072ce5206abd6d2",
+            }
+        ]
+    )
+
+    assert reporting._report_profile({"parameters": parameters}, "store") == "profile_hash=3072ce5206ab"
 
 
 def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:

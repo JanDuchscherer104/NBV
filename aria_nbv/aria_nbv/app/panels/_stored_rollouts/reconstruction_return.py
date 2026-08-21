@@ -16,7 +16,7 @@ from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import LabelSurface, TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
 from .session import _cached_projection
-from .shared import ExplanationSection, ScientificExplanation
+from .shared import ExplanationSection, ScientificExplanation, render_explanation_popover
 from .shared import download_frame as _download_frame
 from .shared import plot_control_key as _plot_control_key
 from .shared import render_plot as _render_plot
@@ -76,8 +76,18 @@ _TEMPORAL_THEORY: dict[str, TheoryReferences] = {
         equation_ids=("rri.target_rri",),
         term_ids=("target-specific-rri",),
     ),
-    "selected_entropy": TheoryReferences(equation_ids=("metrics.categorical_entropy",)),
+    "selected_probability": TheoryReferences(equation_ids=("action.robust_temperature_softmax",)),
+    "selected_entropy": TheoryReferences(
+        equation_ids=("action.robust_temperature_softmax", "metrics.categorical_entropy")
+    ),
 }
+_SELECTION_DIAGNOSTIC_THEORY = TheoryReferences(
+    equation_ids=("action.robust_temperature_softmax", "metrics.categorical_entropy")
+)
+_ROLLOUT_RECIPE_THESIS_REFERENCE = (
+    "Thesis: rollout recipes and temperature-softmax selection",
+    "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ#L167-L188",
+)
 
 
 def _temporal_metric_label(metric: str, *, surface: LabelSurface = "plain") -> str:
@@ -87,7 +97,7 @@ def _temporal_metric_label(metric: str, *, surface: LabelSurface = "plain") -> s
 
 
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
-    """Show the essential factual corpus trajectories, separated by contract."""
+    """Show each factual corpus quantity once while retaining contract strata."""
 
     st.subheader("Corpus reward and reconstruction")
     if summary is None:
@@ -97,36 +107,73 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
     if temporal.empty:
         st.info("No validated factual temporal rows are available.")
         return
-    for contract_id, contract_rows in temporal.groupby("contract_id", sort=True, dropna=False):
-        contract = str(contract_rows["contract"].iloc[0])
-        st.markdown(f"#### {contract}")
-        _render_corpus_quality_cards(contract_rows)
-        for metric in (
-            "cumulative_target_root_gain",
-            "selected_target_root_gain",
-        ):
-            rows = contract_rows[contract_rows["metric"] == metric].copy()
-            if rows.empty:
-                continue
-            rows["trajectory"] = _trajectory_label(rows)
-            _render_corpus_temporal_plot(
-                rows,
-                contract_id=contract_id,
-                metric=metric,
-                label=_temporal_metric_label(metric),
-            )
+    contract_count = int(temporal["contract_id"].nunique())
+    included_count = len(summary.included_stores)
+    selected_count = len(summary.selected_paths)
+    st.caption(
+        f"{included_count} validated stores from {selected_count} selected stores · {contract_count} exact contracts. "
+        "Every validated store contributes; incompatible candidate/return contracts remain separate traces in the same plots. "
+        "Trace labels show the persisted profile (or profile hash) and candidate-config hash; the exact contract also binds "
+        "the oracle configuration, return semantics, discount, and Q_H semantics."
+    )
+    for metric in (
+        "cumulative_target_root_gain",
+        "selected_target_root_gain",
+    ):
+        rows = temporal[temporal["metric"] == metric].copy()
+        if rows.empty:
+            continue
+        rows["trajectory"] = _trajectory_label(rows)
+        _render_corpus_temporal_plot(
+            rows,
+            metric=metric,
+            label=_temporal_metric_label(metric),
+        )
 
-        with st.expander("Diagnostic target RRI, selection-distribution rows, and CSV", expanded=False):
-            diagnostics = contract_rows[
-                contract_rows["metric"].isin(("cumulative_target_rri", "selected_probability", "selected_entropy"))
-            ].copy()
-            if diagnostics.empty:
-                st.info("No optional diagnostic rows are available for this contract.")
-            else:
-                st.dataframe(diagnostics, hide_index=True, width="stretch")
-                _download_frame(
-                    "Download diagnostic temporal CSV", f"corpus-diagnostics-{contract_id}.csv", diagnostics
-                )
+    render_explanation_popover(
+        "Interpret selection probability and entropy",
+        ScientificExplanation(
+            question="How concentrated were the temperature-softmax draws in this selected corpus?",
+            answer=(
+                "Selection probability is the mass assigned to the candidate that was actually drawn; entropy summarizes "
+                "the full actor-valid probability table. Both remain separated by exact persisted contract in the rows below."
+            ),
+            sections=(
+                ExplanationSection(
+                    "Selected-action probability",
+                    "A value near 100% means almost all probability mass sat on the selected action. It does not mean the "
+                    "action achieved a large reconstruction gain.",
+                ),
+                ExplanationSection(
+                    "Policy entropy",
+                    "Entropy is measured in nats, not percent. Zero is deterministic; larger values mean the valid candidate "
+                    "mass is more diffuse. Compare it only alongside candidate support and within a matched generator contract.",
+                ),
+                ExplanationSection(
+                    "How comparisons stay valid",
+                    "Every validated selected store contributes factual rows. Incompatible candidate, oracle, and return "
+                    "contracts are never pooled into one statistic.",
+                ),
+            ),
+            theory=_SELECTION_DIAGNOSTIC_THEORY,
+            evidence_role="actor-visible",
+            source_fields=(
+                "reporting.RolloutCorpusSummary.temporal_summary",
+                "audits.candidate_policy_entropy",
+            ),
+            external_references=(_ROLLOUT_RECIPE_THESIS_REFERENCE,),
+        ),
+    )
+
+    with st.expander("Diagnostic target RRI, selection-distribution rows, and CSV", expanded=False):
+        diagnostics = temporal[
+            temporal["metric"].isin(("cumulative_target_rri", "selected_probability", "selected_entropy"))
+        ].copy()
+        if diagnostics.empty:
+            st.info("No optional diagnostic rows are available for this corpus.")
+        else:
+            st.dataframe(diagnostics, hide_index=True, width="stretch")
+            _download_frame("Download diagnostic temporal CSV", "corpus-diagnostics.csv", diagnostics)
 
 
 def _trajectory_label(rows: pd.DataFrame) -> pd.Series:
@@ -134,62 +181,34 @@ def _trajectory_label(rows: pd.DataFrame) -> pd.Series:
 
     return rows.apply(
         lambda row: (
-            f"{row['policy']} · T={row['temperature']} · H={row['horizon']} · "
+            f"{row['contract']} · {row['policy']} · T={row['temperature']} · H={row['horizon']} · "
             f"B={row['branch_factor']} · beam={row['beam_width']}"
         ),
         axis=1,
     )
 
 
-def _render_corpus_quality_cards(rows: pd.DataFrame) -> None:
-    """Expose the minimal selection-quality context before the two primary plots."""
-
-    cumulative = rows[rows["metric"] == "cumulative_target_root_gain"]
-    selected = rows[rows["metric"] == "selected_target_root_gain"]
-    probability = rows[rows["metric"] == "selected_probability"]
-    entropy = rows[rows["metric"] == "selected_entropy"]
-    if cumulative.empty or selected.empty:
-        return
-    first_selected = selected[selected["step_index"] == selected["step_index"].min()]["median"].median()
-    endpoint = cumulative.loc[cumulative["step_index"] == cumulative["step_index"].max(), "median"].median()
-    first_probability = probability.loc[probability["step_index"] == probability["step_index"].min(), "median"].median()
-    first_entropy = entropy.loc[entropy["step_index"] == entropy["step_index"].min(), "median"].median()
-    cols = st.columns(4)
-    cols[0].metric("First-view median gain", _format_fraction(first_selected))
-    cols[1].metric("Endpoint median gain", _format_fraction(endpoint))
-    cols[2].metric("First-view selection probability", _format_fraction(first_probability))
-    cols[3].metric("First-view policy entropy", "n/a" if pd.isna(first_entropy) else f"{float(first_entropy):.3g} nats")
-    with st.popover("How to interpret these quality cards", icon="ℹ️"):
-        st.markdown(
-            "**First view** is the first selected counterfactual acquisition, not the root state. "
-            "The root baseline is omitted because its cumulative gain is zero by definition. "
-            "A small first-view gain is therefore factual evidence of a weak first selected action, not plot padding.\n\n"
-            "**Selection probability** and **entropy** describe the persisted temperature-softmax distribution. "
-            "They explain how concentrated the draw was; they do not by themselves prove that the selected view was useful."
-        )
-
-
-def _format_fraction(value: object) -> str:
-    """Format small dimensionless gains without visually rounding them to zero."""
+def _format_percent(value: object) -> str:
+    """Format a dimensionless fraction as a percentage with four significant digits."""
 
     numeric = pd.to_numeric(value, errors="coerce")
-    return "n/a" if pd.isna(numeric) else f"{float(numeric):.3g} ({float(numeric):.4%})"
+    return "n/a" if pd.isna(numeric) else f"{100.0 * float(numeric):.4g}%"
 
 
-def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, metric: str, label: str) -> None:
+def _render_corpus_temporal_plot(rows: pd.DataFrame, *, metric: str, label: str) -> None:
     """Render one default corpus plot with interpretation and its raw rows collapsed below."""
 
-    store_count = int(rows["store_count"].max())
+    store_count = int(rows.groupby("contract_id", sort=False)["store_count"].max().sum())
     iqr_width = pd.to_numeric(rows["iqr_width"], errors="coerce").max()
     cols = st.columns(3)
     cols[0].metric("Validated shards", store_count)
     cols[1].metric("Observed rows", f"{int(rows['finite_count'].sum()):,} / {int(rows['total_count'].sum()):,}")
-    cols[2].metric("Maximum IQR width", "n/a" if pd.isna(iqr_width) else f"{float(iqr_width):.3g}")
+    cols[2].metric("Maximum IQR width", _format_percent(iqr_width))
     render_scientific_notation(metric)
     _render_plot(
         _temporal_summary_figure(rows, group_field="trajectory"),
         ScientificExplanation(
-            question=f"How does {label.lower()} evolve across all compatible selected shards?",
+            question=f"How does {label.lower()} evolve across the selected corpus without pooling incompatible contracts?",
             answer=(
                 "Each point sums the observed root-normalized gains through that acquisition; the line is the "
                 "median and the ribbon is the descriptive IQR."
@@ -200,7 +219,7 @@ def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, met
             sections=(
                 ExplanationSection(
                     "Reading the trajectory",
-                    "Each line keeps policy, temperature, horizon, branch factor, and beam width separate. "
+                    "Each line keeps the exact persisted contract, policy, temperature, horizon, branch factor, and beam width separate. "
                     "The center is the median across finite factual rows; the shaded band spans the "
                     "linear-interpolated interquartile range. Acquisition 1 is the first selected view, not the root state.",
                 ),
@@ -225,11 +244,11 @@ def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, met
             ),
             external_references=(_EVIDENCE_REPORTING_REFERENCE,),
         ),
-        log_y_key=_plot_control_key("corpus-temporal", contract_id, metric),
+        log_y_key=_plot_control_key("corpus-temporal", metric),
     )
     with st.expander(f"{label} rows and CSV", expanded=False):
         st.dataframe(rows.drop(columns="trajectory"), hide_index=True, width="stretch")
-        _download_frame(f"Download {label} CSV", f"corpus-{metric}-{contract_id}.csv", rows.drop(columns="trajectory"))
+        _download_frame(f"Download {label} CSV", f"corpus-{metric}.csv", rows.drop(columns="trajectory"))
 
 
 def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:

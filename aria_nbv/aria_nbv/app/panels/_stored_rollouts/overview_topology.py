@@ -143,19 +143,19 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
     render_scientific_notation(metric)
     fig = px.box(
         summary.endpoints,
-        x="profile",
+        x="contract",
         y=metric,
         color="policy",
         facet_col="horizon",
-        hover_data=["store_id"],
-        labels={metric: current_scientific_label(metric)},
+        hover_data=["store_id", "profile", "contract_id"],
+        labels={metric: current_scientific_label(metric), "contract": "Persisted rollout contract"},
         title=(f"Store-qualified factual endpoint distributions: {current_scientific_label(metric)}"),
     )
     _render_plot(
         fig,
         ScientificExplanation(
             question="How are factual rollout endpoints distributed across selected validated shards?",
-            answer="The endpoint boxes show the observed store-to-store distribution for each matched profile, policy, and horizon.",
+            answer="The endpoint boxes show the observed store-to-store distribution for each exact persisted contract, policy, and horizon.",
             sections=(
                 ExplanationSection(
                     title="Following the population",
@@ -174,11 +174,11 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
                 ExplanationSection(
                     title="Reading the evidence",
                     body=(
-                        "Compare within profile, policy, horizon, and the persisted contract; store identity remains visible."
+                        "Compare within the exact persisted contract, policy, and horizon; profile and store identity remain visible."
                     )
                     + "\n\n"
                     + (
-                        "Distributions remain stable across shards of one profile rather than being driven by one store."
+                        "Distributions should remain stable across shards of one exact contract rather than being driven by one store."
                     )
                     + "\n\n"
                     + (

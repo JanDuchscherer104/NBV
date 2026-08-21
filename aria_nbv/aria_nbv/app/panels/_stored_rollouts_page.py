@@ -82,12 +82,6 @@ def render_stored_rollouts_page() -> None:
         with tabs[1]:
             reconstruction._render_corpus_temporal_evidence(corpus_summary)
             overview._render_corpus_endpoint_distributions(corpus_summary)
-            if current:
-                reconstruction._render_scientific_evidence(reader)
-            else:
-                render_stale_store_boundary(
-                    validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
-                )
     if tabs[2].open:
         with tabs[2]:
             overview._render_corpus_admission(corpus_summary)
@@ -115,6 +109,7 @@ def render_stored_rollouts_page() -> None:
                     failure_triage._render_failure_triage(reader)
                 else:
                     overview._render_corpus_details(corpus_summary)
+                    reconstruction._render_scientific_evidence(reader)
                     inspect_rerun._render_inspect_export_rerun(
                         reader, store_path=store_path, manifest_payload=manifest_payload, paths=paths
                     )

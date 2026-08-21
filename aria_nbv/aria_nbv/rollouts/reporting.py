@@ -678,6 +678,11 @@ def _report_profile(frames: Mapping[str, pd.DataFrame], store_id: str) -> str:
         rows = parameters[(parameters["store_id"] == store_id) & (parameters["key"] == key)]
         if not rows.empty and isinstance(rows.iloc[0]["value_text"], str):
             return str(rows.iloc[0]["value_text"])
+    binding = parameters[
+        (parameters["store_id"] == store_id) & (parameters["key"] == "shard.campaign_binding.profile_hash")
+    ]
+    if not binding.empty and isinstance(binding.iloc[0]["value_text"], str):
+        return f"profile_hash={str(binding.iloc[0]['value_text'])[:12]}"
     return "unknown"
 
 
@@ -741,6 +746,7 @@ def _corpus_temporal_summary(
     groups = ("contract_id", "contract", "profile", "policy", "temperature", "horizon", "branch_factor", "beam_width")
     for group_field in groups:
         source[group_field] = source[group_field].map(_temporal_group_scalar)
+    source_records = source.to_dict("records")
     store_counts = (
         source.groupby([*groups, "step_index"], dropna=False, sort=True)["corpus_store_path"]
         .nunique()
@@ -757,7 +763,7 @@ def _corpus_temporal_summary(
         "valid_fanout",
         "invalid_fraction",
     ):
-        rows = temporal_metric_summary_rows(source.to_dict("records"), metric=metric, group_fields=groups)
+        rows = temporal_metric_summary_rows(source_records, metric=metric, group_fields=groups)
         if not rows:
             continue
         frame = pd.DataFrame(rows).merge(store_counts, on=[*groups, "step_index"], how="left", validate="one_to_one")
@@ -807,8 +813,10 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
     return {
         "id": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
         "profile": profile,
-        "label": f"{profile} · {str(payload['candidate_configs'][0] if payload['candidate_configs'] else 'unknown')[:12]} · "
-        f"{payload['return_semantics'] or 'unknown'}",
+        "label": (
+            f"{profile} · candidate "
+            f"{str(payload['candidate_configs'][0] if payload['candidate_configs'] else 'unknown')[:12]}"
+        ),
     }
 
 
@@ -940,21 +948,35 @@ def _corpus_endpoints(
     frames: list[dict[str, pd.DataFrame]],
     included: list[dict[str, object]],
 ) -> pd.DataFrame:
-    """Retain raw diagnostic endpoints with store and profile identity."""
+    """Retain raw diagnostic endpoints with store and exact contract identity."""
 
     rows: list[pd.DataFrame] = []
     for bundle, store in zip(frames, included, strict=True):
         frame = bundle["reconstruction_endpoints"].copy()
+        contract = _persisted_rollout_contract(bundle, str(store["store_id"]), str(store["profile"]))
         frame.insert(1, "store_path", str(store["path"]))
         frame.insert(2, "profile", str(store["profile"]))
+        frame.insert(3, "contract_id", contract["id"])
+        frame.insert(4, "contract", contract["label"])
         rows.append(frame)
-    columns = ("store_id", "store_path", "profile", *THESIS_REPORT_TABLE_COLUMNS["reconstruction_endpoints"][1:])
+    columns = (
+        "store_id",
+        "store_path",
+        "profile",
+        "contract_id",
+        "contract",
+        *THESIS_REPORT_TABLE_COLUMNS["reconstruction_endpoints"][1:],
+    )
     if not rows:
         return pd.DataFrame(columns=columns)
     return (
         pd.concat(rows, ignore_index=True)
         .loc[:, columns]
-        .sort_values(["profile", "policy", "horizon", "store_id", "rollout_row_id"], kind="stable", na_position="last")
+        .sort_values(
+            ["contract_id", "policy", "horizon", "store_id", "rollout_row_id"],
+            kind="stable",
+            na_position="last",
+        )
         .reset_index(drop=True)
     )
 

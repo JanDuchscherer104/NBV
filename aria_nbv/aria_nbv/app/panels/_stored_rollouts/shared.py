@@ -111,6 +111,14 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
     st.plotly_chart(rendered, width="stretch")
 
 
+def render_explanation_popover(label: str, explanation: ScientificExplanation) -> None:
+    """Render canonical scientific context for a metric group without a plot."""
+
+    with st.popover(label, icon="ℹ️"):
+        _render_scientific_guide(explanation)
+        explanation_item("Provenance", ", ".join(explanation.source_fields), code=True)
+
+
 def _render_scientific_guide(explanation: ScientificExplanation) -> None:
     """Render an explanation as a compact narrative backed by shared theory."""
 
