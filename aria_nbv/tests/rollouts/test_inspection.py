@@ -26,6 +26,10 @@ from aria_nbv.rollouts.inspection import (
     candidate_group_summary_rows,
     candidate_population_evidence,
     candidate_proposal_calibration_rows,
+    candidate_selection_sequence_rows,
+    candidate_selection_temporal_summary_rows,
+    candidate_selection_transition_rows,
+    candidate_sequence_return_summary_rows,
     comparable_policy_cohorts,
     deterministic_candidate_display_sample,
     discounted_rollout_return_rows,
@@ -1021,6 +1025,157 @@ def test_candidate_population_evidence_is_compact_callback_parity_and_order_inva
     assert [row["candidate_row_id"] for row in evidence["sample"]["rows"]] == [
         row["candidate_row_id"] for row in reversed_evidence["sample"]["rows"]
     ]
+
+
+def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_sequences() -> None:
+    selected_families = {
+        (0, 0): "forward",
+        (0, 1): "side",
+        (0, 2): "forward",
+        (1, 0): "forward",
+        (1, 1): "forward",
+        (1, 2): "side",
+    }
+    forward_mass = {
+        (0, 0): 0.8,
+        (0, 1): 0.3,
+        (0, 2): 0.6,
+        (1, 0): 0.6,
+        (1, 1): 0.6,
+        (1, 2): 0.3,
+    }
+    terminal_gain = {0: 0.5, 1: 0.1}
+    rows: list[dict[str, object]] = []
+    candidate_row_id = 0
+    for rollout_row_id in range(2):
+        for step_index in range(3):
+            for family in ("forward", "side"):
+                probability = forward_mass[(rollout_row_id, step_index)]
+                if family == "side":
+                    probability = 1.0 - probability
+                rows.append(
+                    {
+                        "candidate_row_id": candidate_row_id,
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "{}",
+                        "scene": f"scene-{rollout_row_id}",
+                        "rollout_row_id": rollout_row_id,
+                        "step_row_id": 10 * rollout_row_id + step_index,
+                        "step_index": step_index,
+                        "policy": "temperature_softmax",
+                        "temperature": 2.0,
+                        "horizon": 3,
+                        "branch_factor": 1,
+                        "beam_width": 1,
+                        "mixture": family,
+                        "position": family,
+                        "strategy": "target_point" if family == "forward" else "forward_rig",
+                        "invalid_reason": "none",
+                        "actor_action": True,
+                        "oracle_label": True,
+                        "q_train": True,
+                        "selected": selected_families[(rollout_row_id, step_index)] == family,
+                        "sampler_probability": 0.5,
+                        "selection_probability": probability,
+                        "target_root_gain": 0.1,
+                        "cumulative_target_root_gain": terminal_gain[rollout_row_id]
+                        if step_index == 2
+                        else 0.05 * (step_index + 1),
+                        "path_collision": False,
+                        "path_collision_applicable": True,
+                        "path_collision_evaluated": True,
+                        "path_min_clearance_m": 1.0,
+                    }
+                )
+                candidate_row_id += 1
+
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+    dynamics = evidence["selection_dynamics"]["position"]
+    assert len(dynamics) == 12
+    rollout_zero_step_one_side = next(
+        row for row in dynamics if row["rollout_row_id"] == 0 and row["step_index"] == 1 and row["family"] == "side"
+    )
+    assert rollout_zero_step_one_side["policy_mass"] == pytest.approx(0.7)
+    assert rollout_zero_step_one_side["selected_share"] == pytest.approx(1.0)
+
+    temporal = candidate_selection_temporal_summary_rows(dynamics, metric="policy_mass")
+    forward_step_one = next(row for row in temporal if row["step_index"] == 1 and row["family"] == "forward")
+    assert forward_step_one["finite_count"] == 2
+    assert forward_step_one["median"] == pytest.approx(0.45)
+
+    transitions = candidate_selection_transition_rows(dynamics)
+    a_to_a = next(
+        row
+        for row in transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "forward"
+    )
+    assert a_to_a["context_count"] == 2
+    assert a_to_a["expected_policy_mass_mean"] == pytest.approx(0.45)
+    assert a_to_a["realized_rate"] == pytest.approx(0.5)
+
+    sequences = candidate_selection_sequence_rows(dynamics)
+    assert [row["sequence"] for row in sequences] == [
+        "forward → side → forward",
+        "forward → forward → side",
+    ]
+    assert [row["terminal_cumulative_target_root_gain"] for row in sequences] == [0.5, 0.1]
+    summaries = candidate_sequence_return_summary_rows(sequences)
+    assert {row["sequence"]: row["terminal_return_median"] for row in summaries} == {
+        "forward → forward → side": pytest.approx(0.1),
+        "forward → side → forward": pytest.approx(0.5),
+    }
+    assert evidence["selection_sequences"]["position"] == sequences
+    assert evidence["sequence_returns"]["position"] == summaries
+
+
+def test_candidate_selection_probability_failure_closes_policy_mass_only() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "step_index": 0,
+            "policy": "temperature_softmax",
+            "temperature": 2.0,
+            "horizon": 1,
+            "branch_factor": 1,
+            "beam_width": 1,
+            "mixture": family,
+            "position": family,
+            "strategy": "target_point",
+            "invalid_reason": "none",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": 0.5,
+            "selection_probability": probability,
+            "target_root_gain": 0.1,
+            "cumulative_target_root_gain": 0.1,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, (family, probability) in enumerate((("forward", 0.8), ("side", None)))
+    ]
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+
+    dynamics = evidence["selection_dynamics"]["position"]
+    assert all(row["policy_mass"] is None for row in dynamics)
+    assert all(row["probability_unavailable_reason"] == "incomplete_probability_vector" for row in dynamics)
+    assert evidence["calibration"]["position"][0]["proposal_available"] is True
+    with pytest.raises(ValueError, match="Unsupported candidate selection metric"):
+        candidate_selection_temporal_summary_rows(dynamics, metric="unsupported")
 
 
 @pytest.mark.parametrize(
