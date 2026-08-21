@@ -72,6 +72,7 @@ from ..rerun_launch import (
     stop_rerun_launch,
 )
 from .common import _report_exception
+from . import _stored_rollout_session as session
 
 _SECTIONS = (
     "Trust & Topology",
@@ -471,12 +472,7 @@ def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
 def _clear_stored_rollout_caches() -> None:
     """Clear only the inspector caches after stores are created or replaced."""
 
-    _cached_inventory.clear()
-    _cached_projection_cached.clear()
-    _cached_topology_cached.clear()
-    _cached_failures_cached.clear()
-    _cached_evidence_bundle_cached.clear()
-    _cached_store_bundle_cached.clear()
+    session.clear_stored_rollout_caches()
 
 
 def render_stored_rollouts_page() -> None:
