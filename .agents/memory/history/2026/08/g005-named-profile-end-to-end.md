@@ -1,3 +1,14 @@
+---
+id: 2026-08-21_g005_named_profile_integration
+date: 2026-08-21
+title: "G005 Named-Profile Integration Proof"
+status: done
+topics: [qh, profiles, actor-contract, verification]
+confidence: high
+canonical_updates_needed: []
+codex_thread: codex://threads/g005-named-profile-end-to-end
+---
+
 # G005 named-profile integration proof
 
 ## Task
