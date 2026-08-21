@@ -1131,6 +1131,17 @@ def _candidate_group_bar(frame: pd.DataFrame, group_by: str, title: str) -> go.F
     )
 
 
+def _direction_count_context(frame: pd.DataFrame, column: str) -> str:
+    """Return a non-duplicated direction denominator for the visible facet."""
+
+    if column not in frame:
+        return "unavailable"
+    values = pd.to_numeric(frame[column], errors="coerce").dropna()
+    if values.empty:
+        return "unavailable"
+    return f"{int(values.max()):,}"
+
+
 def _render_complete_candidate_support(population: dict[str, object]) -> None:
     """Render complete-population support plots before their collapsed rows."""
 
@@ -1203,38 +1214,52 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             _download_frame("Download normalized candidate positions CSV", "candidate-normalized-positions.csv", points)
     direction = population.get("direction", {})
     density = pd.DataFrame(direction.get("density_rows", []) if isinstance(direction, dict) else [])
-    state_density = density[density.get("aggregation_level") == "state"] if not density.empty else density
-    if not state_density.empty:
-        if "generation_cohort_id" not in state_density:
-            state_density = state_density.assign(generation_cohort_id="unknown")
-        if "population" not in state_density:
-            state_density = state_density.assign(population="all")
-        cohorts = sorted(str(value) for value in state_density["generation_cohort_id"].dropna().unique())
-        populations = sorted(str(value) for value in state_density["population"].dropna().unique())
+    if not density.empty:
+        if "generation_cohort_id" not in density:
+            density = density.assign(generation_cohort_id="unknown")
+        if "population" not in density:
+            density = density.assign(population="all")
+        if "aggregation_level" not in density:
+            density = density.assign(aggregation_level="state")
+        cohorts = sorted(str(value) for value in density["generation_cohort_id"].dropna().unique())
+        populations = sorted(str(value) for value in density["population"].dropna().unique())
+        available_levels = {str(value) for value in density["aggregation_level"].dropna()}
+        levels = [level for level in ("cohort_macro", "scene_macro", "state") if level in available_levels]
         cohort_col, population_col = st.columns(2)
         cohort = cohort_col.selectbox("Direction generation cohort", options=cohorts, key="candidate_direction_cohort")
         direction_population = population_col.selectbox(
             "Direction population", options=populations, key="candidate_direction_population"
         )
-        state_density = state_density[
-            (state_density["generation_cohort_id"].astype(str) == cohort)
-            & (state_density["population"].astype(str) == direction_population)
+        aggregation = st.selectbox(
+            "Direction aggregation", options=levels, index=0, key="candidate_direction_aggregation"
+        )
+        selected_density = density[
+            (density["generation_cohort_id"].astype(str) == cohort)
+            & (density["population"].astype(str) == direction_population)
+            & (density["aggregation_level"].astype(str) == aggregation)
         ]
-        matrix = state_density.pivot_table(
+        matrix = selected_density.pivot_table(
             index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
+        )
+        total_n = _direction_count_context(selected_density, "total_count")
+        finite_n = _direction_count_context(selected_density, "valid_count")
+        missing_n = _direction_count_context(selected_density, "missing_count")
+        st.caption(
+            f"Aggregation: {aggregation} · n={total_n} · finite directions={finite_n} · "
+            f"missing/unavailable={missing_n} · protocol: azimuth × sin(elevation) equal-area bins."
         )
         fig = px.imshow(
             matrix,
             origin="lower",
             aspect="auto",
             labels={"x": "azimuth bin", "y": "sin(elevation) bin", "color": "fraction"},
-            title=f"Candidate direction density (equal-area bins) · {cohort}",
+            title=f"Candidate direction density (equal-area bins) · {cohort} · {aggregation}",
         )
         _render_plot(
             fig,
             ScientificExplanation(
                 question="Does direction support cover solid angle without latitude bias?",
-                population=f"Complete candidate rows, normalized per factual state; cohort={cohort}, population={direction_population}.",
+                population=f"Candidate rows at {aggregation} grain; cohort={cohort}, population={direction_population}.",
                 metric="Fraction per azimuth × sin(elevation) bin.",
                 denominator_masks="Zero-length vectors remain missing.",
                 comparability="Match binning and candidate contract.",
@@ -1245,8 +1270,8 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             ),
         )
         with st.expander("Direction density rows and CSV"):
-            st.dataframe(state_density, hide_index=True, width="stretch")
-            _download_frame("Download direction density CSV", "candidate-direction-density.csv", state_density)
+            st.dataframe(selected_density, hide_index=True, width="stretch")
+            _download_frame("Download direction density CSV", "candidate-direction-density.csv", selected_density)
     for frame, value, title, key in (
         (
             pd.DataFrame(direction.get("cap_rows", []) if isinstance(direction, dict) else []),
