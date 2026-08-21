@@ -7,10 +7,13 @@ from pathlib import Path
 import pytest
 
 from aria_nbv.app.scientific_labels import (
+    SCIENTIFIC_LABELS,
+    ScientificLabel,
     TheoryReferences,
     TheoryResolutionError,
     equation_label,
     format_identifier,
+    format_scientific_label,
     resolve_theory,
     symbol_label,
 )
@@ -50,3 +53,20 @@ def test_unknown_labels_fail_closed_to_readable_identifier(tmp_path: Path) -> No
     assert symbol_label("missing_value", root=tmp_path) == "Missing Value"
     with pytest.raises(TheoryResolutionError):
         resolve_theory(TheoryReferences(symbol_ids=("missing_value",)), root=tmp_path)
+
+
+def test_scientific_inventory_formats_only_at_the_presentation_boundary(tmp_path: Path) -> None:
+    _write_registry(tmp_path)
+    label = ScientificLabel("raw_metric_key", "Observed change", "demo.value", "fraction")
+
+    assert format_scientific_label(label, mode="Symbols", surface="markdown", root=tmp_path) == (
+        r"$\Delta_t$ (fraction)"
+    )
+    assert format_scientific_label(label, mode="Both", surface="markdown", root=tmp_path) == (
+        r"$\Delta_t$ — Observed change (fraction)"
+    )
+    assert format_scientific_label(label, mode="Symbols", surface="plain", root=tmp_path) == (
+        "Observed change (fraction)"
+    )
+    assert format_scientific_label("unknown_metric", root=tmp_path) == "Unknown Metric"
+    assert SCIENTIFIC_LABELS["cumulative_target_root_gain"].symbol_key == ("rl.observed_cumulative_root_gain")
