@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
+ROUTING_PROMPTS = ROOT / "scripts" / "scaffold" / "fixtures" / "routing_prompts.jsonl"
 UPSTREAM_SKILL_PATHS = {(SKILLS_DIR / "graphify" / "SKILL.md").resolve()}
 
 FRONTMATTER_KEYS = {"name", "description"}
@@ -626,7 +627,9 @@ def audit_semantic_drift(skills: list[Skill]) -> list[str]:
 
 
 def audit_routing_fixtures(
-    path: Path, skills_by_name: dict[str, Skill]
+    path: Path,
+    skills_by_name: dict[str, Skill],
+    prompts_path: Path | None = None,
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -657,10 +660,13 @@ def audit_routing_fixtures(
     if not isinstance(fixtures, list) or not fixtures:
         return [f"{rel(path)}: fixtures must be a non-empty list"], []
 
+    prompt_path = prompts_path or path.with_name("routing_prompts.jsonl")
+    prompts, prompt_errors = load_routing_prompts(prompt_path)
+    errors.extend(prompt_errors)
+
     seen_ids: set[str] = set()
     allowed_fixture_keys = {
         "id",
-        "task",
         "expected_owner_paths",
         "stable_skill_ids",
         "expected_tool_refs",
@@ -685,9 +691,6 @@ def audit_routing_fixtures(
         else:
             seen_ids.add(fixture_id)
 
-        task = fixture.get("task")
-        if not isinstance(task, str) or not task.strip():
-            errors.append(f"{rel(path)} fixture {fixture_id or index}: missing task")
         owner_paths = fixture.get("expected_owner_paths")
         resolved_owner_paths: list[Path] = []
         if not isinstance(owner_paths, list) or not owner_paths:
@@ -812,7 +815,72 @@ def audit_routing_fixtures(
                     f"{rel(path)} fixture {fixture_id or index}: {field} entries must be non-empty strings"
                 )
 
+    prompt_ids = set(prompts)
+    if seen_ids != prompt_ids:
+        errors.append(
+            f"{rel(path)}: routing fixture IDs must exactly match prompt IDs; "
+            f"fixtures-only={sorted(seen_ids - prompt_ids)}, "
+            f"prompts-only={sorted(prompt_ids - seen_ids)}"
+        )
+
     return errors, warnings
+
+
+def load_routing_prompts(path: Path) -> tuple[dict[str, str], list[str]]:
+    """Load prompt-only JSONL without exposing rubric fields to trial inputs."""
+    if not path.is_file():
+        return {}, [f"missing routing prompt file: {_display_path(path)}"]
+    prompts: dict[str, str] = {}
+    errors: list[str] = []
+    forbidden_text = (
+        "expected_owner_paths",
+        "stable_skill_ids",
+        "expected_tool_refs",
+        "forbidden_tool_refs",
+        "required_outcomes",
+        "forbidden_outcomes",
+        "mcp__",
+    )
+    for line_number, raw_line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if not raw_line.strip():
+            errors.append(f"{_display_path(path)}:{line_number}: blank JSONL record")
+            continue
+        try:
+            record = json.loads(raw_line)
+        except json.JSONDecodeError as exc:
+            errors.append(
+                f"{_display_path(path)}:{line_number}: unreadable JSON record: {exc}"
+            )
+            continue
+        if not isinstance(record, dict) or set(record) != {"id", "task"}:
+            errors.append(
+                f"{_display_path(path)}:{line_number}: prompt record must contain only id and task"
+            )
+            continue
+        prompt_id = record["id"]
+        task = record["task"]
+        if not isinstance(prompt_id, str) or not prompt_id.strip():
+            errors.append(f"{_display_path(path)}:{line_number}: missing prompt id")
+            continue
+        if prompt_id in prompts:
+            errors.append(
+                f"{_display_path(path)}:{line_number}: duplicate prompt id {prompt_id!r}"
+            )
+            continue
+        if not isinstance(task, str) or not task.strip():
+            errors.append(
+                f"{_display_path(path)}:{line_number}: task must be a non-empty string"
+            )
+            continue
+        if any(marker in task for marker in forbidden_text):
+            errors.append(
+                f"{_display_path(path)}:{line_number}: prompt contains rubric or tool text"
+            )
+            continue
+        prompts[prompt_id] = task
+    return prompts, errors
 
 
 def self_test_skill_text(
@@ -838,8 +906,17 @@ def write_self_test_skill(root: Path, name: str, text: str) -> Path:
 
 
 def self_test_fixture_path(root: Path, data: dict[str, Any]) -> Path:
+    data = json.loads(json.dumps(data))
+    prompt_records = [
+        {"id": fixture["id"], "task": fixture.pop("task")}
+        for fixture in data["fixtures"]
+    ]
     path = root / "fixtures.json"
     path.write_text(json.dumps(data), encoding="utf-8")
+    path.with_name("routing_prompts.jsonl").write_text(
+        "".join(json.dumps(record) + "\n" for record in prompt_records),
+        encoding="utf-8",
+    )
     return path
 
 
