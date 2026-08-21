@@ -1038,7 +1038,6 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
     _render_complete_candidate_support(population)
     composition = pd.DataFrame(population["composition"][group_by])
     calibration = pd.DataFrame(population["calibration"][group_by])
-    collision = pd.DataFrame(population["collision"])
     sample = population["sample"]
 
     if not composition.empty:
@@ -1152,7 +1151,14 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 x_values.extend([0.0, float(row.target_normalized_forward), None])
                 y_values.extend([0.0, float(row.target_normalized_lateral), None])
             fig.add_trace(go.Scatter(x=x_values, y=y_values, mode="lines", name=f"rays · {cohort}"))
-            fig.add_trace(go.Scatter(x=cohort_rows["target_normalized_forward"], y=cohort_rows["target_normalized_lateral"], mode="markers", name=f"candidate · {cohort}"))
+            fig.add_trace(
+                go.Scatter(
+                    x=cohort_rows["target_normalized_forward"],
+                    y=cohort_rows["target_normalized_lateral"],
+                    mode="markers",
+                    name=f"candidate · {cohort}",
+                )
+            )
         fig.update_layout(title="Target-normalized candidate endpoints", xaxis_title="forward", yaxis_title="lateral")
         fig.update_xaxes(scaleanchor="y", scaleratio=1)
         fig.update_yaxes(scaleanchor="x", scaleratio=1)
@@ -1214,8 +1220,18 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             st.dataframe(state_density, hide_index=True, width="stretch")
             _download_frame("Download direction density CSV", "candidate-direction-density.csv", state_density)
     for frame, value, title, key in (
-        (pd.DataFrame(direction.get("cap_rows", []) if isinstance(direction, dict) else []), "discrepancy", "Spherical-cap directional discrepancy", "direction-cap"),
-        (pd.DataFrame(direction.get("angular_support_rows", []) if isinstance(direction, dict) else []), "nearest_neighbor_deg", "Angular nearest-neighbour and covering support", "direction-angular"),
+        (
+            pd.DataFrame(direction.get("cap_rows", []) if isinstance(direction, dict) else []),
+            "discrepancy",
+            "Spherical-cap directional discrepancy",
+            "direction-cap",
+        ),
+        (
+            pd.DataFrame(direction.get("angular_support_rows", []) if isinstance(direction, dict) else []),
+            "nearest_neighbor_deg",
+            "Angular nearest-neighbour and covering support",
+            "direction-angular",
+        ),
     ):
         if frame.empty:
             continue
@@ -1224,20 +1240,31 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
         if frame.empty or value not in frame:
             continue
         x = "radius_deg" if "radius_deg" in frame else "generation_cohort_id"
-        fig = px.line(frame, x=x, y=value, color="population" if "population" in frame else None, markers=True, title=title)
-        _render_plot(fig, _candidate_population_explanation(
-            "Does candidate direction support cover solid angle without collapse?",
-            "Stored candidate direction rows at the factual-state grain.",
-            "Angular discrepancy or separation in degrees/fraction as labelled.",
-            "Finite normalized vectors only; missing vectors remain unavailable.",
-            "Low cap discrepancy and small covering gaps indicate broad directional support.",
-            "Large discrepancy or angular gaps indicate directional collapse or missing generator families.",
-            "candidate direction evidence", "actor-visible"))
+        fig = px.line(
+            frame, x=x, y=value, color="population" if "population" in frame else None, markers=True, title=title
+        )
+        _render_plot(
+            fig,
+            _candidate_population_explanation(
+                "Does candidate direction support cover solid angle without collapse?",
+                "Stored candidate direction rows at the factual-state grain.",
+                "Angular discrepancy or separation in degrees/fraction as labelled.",
+                "Finite normalized vectors only; missing vectors remain unavailable.",
+                "Low cap discrepancy and small covering gaps indicate broad directional support.",
+                "Large discrepancy or angular gaps indicate directional collapse or missing generator families.",
+                "candidate direction evidence",
+                "actor-visible",
+            ),
+        )
         with st.expander(f"{title} rows and CSV"):
             st.dataframe(frame, hide_index=True, width="stretch")
             _download_frame(f"Download {title} CSV", f"candidate-{key}.csv", frame)
 
-    for key, title in (("spatial", "Spatial support by shell"), ("target_view", "Target-view distance support"), ("motion", "Motion support")):
+    for key, title in (
+        ("spatial", "Spatial support by shell"),
+        ("target_view", "Target-view distance support"),
+        ("motion", "Motion support"),
+    ):
         frame = pd.DataFrame(population.get(key, []))
         if frame.empty:
             continue
@@ -1245,33 +1272,72 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             frame = frame[frame["aggregation_level"].eq("state")]
         y = "mean" if "mean" in frame else "count"
         x = "metric" if "metric" in frame else "evidence"
-        fig = px.bar(frame, x=x, y=y, color="generation_cohort_id" if "generation_cohort_id" in frame else None, title=title, barmode="group")
-        _render_plot(fig, _candidate_population_explanation(
-            f"What physical support is present in {title.lower()}?",
-            "Complete candidate audit support summaries at factual-state grain.",
-            "Metric units follow the persisted field (`m`, `deg`, or dimensionless).",
-            "Finite support is plotted; unavailable optical and numeric values remain missing.",
-            "Support spans configured shell, target-view, and motion bounds.",
-            "Concentration, clipping, or missingness points to an invalid component or evaluator coverage issue.",
-            f"candidate {key} evidence", "actor-visible"))
+        fig = px.bar(
+            frame,
+            x=x,
+            y=y,
+            color="generation_cohort_id" if "generation_cohort_id" in frame else None,
+            title=title,
+            barmode="group",
+        )
+        _render_plot(
+            fig,
+            _candidate_population_explanation(
+                f"What physical support is present in {title.lower()}?",
+                "Complete candidate audit support summaries at factual-state grain.",
+                "Metric units follow the persisted field (`m`, `deg`, or dimensionless).",
+                "Finite support is plotted; unavailable optical and numeric values remain missing.",
+                "Support spans configured shell, target-view, and motion bounds.",
+                "Concentration, clipping, or missingness points to an invalid component or evaluator coverage issue.",
+                f"candidate {key} evidence",
+                "actor-visible",
+            ),
+        )
         with st.expander(f"{title} rows and CSV"):
             st.dataframe(frame, hide_index=True, width="stretch")
             _download_frame(f"Download {key} support CSV", f"candidate-{key}.csv", frame)
 
     collision = pd.DataFrame(population.get("collision", []))
     if not collision.empty:
-        counts = [column for column in ("collision_available_count", "collision_not_applicable_count", "collision_unavailable_count", "collision_count", "clearance_finite_count") if column in collision]
+        counts = [
+            column
+            for column in (
+                "collision_available_count",
+                "collision_not_applicable_count",
+                "collision_unavailable_count",
+                "collision_count",
+                "clearance_finite_count",
+            )
+            if column in collision
+        ]
         if counts:
-            plot_rows = collision.melt(id_vars=[c for c in ("generation_cohort_id",) if c in collision], value_vars=counts, var_name="state", value_name="count")
-            fig = px.bar(plot_rows, x="state", y="count", color="generation_cohort_id" if "generation_cohort_id" in plot_rows else None, title="Collision applicability and clearance evidence", barmode="group")
-            _render_plot(fig, _candidate_population_explanation(
-                "Were collision and clearance outcomes actually evaluated?",
-                "Complete candidate audit rows grouped by exact generation cohort.",
-                "Counts and collision rate; finite clearance is in metres.",
-                "Applicable, evaluated, not-applicable, and unevaluated rows remain separate.",
-                "Most applicable rows are evaluated and collision rates stay within physical expectations.",
-                "Unevaluated or not-applicable concentration indicates missing evaluator support, not safe free space.",
-                "candidate diagnostics/path collision and clearance", "actor-visible"))
+            plot_rows = collision.melt(
+                id_vars=[c for c in ("generation_cohort_id",) if c in collision],
+                value_vars=counts,
+                var_name="state",
+                value_name="count",
+            )
+            fig = px.bar(
+                plot_rows,
+                x="state",
+                y="count",
+                color="generation_cohort_id" if "generation_cohort_id" in plot_rows else None,
+                title="Collision applicability and clearance evidence",
+                barmode="group",
+            )
+            _render_plot(
+                fig,
+                _candidate_population_explanation(
+                    "Were collision and clearance outcomes actually evaluated?",
+                    "Complete candidate audit rows grouped by exact generation cohort.",
+                    "Counts and collision rate; finite clearance is in metres.",
+                    "Applicable, evaluated, not-applicable, and unevaluated rows remain separate.",
+                    "Most applicable rows are evaluated and collision rates stay within physical expectations.",
+                    "Unevaluated or not-applicable concentration indicates missing evaluator support, not safe free space.",
+                    "candidate diagnostics/path collision and clearance",
+                    "actor-visible",
+                ),
+            )
             with st.expander("Collision and clearance rows and CSV"):
                 st.dataframe(collision, hide_index=True, width="stretch")
                 _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
@@ -1778,30 +1844,50 @@ def _render_raw_candidate_metrics(candidates: pd.DataFrame, *, total_candidates:
     if candidates.empty:
         return
     with st.expander("Raw candidate reward and metric distribution", expanded=True):
-        st.caption(f"Showing {len(candidates):,} of {total_candidates:,} rows. Aggregate geometry and support plots use the explicit complete audit above.")
+        st.caption(
+            f"Showing {len(candidates):,} of {total_candidates:,} rows. Aggregate geometry and support plots use the explicit complete audit above."
+        )
         options = [
-            name for name in (
-                "motion_step_length_m", "motion_height_delta_m", "motion_backward_step_m",
-                "motion_yaw_delta_deg", "mesh_distance_m", "path_min_clearance_m",
-                "free_space_margin_m", "target_distance_m", "target_root_gain", "target_rri",
-            ) if name in candidates and candidates[name].notna().any()
+            name
+            for name in (
+                "motion_step_length_m",
+                "motion_height_delta_m",
+                "motion_backward_step_m",
+                "motion_yaw_delta_deg",
+                "mesh_distance_m",
+                "path_min_clearance_m",
+                "free_space_margin_m",
+                "target_distance_m",
+                "target_root_gain",
+                "target_rri",
+            )
+            if name in candidates and candidates[name].notna().any()
         ]
         if not options:
             st.info("No finite per-row metric is available in the bounded sample.")
             return
-        metric = st.selectbox("Raw candidate metric", options=options, key="raw_candidate_metric")
+        metric = st.selectbox("Geometry / label distribution", options=options, key="raw_candidate_metric")
         rows = candidates.dropna(subset=[metric])
-        fig = px.histogram(rows, x=metric, color="invalid_reason" if "invalid_reason" in rows else None, marginal="box", title=f"Raw {metric} distribution")
-        _render_plot(fig, _candidate_population_explanation(
-            f"What does the bounded raw {metric} distribution look like?",
-            "A deterministic bounded sample of persisted candidate rows; this is not a population estimate.",
-            f"{metric}; units follow the field suffix or are dimensionless for reward/RRI.",
-            "Finite values only; invalid reasons remain explicit.",
-            "The sample reflects the persisted row-level support without claiming complete-store aggregation.",
-            "Tails and invalidity-specific modes guide row-level debugging; use aggregate plots for cohort conclusions.",
-            f"candidate audit/{metric}",
-            "oracle/evaluation" if metric in {"target_root_gain", "target_rri"} else "actor-visible",
-        ))
+        fig = px.histogram(
+            rows,
+            x=metric,
+            color="invalid_reason" if "invalid_reason" in rows else None,
+            marginal="box",
+            title=f"Raw {metric} distribution",
+        )
+        _render_plot(
+            fig,
+            _candidate_population_explanation(
+                f"What does the bounded raw {metric} distribution look like?",
+                "A deterministic bounded sample of persisted candidate rows; this is not a population estimate.",
+                f"{metric}; units follow the field suffix or are dimensionless for reward/RRI.",
+                "Finite values only; invalid reasons remain explicit.",
+                "The sample reflects the persisted row-level support without claiming complete-store aggregation.",
+                "Tails and invalidity-specific modes guide row-level debugging; use aggregate plots for cohort conclusions.",
+                f"candidate audit/{metric}",
+                "oracle/evaluation" if metric in {"target_root_gain", "target_rri"} else "actor-visible",
+            ),
+        )
         with st.expander("Raw candidate metric rows and CSV"):
             st.dataframe(rows, hide_index=True, width="stretch")
             _download_frame("Download raw candidate metric CSV", "candidate-raw-metric.csv", rows)
