@@ -16,7 +16,7 @@ from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 _CONTRACT = QhDataContract(
     schema_version="qh-v1",
-    target_protocol="v0_gt_input",
+    target_protocol="v1_observed",
     reward_metric="target-root-gain",
     return_semantics="finite-horizon",
     td_semantics="fitted-q",
@@ -124,10 +124,23 @@ def test_datamodule_uses_seeded_train_shuffle_and_sequential_evaluation() -> Non
 
 
 def test_datamodule_requires_exact_named_experiment_profile() -> None:
-    actor = replace(_ACTOR_CONTRACT, experiment_profile="qh_cf0_v1")
+    actor = replace(_ACTOR_CONTRACT, root_evl_profile="evl_v1", experiment_profile="qh_cf0_v1")
     qh = _StructuralDataset("train", actor_state_contract=actor)
     data = qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cf0_v1")  # type: ignore[arg-type]
     assert data.experiment_profile == "qh_cf0_v1"
+    assert data.learning_contract_hash == stable_msgspec_hash(_CONTRACT)
     assert data.actor_state_contract_hash == stable_msgspec_hash(actor)
-    with pytest.raises(ValueError, match="experiment profile"):
+    with pytest.raises(ValueError, match="experiment profile|selected_observation_protocol"):
         qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cfplus_gt_depth_v1")  # type: ignore[arg-type]
+
+
+def test_named_cf0_datamodule_rejects_legacy_v0_contract() -> None:
+    actor = replace(_ACTOR_CONTRACT, root_evl_profile="evl_v1", experiment_profile="qh_cf0_v1")
+    qh = _StructuralDataset(
+        "train",
+        contract=replace(_CONTRACT, target_protocol="v0_gt_input"),
+        actor_state_contract=actor,
+    )
+
+    with pytest.raises(ValueError, match="requires target_protocol='v1_observed'"):
+        qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cf0_v1")  # type: ignore[arg-type]

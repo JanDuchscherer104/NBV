@@ -45,7 +45,8 @@ def validate_experiment_profile(
     *,
     root_evl_profile: QhRootEvlProfile,
     selected_observation_protocol: QhSelectedObservationProtocol,
-    privileged: bool = True,
+    target_protocol: str | None = None,
+    privileged: bool = False,
 ) -> None:
     """Validate one named Q_H profile before dataset or scorer construction."""
 
@@ -58,6 +59,8 @@ def validate_experiment_profile(
         raise ValueError(f"Q_H profile {profile!r} requires selected_observation_protocol={expected_observation!r}.")
     if profile == "qh_cfplus_gt_depth_v1" and not privileged:
         raise ValueError("Deployable Q_H configuration rejects privileged qh_cfplus_gt_depth_v1.")
+    if profile == "qh_cf0_v1" and target_protocol is not None and target_protocol != "v1_observed":
+        raise ValueError("Deployable qh_cf0_v1 requires target_protocol='v1_observed'.")
 
 
 @dataclass(frozen=True, slots=True)

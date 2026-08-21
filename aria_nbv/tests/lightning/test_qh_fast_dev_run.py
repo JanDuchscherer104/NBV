@@ -43,7 +43,11 @@ def test_fast_dev_run_executes_exactly_one_injected_scorer_transaction(
         experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(target_sync_interval=1, actor_state_contract_hash=_CF0_ACTOR_HASH),
+        QhLightningModuleConfig(
+            target_sync_interval=1,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=data.learning_contract_hash,
+        ),
         scorer=_TableScorer(),
     )
     trainer = _trainer()
@@ -74,7 +78,11 @@ def test_fast_dev_run_global_empty_batch_is_exact_noop(monkeypatch: pytest.Monke
         experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(target_sync_interval=1, actor_state_contract_hash=_CF0_ACTOR_HASH),
+        QhLightningModuleConfig(
+            target_sync_interval=1,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=data.learning_contract_hash,
+        ),
         scorer=_TableScorer(),
     )
     initial_state = deepcopy(module.state_dict())
@@ -114,7 +122,11 @@ def test_trainer_rejects_gradient_accumulation_before_scorer_execution() -> None
         experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash=_CF0_ACTOR_HASH),
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=data.learning_contract_hash,
+        ),
         scorer=_TableScorer(),
     )
     initial_state = deepcopy(module.state_dict())

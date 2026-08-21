@@ -33,6 +33,7 @@ from aria_nbv.data_handling.qh_data.views import (
     QhSelectedObservationPrefix,
     QhStaticContext,
     QhSupervision,
+    validate_experiment_profile,
 )
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
 from aria_nbv.data_handling.vin_store.store import VinOfflineStoreReader
@@ -43,6 +44,8 @@ from aria_nbv.oracle.pipelines.offline_vin import _compact_evl_block_signature, 
 from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.targets.descriptor import TargetDescriptor
+from aria_nbv.targets.selection import ObservedTargetDescriptor
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
@@ -119,7 +122,7 @@ def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
     )
 
     class _ProfileDataset:
-        contract = QhDataContract("8", "v0", "gain", "return", "td", 0.95, "reason", "7")
+        contract = QhDataContract("8", "v1_observed", "gain", "return", "td", 0.95, "reason", "7")
         scenes = frozenset({"scene-profile"})
         max_horizon = 2
         provenance: dict[str, object] = {}
@@ -153,11 +156,50 @@ def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
             root_evl_profile=root_evl,
             selected_observation_protocol=selected,
             actor_state_contract_hash=data.actor_state_contract_hash,
+            learning_contract_hash=data.learning_contract_hash,
             geometry_contract_hash=geometry,
         ),
         scorer=_Scorer(),
     )
     module._validate_datamodule_contract(data)
+
+
+def test_named_cf0_requires_observed_v1_while_unnamed_v0_remains_available() -> None:
+    with pytest.raises(ValueError, match="requires target_protocol='v1_observed'"):
+        validate_experiment_profile(
+            "qh_cf0_v1",
+            root_evl_profile="evl_v1",
+            selected_observation_protocol="none",
+            target_protocol="v0_gt_input",
+        )
+
+    validate_experiment_profile(
+        "qh_cf0_v1",
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="none",
+        target_protocol="v1_observed",
+    )
+    legacy = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=_RolloutReader(_source_ref()),
+        actor_reader=_ActorReader(),
+    )
+    assert legacy.contract.target_protocol == "v0_gt_input"
+
+
+def test_cfplus_profile_requires_explicit_privilege() -> None:
+    with pytest.raises(ValueError, match="rejects privileged"):
+        validate_experiment_profile(
+            "qh_cfplus_gt_depth_v1",
+            root_evl_profile="evl_v1",
+            selected_observation_protocol="cf_gt",
+        )
+
+    validate_experiment_profile(
+        "qh_cfplus_gt_depth_v1",
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt",
+        privileged=True,
+    )
 
 
 def test_qh_batch_transfer_constructs_owned_dtos_without_reflective_traversal() -> None:
@@ -711,6 +753,8 @@ def test_named_cf0_requires_root_evl_and_does_not_load_selected_depth(tmp_path: 
     captured: dict[str, object] = {}
 
     class _Reader:
+        contract = QhDataContract("8", "v1_observed", "gain", "return", "td", 0.95, "reason", "7")
+
         def __init__(self, store_dirs, *, campaign_split, include_selected_depth):
             captured["include_selected_depth"] = include_selected_depth
 
@@ -961,6 +1005,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     actor_record = actor_reader.get_split_records(Stage.VAL)[0]
     rollout = build_rollout_records(horizon=2, num_samples=6, seed=7)[0]
     source = rollout.lineage.source
+    target = rollout.lineage.target
     source.source_sample_index = actor_record.sample_index
     source.source_sample_key = actor_record.sample_key
     source.scene_id = actor_record.scene_id
@@ -970,6 +1015,40 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     source.split = actor_record.split
     source.source_cache_version = "9"
     source.source_offline_store_manifest_hash = stable_msgspec_hash(actor_reader.manifest)
+    target.target_protocol_version = "v1_observed"
+    target.target_source = "detected_obbs"
+    target.descriptor_source = "detected_obbs"
+    target.descriptor_provenance = "actor_visible_detector"
+    actor_target = ObservedTargetDescriptor(
+        sample_key=str(source.source_sample_key),
+        source="detected_obbs",
+        source_row=int(target.target_source_index),
+        target_id=str(target.target_id),
+        descriptor=TargetDescriptor(
+            sem_id=int(target.target_sem_id),
+            class_name=str(target.target_class_name),
+            pose_world_object=tuple(target.target_pose_world_object),
+            extents_m=tuple(target.target_extents),
+            relative_pose_reference_object=tuple(target.target_relative_pose_reference_object),
+        ),
+        confidence=float(target.target_confidence),
+        inst_id=int(target.target_inst_id),
+    )
+    target.descriptor_hash = actor_target.descriptor_hash
+    target.target_invalid_reason_bitset = 1
+    target.gt_match_status = "admitted"
+    target.gt_match_iou = float(np.float32(0.7))
+    target.explicit_target_hash = stable_msgspec_hash(
+        {
+            "sample_key": actor_target.sample_key,
+            "target_id": actor_target.target_id,
+            "detected_source_row": actor_target.source_row,
+            "gt_match_row": target.matched_gt_target_row_id,
+            "gt_match_id": target.matched_gt_target_id,
+            "oriented_iou": target.gt_match_iou,
+            "descriptor_hash": actor_target.descriptor_hash,
+        }
+    )
     split_hash = build_rollout_split_manifest_hash(
         source_manifest_hash=source.source_offline_store_manifest_hash,
         split=source.split,
@@ -992,6 +1071,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
         [rollout],
         source_offline_store_version="9",
         split_manifest_hash=split_hash,
+        target_protocol_version="v1_observed",
         selected_depth_enabled=True,
     ).store_dir
     rich = profile == "qh_cfplus_gt_depth_v1"
@@ -1020,6 +1100,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
         experiment_profile=profile,
         privileged=rich,
         actor_state_contract_hash=data.actor_state_contract_hash,
+        learning_contract_hash=data.learning_contract_hash,
         geometry_contract_hash=data.geometry_contract_hash,
         lr_scheduler=None,
     )

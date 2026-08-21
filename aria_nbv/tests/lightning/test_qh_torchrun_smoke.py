@@ -53,19 +53,20 @@ def _run_torchrun(output_dir: Path, scenario: str) -> list[dict[str, object]]:
 
 def _fit_control(chains: list[QhChain], *, batch_size: int) -> dict[str, torch.Tensor]:
     pl.seed_everything(123, workers=True)
-    module = QhLightningModule(
-        QhLightningModuleConfig(
-            lr_scheduler=None,
-            target_sync_interval=3,
-            actor_state_contract_hash=_CF0_ACTOR_HASH,
-        ),
-        scorer=_TableScorer(),
-    )
     data = QhDataModule(
         train=_ChainDataset(chains),
         batch_size=batch_size,
         seed=43,
         experiment_profile="qh_cf0_v1",
+    )
+    module = QhLightningModule(
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            target_sync_interval=3,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=data.learning_contract_hash,
+        ),
+        scorer=_TableScorer(),
     )
     trainer = _trainer(
         fast_dev_run=False,

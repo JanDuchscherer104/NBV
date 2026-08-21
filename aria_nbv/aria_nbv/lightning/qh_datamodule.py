@@ -20,7 +20,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
-from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProfile
+from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProfile, validate_experiment_profile
 from ..rollouts.qh_reader import QhDataContract
 from ..utils.fingerprints import stable_msgspec_hash
 
@@ -81,9 +81,17 @@ class QhDataModule(pl.LightningDataModule):
             raise ValueError(f"Q_H configured corpus stages must contain at least one chain: {empty}.")
         if any(dataset.contract != train.contract for dataset in stages.values()):
             raise ValueError("Q_H corpus stages have incompatible learning contracts.")
+        self.learning_contract_hash = stable_msgspec_hash(train.contract)
         self.actor_state_contract_hash = stable_msgspec_hash(train.actor_state_contract)
         self.geometry_contract_hash = train.actor_state_contract.geometry_contract_hash
         if experiment_profile is not None:
+            validate_experiment_profile(
+                experiment_profile,
+                root_evl_profile=train.actor_state_contract.root_evl_profile,
+                selected_observation_protocol=train.actor_state_contract.selected_observation_protocol,
+                target_protocol=train.contract.target_protocol,
+                privileged=experiment_profile == "qh_cfplus_gt_depth_v1",
+            )
             for name, dataset in stages.items():
                 if dataset.actor_state_contract.experiment_profile != experiment_profile:
                     raise ValueError(

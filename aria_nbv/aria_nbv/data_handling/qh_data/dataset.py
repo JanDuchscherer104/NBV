@@ -80,18 +80,29 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
 
         if self.selected_observation_protocol == "cf_gt" and self.experiment_profile is None:
             raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
+        privileged = self.experiment_profile == "qh_cfplus_gt_depth_v1"
         if self.experiment_profile is not None:
             validate_experiment_profile(
                 self.experiment_profile,
                 root_evl_profile=self.root_evl_profile,
                 selected_observation_protocol=self.selected_observation_protocol,
+                privileged=privileged,
+            )
+        rollout_reader = QhRolloutReader(
+            self.rollout_store_dirs,
+            campaign_split=self.split,
+            include_selected_depth=self.selected_observation_protocol == "cf_gt",
+        )
+        if self.experiment_profile is not None:
+            validate_experiment_profile(
+                self.experiment_profile,
+                root_evl_profile=self.root_evl_profile,
+                selected_observation_protocol=self.selected_observation_protocol,
+                target_protocol=rollout_reader.contract.target_protocol,
+                privileged=privileged,
             )
         return QhDataset(
-            rollout_reader=QhRolloutReader(
-                self.rollout_store_dirs,
-                campaign_split=self.split,
-                include_selected_depth=self.selected_observation_protocol == "cf_gt",
-            ),
+            rollout_reader=rollout_reader,
             actor_reader=VinOfflineStoreReader(self.actor),
             split=self.split,
             root_evl_profile=self.root_evl_profile,
@@ -160,6 +171,8 @@ class QhDataset(Dataset[QhChain]):
                 experiment_profile,
                 root_evl_profile=root_evl_profile,
                 selected_observation_protocol=selected_observation_protocol,
+                target_protocol=rollout_reader.contract.target_protocol,
+                privileged=experiment_profile == "qh_cfplus_gt_depth_v1",
             )
         self.experiment_profile = experiment_profile
         self.include_audit = include_audit

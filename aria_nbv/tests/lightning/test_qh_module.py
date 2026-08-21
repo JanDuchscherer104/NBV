@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import pytest
 import torch
@@ -22,6 +22,7 @@ from aria_nbv.data_handling.qh_data import (
 )
 from aria_nbv.data_handling.qh_data.views import QhActorStateContract, QhStaticContext
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
+from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from tests.data_handling.test_qh import _chain, _snippet
@@ -49,9 +50,10 @@ class _BadShapeScorer(nn.Module):
         return torch.zeros((*actor.action_mask.shape[:2], actor.action_mask.shape[-1] + 1))
 
 
-_CONTRACT = QhDataContract("qh-v1", "v0", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
+_CONTRACT = QhDataContract("qh-v1", "v1_observed", "reward", "return", "td", 0.95, "reasons-v1", "vin-v1")
 _ACTOR_CONTRACT = QhActorStateContract("evl_v1", "none", "test-actor-manifest", (), experiment_profile="qh_cf0_v1")
 _CF0_ACTOR_HASH = stable_msgspec_hash(_ACTOR_CONTRACT)
+_LEARNING_CONTRACT_HASH = stable_msgspec_hash(_CONTRACT)
 
 
 def _cf0_chain(chain: QhChain) -> QhChain:
@@ -116,6 +118,7 @@ def _module(sync_interval: int = 2) -> QhLightningModule:
             target_sync_interval=sync_interval,
             lr_scheduler=None,
             actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=_LEARNING_CONTRACT_HASH,
         ),
         scorer=_TableScorer(),
     )
@@ -132,7 +135,11 @@ def _install_manual_step(module: QhLightningModule, monkeypatch: pytest.MonkeyPa
 def test_scorer_is_required_and_not_part_of_config() -> None:
     with pytest.raises(TypeError, match="scorer"):
         QhLightningModule(  # type: ignore[call-arg]
-            QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash=_CF0_ACTOR_HASH)
+            QhLightningModuleConfig(
+                lr_scheduler=None,
+                actor_state_contract_hash=_CF0_ACTOR_HASH,
+                learning_contract_hash=_LEARNING_CONTRACT_HASH,
+            )
         )
 
 
@@ -143,6 +150,7 @@ def test_named_cfplus_rejects_deployable_module_before_scorer_construction() -> 
         root_evl_profile="evl_v1",
         selected_observation_protocol="cf_gt",
         actor_state_contract_hash="actor",
+        learning_contract_hash=_LEARNING_CONTRACT_HASH,
     )
     with pytest.raises(ValueError, match="rejects privileged"):
         QhLightningModule(config, scorer=_TableScorer())
@@ -157,6 +165,7 @@ def test_named_cfplus_allows_explicit_privileged_module() -> None:
             selected_observation_protocol="cf_gt",
             privileged=True,
             actor_state_contract_hash="actor",
+            learning_contract_hash=_LEARNING_CONTRACT_HASH,
             geometry_contract_hash="geometry",
         ),
         scorer=_TableScorer(),
@@ -169,6 +178,7 @@ def test_module_rejects_unnamed_cf_gt_before_scorer_construction() -> None:
         lr_scheduler=None,
         selected_observation_protocol="cf_gt",
         actor_state_contract_hash=_CF0_ACTOR_HASH,
+        learning_contract_hash=_LEARNING_CONTRACT_HASH,
     )
     with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
         QhLightningModule(config, scorer=_TableScorer())
@@ -176,7 +186,12 @@ def test_module_rejects_unnamed_cf_gt_before_scorer_construction() -> None:
 
 def test_named_cf0_requires_actor_state_contract_hash() -> None:
     with pytest.raises(ValidationError, match="actor_state_contract_hash"):
-        QhLightningModuleConfig(lr_scheduler=None)
+        QhLightningModuleConfig(lr_scheduler=None, learning_contract_hash=_LEARNING_CONTRACT_HASH)
+
+
+def test_named_cf0_requires_learning_contract_hash() -> None:
+    with pytest.raises(ValidationError, match="learning_contract_hash"):
+        QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash=_CF0_ACTOR_HASH)
 
 
 def test_named_cfplus_requires_geometry_contract_hash() -> None:
@@ -189,6 +204,7 @@ def test_named_cfplus_requires_geometry_contract_hash() -> None:
                 selected_observation_protocol="cf_gt",
                 privileged=True,
                 actor_state_contract_hash="actor",
+                learning_contract_hash=_LEARNING_CONTRACT_HASH,
             ),
             scorer=_TableScorer(),
         )
@@ -196,13 +212,83 @@ def test_named_cfplus_requires_geometry_contract_hash() -> None:
 
 def test_module_rejects_actor_contract_hash_mismatch_before_training() -> None:
     module = QhLightningModule(
-        QhLightningModuleConfig(lr_scheduler=None, actor_state_contract_hash="expected"),
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            actor_state_contract_hash="expected",
+            learning_contract_hash=_LEARNING_CONTRACT_HASH,
+        ),
         scorer=_TableScorer(),
     )
     with pytest.raises(ValueError, match="actor-state contract hashes"):
         module._validate_datamodule_contract(
             type("Data", (), {"experiment_profile": "qh_cf0_v1", "actor_state_contract_hash": "actual"})()
         )
+
+
+def test_module_rejects_every_learning_contract_field_mutation() -> None:
+    geometry = QhGeometryContract(
+        projection_model="linear_pinhole_screen",
+        linearization="camera_z_metres",
+        camera_pose="root_from_camera",
+        depth_semantics="camera_z_m",
+        focal_px=(100.0, 100.0),
+        principal_point_px=(120.0, 120.0),
+        image_size_hw=(240, 240),
+        camera_axes="left_up_forward",
+        camera_forward="+z",
+        camera_handedness="right",
+        pixel_convention="half_pixel_centers_in_ndc_false",
+        in_ndc=False,
+        znear_m=0.001,
+        zfar_m=20.0,
+        invalid_fill_value=0.0,
+        dtype="float16",
+        renderer="Pytorch3DDepthRenderer",
+        source_role="selected_successor_state_history",
+        selected_identity="selected_depth.step_row_id",
+    )
+    mutations = {
+        "schema_version": "other-schema",
+        "target_protocol": "v0_gt_input",
+        "reward_metric": "other-reward",
+        "return_semantics": "other-return",
+        "td_semantics": "other-td",
+        "discount_gamma": 0.5,
+        "reason_code_version": "other-reasons",
+        "actor_store_version": "other-actor-store",
+        "selected_depth_enabled": True,
+        "selected_depth_role": "selected_successor_state_history",
+        "selected_depth_renderer": "Pytorch3DDepthRenderer",
+        "selected_depth_image_size_hw": (240, 240),
+        "selected_depth_dtype": "float16",
+        "selected_depth_units": "m",
+        "selected_depth_znear_m": 0.001,
+        "selected_depth_zfar_m": 20.0,
+        "selected_depth_source_resolution": "exact_output_size",
+        "selected_depth_projection_model": "linear_pinhole_screen",
+        "selected_depth_value_semantics": "camera_z_m",
+        "selected_depth_pixel_convention": "half_pixel_centers_in_ndc_false",
+        "selected_depth_camera_axes": "left_up_forward",
+        "selected_depth_pose_convention": "root_from_camera",
+        "selected_depth_geometry": geometry,
+    }
+    assert set(mutations) == {field.name for field in fields(QhDataContract)}
+    module = _module()
+
+    for field_name, value in mutations.items():
+        changed_hash = stable_msgspec_hash(replace(_CONTRACT, **{field_name: value}))
+        assert changed_hash != _LEARNING_CONTRACT_HASH
+        data = type(
+            "Data",
+            (),
+            {
+                "experiment_profile": "qh_cf0_v1",
+                "actor_state_contract_hash": _CF0_ACTOR_HASH,
+                "learning_contract_hash": changed_hash,
+            },
+        )()
+        with pytest.raises(ValueError, match="learning contract hashes"):
+            module._validate_datamodule_contract(data)
 
 
 def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None:
@@ -222,9 +308,11 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
         selected_observation_protocol="cf_gt",
         privileged=True,
         actor_state_contract_hash=stable_msgspec_hash(actor),
+        learning_contract_hash=_LEARNING_CONTRACT_HASH,
         geometry_contract_hash="geom-v1",
     )
     reloaded = QhLightningModuleConfig.model_validate(config.model_dump())
+    assert reloaded.learning_contract_hash == _LEARNING_CONTRACT_HASH
     module = QhLightningModule(reloaded, scorer=_TableScorer())
     module._validate_datamodule_contract(
         type(
@@ -233,6 +321,7 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
             {
                 "experiment_profile": "qh_cfplus_gt_depth_v1",
                 "actor_state_contract_hash": stable_msgspec_hash(actor),
+                "learning_contract_hash": _LEARNING_CONTRACT_HASH,
                 "geometry_contract_hash": "geom-v1",
             },
         )()
@@ -245,6 +334,7 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
                 {
                     "experiment_profile": "qh_cfplus_gt_depth_v1",
                     "actor_state_contract_hash": stable_msgspec_hash(actor),
+                    "learning_contract_hash": _LEARNING_CONTRACT_HASH,
                     "geometry_contract_hash": "tampered",
                 },
             )()
@@ -255,7 +345,11 @@ def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), "inf"])
 def test_huber_delta_rejects_nonfinite_values(value: float | str) -> None:
     with pytest.raises(ValidationError) as error:
-        QhLightningModuleConfig(huber_delta=value, actor_state_contract_hash=_CF0_ACTOR_HASH)
+        QhLightningModuleConfig(
+            huber_delta=value,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=_LEARNING_CONTRACT_HASH,
+        )
 
     assert error.value.errors()[0]["loc"] == ("huber_delta",)
 
@@ -292,6 +386,7 @@ def test_scorer_rejects_missing_declared_actor_carrier(field: str, value: str, m
     config = QhLightningModuleConfig(
         lr_scheduler=None,
         actor_state_contract_hash=config_values.pop("actor_state_contract_hash", _CF0_ACTOR_HASH),
+        learning_contract_hash=_LEARNING_CONTRACT_HASH,
         **config_values,
     )
     module = QhLightningModule(config, scorer=_TableScorer())
