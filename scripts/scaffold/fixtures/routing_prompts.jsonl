@@ -25,7 +25,7 @@
 {"id":"rerun-rollout-zarr-inspection","task":"Inspect an ARIA-NBV rollout store through Rerun."}
 {"id":"rerun-sdk-api-change","task":"Change Rerun Python SDK usage in the ARIA inspector."}
 {"id":"context7-pytorch3d-conceptual-plan","task":"Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence."}
-{"id":"context7-graphify-api-change","task":"Verify whether Graphify 0.9.48 hook installation refreshes semantic indexes using current external documentation, then identify the installed/local owner and focused test for any contract correction."}
+{"id":"context7-graphify-api-change","task":"Use the repository's Context7 route to verify whether Graphify 0.9.48 hook installation refreshes semantic indexes, then identify the installed/local owner and focused test for any contract correction."}
 {"id":"thesis-aria-grill-matt-collision","task":"Stress-test a thesis scope or advisor-facing decision."}
 {"id":"aria-grill-progressive-interface-design","task":"Compare high-impact ARIA interface shapes after grounding the owning contract."}
 {"id":"context7-not-needed-target-rri-section","task":"Find a local source family and thesis target-RRI section owner."}
@@ -33,7 +33,7 @@
 {"id":"code-index-frustum-rendering","task":"Locate candidate-frustum rendering implementation with source family and code-index evidence."}
 {"id":"semantic-recall-current-thesis","task":"Recall related current thesis sections before opening authoritative Typst source."}
 {"id":"semantic-recall-literature-primary","task":"Find literature-review domain and verify a claim in matching primary paper."}
-{"id":"semantic-recall-reviewed-history","task":"Recall the reviewed diagnosis for why stale rollout changes were selectively reconstructed rather than wholesale rebased, then verify the current generation and replay owners."}
+{"id":"semantic-recall-reviewed-history","task":"Use the repository's reviewed semantic-recall route to recover why stale rollout changes were selectively reconstructed rather than wholesale rebased, then verify the current generation and replay owners."}
 {"id":"semantic-recall-code-direct-source","task":"Localize unknown implementation, test, or active-configuration owner without semantic code retrieval."}
 {"id":"planned-thesis-detail","task":"Place planned research details in canonical thesis or Quarto owners."}
 {"id":"package-contract-owner","task":"Localize nearest aria_nbv package guide before changing Python API contracts."}
