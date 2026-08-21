@@ -813,6 +813,12 @@ def test_direction_and_spatial_cohort_macros_weight_scenes_equally() -> None:
         and row["sin_elevation_bin"] == 3
     )
     assert x_cell["mean_state_fraction"] == pytest.approx(0.5)
+    assert x_cell["state_count"] == 3
+    assert x_cell["candidate_direction_count"] == 3
+    assert x_cell["total_count"] == 3
+    assert x_cell["finite_count"] + x_cell["missing_count"] == x_cell["total_count"]
+    state_rows = [row for row in direction if row["aggregation_level"] == "state" and row["population"] == "all"]
+    assert all(row["state_count"] == 1 for row in state_rows)
     spatial = candidate_spatial_support_evidence(
         [
             {**row, "root_relative_x_m": 0.1 if row["scene"] == "scene-a" else 1.0, "root_relative_y_m": 0.0}

@@ -818,9 +818,12 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
             "rollout_row_id": rollout_id,
             "step_row_id": step_id,
             "population": population,
+            "state_count": 1,
             "total_count": len(state_rows),
             "valid_count": valid,
+            "finite_count": valid,
             "missing_count": len(state_rows) - valid,
+            "candidate_direction_count": len(state_rows),
             "units": "solid-angle fraction",
             "protocol": {"binning": "azimuth x sin(elevation)"},
         }
@@ -951,6 +954,14 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 [],
             ).append(row)
         for key, grouped in sorted(groups.items()):
+            state_facets: dict[tuple[str, str], dict[str, object]] = {}
+            for row in grouped:
+                state_key = (str(row["rollout_row_id"]), str(row["step_row_id"]))
+                state_facets.setdefault(state_key, row)
+            facet_rows = list(state_facets.values())
+            total_count = sum(int(row["total_count"]) for row in facet_rows)
+            valid_count = sum(int(row["valid_count"]) for row in facet_rows)
+            missing_count = sum(int(row["missing_count"]) for row in facet_rows)
             if level == "cohort_macro":
                 by_scene: dict[str, list[float]] = {}
                 for row in grouped:
@@ -970,6 +981,12 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     **grouped[0],
                     "aggregation_level": level,
                     "scene": key[1],
+                    "state_count": len(facet_rows),
+                    "total_count": total_count,
+                    "candidate_direction_count": total_count,
+                    "valid_count": valid_count,
+                    "finite_count": valid_count,
+                    "missing_count": missing_count,
                     "mean_state_fraction": None if not values else float(np.mean(values)),
                     "available": bool(values),
                     "cohort_macro_population": key[2],
