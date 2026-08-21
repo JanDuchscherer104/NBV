@@ -11,8 +11,15 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
-from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS, GeometryProjection, ProposalAlignment
+from ....rollouts.inspection import (
+    CANDIDATE_GROUP_FIELDS,
+    CANDIDATE_SELECTION_GROUP_FIELDS,
+    GeometryProjection,
+    ProposalAlignment,
+    candidate_selection_temporal_summary_rows,
+)
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
@@ -36,6 +43,18 @@ _PYTORCH3D_RENDERING_REFERENCE = (
 
 
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
+_CANDIDATE_SELECTION_GROUP_LABELS = {
+    "position": "Position family",
+    "strategy": "Direction strategy",
+    "mixture": "Generator component",
+    "position_strategy": "Position × direction",
+}
+_CANDIDATE_SELECTION_METRIC_LABELS = {
+    "Policy selection mass": "policy_mass",
+    "Candidate allocation share": "allocation_share",
+    "Actor-valid share": "valid_share",
+    "Realized selected share": "selected_share",
+}
 
 
 class _PairwiseCorrelation(TypedDict):
@@ -47,37 +66,308 @@ class _PairwiseCorrelation(TypedDict):
     has_finite_off_diagonal: bool
 
 
-def _render_candidate_population_evidence(store_path: str) -> None:
-    """Render complete candidate aggregates and a deterministic display-only sample."""
+def _selection_stratum_columns() -> tuple[str, ...]:
+    """Return the exact persisted controls that selection plots never pool."""
 
-    group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
-    population = _cached_projection(store_path, "candidate_population", group_by=group_by)
-    composition = pd.DataFrame(population["composition"][group_by])
-    calibration = pd.DataFrame(population["calibration"][group_by])
+    return (
+        "generation_cohort_id",
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+    )
+
+
+def _selection_stratum_label(row: pd.Series) -> str:
+    """Return a compact exact-cohort label for controls and traces."""
+
+    return (
+        f"{row['generation_cohort_id']} · {row['policy']} · T={row['temperature']} · "
+        f"H={row['horizon']} · B={row['branch_factor']} · beam={row['beam_width']}"
+    )
+
+
+def _candidate_selection_temporal_figure(summary: pd.DataFrame) -> go.Figure:
+    """Plot family-level state summaries without pooling persisted cohorts."""
+
+    figure = go.Figure()
+    summary = summary.dropna(subset=["median", "q25", "q75"]).copy()
+    if summary.empty:
+        figure.update_layout(title="Candidate choice over factual acquisition: no finite rows")
+        return figure
+    palette = px.colors.qualitative.Plotly
+    stratum_columns = list(_selection_stratum_columns())
+    stratum_count = summary[stratum_columns].drop_duplicates().shape[0]
+    trace_columns = [*stratum_columns, "family"]
+    for index, (trace_key, rows) in enumerate(summary.groupby(trace_columns, sort=True, dropna=False)):
+        ordered = rows.sort_values("step_index")
+        acquisition = ordered["step_index"].to_numpy(dtype=np.int64) + 1
+        color = palette[index % len(palette)]
+        family = str(trace_key[-1])
+        trace_name = family if stratum_count == 1 else f"{family} · {_selection_stratum_label(ordered.iloc[0])}"
+        hover = [
+            (
+                f"family={family}<br>acquisition={int(step) + 1}<br>median={median:.4g}"
+                f"<br>IQR=[{q25:.4g}, {q75:.4g}]<br>finite={int(finite)} / {int(total)}"
+                f"<br>{_selection_stratum_label(row)}"
+            )
+            for step, median, q25, q75, finite, total, (_, row) in zip(
+                ordered["step_index"],
+                ordered["median"],
+                ordered["q25"],
+                ordered["q75"],
+                ordered["finite_count"],
+                ordered["total_count"],
+                ordered.iterrows(),
+                strict=True,
+            )
+        ]
+        figure.add_trace(
+            go.Scatter(
+                x=acquisition,
+                y=ordered["q25"],
+                mode="lines",
+                line={"color": color, "width": 0},
+                legendgroup=trace_name,
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=acquisition,
+                y=ordered["q75"],
+                mode="lines",
+                line={"color": color, "width": 0},
+                fill="tonexty",
+                fillcolor=_rgba(color, 0.18),
+                legendgroup=trace_name,
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=acquisition,
+                y=ordered["median"],
+                mode="lines+markers",
+                line={"color": color},
+                marker={"size": 7},
+                name=trace_name,
+                legendgroup=trace_name,
+                text=hover,
+                hovertemplate="%{text}<extra></extra>",
+            )
+        )
+    metric = str(summary["metric"].iloc[0])
+    figure.update_layout(
+        title=f"{metric.replace('_', ' ').title()} by factual acquisition",
+        xaxis_title="acquisition number (1 = first selected view)",
+        yaxis_title="state-level fraction",
+        yaxis={"range": [0.0, 1.0]},
+        hovermode="x unified",
+    )
+    return figure
+
+
+def _candidate_transition_figure(rows: pd.DataFrame) -> go.Figure:
+    """Compare expected and realized next-family transitions in one figure."""
+
+    families = sorted(set(rows["previous_family"]).union(rows["next_family"]))
+    expected = rows.pivot(index="previous_family", columns="next_family", values="expected_policy_mass_mean").reindex(
+        index=families, columns=families
+    )
+    realized = rows.pivot(index="previous_family", columns="next_family", values="realized_rate").reindex(
+        index=families, columns=families
+    )
+    contexts = rows.pivot(index="previous_family", columns="next_family", values="context_count").reindex(
+        index=families, columns=families
+    )
+    figure = make_subplots(rows=1, cols=2, subplot_titles=("Expected policy mass", "Realized frequency"))
+    for column, (values, colorscale) in enumerate(((expected, "Blues"), (realized, "Reds")), start=1):
+        figure.add_trace(
+            go.Heatmap(
+                z=values.to_numpy(dtype=np.float64),
+                x=families,
+                y=families,
+                customdata=contexts.to_numpy(dtype=np.float64),
+                zmin=0.0,
+                zmax=1.0,
+                colorscale=colorscale,
+                colorbar={"title": "fraction", "x": 0.45 if column == 1 else 1.0},
+                hovertemplate=(
+                    "previous=%{y}<br>next=%{x}<br>fraction=%{z:.3f}<br>contexts=%{customdata:.0f}<extra></extra>"
+                ),
+            ),
+            row=1,
+            col=column,
+        )
+    acquisition = int(rows["step_index"].iloc[0]) + 1
+    figure.update_layout(title=f"Next-family choice conditioned on acquisition {acquisition - 1}")
+    figure.update_xaxes(title_text="next family")
+    figure.update_yaxes(title_text="previous selected family", row=1, col=1)
+    return figure
+
+
+def _rgba(color: str, alpha: float) -> str:
+    """Convert a Plotly hexadecimal color to a transparent fill."""
+
+    red, green, blue = (int(color[index : index + 2], 16) for index in (1, 3, 5))
+    return f"rgba({red},{green},{blue},{alpha})"
+
+
+def _render_candidate_population_evidence(store_path: str) -> None:
+    """Render plot-first candidate choice evidence and collapsed audit tables."""
+
+    group_by = st.selectbox(
+        "Candidate family vocabulary",
+        options=list(CANDIDATE_SELECTION_GROUP_FIELDS),
+        format_func=_CANDIDATE_SELECTION_GROUP_LABELS.__getitem__,
+        help="Compare position, direction, generator component, or their exact position-direction combination.",
+    )
+    population = _cached_projection(store_path, "candidate_population")
+    dynamics = pd.DataFrame(population["selection_dynamics"][group_by])
+    transitions = pd.DataFrame(population["selection_transitions"][group_by])
+    if dynamics.empty:
+        st.info("No factual candidate-choice states are available for this family vocabulary.")
+        return
+    stratum_columns = list(_selection_stratum_columns())
+    strata = dynamics[stratum_columns].drop_duplicates().reset_index(drop=True)
+    strata["label"] = strata.apply(_selection_stratum_label, axis=1)
+    selected_label = st.selectbox("Candidate choice cohort", options=strata["label"].tolist())
+    selected_stratum = strata.loc[strata["label"] == selected_label].iloc[0]
+    for column in stratum_columns:
+        dynamics = dynamics.loc[dynamics[column].astype(str) == str(selected_stratum[column])]
+        if not transitions.empty:
+            transitions = transitions.loc[transitions[column].astype(str) == str(selected_stratum[column])]
+
+    metric_label = st.segmented_control(
+        "State-level quantity",
+        options=tuple(_CANDIDATE_SELECTION_METRIC_LABELS),
+        default="Policy selection mass",
+        help=(
+            "Policy mass sums the persisted softmax probabilities in each family. Allocation and validity describe "
+            "the offered action set; realized share describes the selected action."
+        ),
+    )
+    metric = _CANDIDATE_SELECTION_METRIC_LABELS[metric_label or "Policy selection mass"]
+    temporal = pd.DataFrame(candidate_selection_temporal_summary_rows(dynamics.to_dict("records"), metric=metric))
+    _render_plot(
+        _candidate_selection_temporal_figure(temporal),
+        ScientificExplanation(
+            question="How does candidate-family availability and selection evolve along factual rollout depth?",
+            answer=(
+                "The traces compare one state-level family quantity at each observed acquisition while keeping every "
+                "persisted generation cohort and policy control separate."
+            ),
+            sections=(
+                ExplanationSection(
+                    "Four distinct quantities",
+                    "Allocation share is the fraction of candidates generated in the family; actor-valid share is the "
+                    "fraction of the state's actor-valid candidates that belong to the family; policy mass sums the "
+                    "persisted selection probabilities in the family; realized selected share records the one chosen family.",
+                ),
+                ExplanationSection(
+                    "Depth and uncertainty",
+                    "Acquisition 1 is persisted step_index 0. Lines are medians and ribbons are descriptive IQRs across "
+                    "factual states; hover gives finite/total n. Early-terminated rollouts contribute only observed depths.",
+                ),
+                ExplanationSection(
+                    "Comparison limits",
+                    "Exact cohort, policy, temperature, horizon, branch factor, and beam width are never pooled. "
+                    "A family can dominate because it was offered more often, remained valid, received more policy mass, "
+                    "or was selected; compare the four quantities before attributing a policy preference.",
+                ),
+            ),
+            evidence_role="actor-visible",
+            source_fields=(
+                "inspection.candidate_population_evidence.selection_dynamics",
+                "candidates/selection_probability",
+                "candidates/actor_action_mask",
+                "candidates/selected_mask",
+            ),
+            external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+        ),
+    )
+
+    if not transitions.empty:
+        depth_options = sorted(int(value) for value in transitions["step_index"].unique())
+        selected_depth = st.selectbox(
+            "Condition on previous acquisition",
+            options=depth_options,
+            format_func=lambda step: f"Acquisition {step} → {step + 1}",
+        )
+        transition_rows = transitions.loc[transitions["step_index"] == selected_depth]
+        _render_plot(
+            _candidate_transition_figure(transition_rows),
+            ScientificExplanation(
+                question="How does the next selected family vary with the previously selected family?",
+                answer=(
+                    "The left heatmap averages the next-family selection probability mass; the right reports the "
+                    "realized next-family frequency for the same previous-family contexts."
+                ),
+                sections=(
+                    ExplanationSection(
+                        "Conditioning",
+                        "Rows condition on the factual family selected at the previous acquisition; columns are the "
+                        "candidate family at the next acquisition. Context counts are visible on hover.",
+                    ),
+                    ExplanationSection(
+                        "Expected versus realized",
+                        "Expected mass uses the complete persisted selection-probability vector. Realized frequency uses "
+                        "the one selected candidate. Their difference is sampling variation and possible low support, not calibration error by itself.",
+                    ),
+                    ExplanationSection(
+                        "Association, not causation",
+                        "The generator state and geometry also change after the previous action. These heatmaps expose "
+                        "state-mediated association; they do not prove that the policy explicitly consumes a family label.",
+                    ),
+                ),
+                evidence_role="actor-visible",
+                source_fields=(
+                    "inspection.candidate_population_evidence.selection_transitions",
+                    "candidates/selection_probability",
+                    "steps/selected_candidate_row_id",
+                ),
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+            ),
+        )
+
+    composition = pd.DataFrame(population["composition"].get(group_by, []))
+    calibration = pd.DataFrame(population["calibration"].get(group_by, []))
     collision = pd.DataFrame(population["collision"])
     sample = population["sample"]
-
-    st.markdown("#### Candidate composition")
-    st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
-    st.dataframe(composition, hide_index=True, width="stretch")
-    _download_frame("Download candidate composition CSV", "candidate-composition.csv", composition)
-
-    st.markdown("#### Proposal calibration")
-    st.caption("Empirical frequency, proposal mass, and selection enrichment remain descriptive within cohort.")
-    st.dataframe(calibration, hide_index=True, width="stretch")
-    _download_frame("Download proposal calibration CSV", "candidate-proposal-calibration.csv", calibration)
-
-    st.markdown("#### Collision support")
-    st.dataframe(collision, hide_index=True, width="stretch")
-    _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
-
-    sample_rows = pd.DataFrame(sample.get("rows", []))
-    st.markdown("#### Deterministic display sample")
-    st.caption(
-        f"Showing {int(sample.get('display_count', 0)):,} of {int(sample.get('population_count', 0)):,} rows. "
-        "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
-    )
-    st.dataframe(sample_rows, hide_index=True, width="stretch")
+    with st.expander("Candidate choice rows, aggregate tables, and CSV", expanded=False):
+        st.markdown("#### State-level family dynamics")
+        st.dataframe(dynamics, hide_index=True, width="stretch")
+        _download_frame("Download candidate choice dynamics CSV", "candidate-choice-dynamics.csv", dynamics)
+        if not transitions.empty:
+            st.markdown("#### Conditional family transitions")
+            st.dataframe(transitions, hide_index=True, width="stretch")
+            _download_frame(
+                "Download candidate family transitions CSV", "candidate-family-transitions.csv", transitions
+            )
+        if not composition.empty:
+            st.markdown("#### Candidate composition")
+            st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
+            st.dataframe(composition, hide_index=True, width="stretch")
+            _download_frame("Download candidate composition CSV", "candidate-composition.csv", composition)
+        if not calibration.empty:
+            st.markdown("#### Proposal calibration")
+            st.caption("Empirical frequency, proposal mass, and selection enrichment remain descriptive within cohort.")
+            st.dataframe(calibration, hide_index=True, width="stretch")
+            _download_frame("Download proposal calibration CSV", "candidate-proposal-calibration.csv", calibration)
+        st.markdown("#### Collision support")
+        st.dataframe(collision, hide_index=True, width="stretch")
+        _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
+        sample_rows = pd.DataFrame(sample.get("rows", []))
+        st.markdown("#### Deterministic display sample")
+        st.caption(
+            f"Showing {int(sample.get('display_count', 0)):,} of {int(sample.get('population_count', 0)):,} rows. "
+            "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
+        )
+        st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
 def _render_candidate_provenance_flow(store_path: str) -> None:

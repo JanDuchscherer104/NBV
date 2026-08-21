@@ -82,6 +82,7 @@ def render_stored_rollouts_page() -> None:
         with tabs[1]:
             reconstruction._render_corpus_temporal_evidence(corpus_summary)
             overview._render_corpus_endpoint_distributions(corpus_summary)
+            reconstruction._render_active_store_sequence_returns(store_path.as_posix())
     if tabs[2].open:
         with tabs[2]:
             overview._render_corpus_admission(corpus_summary)

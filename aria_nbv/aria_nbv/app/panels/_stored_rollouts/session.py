@@ -51,6 +51,7 @@ from ....rollouts.reporting import (
 )
 
 CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
+_CANDIDATE_POPULATION_CACHE_REVISION = 2
 _PROJECTION_CACHE_REVISIONS = {
     "proposal_geometry": 2,
     "trajectory_geometry": 2,
@@ -93,12 +94,31 @@ def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
 def _cached_candidate_population_cached(
-    store_path: str, store_identity: str, sample_size: int = 500
+    store_path: str,
+    store_identity: str,
+    sample_size: int = 500,
+    projection_revision: int = _CANDIDATE_POPULATION_CACHE_REVISION,
 ) -> dict[str, object]:
     """Build the complete candidate bundle once per immutable store identity."""
 
+    del projection_revision
     reader, _, _ = _cached_store_bundle(store_path)
     return candidate_population_evidence(reader, sample_size=sample_size)
+
+
+def _cached_candidate_population(
+    store_path: str,
+    store_identity: str,
+    sample_size: int = 500,
+) -> dict[str, object]:
+    """Read the revisioned complete-population cache through one call seam."""
+
+    return _cached_candidate_population_cached(
+        store_path,
+        store_identity,
+        sample_size,
+        projection_revision=_CANDIDATE_POPULATION_CACHE_REVISION,
+    )
 
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
@@ -177,21 +197,23 @@ def _cached_projection_cached(
         if not hasattr(reader, "array"):
             audit_rows = _cached_projection(store_path, "candidates", limit=limit)
             return candidate_group_summary_rows(reader, group_by=group_by, audit_rows=audit_rows)
-        return _cached_candidate_population_cached(store_path, store_identity)["groups"][group_by]
+        return _cached_candidate_population(store_path, store_identity)["groups"][group_by]
     if projection in {"candidate_composition", "candidate_calibration"}:
         if group_by is None:
             raise ValueError(f"{projection} projection requires group_by")
-        evidence = _cached_candidate_population_cached(store_path, store_identity)
+        evidence = _cached_candidate_population(store_path, store_identity)
         key = "composition" if projection == "candidate_composition" else "calibration"
         return evidence[key][group_by]
     if projection == "candidate_collision":
-        return _cached_candidate_population_cached(store_path, store_identity)["collision"]
+        return _cached_candidate_population(store_path, store_identity)["collision"]
     if projection == "candidate_sample":
-        return _cached_candidate_population_cached(store_path, store_identity, 500 if limit is None else limit)[
-            "sample"
-        ]
+        return _cached_candidate_population(
+            store_path,
+            store_identity,
+            500 if limit is None else limit,
+        )["sample"]
     if projection == "candidate_population":
-        return _cached_candidate_population_cached(store_path, store_identity)
+        return _cached_candidate_population(store_path, store_identity)
     if projection == "q_h":
         _, validation, _ = _cached_store_bundle(store_path)
         return q_h_evidence_rows(

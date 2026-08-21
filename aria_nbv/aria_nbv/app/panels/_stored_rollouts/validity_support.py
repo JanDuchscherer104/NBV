@@ -143,9 +143,12 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
         _render_candidate_aggregate_breakdowns(store_path)
 
     if st.toggle(
-        "Load cohort composition, proposal calibration, and collision support",
+        "Load candidate choice, calibration, and collision comparisons",
         value=False,
-        help="Materializes the complete candidate audit only after this explicit request and reuses its cached rows.",
+        help=(
+            "Materializes the complete candidate audit only after this explicit request, then reuses it for "
+            "family-over-depth, conditional-transition, calibration, and collision evidence."
+        ),
     ):
         _render_candidate_population_evidence(store_path)
 
