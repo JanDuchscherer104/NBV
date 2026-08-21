@@ -1036,6 +1036,7 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
 
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
     population = stored_session.candidate_population()
+    _render_complete_candidate_support(population)
     composition = pd.DataFrame(population["composition"][group_by])
     calibration = pd.DataFrame(population["calibration"][group_by])
     collision = pd.DataFrame(population["collision"])
@@ -1062,6 +1063,111 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
         "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
     )
     st.dataframe(sample_rows, hide_index=True, width="stretch")
+
+
+def _render_complete_candidate_support(population: dict[str, object]) -> None:
+    """Render complete-population support plots before their collapsed rows."""
+
+    geometry = pd.DataFrame(population.get("geometry", []))
+    points = geometry.dropna(subset=["target_normalized_forward", "target_normalized_lateral"])
+    if not points.empty:
+        fig = go.Figure()
+        for label, x, y in (("root", 0.0, 0.0), ("target", 1.0, 0.0)):
+            fig.add_trace(go.Scatter(x=[x], y=[y], mode="markers", name=label))
+        fig.add_trace(
+            go.Scatter(
+                x=points["target_normalized_forward"],
+                y=points["target_normalized_lateral"],
+                mode="markers",
+                name="candidate",
+            )
+        )
+        fig.update_layout(title="Target-normalized candidate endpoints", xaxis_title="forward", yaxis_title="lateral")
+        fig.update_xaxes(scaleanchor="y", scaleratio=1)
+        fig.update_yaxes(scaleanchor="x", scaleratio=1)
+        _render_plot(
+            fig,
+            ScientificExplanation(
+                question="Where do the complete candidate endpoints lie relative to root and target?",
+                population="Complete candidate audit population with finite target-normalized baselines.",
+                metric="Dimensionless forward/lateral coordinates; root=(0,0), target=(1,0).",
+                denominator_masks="Degenerate target baselines are unavailable, never zero-filled.",
+                comparability="Use the same target protocol and generation contract.",
+                expected_pattern="Support covers the intended local shell without frame mirroring or collapse.",
+                failure_interpretation="Offsets and asymmetry indicate frame or generator defects.",
+                evidence_role="actor-visible",
+                source_fields=("candidate audit", "target center"),
+            ),
+        )
+        with st.expander("Target-normalized endpoint rows and CSV"):
+            st.dataframe(points, hide_index=True, width="stretch")
+            _download_frame("Download normalized candidate positions CSV", "candidate-normalized-positions.csv", points)
+    direction = population.get("direction", {})
+    density = pd.DataFrame(direction.get("density_rows", []) if isinstance(direction, dict) else [])
+    state_density = (
+        density[(density.get("aggregation_level") == "state") & (density.get("population") == "all")]
+        if not density.empty
+        else density
+    )
+    if not state_density.empty:
+        matrix = state_density.pivot_table(
+            index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
+        ).fillna(0.0)
+        fig = px.imshow(
+            matrix,
+            origin="lower",
+            aspect="auto",
+            labels={"x": "azimuth bin", "y": "sin(elevation) bin", "color": "fraction"},
+            title="Candidate direction density (equal-area bins)",
+        )
+        _render_plot(
+            fig,
+            ScientificExplanation(
+                question="Does direction support cover solid angle without latitude bias?",
+                population="Complete candidate rows, normalized per factual state.",
+                metric="Fraction per azimuth × sin(elevation) bin.",
+                denominator_masks="Zero-length vectors remain missing.",
+                comparability="Match binning and candidate contract.",
+                expected_pattern="No unexplained directional collapse.",
+                failure_interpretation="Spikes expose orientation or generator support defects.",
+                evidence_role="actor-visible",
+                source_fields=("root-relative vectors",),
+            ),
+        )
+        with st.expander("Direction density rows and CSV"):
+            st.dataframe(state_density, hide_index=True, width="stretch")
+            _download_frame("Download direction density CSV", "candidate-direction-density.csv", state_density)
+    for key, title in (
+        ("spatial", "Spatial support"),
+        ("target_view", "Target-view support"),
+        ("motion", "Motion and collision support"),
+    ):
+        frame = pd.DataFrame(population.get(key, []))
+        if frame.empty:
+            continue
+        fig = px.bar(
+            frame,
+            x="metric" if "metric" in frame else "evidence",
+            y="mean" if "mean" in frame else "count",
+            title=title,
+        )
+        _render_plot(
+            fig,
+            ScientificExplanation(
+                question=f"What does {title.lower()} cover?",
+                population="Complete candidate audit population.",
+                metric="Persisted support summaries with field units.",
+                denominator_masks="Finite or explicitly evaluated rows only.",
+                comparability="Match persisted contract and cohort.",
+                expected_pattern="Support matches configured physical and evaluation bounds.",
+                failure_interpretation="Missingness or concentration guides generator debugging.",
+                evidence_role="actor-visible",
+                source_fields=(f"candidate {key} evidence",),
+            ),
+        )
+        with st.expander(f"{title} rows and CSV"):
+            st.dataframe(frame, hide_index=True, width="stretch")
+            _download_frame(f"Download {key} support CSV", f"candidate-{key}.csv", frame)
 
 
 def _render_candidate_provenance_flow(stored_session: session.StoredRolloutSession) -> None:
@@ -1599,6 +1705,7 @@ def _render_candidate_geometry_diagnostics(
                     yaxis_title="lateral (target-normalized)",
                 )
                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                fig.update_xaxes(scaleanchor="y", scaleratio=1)
                 _render_plot(
                     fig,
                     ScientificExplanation(
@@ -1708,6 +1815,7 @@ def _render_candidate_geometry_diagnostics(
                 title="Candidate centers relative to each rollout root (ground plane)",
             )
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            fig.update_xaxes(scaleanchor="y", scaleratio=1)
             _render_plot(
                 fig,
                 ScientificExplanation(
