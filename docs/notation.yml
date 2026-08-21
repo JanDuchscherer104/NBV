@@ -128,6 +128,24 @@ symbols:
     description: 'Actor-visible target/entity descriptor used to condition target-specific value prediction.'
     thesis_list: true
     order: 205
+  entity.target_error:
+    tex: '\Delta_t^e'
+    typst: '#symb.entity.target_error'
+    description: Target-specific reconstruction error at rollout step t.
+    thesis_list: true
+    order: 206
+  entity.target_error_next:
+    tex: '\Delta_{t+1}^e'
+    typst: '#symb.entity.target_error_next'
+    description: Target-specific reconstruction error after the next observation.
+    thesis_list: true
+    order: 207
+  entity.target_error_0:
+    tex: '\Delta_0^e'
+    typst: '#symb.entity.target_error_0'
+    description: Target-specific reconstruction error at the rollout start.
+    thesis_list: true
+    order: 208
   rl.s:
     tex: 's'
     typst: '#symb.rl.s'
@@ -224,6 +242,12 @@ symbols:
     description: 'Return discount factor.'
     thesis_list: true
     order: 360
+  rl.epsilon:
+    tex: '\varepsilon'
+    typst: '#symb.rl.epsilon'
+    description: Small positive numerical stabilizer used in denominators and logarithms.
+    thesis_list: true
+    order: 365
   rl.H:
     tex: 'H'
     typst: '#symb.rl.H'
@@ -562,6 +586,21 @@ equations:
     description: ''
     thesis_list: false
     order: 9999
+  metrics.pearson:
+    tex: 'r_{x,y}=\frac{\sum_i(x_i-\bar{x})(y_i-\bar{y})}{\sqrt{\sum_i(x_i-\bar{x})^2\sum_i(y_i-\bar{y})^2}}'
+    typst: '#eqs.metrics.pearson'
+  metrics.categorical_entropy:
+    tex: 'H(\boldsymbol{p})=-\sum_{i:m_i=1}p_i\log p_i'
+    typst: '#eqs.metrics.categorical_entropy'
+  metrics.selection_rate_given_available:
+    tex: '\mathrm{SelRate}_f=N_{\mathrm{selected},f}/N_{\mathrm{actor-valid},f}'
+    typst: '#eqs.metrics.selection_rate_given_available'
+  metrics.q_train_mask:
+    tex: 'm_{t,i}^{\mathrm{train}}=m_{t,i}^{\mathrm{actor}}m_{t,i}^{\mathrm{oracle}}'
+    typst: '#eqs.metrics.q_train_mask'
+  metrics.selected_oracle_regret:
+    tex: '\mathrm{Regret}_t=\max_{i:m_{t,i}=1}g_{t,i}-g_{t,a_t}'
+    typst: '#eqs.metrics.selected_oracle_regret'
   metrics.topk_acc:
     tex: '\mathrm{TopKAcc}(k)=\frac{1}{N}\sum_i\mathbb{1}[y_i\in\mathrm{TopK}(\boldsymbol{\pi}_i,k)]'
     typst: '#eqs.metrics.topk_acc'
@@ -653,11 +692,14 @@ equations:
     thesis_list: false
     order: 9999
   rl.target_rri_reward:
-    tex: 'r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})'
+    tex: 'r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/(\Delta_0^e+\varepsilon)'
     typst: '#eqs.rl.target_rri_reward'
     description: ''
     thesis_list: false
     order: 9999
+  rl.observed_cumulative_root_gain:
+    tex: 'G_{0:s,\mathrm{root}}^e=\sum_{k=0}^{s-1}r_{k,\mathrm{root}}^e'
+    typst: '#eqs.rl.observed_cumulative_root_gain'
   rl.finite_horizon_return:
     tex: 'G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e'
     typst: '#eqs.rl.finite_horizon_return'

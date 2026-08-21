@@ -22,6 +22,8 @@
   H: $H$,
   // Temporal discount factor.
   gamma: $gamma$,
+  // Small positive numerical stabilizer used in denominators and logarithms.
+  epsilon: $epsilon$,
   // Markov decision process specialized to NBV selection.
   mdp_nbv: $cal(M)_"NBV"$,
   // State-dependent feasible action set.

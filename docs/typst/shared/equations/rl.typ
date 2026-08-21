@@ -147,6 +147,9 @@
     /
     (#symb.entity.target_error_0 + epsilon)
   $,
+  observed_cumulative_root_gain: $
+    G_(0:s,"root")^e = sum_(k=0)^(s-1) r_(k,"root")^e
+  $,
   finite_horizon_return: $
     G_(t,e)^((h))
     =
