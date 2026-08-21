@@ -103,12 +103,6 @@ def _cached_store_bundle_cached(
     return reader, validation, manifest_payload
 
 
-def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
-    """Open a store through its current replacement-sensitive identity."""
-
-    return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
-
-
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
 def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
     """Project immutable rollout-store inventory once per cache root."""
@@ -330,14 +324,6 @@ def _cached_topology_cached(
     )
 
 
-def _cached_topology(
-    store_path: str, vin_store_dirs: tuple[str, ...], paths: PathConfig, selected_source_row_id: int | None = None
-) -> Any:
-    return _cached_topology_cached(
-        store_path, vin_store_dirs, paths, selected_source_row_id, store_identity=_store_projection_identity(store_path)
-    )
-
-
 @st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
 def _cached_failures_cached(
     store_path: str,
@@ -360,30 +346,12 @@ def _cached_failures_cached(
     )
 
 
-def _cached_failures(
-    store_path: str, min_valid_candidates: int, dominant_invalid_fraction: float, max_step_distance_m: float
-) -> list[dict[str, object]]:
-    return _cached_failures_cached(
-        store_path,
-        min_valid_candidates,
-        dominant_invalid_fraction,
-        max_step_distance_m,
-        store_identity=_store_projection_identity(store_path),
-    )
-
-
 @st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
 def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, store_identity: str = "") -> bytes:
     """Build one deterministic report bundle for a replacement-sensitive store."""
 
     return serialize_thesis_report_bundle(
         build_thesis_report_frames([Path(store_path)], evidence_status=evidence_status)
-    )
-
-
-def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
-    return _cached_evidence_bundle_cached(
-        store_path, evidence_status, store_identity=_store_projection_identity(store_path)
     )
 
 

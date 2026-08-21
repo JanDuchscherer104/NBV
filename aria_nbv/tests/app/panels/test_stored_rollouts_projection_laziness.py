@@ -215,7 +215,7 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
     store_path = result.final_dir.as_posix()
     mtimes = {path: path.stat().st_mtime_ns for path in result.final_dir.rglob("*") if path.is_file()}
     first_identity = session._store_projection_identity(store_path)
-    _, first_validation, _ = session._cached_store_bundle(store_path)
+    _, first_validation, _ = session._cached_store_bundle_cached(store_path, store_identity=first_identity)
     assert first_validation.ok
 
     root = zarr.open_group(result.final_dir, mode="a")
@@ -225,7 +225,7 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
         os.utime(path, ns=(path.stat().st_atime_ns, mtime_ns))
 
     second_identity = session._store_projection_identity(store_path)
-    _, second_validation, _ = session._cached_store_bundle(store_path)
+    _, second_validation, _ = session._cached_store_bundle_cached(store_path, store_identity=second_identity)
 
     assert second_identity != first_identity
     assert not second_validation.ok
@@ -305,9 +305,12 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     selected.symlink_to(first.store_dir, target_is_directory=True)
 
     path = selected.as_posix()
-    first_reader, first_validation, first_manifest = session._cached_store_bundle(path)
+    first_identity = session._store_projection_identity(path)
+    first_reader, first_validation, first_manifest = session._cached_store_bundle_cached(
+        path, store_identity=first_identity
+    )
     first_steps = session._cached_steps_cached(path, store_identity=session._store_projection_identity(path))
-    first_bundle = session._cached_evidence_bundle(path, "pilot")
+    first_bundle = session._cached_evidence_bundle_cached(path, "pilot", store_identity=first_identity)
     assert first_validation.ok
     assert first_reader.store_dir == selected.resolve()
     assert first_manifest == first_reader.manifest()
@@ -317,9 +320,12 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     replacement.symlink_to(second.store_dir, target_is_directory=True)
     replacement.replace(selected)
 
-    second_reader, second_validation, second_manifest = session._cached_store_bundle(path)
-    second_steps = session._cached_steps_cached(path, store_identity=session._store_projection_identity(path))
-    second_bundle = session._cached_evidence_bundle(path, "pilot")
+    second_identity = session._store_projection_identity(path)
+    second_reader, second_validation, second_manifest = session._cached_store_bundle_cached(
+        path, store_identity=second_identity
+    )
+    second_steps = session._cached_steps_cached(path, store_identity=second_identity)
+    second_bundle = session._cached_evidence_bundle_cached(path, "pilot", store_identity=second_identity)
     assert second_validation.ok
     assert second_reader.store_dir == selected.resolve()
     assert second_manifest == second_reader.manifest()
@@ -385,13 +391,15 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     failure_calls: list[str] = []
 
     def topology(*, rollout_store_dir: Path, **_kwargs: object) -> dict[str, str]:
-        manifest = session._cached_store_bundle(rollout_store_dir.as_posix())[2]
+        path = rollout_store_dir.as_posix()
+        manifest = session._cached_store_bundle_cached(path, store_identity=session._store_projection_identity(path))[2]
         marker = json.dumps(manifest, sort_keys=True)
         topology_calls.append(marker)
         return {"manifest": marker}
 
     def failures(reader: object, *, config: object) -> list[dict[str, str]]:
-        marker = session._cached_store_bundle(reader.store_dir.as_posix())[2]  # type: ignore[attr-defined]
+        path = reader.store_dir.as_posix()  # type: ignore[attr-defined]
+        marker = session._cached_store_bundle_cached(path, store_identity=session._store_projection_identity(path))[2]
         value = json.dumps(marker, sort_keys=True)
         failure_calls.append(value)
         return [{"manifest": value}]
@@ -399,15 +407,17 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     monkeypatch.setattr(session, "build_dataset_topology", topology)
     monkeypatch.setattr(session, "suspicious_rollout_rows", failures)
     path = selected.as_posix()
-    topology_first = session._cached_topology(path, (), None)
-    failure_first = session._cached_failures(path, 1, 0.5, 1.0)
+    first_identity = session._store_projection_identity(path)
+    topology_first = session._cached_topology_cached(path, (), None, store_identity=first_identity)
+    failure_first = session._cached_failures_cached(path, 1, 0.5, 1.0, store_identity=first_identity)
 
     replacement = tmp_path / "replacement-link.zarr"
     replacement.symlink_to(second.store_dir, target_is_directory=True)
     replacement.replace(selected)
 
-    topology_second = session._cached_topology(path, (), None)
-    failure_second = session._cached_failures(path, 1, 0.5, 1.0)
+    second_identity = session._store_projection_identity(path)
+    topology_second = session._cached_topology_cached(path, (), None, store_identity=second_identity)
+    failure_second = session._cached_failures_cached(path, 1, 0.5, 1.0, store_identity=second_identity)
 
     assert topology_first != topology_second
     assert failure_first != failure_second
@@ -532,7 +542,7 @@ def test_stored_rollout_session_topology_preserves_structured_cache_arguments(
         return object()
 
     monkeypatch.setattr(session, "_cached_topology_cached", cached_topology)
-    session._cached_topology("/selected.zarr", ("/vin-a", "/vin-b"), config, 7)
+    session._cached_topology_cached("/selected.zarr", ("/vin-a", "/vin-b"), config, 7, store_identity="identity-1")
 
     assert calls == [("/selected.zarr", ("/vin-a", "/vin-b"), config, 7, "identity-1")]
 
