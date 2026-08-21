@@ -85,3 +85,16 @@ def test_chart_notation_uses_markdown_surface_only_when_requested(monkeypatch) -
     monkeypatch.setattr(common, "get_label_display_mode", lambda: "Text")
     common.render_scientific_notation("cumulative_target_root_gain")
     assert len(captions) == 1
+
+
+def test_every_configured_symbol_key_resolves_exactly() -> None:
+    references = TheoryReferences(
+        symbol_ids=tuple(
+            sorted({label.symbol_key for label in SCIENTIFIC_LABELS.values() if label.symbol_key is not None})
+        )
+    )
+
+    resolved = resolve_theory(references)
+
+    assert {symbol.identifier for symbol in resolved.symbols} == set(references.symbol_ids)
+    assert all(symbol.typst == f"#symb.{symbol.identifier}" for symbol in resolved.symbols)
