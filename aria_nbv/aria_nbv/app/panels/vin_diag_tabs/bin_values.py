@@ -18,7 +18,7 @@ import torch
 from ....rri_metrics.ordinal import RriOrdinalBinner
 from ...scientific_labels import format_scientific_label, scientific_label
 from ...state import get_label_display_mode
-from ..common import _info_popover, _pretty_label
+from ..common import _info_popover, _pretty_label, render_scientific_notation
 from .context import VinDiagContext
 
 
@@ -140,6 +140,7 @@ def render_bin_values_tab(ctx: VinDiagContext) -> None:
         "and then trained as a monotone parameterization (MonotoneBinValues). "
         "This tab compares the fitted binner edges/centers against the learned u_k.",
     )
+    render_scientific_notation("rri")
 
     try:
         payload = _build_bin_value_payload(binner=binner, learned_u=learned_u)

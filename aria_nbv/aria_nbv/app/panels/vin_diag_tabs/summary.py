@@ -19,7 +19,7 @@ from ....utils.plotting import _histogram_overlay, _to_numpy
 from ....vin.diagnostics.plotting import _parameter_distribution
 from ...scientific_labels import format_scientific_label, scientific_label
 from ...state import get_label_display_mode
-from ..common import _info_popover, _offline_summary_rows, _pretty_label, _strip_ansi
+from ..common import _info_popover, _offline_summary_rows, _pretty_label, _strip_ansi, render_scientific_notation
 from .context import VinDiagContext
 
 
@@ -91,6 +91,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
                 st.warning(f"Could not inspect VIN offline store: {type(exc).__name__}: {exc}")
 
     if batch.rri is not None:
+        render_scientific_notation("rri")
         _info_popover(
             "scatter",
             "Each point is a candidate view. **X** is the oracle RRI computed from "

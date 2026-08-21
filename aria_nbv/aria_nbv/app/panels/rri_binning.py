@@ -22,7 +22,7 @@ from ...rri_metrics.ordinal import RriOrdinalBinner
 from ...utils.plotting import _histogram_overlay
 from ..scientific_labels import format_scientific_label, scientific_label
 from ..state import get_label_display_mode
-from .common import _info_popover, _pretty_label, _report_exception
+from .common import _info_popover, _pretty_label, _report_exception, render_scientific_notation
 
 
 def _rri_label() -> str:
@@ -40,6 +40,7 @@ def render_rri_binning_page() -> None:
         "Inspect the RRI distribution and quantile edges used for CORAL binning, "
         "loaded directly from saved binner artifacts.",
     )
+    render_scientific_notation("rri")
     _info_popover(
         "rri binning",
         "The binner is fit on cached oracle RRIs stored in "

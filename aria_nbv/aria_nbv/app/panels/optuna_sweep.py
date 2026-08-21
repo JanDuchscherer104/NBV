@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - optional dependency guard
 from ...configs import OptunaConfig, PathConfig
 from ..scientific_labels import format_scientific_label, scientific_label
 from ..state import get_label_display_mode
-from .common import _info_popover, _pretty_label, _report_exception
+from .common import _info_popover, _pretty_label, _report_exception, render_scientific_notation
 
 _CACHE_TTL_S = 120
 
@@ -790,6 +790,8 @@ def render_optuna_sweep_page() -> None:
                 options=param_cols_vary,
                 index=0,
             )
+            if selected_param in {"rri", "oracle_rri", "target_rri"}:
+                render_scientific_notation("target_rri" if selected_param == "target_rri" else "oracle_rri")
         if selected_param is not None:
             fig, summary_table, reg_stats = _plot_param_effect(df, param=selected_param)
             if reg_stats is not None:
