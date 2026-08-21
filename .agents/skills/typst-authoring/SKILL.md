@@ -34,6 +34,24 @@ description: Use for ARIA-NBV Typst proposal or thesis authoring, shared notatio
   work also reads [`scientific-visualizations.md`](references/scientific-visualizations.md)
   and the selected renderer/package reference.
 
+## Conditional References
+
+- **Typst language, syntax, symbols, or data structures:** When a construct or
+  API is uncertain, read the narrowest of
+  [`typst-essentials.md`](references/typst-essentials.md),
+  [`typst-symbols.md`](references/typst-symbols.md),
+  [`typst-data-structures.md`](references/typst-data-structures.md), or
+  [`typst-docs-notes.md`](references/typst-docs-notes.md).
+- **Scripting or data loading:** For reusable code, control flow, modules, or
+  external tables/configuration, read [`scripting.md`](references/scripting.md)
+  or [`data-loading.md`](references/data-loading.md).
+- **Layout:** For flow, spacing, columns, grids, transforms, or measurement,
+  read [`layout.md`](references/layout.md).
+- **External research:** When local references are insufficient or current
+  upstream evidence is required, read
+  [`external-research.md`](references/external-research.md), then use the
+  local-owner and Context7 route above.
+
 For current Typst, package, or API behavior, hand off through
 [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and read its
 [Context7 registry](../aria-nbv-context/references/context7_library_ids.md)
@@ -42,9 +60,11 @@ only after inspecting local owners and installed call sites.
 ## Rules
 
 1. Inspect nearest docs guidance, target imports, adjacent sections,
-   bibliography style, labels, thesis-to-code link tier, and `docs/typst/shared/`.
+  bibliography style, labels, thesis-to-code link tier, and `docs/typst/shared/`.
 2. Use shared notation, glossary, and equations before inventing local symbols;
-   add recurring terms or equations to shared modules first.
+   add recurring terms or equations to shared modules first. Edit
+   `docs/typst/shared/glossary.typ` for durable terms; treat
+   `docs/typst/glossary/` as rendered/modular output, not the term owner.
 3. Keep notation policy, math-attachment details, claim discipline, figure/table
    conventions, and package notes in the referenced files, not this hot path.
 4. Classify literature-facing claims and complete the direct-source evidence
@@ -65,7 +85,7 @@ only after inspecting local owners and installed call sites.
    binders and other local dummy variables remain local; they are not global
    notation obligations.
 3. If thesis prose links to implementation code, classify the link with
-   `docs/typst/shared/style.typ`: use `#gh` for final-worthy pinned
+   [`docs/typst/shared/style.typ`](../../../docs/typst/shared/style.typ): use `#gh` for final-worthy pinned
    anchors and `#gh-wip` / `#gh-symbol` for removable drafting aids.
 4. For thesis, slides, or diagrams that introduce or reuse symbols/equations,
    read [`references/aria-nbv-notation.md`](references/aria-nbv-notation.md);

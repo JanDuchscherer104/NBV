@@ -7,6 +7,13 @@ focused query per concept. Each backticked list is a seed menu, not one broad
 query. Verify consequential answers against the installed version, local
 source/tests, and exact ARIA owner. Docker MCP Context7 is deprecated.
 
+## Tool route
+
+- Resolve a missing library ID with
+  `mcp__codex_apps__context7_resolve_library_id`.
+- Query the selected library with
+  `mcp__codex_apps__context7_query_docs`.
+
 ## Navigation And Publication
 
 - `/graphify-labs/graphify`

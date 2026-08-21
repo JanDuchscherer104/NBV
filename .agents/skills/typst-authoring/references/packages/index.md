@@ -32,6 +32,7 @@ Current package notes:
 - `maquette.md`, `maquette-smoke.typ`, and `maquette-octahedron.obj` -
   fixture-gated local mesh rendering.
 - `fletcher.md` and `fletcher-*.typ` - diagram rules and examples.
+- `fletcher-manual.md` - cleaned Fletcher manual for detailed package syntax.
 - `neural-netz.md` and `neural-netz-example.typ` - simple network schematic
   fallback.
 - `slides.md` - local slide template, Touying reveal controls, and slide QA

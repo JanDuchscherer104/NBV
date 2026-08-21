@@ -42,7 +42,7 @@ Do not import generic defaults that conflict with ARIA-NBV:
 
 Use these nested modes only inside `prose-draft` or `prose-polish`; they are
 ARIA adaptations of Matt writing skills, not activated upstream owners. See
-`upstream-matt-writing.md` for the pinned source links and update policy.
+[upstream-matt-writing](upstream-matt-writing.md) for the pinned source links and update policy.
 
 `fragment-capture`: use before structure exists. Collect scratch claims,
 observations, advisor notes, possible phrasings, examples, objections, and

@@ -1,150 +1,93 @@
 ---
 name: aria-nbv-context
-description: Use for hierarchical ARIA-NBV owner localization, Graphify-first project relationships, scientific-source initialization, reviewed semantic recall, or current Context7 plugin evidence before handing work to an exact owner.
-metadata:
-  mode: router
-  not_when:
-    - "the exact local owner is already known and no external API/version uncertainty remains"
-    - "a concrete failure command or traceback owns the task"
-  handoff_to:
-    - "graphify for a usable broad-context navigation graph"
-    - "typst-authoring for thesis, glossary, shared-symbol, or shared-equation edits"
-    - "nearest owning guide for concrete implementation or documentation work"
-    - "nearest failure owner for a reproducer or traceback"
-  evidence_required:
-    - "selected branch and leaf in the owner hierarchy"
-    - "localized exact owner and nearest applicable AGENTS.md"
-    - "Graphify provenance before Graphify-backed navigation"
-    - "installed call site plus current external docs for Context7-backed claims"
-  applies_to:
-    - "**"
-  triggers:
-    - "codebase architecture, ownership, relationships, or broad project context"
-    - "locate an unknown ARIA-NBV owner or source family"
-    - "thesis section, glossary, symbol, equation, notation, or literature owner"
-    - "current external API, SDK, or version behavior"
-    - "semantic recall of prior decisions or failed approaches"
-  must_read:
-    - "AGENTS.md"
-  canonical_sources:
-    - "AGENTS.md"
-    - ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
-    - ".agents/skills/aria-nbv-context/references/context7_library_ids.md"
-    - ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md"
-    - ".agents/skills/aria-nbv-context/references/context_map.md"
-    - "docs/typst/thesis/main.typ"
-    - "docs/typst/thesis/sections/01-research-questions.typ"
-    - "docs/typst/thesis/development/roadmap.typ"
-    - "docs/typst/shared/glossary.typ"
-    - "docs/typst/shared/symbols.typ"
-    - "docs/typst/shared/equations.typ"
-    - "docs/typst/glossary/main.typ"
-    - "docs/notation.yml"
-    - "docs/literature/sources.jsonl"
-    - "docs/references.bib"
-    - "docs/contents/literature/index.qmd"
-    - "docs/typst/thesis/sections/02-foundations/02-01-related-work.typ"
-  literature_refs: ["docs/contents/literature/index.qmd", "docs/literature/sources.jsonl", "quality-driven-rri", "finite-candidate-rl", "continuous-nbv-bridge", "radiance-field-nbv-bridge", "semantic-scene-memory-bridge"]
-  context7_refs: ["/graphify-labs/graphify", "/websites/typst_app", "/facebookresearch/atek", "/websites/facebookresearch_github_io_projectaria_tools", "/facebookresearch/efm3d", "/facebookresearch/pytorch3d", "/websites/zarr_readthedocs_io_en_stable", "/rerun-io/rerun"]
-  tool_refs:
-    - "mcp__codex_apps__context7_resolve_library_id"
-    - "mcp__codex_apps__context7_query_docs"
-    - "mcp__code_index.search_code_advanced"
-    - "mcp__code_index.get_symbol_body"
-  verification:
-    - "make context when a required generated context view is stale or missing"
-    - "python3 scripts/check_graphify_freshness.py --json before Graphify-backed claims"
-    - "make graphify-state-check for strict scaffold validation"
+description: Use to locate the smallest authoritative ARIA-NBV owner for broad project context, scientific-source routing, reviewed recall, or current external API and version questions.
 ---
 
 # ARIA-NBV Context
 
-Select the smallest hierarchy leaf, open the exact owner, then hand off. Derived,
-retrieved, generated, and historical material may locate truth but cannot replace its owner.
+Select the smallest hierarchy leaf, open the exact owner, then hand off.
+Derived, retrieved, generated, and historical material may locate truth but
+cannot replace its owner.
 
 ## Owner Hierarchy
 
-- **Scientific language**
-  - `docs/typst/shared/symbols.typ`: composed `symb` facade; domain symbol
-    modules beneath it own reusable notation bodies.
-  - `docs/typst/shared/equations.typ`: composed `eqs` facade; domain equation
-    modules beneath it own reusable mathematical bodies.
-  - `docs/typst/shared/glossary.typ`: editable term registry linking prose,
-    symbols, equations, and sources. `docs/typst/glossary/` renders and checks
-    that registry; it is not another glossary owner.
-  - `docs/notation.yml`: generated cross-format lookup adapter; shared Typst
-    facades own reusable bodies and metadata.
-- **Thesis direction**: `docs/typst/thesis/main.typ` and its active includes own
-  narrative and claims; question and development-gate files own their narrower
-  contracts. Seminar, archived proposal, and dated history are evidence only.
-- **Literature to thesis**
-  - `docs/literature/sources.jsonl`: checked-in paper manifest for acquisition,
-    relevance, and adoptable-idea metadata.
-  - `docs/references.bib` and `docs/references-qh.bib`: citation identities and
-    bibliographic metadata; exact primary sources support external claims.
-  - `docs/contents/literature/`: paper-by-paper review and ARIA-NBV synthesis.
-  - `docs/typst/thesis/sections/`: current claim placement and narrative;
-    foundations/related work starts at `02-foundations/02-01-related-work.typ`.
-- **Executable system**: nearest package `AGENTS.md`, source, tests, and active
-  configuration own behavior and proof.
-- **Project intent and work**: accepted spec supersessions and reviewed human
+- **Scientific language**: `docs/typst/shared/symbols.typ`,
+  `docs/typst/shared/equations.typ`, and `docs/typst/shared/glossary.typ` own
+  reusable notation and terms; `docs/typst/glossary/` is the rendered/modular
+  glossary output surface, not a term owner. `docs/notation.yml` is a generated
+  cross-format adapter; the shared Typst facades own reusable bodies and
+  metadata.
+- **Thesis direction:** `docs/typst/thesis/main.typ` and active includes own
+  narrative and claims; question and development-gate files own narrower
+  contracts; `docs/typst/thesis/sections/` owns active claim placement.
+- **Literature:** `docs/literature/sources.jsonl` owns source
+  acquisition/relevance metadata; `docs/references.bib` and
+  `docs/references-qh.bib` own citation identities; `docs/contents/literature/`
+  owns review synthesis.
+- **Executable system:** the nearest package `AGENTS.md`, source, tests, and
+  active configuration own behavior and proof.
+- **Project intent and work:** accepted spec supersessions and reviewed human
   intent own decisions; Agents-DB TOMLs own actionable work.
-- **Agent execution**: root/nested `AGENTS.md` own invariants; skills own
-  activation, procedure, handoff, and verification.
+- **Agent execution:** root or nested `AGENTS.md` files own invariants; skills
+  own activation, procedure, handoff, and verification.
 
 ## Conflict Rule
 
-Prefer the narrowest active owner: active thesis over seminar/archive history;
-source, tests, and configuration over documentation or retrieval; explicit
-accepted supersessions over plans or chronology. Planned work is not an
-implemented result.
+Prefer the narrowest active owner: active thesis over seminar or archive
+history; source, tests, and configuration over documentation or retrieval; and
+explicit accepted supersessions over plans or chronology. Planned work is not
+an implemented result.
 
 ## Capture Rule
 
 - Repo invariant: root or nearest nested `AGENTS.md`.
-- Repeatable workflow: `.agents/skills/*/SKILL.md`.
+- Repeatable workflow: the owning skill's `SKILL.md`.
 - Actionable work: Agents-DB issues, todos, or refactors.
-- Public narrative or scientific language: the smallest active Quarto/Typst
-  section, glossary, symbol, equation, notation, bibliography, or source owner.
+- Public narrative or scientific language: the smallest active Quarto/Typst,
+  glossary, symbol, equation, notation, bibliography, or source owner.
 - Reviewed preference: `.agents/references/human_owner_intent.md`.
 - Accepted scoped target: the relevant explicit `.omx/specs/` supersession.
 - Debriefs and optional tools capture evidence or proposals, not current truth.
 
+Use the owner hierarchy to select one leaf before opening optional references.
+
+## Branch Index
+
+Use this index only for branches with many subtopics. A linked branch reference
+may route one additional hop to a leaf; do not chain through another index.
+
 ## Graphify Branch
 
-For architecture, ownership, relationships, or broad project content, initialize
-the worktree and run `scripts/check_graphify_freshness.py --json`. For `fresh`
-or `usable-stale`, use upstream `graphify query` for context, `graphify path`
-for relationships, and `graphify explain` for a concept before raw search.
-Verify exact owners and every consequential stale source. Repair `unusable`
-once, then report it and use direct sources if repair fails. Read
-[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)
-for freshness, repair, lifecycle, and fallback rules.
-
-## Derived Route And Semantic Recall Branches
-
-Use derived [`context_map.md`](references/context_map.md) only to reveal exact
-owners for non-obvious routes. Apply the fail-closed reviewed-drawer procedure in
-[`semantic-memory-boundary.md`](references/semantic-memory-boundary.md).
-
+- **Broad architecture, relationship, or project-content question:** Read
+  [`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md),
+  classify the navigation state, use the upstream Graphify route when eligible,
+  and verify every consequential exact owner.
 ## Context7 Plugin Branch
 
-Use the `@Context7` plugin only after locating the local owner and installed
-call site. Use a supplied exact ID directly; otherwise call
-`mcp__codex_apps__context7_resolve_library_id`, then issue one concept per
-`mcp__codex_apps__context7_query_docs` call. Verify against installed source and
-tests. [`context7_library_ids.md`](references/context7_library_ids.md) owns seed
-IDs and query menus. Do not use Docker MCP Context7.
+- **External API or version uncertainty:** Read
+  [`references/context7_library_ids.md`](references/context7_library_ids.md),
+  the Context7 library reference. Use a supplied exact ID directly; otherwise call
+  the resolver documented there, select one library, issue one focused
+  query per concept, and verify the answer against the installed owner and
+  tests. Do not use Docker MCP Context7.
+- **Prior decision or failed-approach recall:** Read
+  [`references/semantic-memory-boundary.md`](references/semantic-memory-boundary.md)
+  and use only its reviewed, read-only, fail-closed route before opening the
+  current owner.
+- **Non-obvious cross-surface or literature owner:** Read
+  [`references/context_map.md`](references/context_map.md) to reveal the exact
+  owner, then open that owner and its nearest guide.
+- **Unknown local implementation or symbol owner:** After selecting the source
+  family, use `mcp__code_index.search_code_advanced` for a narrow lookup, open
+  the exact source and tests, then hand off. Treat index output as navigation
+  evidence rather than the behavior owner.
+- **Already-known exact owner:** Open it and its nearest `AGENTS.md`, hand off
+  immediately, and leave optional branch references unopened.
+- **Concrete failure or traceback:** Hand the reproducer to the nearest failure
+  owner; use context routing only when ownership remains unknown.
 
-## Workflow
+## Completion
 
-1. Select one hierarchy leaf and its nearest `AGENTS.md`.
-2. For scientific language, open the active thesis include graph and the
-   smallest shared glossary, symbol, or equation owner; treat `docs/notation.yml`
-   as a generated consumer.
-3. Use Graphify first for eligible broad context, subject to its state contract.
-4. Use reviewed semantic memory only through its boundary when prior decisions
-   or failed approaches materially help; chronology never implies supersession.
-5. Use the Context7 plugin only for consequential current external behavior.
-6. Open the exact owner, reject conflicting navigation evidence, hand off, and
-   stop retrieving when the owner and proof are explicit.
+Report the selected branch, exact owner, nearest applicable guide, evidence
+used, references opened, handoff, and any freshness or verification gap. Stop
+retrieving once the owner and proof are explicit.

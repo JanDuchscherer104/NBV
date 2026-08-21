@@ -34,8 +34,8 @@ or angular interpretation matters, and make foreground/background treatment
 explicit. Use a data or scene renderer for dense fields, meshes, or point
 clouds, with Typst/CeTZ as the annotation layer. Keep thesis sections
 responsible for the scientific caption and prose hook; keep drawing primitives
-inside the figure source. Read `../scientific-visualizations.md` for renderer
-selection and the geometry/provenance contract.
+inside the figure source. Renderer selection and the geometry/provenance
+contract are routed directly by the skill.
 
 ## Verification
 

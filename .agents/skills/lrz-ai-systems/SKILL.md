@@ -1,46 +1,6 @@
 ---
 name: lrz-ai-systems
 description: "Use when working with LRZ AI Systems remote compute for ARIA-NBV: SSH/login.ai.lrz.de, DSS storage, Slurm GPU/CPU allocations, Enroot/Pyxis containers, dataset/cache/training batch jobs, or debugging remote job failures."
-metadata:
-  mode: maintenance
-  not_when:
-    - "local-only package, docs, or scaffold work with no LRZ execution surface"
-    - "experiment design before a concrete remote resource or batch need exists"
-    - "credential, quota, or production action that lacks user authority"
-  handoff_to:
-    - "nearest data-handling guide for ASE shards, offline stores, and data smoke contracts"
-    - "nearest rollout guide for rollout/Q_H workload semantics"
-    - "nearest owning guide for concrete failed job logs or suspicious remote output"
-    - "agents-db for durable blocked access, quota, or remote-run debt"
-  evidence_required:
-    - "target LRZ partition, DSS/container path policy, and intended workload class"
-    - "dry-run, syntax check, or exact Slurm/job log excerpt"
-    - "explicit credential/access blocker when remote verification cannot run"
-  applies_to:
-    - ".configs/lrz/**"
-    - "scripts/templates/**"
-    - ".agents/skills/lrz-ai-systems/**"
-    - "docs/contents/setup.qmd"
-  triggers:
-    - "LRZ"
-    - "Slurm"
-    - "DSS"
-    - "Pyxis"
-    - "EFM3D on LRZ"
-  must_read:
-    - ".agents/skills/lrz-ai-systems/references/decision-map.md"
-  canonical_sources:
-    - ".agents/skills/lrz-ai-systems/references/decision-map.md"
-    - ".agents/skills/lrz-ai-systems/references/lrz-original-sources.md"
-    - ".agents/skills/lrz-ai-systems/references/storage-dss.md"
-    - ".agents/skills/lrz-ai-systems/references/slurm-partitions.md"
-    - ".agents/skills/lrz-ai-systems/references/slurm-job-patterns.md"
-    - ".agents/skills/lrz-ai-systems/references/containers-pyxis.md"
-    - ".agents/skills/lrz-ai-systems/references/efm3d-aria-workloads.md"
-    - ".agents/skills/lrz-ai-systems/templates/sbatch_single_gpu_aria.sh"
-  verification:
-    - "shellcheck or dry-run checks for changed scripts where available"
-    - "make check-agent-memory for LRZ guidance changes"
 ---
 
 # LRZ AI Systems
@@ -54,10 +14,19 @@ submitting jobs, or owning workflow state.
 
 ## Read First
 
-- `references/decision-map.md` first. It routes to the smallest nested
+- [`references/decision-map.md`](references/decision-map.md) first. It routes
+  to the smallest nested
   reference set for the current LRZ task.
-- `references/lrz-original-sources.md` when LRZ, Slurm, Pyxis, or EFM3D facts
-  could be stale or source-sensitive.
+- Read [`references/lrz-original-sources.md`](references/lrz-original-sources.md)
+  when LRZ, Slurm, Pyxis, or EFM3D facts could be stale or source-sensitive.
+- For a failed job or container start, read
+  [`references/troubleshooting-slurm.md`](references/troubleshooting-slurm.md)
+  after the decision map, capture one metadata snapshot plus stdout/stderr, and
+  hand off concrete ARIA or data failures.
+- For current external dependency API or version uncertainty, route through
+  [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
+  [`Context7 registry`](../aria-nbv-context/references/context7_library_ids.md);
+  keep library IDs and plugin calls in that owner.
 
 ## Rules
 
@@ -69,6 +38,9 @@ submitting jobs, or owning workflow state.
   containers, temp files, and package/model caches under `$ARIA_DSS`.
 - Never submit GPU work without `--gres=gpu:<N>`.
 - Do not automate `sinfo`, `squeue`, `sacct`, or similar Slurm polling loops.
+- Do not silently poll or submit jobs, or guess partition, container, or
+  resource settings; require explicit authority for submission and report
+  missing evidence as a blocker.
 - Use current `sinfo` output at runtime; partition names and limits can change.
 - Avoid MCML partitions unless access/QOS is confirmed by project membership or a short successful test allocation.
 - Use Pyxis Slurm options (`--container-image`, `--container-mounts`) for containers on compute nodes.
@@ -83,7 +55,8 @@ submitting jobs, or owning workflow state.
 4. Smoke test GPU access with `salloc -p lrz-v100x2 --gres=gpu:1 --time=00:10:00` and `srun --pty bash`.
 5. Use `scripts/lrz-container-shell.sh` inside an allocation for interactive container debugging.
 6. Use `scripts/lrz-sbatch-cpu.sh`, `scripts/lrz-sbatch-single-gpu.sh`, or `scripts/lrz-sbatch-multigpu.sh` for batch work.
-7. Read `references/aria-workflows.md` or `references/efm3d-aria-workloads.md`
+7. Read [`references/aria-workflows.md`](references/aria-workflows.md) or
+   [`references/efm3d-aria-workloads.md`](references/efm3d-aria-workloads.md)
    before filling dataset, cache, or training commands.
 
 ## Verification

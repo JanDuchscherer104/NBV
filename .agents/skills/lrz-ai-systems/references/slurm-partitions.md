@@ -44,5 +44,5 @@ mcml-*                     require confirmed MCML access/QOS
 
 Always include `--gres=gpu:<N>` for GPU allocations and batch jobs. Missing GRES can leave jobs pending with policy errors or allocate no GPU.
 
-For allocation and batch-script patterns, read `slurm-job-patterns.md`. For
-concrete failed or pending jobs, read `troubleshooting-slurm.md`.
+Allocation, batch-script, and troubleshooting routes are selected directly by
+the decision map.

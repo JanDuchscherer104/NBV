@@ -78,22 +78,27 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         root_guidance = ROOT_GUIDANCE.read_text(encoding="utf-8")
         context = CONTEXT_SKILL.read_text(encoding="utf-8")
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
+        upstream_skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         target_state = TARGET_STATE.read_text(encoding="utf-8")
 
         self.assertIn("## Graphify And Context7 Plugin", root_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary)
-        self.assertIn("scripts/check_graphify_freshness.py --json", context)
+        self.assertIn("## Graphify Branch", context)
+        self.assertIn(
+            "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
+            context,
+        )
+        self.assertIn("scripts/check_graphify_freshness.py --json", boundary)
         self.assertIn(
             "Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession",
             target_state,
         )
         for state in ("fresh", "usable-stale", "unusable"):
             with self.subTest(state=state):
-                self.assertIn(f"`{state}`", context)
                 self.assertIn(f"`{state}`", boundary)
-        self.assertIn("`graphify query`", context)
-        self.assertIn("`graphify path`", context)
-        self.assertIn("`graphify explain`", context)
+        self.assertIn("graphify query", upstream_skill)
+        self.assertIn("/graphify path", upstream_skill)
+        self.assertIn("/graphify explain", upstream_skill)
         self.assertIn("use direct sources only", boundary)
         self.assertIn("Graphify never owns the located fact", boundary)
 

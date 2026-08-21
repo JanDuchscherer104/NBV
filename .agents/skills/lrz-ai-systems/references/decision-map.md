@@ -6,27 +6,28 @@ Start here, then read only the references needed for the current task.
 
 - `lrz-original-sources.md` when a claim depends on current LRZ, Slurm, Pyxis,
   or EFM3D behavior.
-- `cheatsheet.md` when the user needs a short operator command sequence.
+- [cheatsheet](cheatsheet.md) when the user needs a short operator command sequence.
 
 ## By Task
 
 - SSH, project access, first login, or basic probe:
-  `cheatsheet.md`, then `service-desk-templates.md` only if access is blocked.
+  [cheatsheet](cheatsheet.md), then [service-desk-templates](service-desk-templates.md) only if access is blocked.
 - DSS layout, quota, datasets, caches, checkpoints, logs, containers, or temp
-  files: `storage-dss.md`.
+  files: [storage-dss](storage-dss.md).
 - Partition choice, GPU count, CPU jobs, `sinfo`, `squeue`, `sacct`, or job
-  status: `slurm-partitions.md` and `slurm-job-patterns.md`.
-- Interactive or batch containers: `containers-pyxis.md` and
-  `slurm-job-patterns.md`.
+  status: [slurm-partitions](slurm-partitions.md) and
+  [slurm-job-patterns](slurm-job-patterns.md).
+- Interactive or batch containers: [containers-pyxis](containers-pyxis.md) and
+  [slurm-job-patterns](slurm-job-patterns.md).
 - ARIA dataset/cache/training commands: `aria-workflows.md`.
 - EFM3D, ASE, ATEK, EVL, or upstream EFM3D Slurm examples:
-  `efm3d-aria-workloads.md`, then `storage-dss.md` and
-  `slurm-job-patterns.md`.
+  `efm3d-aria-workloads.md`, then [storage-dss](storage-dss.md) and
+  [slurm-job-patterns](slurm-job-patterns.md).
 - Failed jobs, pending reasons, missing logs, container launch failures, or
   suspicious remote output: `troubleshooting-slurm.md`, then hand off to
   the nearest owning guide if the failure is concrete and code/data-facing.
 - Missing quota, project membership, MCML QOS, or DSS allocation:
-  `service-desk-templates.md`, then hand off to `agents-db` only for durable
+  [service-desk-templates](service-desk-templates.md), then hand off to `agents-db` only for durable
   blocked access or quota debt.
 
 ## Stop Conditions

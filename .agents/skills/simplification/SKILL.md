@@ -1,48 +1,6 @@
 ---
 name: simplification
 description: Use for ARIA-NBV behavior-preserving pruning of redundancy, dead code, stale compatibility, unused config, or excess LOC.
-metadata:
-  mode: implementation
-  not_when:
-    - "behavior is intended to change"
-    - "ownership is unclear and needs a high-impact decision first"
-    - "the task is only general surgical-edit discipline"
-  handoff_to:
-    - "aria-grill for unclear ownership or high-impact cleanup choices"
-    - "agent-behavior for general surgical-edit discipline"
-    - "agents-db when cleanup materially changes active debt"
-  evidence_required:
-    - "current contract and baseline verification for touched surface"
-    - "usage or redundancy evidence before pruning"
-    - "focused verification after the cut"
-  applies_to:
-    - "aria_nbv/**"
-    - ".agents/**"
-    - "docs/**"
-  triggers:
-    - "simplify"
-    - "prune"
-    - "dead code"
-    - "ruthless simplification"
-  must_read:
-    - "AGENTS.md"
-    - ".agents/skills/agent-behavior/SKILL.md"
-    - ".agents/skills/simplification/references/redundancy-discovery.md"
-  canonical_sources:
-    - "AGENTS.md"
-    - ".agents/skills/aria-nbv-context/SKILL.md#capture-rule"
-    - ".agents/skills/README.md#style-rules"
-    - ".agents/skills/simplification/references/redundancy-discovery.md"
-    - ".agents/skills/simplification/references/tool-decision-tree.md"
-  tool_refs:
-    - "mcp__code_index.search_code_advanced"
-    - "mcp__MCP_DOCKER.analyze_python_file"
-    - "mcp__MCP_DOCKER.get_package_metrics"
-    - "mcp__MCP_DOCKER.get_extraction_guidance"
-  verification:
-    - "focused tests for the changed surface"
-    - "ruff format <file> and ruff check <file> for Python changes"
-    - "make loc when LOC reduction is part of the goal"
 ---
 
 # Simplification
@@ -54,13 +12,14 @@ Use this skill for behavior-preserving pruning of the current intended surface.
 - Default simplification: reduce redundancy, stale surface, and unnecessary
   indirection while preserving intended behavior.
 - Ruthless simplification: only when explicitly requested. Read
-  `references/ruthless.md` before planning or editing.
+  [`references/ruthless.md`](references/ruthless.md) before planning or editing.
 
 ## Workflow
 
 1. Establish the current contract and baseline verification.
-2. Use focused `rg`, narrow reads, and `references/redundancy-discovery.md` to
-   find actual overlap or dead surface.
+2. Use focused `rg`, narrow reads, and
+   [redundancy discovery](./references/redundancy-discovery.md) to find actual
+   overlap or dead surface.
 3. Choose the smallest behavior-preserving cut.
 4. Prefer deleting, merging, or inlining over adding new abstraction.
 5. Validate with focused tests and formatting/lint checks for the touched
@@ -78,15 +37,20 @@ Use this skill for behavior-preserving pruning of the current intended surface.
 - Move genuinely shared behavior to the canonical shared owner instead of
   leaving quasi-shared helpers in leaf modules.
 - Treat analyzer output as advisory; repo ownership and tests decide.
-- For optional upstream architecture cleanup prompts, see
-  `references/upstream-mattpocock.md`; use them as questions, not authority.
+- For optional upstream architecture cleanup prompts, read
+  [`references/upstream-mattpocock.md`](references/upstream-mattpocock.md); use
+  them as questions, not authority.
 
 ## Tooling
 
 - Use `rg` first for local checks.
-- Use code-index or analyzer tools only after the candidate surface is broader
-  than a quick local search.
-- See `references/tool-decision-tree.md` for the optional analyzer workflow.
+- Use indexed search or analyzers only after the candidate surface is broader
+  than a quick local search; choose the smallest available operation described
+  in [the tool decision tree](./references/tool-decision-tree.md).
+- For current external dependency API or version uncertainty, route through
+  [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
+  [`Context7 registry`](../aria-nbv-context/references/context7_library_ids.md)
+  before treating upstream behavior as a cleanup target.
 
 ## Verification
 

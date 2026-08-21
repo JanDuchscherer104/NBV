@@ -30,6 +30,7 @@ CONTEXT_INITIALIZATION_OWNERS = (
     "docs/typst/glossary/",
     "docs/literature/sources.jsonl",
     "docs/references.bib",
+    "docs/references-qh.bib",
     "docs/contents/literature/",
     "docs/typst/thesis/sections/",
 )
@@ -303,15 +304,11 @@ def test_active_omx_and_maintained_slides_scope_retired_references() -> None:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for alias in aliases:
-            if (
-                relative in SOURCE_ORDER_REFERENCE_PROVENANCE
-                and alias
-                in {
-                    ".agents/references/source_order.md",
-                    "source_order.md",
-                    (ROOT / ".agents/references/source_order.md").as_posix(),
-                }
-            ):
+            if relative in SOURCE_ORDER_REFERENCE_PROVENANCE and alias in {
+                ".agents/references/source_order.md",
+                "source_order.md",
+                (ROOT / ".agents/references/source_order.md").as_posix(),
+            }:
                 continue
             if alias in text:
                 violations.append(f"{relative}: {alias}")
@@ -360,3 +357,47 @@ def test_glossary_theory_links_target_existing_anchors() -> None:
         relative, anchor = link.split("#", 1)
         target = (ROOT / relative).read_text(encoding="utf-8")
         assert f"{{#{anchor}}}" in target, link
+
+
+def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_distinct() -> (
+    None
+):
+    context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    glossary_source = ROOT / "docs/typst/shared/glossary.typ"
+    glossary_renderer = ROOT / "docs/contents/glossary.qmd"
+    acquisition_owner = ROOT / "docs/literature/sources.jsonl"
+    citation_owners = (
+        ROOT / "docs/references.bib",
+        ROOT / "docs/references-qh.bib",
+    )
+    synthesis_owner = ROOT / "docs/contents/literature"
+    claim_owner = ROOT / "docs/typst/thesis/sections"
+    assert glossary_source.is_file()
+    assert glossary_renderer.is_file()
+    assert acquisition_owner.is_file()
+    assert all(path.is_file() for path in citation_owners)
+    assert synthesis_owner.is_dir()
+    assert claim_owner.is_dir()
+    assert glossary_source != glossary_renderer
+    assert acquisition_owner not in citation_owners
+    assert len(set(citation_owners)) == 2
+    assert "Canonical ARIA-NBV glossary source" in glossary_source.read_text(
+        encoding="utf-8"
+    )
+    assert "Generated" in glossary_renderer.read_text(encoding="utf-8")
+    assert acquisition_owner.suffix == ".jsonl"
+    assert all(path.suffix == ".bib" for path in citation_owners)
+    assert "acquisition/relevance metadata" in context
+    assert "citation identities" in context
+    assert "review synthesis" in context
+    assert "active claim placement" in context
+    for owner in (
+        "docs/literature/sources.jsonl",
+        "docs/references.bib",
+        "docs/references-qh.bib",
+        "docs/contents/literature/",
+        "docs/typst/thesis/sections/",
+    ):
+        assert f"`{owner}`" in context

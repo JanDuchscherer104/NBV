@@ -79,9 +79,8 @@ For non-trivial sections, build a scratch claim ledger before final prose. Use
 path, citation/result, and status. The ledger is an authoring artifact, not a
 required final thesis table.
 
-For empirical claims, also apply
-`empirical-reporting-and-reproducibility.md`; a citation does not substitute for
-run-level result provenance.
+For empirical claims, apply the skill's direct empirical-results route; a
+citation does not substitute for run-level result provenance.
 
 ## Hedging
 

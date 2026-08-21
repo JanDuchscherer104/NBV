@@ -233,7 +233,7 @@ context-literature-search: ## 🗺️ Search literature sources (set LITERATURE_
 codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory and chat artifacts (set CODEX_TRANSCRIPT_ARGS='--dry-run')
 	@$(PYTHON_INTERPRETER) scripts/codex_transcript_extract.py $(CODEX_TRANSCRIPT_ARGS)
 
-scaffold-audit: _check_python ## 🧭 Validate agent skill metadata, handoffs, and routing fixtures
+scaffold-audit: _check_python ## 🧭 Validate skill frontmatter, references, handoffs, and routing fixtures
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants

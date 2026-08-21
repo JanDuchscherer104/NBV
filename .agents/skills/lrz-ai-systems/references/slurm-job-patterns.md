@@ -1,6 +1,7 @@
 # Slurm Job Patterns
 
-Use this after `slurm-partitions.md` when shaping allocations or batch scripts.
+Use this when shaping allocations or batch scripts after the decision map has
+selected the relevant resource path.
 Run live one-shot checks before choosing final resources.
 
 ## Interactive Smoke

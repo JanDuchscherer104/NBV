@@ -1,100 +1,51 @@
 ---
 name: agents-db
-description: Use when triaging or maintaining ARIA-NBV internal agent-memory and backlog TOML surfaces with `make agents-db`.
-metadata:
-  mode: maintenance
-  not_when:
-    - "public documentation or thesis narrative is the primary output"
-    - "ordinary KG retrieval or claim checking without backlog edits"
-    - "tiny cleanup that does not change active debt"
-  handoff_to:
-    - "nearest docs guide for public docs or thesis narrative"
-    - "simplification for behavior-preserving pruning"
-  evidence_required:
-    - "existing record search before adding duplicates"
-    - "compact context plus stable references for each changed record"
-    - "agents-db validation output"
-  applies_to:
-    - ".agents/AGENTS_INTERNAL_DB.md"
-    - ".agents/issues.toml"
-    - ".agents/todos.toml"
-    - ".agents/refactors.toml"
-    - ".agents/resolved.toml"
-    - ".agents/memory/README.md"
-  triggers:
-    - "agents DB"
-    - "backlog"
-    - "memory consolidation"
-    - "issue triage"
-    - "resolved work"
-  must_read:
-    - ".agents/AGENTS_INTERNAL_DB.md"
-    - ".agents/skills/agents-db/references/schema.md"
-    - ".agents/skills/agents-db/references/provenance.md"
-  canonical_sources:
-    - ".agents/AGENTS_INTERNAL_DB.md"
-    - ".agents/skills/agents-db/references/schema.md"
-    - ".agents/skills/agents-db/references/provenance.md"
-    - ".agents/issues.toml"
-    - ".agents/todos.toml"
-    - ".agents/refactors.toml"
-    - ".agents/resolved.toml"
-  verification:
-    - "make agents-db AGENTS_ARGS='validate'"
-    - "make agents-db"
-    - "make check-agent-memory when memory or guidance changed"
+description: Use when triaging or maintaining ARIA-NBV internal agent-memory and backlog TOML surfaces with the repository's agents-db workflow.
 ---
 
 # AGENTS DB
 
-Use this skill when work depends on the internal agent-memory surfaces under
-`.agents/`, active backlog ranking, proposal/review requirement consolidation,
-or durable maintenance debt capture.
+Use this skill for internal agent-memory surfaces, active backlog ranking,
+proposal or review consolidation, and durable maintenance-debt capture. Keep
+the database as a compact, auditable work index; current implementation and
+scientific truth stays with its smallest source owner.
 
-## Read First
+## Invariants
 
-1. `.agents/AGENTS_INTERNAL_DB.md`
-2. `.agents/skills/agents-db/references/schema.md`
-3. `.agents/skills/agents-db/references/provenance.md`
-4. `.agents/skills/agents-db/references/modes.md` for `triage`,
-   `to-issues`, or `to-prd` style work
+- Search existing records before adding a new one.
+- Prefer amending an existing record over creating a duplicate.
+- Keep each record compact but auditable with context and stable references.
+- Use vertical slices for concrete follow-up work.
+- Keep `.agents/*.toml` local unless the user explicitly requests external
+  publication.
+- In parallel worktrees, check the target branch before allocating an ID and
+  reconcile collisions explicitly.
+- Resolve completed records into `.agents/resolved.toml`; retain their history.
+
+## Branches
+
+- **Any record change:** Read the
+  [internal DB guide](../../AGENTS_INTERNAL_DB.md) and the
+  [schema reference](references/schema.md) before editing a TOML surface.
+- **Source-backed or literature-backed record:** Read the
+  [provenance reference](references/provenance.md) and record stable source
+  pointers plus the installed owner and focused proof when applicable.
+- **Triage, issue conversion, or PRD synthesis:** Read the matching mode in
+  [workflow modes](references/modes.md).
+- **Public docs, thesis narrative, or ordinary retrieval:** Hand off to the
+  nearest docs or scientific owner instead of changing the database.
+- **Tiny cleanup with no active-debt change:** Keep the database unchanged.
 
 ## Workflow
 
-1. Run or inspect `make agents-db` to understand active ranking.
-2. Prefer amending existing records over creating duplicates.
-3. Add or amend a record only when the work materially changes the repo's
-   maintenance picture.
-4. Keep records compact but auditable with `context` plus stable `references`.
-5. Route extracted requirements to the smallest owner: `.agents/*.toml` for
-   active work, the exact Typst/Python/configuration/test/setup/guidance source
-   for durable current truth, and dated history debriefs for episodic records.
-6. Resolve or retire completed records into `.agents/resolved.toml`; do not
-   delete records outright.
+1. Inspect the active ranking through the repository's `agents-db` target.
+2. Select the smallest record owner and amend it with the requested outcome.
+3. Capture acceptance and verification in the record when the slice is
+   independently actionable.
+4. Run the target's validation before handing off or completing the change.
 
-## Commands
+## Completion
 
-- `make agents-db`
-- `make agents-db AGENTS_ARGS='validate'`
-- `make agents-db AGENTS_ARGS='resolve issue issue-XXXX --note "..."'`
-- `make agents-db AGENTS_ARGS='resolve todo todo-XXXX --note "..."'`
-- `make agents-db AGENTS_ARGS='resolve refactor refactor-XXXX --note "..."'`
-
-## Rules
-
-- Use vertical slices for concrete follow-up work.
-- Keep `.agents/*.toml` as the local source of truth unless the user explicitly
-  asks to publish GitHub issues.
-- In parallel worktrees, check the target branch before allocating a new record
-  ID. Reconcile colliding edits explicitly; never silently drop another
-  worktree's record.
-- Do not churn the DB for tiny local cleanup that does not change active debt.
-- For broad or literature-backed additions, include source-backed evidence
-  before changing records.
-
-## Verification
-
-- `make agents-db AGENTS_ARGS='validate'`
-- `make agents-db`
-- `make check-agent-memory` when skills, debriefs, guidance, or owner pointers
-  changed
+Report the changed record IDs, stable references, validation result, and any
+unresolved ownership or publication handoff. When guidance, memory, or owner
+pointers changed, include the repository's `check-agent-memory` result.

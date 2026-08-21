@@ -40,8 +40,7 @@ Run Slurm queries as one-shot inspections. Do not put them in polling loops.
 .agents/skills/lrz-ai-systems/scripts/lrz-resources.sh mine
 ```
 
-Read `slurm-partitions.md` before choosing final partitions and
-`slurm-job-patterns.md` before writing batch directives.
+Use the decision map for partition selection and batch-directive routing.
 
 ## GPU Smoke Test
 
@@ -76,5 +75,5 @@ scancel <JOB_ID>
 scancel --me
 ```
 
-For failed or pending jobs, collect evidence with `troubleshooting-slurm.md`
-before changing resources or scripts.
+For failed or pending jobs, use the decision map's troubleshooting route before
+changing resources or scripts.

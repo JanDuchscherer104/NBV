@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -13,11 +14,65 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from scaffold_audit import load_frontmatter  # noqa: E402
+from scaffold_audit import (  # noqa: E402
+    APPROVED_CUSTOM_SKILL_PATHS,
+    active_custom_reference_files,
+    audit_reference_graph,
+    deprecated_context7_calls,
+    explicit_tool_ids,
+    custom_skill_paths,
+    load_frontmatter,
+    local_markdown_pointers,
+    Skill,
+)
+
+
+CUSTOM_SKILLS = tuple(sorted(custom_skill_paths()))
+GRAPHIFY_BUNDLE = ROOT / ".agents" / "skills" / "graphify"
+CONTEXT7_REGISTRY = (
+    ROOT
+    / ".agents"
+    / "skills"
+    / "aria-nbv-context"
+    / "references"
+    / "context7_library_ids.md"
+)
+CONTEXT7_PLUGIN_CALLS = {
+    "mcp__codex_apps__context7_resolve_library_id",
+    "mcp__codex_apps__context7_query_docs",
+}
+GRAPHIFY_UPSTREAM_BLOBS = {
+    ".graphify_version": "2d72c8d340b915a70b4c553e2a7fe6c8a9b7ea35",
+    "SKILL.md": "af3f723c7878b8ca9252af511270511002086ed4",
+    "references/add-watch.md": "77844343e140553b7f1bf419e32640568c2014ff",
+    "references/exports.md": "242ff868e015b158504dda3ea1992e4cd9686843",
+    "references/extraction-spec.md": "4b278b28d3681400286c66af4d61ca2e48bcc211",
+    "references/github-and-merge.md": "a41ea06e17c1676483356a2a06504a1bfb0870e4",
+    "references/hooks.md": "438b8b16be18480a1e77759b3e74fc8a9e97eae7",
+    "references/query.md": "56565eb782951a1f0e1279f851b8a022292f3ac3",
+    "references/transcribe.md": "b967f8379998b890945706b3c95fef23b2ec402f",
+    "references/update.md": "3632fd41266964bdcf04b58d4359f9364cedfbce",
+}
 
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _git_blob_id(content: bytes) -> str:
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content, usedforsecurity=False).hexdigest()
+
+
+def _context7_ids(text: str) -> set[str]:
+    """Return exact backticked registry IDs, not URL path substrings."""
+    return {
+        token.strip()
+        for token in re.findall(r"`([^`\n]+)`", text)
+        if re.fullmatch(
+            r"/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", token.strip()
+        )
+    }
 
 
 def _tracked_live_runtime_configs(root: Path = ROOT) -> list[Path]:
@@ -123,6 +178,178 @@ def test_direct_skill_discovery_shape() -> None:
     assert not (ROOT / ".agents" / "skills" / "plan-grill").exists()
     assert "name: aria-grill" in _read(skill / "SKILL.md")
     assert 'display_name: "Aria Grill"' in _read(skill / "agents" / "openai.yaml")
+
+
+def test_discovered_custom_skill_paths_are_the_approved_set() -> None:
+    discovered = custom_skill_paths()
+    assert discovered == {path.resolve() for path in APPROVED_CUSTOM_SKILL_PATHS}
+
+
+def test_custom_skills_use_only_native_name_and_description_frontmatter() -> None:
+    for skill_path in CUSTOM_SKILLS:
+        with_context = load_frontmatter(skill_path)
+        assert set(with_context) == {"name", "description"}, skill_path
+        assert with_context["name"] == skill_path.parent.name
+        assert isinstance(with_context["description"], str)
+        assert with_context["description"].strip()
+
+
+def test_upstream_graphify_bundle_is_exempt_and_byte_identical() -> None:
+    assert GRAPHIFY_BUNDLE / "SKILL.md" not in CUSTOM_SKILLS
+    actual_files = {
+        path.relative_to(GRAPHIFY_BUNDLE).as_posix()
+        for path in GRAPHIFY_BUNDLE.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    }
+    assert actual_files == set(GRAPHIFY_UPSTREAM_BLOBS)
+    for relative, expected_blob in GRAPHIFY_UPSTREAM_BLOBS.items():
+        assert _git_blob_id((GRAPHIFY_BUNDLE / relative).read_bytes()) == expected_blob
+
+
+def test_custom_skill_conditional_reference_links_exist_directly() -> None:
+    link_pattern = re.compile(r"\]\((?:\./)?(references/[^)#]+\.md)(?:#[^)]+)?\)")
+    checked_links = 0
+    for skill_path in CUSTOM_SKILLS:
+        links = link_pattern.findall(_read(skill_path))
+        for relative in links:
+            checked_links += 1
+            assert (skill_path.parent / relative).is_file(), (skill_path, relative)
+    assert checked_links > 0
+
+
+def test_markdown_pointer_bare_sibling_boundary() -> None:
+    tmp_parent = ROOT / ".tmp"
+    tmp_parent.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="g002-pointer-", dir=tmp_parent) as tmp:
+        root = Path(tmp)
+        bare_path = root / "bare" / "SKILL.md"
+        bare_path.parent.mkdir()
+        bare_path.write_text(
+            "---\nname: bare\ndescription: Test fixture.\n---\n"
+            "See `references/guide.md`.\n",
+            encoding="utf-8",
+        )
+        references = bare_path.parent / "references"
+        references.mkdir()
+        guide = references / "guide.md"
+        guide.write_text("See `orphan.md`.\n", encoding="utf-8")
+        orphan = references / "orphan.md"
+        orphan.write_text("# Orphan\n", encoding="utf-8")
+        assert "orphan.md" not in local_markdown_pointers(guide, _read(guide))
+        bare_skill = Skill(
+            bare_path,
+            "bare",
+            "bare",
+            "Test fixture.",
+            1,
+            _read(bare_path),
+        )
+        assert any(
+            "orphan progressive-disclosure reference" in error
+            for error in audit_reference_graph([bare_skill])
+        )
+
+        package_index = root / "package" / "references" / "packages" / "index.md"
+        package_index.parent.mkdir(parents=True)
+        package_index.write_text("See `booktabs.md`.\n", encoding="utf-8")
+        booktabs = package_index.parent / "booktabs.md"
+        booktabs.write_text("# Booktabs\n", encoding="utf-8")
+        assert "booktabs.md" in local_markdown_pointers(
+            package_index, _read(package_index)
+        )
+
+
+def test_context7_ids_and_plugin_calls_have_one_owner() -> None:
+    skill_files = tuple(
+        path
+        for path in (ROOT / ".agents" / "skills").rglob("*.md")
+        if "graphify" not in path.parts
+    )
+    registry_text = _read(CONTEXT7_REGISTRY)
+    registry_ids = _context7_ids(registry_text)
+    assert registry_ids
+    assert "/facebookresearch/efm3d" not in _context7_ids(
+        "https://github.com/facebookresearch/efm3d"
+    )
+
+    for library_id in registry_ids:
+        owners = [
+            path for path in skill_files if library_id in _context7_ids(_read(path))
+        ]
+        assert owners == [CONTEXT7_REGISTRY], (library_id, owners)
+
+    collision = f"`{next(iter(CONTEXT7_PLUGIN_CALLS))}_suffix`"
+    assert not (CONTEXT7_PLUGIN_CALLS & explicit_tool_ids(collision))
+
+    call_owners = {
+        call: [path for path in skill_files if call in explicit_tool_ids(_read(path))]
+        for call in CONTEXT7_PLUGIN_CALLS
+    }
+    assert call_owners == {call: [CONTEXT7_REGISTRY] for call in CONTEXT7_PLUGIN_CALLS}
+
+
+def test_active_skill_routes_contain_no_deprecated_docker_context7_calls() -> None:
+    deprecated = {
+        "mcp__MCP_DOCKER.resolve_library_id",
+        "mcp__MCP_DOCKER.get_library_docs",
+    }
+    positive_routes = {
+        fixture["id"]: fixture
+        for fixture in json.loads(
+            _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+        )["fixtures"]
+        if fixture.get("expected_tool_refs")
+    }
+    for fixture_id, fixture in positive_routes.items():
+        assert not deprecated.intersection(fixture["expected_tool_refs"]), fixture_id
+        if CONTEXT7_PLUGIN_CALLS.intersection(fixture["expected_tool_refs"]):
+            assert (
+                ".agents/skills/aria-nbv-context/references/context7_library_ids.md"
+                in fixture["expected_owner_paths"]
+            ), fixture_id
+    assert not deprecated_context7_calls(active_custom_reference_files())
+
+    with tempfile.TemporaryDirectory(prefix="g002-context7-") as tmp:
+        reference = Path(tmp) / "references" / "active.md"
+        reference.parent.mkdir()
+        reference.write_text(
+            "Call mcp__MCP_DOCKER.get_library_docs here.\n", encoding="utf-8"
+        )
+        assert deprecated_context7_calls((reference,)) == {
+            reference: {"mcp__MCP_DOCKER.get_library_docs"}
+        }
+
+
+def test_existing_routing_families_remain_declared() -> None:
+    routing = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    expected_families = {
+        "graphify-codebase-navigation",
+        "graphify-usable-stale-navigation",
+        "graphify-unusable-bootstrap-repair",
+        "context7-graphify-api-change",
+        "context7-pytorch3d-conceptual-plan",
+        "context7-not-needed-target-rri-section",
+        "active-thesis-scientific-language",
+        "package-contract-owner",
+        "rerun-offline-inspection",
+        "rerun-rollout-zarr-inspection",
+        "rerun-sdk-api-change",
+        "semantic-recall-current-thesis",
+        "semantic-recall-literature-primary",
+        "semantic-recall-reviewed-history",
+        "semantic-recall-code-direct-source",
+        "code-index-frustum-rendering",
+        "concrete-failure",
+    }
+    assert expected_families <= fixtures.keys()
+    for fixture_id in expected_families:
+        fixture = fixtures[fixture_id]
+        assert _fixture_owner_paths_exist(ROOT, fixture), fixture_id
+        assert fixture["required_outcomes"], fixture_id
+        assert fixture["forbidden_outcomes"], fixture_id
 
 
 def test_mempalace_routing_scenarios() -> None:
@@ -363,9 +590,10 @@ def test_route_only_domain_skill_contract() -> None:
         "aria_nbv/AGENTS.md",
         "aria_nbv/aria_nbv/targets/protocol.py",
     ]
-    assert "aria_nbv/aria_nbv/oracle/labels.py" in fixtures[
-        "oracle-label-generation"
-    ]["expected_owner_paths"]
+    assert (
+        "aria_nbv/aria_nbv/oracle/labels.py"
+        in fixtures["oracle-label-generation"]["expected_owner_paths"]
+    )
     assert fixtures["rri-metric-semantics"]["expected_owner_paths"] == [
         "aria_nbv/aria_nbv/rri_metrics/AGENTS.md"
     ]
@@ -518,7 +746,7 @@ def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
     capture_rule = context.split("## Capture Rule", maxsplit=1)[1]
     for destination in (
         "Repo invariant: root or nearest nested `AGENTS.md`",
-        "Repeatable workflow: `.agents/skills/*/SKILL.md`",
+        "Repeatable workflow: the owning skill's `SKILL.md`",
         "Actionable work: Agents-DB issues, todos, or refactors.",
         "Public narrative or scientific language: the smallest active Quarto/Typst",
     ):
@@ -678,10 +906,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
 
 def test_thesis_context_and_context7_routing() -> None:
     context_path = ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md"
-    metadata = load_frontmatter(context_path)["metadata"]
-    assert isinstance(metadata, dict)
-    canonical_sources = metadata["canonical_sources"]
-    assert isinstance(canonical_sources, list)
+    context = _read(context_path)
     for owner in (
         "docs/typst/thesis/main.typ",
         "docs/typst/shared/glossary.typ",
@@ -692,8 +917,11 @@ def test_thesis_context_and_context7_routing() -> None:
         ".agents/skills/aria-nbv-context/references/context_map.md",
         ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md",
     ):
-        assert owner in canonical_sources
         assert (ROOT / owner.partition("#")[0]).is_file()
+    assert "owner hierarchy" in context
+    assert "context7_library_ids.md" in context
+    assert "context_map.md" in context
+    assert "semantic-memory-boundary.md" in context
 
     context_map = _read(
         ROOT
@@ -725,12 +953,7 @@ def test_thesis_context_and_context7_routing() -> None:
         for cells in [[cell.strip() for cell in line.strip("|").split("|")]]
         if cells[0] != "Concept route"
     }
-    declared_routes = {
-        ref
-        for skill_path in (ROOT / ".agents" / "skills").glob("*/SKILL.md")
-        for ref in (load_frontmatter(skill_path).get("metadata", {}).get("literature_refs") or [])
-    }
-    assert route_labels <= declared_routes
+    assert route_labels
 
 
 def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
@@ -740,7 +963,7 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
     }
     for skill in (ROOT / ".agents" / "skills").glob("*/SKILL.md"):
         text = _read(skill)
-        assert not (forbidden & {ref for ref in forbidden if ref in text}), skill
+        assert not any(ref in text for ref in forbidden), skill
 
     context7_registry = _read(
         ROOT
@@ -773,6 +996,7 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
         assert graphify_seed in context7_registry
 
     typst_skill = _read(ROOT / ".agents" / "skills" / "typst-authoring" / "SKILL.md")
+    assert not _context7_ids(typst_skill)
     for library_id in (
         "/websites/typst_app",
         "/typst-community/glossarium",
@@ -780,10 +1004,11 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
         "/jollywatt/typst-fletcher",
         "/touying-typ/touying",
     ):
-        assert library_id in typst_skill
+        assert library_id in context7_registry
 
     mermaid_skill = _read(ROOT / ".agents" / "skills" / "aria-nbv-mermaid" / "SKILL.md")
-    assert "/mermaid-js/mermaid" in mermaid_skill
+    assert not _context7_ids(mermaid_skill)
+    assert "/mermaid-js/mermaid" in context7_registry
 
     outline_script = ROOT / "scripts" / "nbv_typst_includes.py"
     assert outline_script.is_file()
@@ -818,6 +1043,33 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
         "# docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ"
         in slides_result.stdout
     )
+
+
+def test_fixture_tool_and_lrz_regressions_follow_owner_boundaries() -> None:
+    routing = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    for fixture in fixtures.values():
+        if fixture.get("expected_tool_refs"):
+            owner_text = "\n".join(
+                _read(ROOT / owner) for owner in fixture["expected_owner_paths"]
+            )
+            for tool_ref in fixture["expected_tool_refs"]:
+                assert f"`{tool_ref}`" in owner_text, fixture["id"]
+            for tool_ref in fixture.get("forbidden_tool_refs", []):
+                assert tool_ref not in owner_text, fixture["id"]
+
+    lrz_fixtures = [
+        fixture
+        for fixture in fixtures.values()
+        if "lrz" in fixture["id"].lower()
+        or any("lrz-ai-systems" in path for path in fixture["expected_owner_paths"])
+    ]
+    for fixture in lrz_fixtures:
+        assert (
+            ".agents/skills/lrz-ai-systems/SKILL.md" in fixture["expected_owner_paths"]
+        ), fixture["id"]
 
 
 if __name__ == "__main__":

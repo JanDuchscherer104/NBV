@@ -12,12 +12,12 @@ Use this reference when `simplification` needs a deeper workflow for finding goo
    - Run `make loc` if Python LOC reduction is part of the goal.
 3. Run a quick local search pass.
    - Use `rg` for duplicate symbol names, repeated config fields, repeated conditionals, unused imports, stale adapters, and suspicious `TODO` or compatibility branches.
-   - Use `mcp__code_index__.set_project_path` + `build_deep_index` once per repo session when the search surface is broader than a quick local grep.
-   - Use `mcp__code_index__.find_files` or `search_code_advanced` when indexed search is clearer than repeated shell grep.
+   - Initialize the repository's indexed search once per session when the search surface is broader than a quick local grep.
+   - Use indexed file and symbol search when it is clearer than repeated shell grep.
 4. Narrow the candidate.
-   - Use `mcp__code_index__.get_file_summary` to decide whether a file is worth simplifying.
-   - Use `mcp__code_index__.get_symbol_body` to inspect one helper or method before inlining, deleting, or moving it.
-   - Use `search_code_advanced` on the helper name to estimate whether it is a one-use function or trivial wrapper candidate.
+   - Use an indexed file summary to decide whether a file is worth simplifying.
+   - Use an indexed symbol-body read to inspect one helper or method before inlining, deleting, or moving it.
+   - Search the helper name across the relevant source and tests to estimate whether it is a one-use function or trivial wrapper candidate.
 5. Escalate only when needed.
    - Look for multiple wrappers around the same concept, repeated DTO shaping, parallel service helpers, or temporary paths that still leak into first-class code.
    - Use `aria-nbv-context` when ownership or source-family routing is unclear.
@@ -42,14 +42,14 @@ Use targeted searches such as:
 
 Useful indexed probes:
 
-- `find_files` for clusters like `README.md`, `REQUIREMENTS.md`, `services.py`, or `contracts.py`
-- `search_code_advanced` for repeated field names, helper names, or conditionals
-- `get_file_summary` for quick file triage before opening raw code
-- `get_symbol_body` for one candidate helper before deciding whether to inline, delete, or move it
+- file search for clusters like `README.md`, `REQUIREMENTS.md`, `services.py`, or `contracts.py`
+- symbol search for repeated field names, helper names, or conditionals
+- file summaries for quick file triage before opening raw code
+- symbol-body reads for one candidate helper before deciding whether to inline, delete, or move it
 
 One-use / trivial-wrapper check:
 
-1. `search_code_advanced` for the function name across `src/` and `tests/`
+1. Search the function name across `src/` and `tests/`
 2. if the only hits are the definition plus one call site, inspect the body with `get_symbol_body`
 3. if the body is only forwarding, renaming, or tiny glue logic, prefer inlining or deletion
 4. if the helper is used in multiple places or provides a real semantic boundary, keep it

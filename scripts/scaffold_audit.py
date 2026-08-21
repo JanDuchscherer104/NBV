@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit ARIA-NBV agent scaffold skill metadata and routing fixtures."""
+"""Audit ARIA-NBV agent skill frontmatter, references, and routing fixtures."""
 
 from __future__ import annotations
 
@@ -18,32 +18,25 @@ ROOT_RESOLVED = ROOT.resolve()
 SKILLS_DIR = ROOT / ".agents" / "skills"
 ROUTING_FIXTURES = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
 UPSTREAM_SKILL_PATHS = {SKILLS_DIR / "graphify" / "SKILL.md"}
+APPROVED_CUSTOM_SKILL_PATHS = {
+    SKILLS_DIR / name / "SKILL.md"
+    for name in (
+        "agent-behavior",
+        "agents-db",
+        "aria-grill",
+        "aria-nbv-context",
+        "aria-nbv-mermaid",
+        "lrz-ai-systems",
+        "measured-autoresearch",
+        "python-standards",
+        "rerun-nbv-inspector",
+        "simplification",
+        "typst-authoring",
+    )
+}
 
-ALLOWED_MODES = {"implementation", "router", "diagnostic", "review", "maintenance"}
-REQUIRED_METADATA = {
-    "mode",
-    "not_when",
-    "handoff_to",
-    "evidence_required",
-    "applies_to",
-    "triggers",
-    "must_read",
-    "canonical_sources",
-    "verification",
-}
-OPTIONAL_METADATA = {
-    "context7_refs",
-    "literature_refs",
-    "tool_refs",
-}
-METADATA_KEYS = REQUIRED_METADATA | OPTIONAL_METADATA
-BLOCKED_HANDOFF_PREFIXES = {"omx", "github", "oh-my-codex"}
-DECLARED_CAPABILITY_TOKENS = {"external", "GitHub", "owning", "nearest", "specialized"}
+FRONTMATTER_KEYS = {"name", "description"}
 HOT_PATH_LINE_BUDGET = 150
-BIBLIOGRAPHY = ROOT / "docs" / "references.bib"
-CONTEXT_MAP = (
-    ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md"
-)
 CONTEXT7_REGISTRY = (
     ROOT
     / ".agents"
@@ -53,64 +46,12 @@ CONTEXT7_REGISTRY = (
     / "context7_library_ids.md"
 )
 CONTEXT7_ID_RE = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
+BACKTICK_TOKEN_RE = re.compile(r"`([^`\n]+)`")
 TOOL_REF_RE = re.compile(r"^mcp__[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|__[A-Za-z0-9_]+)$")
-AUDIT_OWNED_TOOL_REFS = {
-    "mcp__codex_apps__context7_query_docs",
-    "mcp__codex_apps__context7_resolve_library_id",
-    "mcp__MCP_DOCKER.analyze_python_file",
-    "mcp__MCP_DOCKER.analyze_python_package",
-    "mcp__MCP_DOCKER.analyze_security_and_patterns",
-    "mcp__MCP_DOCKER.analyze_test_coverage",
-    "mcp__MCP_DOCKER.browser_click",
-    "mcp__MCP_DOCKER.browser_close",
-    "mcp__MCP_DOCKER.browser_console_messages",
-    "mcp__MCP_DOCKER.browser_drag",
-    "mcp__MCP_DOCKER.browser_evaluate",
-    "mcp__MCP_DOCKER.browser_file_upload",
-    "mcp__MCP_DOCKER.browser_fill_form",
-    "mcp__MCP_DOCKER.browser_handle_dialog",
-    "mcp__MCP_DOCKER.browser_hover",
-    "mcp__MCP_DOCKER.browser_navigate",
-    "mcp__MCP_DOCKER.browser_navigate_back",
-    "mcp__MCP_DOCKER.browser_network_requests",
-    "mcp__MCP_DOCKER.browser_press_key",
-    "mcp__MCP_DOCKER.browser_resize",
-    "mcp__MCP_DOCKER.browser_run_code",
-    "mcp__MCP_DOCKER.browser_select_option",
-    "mcp__MCP_DOCKER.browser_snapshot",
-    "mcp__MCP_DOCKER.browser_tabs",
-    "mcp__MCP_DOCKER.browser_take_screenshot",
-    "mcp__MCP_DOCKER.browser_type",
-    "mcp__MCP_DOCKER.browser_wait_for",
-    "mcp__MCP_DOCKER.download_paper",
-    "mcp__MCP_DOCKER.find_long_functions",
-    "mcp__MCP_DOCKER.find_package_issues",
-    "mcp__MCP_DOCKER.get_extraction_guidance",
-    "mcp__MCP_DOCKER.get_package_metrics",
-    "mcp__MCP_DOCKER.list_papers",
-    "mcp__MCP_DOCKER.read_paper",
-    "mcp__MCP_DOCKER.search_papers",
-    "mcp__MCP_DOCKER.tdd_refactoring_guidance",
-    "mcp__code_index.get_file_summary",
-    "mcp__code_index.get_file_watcher_status",
-    "mcp__code_index.get_settings_info",
-    "mcp__code_index.get_symbol_body",
-    "mcp__code_index.search_code_advanced",
-    "mcp__openaiDeveloperDocs.get_openapi_spec",
-    "mcp__openaiDeveloperDocs.list_openai_docs",
+DEPRECATED_CONTEXT7_TOOL_IDS = {
+    "mcp__MCP_DOCKER.resolve_library_id",
+    "mcp__MCP_DOCKER.get_library_docs",
 }
-CONTEXT7_TRIGGER_RE = re.compile(
-    r"\b(Context7|official docs?|external librar(?:y|ies)|API|SDK|"
-    r"PyTorch3D|PyTorch|Rerun|Streamlit|Gymnasium|SB3|Stable Baselines3|"
-    r"Pydantic|msgspec|Zarr|Typst|Quarto)\b",
-    re.IGNORECASE,
-)
-LITERATURE_TRIGGER_RE = re.compile(
-    r"\b(literature|BibTeX|citation|advisor-facing|thesis|paper|claim-check|"
-    r"VIN-NBV|Project Aria|EFM3D|Double-Q|RRI)\b",
-    re.IGNORECASE,
-)
-
 SEMANTIC_DRIFT_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "formula-detail",
@@ -150,6 +91,61 @@ SEMANTIC_DRIFT_EXEMPTIONS = {
 }
 
 
+def context7_tokens(text: str) -> set[str]:
+    """Extract exact backticked Context7 IDs, excluding URL path substrings."""
+
+    return {
+        match.group(1).strip()
+        for match in BACKTICK_TOKEN_RE.finditer(text)
+        if CONTEXT7_ID_RE.fullmatch(match.group(1).strip())
+    }
+
+
+def explicit_tool_ids(text: str) -> set[str]:
+    """Return canonical tool identifiers declared as exact backtick tokens."""
+    return {
+        token.strip()
+        for token in BACKTICK_TOKEN_RE.findall(text)
+        if TOOL_REF_RE.fullmatch(token.strip())
+    }
+
+
+def custom_skill_paths(skills_dir: Path = SKILLS_DIR) -> set[Path]:
+    """Return discovered custom skill entrypoints, excluding upstream Graphify."""
+    return {
+        path.resolve()
+        for path in skills_dir.glob("*/SKILL.md")
+        if path.parent.name != "graphify"
+    }
+
+
+def active_custom_reference_files(skills_dir: Path = SKILLS_DIR) -> tuple[Path, ...]:
+    """Return every file in custom skill references trees, excluding Graphify."""
+    return tuple(
+        sorted(
+            path.resolve()
+            for skill_path in custom_skill_paths(skills_dir)
+            for path in skill_path.parent.glob("references/**/*")
+            if path.is_file()
+        )
+    )
+
+
+def deprecated_context7_calls(paths: tuple[Path, ...]) -> dict[Path, set[str]]:
+    """Find deprecated Context7 identifiers in active reference files."""
+    findings: dict[Path, set[str]] = {}
+    for path in paths:
+        content = path.read_bytes()
+        identifiers = {
+            identifier
+            for identifier in DEPRECATED_CONTEXT7_TOOL_IDS
+            if identifier.encode() in content
+        }
+        if identifiers:
+            findings[path] = identifiers
+    return findings
+
+
 def slugify_heading(text: str) -> str:
     text = re.sub(r"\{#[^}]+}", "", text)
     text = text.strip().lower()
@@ -174,50 +170,6 @@ def markdown_anchors(path: Path) -> set[str]:
     return anchors
 
 
-def metadata_strings(metadata: dict[str, Any], fields: set[str]) -> list[str]:
-    values: list[str] = []
-    for field in fields:
-        value = metadata.get(field)
-        if isinstance(value, list):
-            values.extend(item for item in value if isinstance(item, str))
-        elif isinstance(value, str):
-            values.append(value)
-    return values
-
-
-def load_bibtex_keys(path: Path = BIBLIOGRAPHY) -> tuple[set[str], list[str]]:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        return set(), [f"{rel(path)}: cannot read bibliography: {exc}"]
-    keys = {
-        match.group(1).strip() for match in re.finditer(r"@\w+\s*\{\s*([^,\s]+)", text)
-    }
-    if not keys:
-        return keys, [f"{rel(path)}: no BibTeX keys found"]
-    return keys, []
-
-
-def load_context_map_routes(path: Path = CONTEXT_MAP) -> tuple[set[str], list[str]]:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        return set(), [f"{rel(path)}: cannot read derived context-route index: {exc}"]
-    routes: set[str] = set()
-    for line in lines:
-        stripped = line.strip()
-        if not stripped.startswith("|") or "---" in stripped:
-            continue
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
-        if len(cells) < 2:
-            continue
-        label = cells[0].strip("` ")
-        if not label or label.lower() in {"topic", "concept route"}:
-            continue
-        routes.add(label)
-    return routes, []
-
-
 def load_context7_registry(
     path: Path = CONTEXT7_REGISTRY,
 ) -> tuple[set[str], list[str]]:
@@ -225,30 +177,10 @@ def load_context7_registry(
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         return set(), [f"{rel(path)}: cannot read Context7 registry: {exc}"]
-    ids = {
-        match.group(1)
-        for match in re.finditer(r"`(/[^`\s]+/[^`\s]+)`", text)
-        if CONTEXT7_ID_RE.fullmatch(match.group(1))
-    }
+    ids = context7_tokens(text)
     if not ids:
         return ids, [f"{rel(path)}: no exact Context7 IDs found"]
     return ids, []
-
-
-def repo_path_exists(ref: str, *, base: Path = ROOT) -> bool:
-    path_text, _, anchor = ref.partition("#")
-    if not path_text or path_text.startswith("/"):
-        return False
-    path = base / path_text
-    resolved = path.resolve()
-    if not is_relative_to(resolved, ROOT_RESOLVED) or not resolved.exists():
-        return False
-    generated_docs = (ROOT / "docs" / "_generated").resolve()
-    if is_relative_to(resolved, generated_docs):
-        return False
-    if anchor and resolved.suffix in {".md", ".qmd"}:
-        return anchor in markdown_anchors(resolved)
-    return True
 
 
 @dataclass(frozen=True)
@@ -257,22 +189,12 @@ class Skill:
     dirname: str
     name: str
     description: str
-    metadata: dict[str, Any]
-    has_metadata: bool
     line_count: int
     text: str
 
 
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
-
-
-def is_relative_to(path: Path, parent: Path) -> bool:
-    try:
-        path.relative_to(parent)
-    except ValueError:
-        return False
-    return True
 
 
 def is_upstream_skill(path: Path) -> bool:
@@ -291,7 +213,7 @@ def load_frontmatter(path: Path) -> dict[str, Any]:
         raise ValueError("unterminated YAML frontmatter") from exc
     data = yaml.safe_load(frontmatter) or {}
     if not isinstance(data, dict):
-        raise ValueError("frontmatter must be a mapping")
+        raise TypeError("frontmatter must be a mapping")
     return data
 
 
@@ -329,12 +251,6 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
         if not isinstance(name, str) or not name.strip():
             errors.append(f"{rel(skill_md)}: missing non-empty name")
             continue
-        has_metadata = "metadata" in data
-        metadata = data.get("metadata")
-        if not isinstance(metadata, dict):
-            if not is_upstream_skill(skill_md):
-                errors.append(f"{rel(skill_md)}: missing metadata mapping")
-            metadata = {}
         description = data.get("description")
         if not isinstance(description, str) or not description.strip():
             errors.append(f"{rel(skill_md)}: missing non-empty description")
@@ -348,8 +264,6 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
                 dirname=skill_md.parent.name,
                 name=name.strip(),
                 description=description.strip(),
-                metadata=metadata,
-                has_metadata=has_metadata,
                 line_count=line_count,
                 text=text,
             )
@@ -360,24 +274,140 @@ def load_skills(skills_dir: Path) -> tuple[list[Skill], list[str]]:
     return skills, errors
 
 
-def first_handoff_token(entry: Any) -> str | None:
-    if not isinstance(entry, str):
+def markdown_reference_links(skill: Skill) -> list[str]:
+    """Return Markdown reference links declared by a skill body."""
+
+    body = body_without_frontmatter(skill.text)
+    return re.findall(r"\]\((?:\./)?(references/[^)\s]+\.md(?:#[^)\s]+)?)\)", body)
+
+
+def local_markdown_pointers(path: Path, text: str) -> list[str]:
+    """Extract explicit local Markdown pointers, excluding URLs and prose."""
+    pointers = [
+        pointer
+        for pointer in re.findall(r"\]\(([^)\s]+\.md(?:#[^)\s]+)?)\)", text)
+        if not pointer.startswith(("http://", "https://", "mailto:"))
+        and not any(char in pointer for char in "*?[")
+    ]
+    package_index = (
+        path.name == "index.md"
+        and path.parent.name == "packages"
+        and path.parent.parent.name == "references"
+    )
+    for token in BACKTICK_TOKEN_RE.findall(text):
+        if not token.endswith(".md") and ".md#" not in token:
+            continue
+        if token.startswith(("http://", "https://", "mailto:")):
+            continue
+        if any(char in token for char in "*?["):
+            continue
+        explicit = "/" in token or token.startswith(".")
+        candidate = resolve_markdown_pointer(path, token)
+        if (
+            candidate is not None
+            and candidate.is_file()
+            and (explicit or (package_index and "/" not in token))
+        ):
+            pointers.append(token)
+    return pointers
+
+
+def resolve_markdown_pointer(source: Path, pointer: str) -> Path | None:
+    """Resolve a repository-relative pointer using the skill's conventions."""
+    relative, _, _ = pointer.partition("#")
+    if relative.startswith(("http://", "https://", "mailto:", "/")):
         return None
-    text = entry.strip()
-    if not text:
-        return None
-    return re.split(r"\s+", text, maxsplit=1)[0]
+    skill_root = next(
+        (parent for parent in source.parents if (parent / "SKILL.md").is_file()),
+        None,
+    )
+    if relative.startswith("references/") and skill_root is not None:
+        return (skill_root / relative).resolve()
+    if relative.startswith(("./", "../")):
+        return (source.parent / relative).resolve()
+    if relative.startswith((".agents/", "aria_nbv/", "docs/", "scripts/")):
+        return (ROOT / relative).resolve()
+    if relative.startswith("assets/"):
+        return (ROOT / relative).resolve()
+    if source.name == "graphify-aria-boundary.md" and relative == "references/hooks.md":
+        return (SKILLS_DIR / "graphify" / relative).resolve()
+    return (source.parent / relative).resolve()
+
+
+def audit_reference_graph(skills: list[Skill]) -> list[str]:
+    """Validate local pointers and bound custom reference reachability."""
+    errors: list[str] = []
+    for skill in skills:
+        if is_upstream_skill(skill.path):
+            continue
+        skill_root = skill.path.parent
+        reference_files = tuple(sorted(skill_root.glob("references/**/*.md")))
+        nodes = {path.resolve() for path in reference_files}
+        edges: dict[Path, set[Path]] = {skill.path.resolve(): set()}
+        edges.update({node: set() for node in nodes})
+        sources = (skill.path, *reference_files)
+        for source in sources:
+            for pointer in local_markdown_pointers(
+                source, source.read_text(encoding="utf-8")
+            ):
+                target = resolve_markdown_pointer(source, pointer)
+                if target is None:
+                    continue
+                _, _, anchor = pointer.partition("#")
+                if not target.is_file():
+                    errors.append(
+                        f"{rel(source)}: reference pointer {pointer!r} does not exist"
+                    )
+                    continue
+                if anchor and anchor not in markdown_anchors(target):
+                    errors.append(
+                        f"{rel(source)}: reference pointer anchor {pointer!r} was not found"
+                    )
+                if target in edges and target in nodes:
+                    edges[source.resolve()].add(target)
+
+        reachable: dict[Path, int] = {}
+        active: list[Path] = []
+        active_set: set[Path] = set()
+
+        def visit(
+            node: Path,
+            depth: int,
+        ) -> None:
+            reachable[node] = min(depth, reachable.get(node, depth))
+            if node in nodes and depth > 2:
+                errors.append(
+                    f"{rel(node)}: progressive-disclosure reference depth exceeds 2 "
+                    f"on path: {' -> '.join(rel(path) for path in (*active, node))}"
+                )
+            active.append(node)
+            active_set.add(node)
+            for child in edges.get(node, ()):
+                if child in active_set:
+                    cycle = " -> ".join(rel(path) for path in (*active, child))
+                    errors.append(
+                        f"{rel(node)}: progressive-disclosure cycle/backedge: {cycle}"
+                    )
+                    continue
+                visit(child, depth + 1)
+            active.pop()
+            active_set.remove(node)
+
+        visit(skill.path.resolve(), 0)
+        for node in nodes:
+            if node not in reachable:
+                errors.append(f"{rel(node)}: orphan progressive-disclosure reference")
+    return sorted(set(errors))
+
+
+def description_sentence_count(description: str) -> int:
+    return len(re.findall(r"(?<=[.!?])(?:['\")\]]*)?(?=\s|$)", description))
 
 
 def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
-    known_names = {skill.name for skill in skills}
-    bibtex_keys, bibtex_errors = load_bibtex_keys()
-    context_routes, context_route_errors = load_context_map_routes()
     context7_registry, context7_registry_errors = load_context7_registry()
-    errors.extend(bibtex_errors)
-    errors.extend(context_route_errors)
     errors.extend(context7_registry_errors)
 
     for skill in skills:
@@ -390,92 +420,19 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
         if is_upstream_skill(skill.path):
             continue
 
-        missing = sorted(REQUIRED_METADATA - skill.metadata.keys())
-        if missing:
-            errors.append(f"{prefix}: missing metadata fields: {', '.join(missing)}")
-
-        unknown_metadata = sorted(set(skill.metadata) - METADATA_KEYS)
-        if unknown_metadata:
+        frontmatter = load_frontmatter(skill.path)
+        unexpected = sorted(set(frontmatter) - FRONTMATTER_KEYS)
+        if unexpected:
             errors.append(
-                f"{prefix}: unknown metadata fields: {', '.join(unknown_metadata)}"
+                f"{prefix}: unexpected frontmatter keys: {', '.join(unexpected)}"
             )
-
-        mode = skill.metadata.get("mode")
-        if mode not in ALLOWED_MODES:
-            errors.append(
-                f"{prefix}: unsupported metadata.mode {mode!r}; expected one of {', '.join(sorted(ALLOWED_MODES))}"
+        if description_sentence_count(skill.description) != 1:
+            errors.append(f"{prefix}: description must be exactly one sentence")
+        if len(skill.description.split()) > 45:
+            warnings.append(
+                f"{prefix}: description is {len(skill.description.split())} words "
+                "(soft budget 45)"
             )
-
-        for field in METADATA_KEYS - {"mode"}:
-            value = skill.metadata.get(field)
-            if value is not None and not isinstance(value, list):
-                errors.append(f"{prefix}: metadata.{field} must be a list")
-            elif isinstance(value, list):
-                for item in value:
-                    if not isinstance(item, str) or not item.strip():
-                        errors.append(
-                            f"{prefix}: metadata.{field} entries must be non-empty strings"
-                        )
-
-        canonical_sources = skill.metadata.get("canonical_sources") or []
-        if isinstance(canonical_sources, list):
-            if not canonical_sources:
-                errors.append(f"{prefix}: metadata.canonical_sources must not be empty")
-            for source in canonical_sources:
-                if not isinstance(source, str) or not source.strip():
-                    errors.append(
-                        f"{prefix}: metadata.canonical_sources entries must be non-empty strings"
-                    )
-                    continue
-                source_path, _, anchor = source.partition("#")
-                path = ROOT / source_path
-                if not source_path or source_path.startswith("/"):
-                    errors.append(
-                        f"{prefix}: canonical source {source!r} must be a relative repo path"
-                    )
-                    continue
-                resolved_path = path.resolve()
-                if not is_relative_to(resolved_path, ROOT_RESOLVED):
-                    errors.append(
-                        f"{prefix}: canonical source {source_path!r} escapes the repo root"
-                    )
-                    continue
-                if not resolved_path.exists():
-                    errors.append(
-                        f"{prefix}: canonical source {source_path!r} does not exist"
-                    )
-                    continue
-                if anchor and resolved_path.suffix in {".md", ".qmd"}:
-                    anchors = markdown_anchors(resolved_path)
-                    if anchor not in anchors:
-                        errors.append(
-                            f"{prefix}: canonical source anchor {source!r} was not found"
-                        )
-
-        handoffs = skill.metadata.get("handoff_to") or []
-        if isinstance(handoffs, list):
-            for handoff in handoffs:
-                token = first_handoff_token(handoff)
-                if token is None:
-                    errors.append(f"{prefix}: empty or non-string handoff entry")
-                    continue
-                if ":" in token:
-                    namespace = token.split(":", 1)[0]
-                    if namespace in BLOCKED_HANDOFF_PREFIXES:
-                        errors.append(
-                            f"{prefix}: unresolved handoff namespace in {handoff!r}; "
-                            "use a local skill name or declared capability wording"
-                        )
-                elif (
-                    token not in known_names and token not in DECLARED_CAPABILITY_TOKENS
-                ):
-                    warnings.append(
-                        f"{prefix}: handoff target {token!r} is not a known skill name"
-                    )
-
-        applies_to = skill.metadata.get("applies_to") or []
-        if isinstance(applies_to, list) and "**" in applies_to:
-            warnings.append(f"{prefix}: broad applies_to '**' should stay intentional")
 
         if skill.line_count > HOT_PATH_LINE_BUDGET:
             warnings.append(
@@ -483,81 +440,72 @@ def audit_skills(skills: list[Skill]) -> tuple[list[str], list[str]]:
                 f"(budget {HOT_PATH_LINE_BUDGET}); prune or move detail to references"
             )
 
-        context7_refs = skill.metadata.get("context7_refs") or []
-        if isinstance(context7_refs, list):
-            for ref in context7_refs:
-                if not isinstance(ref, str) or not ref.strip():
-                    continue
-                if not CONTEXT7_ID_RE.fullmatch(ref):
-                    errors.append(
-                        f"{prefix}: metadata.context7_refs entry {ref!r} must be an exact Context7 ID"
-                    )
-                elif ref not in context7_registry:
-                    errors.append(
-                        f"{prefix}: metadata.context7_refs entry {ref!r} is absent from "
-                        f"{rel(CONTEXT7_REGISTRY)}"
-                    )
+        for link in markdown_reference_links(skill):
+            relative, _, anchor = link.partition("#")
+            reference = skill.path.parent / relative
+            if not reference.is_file():
+                errors.append(f"{prefix}: reference link {link!r} does not exist")
+            elif anchor and anchor not in markdown_anchors(reference):
+                errors.append(f"{prefix}: reference link anchor {link!r} was not found")
 
-        literature_refs = skill.metadata.get("literature_refs") or []
-        if isinstance(literature_refs, list):
-            for ref in literature_refs:
-                if not isinstance(ref, str) or not ref.strip():
-                    continue
-                if ref.startswith("docs/_generated/"):
-                    errors.append(
-                        f"{prefix}: metadata.literature_refs entry {ref!r} points to generated evidence, "
-                        "not an owning literature source"
-                    )
-                elif (
-                    ref in bibtex_keys or ref in context_routes or repo_path_exists(ref)
-                ):
-                    continue
-                else:
-                    errors.append(
-                        f"{prefix}: metadata.literature_refs entry {ref!r} is not a BibTeX key, "
-                        "derived context-route label, or existing repo path"
-                    )
-
-        tool_refs = skill.metadata.get("tool_refs") or []
-        if isinstance(tool_refs, list):
-            for ref in tool_refs:
-                if not isinstance(ref, str) or not ref.strip():
-                    continue
-                if not TOOL_REF_RE.match(ref):
-                    errors.append(
-                        f"{prefix}: metadata.tool_refs entry {ref!r} must use canonical "
-                        "mcp__<server>.<tool_name> or app mcp__<server>__<tool_name> form"
-                    )
-                elif ref not in AUDIT_OWNED_TOOL_REFS:
-                    message = (
-                        f"{prefix}: metadata.tool_refs entry {ref!r} is not in "
-                        "the audit-owned tool registry"
-                    )
-                    if "__" in ref.removeprefix("mcp__"):
-                        errors.append(message)
-                    else:
-                        warnings.append(message)
-
-        trigger_text = " ".join(
-            [skill.description]
-            + metadata_strings(
-                skill.metadata,
-                {"triggers", "evidence_required", "handoff_to", "must_read"},
-            )
+    discovered_custom = custom_skill_paths(SKILLS_DIR)
+    approved_custom = {path.resolve() for path in APPROVED_CUSTOM_SKILL_PATHS}
+    if discovered_custom != approved_custom:
+        errors.append(
+            "custom skill entrypoints must equal approved set: "
+            f"found {sorted(rel(path) for path in discovered_custom)}, expected "
+            f"{sorted(rel(path) for path in approved_custom)}"
         )
-        routes_to_context7_registry = rel(CONTEXT7_REGISTRY) in canonical_sources
-        if (
-            CONTEXT7_TRIGGER_RE.search(trigger_text)
-            and not context7_refs
-            and not routes_to_context7_registry
-        ):
-            warnings.append(
-                f"{prefix}: external-library/API trigger language has no metadata.context7_refs"
+
+    reference_files = tuple(
+        path for path in SKILLS_DIR.rglob("*.md") if "graphify" not in path.parts
+    )
+    observed_context7: dict[str, list[Path]] = {}
+    for path in reference_files:
+        for library_id in context7_tokens(path.read_text(encoding="utf-8")):
+            observed_context7.setdefault(library_id, []).append(path)
+    for library_id, owners in observed_context7.items():
+        if library_id not in context7_registry:
+            errors.append(
+                f"{rel(CONTEXT7_REGISTRY)}: Context7 ID {library_id!r} is absent from the registry; "
+                f"found {[rel(path) for path in owners]}"
             )
-        if LITERATURE_TRIGGER_RE.search(trigger_text) and not literature_refs:
-            warnings.append(
-                f"{prefix}: literature/thesis/advisor trigger language has no metadata.literature_refs"
+    for library_id in context7_registry:
+        owners = [
+            path
+            for path in reference_files
+            if library_id in context7_tokens(path.read_text(encoding="utf-8"))
+        ]
+        if owners != [CONTEXT7_REGISTRY]:
+            errors.append(
+                f"{rel(CONTEXT7_REGISTRY)}: Context7 ID {library_id!r} must have one registry owner; "
+                f"found {[rel(path) for path in owners]}"
             )
+
+    for call in (
+        "mcp__codex_apps__context7_query_docs",
+        "mcp__codex_apps__context7_resolve_library_id",
+    ):
+        owners = [
+            path
+            for path in reference_files
+            if call in explicit_tool_ids(path.read_text(encoding="utf-8"))
+        ]
+        if owners != [CONTEXT7_REGISTRY]:
+            errors.append(
+                f"{rel(CONTEXT7_REGISTRY)}: Context7 tool {call!r} must have one registry owner; "
+                f"found {[rel(path) for path in owners]}"
+            )
+
+    for path, identifiers in deprecated_context7_calls(
+        active_custom_reference_files()
+    ).items():
+        errors.append(
+            f"{rel(path)}: deprecated Docker-MCP Context7 tool identifiers: "
+            f"{', '.join(sorted(identifiers))}"
+        )
+
+    errors.extend(audit_reference_graph(skills))
 
     return errors, warnings
 
@@ -628,7 +576,6 @@ def audit_routing_fixtures(
         "required_outcomes",
         "forbidden_outcomes",
     }
-    skills_by_path = {skill.path.resolve(): skill for skill in skills_by_name.values()}
     for index, fixture in enumerate(fixtures, start=1):
         if not isinstance(fixture, dict):
             errors.append(f"{rel(path)} fixture #{index}: must be an object")
@@ -700,13 +647,6 @@ def audit_routing_fixtures(
 
         expected_tool_refs = fixture.get("expected_tool_refs", [])
         forbidden_tool_refs = fixture.get("forbidden_tool_refs", [])
-        expected_owner_tool_refs: set[str] = set()
-        for owner_path in resolved_owner_paths:
-            owner_skill = skills_by_path.get(owner_path)
-            if owner_skill:
-                expected_owner_tool_refs.update(
-                    owner_skill.metadata.get("tool_refs") or []
-                )
 
         if not isinstance(expected_tool_refs, list) or not all(
             isinstance(item, str) and item.strip() for item in expected_tool_refs
@@ -720,9 +660,14 @@ def audit_routing_fixtures(
                     errors.append(
                         f"{rel(path)} fixture {fixture_id or index}: malformed expected_tool_ref {tool_ref!r}"
                     )
-                elif tool_ref not in expected_owner_tool_refs:
+                elif not any(
+                    tool_ref
+                    in explicit_tool_ids(owner_path.read_text(encoding="utf-8"))
+                    for owner_path in resolved_owner_paths
+                    if owner_path.is_file()
+                ):
                     errors.append(
-                        f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref {tool_ref!r} is not declared by an expected owner"
+                        f"{rel(path)} fixture {fixture_id or index}: expected_tool_ref {tool_ref!r} is not declared by an expected owner path"
                     )
         if not isinstance(forbidden_tool_refs, list) or not all(
             isinstance(item, str) and item.strip() for item in forbidden_tool_refs
@@ -736,6 +681,25 @@ def audit_routing_fixtures(
                     errors.append(
                         f"{rel(path)} fixture {fixture_id or index}: malformed forbidden_tool_ref {tool_ref!r}"
                     )
+        if (
+            isinstance(expected_tool_refs, list)
+            and expected_tool_refs
+            and isinstance(forbidden_tool_refs, list)
+        ):
+            owner_forbidden = {
+                tool_ref
+                for owner_path in resolved_owner_paths
+                if owner_path.is_file()
+                for tool_ref in forbidden_tool_refs
+                if re.search(
+                    rf"(?<![A-Za-z0-9_]){re.escape(tool_ref)}(?![A-Za-z0-9_])",
+                    owner_path.read_text(encoding="utf-8"),
+                )
+            }
+            if owner_forbidden:
+                errors.append(
+                    f"{rel(path)} fixture {fixture_id or index}: forbidden tool refs occur in expected owner paths: {', '.join(sorted(owner_forbidden))}"
+                )
         if isinstance(expected_tool_refs, list) and isinstance(
             forbidden_tool_refs, list
         ):
@@ -760,35 +724,11 @@ def audit_routing_fixtures(
 
 
 def self_test_skill_text(
-    name: str,
-    canonical_sources: list[str],
-    body: str,
-    extra_metadata: str = "",
+    name: str, body: str, description: str = "Test-only skill fixture."
 ) -> str:
-    canonical_yaml = "\n".join(f'    - "{source}"' for source in canonical_sources)
-    extra = f"{extra_metadata.rstrip()}\n" if extra_metadata.strip() else ""
     return f"""---
 name: {name}
-description: Test-only skill fixture.
-metadata:
-  mode: router
-  not_when:
-    - "test-only adjacent owner"
-  handoff_to:
-    - "external test capability"
-  evidence_required:
-    - "test evidence"
-  applies_to:
-    - ".tmp/**"
-  triggers:
-    - "test"
-  must_read:
-    - "AGENTS.md"
-  canonical_sources:
-{canonical_yaml}
-{extra}\
-  verification:
-    - "test verification"
+description: {description}
 ---
 
 # Test Skill
@@ -811,429 +751,439 @@ def self_test_fixture_path(root: Path, data: dict[str, Any]) -> Path:
     return path
 
 
+# Negative probes cover native frontmatter, reference reachability, and the
+# fixture contract without relying on a metadata registry.
 def run_self_tests() -> tuple[list[str], list[str]]:
     failures: list[str] = []
     passes: list[str] = []
 
-    def expect(test_name: str, condition: bool, detail: str) -> None:
-        if condition:
-            passes.append(test_name)
-        else:
-            failures.append(f"{test_name}: {detail}")
+    def expect(name: str, condition: bool, detail: str) -> None:
+        (passes if condition else failures).append(
+            name if condition else f"{name}: {detail}"
+        )
 
     tmp_parent = ROOT / ".tmp"
     tmp_parent.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="scaffold-audit-", dir=tmp_parent) as tmp:
         tmp_root = Path(tmp)
 
-        escape_text = self_test_skill_text(
-            "escape-skill",
-            ["../outside.md"],
-            "Use this test body for canonical source escape validation.",
+        def probe(text: str, dirname: str) -> tuple[list[str], list[str]]:
+            write_self_test_skill(tmp_root, dirname, text)
+            loaded, load_errors = load_skills(tmp_root / "skills")
+            errors, warnings = audit_skills(loaded)
+            return load_errors + errors, warnings
+
+        errors, _ = probe(
+            "---\nname: probe\ndescription: Test fixture.\nmetadata: {}\n---\n",
+            "probe",
         )
-        write_self_test_skill(tmp_root, "escape-skill", escape_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
         expect(
-            "canonical-source-escape",
-            not load_errors
-            and any("escapes the repo root" in error for error in errors),
-            "escaped canonical source was not rejected",
+            "unexpected-frontmatter",
+            any("unexpected frontmatter keys" in e for e in errors),
+            "legacy metadata key was accepted",
         )
 
-        anchor_text = self_test_skill_text(
-            "missing-anchor-skill",
-            [".agents/skills/aria-nbv-context/SKILL.md#definitely-missing-anchor"],
-            "Use this test body for missing anchor validation.",
-        )
-        write_self_test_skill(tmp_root, "missing-anchor-skill", anchor_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
+        errors, _ = probe("Body without frontmatter.\n", "missing-frontmatter")
         expect(
-            "missing-canonical-anchor",
-            not load_errors
-            and any("canonical source anchor" in error for error in errors),
-            "missing markdown anchor was not rejected",
+            "missing-frontmatter",
+            any("unreadable frontmatter" in e for e in errors),
+            "missing frontmatter was accepted",
+        )
+
+        errors, _ = probe(
+            self_test_skill_text(
+                "description-probe", "Body.", "Two sentences. Still one description."
+            ),
+            "description-probe",
+        )
+        expect(
+            "description-one-sentence",
+            any("exactly one sentence" in e for e in errors),
+            "multi-sentence description was accepted",
+        )
+
+        errors, _ = probe(
+            self_test_skill_text(
+                "reference-probe", "See [the branch](references/missing.md)."
+            ),
+            "reference-probe",
+        )
+        expect(
+            "reference-integrity",
+            any("reference link" in e for e in errors),
+            "missing conditional reference was accepted",
+        )
+
+        errors, _ = probe(
+            self_test_skill_text(
+                "anchor-probe", "See [the branch](references/ok.md#missing)."
+            ),
+            "anchor-probe",
+        )
+        (tmp_root / "skills" / "anchor-probe" / "references").mkdir(
+            parents=True, exist_ok=True
+        )
+        (tmp_root / "skills" / "anchor-probe" / "references" / "ok.md").write_text(
+            "# Present\n", encoding="utf-8"
+        )
+        loaded, _ = load_skills(tmp_root / "skills")
+        errors = audit_reference_graph(loaded)
+        expect(
+            "bad-reference-anchor",
+            any("anchor" in e for e in errors),
+            "bad reference anchor was accepted",
+        )
+
+        cross_root = tmp_root / "skills" / "cross-probe"
+        cross_root.mkdir(parents=True, exist_ok=True)
+        (cross_root / "SKILL.md").write_text(
+            self_test_skill_text(
+                "cross-probe",
+                "See [`other`](../other-probe/references/target.md#missing).",
+            ),
+            encoding="utf-8",
+        )
+        other = tmp_root / "skills" / "other-probe" / "references"
+        other.mkdir(parents=True)
+        (other / "target.md").write_text("# Target\n", encoding="utf-8")
+        loaded, _ = load_skills(tmp_root / "skills")
+        errors = audit_reference_graph(loaded)
+        expect(
+            "cross-skill-anchor",
+            any("cross-probe/SKILL.md" in e and "anchor" in e for e in errors),
+            "cross-skill anchor was not checked",
+        )
+
+        errors, _ = probe(
+            self_test_skill_text("other-name", "Body."), "mismatched-name"
+        )
+        expect(
+            "directory-frontmatter-mismatch",
+            any("directory/frontmatter mismatch" in e for e in errors),
+            "directory/name mismatch was accepted",
+        )
+
+        expect(
+            "context7-exact-token",
+            context7_tokens(
+                "https://github.com/facebookresearch/efm3d `/not-a/token` `/valid/id`"
+            )
+            == {"/not-a/token", "/valid/id"},
+            "URL path was treated as a Context7 ID",
+        )
+        expect(
+            "context7-tool-collision",
+            not explicit_tool_ids(
+                "`mcp__codex_apps__context7_query_docs_suffix`"
+            ).intersection({"mcp__codex_apps__context7_query_docs"}),
+            "tool-name suffix was treated as the canonical tool",
+        )
+
+        deprecated_root = tmp_root / "skills" / "deprecated-probe"
+        deprecated_reference = deprecated_root / "references" / "active.md"
+        deprecated_reference.parent.mkdir(parents=True)
+        deprecated_reference.write_text(
+            "Call mcp__MCP_DOCKER.get_library_docs here.\n", encoding="utf-8"
+        )
+        write_self_test_skill(
+            tmp_root,
+            "deprecated-probe",
+            self_test_skill_text("deprecated-probe", "See `references/active.md`."),
+        )
+        expect(
+            "deprecated-active-reference",
+            bool(
+                deprecated_context7_calls(
+                    active_custom_reference_files(tmp_root / "skills")
+                )
+            ),
+            "deprecated call in an active reference was accepted",
         )
 
         skills, load_errors = load_skills(SKILLS_DIR)
         skills_by_name = {skill.name: skill for skill in skills}
         expect("live-skills-load", not load_errors, "; ".join(load_errors))
-
-        typo_text = self_test_skill_text(
-            "plugin-tool-typo",
-            [".agents/skills/aria-nbv-context/SKILL.md#context7-plugin-branch"],
-            "Use this test body for plugin tool reference validation.",
-            extra_metadata='  tool_refs:\n    - "mcp__codex_apps__context7_query_doc"',
+        explicit_owner = tmp_root / "context7-owner.md"
+        explicit_owner.write_text(
+            "`mcp__codex_apps__context7_query_docs`\n", encoding="utf-8"
         )
-        typo_path = write_self_test_skill(tmp_root, "plugin-tool-typo", typo_text)
-        typo_skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(typo_skills)
+        fixture = {
+            "version": 1,
+            "purpose": "explicit owner probe",
+            "fixtures": [
+                {
+                    "id": "owner-tool",
+                    "task": "Validate explicit owner tool declarations.",
+                    "expected_owner_paths": [str(explicit_owner.relative_to(ROOT))],
+                    "expected_tool_refs": ["mcp__codex_apps__context7_query_docs"],
+                    "required_outcomes": ["owner path is available"],
+                    "forbidden_outcomes": ["metadata registry is consulted"],
+                }
+            ],
+        }
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, fixture), skills_by_name
+        )
+        expect("explicit-owner-tool-ref", not errors, "; ".join(errors))
+
+        prose_owner = tmp_root / "prose-owner.md"
+        prose_owner.write_text(
+            "The tool mcp__codex_apps__context7_query_docs is useful.\n",
+            encoding="utf-8",
+        )
+        prose_only = json.loads(json.dumps(fixture))
+        prose_only["fixtures"][0]["expected_owner_paths"] = [
+            str(prose_owner.relative_to(ROOT))
+        ]
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, prose_only), skills_by_name
+        )
         expect(
-            "unknown-plugin-tool-ref",
-            not load_errors
-            and any(
-                "mcp__codex_apps__context7_query_doc" in error
-                and "not in the audit-owned tool registry" in error
-                for error in errors
+            "prose-only-tool-ref",
+            any("not declared by an expected owner path" in e for e in errors),
+            "prose-only tool declaration was accepted",
+        )
+
+        missing_owner = json.loads(json.dumps(fixture))
+        missing_owner["fixtures"][0]["expected_owner_paths"] = [
+            ".agents/skills/agent-behavior/SKILL.md"
+        ]
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, missing_owner), skills_by_name
+        )
+        expect(
+            "missing-owner-tool-ref",
+            any("not declared by an expected owner path" in e for e in errors),
+            "tool ref without explicit owner was accepted",
+        )
+
+        contradiction = json.loads(json.dumps(fixture))
+        contradiction["fixtures"][0]["forbidden_tool_refs"] = [
+            "mcp__codex_apps__context7_query_docs"
+        ]
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, contradiction), skills_by_name
+        )
+        expect(
+            "forbidden-tool-contradiction",
+            any("overlap" in e for e in errors),
+            "expected/forbidden contradiction was accepted",
+        )
+
+        for name, mutation, needle in (
+            (
+                "fixture-unknown-key",
+                lambda value: value["fixtures"][0].update(extra=True),
+                "unknown keys",
             ),
-            "unknown plugin/App tool reference was not rejected",
-        )
-        typo_path.unlink()
-        typo_path.parent.rmdir()
-
-        malformed_path = tmp_root / "skills" / "malformed-yaml" / "SKILL.md"
-        malformed_path.parent.mkdir(parents=True, exist_ok=True)
-        malformed_path.write_text("---\nname: [\n---\n", encoding="utf-8")
-        _, load_errors = load_skills(tmp_root / "skills")
-        expect(
-            "malformed-yaml",
-            any("unreadable frontmatter" in error for error in load_errors),
-            "malformed YAML was not rejected",
-        )
-        malformed_path.unlink()
-        malformed_path.parent.rmdir()
-
-        mismatch_text = self_test_skill_text(
-            "other-name",
-            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
-            "Use this test body for directory-name validation.",
-        )
-        write_self_test_skill(tmp_root, "mismatched-name", mismatch_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
-        expect(
-            "directory-frontmatter-mismatch",
-            not load_errors
-            and any("directory/frontmatter mismatch" in error for error in errors),
-            "directory/frontmatter mismatch was not rejected",
-        )
-
-        missing_description = "---\nname: missing-description\nmetadata: {}\n---\n"
-        write_self_test_skill(tmp_root, "missing-description", missing_description)
-        _, load_errors = load_skills(tmp_root / "skills")
-        expect(
-            "missing-description",
-            any("missing non-empty description" in error for error in load_errors),
-            "missing description was not rejected",
-        )
-        (tmp_root / "skills" / "missing-description" / "SKILL.md").unlink()
-        (tmp_root / "skills" / "missing-description").rmdir()
-
-        unconverted_text = (
-            "---\nname: unconverted-no-metadata\ndescription: Test fixture.\n---\n"
-        )
-        write_self_test_skill(tmp_root, "unconverted-no-metadata", unconverted_text)
-        _, load_errors = load_skills(tmp_root / "skills")
-        expect(
-            "unconverted-metadata-absent",
-            any(
-                "unconverted-no-metadata/SKILL.md: missing metadata mapping" in error
-                for error in load_errors
+            (
+                "fixture-duplicate-id",
+                lambda value: value["fixtures"].append(value["fixtures"][0]),
+                "duplicate id",
             ),
-            "unconverted skill without legacy metadata was not rejected",
-        )
-        (tmp_root / "skills" / "unconverted-no-metadata" / "SKILL.md").unlink()
-        (tmp_root / "skills" / "unconverted-no-metadata").rmdir()
-
-        partial_legacy_text = "---\nname: unconverted-partial-metadata\ndescription: Test fixture.\nmetadata:\n  mode: router\n---\n"
-        write_self_test_skill(
-            tmp_root, "unconverted-partial-metadata", partial_legacy_text
-        )
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
-        expect(
-            "unconverted-partial-legacy-metadata",
-            not load_errors
-            and any("missing metadata fields" in error for error in errors),
-            "unconverted skill with partial legacy metadata was not rejected",
-        )
-
-        missing_fixture = {
-            "version": 1,
-            "purpose": "fixture schema probe",
-            "fixtures": [{"id": "missing-required-fields"}],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, missing_fixture), skills_by_name
-        )
-        expect(
-            "fixture-required-fields",
-            any("missing task" in error for error in errors)
-            and any("expected_owner_paths must be" in error for error in errors)
-            and any("required_outcomes must be" in error for error in errors)
-            and any("forbidden_outcomes must be" in error for error in errors),
-            "fixture schema omissions were not rejected",
-        )
-
-        owner_path_probe = {
-            "version": 1,
-            "purpose": "owner path probe",
-            "fixtures": [
-                {
-                    "id": "owner-path-probe",
-                    "task": "Validate owner paths.",
-                    "expected_owner_paths": ["../outside.md", "missing-owner.md"],
-                    "required_outcomes": ["owner path validation"],
-                    "forbidden_outcomes": ["missing owner accepted"],
-                }
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, owner_path_probe), skills_by_name
-        )
-        expect(
-            "fixture-owner-path-containment-and-existence",
-            any("escapes repo root" in error for error in errors)
-            and any("does not exist" in error for error in errors),
-            "escaping or missing owner paths were not rejected",
-        )
-
-        stable_id_probe = {
-            "version": 1,
-            "purpose": "stable id probe",
-            "fixtures": [
-                {
-                    "id": "stable-id-probe",
-                    "task": "Validate stable identifiers.",
-                    "expected_owner_paths": [".agents/skills/agent-behavior/SKILL.md"],
-                    "stable_skill_ids": ["agent-behavior"],
-                    "required_outcomes": ["stable id validation"],
-                    "forbidden_outcomes": ["unapproved stable id accepted"],
-                }
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, stable_id_probe), skills_by_name
-        )
-        expect(
-            "fixture-stable-skill-id",
-            any("unapproved stable skill id" in error for error in errors),
-            "unapproved stable skill id was not rejected",
-        )
-
-        duplicate_and_unknown_probe = {
-            "version": 1,
-            "purpose": "fixture identity probe",
-            "fixtures": [
-                {
-                    "id": "duplicate-fixture",
-                    "task": "Validate fixture identity.",
-                    "expected_owner_paths": ["AGENTS.md"],
-                    "required_outcomes": ["owner path is available"],
-                    "forbidden_outcomes": ["duplicate id is accepted"],
-                },
-                {
-                    "id": "duplicate-fixture",
-                    "task": "Validate unknown keys.",
-                    "expected_owner_paths": ["AGENTS.md"],
-                    "required_outcomes": ["owner path is available"],
-                    "forbidden_outcomes": ["unknown key is accepted"],
-                    "unexpected": True,
-                },
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, duplicate_and_unknown_probe),
-            skills_by_name,
-        )
-        expect(
-            "fixture-duplicate-id-and-unknown-key",
-            any("duplicate id" in error for error in errors)
-            and any("unknown keys" in error for error in errors),
-            "duplicate fixture ID or unknown fixture key was not rejected",
-        )
-
-        empty_outcomes_probe = {
-            "version": 1,
-            "purpose": "outcome probe",
-            "fixtures": [
-                {
-                    "id": "empty-outcomes",
-                    "task": "Validate outcome fields.",
-                    "expected_owner_paths": ["AGENTS.md"],
-                    "required_outcomes": [],
-                    "forbidden_outcomes": [],
-                }
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, empty_outcomes_probe), skills_by_name
-        )
-        expect(
-            "fixture-empty-outcomes",
-            any("required_outcomes must be" in error for error in errors)
-            and any("forbidden_outcomes must be" in error for error in errors),
-            "empty outcome fields were not rejected",
-        )
-
-        malformed_and_undeclared_tool_probe = {
-            "version": 1,
-            "purpose": "tool declaration probe",
-            "fixtures": [
-                {
-                    "id": "malformed-and-undeclared-tools",
-                    "task": "Validate expected owner tool declarations.",
-                    "expected_owner_paths": [".agents/skills/agent-behavior/SKILL.md"],
-                    "expected_tool_refs": [
-                        "malformed tool",
-                        "mcp__code_index.search_code_advanced",
-                    ],
-                    "forbidden_tool_refs": ["also malformed"],
-                    "required_outcomes": ["tool declaration validation"],
-                    "forbidden_outcomes": ["malformed tool declaration accepted"],
-                }
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, malformed_and_undeclared_tool_probe),
-            skills_by_name,
-        )
-        expect(
-            "fixture-malformed-and-undeclared-tool-refs",
-            sum("malformed" in error for error in errors) >= 2
-            and any("not declared by an expected owner" in error for error in errors),
-            "malformed or undeclared tool refs were not rejected",
-        )
-
-        drift_text = self_test_skill_text(
-            "truth-leak-skill",
-            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
-            "This planned but unimplemented Q_H roadmap detail will be implemented later.",
-        )
-        drift_path = write_self_test_skill(tmp_root, "truth-leak-skill", drift_text)
-        drift_skill = Skill(
-            path=drift_path,
-            dirname="truth-leak-skill",
-            name="truth-leak-skill",
-            description="Test-only skill fixture.",
-            metadata={},
-            has_metadata=False,
-            line_count=len(drift_text.splitlines()),
-            text=drift_text,
-        )
-        warnings = audit_semantic_drift([drift_skill])
-        expect(
-            "planned-detail-semantic-drift",
-            any("possible semantic drift" in warning for warning in warnings),
-            "planned thesis detail in skill body was not warned",
-        )
-
-        missing_literature_text = self_test_skill_text(
-            "missing-literature-skill",
-            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
-            "Use this test body for literature ref validation.",
-            '  literature_refs:\n    - "DefinitelyMissingBibKey2026"',
-        )
-        write_self_test_skill(
-            tmp_root, "missing-literature-skill", missing_literature_text
-        )
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
-        expect(
-            "missing-literature-ref",
-            not load_errors
-            and any("metadata.literature_refs" in error for error in errors),
-            "missing literature ref was not rejected",
-        )
-
-        unregistered_context7_text = self_test_skill_text(
-            "unregistered-context7-skill",
-            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
-            "Use this test body for Context7 registry validation.",
-            '  context7_refs:\n    - "/example/not-in-registry"',
-        )
-        write_self_test_skill(
-            tmp_root, "unregistered-context7-skill", unregistered_context7_text
-        )
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
-        expect(
-            "unregistered-context7-ref",
-            not load_errors and any("absent from" in error for error in errors),
-            "unregistered Context7 ref was not rejected",
-        )
-
-        malformed_tool_text = self_test_skill_text(
-            "malformed-tool-skill",
-            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
-            "Use this test body for tool ref validation.",
-            '  tool_refs:\n    - "Context7 get-library-docs"',
-        )
-        write_self_test_skill(tmp_root, "malformed-tool-skill", malformed_tool_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        errors, _ = audit_skills(skills)
-        expect(
-            "malformed-tool-ref",
-            not load_errors and any("metadata.tool_refs" in error for error in errors),
-            "malformed tool ref was not rejected",
-        )
-
-        unknown_tool_text = self_test_skill_text(
-            "unknown-tool-skill",
-            [".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"],
-            "Use this test body for tool ref inventory validation.",
-            '  tool_refs:\n    - "mcp__Bogus.fake"',
-        )
-        write_self_test_skill(tmp_root, "unknown-tool-skill", unknown_tool_text)
-        skills, load_errors = load_skills(tmp_root / "skills")
-        _, warnings = audit_skills(skills)
-        expect(
-            "unknown-tool-ref-warned",
-            not load_errors
-            and any("audit-owned tool registry" in warning for warning in warnings),
-            "unknown canonical-looking tool ref was not warned",
-        )
-
-        browser_overtrigger_fixture = {
-            "version": 1,
-            "purpose": "tool-ref probe",
-            "fixtures": [
-                {
-                    "id": "browser-overtrigger-probe",
-                    "task": "Diagnose a concrete Streamlit browser symptom with live UI evidence.",
-                    "expected_owner_paths": [".agents/skills/agent-behavior/SKILL.md"],
-                    "forbidden_tool_refs": ["mcp__MCP_DOCKER.browser_run_code"],
-                    "required_outcomes": ["owner path is available"],
-                    "forbidden_outcomes": ["browser use is required"],
-                }
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, browser_overtrigger_fixture),
-            skills_by_name,
-        )
-        expect(
-            "forbidden-tool-without-owner-declaration",
-            not errors,
-            "; ".join(errors),
-        )
-
-        python_analyzer_overtrigger_fixture = {
-            "version": 1,
-            "purpose": "tool contradiction probe",
-            "fixtures": [
-                {
-                    "id": "python-analyzer-overtrigger-probe",
-                    "task": "Simplify Python code with analyzer guidance after code-index localization.",
-                    "expected_owner_paths": [".agents/skills/simplification/SKILL.md"],
-                    "expected_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
-                    "forbidden_tool_refs": ["mcp__MCP_DOCKER.analyze_python_file"],
-                    "required_outcomes": ["owner path is available"],
-                    "forbidden_outcomes": ["tool contradiction is accepted"],
-                }
-            ],
-        }
-        errors, _ = audit_routing_fixtures(
-            self_test_fixture_path(tmp_root, python_analyzer_overtrigger_fixture),
-            skills_by_name,
-        )
-        expect(
-            "expected-forbidden-tool-contradiction",
-            any(
-                "expected and forbidden tool refs overlap" in error for error in errors
+            (
+                "fixture-path-escape",
+                lambda value: value["fixtures"][0].update(
+                    expected_owner_paths=["../escape.md"]
+                ),
+                "escapes repo root",
             ),
-            "expected/forbidden tool contradiction was not rejected",
+            (
+                "fixture-missing-path",
+                lambda value: value["fixtures"][0].update(
+                    expected_owner_paths=["missing.md"]
+                ),
+                "does not exist",
+            ),
+            (
+                "fixture-bad-tool-id",
+                lambda value: value["fixtures"][0].update(
+                    expected_tool_refs=["not-a-tool"]
+                ),
+                "malformed expected_tool_ref",
+            ),
+            (
+                "fixture-empty-outcomes",
+                lambda value: value["fixtures"][0].update(required_outcomes=[]),
+                "required_outcomes",
+            ),
+        ):
+            mutated = json.loads(json.dumps(fixture))
+            mutation(mutated)
+            errors, _ = audit_routing_fixtures(
+                self_test_fixture_path(tmp_root, mutated), skills_by_name
+            )
+            expect(name, any(needle in e for e in errors), f"{name} was accepted")
+
+        escaped = json.loads(json.dumps(fixture))
+        escaped["fixtures"][0]["expected_owner_paths"] = [
+            ".agents/skills/agent-behavior/SKILL.md"
+        ]
+        errors, _ = audit_routing_fixtures(
+            self_test_fixture_path(tmp_root, escaped), skills_by_name
+        )
+        expect(
+            "fixture-missing-explicit-tool",
+            any("not declared by an expected owner path" in e for e in errors),
+            "missing explicit tool declaration was accepted",
+        )
+
+        graph_skill = Skill(
+            tmp_root / "graph" / "SKILL.md", "graph", "graph", "Test fixture.", 1, ""
+        )
+        graph_dir = graph_skill.path.parent
+        (graph_dir / "references").mkdir(parents=True)
+        graph_skill.path.write_text(
+            self_test_skill_text(
+                "graph", "See `references/a.md` and `references/shortcut.md`."
+            ),
+            encoding="utf-8",
+        )
+        (graph_dir / "references" / "a.md").write_text(
+            "See `./b.md`.\n", encoding="utf-8"
+        )
+        (graph_dir / "references" / "b.md").write_text(
+            "See `./c.md`.\n", encoding="utf-8"
+        )
+        (graph_dir / "references" / "c.md").write_text("# C\n", encoding="utf-8")
+        (graph_dir / "references" / "shortcut.md").write_text(
+            "See `./c.md`.\n", encoding="utf-8"
+        )
+        errors = audit_reference_graph([graph_skill])
+        expect(
+            "progressive-non-shortest-depth",
+            any("depth exceeds 2" in e and "on path" in e for e in errors),
+            "over-depth path was accepted because a shorter path existed",
+        )
+
+        (graph_dir / "references" / "orphan.md").write_text(
+            "# Orphan\n", encoding="utf-8"
+        )
+        errors = audit_reference_graph([graph_skill])
+        expect(
+            "progressive-orphan",
+            any("orphan" in e for e in errors),
+            "orphan reference was accepted",
+        )
+
+        bare_dir = tmp_root / "bare"
+        (bare_dir / "references").mkdir(parents=True)
+        bare_path = bare_dir / "SKILL.md"
+        bare_path.write_text(
+            self_test_skill_text("bare", "See `references/guide.md`."),
+            encoding="utf-8",
+        )
+        (bare_dir / "references" / "guide.md").write_text(
+            "See `orphan.md`.\n", encoding="utf-8"
+        )
+        (bare_dir / "references" / "orphan.md").write_text(
+            "# Orphan\n", encoding="utf-8"
+        )
+        bare_skill = Skill(
+            bare_path,
+            "bare",
+            "bare",
+            "Test fixture.",
+            1,
+            bare_path.read_text(encoding="utf-8"),
+        )
+        errors = audit_reference_graph([bare_skill])
+        expect(
+            "bare-sibling-orphan",
+            any("orphan progressive-disclosure reference" in e for e in errors),
+            "bare sibling token outside the package index made an orphan reachable",
+        )
+
+        package_dir = tmp_root / "package-index"
+        package_references = package_dir / "references" / "packages"
+        package_references.mkdir(parents=True)
+        package_path = package_dir / "SKILL.md"
+        package_path.write_text(
+            self_test_skill_text(
+                "package-index", "See `references/packages/index.md`."
+            ),
+            encoding="utf-8",
+        )
+        package_index = package_references / "index.md"
+        package_index.write_text("See `booktabs.md`.\n", encoding="utf-8")
+        (package_references / "booktabs.md").write_text(
+            "# Booktabs\n", encoding="utf-8"
+        )
+        package_skill = Skill(
+            package_path,
+            "package-index",
+            "package-index",
+            "Test fixture.",
+            1,
+            package_path.read_text(encoding="utf-8"),
+        )
+        expect(
+            "package-index-sibling",
+            not audit_reference_graph([package_skill]),
+            "package index sibling pointer was rejected",
+        )
+
+        cycle_dir = tmp_root / "cycle"
+        (cycle_dir / "references").mkdir(parents=True)
+        cycle_path = cycle_dir / "SKILL.md"
+        cycle_path.write_text(
+            self_test_skill_text("cycle", "See `references/a.md`."), encoding="utf-8"
+        )
+        (cycle_dir / "references" / "a.md").write_text(
+            "See `./b.md`.\n", encoding="utf-8"
+        )
+        (cycle_dir / "references" / "b.md").write_text(
+            "See `./a.md`.\n", encoding="utf-8"
+        )
+        cycle_skill = Skill(
+            cycle_path,
+            "cycle",
+            "cycle",
+            "Test fixture.",
+            4,
+            cycle_path.read_text(encoding="utf-8"),
+        )
+        errors = audit_reference_graph([cycle_skill])
+        expect(
+            "progressive-peer-cycle",
+            any("cycle/backedge" in e for e in errors),
+            "peer cycle was accepted despite violating progressive disclosure",
+        )
+
+        leaf_dir = tmp_root / "leaf"
+        (leaf_dir / "references").mkdir(parents=True)
+        leaf_path = leaf_dir / "SKILL.md"
+        leaf_path.write_text(
+            self_test_skill_text("leaf", "See `references/leaf.md`."),
+            encoding="utf-8",
+        )
+        (leaf_dir / "references" / "leaf.md").write_text("# Leaf\n", encoding="utf-8")
+        leaf_skill = Skill(
+            leaf_path,
+            "leaf",
+            "leaf",
+            "Test fixture.",
+            4,
+            leaf_path.read_text(encoding="utf-8"),
+        )
+        expect(
+            "progressive-leaf-reference",
+            not audit_reference_graph([leaf_skill]),
+            "legitimate leaf reference was rejected",
+        )
+
+        drift = Skill(
+            tmp_root / "drift" / "SKILL.md",
+            "drift",
+            "drift",
+            "Test fixture.",
+            4,
+            self_test_skill_text("drift", "## Implementation Contract\n"),
+        )
+        expect(
+            "semantic-drift-warning",
+            bool(audit_semantic_drift([drift])),
+            "semantic drift warning was absent",
         )
 
     return passes, failures
@@ -1274,14 +1224,14 @@ def main() -> int:
 
     errors = load_errors + skill_errors + fixture_errors
     warnings = skill_warnings + drift_warnings + fixture_warnings
-    payload = {
+    audit_payload: dict[str, object] = {
         "skills": len(skills),
         "errors": errors,
         "warnings": warnings,
     }
 
     if args.json:
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        print(json.dumps(audit_payload, indent=2, sort_keys=True))
     else:
         print(
             f"scaffold-audit: skills={len(skills)} errors={len(errors)} warnings={len(warnings)}"

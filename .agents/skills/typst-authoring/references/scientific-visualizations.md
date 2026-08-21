@@ -1,7 +1,8 @@
 # Scientific Visualizations For ARIA-NBV
 
 Use this reference for scientific, geometric, spatial, or 3D figures. Generic
-captions, labels, tables, and Mermaid inclusion remain in `figures-tables.md`;
+captions, labels, tables, and Mermaid inclusion remain in the skill's direct
+conditional figures-and-tables route;
 renderer setup remains in `packages/`; Rerun entity and frame behavior remains
 with `aria_nbv/aria_nbv/rerun_inspector/README.md`.
 
@@ -26,9 +27,9 @@ annotation.
 
 | Scientific role | Preferred renderer | Publication contract |
 | --- | --- | --- |
-| Sparse exact geometry, axes, rays, frusta, boxes, great circles | CeTZ | Vector source with Typst-native math; read `packages/cetz.md`. |
-| Typed sparse 3D scenes with depth-sorted faces and hidden-line clipping | Scenery | Pure vector CeTZ output; fixture-gate the 0.x package and read `packages/scenery.md`. |
-| Low- or medium-poly local PLY, OBJ, or STL meshes | Maquette SVG | Painter-sorted vector mesh; freeze projection, camera, shading, and decimation; read `packages/maquette.md`. |
+| Sparse exact geometry, axes, rays, frusta, boxes, great circles | CeTZ | Vector source with Typst-native math; use the selected package reference. |
+| Typed sparse 3D scenes with depth-sorted faces and hidden-line clipping | Scenery | Pure-vector CeTZ output; fixture-gate the 0.x package. |
+| Low- or medium-poly local PLY, OBJ, or STL meshes | Maquette SVG | Painter-sorted vector mesh; freeze projection, camera, shading, and decimation. |
 | Dense or strongly intersecting local meshes | Maquette PNG, Rerun, or PyTorch3D | Use a z-buffered raster base and retain vector labels, axes, frusta, and callouts in Typst. |
 | Quantitative fields, complete-domain projections, publication plots | Matplotlib | Fixed data, axes, scales, and SVG/PDF export. Use 3D only for simple scenes with inspected depth order. |
 | Interactive 3D exploration | Plotly | Freeze camera and scales before export; treat WebGL 3D inside SVG/PDF as raster content. |
