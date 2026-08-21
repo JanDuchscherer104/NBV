@@ -22,6 +22,7 @@ from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app import panels as panel_dispatcher
 from aria_nbv.app import scene_view
+from aria_nbv.app import scientific_labels as theory
 from aria_nbv.app.panels import common as panel_common
 from aria_nbv.app.panels import counterfactual_rollouts as rollout_panel
 from aria_nbv.app.panels import data as data_panel
@@ -34,7 +35,6 @@ from aria_nbv.app.panels._stored_rollouts import (
     reconstruction_return,
     session,
     shared,
-    theory,
     validity_support,
 )
 from aria_nbv.configs import PathConfig
@@ -1836,7 +1836,7 @@ def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
     assert fig.layout.title.text == "Valid-candidate empirical central 95% range"
     assert "CI" not in fig.layout.title.text
     assert any(trace.fill == "tonexty" for trace in fig.data)
-    assert any("selected target_root_gain" in str(trace.name) for trace in fig.data)
+    assert any("Selected target RRI" in str(trace.name) for trace in fig.data)
     assert not any("candidate min" in str(trace.name) for trace in fig.data)
     assert not any("candidate mean" in str(trace.name) for trace in fig.data)
     assert not any("candidate max" in str(trace.name) for trace in fig.data)
