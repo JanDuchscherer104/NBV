@@ -369,9 +369,23 @@ def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> None:
     expected_names = sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS)
     if not isinstance(signature, list) or [item.get("name") for item in signature] != expected_names:
         raise ValueError("Named Q_H profiles require the exact eight compact EVL blocks; rebuild the store.")
+    declared_signature = tuple(
+        (item["name"], item["dtype"], tuple(item["shape"]))
+        for item in signature
+        if isinstance(item, dict) and {"name", "dtype", "shape"} <= set(item)
+    )
+    if len(declared_signature) != len(expected_names):
+        raise ValueError("Named Q_H profiles require complete EVL block dtype/shape signatures; rebuild the store.")
     for shard in manifest.shards:
         names = sorted(name for name in shard.blocks if name.startswith("backbone."))
         if names != expected_names:
             raise ValueError(
                 f"Named Q_H profile shard {shard.shard_id!r} lacks homogeneous compact EVL blocks; rebuild the store."
+            )
+        actual_signature = tuple(
+            (name, str(shard.blocks[name].dtype), tuple(shard.blocks[name].shape[1:])) for name in expected_names
+        )
+        if actual_signature != declared_signature:
+            raise ValueError(
+                f"Named Q_H profile shard {shard.shard_id!r} disagrees with declared EVL dtype/shape signature; rebuild the store."
             )

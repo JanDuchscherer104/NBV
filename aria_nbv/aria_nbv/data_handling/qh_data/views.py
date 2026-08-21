@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Literal
 
 from torch import Tensor
 
+from ...rollouts.qh_geometry import QhGeometryContract  # noqa: F401
 from ..vin_store.views import VinSnippetView
 
 if TYPE_CHECKING:
@@ -39,31 +40,6 @@ QhSelectedObservationProtocol = Literal["none", "cf_gt"]
 QhExperimentProfile = Literal["qh_cf0_v1", "qh_cfplus_gt_depth_v1"]
 
 
-@dataclass(frozen=True, slots=True)
-class QhGeometryContract:
-    """Persisted, immutable geometry facts for selected CF-GT depth."""
-
-    projection_model: str
-    linearization: str
-    camera_pose: str
-    depth_semantics: str
-    focal_px: tuple[float, float]
-    principal_point_px: tuple[float, float]
-    image_size_hw: tuple[int, int]
-    camera_axes: str
-    camera_forward: str
-    camera_handedness: str
-    pixel_convention: str
-    in_ndc: bool
-    znear_m: float
-    zfar_m: float
-    invalid_fill_value: float
-    dtype: str
-    renderer: str
-    source_role: str
-    selected_identity: str
-
-
 def validate_experiment_profile(
     profile: QhExperimentProfile,
     *,
@@ -73,6 +49,8 @@ def validate_experiment_profile(
 ) -> None:
     """Validate one named Q_H profile before dataset or scorer construction."""
 
+    if selected_observation_protocol == "cf_gt" and profile != "qh_cfplus_gt_depth_v1":
+        raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
     if root_evl_profile != "evl_v1":
         raise ValueError(f"Q_H profile {profile!r} requires compact root EVL profile 'evl_v1'.")
     expected_observation = "none" if profile == "qh_cf0_v1" else "cf_gt"

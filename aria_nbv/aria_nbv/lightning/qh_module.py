@@ -120,6 +120,10 @@ class QhLightningModule(pl.LightningModule):
                 selected_observation_protocol=config.selected_observation_protocol,
                 privileged=config.privileged,
             )
+            if config.actor_state_contract_hash is None:
+                raise ValueError("Named Q_H modules require an exact actor_state_contract_hash.")
+            if config.experiment_profile == "qh_cfplus_gt_depth_v1" and config.geometry_contract_hash is None:
+                raise ValueError("CF+ Q_H modules require an exact geometry_contract_hash.")
         self.config = config
         self.automatic_optimization = False
         self.online_scorer = scorer

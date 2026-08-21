@@ -16,7 +16,6 @@ import numpy as np
 import zarr
 from zarr.storage import LocalStore
 
-from ..data_handling.qh_data.views import QhGeometryContract
 from ..targets.protocol import (
     ORACLE_GT_TARGET_SOURCE,
     ActorVisibleTargetSource,
@@ -26,6 +25,7 @@ from ..targets.protocol import (
     validate_target_protocol_admission,
 )
 from ..utils import Stage
+from .qh_geometry import QhGeometryContract
 from .shard_manifest import build_rollout_split_manifest_hash
 from .zarr_store import (
     DEFAULT_RETURN_SEMANTICS,

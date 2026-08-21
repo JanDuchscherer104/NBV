@@ -129,6 +129,8 @@ def test_named_cfplus_allows_explicit_privileged_module() -> None:
             root_evl_profile="evl_v1",
             selected_observation_protocol="cf_gt",
             privileged=True,
+            actor_state_contract_hash="actor",
+            geometry_contract_hash="geometry",
         ),
         scorer=_TableScorer(),
     )
