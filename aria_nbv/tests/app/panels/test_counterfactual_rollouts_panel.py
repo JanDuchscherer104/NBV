@@ -34,6 +34,7 @@ from aria_nbv.app.panels._stored_rollouts import (
     reconstruction_return,
     session,
     shared,
+    theory,
     validity_support,
 )
 from aria_nbv.configs import PathConfig
@@ -1126,13 +1127,13 @@ def test_stored_rollout_plots_have_one_contextual_rendering_owner() -> None:
     assert shared.plot_control_key("summary", "a") != shared.plot_control_key("summary", "b")
 
 
-def test_target_score_correlation_uses_rich_guide_builder() -> None:
+def test_target_score_correlation_uses_canonical_pearson_theory() -> None:
     source = Path(candidate_generation.__file__).read_text(encoding="utf-8")
 
     correlation_start = source.index('title="Target score-component correlation')
     correlation_block = source[correlation_start : source.index("def _prepare_pairwise_correlation", correlation_start)]
     assert 'answer="The heatmap is descriptive evidence' in correlation_block
-    assert 'definition="Pearson r is the standardized covariance' in correlation_block
+    assert 'equation_ids=("metrics.pearson",)' in correlation_block
 
 
 def test_target_and_q_h_mask_guides_link_their_owning_contracts() -> None:
@@ -1162,15 +1163,41 @@ def test_target_and_q_h_mask_guides_link_their_owning_contracts() -> None:
     assert "docs/typst/shared/equations/rri.typ" not in corpus_admission
 
 
-def test_primary_rollout_plot_guides_are_complete_at_each_constructor() -> None:
-    """Primary inspector plots cannot silently regress to the generic guide."""
+def test_rollout_plot_guides_use_the_narrative_contract_without_legacy_fields() -> None:
+    """Every inspector explanation uses the narrative contract directly."""
 
-    required = {"answer", "intuition", "visual_encoding", "uncertainty", "external_references", "definition"}
+    required = {"question", "answer", "sections", "evidence_role", "source_fields"}
+    removed = {
+        "population",
+        "metric",
+        "denominator_masks",
+        "comparability",
+        "expected_pattern",
+        "failure_interpretation",
+        "intuition",
+        "visual_encoding",
+        "uncertainty",
+        "definition",
+    }
+    rigid_titles = {
+        "Population",
+        "Metric",
+        "Denominator and masks",
+        "Comparability",
+        "Expected pattern",
+        "Failure interpretation",
+        "Intuition",
+        "Visual encoding",
+        "Uncertainty",
+        "Definition",
+    }
     expected_calls = {
         candidate_generation: 13,
         overview_topology: 5,
         reconstruction_return: 8,
         validity_support: 2,
+        failure_triage: 1,
+        inspect_rerun: 1,
     }
     for module, expected_count in expected_calls.items():
         tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
@@ -1185,6 +1212,67 @@ def test_primary_rollout_plot_guides_are_complete_at_each_constructor() -> None:
         for call in calls:
             supplied = {keyword.arg for keyword in call.keywords if keyword.arg is not None}
             assert required <= supplied, f"{module.__name__}:{call.lineno} lacks {sorted(required - supplied)}"
+            assert removed.isdisjoint(supplied), f"{module.__name__}:{call.lineno} retains legacy fields"
+            sections = next(keyword.value for keyword in call.keywords if keyword.arg == "sections")
+            assert isinstance(sections, ast.Tuple)
+            assert 1 <= len(sections.elts) <= 3
+            for section in sections.elts:
+                assert isinstance(section, ast.Call)
+                title_node = (
+                    section.args[0]
+                    if section.args
+                    else next(keyword.value for keyword in section.keywords if keyword.arg == "title")
+                )
+                assert isinstance(title_node, ast.Constant) and isinstance(title_node.value, str)
+                assert title_node.value not in rigid_titles
+
+
+def test_temporal_theory_map_distinguishes_immediate_and_cumulative_root_gain() -> None:
+    one_step = reconstruction_return._TEMPORAL_THEORY["selected_target_root_gain"]
+    cumulative = reconstruction_return._TEMPORAL_THEORY["cumulative_target_root_gain"]
+
+    assert one_step.equation_ids == ("rl.target_rri_reward", "entity.target_error")
+    assert "rl.observed_cumulative_root_gain" in cumulative.equation_ids
+    assert "entity.endpoint_gain" in cumulative.equation_ids
+    assert one_step != cumulative
+
+
+def test_raw_trajectory_and_rank_guides_retain_external_reporting_sources() -> None:
+    source = Path(reconstruction_return.__file__).read_text(encoding="utf-8")
+    raw_start = source.index('question=f"What exact {metric_label.lower()} trajectory')
+    raw_end = source.index("def _temporal_summary_figure", raw_start)
+    rank_start = source.index('question="How far is each selected action')
+    rank_end = source.index("st.dataframe(ranks", rank_start)
+
+    assert "external_references=(_EVIDENCE_REPORTING_REFERENCE,)" in source[raw_start:raw_end]
+    assert "external_references=(_EVIDENCE_REPORTING_REFERENCE,)" in source[rank_start:rank_end]
+
+
+def test_all_static_rollout_theory_references_resolve_from_canonical_docs() -> None:
+    modules = (
+        candidate_generation,
+        overview_topology,
+        reconstruction_return,
+        validity_support,
+        failure_triage,
+        inspect_rerun,
+    )
+    references: list[theory.TheoryReferences] = list(reconstruction_return._TEMPORAL_THEORY.values())
+    for module in modules:
+        source = Path(module.__file__).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for call in (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "TheoryReferences"
+        ):
+            values = {keyword.arg: ast.literal_eval(keyword.value) for keyword in call.keywords}
+            references.append(theory.TheoryReferences(**values))
+        assert r"\frac" not in source
+        assert r"\sum" not in source
+
+    for reference in references:
+        theory.validate_theory_registry(reference, root=PathConfig().root)
 
 
 def test_failure_triage_uses_the_coordinator_state_contract() -> None:
@@ -1197,81 +1285,88 @@ def test_failure_triage_uses_the_coordinator_state_contract() -> None:
     assert shared.st.session_state[shared.STORED_ROLLOUTS_DIAGNOSE_MODE_KEY] == shared.STORED_ROLLOUTS_DIAGNOSE_MODES[1]
 
 
-def _rich_explanation(*, definition: str | None = "RRI = gain / baseline") -> shared.ScientificExplanation:
+def _rich_explanation(*, with_theory: bool = True) -> shared.ScientificExplanation:
     return shared.ScientificExplanation(
         question="How much does the selected view improve reconstruction?",
-        population="Finite evaluated rollout steps.",
-        metric="Relative reconstruction improvement (unitless).",
-        denominator_masks="Only paired finite baseline and selected gains contribute.",
-        comparability="Compare policies only on the same store and evaluated steps.",
-        expected_pattern="Higher values indicate larger reconstruction gains.",
-        failure_interpretation="Investigate missing masks or invalid candidate geometry.",
+        answer="Selected views improve reconstruction relative to the baseline.",
+        sections=(
+            shared.ExplanationSection(
+                "Reading the marks",
+                "Each mark is one finite evaluated rollout step; spread is descriptive, not a confidence interval.",
+            ),
+            shared.ExplanationSection(
+                "Compare carefully",
+                "Compare policies only on the same store and evaluated steps.",
+            ),
+        ),
+        theory=theory.TheoryReferences(
+            equation_ids=("rl.target_rri_reward",),
+            term_ids=("target-rri-reward",),
+        )
+        if with_theory
+        else None,
         evidence_role="oracle/evaluation",
         source_fields=("inspection.rollout_step_objective_rows",),
-        answer="Selected views improve reconstruction relative to the baseline.",
-        intuition="The score measures the gain attributable to the selected view.",
-        visual_encoding="Each mark is one evaluated rollout step.",
-        uncertainty="Describe spread across finite steps; it is not a confidence interval.",
         external_references=(
             ("ARRIVE results guidance", "https://arriveguidelines.org/arrive-guidelines/results/10a/explanation"),
         ),
-        definition=definition,
     )
 
 
-def test_scientific_explanation_supports_explicit_rich_guide() -> None:
+def test_scientific_explanation_supports_ordered_sections_and_theory() -> None:
     explanation = _rich_explanation()
 
     assert explanation.answer.startswith("Selected views")
+    assert [section.title for section in explanation.sections] == ["Reading the marks", "Compare carefully"]
+    assert explanation.theory is not None
     assert explanation.external_references[0][1].startswith("https://")
-    assert explanation.definition is not None
 
 
-def test_rich_guide_groups_content_definition_and_references(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scientific_guide_renders_narrative_theory_and_references(monkeypatch: pytest.MonkeyPatch) -> None:
     rendered: list[str] = []
+    latex: list[str] = []
     monkeypatch.setattr(shared.st, "markdown", lambda body, **_kwargs: rendered.append(body))
+    monkeypatch.setattr(shared.st, "latex", latex.append)
 
-    shared._render_rich_guide(_rich_explanation())
+    shared._render_scientific_guide(_rich_explanation())
 
     joined = "\n".join(rendered)
     positions = [
         joined.index(f"### {title}")
-        for title in (
-            "Core idea",
-            "Reading the marks",
-            "Evidence and uncertainty",
-            "Compare only when",
-            "Investigate next",
-        )
+        for title in ("Core idea", "Canonical equations", "Symbols and terms", "Reading the marks", "Compare carefully")
     ]
     assert positions == sorted(positions)
-    assert "**Definition**" in joined
+    assert latex == [r"r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/(\Delta_0^e+\varepsilon)"]
+    assert "Target-RRI Reward" in joined
+    assert "Shared equation source" in joined
     assert "[ARRIVE results guidance](https://arriveguidelines.org/arrive-guidelines/results/10a/explanation)" in joined
-    assert "Sources" not in joined
 
 
-def test_rich_guide_omits_absent_definition(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scientific_guide_keeps_plot_visible_when_theory_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     rendered: list[str] = []
+    warnings: list[str] = []
     monkeypatch.setattr(shared.st, "markdown", lambda body, **_kwargs: rendered.append(body))
+    monkeypatch.setattr(shared.st, "warning", warnings.append)
+    monkeypatch.setattr(
+        shared,
+        "resolve_theory",
+        lambda _references: (_ for _ in ()).throw(theory.TheoryResolutionError("missing registry key")),
+    )
 
-    shared._render_rich_guide(_rich_explanation(definition=None))
+    shared._render_scientific_guide(_rich_explanation())
 
-    assert "Definition" not in "\n".join(rendered)
+    assert warnings == ["Canonical theory unavailable: missing registry key"]
+    assert "### Reading the marks" in rendered
 
 
-def test_scientific_explanation_rejects_incomplete_rich_guide() -> None:
-    with pytest.raises(ValueError, match="every guide field"):
+def test_scientific_explanation_rejects_empty_narrative_section() -> None:
+    with pytest.raises(ValueError, match="narrative section"):
         shared.ScientificExplanation(
             question="Question",
-            population="Population",
-            metric="Metric",
-            denominator_masks="Masks",
-            comparability="Comparable",
-            expected_pattern="Pattern",
-            failure_interpretation="Failure",
+            answer="Answer",
+            sections=(shared.ExplanationSection("", "Body"),),
             evidence_role="actor-visible",
             source_fields=("steps/value",),
-            answer="Answer",
         )
 
 

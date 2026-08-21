@@ -30,7 +30,7 @@ from ...rerun_launch import (
 from ..common import _report_exception
 from .qh_admission import _render_q_h_evidence
 from .session import _cached_evidence_bundle, _cached_projection
-from .shared import ScientificExplanation
+from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
@@ -479,17 +479,22 @@ def _render_inspect_export_rerun(
                     fig,
                     ScientificExplanation(
                         question="Is the persisted selected-action depth artifact finite, aligned, and geometrically plausible?",
-                        population="One selected rollout step, downsampled only for display.",
-                        metric="Mesh depth in metres; invalid pixels are masked.",
-                        denominator_masks="Pixels marked valid and finite in selected_depth; full row statistics remain in the table.",
-                        comparability="Compare only cameras with compatible calibration and depth representation.",
-                        expected_pattern="Finite depth support aligns with the selected candidate and target evaluation crop.",
-                        failure_interpretation="Missing or corrupt depth disables this view only; it does not erase factual rollout rows.",
+                        sections=(
+                            ExplanationSection(
+                                "Reading the image",
+                                "Pixel color encodes depth in metres, with invalid pixels masked. The selected-depth table retains the complete persisted row statistics while this image may be downsampled for display.",
+                            ),
+                            ExplanationSection(
+                                "Scope and comparison",
+                                "The preview covers one selected rollout step. Compare only cameras with compatible calibration and depth representation; finite support should align with the selected candidate's evaluation crop.",
+                            ),
+                            ExplanationSection(
+                                "Investigate next",
+                                "Missing or corrupt depth disables this view only and does not erase factual rollout rows. Gaps or invalid pixels indicate artifact limitations rather than actor input.",
+                            ),
+                        ),
                         evidence_role="oracle/evaluation",
                         answer="The selected-depth image shows whether the persisted privileged depth artifact is usable for this selected rollout step.",
-                        intuition="Finite, aligned depth support should agree with the selected candidate's evaluation crop; gaps or invalid pixels indicate artifact limitations rather than actor input.",
-                        visual_encoding="Pixel color encodes depth in metres with invalid pixels masked; the table retains the complete selected-depth row statistics.",
-                        uncertainty="The image is a display preview and may be downsampled; compare only compatible camera calibration and depth contracts, using the persisted validity mask.",
                         external_references=(
                             (
                                 "PyTorch3D renderer and camera-coordinate guidance",

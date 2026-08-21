@@ -16,10 +16,11 @@ from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
 from .session import _cached_projection, _cached_topology, clear_rollout_page_caches
-from .shared import _ROLE_COLORS, ScientificExplanation
+from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
+from .theory import TheoryReferences
 
 _EVIDENCE_REPORTING_REFERENCE = (
     "ARRIVE reporting guidance for individual data and summaries",
@@ -151,25 +152,60 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
         fig,
         ScientificExplanation(
             question="How are factual rollout endpoints distributed across selected validated shards?",
-            population="One store-qualified factual rollout endpoint, faceted by persisted horizon.",
-            metric=f"{metric}; units follow the persisted endpoint metric contract.",
-            denominator_masks="Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
-            comparability="Compare within profile, policy, horizon, and the persisted contract; store identity remains visible.",
-            expected_pattern="Distributions remain stable across shards of one profile rather than being driven by one store.",
-            failure_interpretation="Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down.",
-            evidence_role="oracle/evaluation",
             answer="The endpoint boxes show the observed store-to-store distribution for each matched profile, policy, and horizon.",
-            intuition="Endpoint variability is a corpus-coverage diagnostic: it reveals whether the reported return is supported across shards rather than one pooled average.",
-            visual_encoding="Each box summarizes finite endpoint values; color separates policy and facets preserve horizon while store_id remains available on hover.",
-            uncertainty="Excluded stores contribute no values; compare medians and spread only within the same persisted endpoint contract and profile.",
+            sections=(
+                ExplanationSection(
+                    title="Following the population",
+                    body=("One store-qualified factual rollout endpoint, faceted by persisted horizon.")
+                    + "\n\n"
+                    + (f"{metric}; units follow the persisted endpoint metric contract.")
+                    + "\n\n"
+                    + (
+                        "Validated included stores and finite factual endpoints only; excluded stores contribute no values."
+                    )
+                    + "\n\n"
+                    + (
+                        "Each box summarizes finite endpoint values; color separates policy and facets preserve horizon while store_id remains available on hover."
+                    ),
+                ),
+                ExplanationSection(
+                    title="Reading the evidence",
+                    body=(
+                        "Compare within profile, policy, horizon, and the persisted contract; store identity remains visible."
+                    )
+                    + "\n\n"
+                    + (
+                        "Distributions remain stable across shards of one profile rather than being driven by one store."
+                    )
+                    + "\n\n"
+                    + (
+                        "Endpoint variability is a corpus-coverage diagnostic: it reveals whether the reported return is supported across shards rather than one pooled average."
+                    )
+                    + "\n\n"
+                    + (
+                        "Excluded stores contribute no values; compare medians and spread only within the same persisted endpoint contract and profile."
+                    ),
+                ),
+                ExplanationSection(
+                    title="What to investigate",
+                    body=(
+                        "Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down."
+                    )
+                    + "\n\n"
+                    + (
+                        "An endpoint is the final factual selected step recorded for one rollout; early-terminated rollouts contribute their observed terminal value rather than an imputed horizon value."
+                    ),
+                ),
+            ),
+            evidence_role="oracle/evaluation",
+            source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
+            theory=TheoryReferences(equation_ids=("entity.endpoint_gain",)),
             external_references=(
                 (
                     "Canonical ARIA-NBV RRI definition",
                     "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
                 ),
             ),
-            definition="An endpoint is the final factual selected step recorded for one rollout; early-terminated rollouts contribute their observed terminal value rather than an imputed horizon value.",
-            source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
         ),
     )
     with st.expander("Endpoint rows and CSV", expanded=False):
@@ -198,25 +234,57 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             px.bar(target_rows, x="admission", y="count", color="gt_label_valid", title="Target admission outcomes"),
             ScientificExplanation(
                 question="Which actor-visible targets remain valid and receive an unambiguous GT label?",
-                population="One persisted target row across validated selected stores.",
-                metric="Target count by actor validity, GT-label validity, and exact match status.",
-                denominator_masks="All persisted target rows; invalid, ambiguous, unmatched, and below-threshold rows remain explicit.",
-                comparability="Target-selection and GT-matching contracts must match before comparing counts.",
-                expected_pattern="Admitted targets have actor and GT validity; non-admitted categories remain visible rather than becoming low-RRI examples.",
-                failure_interpretation="A rise in ambiguous or unmatched rows indicates target or evidence coverage trouble, not an effect-size change.",
-                evidence_role="oracle/evaluation",
                 answer="The bars count every target outcome so that actor admission and privileged GT-label admission remain auditable separate decisions.",
-                intuition="An executable target is not automatically a trainable oracle-label target: exactly one same-class qualifying GT match is an independent requirement.",
-                visual_encoding="Each bar is the number of persisted targets in one combined actor-validity, GT-label-validity, and match-status category; color preserves label validity.",
-                uncertainty="These are additive protocol counts, not effect estimates. Invalid, ambiguous, unmatched, and below-threshold targets stay visible instead of being converted to low-reward examples.",
+                sections=(
+                    ExplanationSection(
+                        title="Following the population",
+                        body=("One persisted target row across validated selected stores.")
+                        + "\n\n"
+                        + ("Target count by actor validity, GT-label validity, and exact match status.")
+                        + "\n\n"
+                        + (
+                            "All persisted target rows; invalid, ambiguous, unmatched, and below-threshold rows remain explicit."
+                        )
+                        + "\n\n"
+                        + (
+                            "Each bar is the number of persisted targets in one combined actor-validity, GT-label-validity, and match-status category; color preserves label validity."
+                        ),
+                    ),
+                    ExplanationSection(
+                        title="Reading the evidence",
+                        body=("Target-selection and GT-matching contracts must match before comparing counts.")
+                        + "\n\n"
+                        + (
+                            "Admitted targets have actor and GT validity; non-admitted categories remain visible rather than becoming low-RRI examples."
+                        )
+                        + "\n\n"
+                        + (
+                            "An executable target is not automatically a trainable oracle-label target: exactly one same-class qualifying GT match is an independent requirement."
+                        )
+                        + "\n\n"
+                        + (
+                            "These are additive protocol counts, not effect estimates. Invalid, ambiguous, unmatched, and below-threshold targets stay visible instead of being converted to low-reward examples."
+                        ),
+                    ),
+                    ExplanationSection(
+                        title="What to investigate",
+                        body=(
+                            "A rise in ambiguous or unmatched rows indicates target or evidence coverage trouble, not an effect-size change."
+                        )
+                        + "\n\n"
+                        + (
+                            "A valid privileged label requires exactly one same-class GT match with strict oriented IoU greater than 0.20; equality and ambiguity are rejected."
+                        ),
+                    ),
+                ),
+                evidence_role="oracle/evaluation",
+                source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets/gt_match_status_id"),
                 external_references=(
                     (
                         "Canonical observed-target admission",
                         "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/target_selection.py#L96-L169",
                     ),
                 ),
-                definition="A valid privileged label requires exactly one same-class GT match with strict oriented IoU greater than 0.20; equality and ambiguity are rejected.",
-                source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets/gt_match_status_id"),
             ),
         )
         with st.expander("Target-admission rows and CSV", expanded=False):
@@ -243,20 +311,54 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
         fig,
         ScientificExplanation(
             question="Does each exact candidate-generation cohort retain collision and clearance evidence?",
-            population="Additive candidate counts from validated stores, kept separate by generation cohort.",
-            metric="Collision rate among evaluated candidates and fraction with finite clearance evidence.",
-            denominator_masks="Collision uses evaluated candidates; clearance uses its persisted finite-value denominator. Zero denominators remain unavailable, not zero.",
-            comparability="Compare exact generation cohorts only; no per-store macro or calibration estimate is averaged.",
-            expected_pattern="Clearance coverage is high where the geometry audit is available, while collision rates remain interpretable per cohort.",
-            failure_interpretation="Missing coverage or elevated collision rates point to candidate geometry/support failures and warrant active-store drill-down.",
-            evidence_role="actor-visible",
             answer="The paired bars show whether each frozen generation cohort has enough collision and clearance evidence to assess action feasibility.",
-            intuition="Collision frequency and clearance coverage diagnose different issues: a candidate can be non-colliding yet lack the geometric evidence required for a clearance conclusion.",
-            visual_encoding="For every exact generation cohort, grouped bars show collision rate and the fraction with finite clearance evidence on the common fractional scale.",
-            uncertainty="Each rate is recomputed from additive persisted counts and zero denominators stay unavailable; cohorts are intentionally separated rather than averaged across incompatible candidate contracts.",
-            external_references=(_EVIDENCE_REPORTING_REFERENCE,),
-            definition="Collision rate = collided evaluated candidates / evaluated candidates; clearance coverage = candidates with finite persisted clearance / its eligible persisted denominator.",
+            sections=(
+                ExplanationSection(
+                    title="Following the population",
+                    body=("Additive candidate counts from validated stores, kept separate by generation cohort.")
+                    + "\n\n"
+                    + ("Collision rate among evaluated candidates and fraction with finite clearance evidence.")
+                    + "\n\n"
+                    + (
+                        "Collision uses evaluated candidates; clearance uses its persisted finite-value denominator. Zero denominators remain unavailable, not zero."
+                    )
+                    + "\n\n"
+                    + (
+                        "For every exact generation cohort, grouped bars show collision rate and the fraction with finite clearance evidence on the common fractional scale."
+                    ),
+                ),
+                ExplanationSection(
+                    title="Reading the evidence",
+                    body=(
+                        "Compare exact generation cohorts only; no per-store macro or calibration estimate is averaged."
+                    )
+                    + "\n\n"
+                    + (
+                        "Clearance coverage is high where the geometry audit is available, while collision rates remain interpretable per cohort."
+                    )
+                    + "\n\n"
+                    + (
+                        "Collision frequency and clearance coverage diagnose different issues: a candidate can be non-colliding yet lack the geometric evidence required for a clearance conclusion."
+                    )
+                    + "\n\n"
+                    + (
+                        "Each rate is recomputed from additive persisted counts and zero denominators stay unavailable; cohorts are intentionally separated rather than averaged across incompatible candidate contracts."
+                    ),
+                ),
+                ExplanationSection(
+                    title="What to investigate",
+                    body=(
+                        "Missing coverage or elevated collision rates point to candidate geometry/support failures and warrant active-store drill-down."
+                    )
+                    + "\n\n"
+                    + (
+                        "Collision rate = collided evaluated candidates / evaluated candidates; clearance coverage = candidates with finite persisted clearance / its eligible persisted denominator."
+                    ),
+                ),
+            ),
+            evidence_role="actor-visible",
             source_fields=("reporting.RolloutCorpusSummary.feasibility", "candidate_diagnostics/path_collision_mask"),
+            external_references=(_EVIDENCE_REPORTING_REFERENCE,),
         ),
     )
     with st.expander("Candidate support, feasibility rows, and CSV", expanded=False):
@@ -281,20 +383,48 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
         px.bar(summary.failure_counts, x="kind", y="count", color="severity", title="Failures across included stores"),
         ScientificExplanation(
             question="Which validation and data-quality failure classes dominate the selected corpus?",
-            population="Additive failure findings from validated included stores, grouped by exact kind and severity.",
-            metric="Finding count; counts prioritize debugging and are not independent scientific samples.",
-            denominator_masks="Only findings emitted by included validated stores; excluded-store reasons remain in Overview.",
-            comparability="Compare counts only for the same selected corpus and failure rules.",
-            expected_pattern="Hard contract failures are absent or sparse and every count is traceable to a store.",
-            failure_interpretation="Large counts identify debugging priorities, not policy-performance effects.",
-            evidence_role="provenance",
             answer="The bars prioritize the failure predicates occurring most often among the selected validated stores so an investigator can choose an evidence trail to inspect.",
-            intuition="Failure findings are operational signals at mixed rollout, step, candidate, target, and store grains; concentration identifies where to debug, not what policy is better.",
-            visual_encoding="Bar height is the additive number of emitted findings, x is exact failure kind, and color separates the persisted severity category.",
-            uncertainty="Counts depend on the selected corpus and failure rules and are not independent scientific samples; excluded-store reasons remain separate from these values.",
-            external_references=(_FAILURE_COUNT_REFERENCE,),
-            definition="A failure count is the number of emitted diagnostic predicates, not the number of independent rollouts or an estimated failure probability.",
+            sections=(
+                ExplanationSection(
+                    title="Following the population",
+                    body=(
+                        "Additive failure findings from validated included stores, grouped by exact kind and severity."
+                    )
+                    + "\n\n"
+                    + ("Finding count; counts prioritize debugging and are not independent scientific samples.")
+                    + "\n\n"
+                    + ("Only findings emitted by included validated stores; excluded-store reasons remain in Overview.")
+                    + "\n\n"
+                    + (
+                        "Bar height is the additive number of emitted findings, x is exact failure kind, and color separates the persisted severity category."
+                    ),
+                ),
+                ExplanationSection(
+                    title="Reading the evidence",
+                    body=("Compare counts only for the same selected corpus and failure rules.")
+                    + "\n\n"
+                    + ("Hard contract failures are absent or sparse and every count is traceable to a store.")
+                    + "\n\n"
+                    + (
+                        "Failure findings are operational signals at mixed rollout, step, candidate, target, and store grains; concentration identifies where to debug, not what policy is better."
+                    )
+                    + "\n\n"
+                    + (
+                        "Counts depend on the selected corpus and failure rules and are not independent scientific samples; excluded-store reasons remain separate from these values."
+                    ),
+                ),
+                ExplanationSection(
+                    title="What to investigate",
+                    body=("Large counts identify debugging priorities, not policy-performance effects.")
+                    + "\n\n"
+                    + (
+                        "A failure count is the number of emitted diagnostic predicates, not the number of independent rollouts or an estimated failure probability."
+                    ),
+                ),
+            ),
+            evidence_role="provenance",
             source_fields=("reporting.RolloutCorpusSummary.failure_counts", "inspection.suspicious_rollout_rows"),
+            external_references=(_FAILURE_COUNT_REFERENCE,),
         ),
     )
 
@@ -374,20 +504,48 @@ def _render_trust_and_topology(
                 fig,
                 ScientificExplanation(
                     question="Which persisted artifacts are embedded, resolved, inferred, or missing?",
-                    population="Aggregate artifact nodes and typed edges; source rows are collapsed by default.",
-                    metric="Edge width is relationship count, not bytes or scientific effect size.",
-                    denominator_masks="All recorded topology links for the selected rollout store and discovered VIN stores.",
-                    comparability="Compare resolution classes only; node width does not imply data quality.",
-                    expected_pattern="Manifest hashes resolve uniquely and required actor/oracle modalities have one owner.",
-                    failure_interpretation="Missing or ambiguous links indicate incomplete local provenance, not invalid scientific values by themselves.",
-                    evidence_role="provenance",
                     answer="The Sankey maps which rollout payloads and external artifacts the selected store declares, resolves, infers, or fails to locate.",
-                    intuition="Scientific values can only be interpreted in context when their source, actor inputs, oracle material, and configuration references have one traceable owner.",
-                    visual_encoding="Nodes are artifact or modality classes and link width is the number of recorded relationships; it does not encode bytes, quality, or causal influence.",
-                    uncertainty="Topology is a provenance inventory, not a validity proof: a resolved path still requires the store's schema and semantic validation before scientific use.",
-                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
-                    definition="A topology link records a persisted or resolved relationship between rollout and VIN/store artifacts; its class states whether the relation is embedded, resolved, inferred, or missing.",
+                    sections=(
+                        ExplanationSection(
+                            title="Following the population",
+                            body=("Aggregate artifact nodes and typed edges; source rows are collapsed by default.")
+                            + "\n\n"
+                            + ("Edge width is relationship count, not bytes or scientific effect size.")
+                            + "\n\n"
+                            + ("All recorded topology links for the selected rollout store and discovered VIN stores.")
+                            + "\n\n"
+                            + (
+                                "Nodes are artifact or modality classes and link width is the number of recorded relationships; it does not encode bytes, quality, or causal influence."
+                            ),
+                        ),
+                        ExplanationSection(
+                            title="Reading the evidence",
+                            body=("Compare resolution classes only; node width does not imply data quality.")
+                            + "\n\n"
+                            + ("Manifest hashes resolve uniquely and required actor/oracle modalities have one owner.")
+                            + "\n\n"
+                            + (
+                                "Scientific values can only be interpreted in context when their source, actor inputs, oracle material, and configuration references have one traceable owner."
+                            )
+                            + "\n\n"
+                            + (
+                                "Topology is a provenance inventory, not a validity proof: a resolved path still requires the store's schema and semantic validation before scientific use."
+                            ),
+                        ),
+                        ExplanationSection(
+                            title="What to investigate",
+                            body=(
+                                "Missing or ambiguous links indicate incomplete local provenance, not invalid scientific values by themselves."
+                            )
+                            + "\n\n"
+                            + (
+                                "A topology link records a persisted or resolved relationship between rollout and VIN/store artifacts; its class states whether the relation is embedded, resolved, inferred, or missing."
+                            ),
+                        ),
+                    ),
+                    evidence_role="provenance",
                     source_fields=("rollout manifest source lineage", "VIN manifest", "PathConfig", "mesh paths"),
+                    external_references=(_EVIDENCE_REPORTING_REFERENCE,),
                 ),
             )
         modality_df = pd.DataFrame(topology.modality_rows())

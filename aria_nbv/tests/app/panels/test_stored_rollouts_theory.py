@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from aria_nbv.app.panels._stored_rollouts import theory
+from aria_nbv.app.panels._stored_rollouts import reconstruction_return, shared, theory
+from aria_nbv.configs import PathConfig
 
 
 def _write_registry(root: Path, *, equation_tex: str = "x=y") -> None:
@@ -84,6 +85,41 @@ def test_theory_registry_cache_invalidates_when_glossary_content_changes_without
 
     assert first.terms[0].label == "Demo Term"
     assert second.terms[0].label == "Alt. Term"
+
+
+def test_canonical_root_gain_equations_remain_semantically_distinct() -> None:
+    resolved = theory.resolve_theory(
+        theory.TheoryReferences(
+            equation_ids=("rl.target_rri_reward", "rl.observed_cumulative_root_gain", "entity.endpoint_gain")
+        ),
+        root=PathConfig().root,
+    )
+
+    immediate, cumulative, endpoint = (item.tex for item in resolved.equations)
+    assert r"\Delta_0^e+\varepsilon" in immediate
+    assert r"\Delta_t^e-\Delta_{t+1}^e" in immediate
+    assert r"\sum_{k=0}^{s-1}" in cumulative
+    assert r"G_{0:s,\mathrm{root}}^e" in cumulative
+    assert r"\Delta_{t=H}^e" in endpoint
+    assert len({immediate, cumulative, endpoint}) == 3
+
+
+def test_cumulative_plot_theory_renders_prefix_equation_and_symbol_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    latex: list[str] = []
+    markdown: list[str] = []
+    monkeypatch.setattr(shared.st, "latex", latex.append)
+    monkeypatch.setattr(shared.st, "markdown", lambda body, **_kwargs: markdown.append(body))
+
+    shared._render_theory(reconstruction_return._TEMPORAL_THEORY["cumulative_target_root_gain"])
+
+    assert any(r"G_{0:s,\mathrm{root}}^e=\sum_{k=0}^{s-1}" in expression for expression in latex)
+    assert any(r"\Delta_0^e+\varepsilon" in expression for expression in latex)
+    joined = "\n".join(markdown)
+    assert "Target-specific reconstruction error at rollout step t" in joined
+    assert "Target-specific reconstruction error at the rollout start" in joined
+    assert "Small positive numerical stabilizer" in joined
 
 
 @pytest.mark.parametrize("malformation", ["missing", "invalid-yaml", "unknown-key"])

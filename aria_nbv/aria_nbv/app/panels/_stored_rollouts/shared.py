@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from ..common import _plot_with_y_axis_control
+from .theory import ResolvedNotation, ResolvedTerm, TheoryReferences, TheoryResolutionError, resolve_theory
 
 _ROLE_COLORS = {
     "actor-visible": "#1f77b4",
@@ -33,49 +34,36 @@ STORED_ROLLOUTS_DIAGNOSE_MODES = ("Triage failures", "Inspect, export, and Rerun
 
 
 @dataclass(frozen=True, slots=True)
-class ScientificExplanation:
-    """Complete interpretation contract shown beside one primary visualization.
+class ExplanationSection:
+    """One author-chosen narrative section in a scientific explanation."""
 
-    The legacy fields remain positional-compatible while chart call sites migrate
-    to the richer reader-intent guide.  Supplying any rich guide field opts into
-    validation of the complete guide; legacy callers continue to render their
-    existing checklist until they are migrated.
-    """
-
-    question: str
-    population: str
-    metric: str
-    denominator_masks: str
-    comparability: str
-    expected_pattern: str
-    failure_interpretation: str
-    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
-    source_fields: tuple[str, ...]
-    answer: str = ""
-    intuition: str = ""
-    visual_encoding: str = ""
-    uncertainty: str = ""
-    external_references: tuple[tuple[str, str], ...] = ()
-    definition: str | None = None
+    title: str
+    body: str
 
     def __post_init__(self) -> None:
-        required = (
-            self.question,
-            self.population,
-            self.metric,
-            self.denominator_masks,
-            self.comparability,
-            self.expected_pattern,
-            self.failure_interpretation,
-        )
-        if any(not value.strip() for value in required) or not self.source_fields:
-            raise ValueError("Scientific explanations require every interpretation field and at least one source.")
-        rich_fields = (self.answer, self.intuition, self.visual_encoding, self.uncertainty)
-        if any(rich_fields) or self.external_references or self.definition is not None:
-            if any(not value.strip() for value in rich_fields) or not self.external_references:
-                raise ValueError("Rich scientific explanations require every guide field and an external reference.")
-            if any(not label.strip() or not url.strip() for label, url in self.external_references):
-                raise ValueError("External references require a label and URL.")
+        if not self.title.strip() or not self.body.strip():
+            raise ValueError("Each narrative section requires a title and body.")
+
+
+@dataclass(frozen=True, slots=True)
+class ScientificExplanation:
+    """Narrative interpretation and canonical theory references for one plot."""
+
+    question: str
+    answer: str
+    sections: tuple[ExplanationSection, ...]
+    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
+    source_fields: tuple[str, ...]
+    theory: TheoryReferences | None = None
+    external_references: tuple[tuple[str, str], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.question.strip() or not self.answer.strip() or not self.source_fields:
+            raise ValueError("Scientific explanations require a question, answer, and at least one source.")
+        if any(not source.strip() for source in self.source_fields):
+            raise ValueError("Scientific explanation sources must be non-empty.")
+        if any(not label.strip() or not url.strip() for label, url in self.external_references):
+            raise ValueError("External references require a label and URL.")
 
 
 def render_stale_store_boundary(
@@ -107,22 +95,9 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         f"{html.escape(explanation.evidence_role)}</span>",
         unsafe_allow_html=True,
     )
-    answer = explanation.answer or explanation.question
-    st.markdown(f"**Answer:** {answer}")
+    st.markdown(f"**Answer:** {explanation.answer}")
     with col_info.popover("Interpret this plot", icon="ℹ️"):
-        if explanation.answer:
-            _render_rich_guide(explanation)
-        else:
-            for label, value in (
-                ("Question", explanation.question),
-                ("Population / grain", explanation.population),
-                ("Metric / units", explanation.metric),
-                ("Denominator / masks", explanation.denominator_masks),
-                ("Valid comparison conditions", explanation.comparability),
-                ("Expected pattern", explanation.expected_pattern),
-                ("Warnings / failure modes", explanation.failure_interpretation),
-            ):
-                explanation_item(label, value)
+        _render_scientific_guide(explanation)
         if log_y_key is not None:
             explanation_item(
                 "Axis scale",
@@ -136,46 +111,59 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
     st.plotly_chart(rendered, width="stretch")
 
 
-def _render_rich_guide(explanation: ScientificExplanation) -> None:
-    """Render the reader-intent sections for an explicitly rich guide."""
+def _render_scientific_guide(explanation: ScientificExplanation) -> None:
+    """Render an explanation as a compact narrative backed by shared theory."""
 
-    explanation_section(
-        "Core idea",
-        (
-            ("Question", explanation.question),
-            ("Answer", explanation.answer),
-            ("Intuition", explanation.intuition),
-            ("Metric / units", explanation.metric),
-        ),
-    )
-    if explanation.definition is not None:
-        explanation_item("Definition", explanation.definition)
-    explanation_section(
-        "Reading the marks",
-        (("Visual encoding", explanation.visual_encoding), ("Expected pattern", explanation.expected_pattern)),
-    )
-    explanation_section(
-        "Evidence and uncertainty",
-        (
-            ("Population / grain", explanation.population),
-            ("Denominator / masks", explanation.denominator_masks),
-            ("Uncertainty", explanation.uncertainty),
-        ),
-    )
-    explanation_section("Compare only when", (("Valid comparison conditions", explanation.comparability),))
-    explanation_section("Investigate next", (("Warnings / failure modes", explanation.failure_interpretation),))
+    st.markdown("### Core idea")
+    explanation_item("Question", explanation.question)
+    st.markdown(explanation.answer)
+    if explanation.theory is not None:
+        _render_theory(explanation.theory)
+    for section in explanation.sections:
+        st.markdown(f"### {section.title}")
+        st.markdown(section.body)
     if explanation.external_references:
         st.markdown("**External sources**")
         for label, url in explanation.external_references:
             st.markdown(f"- [{label}]({url})")
 
 
-def explanation_section(title: str, items: tuple[tuple[str, str], ...]) -> None:
-    """Render one named group of interpretation fields."""
+def _render_theory(references: TheoryReferences) -> None:
+    """Render canonical equations, symbols, and glossary terms or warn clearly."""
 
-    st.markdown(f"### {title}")
-    for label, value in items:
-        explanation_item(label, value)
+    try:
+        resolved = resolve_theory(references)
+    except TheoryResolutionError as exc:
+        st.warning(f"Canonical theory unavailable: {exc}")
+        return
+
+    if resolved.equations:
+        st.markdown("### Canonical equations")
+        for equation in resolved.equations:
+            _render_equation(equation)
+    if resolved.symbols or resolved.terms:
+        st.markdown("### Symbols and terms")
+        for symbol in resolved.symbols:
+            _render_symbol(symbol)
+        for term in resolved.terms:
+            _render_term(term)
+
+
+def _render_equation(equation: ResolvedNotation) -> None:
+    st.latex(equation.tex)
+    if equation.description is not None:
+        st.markdown(equation.description)
+    st.markdown(f"[Shared equation source]({equation.source_url})")
+
+
+def _render_symbol(symbol: ResolvedNotation) -> None:
+    description = symbol.description or symbol.identifier
+    st.markdown(f"${symbol.tex}$ — {description} ([shared symbol]({symbol.source_url}))")
+
+
+def _render_term(term: ResolvedTerm) -> None:
+    label = f"{term.label} ({term.short})" if term.short and term.short != term.label else term.label
+    st.markdown(f"**{label}.** {term.definition} ([glossary source]({term.source_url}))")
 
 
 def explanation_item(label: str, value: str, *, code: bool = False) -> None:
