@@ -20,6 +20,7 @@ import pandas as pd
 
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
+    build_compact_statistics,
     build_manifest_facts,
     build_promotion_evidence,
     build_schema_validation,
@@ -33,7 +34,6 @@ from .inspection import (
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
     rollout_header_summary,
-    rollout_statistics,
     rollout_step_objective_rows,
     rollout_tree_summary_rows,
     runtime_storage_statistics,
@@ -643,7 +643,7 @@ def _append_store_rows(
         "root_attrs": parameter_root_attrs,
     }
     rows["parameters"].extend(_typed_leaf_rows("store_id", store_id, parameter_payload))
-    stats = rollout_statistics(reader, manifest_payload=manifest_payload)
+    stats = build_compact_statistics(reader, manifest_payload=manifest_payload).payload
     rows["statistics"].extend(_typed_leaf_rows("store_id", store_id, stats))
     rows["facts"].extend(_fact_rows(store_id, stats, evidence_status=evidence_status))
     rows["source_coverage"].extend(_source_coverage_rows(store_id, stats.get("source_coverage", {})))

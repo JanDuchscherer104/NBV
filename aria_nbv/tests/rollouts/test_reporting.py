@@ -54,7 +54,7 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
     original_manifest = RolloutZarrStoreReader.manifest
     original_validate = RolloutZarrStoreReader.validate
     original_promotion = reporting.promoted_store_validation_error
-    original_statistics = reporting.rollout_statistics
+    original_statistics = reporting.build_compact_statistics
 
     def manifest(reader):
         calls["manifest"] += 1
@@ -75,7 +75,7 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
     monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
     monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
     monkeypatch.setattr(reporting, "promoted_store_validation_error", promotion)
-    monkeypatch.setattr(reporting, "rollout_statistics", statistics)
+    monkeypatch.setattr(reporting, "build_compact_statistics", statistics)
 
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
 

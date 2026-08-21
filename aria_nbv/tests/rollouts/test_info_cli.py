@@ -47,7 +47,7 @@ def test_rollouts_info_preserves_demand_aligned_inspection_calls(
 
     original_manifest = info_cli.RolloutZarrStoreReader.manifest
     original_validate = info_cli.RolloutZarrStoreReader.validate
-    original_statistics = info_cli.rollout_statistics
+    original_statistics = info_cli.build_compact_statistics
     original_promotion = reporting.promoted_store_validation_error
 
     def manifest(reader):
@@ -68,7 +68,7 @@ def test_rollouts_info_preserves_demand_aligned_inspection_calls(
 
     monkeypatch.setattr(info_cli.RolloutZarrStoreReader, "manifest", manifest)
     monkeypatch.setattr(info_cli.RolloutZarrStoreReader, "validate", validate)
-    monkeypatch.setattr(info_cli, "rollout_statistics", statistics)
+    monkeypatch.setattr(info_cli, "build_compact_statistics", statistics)
     monkeypatch.setattr(reporting, "promoted_store_validation_error", promotion)
 
     cli_result = runner.invoke(
