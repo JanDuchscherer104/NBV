@@ -39,6 +39,8 @@ the scorer-visible actor state without changing persisted schemas or model code.
   removing duplicate object construction without changing tensor ownership.
 - Moved chain, prefix, and EVL materialization into one internal module and
   replaced reflective access to known typed fields with direct access.
+- Bounded selected-depth reads to the validated factual-chain slice instead of
+  rescanning the store-wide identifier column for every rich chain.
 
 ## Verification
 
