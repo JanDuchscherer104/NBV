@@ -17,6 +17,7 @@ from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import LabelSurface, TheoryReferences, format_scientific_label, scientific_label
 from ...state import get_label_display_mode
+from ..common import render_scientific_notation
 from .session import _cached_projection, _cached_topology, clear_rollout_page_caches
 from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
@@ -150,6 +151,7 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
     if metric is None:
         st.info("The selected stores do not expose a supported endpoint metric.")
         return
+    render_scientific_notation(metric)
     fig = px.box(
         summary.endpoints,
         x="profile",
