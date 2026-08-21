@@ -124,7 +124,7 @@ def _cached_candidate_population_cached(
 ) -> dict[str, object]:
     """Build candidate evidence once per immutable store identity."""
 
-    reader, _, _ = _cached_store_bundle(store_path)
+    reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
     return candidate_population_evidence(reader, sample_size=sample_size)
 
 
@@ -148,7 +148,7 @@ def _cached_projection_cached(
 ) -> Any:
     """Cache a named inspection projection for one validated store identity."""
 
-    reader, _, manifest_payload = _cached_store_bundle(store_path)
+    reader, _, manifest_payload = _cached_store_bundle_cached(store_path, store_identity=store_identity)
     if projection == "invariants":
         return store_invariant_rows(reader, manifest_payload=manifest_payload)
     if projection == "header":
@@ -210,7 +210,7 @@ def _cached_projection_cached(
     if projection == "candidate_population":
         return _cached_candidate_population_cached(store_path, store_identity)
     if projection == "q_h":
-        _, validation, _ = _cached_store_bundle(store_path)
+        _, validation, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
         return q_h_evidence_rows(
             reader,
             deep_count=deep_count,
@@ -285,7 +285,7 @@ def _cached_failures_cached(
 ) -> list[dict[str, object]]:
     """Cache failure triage for one replacement-sensitive store."""
 
-    reader, _, _ = _cached_store_bundle(store_path)
+    reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
     return suspicious_rollout_rows(
         reader,
         config=RolloutSuspiciousQueryConfig(

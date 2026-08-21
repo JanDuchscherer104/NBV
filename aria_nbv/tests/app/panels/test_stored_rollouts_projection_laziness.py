@@ -49,7 +49,7 @@ def test_lightweight_dispatch_does_not_materialize_candidate_audit(
 
     reader = object()
     expected = [{"projection": projection}]
-    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (reader, object(), {}))
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda _path, **_kwargs: (reader, object(), {}))
     monkeypatch.setattr(
         session,
         "candidate_audit_rows",
@@ -73,7 +73,7 @@ def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_ro
     summary_calls: list[tuple[object, str, object]] = []
     dispatch = session._cached_projection.__wrapped__
 
-    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (reader, object(), {}))
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda _path, **_kwargs: (reader, object(), {}))
 
     def recursive_projection(
         _store_path: str,
@@ -259,7 +259,9 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     monkeypatch.setattr(page.st, "empty", lambda: status)
     monkeypatch.setattr(page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(page, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (object(), object(), {}))
+    monkeypatch.setattr(
+        session, "_cached_store_bundle_cached", lambda _path, **_kwargs: (object(), SimpleNamespace(ok=True), {})
+    )
     callback_results: list[bool] = []
 
     def q_h(_reader, **kwargs):
