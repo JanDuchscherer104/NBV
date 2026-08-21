@@ -31,6 +31,7 @@ from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
+from aria_nbv.vin.types import EvlBackboneOutput
 
 
 def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_types() -> None:
@@ -38,7 +39,7 @@ def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_ty
 
     package = Path(__file__).resolve().parents[2] / "aria_nbv" / "data_handling" / "qh_data"
     expected_classes = {
-        "views.py": {"QhActorTensors", "QhSupervision", "QhChainKey", "QhChain"},
+        "views.py": {"QhActorStateContract", "QhActorTensors", "QhSupervision", "QhChainKey", "QhChain"},
         "batching.py": {"QhBatch"},
         "dataset.py": {"QhDatasetConfig"},
     }
@@ -197,12 +198,21 @@ class _ActorReader:
     record = _RECORD
     config = SimpleNamespace(store_dir=Path("/tmp/vin"))
 
+    def __init__(self, backbone: EvlBackboneOutput | None = None) -> None:
+        self.backbone = backbone
+        self.backbone_reads = 0
+
     def get_split_records(self, _split: Stage | None) -> list[VinOfflineIndexRecord]:
         return [self.record]
 
     def read_actor_snippet(self, record: VinOfflineIndexRecord, *, device: str = "cpu") -> VinSnippetView:
         assert record is self.record and device == "cpu"
         return _snippet()
+
+    def read_backbone_evidence(self, record: VinOfflineIndexRecord, *, device: str = "cpu") -> EvlBackboneOutput | None:
+        assert record is self.record and device == "cpu"
+        self.backbone_reads += 1
+        return self.backbone
 
 
 def _source_ref(**changes: object) -> _QhSourceRef:
@@ -247,6 +257,12 @@ def _stored(source_ref: _QhSourceRef) -> SimpleNamespace:
         horizon_remaining=np.array([2, 1]),
         discount=np.array([0.95, 0], dtype=np.float32),
         terminal=np.array([False, True]),
+        selected_depth_m=None,
+        selected_depth_valid_mask=None,
+        selected_depth_focal_px=None,
+        selected_depth_principal_point_px=None,
+        selected_depth_image_size_hw=None,
+        selected_depth_renderer=None,
         store_index=0,
         rollout_row_id=4,
         target_row_id=5,
@@ -258,6 +274,7 @@ class _RolloutReader:
     max_horizon = 2
     contract = QhDataContract("8", "v0_gt_input", "gain", "return", "td", 0.95, "reason", "7")
     provenance = {"stores": []}
+    store_dirs = (Path("/tmp/rollouts.zarr"),)
 
     def __init__(self, source_ref: _QhSourceRef, campaign_split: Stage | None = None) -> None:
         self.source_refs = (source_ref,)
@@ -274,8 +291,9 @@ class _RolloutReader:
 
 
 def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
+    actor_reader = _ActorReader()
     dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()), actor_reader=_ActorReader()
+        rollout_reader=_RolloutReader(_source_ref()), actor_reader=actor_reader
     )
     chain = dataset[0]
 
@@ -283,6 +301,123 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert chain.actor.target_pose_relative_root[-3:].tolist() == pytest.approx([1, 2, 3])
     assert chain.actor.history_mask.tolist() == [[False, False], [True, False]]
     assert chain.actor.horizon_remaining.tolist() == [2, 1]
+    assert chain.actor.static_context is None
+    assert actor_reader.backbone_reads == 0
+
+
+def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
+    scalar_grid = torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)
+    actor_reader = _ActorReader(
+        EvlBackboneOutput(
+            t_world_voxel=PoseTW(torch.zeros((1, 12), dtype=torch.float32)),
+            voxel_extent=torch.ones(6),
+            occ_pr=scalar_grid,
+            occ_input=scalar_grid,
+            free_input=scalar_grid,
+            counts=torch.ones((1, 2, 2, 2), dtype=torch.int64),
+            cent_pr=scalar_grid,
+            pts_world=torch.ones((1, 8, 3), dtype=torch.float32),
+        )
+    )
+    rollout_reader = _RolloutReader(_source_ref())
+    rollout_reader.stored.selected_depth_m = np.ones((2, 2, 3), dtype=np.float16)
+    rollout_reader.stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
+    rollout_reader.stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
+    rollout_reader.stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
+    rollout_reader.stored.selected_depth_image_size_hw = np.tile(np.array([2, 3]), (2, 1))
+    rollout_reader.stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=rollout_reader,
+        actor_reader=actor_reader,
+        require_rich_modalities=True,
+    )
+
+    chain = dataset[0]
+    context = chain.actor.static_context
+    assert context is not None
+    assert context.t_world_voxel is not None and context.t_world_voxel.shape == (12,)
+    assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)
+    assert context.counts is not None and context.counts.shape == (2, 2, 2)
+    assert context.pts_world is not None and context.pts_world.shape == (8, 3)
+    batch_context = collate_qh_chains([chain, chain]).actor.static_context
+    assert batch_context is not None
+    assert batch_context.t_world_voxel is not None and batch_context.t_world_voxel.shape == (2, 12)
+    assert batch_context.occ_pr is not None and batch_context.occ_pr.shape == (2, 1, 2, 2, 2)
+    assert batch_context.counts is not None and batch_context.counts.shape == (2, 2, 2, 2)
+    assert batch_context.pts_world is not None and batch_context.pts_world.shape == (2, 8, 3)
+    assert actor_reader.backbone_reads == 1
+
+
+def test_rich_dataset_rejects_non_singleton_source_axis() -> None:
+    actor_reader = _ActorReader(
+        EvlBackboneOutput(
+            t_world_voxel=PoseTW(torch.zeros((2, 12), dtype=torch.float32)),
+            voxel_extent=torch.ones(6),
+        )
+    )
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=_RolloutReader(_source_ref()),
+        actor_reader=actor_reader,
+        require_rich_modalities=True,
+    )
+
+    with pytest.raises(ValueError, match="source batch axis must have size 1"):
+        _ = dataset[0]
+
+
+def test_audit_reads_renderer_metadata_without_loading_rich_payloads() -> None:
+    actor_reader = _ActorReader()
+    rollout_reader = _RolloutReader(_source_ref())
+    rollout_reader.stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    dataset = QhDataset(  # type: ignore[arg-type]
+        rollout_reader=rollout_reader,
+        actor_reader=actor_reader,
+        include_audit=True,
+    )
+
+    chain = dataset[0]
+    assert chain.audit is not None
+    assert chain.audit.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert chain.actor.selected_observation_prefix is None
+    assert actor_reader.backbone_reads == 0
+
+
+def test_collate_rejects_incompatible_root_evl_geometry() -> None:
+    first_context = QhStaticContext(
+        vin_snippet=_snippet(),
+        t_world_voxel=PoseTW().tensor(),
+        voxel_extent=torch.ones(6),
+        occ_pr=torch.ones(1, 2, 2, 2),
+        occ_input=None,
+        free_input=None,
+        counts=None,
+        cent_pr=None,
+        pts_world=None,
+        evl_presence=torch.tensor([True, True, True, False, False, False, False, False]),
+    )
+    second_context = replace(first_context, occ_pr=torch.ones(1, 2, 2, 3))
+    first = _chain(steps=1, width=1)
+    second = _chain(steps=1, width=1, offset=1)
+    first = replace(first, actor=replace(first.actor, static_context=first_context))
+    second = replace(second, actor=replace(second.actor, static_context=second_context))
+
+    with pytest.raises(ValueError, match="one root EVL field 'occ_pr' shape"):
+        collate_qh_chains([first, second])
+
+
+def test_collate_rejects_incompatible_selected_depth_geometry() -> None:
+    def rich_chain(height: int) -> QhChain:
+        stored = _stored(_source_ref())
+        stored.selected_depth_m = np.ones((2, height, 3), dtype=np.float16)
+        stored.selected_depth_valid_mask = np.ones((2, height, 3), dtype=np.bool_)
+        stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
+        stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
+        stored.selected_depth_image_size_hw = np.tile(np.array([height, 3]), (2, 1))
+        stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+        return _tensor_chain(stored, _snippet())
+
+    with pytest.raises(ValueError, match="one raster geometry"):
+        collate_qh_chains([rich_chain(2), rich_chain(3)])
 
 
 def test_dataset_rejects_split_inconsistent_with_unfiltered_reader() -> None:
@@ -298,9 +433,10 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
     captured: dict[str, object] = {}
 
     class _Reader:
-        def __init__(self, store_dirs, *, campaign_split):
+        def __init__(self, store_dirs, *, campaign_split, include_selected_depth):
             captured["store_dirs"] = store_dirs
             captured["campaign_split"] = campaign_split
+            captured["include_selected_depth"] = include_selected_depth
 
     monkeypatch.setattr(qh_dataset_module, "QhRolloutReader", _Reader)
     monkeypatch.setattr(qh_dataset_module, "VinOfflineStoreReader", lambda actor: "actor-reader")
@@ -311,6 +447,7 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
     assert captured == {
         "store_dirs": (tmp_path / "rollouts.zarr",),
         "campaign_split": Stage.VAL,
+        "include_selected_depth": False,
     }
     assert result["split"] is Stage.VAL
 

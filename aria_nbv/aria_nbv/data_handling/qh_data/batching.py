@@ -169,6 +169,7 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
         points_world=_pad([value.points_world for value in snippets], float("nan")),
         lengths=torch.stack([value.lengths for value in snippets]),
         t_world_rig=PoseTW(_pad([value.t_world_rig.tensor() for value in snippets], 0)),
+        t_world_snippet=PoseTW(_pad([value.t_world_snippet.tensor() for value in snippets], 0)),
     )
     batch = QhBatch(
         actor=QhActorTensors(
@@ -224,7 +225,9 @@ def _collate_static_context(actors: list[QhActorTensors], vin_snippet: VinSnippe
             return None
         if any(field is None for field in fields):
             raise ValueError(f"Q_H batches require one shared EVL availability pattern for {name!r}.")
-        return _pad([field for field in fields if field is not None], fill)
+        present = [field for field in fields if field is not None]
+        _require_matching_shapes(present, name=f"root EVL field {name!r}")
+        return torch.stack(present) if present else None
 
     return QhStaticContext(
         vin_snippet=vin_snippet,
@@ -251,6 +254,9 @@ def _collate_selected_prefix(actors: list[QhActorTensors]) -> QhSelectedObservat
     values = [prefix for prefix in prefixes if prefix is not None]
     if {prefix.source_protocol for prefix in values} != {"cf_gt"}:
         raise ValueError("Q_H selected-observation batches require one CF-GT source protocol.")
+    depth_shapes = {tuple(prefix.depth_m.shape[-2:]) for prefix in values}
+    if len(depth_shapes) != 1:
+        raise ValueError(f"Q_H selected-observation batches require one raster geometry, got {sorted(depth_shapes)}.")
     return QhSelectedObservationPrefix(
         depth_m=_pad([value.depth_m for value in values], 0),
         valid_mask=_pad([value.valid_mask for value in values], False),
@@ -283,6 +289,14 @@ def _pad(values: list[Tensor], fill: int | float | bool) -> Tensor:
     for row, value in enumerate(values):
         output[(row, *(slice(0, size) for size in value.shape))] = value
     return output
+
+
+def _require_matching_shapes(values: list[Tensor], *, name: str) -> None:
+    """Reject spatially incompatible tensors before generic chain-axis padding."""
+
+    shapes = {tuple(value.shape) for value in values}
+    if len(shapes) != 1:
+        raise ValueError(f"Q_H batches require one {name} shape, got {sorted(shapes)}.")
 
 
 def _gather_candidates(values: Tensor, indices: Tensor) -> Tensor:
@@ -322,6 +336,12 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
     actor = batch.actor
     snippet = actor.vin_snippet
     supervision = batch.supervision
+    transformed_snippet = VinSnippetView(
+        points_world=transform(snippet.points_world),
+        lengths=transform(snippet.lengths),
+        t_world_rig=PoseTW(transform(snippet.t_world_rig.tensor())),
+        t_world_snippet=PoseTW(transform(snippet.t_world_snippet.tensor())),
+    )
     return QhBatch(
         actor=QhActorTensors(
             vin_snippet=VinSnippetView(

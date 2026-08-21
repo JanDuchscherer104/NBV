@@ -10,6 +10,7 @@ import pytest
 from torch.utils.data import Dataset, SequentialSampler
 
 import aria_nbv.lightning.qh_datamodule as qh_datamodule
+from aria_nbv.data_handling.qh_data.views import QhActorStateContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
 
 _CONTRACT = QhDataContract(
@@ -22,6 +23,7 @@ _CONTRACT = QhDataContract(
     reason_code_version="reasons-v1",
     actor_store_version="vin-v1",
 )
+_ACTOR_CONTRACT = QhActorStateContract("lean", "actor-manifest", ())
 
 
 class _StructuralDataset(Dataset[object]):
@@ -32,11 +34,13 @@ class _StructuralDataset(Dataset[object]):
         size: int = 1,
         max_horizon: int = 1,
         contract: QhDataContract = _CONTRACT,
+        actor_state_contract: QhActorStateContract = _ACTOR_CONTRACT,
     ) -> None:
         self.size = size
         self.scenes = frozenset({scene})
         self.max_horizon = max_horizon
         self.contract = contract
+        self.actor_state_contract = actor_state_contract
         self.provenance: dict[str, object] = {"scene": scene}
 
     def __len__(self) -> int:
@@ -77,6 +81,28 @@ def test_datamodule_rejects_different_semantic_contracts() -> None:
         qh_datamodule.QhDataModule(  # type: ignore[arg-type]
             train=_StructuralDataset("train"),
             val=_StructuralDataset("val", contract=replace(_CONTRACT, reward_metric="scene-rri")),
+            seed=7,
+        )
+
+
+@pytest.mark.parametrize(
+    "actor_contract",
+    (
+        replace(_ACTOR_CONTRACT, modality_mode="rich"),
+        replace(_ACTOR_CONTRACT, actor_manifest_hash="other-manifest"),
+        replace(
+            _ACTOR_CONTRACT,
+            evl_block_signature=(("backbone.occ_pr", "float32", (1, 4, 4, 4)),),
+        ),
+    ),
+)
+def test_datamodule_rejects_incompatible_actor_state_contracts(
+    actor_contract: QhActorStateContract,
+) -> None:
+    with pytest.raises(ValueError, match="incompatible actor-state contract"):
+        qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+            train=_StructuralDataset("train"),
+            val=_StructuralDataset("val", actor_state_contract=actor_contract),
             seed=7,
         )
 

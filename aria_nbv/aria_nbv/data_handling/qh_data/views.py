@@ -24,10 +24,25 @@ construction.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from torch import Tensor
 
 from ..vin_store.views import VinSnippetView
+
+
+@dataclass(frozen=True, slots=True)
+class QhActorStateContract:
+    """Metadata-only compatibility contract for scorer-visible root evidence."""
+
+    modality_mode: Literal["lean", "rich"]
+    """Whether chains omit or require root EVL and selected CF-GT evidence."""
+
+    actor_manifest_hash: str
+    """Exact immutable VIN manifest digest used by every configured stage."""
+
+    evl_block_signature: tuple[tuple[str, str, tuple[int, ...]], ...]
+    """Sorted ``(block, dtype, canonical row shape)`` facts for root EVL tensors."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,8 +134,8 @@ class QhAudit:
     source_manifest_hash: str
     """VIN source-manifest digest bound to the chain's immutable source identity."""
 
-    selected_depth_renderer: str
-    """Selected-depth renderer recorded by the validated rollout store."""
+    selected_depth_renderer: str | None
+    """Selected-depth renderer recorded by the store, or ``None`` when disabled."""
 
 
 @dataclass(frozen=True, slots=True)

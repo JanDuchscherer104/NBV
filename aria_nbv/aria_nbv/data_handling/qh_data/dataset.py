@@ -33,6 +33,7 @@ from ..vin_store.store import VinOfflineStoreConfig, VinOfflineStoreReader
 from ..vin_store.views import VinSnippetView
 from .batching import _gather_candidates, _pad
 from .views import (
+    QhActorStateContract,
     QhActorTensors,
     QhAudit,
     QhChain,
@@ -143,6 +144,11 @@ class QhDataset(Dataset[QhChain]):
         self.require_rich_modalities = require_rich_modalities
         self.include_audit = include_audit
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
+        self._actor_state_contract = QhActorStateContract(
+            modality_mode="rich" if require_rich_modalities else "lean",
+            actor_manifest_hash=self._manifest_hash,
+            evl_block_signature=_evl_block_signature(actor_reader) if require_rich_modalities else (),
+        )
         # ``split`` selects campaign chains above; actor rows are loaded from
         # the complete immutable index so source_ref.split can validate the
         # physical VIN lineage independently.
@@ -169,7 +175,9 @@ class QhDataset(Dataset[QhChain]):
         stored = self.rollout_reader[index]
         record = self._record(stored.source_ref)
         snippet = self.actor_reader.read_actor_snippet(record, device="cpu")
-        static_context = _read_static_context(self.actor_reader, record, snippet)
+        static_context = (
+            _read_static_context(self.actor_reader, record, snippet) if self.require_rich_modalities else None
+        )
         if self.require_rich_modalities and (static_context is None or not bool(static_context.evl_presence.all())):
             raise ValueError(
                 "Q_H rich training requires every root EVL evidence field; rebuild the VIN offline store with backbone materialization."
@@ -206,6 +214,12 @@ class QhDataset(Dataset[QhChain]):
         """
 
         return self.rollout_reader.contract
+
+    @property
+    def actor_state_contract(self) -> QhActorStateContract:
+        """Return metadata-only scorer-input compatibility facts for this stage."""
+
+        return self._actor_state_contract
 
     @property
     def provenance(self) -> dict[str, object]:
@@ -419,7 +433,17 @@ def _read_static_context(
     backbone = read_backbone(record, device="cpu")
     if backbone is None:
         return None
-    values = (
+    names = (
+        "backbone.t_world_voxel",
+        "backbone.voxel_extent",
+        "backbone.occ_pr",
+        "backbone.occ_input",
+        "backbone.free_input",
+        "backbone.counts",
+        "backbone.cent_pr",
+        "backbone.pts_world",
+    )
+    raw_values = (
         backbone.t_world_voxel.tensor(),
         backbone.voxel_extent,
         backbone.occ_pr,
@@ -429,6 +453,11 @@ def _read_static_context(
         backbone.cent_pr,
         backbone.pts_world,
     )
+    values = tuple(
+        None if value is None else _canonical_evl_tensor(name, value)
+        for name, value in zip(names, raw_values, strict=True)
+    )
+    _validate_evl_geometry(names, values)
     return QhStaticContext(
         vin_snippet=snippet,
         t_world_voxel=values[0],
@@ -450,19 +479,19 @@ def _selected_observation_prefix(
 ) -> QhSelectedObservationPrefix | None:
     """Materialize a no-future-observation CF-GT prefix for each chain state."""
 
-    values = (
+    payload = (
         getattr(stored, "selected_depth_m", None),
         getattr(stored, "selected_depth_valid_mask", None),
         getattr(stored, "selected_depth_focal_px", None),
         getattr(stored, "selected_depth_principal_point_px", None),
         getattr(stored, "selected_depth_image_size_hw", None),
-        getattr(stored, "selected_depth_renderer", None),
     )
-    if all(value is None for value in values):
+    if all(value is None for value in payload):
         return None
-    if any(value is None for value in values):
+    if any(value is None for value in payload):
         raise ValueError("Q_H selected CF-GT depth payload is incomplete; rebuild the rollout store.")
-    depth, valid, focal, principal, image_size, renderer = values
+    depth, valid, focal, principal, image_size = payload
+    renderer = getattr(stored, "selected_depth_renderer", None)
     assert isinstance(depth, np.ndarray)
     assert isinstance(valid, np.ndarray)
     assert isinstance(focal, np.ndarray)
@@ -500,8 +529,89 @@ def _audit_for(stored: _StoredChain, store_dir: Path) -> QhAudit:
         rollout_store_dir=str(store_dir),
         actor_store_version=stored.source_ref.actor_store_version,
         source_manifest_hash=stored.source_ref.source_manifest_hash,
-        selected_depth_renderer=stored.selected_depth_renderer or "not_loaded",
+        selected_depth_renderer=stored.selected_depth_renderer,
     )
+
+
+_EVL_CANONICAL_RANKS = {
+    "backbone.t_world_voxel": 1,
+    "backbone.voxel_extent": 1,
+    "backbone.occ_pr": 4,
+    "backbone.occ_input": 4,
+    "backbone.free_input": 4,
+    "backbone.counts": 3,
+    "backbone.cent_pr": 4,
+    "backbone.pts_world": 2,
+}
+
+
+def _canonical_evl_shape(name: str, shape: tuple[int, ...]) -> tuple[int, ...]:
+    """Remove only the optional singleton source axis and validate one EVL field shape."""
+
+    expected_rank = _EVL_CANONICAL_RANKS[name]
+    if len(shape) == expected_rank + 1:
+        if shape[0] != 1:
+            raise ValueError(f"Q_H {name} source batch axis must have size 1, got {shape}.")
+        shape = shape[1:]
+    if len(shape) != expected_rank or any(size < 1 for size in shape):
+        raise ValueError(f"Q_H {name} has invalid canonical shape {shape}.")
+    if name == "backbone.t_world_voxel" and shape != (12,):
+        raise ValueError(f"Q_H {name} must end in the 12-value PoseTW layout, got {shape}.")
+    if name == "backbone.voxel_extent" and shape != (6,):
+        raise ValueError(f"Q_H {name} must contain six metric bounds, got {shape}.")
+    if name in {"backbone.occ_pr", "backbone.occ_input", "backbone.free_input", "backbone.cent_pr"} and shape[0] != 1:
+        raise ValueError(f"Q_H {name} must have one channel, got {shape}.")
+    if name == "backbone.pts_world" and shape[-1] != 3:
+        raise ValueError(f"Q_H {name} must contain XYZ points, got {shape}.")
+    return shape
+
+
+def _canonical_evl_tensor(name: str, value: Tensor) -> Tensor:
+    """Return one canonical unbatched EVL tensor without squeezing semantic axes."""
+
+    shape = tuple(value.shape)
+    canonical = _canonical_evl_shape(name, shape)
+    return value[0] if len(shape) == len(canonical) + 1 else value
+
+
+def _validate_evl_geometry(names: tuple[str, ...], values: tuple[Tensor | None, ...]) -> None:
+    """Require all available EVL grids and flattened centres to describe one voxel lattice."""
+
+    fields = dict(zip(names, values, strict=True))
+    spatial = {
+        tuple(value.shape[-3:])
+        for name, value in fields.items()
+        if value is not None and name not in {"backbone.t_world_voxel", "backbone.voxel_extent", "backbone.pts_world"}
+    }
+    if len(spatial) > 1:
+        raise ValueError(f"Q_H root EVL fields have incompatible voxel-grid shapes: {sorted(spatial)}.")
+    points = fields["backbone.pts_world"]
+    if spatial and points is not None:
+        grid = next(iter(spatial))
+        expected_points = int(np.prod(grid))
+        if points.shape[0] != expected_points:
+            raise ValueError(
+                f"Q_H backbone.pts_world has {points.shape[0]} centres for voxel grid {grid} ({expected_points} expected)."
+            )
+
+
+def _evl_block_signature(actor_reader: VinOfflineStoreReader) -> tuple[tuple[str, str, tuple[int, ...]], ...]:
+    """Build a canonical EVL shape/dtype signature from immutable shard metadata."""
+
+    observed: dict[str, set[tuple[str, tuple[int, ...]]]] = {name: set() for name in _EVL_CANONICAL_RANKS}
+    for shard in getattr(actor_reader.manifest, "shards", ()):
+        for name in observed:
+            spec = shard.blocks.get(name)
+            if spec is None:
+                continue
+            if spec.dtype is None or spec.shape is None or len(spec.shape) < 2:
+                raise ValueError(f"Q_H {name} requires numeric shard shape and dtype metadata.")
+            row_shape = _canonical_evl_shape(name, tuple(int(size) for size in spec.shape[1:]))
+            observed[name].add((str(spec.dtype), row_shape))
+    conflicting = {name: facts for name, facts in observed.items() if len(facts) > 1}
+    if conflicting:
+        raise ValueError(f"Q_H actor store has heterogeneous EVL block contracts: {conflicting}.")
+    return tuple((name, dtype, shape) for name in sorted(observed) for dtype, shape in sorted(observed[name]))
 
 
 def _from_numpy(value: np.ndarray, dtype: torch.dtype) -> Tensor:

@@ -11,6 +11,7 @@ module seed, and derive Python/NumPy worker seeds from each worker's
 from __future__ import annotations
 
 import random
+from dataclasses import fields
 from typing import Protocol, cast
 
 import numpy as np
@@ -19,12 +20,16 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
+from ..data_handling.qh_data.views import QhActorStateContract
 from ..rollouts.qh_reader import QhDataContract
 
 
 class _QhDataset(Protocol):
     @property
     def contract(self) -> QhDataContract: ...
+
+    @property
+    def actor_state_contract(self) -> QhActorStateContract: ...
 
     @property
     def scenes(self) -> frozenset[str]: ...
@@ -73,6 +78,15 @@ class QhDataModule(pl.LightningDataModule):
             raise ValueError(f"Q_H configured corpus stages must contain at least one chain: {empty}.")
         if any(dataset.contract != train.contract for dataset in stages.values()):
             raise ValueError("Q_H corpus stages have incompatible learning contracts.")
+        for name, dataset in stages.items():
+            if dataset.actor_state_contract == train.actor_state_contract:
+                continue
+            mismatches = [
+                field.name
+                for field in fields(QhActorStateContract)
+                if getattr(dataset.actor_state_contract, field.name) != getattr(train.actor_state_contract, field.name)
+            ]
+            raise ValueError(f"Q_H {name} stage has incompatible actor-state contract fields: {', '.join(mismatches)}.")
         names = tuple(stages)
         for index, left in enumerate(names):
             for right in names[index + 1 :]:

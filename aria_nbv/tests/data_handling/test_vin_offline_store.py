@@ -25,6 +25,7 @@ from aria_nbv.data_handling import (
     VinOracleBatch,
     VinSnippetView,
 )
+from aria_nbv.data_handling.qh_data.dataset import _evl_block_signature, _read_static_context
 from aria_nbv.data_handling.vin_store.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
@@ -897,6 +898,19 @@ def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: P
     assert evidence.counts is not None  # noqa: S101
     assert evidence.cent_pr is not None  # noqa: S101
     assert evidence.pts_world is not None  # noqa: S101
+
+    snippet = reader.read_actor_snippet(reader.sample_index[0])
+    context = _read_static_context(reader, reader.sample_index[0], snippet)
+    assert context is not None  # noqa: S101
+    assert context.t_world_voxel is not None and context.t_world_voxel.shape == (12,)  # noqa: S101
+    assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)  # noqa: S101
+    assert context.counts is not None and context.counts.shape == (2, 2, 2)  # noqa: S101
+    assert context.pts_world is not None and context.pts_world.shape == (8, 3)  # noqa: S101
+    signature = {name: (dtype, shape) for name, dtype, shape in _evl_block_signature(reader)}
+    assert signature["backbone.t_world_voxel"] == ("float32", (12,))  # noqa: S101
+    assert signature["backbone.occ_pr"] == ("float32", (1, 2, 2, 2))  # noqa: S101
+    assert signature["backbone.counts"] == ("int64", (2, 2, 2))  # noqa: S101
+    assert signature["backbone.pts_world"] == ("float32", (8, 3))  # noqa: S101
 
 
 def test_collect_vin_offline_dataset_stats_reports_batch_shape_preview(tmp_path: Path) -> None:

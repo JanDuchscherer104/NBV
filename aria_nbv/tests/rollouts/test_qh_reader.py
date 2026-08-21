@@ -57,7 +57,14 @@ def _campaign_split_hash(records: list[object]) -> str:
     return split_hash
 
 
-def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_id: int | None = None) -> Path:
+def _write_store(
+    path: Path,
+    *,
+    horizon: int = 2,
+    records: int = 1,
+    source_row_id: int | None = None,
+    selected_depth_enabled: bool = True,
+) -> Path:
     rollout_records = build_rollout_records(horizon=horizon, num_samples=6, seed=7)[:records]
     if source_row_id is not None:
         assert records == 1
@@ -72,6 +79,7 @@ def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_i
         target_protocol_version="v0_gt_input",
         source_offline_store_version="7",
         split_manifest_hash="fixture-split-manifest",
+        selected_depth_enabled=selected_depth_enabled,
     ).store_dir
 
 
@@ -287,6 +295,29 @@ def test_reader_reads_selected_cf_gt_depth_only_when_explicitly_requested(tmp_pa
     assert chain.selected_depth_valid_mask.dtype == np.bool_
 
 
+def test_reader_preserves_renderer_metadata_without_loading_selected_depth(tmp_path: Path) -> None:
+    enabled = QhRolloutReader((_write_store(tmp_path / "enabled.zarr"),))[0]
+    disabled = QhRolloutReader((_write_store(tmp_path / "disabled.zarr", selected_depth_enabled=False),))[0]
+
+    assert enabled.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert enabled.selected_depth_m is None
+    assert disabled.selected_depth_renderer is None
+    assert disabled.selected_depth_m is None
+
+
+def test_reader_contract_records_selected_depth_geometry(tmp_path: Path) -> None:
+    contract = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),), include_selected_depth=True).contract
+
+    assert contract.selected_depth_enabled
+    assert contract.selected_depth_role == "selected_successor_state_history"
+    assert contract.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert contract.selected_depth_image_size_hw == (240, 240)
+    assert contract.selected_depth_dtype == "float16"
+    assert contract.selected_depth_units == "m"
+    assert contract.selected_depth_znear_m == pytest.approx(1e-3)
+    assert contract.selected_depth_zfar_m == pytest.approx(20.0)
+
+
 def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A rich reader must not relabel an unknown selected-depth renderer as CF-GT."""
 
@@ -297,7 +328,54 @@ def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monk
     monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: validation)
 
     with pytest.raises(ValueError, match="CF-GT depth requires"):
-        _ = QhRolloutReader((store,), include_selected_depth=True)[0]
+        QhRolloutReader((store,), include_selected_depth=True)
+
+
+@pytest.mark.parametrize(
+    ("attribute", "value", "field"),
+    (
+        ("selected_depth_role", "other-role", "selected_depth_role"),
+        ("selected_depth_renderer", "other-renderer", "selected_depth_renderer"),
+        ("selected_depth_width_px", 320, "selected_depth_image_size_hw"),
+        ("selected_depth_dtype", "float32", "selected_depth_dtype"),
+        ("selected_depth_units", "mm", "selected_depth_units"),
+        ("selected_depth_znear_m", 0.1, "selected_depth_znear_m"),
+        ("selected_depth_zfar_m", 10.0, "selected_depth_zfar_m"),
+        ("selected_depth_source_resolution", "resampled", "selected_depth_source_resolution"),
+    ),
+)
+def test_reader_rejects_mixed_selected_depth_contracts_during_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    attribute: str,
+    value: str | int | float,
+    field: str,
+) -> None:
+    first = _write_store(tmp_path / "first.zarr")
+    second = _write_store(tmp_path / "second.zarr")
+    validations = {
+        first.resolve(): RolloutZarrStoreReader(first).validate(),
+        second.resolve(): RolloutZarrStoreReader(second).validate(),
+    }
+    zarr.open_group(second, mode="a").attrs[attribute] = value
+    monkeypatch.setattr(
+        RolloutZarrStoreReader,
+        "validate",
+        lambda reader: validations[reader.store_dir],
+    )
+
+    with pytest.raises(ValueError, match=f"incompatible {field}"):
+        QhRolloutReader((first, second), include_selected_depth=True)
+
+
+def test_lean_reader_ignores_unconsumed_selected_depth_geometry(tmp_path: Path) -> None:
+    first = _write_store(tmp_path / "first.zarr")
+    second = _write_store(tmp_path / "second.zarr", selected_depth_enabled=False)
+
+    reader = QhRolloutReader((first, second))
+
+    assert len(reader) == 2
+    assert not reader.contract.selected_depth_enabled
 
 
 def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
@@ -503,6 +581,7 @@ def test_reader_rejects_invalid_factual_rollout_partition(
 
     with pytest.raises(ValueError, match="ordered factual step run|non-contiguous factual|orphaned factual steps"):
         QhRolloutReader((store,))
+
 
 def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
