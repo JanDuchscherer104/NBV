@@ -11,6 +11,8 @@ import streamlit as st
 
 from ...data_handling.vin_store.diagnostics import VinOfflineDatasetStats
 from ...utils.reporting import _pretty_label
+from ..scientific_labels import format_scientific_label, scientific_label
+from ..state import get_label_display_mode
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -45,6 +47,24 @@ def _plot_with_y_axis_control(fig: go.Figure, *, key: str) -> tuple[go.Figure, b
     return rendered, logarithmic
 
 
+def render_scientific_notation(*identifiers: str) -> None:
+    """Render registry symbols beside charts whose own labels must stay text.
+
+    Plotly in the installed Streamlit runtime displays TeX delimiters
+    literally. Axes therefore remain readable prose while this Markdown-capable
+    surface honors the global ``Symbols`` and ``Both`` modes.
+    """
+
+    mode = get_label_display_mode()
+    if mode == "Text" or not identifiers:
+        return
+    labels = [
+        format_scientific_label(scientific_label(identifier), mode=mode, surface="markdown")
+        for identifier in identifiers
+    ]
+    st.caption("**Notation:** " + " · ".join(labels))
+
+
 def _report_exception(exc: Exception, *, context: str) -> None:
     """Render a full traceback in the UI and emit it to stdout."""
     trace = traceback.format_exc()
@@ -72,4 +92,5 @@ __all__ = [
     "_pretty_label",
     "_report_exception",
     "_strip_ansi",
+    "render_scientific_notation",
 ]

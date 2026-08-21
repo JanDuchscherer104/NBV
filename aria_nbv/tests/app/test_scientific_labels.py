@@ -70,3 +70,18 @@ def test_scientific_inventory_formats_only_at_the_presentation_boundary(tmp_path
     )
     assert format_scientific_label("unknown_metric", root=tmp_path) == "Unknown Metric"
     assert SCIENTIFIC_LABELS["cumulative_target_root_gain"].symbol_key == ("rl.observed_cumulative_root_gain")
+
+
+def test_chart_notation_uses_markdown_surface_only_when_requested(monkeypatch) -> None:
+    from aria_nbv.app.panels import common
+
+    captions: list[str] = []
+    monkeypatch.setattr(common, "get_label_display_mode", lambda: "Both")
+    monkeypatch.setattr(common.st, "caption", captions.append)
+    common.render_scientific_notation("cumulative_target_root_gain")
+
+    assert captions == [r"**Notation:** $G_{0:s,\mathrm{root}}^e$ — Cumulative target root gain (fraction)"]
+
+    monkeypatch.setattr(common, "get_label_display_mode", lambda: "Text")
+    common.render_scientific_notation("cumulative_target_root_gain")
+    assert len(captions) == 1
