@@ -54,7 +54,7 @@ def set_label_display_mode(mode: str) -> LabelDisplayMode:
 
     if mode not in LABEL_DISPLAY_MODES:
         raise ValueError(f"Unsupported label display mode: {mode!r}")
-    selected = cast(LabelDisplayMode, mode)
+    selected = mode
     st.session_state[LABEL_DISPLAY_MODE_KEY] = selected
     return selected
 
@@ -112,7 +112,7 @@ def safe_rerun() -> None:
         st.rerun()
         return
     if hasattr(st, "experimental_rerun"):
-        st.experimental_rerun()  # type: ignore[attr-defined]
+        st.experimental_rerun()
         return
     raise RuntimeError("Streamlit rerun API not available.")  # pragma: no cover
 
