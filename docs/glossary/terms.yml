@@ -1581,7 +1581,7 @@
   definition_long: Thesis-facing ARIA-NBV notation uses point-mesh error D with directional
     components D_{P->M} and D_{M->P}; older seminar material may still call this CD.
   symbol_refs:
-  - rri.cd_value
+  - oracle.err
   - oracle.points
   - ase.mesh
   equation_refs:

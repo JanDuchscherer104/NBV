@@ -92,6 +92,12 @@ return {
       description = "Target-specific reconstruction error after the next observation.",
       thesis_list = true,
     },
+    ["entity.target_reward"] = {
+      tex = "r_t^e",
+      typst = "#symb.entity.target_reward",
+      description = "Canonical target-specific reward at rollout step t.",
+      thesis_list = true,
+    },
     ["model.candidate_row"] = {
       tex = "\\boldsymbol{x}_{t,i}",
       typst = "#symb.model.candidate_row",
@@ -188,6 +194,24 @@ return {
       description = "Oracle-rendered or candidate-specific depth map for a proposed view.",
       thesis_list = true,
     },
+    ["oracle.dist_mp"] = {
+      tex = "D_{M\\\\to P}",
+      typst = "#symb.oracle.dist_mp",
+      description = "Mesh-to-point directional reconstruction error component.",
+      thesis_list = true,
+    },
+    ["oracle.dist_pm"] = {
+      tex = "D_{P\\\\to M}",
+      typst = "#symb.oracle.dist_pm",
+      description = "Point-to-mesh directional reconstruction error component.",
+      thesis_list = true,
+    },
+    ["oracle.err"] = {
+      tex = "D",
+      typst = "#symb.oracle.err",
+      description = "Aggregate point-mesh reconstruction error used by RRI definitions.",
+      thesis_list = true,
+    },
     ["oracle.points"] = {
       tex = "\\mathcal{P}",
       typst = "#symb.oracle.points",
@@ -272,6 +296,12 @@ return {
       description = "Target-conditioned finite-candidate NBV decision process.",
       thesis_list = true,
     },
+    ["rl.observed_cumulative_root_gain"] = {
+      tex = "G_{0:s,\\\\mathrm{root}}^e",
+      typst = "#symb.rl.observed_cumulative_root_gain",
+      description = "Observed cumulative target-root gain through factual rollout step s.",
+      thesis_list = true,
+    },
     ["rl.qh"] = {
       tex = "Q_H",
       typst = "#symb.rl.qh",
@@ -348,12 +378,6 @@ return {
       tex = "m_{t,i}",
       typst = "#symb.rl.validity_mask",
       description = "Hard validity mask for candidate i at rollout step t.",
-      thesis_list = true,
-    },
-    ["rri.cd_value"] = {
-      tex = "D",
-      typst = "#symb.oracle.err",
-      description = "Aggregate point-mesh reconstruction error used by RRI definitions.",
       thesis_list = true,
     },
     ["scene.evl_local"] = {

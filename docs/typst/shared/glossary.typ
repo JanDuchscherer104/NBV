@@ -2203,7 +2203,7 @@
       tier: "core",
       lookup_rank: 25,
       symbol_refs: (
-        "rri.cd_value",
+        "oracle.err",
         "oracle.points",
         "ase.mesh",
       ),

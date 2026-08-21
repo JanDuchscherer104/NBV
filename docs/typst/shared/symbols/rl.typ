@@ -10,6 +10,8 @@
   r: $r$,
   // Generic cumulative return.
   G: $G$,
+  // Observed cumulative target-root gain through factual step s.
+  observed_cumulative_root_gain: $G_(0:s,"root")^e$,
   // Generic state-action value function.
   Q: $Q$,
   // Generic state-value function.
