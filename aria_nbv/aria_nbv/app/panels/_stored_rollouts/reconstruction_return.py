@@ -13,12 +13,13 @@ import streamlit as st
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import rollout_endpoint_metric_summary
 from ....rollouts.reporting import RolloutCorpusSummary
+from ...scientific_labels import LabelSurface, TheoryReferences, format_scientific_label, scientific_label
+from ...state import get_label_display_mode
 from .session import _cached_projection
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import plot_control_key as _plot_control_key
 from .shared import render_plot as _render_plot
-from ...scientific_labels import TheoryReferences
 
 _EVIDENCE_REPORTING_REFERENCE = (
     "ARRIVE reporting guidance for individual data and summaries",
@@ -79,6 +80,22 @@ _TEMPORAL_THEORY: dict[str, TheoryReferences] = {
 }
 
 
+def _scientific_label(identifier: str, *, surface: LabelSurface = "plain") -> str:
+    """Render a curated scientific label using the global display preference."""
+
+    return format_scientific_label(
+        scientific_label(identifier),
+        mode=get_label_display_mode(),
+        surface=surface,
+    )
+
+
+def _temporal_metric_label(metric: str, *, surface: LabelSurface = "plain") -> str:
+    """Return the UI label for a persisted temporal metric key."""
+
+    return _scientific_label(metric, surface=surface)
+
+
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
     """Show the essential factual corpus trajectories, separated by contract."""
 
@@ -94,15 +111,20 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
         contract = str(contract_rows["contract"].iloc[0])
         st.markdown(f"#### {contract}")
         _render_corpus_quality_cards(contract_rows)
-        for metric, label in (
-            ("cumulative_target_root_gain", "Cumulative target root gain"),
-            ("selected_target_root_gain", "Selected one-step target root gain"),
+        for metric in (
+            "cumulative_target_root_gain",
+            "selected_target_root_gain",
         ):
             rows = contract_rows[contract_rows["metric"] == metric].copy()
             if rows.empty:
                 continue
             rows["trajectory"] = _trajectory_label(rows)
-            _render_corpus_temporal_plot(rows, contract_id=contract_id, metric=metric, label=label)
+            _render_corpus_temporal_plot(
+                rows,
+                contract_id=contract_id,
+                metric=metric,
+                label=_temporal_metric_label(metric),
+            )
 
         with st.expander("Diagnostic target RRI, selection-distribution rows, and CSV", expanded=False):
             diagnostics = contract_rows[
@@ -362,8 +384,14 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
     if not available_labels:
         st.info("No supported finite temporal metric is available in this store.")
         return
-    metric_label = st.selectbox("Temporal metric", options=available_labels)
-    metric = _TEMPORAL_METRIC_LABELS[metric_label]
+    selected_metric_label = st.selectbox(
+        "Temporal metric",
+        options=[_temporal_metric_label(_TEMPORAL_METRIC_LABELS[label]) for label in available_labels],
+    )
+    metric = next(
+        metric for metric in _TEMPORAL_METRIC_LABELS.values() if _temporal_metric_label(metric) == selected_metric_label
+    )
+    metric_label = _temporal_metric_label(metric)
     group_class = st.selectbox("Temporal grouping class", options=list(_TEMPORAL_GROUP_CLASSES))
     group_field = st.selectbox("Temporal grouping field", options=list(_TEMPORAL_GROUP_CLASSES[group_class]))
     if group_class.startswith("Selected-action provenance"):
@@ -459,7 +487,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
                 x="acquisition_number",
                 y=source_field,
                 markers=True,
-                title=f"Raw trajectory for rollout {selected_rollout}",
+                title=f"Raw trajectory for rollout {selected_rollout}: {_temporal_metric_label(metric)}",
                 hover_data=[column for column in ("step_index", "step_row_id", "policy") if column in raw],
             )
             _render_plot(
@@ -555,9 +583,9 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
             )
         )
     figure.update_layout(
-        title=f"{metric_label}: median and interquartile range by acquisition number",
+        title=f"{_temporal_metric_label(str(summary['metric'].iloc[0]))}: median and interquartile range by acquisition number",
         xaxis_title="acquisition number (1 = first selected view; root baseline omitted)",
-        yaxis_title=f"{summary['metric'].iloc[0]} ({summary['units'].iloc[0]})",
+        yaxis_title=(f"{_temporal_metric_label(str(summary['metric'].iloc[0]))} ({summary['units'].iloc[0]})"),
         hovermode="x unified",
     )
     return figure

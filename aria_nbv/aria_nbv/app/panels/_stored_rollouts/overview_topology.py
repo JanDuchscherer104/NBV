@@ -15,12 +15,13 @@ from ....configs import PathConfig
 from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
+from ...scientific_labels import LabelSurface, TheoryReferences, format_scientific_label, scientific_label
+from ...state import get_label_display_mode
 from .session import _cached_projection, _cached_topology, clear_rollout_page_caches
 from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
-from ...scientific_labels import TheoryReferences
 
 _EVIDENCE_REPORTING_REFERENCE = (
     "ARRIVE reporting guidance for individual data and summaries",
@@ -30,6 +31,16 @@ _FAILURE_COUNT_REFERENCE = (
     "NIST Engineering Statistics Handbook: counts and nonconformities",
     "https://www.itl.nist.gov/div898/handbook/toolaids/pff/pmc.pdf",
 )
+
+
+def _scientific_label(identifier: str, *, surface: LabelSurface = "plain") -> str:
+    """Render a canonical scientific label for the current display mode."""
+
+    return format_scientific_label(
+        scientific_label(identifier),
+        mode=get_label_display_mode(),
+        surface=surface,
+    )
 
 
 def _render_store_selector(
@@ -146,7 +157,8 @@ def _render_corpus_endpoint_distributions(summary: RolloutCorpusSummary | None) 
         color="policy",
         facet_col="horizon",
         hover_data=["store_id"],
-        title="Store-qualified factual endpoint distributions",
+        labels={metric: _scientific_label(metric)},
+        title=(f"Store-qualified factual endpoint distributions: {_scientific_label(metric)}"),
     )
     _render_plot(
         fig,
