@@ -709,6 +709,96 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
     assert [explanation.evidence_role for explanation in captured] == ["oracle/evaluation"]
 
 
+def test_candidate_support_plot_has_fixed_anchors_equal_axes_and_unjoined_candidate_rays(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The normalized candidate view must show frame anchors without connecting unrelated rows."""
+
+    figures: list[object] = []
+
+    class _Expander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
+    monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
+
+    candidates = pd.DataFrame(
+        [
+            {
+                "candidate_row_id": 1,
+                "position": "forward_local",
+                "root_relative_x_m": 0.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.0,
+                "root_to_target_x_m": 1.0,
+                "root_to_target_y_m": 0.0,
+                "target_distance_m": 1.0,
+            },
+            {
+                "candidate_row_id": 2,
+                "position": "forward_local",
+                "root_relative_x_m": 0.4,
+                "root_relative_y_m": 0.2,
+                "root_relative_z_m": 0.1,
+                "root_to_target_x_m": 1.0,
+                "root_to_target_y_m": 0.0,
+                "target_distance_m": 0.8,
+            },
+        ]
+    )
+
+    stored_rollouts_page._render_candidate_geometry_diagnostics(candidates, candidates, total_candidates=2)
+
+    assert figures
+    normalized = figures[0]
+    assert normalized.layout.xaxis.scaleanchor == "y"
+    assert normalized.layout.yaxis.scaleanchor == "x"
+    assert any("root" in str(trace.name).lower() for trace in normalized.data)
+    assert any("target" in str(trace.name).lower() for trace in normalized.data)
+    assert not any(getattr(trace, "mode", None) == "lines" for trace in normalized.data)
+
+
+def test_candidate_direction_heatmap_declares_azimuth_and_sine_elevation_axes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The direction plot must expose the equal-area variables, not opaque bin numbers."""
+
+    from tests.rollouts.test_inspection import _direction_fixture_rows
+
+    figures: list[object] = []
+
+    class _Expander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
+    monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
+
+    candidates = pd.DataFrame(_direction_fixture_rows())
+    stored_rollouts_page._render_candidate_geometry_diagnostics(
+        candidates, candidates, total_candidates=len(candidates)
+    )
+
+    heatmap = next(figure for figure in figures if "direction" in str(figure.layout.title.text).lower())
+    assert "azimuth" in str(heatmap.layout.xaxis.title.text).lower()
+    assert "sin" in str(heatmap.layout.yaxis.title.text).lower()
+
+
 def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result() -> None:
     """Query transitions should be explicit, copied, deterministic, and failure-preserving."""
 

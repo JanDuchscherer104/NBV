@@ -485,6 +485,172 @@ def test_candidate_motion_support_reports_clearance_and_collision_missingness() 
     assert collision["missing_count"] == 1
 
 
+def test_candidate_population_scientific_support_is_complete_and_sample_size_independent() -> None:
+    """Scientific reducers use every audit row; sample_size only bounds display rows."""
+
+    from aria_nbv.rollouts.inspection import candidate_population_evidence
+
+    rows = [
+        {
+            **_direction_fixture_rows()[0],
+            "candidate_row_id": index,
+            "root_relative_x_m": float(index + 1),
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+            "root_to_target_x_m": 1.0,
+            "root_to_target_y_m": 0.0,
+        }
+        for index in range(4)
+    ]
+
+    def audit_reader(_reader: object, *, row_callback) -> None:
+        for row in rows:
+            row_callback(row)
+
+    bounded = candidate_population_evidence(object(), sample_size=1, audit_reader=audit_reader)
+    complete = candidate_population_evidence(object(), sample_size=100, audit_reader=audit_reader)
+    assert bounded["population_count"] == complete["population_count"] == 4
+    assert bounded["sample"]["display_count"] == 1
+    assert complete["sample"]["display_count"] == 4
+    assert bounded["spatial"] == complete["spatial"]
+    assert bounded["direction"] == complete["direction"]
+
+
+def test_candidate_direction_evidence_preserves_cohorts_and_all_actor_valid_populations() -> None:
+    """Direction support never pools incompatible cohorts or actor populations."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    rows = []
+    for cohort, actor_action, scene, rollout_id in (
+        ("cohort-a", True, "scene-a", 0),
+        ("cohort-a", False, "scene-a", 1),
+        ("cohort-b", True, "scene-b", 2),
+    ):
+        rows.append(
+            {
+                **_direction_fixture_rows()[0],
+                "generation_cohort_id": cohort,
+                "actor_action": actor_action,
+                "scene": scene,
+                "rollout_row_id": rollout_id,
+                "root_relative_x_m": 1.0,
+            }
+        )
+
+    density = candidate_direction_evidence(rows)["density_rows"]
+    assert {row["generation_cohort_id"] for row in density if row["aggregation_level"] == "cohort_macro"} == {
+        "cohort-a",
+        "cohort-b",
+    }
+    assert {row["population"] for row in density if row["aggregation_level"] == "state"} >= {"all", "actor_valid"}
+    assert all(
+        row["cohort_macro_population"] in {"all", "actor_valid"} for row in density if "cohort_macro_population" in row
+    )
+
+
+def test_candidate_direction_evidence_reports_numeric_cap_and_nearest_neighbor_metrics() -> None:
+    """Angular support rows contain deterministic discrepancy and separation values."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    rows = _direction_fixture_rows()[:3]
+    evidence = candidate_direction_evidence(rows)
+    cap = evidence["cap_rows"]
+    angular = evidence["angular_support_rows"]
+    assert cap and angular
+    assert all(row["available"] is True for row in cap + angular)
+    assert all("candidate_count" not in row or row["candidate_count"] == len(rows) for row in cap + angular)
+    assert any("discrepancy" in row or "value" in row for row in cap)
+    assert any("nearest" in str(row).lower() or "separation" in str(row).lower() for row in angular)
+    assert any("covering" in str(row).lower() for row in angular)
+
+
+def test_candidate_spatial_support_reports_3d_distance_shell_and_macro_levels() -> None:
+    """Spatial support includes radius, 3-D distance, signed Z, and shell macros."""
+
+    from aria_nbv.rollouts.inspection import candidate_spatial_support_evidence
+
+    rows = [
+        {
+            **_direction_fixture_rows()[0],
+            "generation_cohort_id": "cohort-a",
+            "position": "forward_local",
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": -0.25,
+        },
+        {
+            **_direction_fixture_rows()[0],
+            "generation_cohort_id": "cohort-a",
+            "position": "backtrack",
+            "candidate_row_id": 99,
+            "root_relative_x_m": 0.3,
+            "root_relative_y_m": 0.4,
+            "root_relative_z_m": 0.5,
+        },
+    ]
+    evidence = candidate_spatial_support_evidence(rows)
+    assert {row["metric"] for row in evidence} >= {"root_xy_radius", "root_3d_distance", "root_height"}
+    assert {row["aggregation_level"] for row in evidence} >= {"state", "scene_macro", "cohort_macro"}
+    assert {row["declared_shell"] for row in evidence} >= {"forward_local", "backtrack"}
+    assert any(row["metric"] == "root_3d_distance" and row["units"] == "m" for row in evidence)
+
+
+def test_candidate_target_view_exposes_unavailable_fov_and_pixel_evidence() -> None:
+    """Missing target-view calibration is explicit rather than inferred from distance."""
+
+    from aria_nbv.rollouts.inspection import candidate_target_view_evidence
+
+    evidence = candidate_target_view_evidence([{**_direction_fixture_rows()[0], "target_distance_m": 2.0}])
+    names = {row["evidence"] for row in evidence}
+    assert {"target_fov_margin", "target_pixel_margin"} <= names
+    for row in evidence:
+        if row["evidence"] in {"target_fov_margin", "target_pixel_margin"}:
+            assert row["available"] is False
+            assert row["missing_count"] == 1
+
+
+def test_candidate_motion_support_reports_all_motion_fields_and_collision_applicability_matrix() -> None:
+    """Motion diagnostics preserve all persisted fields and four collision states."""
+
+    from aria_nbv.rollouts.inspection import candidate_motion_support_evidence
+
+    rows = []
+    for index, (applicable, evaluated, collision) in enumerate(
+        ((False, False, None), (True, False, None), (True, True, False), (True, True, True))
+    ):
+        rows.append(
+            {
+                **_direction_fixture_rows()[0],
+                "candidate_row_id": index,
+                "motion_step_length_m": 0.2,
+                "motion_height_delta_m": -0.1,
+                "motion_backward_step_m": 0.0,
+                "motion_yaw_delta_deg": 10.0,
+                "free_space_margin_m": 0.3,
+                "path_min_clearance_m": 0.1 if evaluated else None,
+                "path_collision_applicable": applicable,
+                "path_collision_evaluated": evaluated,
+                "path_collision": collision,
+            }
+        )
+    evidence = candidate_motion_support_evidence(rows)
+    assert {row["metric"] for row in evidence} >= {
+        "motion_step_length_m",
+        "motion_height_delta_m",
+        "motion_backward_step_m",
+        "motion_yaw_delta_deg",
+        "free_space_margin_m",
+        "path_min_clearance_m",
+        "path_collision_rate",
+    }
+    collision = next(row for row in evidence if row["metric"] == "path_collision_rate")
+    assert collision["applicable_count"] == 3
+    assert collision["evaluated_count"] == 2
+    assert collision["collision_count"] == 1
+
+
 def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path) -> None:
     """Suspicious-row predicates should find low fanout, missing labels, and motion outliers."""
 
