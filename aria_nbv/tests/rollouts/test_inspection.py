@@ -231,6 +231,240 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert sum(row["count"] for row in flow if row["source_stage"] == "root") == result.num_candidates
 
 
+def test_candidate_geometry_evidence_maps_root_target_and_rightward_lateral() -> None:
+    """Target-normalized geometry fixes the frame and preserves right-handed sign."""
+
+    from aria_nbv.rollouts.inspection import candidate_geometry_evidence_rows
+
+    rows = candidate_geometry_evidence_rows(
+        [
+            {
+                "candidate_row_id": 1,
+                "root_relative_x_m": 0.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.0,
+                "root_to_target_x_m": 2.0,
+                "root_to_target_y_m": 0.0,
+            },
+            {
+                "candidate_row_id": 2,
+                "root_relative_x_m": 2.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.0,
+                "root_to_target_x_m": 2.0,
+                "root_to_target_y_m": 0.0,
+            },
+            {
+                "candidate_row_id": 3,
+                "root_relative_x_m": 0.0,
+                "root_relative_y_m": 1.0,
+                "root_relative_z_m": 0.0,
+                "root_to_target_x_m": 2.0,
+                "root_to_target_y_m": 0.0,
+            },
+        ]
+    )
+
+    by_id = {row["candidate_row_id"]: row for row in rows}
+    assert by_id[1]["target_normalized_forward"] == pytest.approx(0.0)
+    assert by_id[1]["target_normalized_lateral"] == pytest.approx(0.0)
+    assert by_id[2]["target_normalized_forward"] == pytest.approx(1.0)
+    assert by_id[3]["target_normalized_forward"] == pytest.approx(0.0)
+    assert by_id[3]["target_normalized_lateral"] == pytest.approx(0.5)
+    assert by_id[3]["target_normalized_coordinate_frame"] == ("root=(0,0), target=(1,0), right-handed lateral axis")
+
+
+def test_candidate_geometry_evidence_keeps_missing_and_degenerate_baselines_unavailable() -> None:
+    """Unavailable target geometry is not converted into a fabricated origin."""
+
+    from aria_nbv.rollouts.inspection import candidate_geometry_evidence_rows
+
+    rows = candidate_geometry_evidence_rows(
+        [
+            {
+                "candidate_row_id": 1,
+                "root_relative_x_m": 1.0,
+                "root_relative_y_m": 1.0,
+                "root_relative_z_m": 0.0,
+                "root_to_target_x_m": 0.0,
+                "root_to_target_y_m": 0.0,
+            },
+            {
+                "candidate_row_id": 2,
+                "root_relative_x_m": 1.0,
+                "root_relative_y_m": 1.0,
+                "root_relative_z_m": 0.0,
+                "root_to_target_x_m": None,
+                "root_to_target_y_m": None,
+            },
+        ]
+    )
+
+    assert all(row["target_normalized_forward"] is None for row in rows)
+    assert all(row["target_normalized_lateral"] is None for row in rows)
+
+
+def _direction_fixture_rows() -> list[dict[str, object]]:
+    common = {
+        "generation_cohort_id": "cohort-a",
+        "source_sample_key": "sample-a",
+        "target_id": "target-a",
+        "target_protocol": "v1_observed",
+        "candidate_config": "candidate-a",
+        "rollout_config": "rollout-a",
+        "branch_schedule": "temperature_softmax",
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 8,
+        "acquisition_budget_steps": 8,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "scene": "scene-a",
+        "position": "forward_local",
+        "actor_action": True,
+    }
+    return [
+        {
+            **common,
+            "candidate_row_id": 0,
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "root_relative_x_m": 1.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+        },
+        {
+            **common,
+            "candidate_row_id": 1,
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 1.0,
+            "root_relative_z_m": 0.0,
+        },
+        {
+            **common,
+            "candidate_row_id": 2,
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 1.0,
+        },
+        {
+            **common,
+            "candidate_row_id": 3,
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "root_relative_x_m": 0.0,
+            "root_relative_y": 0.0,
+            "root_relative_z_m": 0.0,
+        },
+    ]
+
+
+def test_candidate_direction_evidence_uses_complete_equal_area_bins_and_state_scene_macros() -> None:
+    """Direction density uses azimuth x sin(elevation) and macro-averages states."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    evidence = candidate_direction_evidence(_direction_fixture_rows())
+    density = evidence["density_rows"]
+    assert density
+    assert {row["evidence"] for row in density} == {"equal_area_direction_density"}
+    assert {row["aggregation_level"] for row in density} >= {"state", "scene_macro", "cohort_macro"}
+    assert all(row["protocol"]["binning"] == "azimuth x sin(elevation)" for row in density)
+    state_rows = [row for row in density if row["aggregation_level"] == "state" and row["available"]]
+    assert sum(float(row["mean_state_fraction"]) for row in state_rows) == pytest.approx(1.0)
+    assert all(row["azimuth_bin"] >= 0 and row["sin_elevation_bin"] >= 0 for row in density)
+    assert evidence["cap_rows"] and evidence["angular_support_rows"]
+
+
+def test_candidate_direction_evidence_excludes_zero_length_and_missing_directions_from_denominator() -> None:
+    """Invalid direction vectors remain explicit missingness, never zero directions."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    evidence = candidate_direction_evidence(_direction_fixture_rows())
+    state_rows = [row for row in evidence["density_rows"] if row["aggregation_level"] == "state"]
+    assert any(int(row["missing_count"]) > 0 for row in state_rows)
+    assert all(row["units"] == "solid-angle fraction" for row in state_rows)
+
+
+def test_candidate_spatial_support_preserves_zero_radius_and_signed_height() -> None:
+    """Spatial support is measured in metres and does not discard the origin."""
+
+    from aria_nbv.rollouts.inspection import candidate_geometry_evidence_rows, candidate_spatial_support_evidence
+
+    rows = candidate_geometry_evidence_rows(
+        [
+            {
+                **_direction_fixture_rows()[0],
+                "root_relative_x_m": 0.0,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": -0.25,
+            },
+            {
+                **_direction_fixture_rows()[1],
+                "root_relative_x_m": 0.5,
+                "root_relative_y_m": 0.0,
+                "root_relative_z_m": 0.5,
+            },
+        ]
+    )
+
+    evidence = candidate_spatial_support_evidence(rows)
+    origin = next(row for row in evidence if row["metric"] == "root_xy_radius" and row["aggregation_level"] == "state")
+    height = next(row for row in evidence if row["metric"] == "root_height" and row["aggregation_level"] == "state")
+    assert origin["available"] is True
+    assert origin["mean"] == pytest.approx(0.0)
+    assert origin["zero_radius_policy"] == "included"
+    assert height["mean"] == pytest.approx(-0.25)
+    assert height["units"] == "m"
+
+
+def test_candidate_target_view_evidence_keeps_unpersisted_visibility_explicit() -> None:
+    """Target distance is distinct from unavailable target-view or line-of-sight evidence."""
+
+    from aria_nbv.rollouts.inspection import candidate_target_view_evidence
+
+    rows = [{**_direction_fixture_rows()[0], "target_distance_m": 2.0}]
+    evidence = candidate_target_view_evidence(rows)
+    distance = next(row for row in evidence if row["evidence"] == "target_distance")
+    los = next(row for row in evidence if row["evidence"] == "target_line_of_sight")
+    assert distance["available"] is True
+    assert distance["units"] == "m"
+    assert los["available"] is False
+    assert "not persisted" in str(los["reason"])
+    assert los["missing_count"] == 1
+
+
+def test_candidate_motion_support_reports_clearance_and_collision_missingness() -> None:
+    """Motion support never substitutes a missing collision evaluation with zero."""
+
+    from aria_nbv.rollouts.inspection import candidate_motion_support_evidence
+
+    rows = [
+        {
+            **_direction_fixture_rows()[0],
+            "motion_step_length_m": 0.2,
+            "motion_height_delta_m": -0.1,
+            "motion_backward_step_m": 0.0,
+            "motion_yaw_delta_deg": 10.0,
+            "path_min_clearance_m": None,
+            "free_space_margin_m": None,
+            "path_collision": None,
+        }
+    ]
+    evidence = candidate_motion_support_evidence(rows)
+    clearance = next(row for row in evidence if row["metric"] == "path_min_clearance")
+    collision = next(row for row in evidence if row["metric"] == "path_collision_rate")
+    assert clearance["available"] is False
+    assert clearance["missing_count"] == 1
+    assert collision["available"] is False
+    assert collision["missing_count"] == 1
+
+
 def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path) -> None:
     """Suspicious-row predicates should find low fanout, missing labels, and motion outliers."""
 
