@@ -17,7 +17,7 @@ from aria_nbv.app.panels import _stored_rollout_session as session
 from aria_nbv.app.panels import _stored_rollouts_page as page
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard
-from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
 
@@ -533,6 +533,43 @@ def test_stored_rollout_session_open_does_not_materialize_heavy_projection_owner
     session.open_stored_rollout_session(store)
 
     assert heavy_calls == []
+
+
+def test_stored_rollout_lightweight_header_reads_manifest_validation_promotion_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lightweight Streamlit trust/header path excludes compact statistics."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "facet-demand.zarr", build_rollout_records(horizon=1, num_samples=6, seed=103)[:1]
+    )
+    session.clear_stored_rollout_caches()
+    calls = {"manifest": 0, "validation": 0, "promotion": 0}
+    original_manifest = RolloutZarrStoreReader.manifest
+    original_validate = RolloutZarrStoreReader.validate
+    original_promotion = session.promoted_store_validation_error
+
+    def manifest(reader):
+        calls["manifest"] += 1
+        return original_manifest(reader)
+
+    def validate(reader):
+        calls["validation"] += 1
+        return original_validate(reader)
+
+    def promotion(reader, *, manifest_payload=None):
+        calls["promotion"] += 1
+        return original_promotion(reader, manifest_payload=manifest_payload)
+
+    monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
+    monkeypatch.setattr(session, "promoted_store_validation_error", promotion)
+
+    opened = session.open_stored_rollout_session(result.store_dir)
+    header = opened.header()
+
+    assert calls == {"manifest": 1, "validation": 1, "promotion": 1}
+    assert header["rollouts"] == result.num_rollouts
 
 
 def test_stored_rollout_session_candidate_population_uses_captured_identity(

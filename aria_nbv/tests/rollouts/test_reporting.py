@@ -40,6 +40,49 @@ from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_z
 from tests.rollout_fixtures import build_rollout_records
 
 
+def test_report_export_preserves_one_manifest_validation_promotion_and_statistics_call_per_store(
+    tmp_path, monkeypatch
+) -> None:
+    """Report export composes each demanded inspection facet exactly once."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=102)[:1]
+    )
+    import aria_nbv.rollouts.reporting as reporting
+
+    calls = {"manifest": 0, "validation": 0, "promotion": 0, "statistics": 0}
+    original_manifest = RolloutZarrStoreReader.manifest
+    original_validate = RolloutZarrStoreReader.validate
+    original_promotion = reporting.promoted_store_validation_error
+    original_statistics = reporting.rollout_statistics
+
+    def manifest(reader):
+        calls["manifest"] += 1
+        return original_manifest(reader)
+
+    def validate(reader):
+        calls["validation"] += 1
+        return original_validate(reader)
+
+    def promotion(reader, *, manifest_payload=None):
+        calls["promotion"] += 1
+        return original_promotion(reader, manifest_payload=manifest_payload)
+
+    def statistics(reader, *, manifest_payload=None):
+        calls["statistics"] += 1
+        return original_statistics(reader, manifest_payload=manifest_payload)
+
+    monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
+    monkeypatch.setattr(reporting, "promoted_store_validation_error", promotion)
+    monkeypatch.setattr(reporting, "rollout_statistics", statistics)
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+
+    assert calls == {"manifest": 1, "validation": 1, "promotion": 1, "statistics": 1}
+    assert len(frames["stores"]) == 1
+
+
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=71)

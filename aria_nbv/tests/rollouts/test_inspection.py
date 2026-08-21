@@ -103,6 +103,33 @@ def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores
     assert by_name["unreadable.zarr"]["first_error"]
 
 
+def test_rollout_header_summary_reuses_manifest_snapshot_without_statistics_read(tmp_path, monkeypatch) -> None:
+    """Header inspection consumes its manifest input and does not compute compact statistics."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "header.zarr", build_rollout_records(horizon=1, num_samples=6, seed=104)[:1]
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    manifest = reader.manifest()
+    manifest_calls = 0
+
+    def fail_manifest():
+        nonlocal manifest_calls
+        manifest_calls += 1
+        raise AssertionError("header summary reopened the manifest")
+
+    monkeypatch.setattr(reader, "manifest", fail_manifest)
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.inspection.rollout_statistics",
+        lambda *_args, **_kwargs: pytest.fail("header summary computed compact statistics"),
+    )
+
+    header = rollout_header_summary(reader, manifest_payload=manifest)
+
+    assert manifest_calls == 0
+    assert header["rollouts"] == result.num_rollouts
+
+
 def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discovery(tmp_path) -> None:
     current = write_rollout_zarr_store(
         tmp_path / "current.zarr",
