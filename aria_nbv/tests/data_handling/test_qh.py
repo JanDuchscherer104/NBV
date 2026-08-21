@@ -27,6 +27,7 @@ from aria_nbv.data_handling.qh_data.batching import _gather_candidates
 from aria_nbv.data_handling.qh_data.dataset import _require_named_profile_store
 from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
 from aria_nbv.data_handling.qh_data.views import (
+    QhActorStateContract,
     QhAudit,
     QhChainKey,
     QhSelectedObservationPrefix,
@@ -34,13 +35,20 @@ from aria_nbv.data_handling.qh_data.views import (
     QhSupervision,
 )
 from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord
+from aria_nbv.data_handling.vin_store.store import VinOfflineStoreReader
 from aria_nbv.data_handling.vin_store.views import VinSnippetView
-from aria_nbv.rollouts.qh_reader import QhDataContract, _QhSourceRef
+from aria_nbv.lightning.qh_datamodule import QhDataModule
+from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
+from aria_nbv.oracle.pipelines.offline_vin import _compact_evl_block_signature, _point_feature_schema
+from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
+from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
 from aria_nbv.vin.types import EvlBackboneOutput
+from tests.data_handling.test_vin_offline_store import _write_test_store
+from tests.rollout_fixtures import build_rollout_records
 
 
 def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_types() -> None:
@@ -88,6 +96,67 @@ def test_qh_pose_fields_preserve_frame_aware_public_types() -> None:
         "history_pose_relative_root",
     ):
         assert QhActorTensors.__annotations__[field] == "PoseTW"
+
+
+@pytest.mark.parametrize(
+    ("profile", "root_evl", "selected", "geometry"),
+    (
+        ("qh_cf0_v1", "evl_v1", "none", None),
+        ("qh_cfplus_gt_depth_v1", "evl_v1", "cf_gt", "geometry-v1"),
+    ),
+)
+def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
+    profile: str, root_evl: str, selected: str, geometry: str | None
+) -> None:
+    """Both named roles survive batch transfer while supervision stays outside actor inputs."""
+
+    actor_contract = replace(
+        QhActorStateContract("none", "none", "test-actor-manifest", ()),
+        root_evl_profile=root_evl,
+        selected_observation_protocol=selected,
+        experiment_profile=profile,
+        geometry_contract_hash=geometry,
+    )
+    class _ProfileDataset:
+        contract = QhDataContract("8", "v0", "gain", "return", "td", 0.95, "reason", "7")
+        scenes = frozenset({"scene-profile"})
+        max_horizon = 2
+        provenance: dict[str, object] = {}
+
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> QhChain:
+            assert index == 0
+            return _chain(steps=2, width=3)
+
+        @property
+        def actor_state_contract(self) -> QhActorStateContract:
+            return actor_contract
+
+    dataset = _ProfileDataset()
+    data = QhDataModule(train=dataset, seed=7, experiment_profile=profile)  # type: ignore[arg-type]
+    batch = next(iter(data.train_dataloader())).to("cpu")
+    assert batch.actor.vin_snippet is not None
+    assert not hasattr(batch.actor, "one_step_target_rri")
+
+    class _Scorer(torch.nn.Module):
+        def forward(self, actor: QhActorTensors) -> torch.Tensor:
+            return torch.zeros_like(actor.action_mask, dtype=torch.float32)
+
+    module = QhLightningModule(
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            experiment_profile=profile,
+            privileged=profile == "qh_cfplus_gt_depth_v1",
+            root_evl_profile=root_evl,
+            selected_observation_protocol=selected,
+            actor_state_contract_hash=data.actor_state_contract_hash,
+            geometry_contract_hash=geometry,
+        ),
+        scorer=_Scorer(),
+    )
+    module._validate_datamodule_contract(data)
 
 
 def test_qh_batch_transfer_constructs_owned_dtos_without_reflective_traversal() -> None:
@@ -845,3 +914,89 @@ def test_dataset_rejects_each_source_identity_mismatch(field: str, value: object
             rollout_reader=_RolloutReader(_source_ref(**{field: value})),  # type: ignore[arg-type]
             actor_reader=_ActorReader(),  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize("profile", ["qh_cf0_v1", "qh_cfplus_gt_depth_v1"])
+def test_named_profiles_use_written_vin_and_rollout_artifacts(
+    tmp_path: Path, profile: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    actor_config = _write_test_store(tmp_path / "vin", include_backbone=True)
+    actor_reader = VinOfflineStoreReader(actor_config)
+    manifest = actor_reader.manifest
+    schema = _point_feature_schema(include_obs_count=False)
+    manifest.vin.update(
+        point_feature_schema=schema,
+        point_feature_schema_hash=stable_msgspec_hash(schema),
+        include_inv_dist_std=True,
+        include_obs_count=False,
+        backbone_block_signature=_compact_evl_block_signature(manifest.shards),
+    )
+    manifest.write(actor_config.manifest_path)
+    actor_reader = VinOfflineStoreReader(actor_config)
+    actor_record = actor_reader.get_split_records(Stage.VAL)[0]
+    rollout = build_rollout_records(horizon=2, num_samples=6, seed=7)[0]
+    source = rollout.lineage.source
+    source.source_sample_index = actor_record.sample_index
+    source.source_sample_key = actor_record.sample_key
+    source.scene_id = actor_record.scene_id
+    source.snippet_id = actor_record.snippet_id
+    source.source_shard_id = actor_record.shard_id
+    source.source_shard_row = actor_record.row
+    source.split = actor_record.split
+    source.source_cache_version = "9"
+    source.source_offline_store_manifest_hash = stable_msgspec_hash(actor_reader.manifest)
+    split_hash = build_rollout_split_manifest_hash(
+        source_manifest_hash=source.source_offline_store_manifest_hash,
+        split=source.split,
+        records=[
+            {
+                "order": 0,
+                "sample_index": actor_record.sample_index,
+                "sample_key": actor_record.sample_key,
+                "scene_id": actor_record.scene_id,
+                "snippet_id": actor_record.snippet_id,
+                "split": actor_record.split,
+                "source_shard_id": actor_record.shard_id,
+                "source_shard_row": actor_record.row,
+            }
+        ],
+    )
+    source.split_manifest_hash = split_hash
+    rollout_store = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        [rollout],
+        source_offline_store_version="9",
+        split_manifest_hash=split_hash,
+        selected_depth_enabled=True,
+    ).store_dir
+    rich = profile == "qh_cfplus_gt_depth_v1"
+    reader = QhRolloutReader((rollout_store,), include_selected_depth=rich)
+    dataset = QhDataset(
+        rollout_reader=reader,
+        actor_reader=actor_reader,
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt" if rich else "none",
+        experiment_profile=profile,
+        include_audit=True,
+    )
+    data = QhDataModule(train=dataset, seed=7, experiment_profile=profile)
+    batch = next(iter(data.train_dataloader()))
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    batch = batch.pin_memory().to("cpu")
+    assert batch.audits[0] is not None
+    for field in ("one_step_target_rri", "candidate_reward", "selected_index", "discount", "terminal", "label_mask"):
+        assert hasattr(batch.supervision, field)
+        assert not hasattr(batch.actor, field)
+    assert batch.audits[0] is not None
+    assert not hasattr(batch.actor, "audit")
+    config = QhLightningModuleConfig(
+        root_evl_profile="evl_v1",
+        selected_observation_protocol="cf_gt" if rich else "none",
+        experiment_profile=profile,
+        privileged=rich,
+        actor_state_contract_hash=data.actor_state_contract_hash,
+        geometry_contract_hash=data.geometry_contract_hash,
+        lr_scheduler=None,
+    )
+    module = QhLightningModule(config, scorer=torch.nn.Identity())
+    module._validate_datamodule_contract(data)
