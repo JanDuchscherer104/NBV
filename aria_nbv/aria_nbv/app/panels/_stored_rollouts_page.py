@@ -1578,14 +1578,25 @@ def _render_candidate_geometry_diagnostics(
         if {"target_normalized_forward", "target_normalized_lateral"}.issubset(normalized.columns):
             points = normalized.dropna(subset=["target_normalized_forward", "target_normalized_lateral"])
             if not points.empty:
-                fig = px.density_heatmap(
-                    points,
-                    x="target_normalized_forward",
-                    y="target_normalized_lateral",
-                    nbinsx=32,
-                    nbinsy=32,
-                    facet_col="position" if "position" in points else None,
+                fig = go.Figure()
+                for label, x, y, color in (("root", 0.0, 0.0, "#4c78a8"), ("target", 1.0, 0.0, "#e45756")):
+                    fig.add_trace(
+                        go.Scatter(x=[x], y=[y], mode="markers", name=label, marker={"size": 10, "color": color})
+                    )
+                fig.add_trace(
+                    go.Scatter(
+                        x=points["target_normalized_forward"],
+                        y=points["target_normalized_lateral"],
+                        mode="markers",
+                        name="candidate",
+                        marker={"size": 5, "opacity": 0.45},
+                        text=points["position"] if "position" in points else None,
+                    )
+                )
+                fig.update_layout(
                     title="Target-normalized candidate position support",
+                    xaxis_title="forward (target-normalized)",
+                    yaxis_title="lateral (target-normalized)",
                 )
                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
                 _render_plot(
