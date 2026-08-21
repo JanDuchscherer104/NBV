@@ -1,72 +1,6 @@
 ---
 name: typst-authoring
-description: Use for ARIA-NBV Typst proposal/thesis authoring, shared notation, scientific prose, citations, scientific/geometric figures, tables, Mermaid inclusion, and compile/render QA.
-metadata:
-  mode: implementation
-  not_when:
-    - "pure Quarto navigation/frontmatter without Typst or thesis scientific-writing concerns"
-    - "a systemic, CI-specific, or persistent docs build failure owns the task"
-    - "a broad advisor-facing thesis-scope decision is unresolved"
-  handoff_to:
-    - "nearest docs guide for public Quarto navigation or docs-boundary edits"
-    - "nearest build owner for systemic failures or suspicious rendered output that persists after the Typst loop"
-    - "aria-grill for ambiguous advisor-facing research-contract decisions"
-  evidence_required:
-    - "nearest docs guidance and target Typst imports"
-    - "shared notation/glossary check for new symbols, equations, or durable terms"
-    - "claim/citation check for advisor-facing literature or thesis claims"
-    - "source artifact plus frame, units, projection/view, and provenance for scientific or geometric figures"
-    - "compile and rendered-page inspection for non-trivial visual/math edits"
-  applies_to:
-    - "docs/typst/**"
-    - ".agents/skills/typst-authoring/**"
-  triggers:
-    - "Typst"
-    - "main.typ"
-    - "thesis seed"
-    - "thesis Typst"
-    - "shared symbols or equations"
-    - "scientific prose in thesis/proposal"
-    - "scientific illustration"
-    - "3D/geometric figure"
-  must_read:
-    - "AGENTS.md"
-    - "docs/AGENTS.md"
-    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
-  canonical_sources:
-    - "docs/AGENTS.md"
-    - ".agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy"
-    - "docs/typst/thesis/main.typ"
-    - "docs/typst/shared"
-    - "docs/typst/shared/symbols.typ"
-    - "docs/typst/shared/equations.typ"
-    - "docs/typst/shared/style.typ"
-    - ".agents/skills/typst-authoring/references/thesis-section-contracts.md"
-    - ".agents/skills/typst-authoring/references/empirical-reporting-and-reproducibility.md"
-    - ".agents/skills/typst-authoring/references/aria-nbv-notation.md"
-    - ".agents/skills/typst-authoring/references/figures-tables.md"
-    - ".agents/skills/typst-authoring/references/scientific-visualizations.md"
-  context7_refs:
-    - "/websites/typst_app"
-    - "/typst-community/glossarium"
-    - "/cetz-package/cetz"
-    - "/jollywatt/typst-fletcher"
-    - "/touying-typ/touying"
-    - "/websites/quarto"
-  literature_refs:
-    - "docs/references.bib"
-    - "docs/literature/sources.jsonl"
-    - "quality-driven-rri"
-    - "finite-candidate-rl"
-  tool_refs:
-    - "mcp__codex_apps__context7_resolve_library_id"
-    - "mcp__codex_apps__context7_query_docs"
-    - "mcp__code_index.search_code_advanced"
-  verification:
-    - "skill quick_validate.py when available for skill edits"
-    - "make check-agent-memory when agent guidance changes"
-    - "make typst-authoring-contract for thesis-wide authoring hygiene"
-    - "focused Typst compile plus PNG render for document edits"
+description: Use for ARIA-NBV Typst proposal or thesis authoring, shared notation, scientific prose, citations, scientific or geometric figures, tables, Mermaid inclusion, and compile or render QA.
 ---
 
 # ARIA-NBV Typst + Thesis Authoring
@@ -81,19 +15,29 @@ metadata:
 
 ## Task Modes
 
-- `notation-edit`: update `docs/typst/shared/symbols.typ` and
-  `docs/typst/shared/equations.typ` before document-local use; read notation,
-  math-attachment, and migration references.
-- `prose-draft` / `prose-polish`: read thesis-writing, section-contract, and
-  claim-discipline references; use the nested fragment, shape, or beat writing
-  modes only when useful; preserve claim strength and citations.
-- `claim-check`: classify advisor-facing literature or thesis claims and use the
-  direct-source checklist in `references/claim-citation-discipline.md`.
-- `empirical-results`: read the empirical-reporting reference; require a frozen
+- `notation-edit`: update shared modules before document-local use; read
+  [`aria-nbv-notation.md`](references/aria-nbv-notation.md),
+  [`math-attachments.md`](references/math-attachments.md), and
+  [`notation-migration.md`](references/notation-migration.md).
+- `prose-draft` / `prose-polish`: read [`thesis-writing.md`](references/thesis-writing.md),
+  [`thesis-section-contracts.md`](references/thesis-section-contracts.md), and
+  [`claim-citation-discipline.md`](references/claim-citation-discipline.md); use
+  the nested fragment, shape, or beat writing modes only when useful; preserve
+  claim strength and citations.
+- `claim-check`: classify reviewed literature or thesis evidence and use the
+  direct-source checklist in [`claim-citation-discipline.md`](references/claim-citation-discipline.md).
+- `empirical-results`: read
+  [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md); require a frozen
   analysis contract, uncertainty, fair controls, and immutable provenance.
-- `figure-table` / `visual-qa`: read figures/tables and workflow references;
-  scientific, geometric, or 3D work also reads `scientific-visualizations.md`
+- `figure-table` / `visual-qa`: read [`figures-tables.md`](references/figures-tables.md)
+  and [`workflow.md`](references/workflow.md); scientific, geometric, or 3D
+  work also reads [`scientific-visualizations.md`](references/scientific-visualizations.md)
   and the selected renderer/package reference.
+
+For current Typst, package, or API behavior, hand off through
+[`aria-nbv-context`](../aria-nbv-context/SKILL.md) and read its
+[Context7 registry](../aria-nbv-context/references/context7_library_ids.md)
+only after inspecting local owners and installed call sites.
 
 ## Rules
 
@@ -103,8 +47,8 @@ metadata:
    add recurring terms or equations to shared modules first.
 3. Keep notation policy, math-attachment details, claim discipline, figure/table
    conventions, and package notes in the referenced files, not this hot path.
-4. Classify advisor-facing claims and complete the direct-source evidence check
-   when evidence matters.
+4. Classify literature-facing claims and complete the direct-source evidence
+   check when evidence matters.
 5. Use Glossarium-native `@term` / `@term:short` references for durable terms.
 6. Write final thesis/proposal prose as paragraphs unless the template asks for
    lists.
@@ -124,9 +68,10 @@ metadata:
    `docs/typst/shared/style.typ`: use `#gh` for final-worthy pinned
    anchors and `#gh-wip` / `#gh-symbol` for removable drafting aids.
 4. For thesis, slides, or diagrams that introduce or reuse symbols/equations,
-   read `references/aria-nbv-notation.md`; for package-backed layouts or
-   slide templates, also read `references/packages/index.md` and
-   `references/slides.md` as relevant.
+   read [`references/aria-nbv-notation.md`](references/aria-nbv-notation.md);
+   for package-backed layouts, read
+   [`references/packages/index.md`](references/packages/index.md); for slide
+   templates, read [`references/slides.md`](references/slides.md).
 5. If prose changes, draft claims/evidence first, then convert to paragraphs;
    empirical sentences must resolve scope, evidence, uncertainty, and artifact
    provenance or remain explicitly hypothetical.

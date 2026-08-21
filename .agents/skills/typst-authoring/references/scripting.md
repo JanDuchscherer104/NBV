@@ -117,10 +117,10 @@ See `references/data-loading.md` and `references/typst-symbols.md`.
 
 ## Context7 Queries (Scripting)
 
-Use `/websites/typst_app`:
+Use official Typst documentation; for current library selection, use the
+[`aria-nbv-context` Context7 registry](../../aria-nbv-context/references/context7_library_ids.md):
 
 - `scripting let bindings destructuring blocks content`
 - `if for while break continue return`
 - `include import module`
 - `set show context`
-

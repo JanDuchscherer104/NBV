@@ -1,9 +1,11 @@
 # Rerun Current-Docs Queries
 
-These are query templates, not API authority. Use the Context7 library id
-`/rerun-io/rerun` when that optional capability is available; otherwise open the
-equivalent official Rerun documentation. Request only the slice needed for the
-touched call and verify the installed Python signature locally.
+These are query templates, not API authority. Select the current Rerun library
+through [`aria-nbv-context`](../../aria-nbv-context/SKILL.md) and its
+[Context7 registry](../../aria-nbv-context/references/context7_library_ids.md);
+otherwise open the equivalent official Rerun documentation. Request only the
+slice needed for the touched call and verify the installed Python signature
+locally.
 
 ## Recording and sinks
 

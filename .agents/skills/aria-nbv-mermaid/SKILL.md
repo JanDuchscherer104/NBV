@@ -1,49 +1,6 @@
 ---
 name: aria-nbv-mermaid
-description: Use for ARIA-NBV Mermaid source, local lint/render, and thesis-diagram style work.
-metadata:
-  mode: implementation
-  not_when:
-    - "the task is only Typst layout/prose without Mermaid sources"
-    - "a concrete local lint or Mermaid CLI failure needs diagnosis"
-    - "the requested visual is better as a raster image or non-Mermaid asset"
-  handoff_to:
-    - "typst-authoring for shared notation changes, Typst inclusion, captions, and final-page QA"
-    - "nearest docs guide for Quarto pages containing Mermaid fences"
-    - "nearest owning guide for reproduced local lint or Mermaid CLI failures"
-  evidence_required:
-    - "the source `.mmd` and its destination surface"
-    - "the local style guide and symbol map before math-heavy or thesis-figure edits"
-    - "local lint output; render output or an explicit `mmdc`-unavailable result"
-  applies_to:
-    - "**/*.mmd"
-    - "tools/mermaid/**"
-    - "docs/figures/**"
-    - "docs/typst/**/figures/**"
-  triggers:
-    - "Mermaid"
-    - ".mmd"
-    - "thesis diagram"
-    - "flowchart"
-    - "sequence diagram"
-  must_read:
-    - "AGENTS.md"
-    - "docs/AGENTS.md"
-  canonical_sources:
-    - "docs/AGENTS.md"
-    - "tools/mermaid/references/aria_mermaid_style.md"
-    - "tools/mermaid/references/aria_symbol_map.yaml"
-    - "tools/mermaid/scripts/aria_mermaid_lint.py"
-    - "tools/mermaid/scripts/render_mermaid.sh"
-    - "docs/typst/shared"
-  context7_refs:
-    - "/mermaid-js/mermaid"
-  tool_refs:
-    - "mcp__codex_apps__context7_resolve_library_id"
-    - "mcp__codex_apps__context7_query_docs"
-  verification:
-    - "python tools/mermaid/scripts/aria_mermaid_lint.py <file.mmd>"
-    - "tools/mermaid/scripts/render_mermaid.sh <file.mmd> <out.svg> when `mmdc` is available"
+description: Use for ARIA-NBV Mermaid source, local lint and rendering, thesis diagrams, flowcharts, sequence diagrams, and Mermaid style or symbol-map work.
 ---
 
 # ARIA-NBV Mermaid Figure Skill
@@ -67,8 +24,11 @@ document integration, and diagnosed tool failures to their existing owners.
    map; also inspect the relevant `docs/typst/shared` source.
 3. For a rendering or linting failure, capture the exact local command and
    output before handing the evidence to the nearest owning guide.
-4. Query `/mermaid-js/mermaid` only when current upstream grammar or renderer
-   behavior is material; local source, lint, and render results remain decisive.
+4. For current upstream grammar or renderer behavior, use the external-evidence
+   branch in [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its
+   [Context7 registry](../aria-nbv-context/references/context7_library_ids.md)
+   only after local owner inspection; local source, lint, and render results
+   remain decisive.
 
 ## Seam Rules
 

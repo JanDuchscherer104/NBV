@@ -6,7 +6,9 @@ not bulk-copy external skill content.
 
 ## Official Typst Docs
 
-Use official Typst docs or `/websites/typst_app` with narrow queries:
+Use official Typst docs with narrow queries; for current library selection, use
+[`aria-nbv-context`](../../aria-nbv-context/SKILL.md) and its
+[Context7 registry](../../aria-nbv-context/references/context7_library_ids.md):
 
 - `math attach subscript superscript limits scripts`
 - `math op text operator spacing limits`
