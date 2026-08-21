@@ -25,18 +25,18 @@ from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
 @pytest.mark.parametrize(
     ("projection", "owner_name", "kwargs"),
     [
-        ("invariants", "store_invariant_rows", {}),
-        ("cohorts", "comparable_policy_cohorts", {}),
-        ("paired", "paired_policy_comparison_rows", {}),
-        ("steps", "rollout_step_objective_rows", {}),
-        ("temporal", "temporal_metric_summary_rows", {"metric": "selected_target_rri"}),
-        ("candidate_flow", "candidate_flow_rows", {}),
-        ("ranks", "selected_candidate_rank_rows", {}),
-        ("targets", "target_audit_rows", {}),
-        ("masks", "mask_combination_rows", {}),
-        ("tree", "rollout_tree_summary_rows", {}),
-        ("root_geometry", "root_relative_candidate_rows", {}),
-        ("depth_summary", "selected_depth_summary_rows", {}),
+        ("invariants", "_cached_invariants_cached", {}),
+        ("cohorts", "_cached_cohorts_cached", {}),
+        ("paired", "_cached_paired_cached", {}),
+        ("steps", "_cached_steps_cached", {}),
+        ("temporal", "_cached_temporal_cached", {"metric": "selected_target_rri"}),
+        ("candidate_flow", "_cached_candidate_flow_cached", {}),
+        ("ranks", "_cached_ranks_cached", {}),
+        ("targets", "_cached_targets_cached", {}),
+        ("masks", "_cached_masks_cached", {}),
+        ("tree", "_cached_tree_cached", {}),
+        ("root_geometry", "_cached_root_geometry_cached", {}),
+        ("depth_summary", "_cached_depth_summary_cached", {}),
     ],
 )
 def test_lightweight_dispatch_does_not_materialize_candidate_audit(
@@ -57,7 +57,7 @@ def test_lightweight_dispatch_does_not_materialize_candidate_audit(
     )
     monkeypatch.setattr(session, owner_name, _owner_stub(expected))
 
-    result = session._cached_projection.__wrapped__("/fixture.zarr", projection, **kwargs)
+    result = getattr(session, owner_name)("/fixture.zarr", store_identity="fixture", **kwargs)
 
     assert result == expected
 
@@ -71,19 +71,10 @@ def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_ro
     candidate_rows = [{"candidate_row_id": 7}, {"candidate_row_id": 11}]
     recursive_calls: list[tuple[str, int | None]] = []
     summary_calls: list[tuple[object, str, object]] = []
-    dispatch = session._cached_projection.__wrapped__
-
     monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda _path, **_kwargs: (reader, object(), {}))
 
-    def recursive_projection(
-        _store_path: str,
-        projection: str,
-        *,
-        limit: int | None = None,
-        **_kwargs: object,
-    ) -> list[dict[str, int]]:
-        recursive_calls.append((projection, limit))
-        assert projection == "candidates"
+    def candidate_projection(_store_path: str, *, limit: int | None = None, **_kwargs: object) -> list[dict[str, int]]:
+        recursive_calls.append(("candidates", limit))
         return candidate_rows
 
     def summarize(
@@ -95,14 +86,11 @@ def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_ro
         summary_calls.append((source, group_by, audit_rows))
         return [{"family": "fixture", "candidate_count": len(candidate_rows)}]
 
-    monkeypatch.setattr(session, "_cached_projection", recursive_projection)
+    monkeypatch.setattr(session, "_cached_candidates_cached", candidate_projection)
     monkeypatch.setattr(session, "candidate_group_summary_rows", summarize)
 
-    result = dispatch(
-        "/fixture.zarr",
-        "candidate_group",
-        group_by="mixture",
-        limit=25,
+    result = session._cached_candidate_group_cached.__wrapped__(
+        "/fixture.zarr", group_by="mixture", limit=25, store_identity="fixture"
     )
 
     assert recursive_calls == [("candidates", 25)]
@@ -122,6 +110,20 @@ def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytes
     assert messages == ["Coverage and physical-cost projections are withheld until store validation succeeds."]
 
 
+def test_manifest_read_failure_blocks_session_without_synthetic_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A manifest failure remains visible and cannot become a trusted empty payload."""
+
+    class Reader:
+        def manifest(self) -> dict[str, object]:
+            raise RuntimeError("manifest read failed")
+
+    monkeypatch.setattr(session, "RolloutZarrStoreReader", lambda _path: Reader())
+    monkeypatch.setattr(session, "build_schema_validation", lambda _reader: object())
+
+    with pytest.raises(RuntimeError, match="manifest read failed"):
+        session._cached_store_bundle_cached.__wrapped__("/unpromoted.zarr", store_identity="fixture")
+
+
 def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -133,15 +135,15 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
     manifest.write_text('{"generation": "first"}', encoding="utf-8")
     identities: list[str] = []
 
-    def cached_projection(_path: str, _projection: str, *, store_identity: str, **_kwargs: object) -> object:
+    def cached_header(_path: str, *, store_identity: str, **_kwargs: object) -> object:
         identities.append(store_identity)
         return []
 
-    monkeypatch.setattr(session, "_cached_projection_cached", cached_projection)
-    session._cached_projection(store.as_posix(), "header")
-    session._cached_projection(store.as_posix(), "header")
+    monkeypatch.setattr(session, "_cached_header_cached", cached_header)
+    session._cached_header_cached(store.as_posix(), store_identity=session._store_projection_identity(store))
+    session._cached_header_cached(store.as_posix(), store_identity=session._store_projection_identity(store))
     manifest.write_text('{"generation": "second"}', encoding="utf-8")
-    session._cached_projection(store.as_posix(), "header")
+    session._cached_header_cached(store.as_posix(), store_identity=session._store_projection_identity(store))
 
     assert identities[0] == identities[1]
     assert identities[2] != identities[0]
@@ -158,21 +160,25 @@ def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat
     manifest_stat = manifest.stat()
     identities: list[str] = []
 
-    def cached_projection(_path: str, _projection: str, *, store_identity: str, **_kwargs: object) -> object:
+    def cached_header(_path: str, *, store_identity: str, **_kwargs: object) -> object:
         identities.append(store_identity)
         return []
 
-    monkeypatch.setattr(session, "_cached_projection_cached", cached_projection)
+    monkeypatch.setattr(session, "_cached_header_cached", cached_header)
     original_read_bytes = Path.read_bytes
     monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
-    session._cached_projection(result.store_dir.as_posix(), "header")
+    session._cached_header_cached(
+        result.store_dir.as_posix(), store_identity=session._store_projection_identity(result.store_dir)
+    )
     monkeypatch.setattr(Path, "read_bytes", original_read_bytes)
     root = zarr.open_group(result.store_dir, mode="a")
     candidate_ids = root["candidates/candidate_row_id"]
     candidate_ids[0] = int(candidate_ids[0]) + 1
     os.utime(manifest, ns=(manifest_stat.st_atime_ns, manifest_stat.st_mtime_ns))
     monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
-    session._cached_projection(result.store_dir.as_posix(), "header")
+    session._cached_header_cached(
+        result.store_dir.as_posix(), store_identity=session._store_projection_identity(result.store_dir)
+    )
 
     assert identities[1] != identities[0]
 
@@ -300,7 +306,7 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
 
     path = selected.as_posix()
     first_reader, first_validation, first_manifest = session._cached_store_bundle(path)
-    first_steps = session._cached_projection(path, "steps")
+    first_steps = session._cached_steps_cached(path, store_identity=session._store_projection_identity(path))
     first_bundle = session._cached_evidence_bundle(path, "pilot")
     assert first_validation.ok
     assert first_reader.store_dir == selected.resolve()
@@ -312,7 +318,7 @@ def test_all_store_backed_caches_follow_atomic_same_path_replacement(tmp_path: P
     replacement.replace(selected)
 
     second_reader, second_validation, second_manifest = session._cached_store_bundle(path)
-    second_steps = session._cached_projection(path, "steps")
+    second_steps = session._cached_steps_cached(path, store_identity=session._store_projection_identity(path))
     second_bundle = session._cached_evidence_bundle(path, "pilot")
     assert second_validation.ok
     assert second_reader.store_dir == selected.resolve()
@@ -471,7 +477,26 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
     names = (
         "_cached_inventory",
         "_cached_store_bundle_cached",
-        "_cached_projection_cached",
+        "_cached_invariants_cached",
+        "_cached_header_cached",
+        "_cached_cohorts_cached",
+        "_cached_paired_cached",
+        "_cached_steps_cached",
+        "_cached_reconstruction_metrics_cached",
+        "_cached_reconstruction_endpoints_cached",
+        "_cached_discounted_returns_cached",
+        "_cached_headroom_cached",
+        "_cached_temporal_cached",
+        "_cached_candidate_flow_cached",
+        "_cached_ranks_cached",
+        "_cached_targets_cached",
+        "_cached_masks_cached",
+        "_cached_candidates_cached",
+        "_cached_candidate_group_cached",
+        "_cached_q_h_cached",
+        "_cached_tree_cached",
+        "_cached_root_geometry_cached",
+        "_cached_depth_summary_cached",
         "_cached_candidate_population_cached",
         "_cached_topology_cached",
         "_cached_failures_cached",
@@ -636,6 +661,10 @@ def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
     assert source.count('@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)') >= 2
     assert '@st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)' in source
     assert '@st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)' in source
+    assert "_cached_projection" not in source
+    assert "_named_projection" not in source
+    assert "projection: str" not in source
+    assert "Unknown cached rollout projection" not in source
 
 
 def _owner_stub(result: object) -> Callable[..., object]:
