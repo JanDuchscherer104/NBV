@@ -117,6 +117,7 @@ def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
         experiment_profile=profile,
         geometry_contract_hash=geometry,
     )
+
     class _ProfileDataset:
         contract = QhDataContract("8", "v0", "gain", "return", "td", 0.95, "reason", "7")
         scenes = frozenset({"scene-profile"})

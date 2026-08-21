@@ -41,7 +41,7 @@ def camera_tw_to_pytorch3d(
     camera = camera.to(device)
     pose_camera_world = pose_world_camera.inverse().to(device)
     batch_size = int(pose_camera_world.shape[0])
-    _width, _height, focal, principal, image_size = _camera_intrinsics(
+    focal, principal, image_size = _camera_intrinsics(
         camera,
         device=device,
         dtype=dtype,
@@ -64,7 +64,7 @@ def _camera_intrinsics(
     device: torch.device,
     dtype: torch.dtype,
     batch_size: int,
-) -> tuple[int, int, Tensor, Tensor, Tensor]:
+) -> tuple[Tensor, Tensor, Tensor]:
     """Return physical-image intrinsics aligned to a pose batch."""
 
     size_all = camera.size.reshape(-1, 2).to(device=device, dtype=torch.float32)
@@ -73,9 +73,6 @@ def _camera_intrinsics(
     size_base = size_all[0]
     if not torch.allclose(size_all, size_base):
         raise ValueError("Per-candidate varying image sizes are not supported.")
-    width = int(size_base[0].item())
-    height = int(size_base[1].item())
-
     focal_all = camera.f.reshape(-1, 2).to(device=device, dtype=dtype)
     principal_all = camera.c.reshape(-1, 2).to(device=device, dtype=dtype)
     if focal_all.shape[0] == 1 and batch_size > 1:
@@ -85,7 +82,7 @@ def _camera_intrinsics(
     elif focal_all.shape[0] != batch_size:
         raise ValueError(f"Camera focal batch {focal_all.shape[0]} does not match poses batch {batch_size}")
     image_size = torch.stack((size_all[:, 1], size_all[:, 0]), dim=-1).to(dtype=dtype)
-    return width, height, focal_all, principal_all, image_size
+    return focal_all, principal_all, image_size
 
 
 class Pytorch3DDepthRendererConfig(TargetConfig["Pytorch3DDepthRenderer"]):
