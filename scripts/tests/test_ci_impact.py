@@ -243,8 +243,8 @@ class SelectionTests(unittest.TestCase):
         )
         boundary_guidance = (REPO_ROOT / boundary_owner).read_text(encoding="utf-8")
 
-        graphify_branch = context_guidance.split("## Graphify Branch", 1)[1].split(
-            "## Context7 Plugin Branch", 1
+        graphify_branch = context_guidance.split("## Branch Index", 1)[1].split(
+            "## Completion", 1
         )[0]
         self.assertIn(
             "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",

@@ -510,8 +510,9 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
 
     context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
     intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
-    assert "## Graphify Branch" in context
-    assert "## Context7 Plugin Branch" in context
+    assert "## Branch Index" in context
+    assert "## Graphify Branch" not in context
+    assert "## Context7 Plugin Branch" not in context
     assert (
         "Require the Graphify executable and usable graph artifacts as navigation"
         in intent
@@ -575,25 +576,41 @@ def test_route_only_domain_skill_contract() -> None:
     for skill_name in retired:
         assert not (ROOT / ".agents" / "skills" / skill_name / "SKILL.md").exists()
 
-    zarr_fixture = next(
-        fixture
-        for fixture in routing["fixtures"]
-        if fixture["id"] == "zarr-storage-api-change"
-    )
-    assert "expected_tool_refs" not in zarr_fixture
-    assert zarr_fixture["expected_owner_paths"] == [
-        "aria_nbv/aria_nbv/data_handling/AGENTS.md"
-    ]
     fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    for fixture_id, guide in (
+        ("zarr-rollout-storage-api", "aria_nbv/aria_nbv/rollouts/AGENTS.md"),
+        (
+            "zarr-offline-vin-storage-api",
+            "aria_nbv/aria_nbv/data_handling/AGENTS.md",
+        ),
+    ):
+        assert "expected_tool_refs" not in fixtures[fixture_id]
+        assert guide in fixtures[fixture_id]["expected_owner_paths"]
     assert "entity-rri-implementation" not in fixtures
     assert fixtures["target-admission-protocol"]["expected_owner_paths"] == [
         "aria_nbv/AGENTS.md",
         "aria_nbv/aria_nbv/targets/protocol.py",
     ]
-    assert (
-        "aria_nbv/aria_nbv/oracle/labels.py"
-        in fixtures["oracle-label-generation"]["expected_owner_paths"]
-    )
+    oracle_routes = {
+        "oracle-evidence-scoring": "aria_nbv/aria_nbv/oracle/evidence.py",
+        "oracle-scene-rri-scoring": "aria_nbv/aria_nbv/oracle/scene_rri.py",
+        "oracle-target-rri-scoring": "aria_nbv/aria_nbv/oracle/target_rri.py",
+        "oracle-label-dtos": "aria_nbv/aria_nbv/oracle/labels.py",
+        "oracle-label-pipeline": "aria_nbv/aria_nbv/oracle/pipelines",
+    }
+    for fixture_id, owner in oracle_routes.items():
+        assert owner in fixtures[fixture_id]["expected_owner_paths"]
+        assert (
+            "aria_nbv/aria_nbv/oracle/README.md"
+            in fixtures[fixture_id]["expected_owner_paths"]
+        )
+    geometry_routes = {
+        "geometry-pose-generation": "aria_nbv/aria_nbv/pose_generation",
+        "geometry-rendering-camera": "aria_nbv/aria_nbv/rendering",
+        "geometry-vin-frame-contract": "aria_nbv/aria_nbv/vin/AGENTS.md",
+    }
+    for fixture_id, owner in geometry_routes.items():
+        assert owner in fixtures[fixture_id]["expected_owner_paths"]
     assert fixtures["rri-metric-semantics"]["expected_owner_paths"] == [
         "aria_nbv/aria_nbv/rri_metrics/AGENTS.md"
     ]
@@ -639,6 +656,10 @@ def test_capture_and_routing_contracts() -> None:
     ):
         assert invariant in agent_behavior
     assert "**Workpackage completion, Git, or external action:**" in agent_behavior
+    assert "After completing a durable\n  workpackage" in agent_behavior
+    descriptor = _read(agent_behavior_path.parent / "agents" / "openai.yaml")
+    assert 'short_description: "Owner-first ARIA-NBV preflight"' in descriptor
+    assert "scope one traceable lane" in descriptor
     reference_paths = {
         link.split("#", 1)[0]
         for link in re.findall(r"\]\((references/[^)]+)\)", agent_behavior)
@@ -944,6 +965,15 @@ def test_thesis_context_and_context7_routing() -> None:
     assert "scripts/nbv_typst_includes.py --thesis --mode outline" in context_map
     assert "Derived Context Route Index" in context_map
     assert "never owns the facts it locates" in context_map
+
+    for owner_label in (
+        "Oracle evidence and private scoring engine",
+        "Scene-RRI scoring",
+        "Target-RRI scoring",
+        "Oracle label DTOs and retained evidence",
+        "Oracle label-generation pipelines",
+    ):
+        assert owner_label in context_map
 
     indexed_paths = {
         token.split()[0].split("#", 1)[0].rstrip("/")

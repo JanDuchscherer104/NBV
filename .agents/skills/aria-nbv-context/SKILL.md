@@ -53,17 +53,13 @@ Use the owner hierarchy to select one leaf before opening optional references.
 
 ## Branch Index
 
-Use this index only for branches with many subtopics. A linked branch reference
-may route one additional hop to a leaf; do not chain through another index.
-
-## Graphify Branch
+Select exactly one matching branch. A linked branch reference may route one
+additional hop to a leaf; do not chain through another index.
 
 - **Broad architecture, relationship, or project-content question:** Read
   [`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md),
   classify the navigation state, use the upstream Graphify route when eligible,
   and verify every consequential exact owner.
-## Context7 Plugin Branch
-
 - **External API or version uncertainty:** Read
   [`references/context7_library_ids.md`](references/context7_library_ids.md),
   the Context7 library reference. Use a supplied exact ID directly; otherwise call
