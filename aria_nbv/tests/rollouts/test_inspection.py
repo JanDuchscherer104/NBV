@@ -1611,6 +1611,7 @@ def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_pa
     assert first["root_relative_x_m"] == pytest.approx(float(world_pose[9] - root_pose[9]))
     assert first["root_relative_y_m"] == pytest.approx(float(world_pose[10] - root_pose[10]))
     assert first["root_relative_z_m"] == pytest.approx(float(world_pose[11] - root_pose[11]))
+    assert first["strategy"] != "unknown"
     target_pose = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
     target_distance = float(np.linalg.norm(target_pose[9:12] - root_pose[9:12]))
     assert first["initial_target_distance_m"] == pytest.approx(target_distance)

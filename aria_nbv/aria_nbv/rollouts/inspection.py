@@ -2879,6 +2879,7 @@ def root_relative_candidate_rows(
     """
 
     targets = {target.target_row_id: target for target in target_rows(reader)}
+    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
     rows: list[dict[str, object]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
@@ -2912,6 +2913,8 @@ def root_relative_candidate_rows(
                         "actor_action": bool(step.actor_action_mask[local]),
                         "selected": bool(step.selected_mask[local]),
                         "position": str(step.position_names[local]),
+                        "strategy_id": int(strategy_ids[int(step.candidate_row_positions[local])]),
+                        "strategy": decode_strategy_id(int(strategy_ids[int(step.candidate_row_positions[local])])),
                         "mixture": str(step.mixture_names[local]),
                         "root_relative_x_m": float(relative[0]),
                         "root_relative_y_m": float(relative[1]),

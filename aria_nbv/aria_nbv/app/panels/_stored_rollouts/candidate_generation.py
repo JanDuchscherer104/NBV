@@ -956,6 +956,87 @@ def _add_root_target_pose_anchors(fig: go.Figure, anchors: pd.DataFrame) -> None
         add_pose_axes_to_figure(fig, centers, axes, title=label, scale=0.12, line_width=4)
 
 
+def _add_selected_rollout_chains(fig: go.Figure, geometry: pd.DataFrame, *, three_dimensional: bool) -> None:
+    """Overlay factual root-to-selected-action paths without joining proposal alternatives."""
+
+    required_columns = {
+        "selected",
+        "rollout_row_id",
+        "step_row_id",
+        "step_index",
+        "root_relative_x_target_distance",
+        "root_relative_y_target_distance",
+        "root_relative_z_target_distance",
+    }
+    if not required_columns.issubset(geometry.columns):
+        return
+    selected = geometry.loc[geometry["selected"].astype(bool)].copy()
+    if selected.empty:
+        return
+    columns = [
+        "root_relative_x_target_distance",
+        "root_relative_y_target_distance",
+        "root_relative_z_target_distance",
+    ]
+    for chain_index, (_, chain) in enumerate(selected.groupby("rollout_row_id", sort=True)):
+        chain = chain.sort_values(["step_index", "step_row_id"]).drop_duplicates("step_row_id")
+        coordinates = np.vstack((np.zeros((1, 3), dtype=float), chain.loc[:, columns].to_numpy(dtype=float)))
+        trace_kwargs = {
+            "mode": "lines",
+            "line": {"color": "rgba(230, 230, 230, 0.55)", "width": 2},
+            "name": "Selected rollout chain (root → action)",
+            "legendgroup": "selected-rollout-chain",
+            "showlegend": chain_index == 0,
+            "hoverinfo": "skip",
+        }
+        if three_dimensional:
+            fig.add_trace(go.Scatter3d(x=coordinates[:, 0], y=coordinates[:, 1], z=coordinates[:, 2], **trace_kwargs))
+        else:
+            fig.add_trace(go.Scatter(x=coordinates[:, 0], y=coordinates[:, 1], **trace_kwargs))
+
+
+def _add_selected_candidate_overlay(fig: go.Figure, geometry: pd.DataFrame, *, three_dimensional: bool) -> None:
+    """Make selected actions visible without consuming the strategy marker encoding."""
+
+    required_columns = {
+        "selected",
+        "rollout_row_id",
+        "step_index",
+        "position",
+        "strategy",
+        "root_relative_x_target_distance",
+        "root_relative_y_target_distance",
+        "root_relative_z_target_distance",
+    }
+    if not required_columns.issubset(geometry.columns):
+        return
+    selected = geometry.loc[geometry["selected"].astype(bool)]
+    if selected.empty:
+        return
+    coordinates = selected.loc[
+        :,
+        [
+            "root_relative_x_target_distance",
+            "root_relative_y_target_distance",
+            "root_relative_z_target_distance",
+        ],
+    ].to_numpy(dtype=float)
+    trace_kwargs = {
+        "mode": "markers",
+        "name": "Selected candidate",
+        "marker": {"size": 8 if three_dimensional else 10, "color": "white", "symbol": "circle-open"},
+        "customdata": selected[["rollout_row_id", "step_index", "position", "strategy"]],
+        "hovertemplate": (
+            "selected<br>rollout=%{customdata[0]}<br>step=%{customdata[1]}<br>"
+            "position=%{customdata[2]}<br>strategy=%{customdata[3]}<extra></extra>"
+        ),
+    }
+    if three_dimensional:
+        fig.add_trace(go.Scatter3d(x=coordinates[:, 0], y=coordinates[:, 1], z=coordinates[:, 2], **trace_kwargs))
+    else:
+        fig.add_trace(go.Scatter(x=coordinates[:, 0], y=coordinates[:, 1], **trace_kwargs))
+
+
 def _render_candidate_geometry_diagnostics(
     candidates: pd.DataFrame,
     root_geometry: pd.DataFrame,
@@ -980,6 +1061,14 @@ def _render_candidate_geometry_diagnostics(
                 "target-distance-normalized coordinate contract. Refresh rollout caches or rerun the page."
             )
             root_geometry = pd.DataFrame()
+        connect_selected_chains = st.toggle(
+            "Connect selected rollout chains",
+            value=False,
+            help=(
+                "Draws only factual root-to-selected-action paths, ordered by rollout step. "
+                "It never connects the alternative candidates in a proposal shell."
+            ),
+        )
         rollout_count = int(candidates["rollout_row_id"].nunique()) if "rollout_row_id" in candidates else 0
         step_count = int(candidates["step_row_id"].nunique()) if "step_row_id" in candidates else 0
         st.caption(
@@ -1081,7 +1170,7 @@ def _render_candidate_geometry_diagnostics(
                 x="root_relative_x_target_distance",
                 y="root_relative_y_target_distance",
                 color="position" if "position" in root_geometry else None,
-                symbol="selected" if "selected" in root_geometry else None,
+                symbol="strategy" if "strategy" in root_geometry else None,
                 hover_data=[
                     name
                     for name in (
@@ -1090,6 +1179,7 @@ def _render_candidate_geometry_diagnostics(
                         "initial_target_distance_m",
                         "root_relative_z_target_distance",
                         "actor_action",
+                        "strategy",
                         "mixture",
                     )
                     if name in root_geometry
@@ -1100,6 +1190,9 @@ def _render_candidate_geometry_diagnostics(
             fig.update_xaxes(title="Root-relative X / initial target distance")
             fig.update_yaxes(title="Root-relative Y / initial target distance")
             fig.update_traces(marker={"size": 4, "opacity": 0.8})
+            if connect_selected_chains:
+                _add_selected_rollout_chains(fig, root_geometry, three_dimensional=False)
+            _add_selected_candidate_overlay(fig, root_geometry, three_dimensional=False)
             _render_plot(
                 fig,
                 ScientificExplanation(
@@ -1172,10 +1265,10 @@ def _render_candidate_geometry_diagnostics(
                     y="root_relative_y_target_distance",
                     z="root_relative_z_target_distance",
                     color="position" if "position" in three_dimensional else None,
-                    symbol="selected" if "selected" in three_dimensional else None,
+                    symbol="strategy" if "strategy" in three_dimensional else None,
                     hover_data=[
                         name
-                        for name in ("rollout_row_id", "step_index", "actor_action", "mixture")
+                        for name in ("rollout_row_id", "step_index", "actor_action", "strategy", "mixture")
                         if name in three_dimensional
                     ],
                     title="Candidate centers relative to each rollout root (3D; target distance normalized)",
@@ -1189,6 +1282,9 @@ def _render_candidate_geometry_diagnostics(
                     ),
                 )
                 fig.update_traces(marker={"size": 4, "opacity": 0.8})
+                if connect_selected_chains:
+                    _add_selected_rollout_chains(fig, three_dimensional, three_dimensional=True)
+                _add_selected_candidate_overlay(fig, three_dimensional, three_dimensional=True)
                 _add_root_target_pose_anchors(fig, anchors if anchors is not None else pd.DataFrame())
                 _render_plot(
                     fig,

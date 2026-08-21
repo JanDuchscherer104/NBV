@@ -53,7 +53,7 @@ CORPUS_SUMMARY_STATE_KEY = "stored_rollouts_corpus_summary"
 _PROJECTION_CACHE_REVISIONS = {
     # Root geometry gained target-distance normalized coordinates.  Keep an
     # existing Streamlit process from serving the prior projection shape.
-    "root_geometry": 2,
+    "root_geometry": 3,
     "root_anchors": 2,
 }
 

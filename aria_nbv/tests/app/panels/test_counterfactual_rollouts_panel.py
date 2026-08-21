@@ -673,6 +673,8 @@ def test_stored_rollouts_default_candidate_geometry_is_visible(
     assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
     assert "Load bounded candidate geometry and reward plots" not in {toggle.label for toggle in app.toggle}
+    chain_toggle = next(toggle for toggle in app.toggle if toggle.label == "Connect selected rollout chains")
+    assert chain_toggle.value is False
     assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
 
 
@@ -756,6 +758,29 @@ def test_root_target_pose_anchors_overlay_markers_and_orientation_triads() -> No
     }
     target_trace = next(trace for trace in figure.data if trace.name == "Observed target pose origin")
     assert np.linalg.norm([target_trace.x[0], target_trace.y[0], target_trace.z[0]]) == pytest.approx(1.0)
+
+
+def test_selected_rollout_chains_connect_only_factual_selected_actions() -> None:
+    """A chain starts at its root and never joins unselected shell alternatives."""
+
+    geometry = pd.DataFrame(
+        {
+            "rollout_row_id": [7, 7, 7],
+            "step_row_id": [10, 10, 11],
+            "step_index": [0, 0, 1],
+            "selected": [False, True, True],
+            "root_relative_x_target_distance": [9.0, 0.2, 0.4],
+            "root_relative_y_target_distance": [9.0, 0.3, 0.5],
+            "root_relative_z_target_distance": [9.0, 0.1, 0.2],
+        }
+    )
+    figure = candidate_generation.go.Figure()
+
+    candidate_generation._add_selected_rollout_chains(figure, geometry, three_dimensional=False)
+
+    assert len(figure.data) == 1
+    assert list(figure.data[0].x) == [0.0, 0.2, 0.4]
+    assert list(figure.data[0].y) == [0.0, 0.3, 0.5]
 
 
 def test_candidate_geometry_stale_projection_is_withheld_instead_of_crashing(
