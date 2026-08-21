@@ -303,8 +303,8 @@ class NbvStreamlitApp:
         segmented_control = getattr(st, "segmented_control", None)
         if not callable(segmented_control):
             return
-        from aria_nbv.app.state import get_label_display_mode, set_label_display_mode
         from aria_nbv.app.scientific_labels import LABEL_DISPLAY_MODES
+        from aria_nbv.app.state import get_label_display_mode, set_label_display_mode
 
         current = get_label_display_mode()
         selected = segmented_control(
