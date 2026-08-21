@@ -73,7 +73,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <tr>
 <td><a href="#term-chamfer-distance">CD - Chamfer Distance</a></td>
 <td>Historical bidirectional distance family used to compare reconstructed points against reference geometry.</td>
-<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$D$</span><code>rri.cd_value</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}^{\mathrm{GT}}$</span><code>ase.mesh</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$D$</span><code>oracle.err</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}^{\mathrm{GT}}$</span><code>ase.mesh</code></span></div></td>
 <td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$D(\mathcal{P},\mathcal{M}^{\mathrm{GT}})=D_{P\to M}(\mathcal{P},\mathcal{M}^{\mathrm{GT}})+D_{M\to P}(\mathcal{P},\mathcal{M}^{\mathrm{GT}})$</span><code>rri.cd</code></span></div></td>
 </tr>
 <tr>
@@ -320,7 +320,7 @@ $$
 </div>
 
 <div class="glossary-card-notation">
-<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$D$</span><code>rri.cd_value</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}^{\mathrm{GT}}$</span><code>ase.mesh</code></span></div></div>
+<div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$D$</span><code>oracle.err</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}^{\mathrm{GT}}$</span><code>ase.mesh</code></span></div></div>
 <div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$D(\mathcal{P},\mathcal{M}^{\mathrm{GT}})=D_{P\to M}(\mathcal{P},\mathcal{M}^{\mathrm{GT}})+D_{M\to P}(\mathcal{P},\mathcal{M}^{\mathrm{GT}})$</span><code>rri.cd</code></span></div></div>
 </div>
 

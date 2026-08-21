@@ -140,9 +140,9 @@ ARIA-NBV has three coupled notation stores:
 - `glossary.typ` uses Glossarium as the prose term source; write
   Glossarium-native `@term` or `@term:short` references instead of new `#gls`
   wrappers.
-- `docs/notation.yml` maps stable symbol/equation keys to TeX and Typst
-  expressions so Quarto lookup tables, generated Lua helpers, and agent context
-  stay aligned with the shared Typst facades.
+- `symbols.typ` and `equations.typ` carry the stable key, TeX, description, and
+  thesis-list metadata beside their shared Typst APIs. The generated
+  `docs/notation.yml` drives Quarto lookup tables, Lua helpers, and agent context.
 
 When a new symbol is needed:
 
@@ -152,8 +152,8 @@ When a new symbol is needed:
 3. Export through `symbols.typ` if a new module is added.
 4. Add reusable formulae under `equations/*.typ` and export through
    `equations.typ`.
-5. Add or update the matching `docs/notation.yml` entry and connect glossary
-   records through `symbol_refs` or `equation_refs` when a term owns the symbol.
+5. Add or update the matching metadata record in the shared facade and connect
+   glossary records through `symbol_refs` or `equation_refs` when a term owns the symbol.
 6. Use the shared symbol/equation in the document.
 7. Run `make glossary` so generated Quarto, Typst, Lua, JSONL, and notation
    artifacts stay synchronized.
