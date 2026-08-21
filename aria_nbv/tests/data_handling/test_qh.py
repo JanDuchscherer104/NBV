@@ -363,12 +363,17 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
     assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)
     assert context.counts is not None and context.counts.shape == (2, 2, 2)
     assert context.pts_world is not None and context.pts_world.shape == (8, 3)
-    batch_context = collate_qh_chains([chain, chain]).actor.static_context
+    batch = collate_qh_chains([chain, chain])
+    batch_context = batch.actor.static_context
     assert batch_context is not None
+    assert batch_context.vin_snippet is batch.actor.vin_snippet
     assert batch_context.t_world_voxel is not None and batch_context.t_world_voxel.tensor().shape == (2, 12)
     assert batch_context.occ_pr is not None and batch_context.occ_pr.shape == (2, 1, 2, 2, 2)
     assert batch_context.counts is not None and batch_context.counts.shape == (2, 2, 2, 2)
     assert batch_context.pts_world is not None and batch_context.pts_world.shape == (2, 8, 3)
+    moved = batch.to("cpu")
+    assert moved.actor.static_context is not None
+    assert moved.actor.static_context.vin_snippet is moved.actor.vin_snippet
     assert actor_reader.backbone_reads == 1
 
 

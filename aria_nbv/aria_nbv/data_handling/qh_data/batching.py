@@ -173,12 +173,7 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
     )
     batch = QhBatch(
         actor=QhActorTensors(
-            vin_snippet=VinSnippetView(
-                points_world=_pad([value.points_world for value in snippets], float("nan")),
-                lengths=torch.stack([value.lengths for value in snippets]),
-                t_world_rig=PoseTW(_pad([value.t_world_rig.tensor() for value in snippets], 0)),
-                t_world_snippet=PoseTW(_pad([value.t_world_snippet.tensor() for value in snippets], 0)),
-            ),
+            vin_snippet=vin_snippet,
             root_pose_world=PoseTW(torch.stack([value.root_pose_world.tensor() for value in actors])),
             target_pose_relative_root=PoseTW(
                 torch.stack([value.target_pose_relative_root.tensor() for value in actors])
@@ -348,12 +343,7 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
     )
     return QhBatch(
         actor=QhActorTensors(
-            vin_snippet=VinSnippetView(
-                points_world=transform(snippet.points_world),
-                lengths=transform(snippet.lengths),
-                t_world_rig=PoseTW(transform(snippet.t_world_rig.tensor())),
-                t_world_snippet=PoseTW(transform(snippet.t_world_snippet.tensor())),
-            ),
+            vin_snippet=transformed_snippet,
             root_pose_world=PoseTW(transform(actor.root_pose_world.tensor())),
             target_pose_relative_root=PoseTW(transform(actor.target_pose_relative_root.tensor())),
             target_extents=transform(actor.target_extents),
