@@ -18,7 +18,10 @@ from ...configs import PathConfig
 from ...dataset_topology import build_dataset_topology
 from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
+    PromotionEvidence,
     RolloutSuspiciousQueryConfig,
+    build_effective_streamlit_trust,
+    build_schema_validation,
     candidate_audit_rows,
     candidate_flow_rows,
     candidate_group_summary_rows,
@@ -91,13 +94,13 @@ def _cached_store_bundle_cached(
     """Open and validate one replacement-sensitive rollout store identity."""
 
     reader = RolloutZarrStoreReader(Path(store_path))
-    validation = reader.validate()
+    schema = build_schema_validation(reader)
     try:
         manifest_payload = reader.manifest()
     except Exception:
         manifest_payload = {"root_attrs": {}, "manifest": {}}
-    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
-        validation.errors.append(promotion_error)
+    promotion = PromotionEvidence(promoted_store_validation_error(reader, manifest_payload=manifest_payload))
+    validation = build_effective_streamlit_trust(schema, promotion)
     return reader, validation, manifest_payload
 
 

@@ -130,6 +130,105 @@ _HEADROOM_TREATMENT_FIELDS = ("policy", "branch_schedule", "branch_factor", "bea
 
 
 @dataclass(frozen=True, slots=True)
+class ManifestFacts:
+    """The single manifest snapshot shared by one inspection demand."""
+
+    payload: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class SchemaValidation:
+    """Immutable schema-validation result with ordered errors."""
+
+    ok: bool
+    num_rollouts: int
+    num_steps: int
+    num_candidates: int
+    errors: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PromotionEvidence:
+    """Optional promotion error for a validated rollout store."""
+
+    error: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveTrust:
+    """Streamlit trust composition, preserving schema then promotion errors."""
+
+    ok: bool
+    num_rollouts: int
+    num_steps: int
+    num_candidates: int
+    errors: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CompactStatistics:
+    """Compact statistics demanded by CLI stats and report consumers."""
+
+    payload: dict[str, Any]
+
+
+def build_manifest_facts(
+    reader: RolloutZarrStoreReader, *, manifest_payload: dict[str, Any] | None = None
+) -> ManifestFacts:
+    """Read or reuse exactly one manifest snapshot."""
+
+    return ManifestFacts(reader.manifest() if manifest_payload is None else manifest_payload)
+
+
+def build_schema_validation(reader: RolloutZarrStoreReader) -> SchemaValidation:
+    """Validate one store without exposing the reader's mutable result."""
+
+    result = reader.validate()
+    return SchemaValidation(
+        ok=bool(result.ok),
+        num_rollouts=int(result.num_rollouts),
+        num_steps=int(result.num_steps),
+        num_candidates=int(result.num_candidates),
+        errors=tuple(str(error) for error in result.errors),
+    )
+
+
+def build_promotion_evidence(
+    reader: RolloutZarrStoreReader,
+    *,
+    manifest_payload: dict[str, Any] | None = None,
+    evaluator: Callable[..., str | None] | None = None,
+) -> PromotionEvidence:
+    """Evaluate promotion evidence only for consumers that demand it."""
+
+    check = promoted_store_validation_error if evaluator is None else evaluator
+    return PromotionEvidence(check(reader, manifest_payload=manifest_payload))
+
+
+def build_effective_streamlit_trust(schema: SchemaValidation, promotion: PromotionEvidence) -> EffectiveTrust:
+    """Compose independent trust facets without mutating either input."""
+
+    errors = list(schema.errors)
+    if promotion.error is not None:
+        errors.append(promotion.error)
+    return EffectiveTrust(
+        ok=schema.ok and promotion.error is None,
+        num_rollouts=schema.num_rollouts,
+        num_steps=schema.num_steps,
+        num_candidates=schema.num_candidates,
+        errors=tuple(errors),
+    )
+
+
+def build_compact_statistics(
+    reader: RolloutZarrStoreReader, *, manifest_payload: dict[str, Any] | None = None
+) -> CompactStatistics:
+    """Compute compact statistics, reusing a supplied manifest snapshot."""
+
+    return CompactStatistics(rollout_statistics(reader, manifest_payload=manifest_payload))
+
+
+@dataclass(frozen=True, slots=True)
 class RolloutSuspiciousQueryConfig:
     """Thresholds used by `suspicious_rollout_rows`."""
 

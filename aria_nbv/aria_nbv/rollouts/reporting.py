@@ -20,6 +20,9 @@ import pandas as pd
 
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
+    build_manifest_facts,
+    build_promotion_evidence,
+    build_schema_validation,
     candidate_audit_rows,  # noqa: F401 - retained for direct consumer compatibility
     candidate_population_evidence,
     discounted_rollout_return_rows,
@@ -40,6 +43,21 @@ from .inspection import (
     validity_waterfall_rows,
 )
 from .zarr_store import RolloutZarrStoreReader
+
+
+class _ManifestSnapshotReader:
+    """Reader view that reuses one already-read manifest for report projections."""
+
+    def __init__(self, reader: RolloutZarrStoreReader, manifest_payload: dict[str, object]) -> None:
+        self._reader = reader
+        self._manifest_payload = manifest_payload
+
+    def manifest(self) -> dict[str, object]:
+        return self._manifest_payload
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._reader, name)
+
 
 THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v1"
 """Schema version for compact thesis-report JSON bundles."""
@@ -571,13 +589,16 @@ def _append_store_rows(
     evidence_status: Literal["pilot", "confirmatory"],
 ) -> None:
     reader = RolloutZarrStoreReader(store_path)
-    validation = reader.validate()
-    if not validation.ok:
-        detail = "; ".join(validation.errors[:3]) or "unknown validation error"
+    schema = build_schema_validation(reader)
+    if not schema.ok:
+        detail = "; ".join(schema.errors[:3]) or "unknown validation error"
         raise ValueError(f"Rollout store {store_path} failed validation: {detail}")
-    manifest_payload = reader.manifest()
-    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
+    manifest_payload = build_manifest_facts(reader).payload
+    if promotion_error := build_promotion_evidence(
+        reader, manifest_payload=manifest_payload, evaluator=promoted_store_validation_error
+    ).error:
         raise ValueError(f"Rollout store {store_path} failed promotion validation: {promotion_error}")
+    reader = _ManifestSnapshotReader(reader, manifest_payload)  # type: ignore[assignment]
     manifest = manifest_payload.get("manifest", {})
     root_attrs = manifest_payload.get("root_attrs", {})
     manifest_sha256 = str(root_attrs["manifest_sha256"])
@@ -753,7 +774,7 @@ def _append_store_rows(
         rows["candidate_composition"].extend(_with_store_id(store_id, candidate_evidence["composition"][group_by]))
         rows["candidate_calibration"].extend(_with_store_id(store_id, candidate_evidence["calibration"][group_by]))
     rows["candidate_collision_support"].extend(_with_store_id(store_id, candidate_evidence["collision"]))
-    rows["q_h_evidence"].extend(_with_store_id(store_id, q_h_evidence_rows(reader, validation_result=validation)))
+    rows["q_h_evidence"].extend(_with_store_id(store_id, q_h_evidence_rows(reader, validation_result=schema)))
     for group_by in CANDIDATE_GROUP_FIELDS:
         for group_row in candidate_evidence["groups"][group_by]:
             group = group_row.pop(group_by)
