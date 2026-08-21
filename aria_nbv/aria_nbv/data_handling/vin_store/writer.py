@@ -680,10 +680,19 @@ def flush_prepared_samples_to_shard(
     if not rows:
         raise ValueError("Cannot flush an empty shard.")
 
+    numeric_block_names = sorted({name for row in rows for name in row.numeric_blocks})
+    for block_name in numeric_block_names:
+        if not block_name.startswith("backbone."):
+            continue
+        missing = [row.sample_key for row in rows if block_name not in row.numeric_blocks]
+        if missing:
+            raise ValueError(
+                f"Backbone block {block_name!r} must be present in every shard row; missing from {missing}."
+            )
+
     shard_dir.mkdir(parents=True, exist_ok=True)
     shard_writer = VinOfflineShardWriter(shard_dir=shard_dir)
     block_specs: dict[str, Any] = {}
-    numeric_block_names = sorted({name for row in rows for name in row.numeric_blocks})
     for block_name in numeric_block_names:
         stacked = _stack_numeric_rows(block_name, rows)
         block_specs[block_name] = shard_writer.write_numeric_block(block_name, stacked)

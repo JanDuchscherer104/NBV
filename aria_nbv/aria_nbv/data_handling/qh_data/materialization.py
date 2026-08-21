@@ -301,7 +301,7 @@ def _evl_block_signature(actor_reader: VinOfflineStoreReader) -> tuple[tuple[str
         for name in observed:
             spec = shard.blocks.get(name)
             if spec is None:
-                continue
+                raise ValueError(f"Q_H actor-store shard {shard.shard_id!r} is missing required EVL block {name!r}.")
             if spec.dtype is None or spec.shape is None or len(spec.shape) < 2:
                 raise ValueError(f"Q_H {name} requires numeric shard shape and dtype metadata.")
             row_shape = _canonical_evl_shape(name, tuple(int(size) for size in spec.shape[1:]))

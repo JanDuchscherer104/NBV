@@ -499,6 +499,67 @@ def test_flush_vin_offline_payloads_normalizes_numpy_scalars(tmp_path: Path) -> 
     assert all(isinstance(name, str) for name in payload["obb_pred_sem_id_to_name"].values())  # noqa: S101
 
 
+def test_flush_rejects_heterogeneous_backbone_block_presence(tmp_path: Path) -> None:
+    """A missing EVL block must not be materialized as a plausible all-zero row."""
+
+    rows = [
+        prepare_vin_offline_sample(
+            scene_id=f"scene-{index}",
+            snippet_id=f"snippet-{index:03d}",
+            vin_snippet=_make_vin_snippet(offset=float(index)),
+            candidates=None,
+            depths=_make_stub_depths(2, offset=float(index)),
+            rri=_make_stub_rri(2),
+            candidate_pcs=None,
+            backbone_out=_make_stub_backbone(),
+            max_candidates=4,
+            include_depths=True,
+            include_candidate_pcs=False,
+            include_backbone=True,
+            include_diagnostic_payloads=False,
+            sample_key=f"sample-{index}",
+        )
+        for index in range(2)
+    ]
+    rows[1].numeric_blocks.pop("backbone.occ_pr")
+    shard_dir = tmp_path / "shard-000000"
+
+    with pytest.raises(ValueError, match=r"backbone\.occ_pr.*sample-1"):
+        flush_prepared_samples_to_shard(shard_index=0, shard_dir=shard_dir, rows=rows)
+
+    assert not shard_dir.exists()  # noqa: S101
+
+
+def test_flush_preserves_present_all_zero_backbone_block(tmp_path: Path) -> None:
+    """A genuinely present all-zero EVL field remains distinguishable from absence."""
+
+    row = prepare_vin_offline_sample(
+        scene_id="scene-a",
+        snippet_id="snippet-000",
+        vin_snippet=_make_vin_snippet(offset=0.0),
+        candidates=None,
+        depths=_make_stub_depths(2, offset=0.0),
+        rri=_make_stub_rri(2),
+        candidate_pcs=None,
+        backbone_out=_make_stub_backbone(),
+        max_candidates=4,
+        include_depths=True,
+        include_candidate_pcs=False,
+        include_backbone=True,
+        include_diagnostic_payloads=False,
+        sample_key="sample-0",
+    )
+    row.numeric_blocks["backbone.occ_pr"].fill(0)
+
+    shard_spec, _ = flush_prepared_samples_to_shard(
+        shard_index=0,
+        shard_dir=tmp_path / "shard-000000",
+        rows=[row],
+    )
+
+    assert "backbone.occ_pr" in shard_spec.blocks  # noqa: S101
+
+
 def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_path: Path) -> None:
     """Ctrl-C should produce a valid partial store for already prepared rows."""
 
@@ -911,6 +972,17 @@ def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: P
     assert signature["backbone.occ_pr"] == ("float32", (1, 2, 2, 2))  # noqa: S101
     assert signature["backbone.counts"] == ("int64", (2, 2, 2))  # noqa: S101
     assert signature["backbone.pts_world"] == ("float32", (8, 3))  # noqa: S101
+
+
+def test_qh_evl_signature_rejects_missing_block_in_any_shard(tmp_path: Path) -> None:
+    """Every shard in a rich actor store must expose the full EVL contract."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True)
+    reader = VinOfflineStoreReader(store_cfg)
+    del reader.manifest.shards[0].blocks["backbone.occ_pr"]
+
+    with pytest.raises(ValueError, match=r"shard-000000.*backbone\.occ_pr"):
+        _evl_block_signature(reader)
 
 
 def test_collect_vin_offline_dataset_stats_reports_batch_shape_preview(tmp_path: Path) -> None:
