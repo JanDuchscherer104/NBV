@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import pytest
 import torch
+from efm3d.aria.pose import PoseTW
 from pydantic import ValidationError
 from torch import nn
 from torch.utils.data import Dataset
@@ -19,11 +20,11 @@ from aria_nbv.data_handling.qh_data import (
     QhChain,
     collate_qh_chains,
 )
-from aria_nbv.data_handling.qh_data.views import QhActorStateContract
+from aria_nbv.data_handling.qh_data.views import QhActorStateContract, QhStaticContext
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
-from tests.data_handling.test_qh import _chain
+from tests.data_handling.test_qh import _chain, _snippet
 
 
 class _TableScorer(nn.Module):
@@ -259,11 +260,40 @@ def test_forward_consumes_actor_tensors_and_requires_exact_batch_shape() -> None
     ),
 )
 def test_scorer_rejects_missing_declared_actor_carrier(field: str, value: str, message: str) -> None:
-    config = QhLightningModuleConfig(lr_scheduler=None, **{field: value})
+    config_values = {field: value}
+    if field == "selected_observation_protocol":
+        config_values.update(
+            experiment_profile="qh_cfplus_gt_depth_v1",
+            root_evl_profile="evl_v1",
+            privileged=True,
+            actor_state_contract_hash="actor",
+            geometry_contract_hash="geometry",
+        )
+    config = QhLightningModuleConfig(lr_scheduler=None, **config_values)
     module = QhLightningModule(config, scorer=_TableScorer())
+    batch = _batch()
+    if field == "selected_observation_protocol":
+        batch = replace(
+            batch,
+            actor=replace(
+                batch.actor,
+                static_context=QhStaticContext(
+                    vin_snippet=_snippet(),
+                    t_world_voxel=PoseTW(),
+                    voxel_extent=torch.ones(6),
+                    occ_pr=torch.ones(1, 1, 1, 1),
+                    occ_input=torch.ones(1, 1, 1, 1),
+                    free_input=torch.ones(1, 1, 1, 1),
+                    counts=torch.ones(1, 1, 1, dtype=torch.int64),
+                    cent_pr=torch.ones(1, 1, 1, 1),
+                    pts_world=torch.ones(1, 3),
+                    evl_presence=torch.ones(8, dtype=torch.bool),
+                ),
+            ),
+        )
 
     with pytest.raises(ValueError, match=message):
-        module(_batch().actor)
+        module(batch.actor)
 
     assert module.hparams["config"][field] == value
 

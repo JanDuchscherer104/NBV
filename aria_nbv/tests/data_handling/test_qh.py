@@ -475,7 +475,8 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert actor_reader.backbone_reads == 0
 
 
-def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
+def test_rich_dataset_normalizes_one_source_axis_before_batching(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(qh_dataset_module, "_require_named_profile_store", lambda _reader: None)
     scalar_grid = torch.ones((1, 1, 2, 2, 2), dtype=torch.float32)
     actor_reader = _ActorReader(
         EvlBackboneOutput(
@@ -501,6 +502,7 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching() -> None:
         actor_reader=actor_reader,
         root_evl_profile="evl_v1",
         selected_observation_protocol="cf_gt",
+        experiment_profile="qh_cfplus_gt_depth_v1",
     )
 
     chain = dataset[0]
@@ -554,28 +556,16 @@ def test_root_evl_profile_does_not_require_selected_observations() -> None:
     assert dataset.actor_state_contract.selected_observation_protocol == "none"
 
 
-def test_selected_observation_protocol_does_not_require_root_evl() -> None:
-    """Privileged selected observations are independently opt-in from root EVL."""
+def test_cfplus_selected_observations_require_root_evl() -> None:
+    """Named CF+ admission requires compact root EVL alongside selected depth."""
 
-    rollout_reader = _RolloutReader(_source_ref(), include_selected_depth=True)
-    rollout_reader.stored.selected_depth_m = np.ones((2, 2, 3), dtype=np.float16)
-    rollout_reader.stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
-    rollout_reader.stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
-    rollout_reader.stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
-    rollout_reader.stored.selected_depth_image_size_hw = np.tile(np.array([2, 3]), (2, 1))
-    rollout_reader.stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=rollout_reader,
-        actor_reader=_ActorReader(),
-        selected_observation_protocol="cf_gt",
-    )
-
-    chain = dataset[0]
-
-    assert chain.actor.static_context is None
-    assert chain.actor.selected_observation_prefix is not None
-    assert dataset.actor_state_contract.root_evl_profile == "none"
-    assert dataset.actor_state_contract.selected_observation_protocol == "cf_gt"
+    with pytest.raises(ValueError, match="requires compact root EVL"):
+        QhDataset(  # type: ignore[arg-type]
+            rollout_reader=_RolloutReader(_source_ref(), include_selected_depth=True),
+            actor_reader=_ActorReader(),
+            selected_observation_protocol="cf_gt",
+            experiment_profile="qh_cfplus_gt_depth_v1",
+        )
 
 
 def test_rich_dataset_rejects_non_singleton_source_axis() -> None:
