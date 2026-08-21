@@ -49,12 +49,12 @@ submitting jobs, or owning workflow state.
 
 ## Standard Workflow
 
-1. Inspect access and storage with `scripts/lrz-probe.sh` and `dssusrinfo all`.
+1. Inspect access and storage with `./scripts/lrz-probe.sh` and `dssusrinfo all`.
 2. Choose or request an AI Systems DSS container, then run `scripts/lrz-dss-init.sh "$ARIA_DSS"`.
 3. Inspect partitions once with `scripts/lrz-resources.sh summary` or `scripts/lrz-resources.sh gpu`.
 4. Smoke test GPU access with `salloc -p lrz-v100x2 --gres=gpu:1 --time=00:10:00` and `srun --pty bash`.
-5. Use `scripts/lrz-container-shell.sh` inside an allocation for interactive container debugging.
-6. Use `scripts/lrz-sbatch-cpu.sh`, `scripts/lrz-sbatch-single-gpu.sh`, or `scripts/lrz-sbatch-multigpu.sh` for batch work.
+5. Use `./scripts/lrz-container-shell.sh` inside an allocation for interactive container debugging.
+6. Use `./scripts/lrz-sbatch-cpu.sh`, `./scripts/lrz-sbatch-single-gpu.sh`, or `./scripts/lrz-sbatch-multigpu.sh` for batch work.
 7. Read [`references/aria-workflows.md`](references/aria-workflows.md) or
    [`references/efm3d-aria-workloads.md`](references/efm3d-aria-workloads.md)
    before filling dataset, cache, or training commands.

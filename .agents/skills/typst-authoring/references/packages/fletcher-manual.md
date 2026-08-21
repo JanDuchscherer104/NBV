@@ -25,7 +25,7 @@
   - [Detailed example](#detailed-example)
 - [Defining mark shorthands](#defining-mark-shorthands)
 - [CeTZ integration](#cetz-integration)
-- [Bézier edges](#bzier-edges)
+- [Bézier edges](#bezier-edges)
 - [Touying integration](#touying-integration)
 - [Main functions](#main-functions)
 - [Behind the scenes](#behind-the-scenes)

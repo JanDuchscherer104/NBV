@@ -76,7 +76,7 @@ config/datamodel, or sequencing examples, load the matching section in
   docstrings (`r"""..."""`) when LaTeX backslashes appear.
 - Use Sphinx/Python-domain roles (`:mod:`, `:class:`, `:func:`, `:meth:`,
   `:attr:` and `:py:*:` forms) for local API symbols; the Quarto role filter
-  resolves them against `docs/objects.json` (see cross-references reference).
+  resolves them against the generated `objects.json` inventory (see cross-references reference).
 - Keep private-helper docs concise unless their invariant or failure mode is
   needed by callers. Avoid boilerplate and long theory blocks for simple APIs.
 

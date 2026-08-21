@@ -3,7 +3,7 @@
 Use Sphinx/Python-domain roles for local ARIA-NBV API symbols. These roles are
 readable in VS Code/Pylance hovers and are resolved in Quarto API pages by the
 local `docs/_extensions/aria-python-roles/aria-python-roles.lua` filter against
-Quartodoc's generated `docs/objects.json` inventory.
+Quartodoc's generated `objects.json` inventory.
 
 Preferred local roles:
 
@@ -25,10 +25,10 @@ Preferred local roles:
 
 Use fully qualified names whenever a short symbol may be ambiguous across the
 package. Short names are acceptable on generated API pages when the target is
-under the current module/class context or is unique in `docs/objects.json`.
+under the current module/class context or is unique in `objects.json`.
 
 External API symbols are not resolved by the local ARIA inventory filter unless
-they also appear in `docs/objects.json`. Use Markdown links for external docs,
+they also appear in `objects.json`. Use Markdown links for external docs,
 or add and verify external inventory support before using external intersphinx
 roles such as `:external+torchmetrics:py:class:`.
 

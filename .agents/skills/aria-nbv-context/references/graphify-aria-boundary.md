@@ -45,7 +45,7 @@ navigation, and require direct verification of affected sources.
   no-LLM accelerator. It refreshes changed code and the pinned executable may
   AST-quick-scan changed Markdown headings. It does not semantically refresh
   documents or images or prove their freshness; refresh those semantic inputs explicitly.
-- The vendored `references/hooks.md` still says document and image changes are
+- The vendored `../../graphify/references/hooks.md` still says document and image changes are
   ignored. Preserve that upstream byte, but follow verified `0.9.48` executable
   behavior and treat either outcome as non-semantic navigation only.
 - Upstream intentionally skips hook rebuilds inside linked Git worktrees. ARIA

@@ -75,7 +75,7 @@ For advisor-facing scientific claims, complete this direct-source check:
 This check is unnecessary for skill-only edits or purely mechanical Typst fixes.
 
 For non-trivial sections, build a scratch claim ledger before final prose. Use
-`assets/templates/claim-ledger.md` to track paragraph, claim type, evidence
+`../assets/templates/claim-ledger.md` to track paragraph, claim type, evidence
 path, citation/result, and status. The ledger is an authoring artifact, not a
 required final thesis table.
 

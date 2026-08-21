@@ -15,15 +15,17 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from scaffold_audit import (  # noqa: E402
-    APPROVED_CUSTOM_SKILL_PATHS,
+    RepositoryPointer,
+    Skill,
     active_custom_reference_files,
     audit_reference_graph,
+    audit_repository_pointer,
+    custom_skill_paths,
     deprecated_context7_calls,
     explicit_tool_ids,
-    custom_skill_paths,
     load_frontmatter,
     local_markdown_pointers,
-    Skill,
+    repository_pointers,
 )
 
 
@@ -114,7 +116,7 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
     owner_paths = fixture.get("expected_owner_paths")
     return isinstance(owner_paths, list) and all(
-        isinstance(path, str) and (root / path).is_file() for path in owner_paths
+        isinstance(path, str) and (root / path).exists() for path in owner_paths
     )
 
 
@@ -180,9 +182,18 @@ def test_direct_skill_discovery_shape() -> None:
     assert 'display_name: "Aria Grill"' in _read(skill / "agents" / "openai.yaml")
 
 
-def test_discovered_custom_skill_paths_are_the_approved_set() -> None:
+def test_custom_skill_discovery_is_dynamic_with_explicit_upstream_exemption() -> None:
     discovered = custom_skill_paths()
-    assert discovered == {path.resolve() for path in APPROVED_CUSTOM_SKILL_PATHS}
+    expected = {
+        path.resolve()
+        for path in (ROOT / ".agents" / "skills").glob("*/SKILL.md")
+        if path.parent.name != "graphify"
+    }
+    assert discovered == expected
+    assert (GRAPHIFY_BUNDLE / "SKILL.md").resolve() not in discovered
+    assert "APPROVED_CUSTOM_SKILL_PATHS" not in _read(
+        ROOT / "scripts/scaffold_audit.py"
+    )
 
 
 def test_custom_skills_use_only_native_name_and_description_frontmatter() -> None:
@@ -217,7 +228,7 @@ def test_custom_skill_conditional_reference_links_exist_directly() -> None:
     assert checked_links > 0
 
 
-def test_markdown_pointer_bare_sibling_boundary() -> None:
+def test_repository_pointer_discovery_and_integrity_boundaries() -> None:
     tmp_parent = ROOT / ".tmp"
     tmp_parent.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="g002-pointer-", dir=tmp_parent) as tmp:
@@ -232,10 +243,14 @@ def test_markdown_pointer_bare_sibling_boundary() -> None:
         references = bare_path.parent / "references"
         references.mkdir()
         guide = references / "guide.md"
-        guide.write_text("See `orphan.md`.\n", encoding="utf-8")
+        guide.write_text(
+            "See `orphan.md` or [the leaf](./orphan.md).\n", encoding="utf-8"
+        )
         orphan = references / "orphan.md"
         orphan.write_text("# Orphan\n", encoding="utf-8")
-        assert "orphan.md" not in local_markdown_pointers(guide, _read(guide))
+        pointers = local_markdown_pointers(guide, _read(guide))
+        assert "orphan.md" not in pointers
+        assert "./orphan.md" in pointers
         bare_skill = Skill(
             bare_path,
             "bare",
@@ -244,18 +259,78 @@ def test_markdown_pointer_bare_sibling_boundary() -> None:
             1,
             _read(bare_path),
         )
-        assert any(
-            "orphan progressive-disclosure reference" in error
-            for error in audit_reference_graph([bare_skill])
-        )
+        assert not audit_reference_graph([bare_skill])
 
         package_index = root / "package" / "references" / "packages" / "index.md"
         package_index.parent.mkdir(parents=True)
-        package_index.write_text("See `booktabs.md`.\n", encoding="utf-8")
+        package_index.write_text("See [booktabs](./booktabs.md).\n", encoding="utf-8")
         booktabs = package_index.parent / "booktabs.md"
         booktabs.write_text("# Booktabs\n", encoding="utf-8")
-        assert "booktabs.md" in local_markdown_pointers(
+        assert "./booktabs.md" in local_markdown_pointers(
             package_index, _read(package_index)
+        )
+
+        source = root / "owners.md"
+        source.write_text(
+            "[missing](./missing.qmd) "
+            "[outside](/tmp/outside.md) "
+            "`.agents/missing.toml` `docs/` `scripts/check.py` "
+            "`https://example.com/docs/a.md` `git status` "
+            "`docs/*.md` `.omx/state/.../runtime.json` `<owner>/file.md`\n",
+            encoding="utf-8",
+        )
+        raw = {pointer.raw for pointer in repository_pointers(source, _read(source))}
+        assert raw == {
+            "./missing.qmd",
+            "/tmp/outside.md",
+            ".agents/missing.toml",
+            "docs/",
+            "scripts/check.py",
+        }
+        missing = next(
+            pointer
+            for pointer in repository_pointers(source, _read(source))
+            if pointer.raw == "./missing.qmd"
+        )
+        assert any(
+            "does not exist" in error for error in audit_repository_pointer(missing)[1]
+        )
+        absolute = next(
+            pointer
+            for pointer in repository_pointers(source, _read(source))
+            if pointer.raw == "/tmp/outside.md"
+        )
+        assert any(
+            "escapes repo root" in error
+            for error in audit_repository_pointer(absolute)[1]
+        )
+
+        markdown = root / "anchor.md"
+        markdown.write_text("# Present\n", encoding="utf-8")
+        typst = root / "anchor.typ"
+        typst.write_text("= Present <ssec:present>\n", encoding="utf-8")
+        for target in (
+            RepositoryPointer(
+                source, "./anchor.md#present", "./anchor.md", "present", "markdown"
+            ),
+            RepositoryPointer(
+                source,
+                "./anchor.typ#ssec:present",
+                "./anchor.typ",
+                "ssec:present",
+                "backtick",
+            ),
+        ):
+            assert audit_repository_pointer(target)[1] == []
+
+        outside = root / "outside.md"
+        outside.symlink_to("/tmp")
+        escaped = RepositoryPointer(
+            source, "./outside.md", "./outside.md", "", "markdown"
+        )
+        assert any(
+            "escapes repo root" in error
+            for error in audit_repository_pointer(escaped)[1]
         )
 
 

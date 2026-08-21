@@ -7,7 +7,7 @@ LRZ AI Systems use Enroot on compute nodes. Enroot is not available on SSH login
 - Run containers only inside Slurm allocations or batch jobs.
 - Prefer NGC PyTorch containers for generic GPU workloads unless the workload has a better pinned image.
 - Mount `$HOME`, `$ARIA_DSS`, and the ARIA repo explicitly.
-- Put package, model, temp, and W&B caches on DSS by sourcing `scripts/lrz-aria-env.sh`.
+- Put package, model, temp, and W&B caches on DSS by sourcing `../scripts/lrz-aria-env.sh`.
 - Keep NGC credentials outside git.
 - If a workload requires conda or pip inside the container, keep caches and build artifacts on DSS.
 
