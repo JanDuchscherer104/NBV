@@ -33,11 +33,19 @@ the scorer-visible actor state without changing persisted schemas or model code.
   root, target, candidate, history, selected-camera, and voxel-frame poses;
   collation and transfer unwrap only at tensor operations and reconstruct the
   typed pose container before returning public views.
+- Declared the actor-state contract on injected Lightning test datasets so the
+  test seam obeys the same fail-closed DataModule boundary as production data.
+- Reused the already-collated VIN snippet for both actor and rich static views,
+  removing duplicate object construction without changing tensor ownership.
+- Moved chain, prefix, and EVL materialization into one internal module and
+  replaced reflective access to known typed fields with direct access.
 
 ## Verification
 
 - Rebased focused Q_H dataset, VIN-store, reader, DataModule, and Lightning
   module tests: 144 passed.
+- Post-review Q_H CI: 323 passed. Package smoke: 116 passed. Targeted mypy for
+  the dataset/materialization boundary, Ruff checks, and diff checks passed.
 - Ruff format/check, compileall, and `git diff --check` passed.
 - Targeted mypy remains baseline-non-clean in pre-existing Zarr/tensor indexing
   sites; no new error is attributable to the new typed views, dataset contract,
