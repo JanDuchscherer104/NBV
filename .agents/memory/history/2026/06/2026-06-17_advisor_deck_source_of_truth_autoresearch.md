@@ -7,9 +7,9 @@ topics: [docs, typst, thesis, advisor-deck, autoresearch]
 confidence: high
 canonical_updates_needed:
   - docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ
-  - .agents/references/source_order.md
-  - docs/contents/thesis/questions.qmd
-  - docs/contents/thesis/roadmap.qmd
+  - .agents/skills/aria-nbv-context/SKILL.md
+  - docs/typst/thesis/sections/01-research-questions.typ
+  - docs/typst/thesis/development/roadmap.typ
 files_touched:
   - .omx/specs/autoresearch-advisor-deck-source-of-truth/mission.md
   - .omx/specs/autoresearch-advisor-deck-source-of-truth/sandbox.md

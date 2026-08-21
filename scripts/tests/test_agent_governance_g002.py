@@ -255,13 +255,18 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     context_hierarchy = (
         "## Accepted 2026-08-19 Context Hierarchy And Context7 Plugin Supersession"
     )
+    pointer_retirement = (
+        "## Accepted 2026-08-21 Source-Order Compatibility Pointer Retirement"
+    )
     assert spec.index(amendment) < spec.index(supersession)
     assert spec.index(supersession) < spec.index(lifecycle)
     assert spec.index(lifecycle) < spec.index(context_hierarchy)
+    assert spec.index(context_hierarchy) < spec.index(pointer_retirement)
     assert "Graphify as a navigation prerequisite in every\nCodex worktree" in spec
     assert "Graphify chooses navigation context; it never settles behavior" in spec
     assert "upstream Graphify `query`, `path`, or\n`explain` before raw search" in spec
     assert "single current owner of\nthe hierarchical source map" in spec
+    assert "retires `.agents/references/source_order.md` completely" in spec
     assert "mcp__codex_apps__context7_query_docs" in spec
     amendment_text = spec.split(amendment, 1)[1].split(supersession, 1)[0]
     assert "Graphify 0.9.31" in amendment_text
@@ -277,12 +282,9 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     assert "Graphify" not in optional_tools
 
     context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
-    source_order = _read(ROOT / ".agents" / "references" / "source_order.md")
     intent = _read(ROOT / ".agents" / "references" / "human_owner_intent.md")
     assert "## Graphify Branch" in context
     assert "## Context7 Plugin Branch" in context
-    assert "Deprecated Compatibility Pointer" in source_order
-    assert "do not add policy here" in source_order
     assert (
         "Require the Graphify executable and usable graph artifacts as navigation"
         in intent

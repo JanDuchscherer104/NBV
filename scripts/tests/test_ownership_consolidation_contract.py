@@ -13,6 +13,7 @@ MIGRATION_RECEIPT = (
 )
 
 RETIRED_SOURCES = (
+    ".agents/references/source_order.md",
     "docs/contents/thesis/roadmap.qmd",
     "docs/contents/thesis/questions.qmd",
     "docs/contents/thesis/m1_contract_report.qmd",
@@ -84,6 +85,7 @@ HISTORICAL_PREFIXES = (
 )
 
 MIGRATION_TEST_PATHS = {
+    "scripts/tests/test_agent_governance_g002.py",
     "scripts/tests/test_ownership_consolidation_contract.py",
     "scripts/tests/test_validate_agent_memory_retired.py",
     "scripts/validate_agent_memory.py",
@@ -96,6 +98,17 @@ RETIRED_REFERENCE_PROVENANCE = {
     ".omx/plans/test-spec-thin-root-nested-agents-rewrite.md",
     ".omx/specs/autoresearch-agent-scaffold-rework-20260729/report.md",
     ".omx/specs/ownership-branch-consolidation-successor-spec.md",
+}
+
+SOURCE_ORDER_REFERENCE_PROVENANCE = {
+    ".omx/plans/graphify-thin-adapter.md",
+    ".omx/plans/pr50-graphify-mandatory-upstream-first.md",
+    ".omx/plans/prd-aria-nbv-domain-skill-distillation.md",
+    ".omx/plans/prd-thin-root-nested-agents-rewrite.md",
+    ".omx/plans/test-spec-aria-nbv-domain-skill-distillation.md",
+    ".omx/plans/test-spec-aria-nbv-ownership-branch-consolidation.md",
+    ".omx/specs/autoresearch-agent-scaffold-external-best-practices-20260730/report.md",
+    ".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md",
 }
 
 REFERENCE_EXCLUDED_PREFIXES = (
@@ -161,7 +174,6 @@ def test_context_skill_owns_hierarchy_and_initialization_map() -> None:
     context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(
         encoding="utf-8"
     )
-    pointer = (ROOT / ".agents/references/source_order.md").read_text(encoding="utf-8")
 
     assert len(context.splitlines()) <= 150
     assert not [
@@ -169,17 +181,6 @@ def test_context_skill_owns_hierarchy_and_initialization_map() -> None:
     ]
     for heading in ("## Owner Hierarchy", "## Conflict Rule", "## Capture Rule"):
         assert heading in context
-    assert "Deprecated Compatibility Pointer" in pointer
-    assert "do not add policy here" in pointer
-    assert "../skills/aria-nbv-context/SKILL.md#owner-hierarchy" in pointer
-    assert len(pointer.splitlines()) <= 20
-    for anchor in (
-        "## Role Split",
-        "## Compositional Owner Tree",
-        "## Conflict Rule",
-        "## Capture Rule",
-    ):
-        assert anchor in pointer
 
 
 def test_theory_pages_are_deprecated_navigation() -> None:
@@ -279,7 +280,8 @@ def _retired_reference_aliases() -> set[str]:
     for retired in RETIRED_SOURCES:
         path = Path(retired)
         aliases.update({retired, path.name, path.as_posix()})
-        aliases.add(path.parent.as_posix() + "/")
+        if retired != ".agents/references/source_order.md":
+            aliases.add(path.parent.as_posix() + "/")
         aliases.add((ROOT / path).as_posix())
     return aliases
 
@@ -301,6 +303,16 @@ def test_active_omx_and_maintained_slides_scope_retired_references() -> None:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for alias in aliases:
+            if (
+                relative in SOURCE_ORDER_REFERENCE_PROVENANCE
+                and alias
+                in {
+                    ".agents/references/source_order.md",
+                    "source_order.md",
+                    (ROOT / ".agents/references/source_order.md").as_posix(),
+                }
+            ):
+                continue
             if alias in text:
                 violations.append(f"{relative}: {alias}")
     assert not violations

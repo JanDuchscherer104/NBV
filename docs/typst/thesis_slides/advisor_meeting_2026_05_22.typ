@@ -171,8 +171,8 @@
       ]
       #v(0.18em)
       #decision_todo(
-        [After advisor acceptance, mirror this owner promotion into source-order docs, roadmap/questions, and memory.],
-        sources: [`source_order.md`; autoresearch report],
+        [After advisor acceptance, mirror this owner promotion into the context hierarchy, roadmap/questions, and memory.],
+        sources: [`aria-nbv-context`; autoresearch report],
       )
     ],
   )
