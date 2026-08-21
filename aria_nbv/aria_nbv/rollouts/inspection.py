@@ -746,23 +746,51 @@ def _candidate_state_key(row: Mapping[str, object]) -> tuple[str, str, str]:
     )
 
 
-def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
-    """Summarize direction support with fixed equal-area angular bins."""
-    source = [dict(row) for row in rows]
-    azimuth_bins, elevation_bins = 12, 6
-    populations = ("all", "actor_valid")
-    density: list[dict[str, object]] = []
-    states: dict[tuple[str, str, str, str, str], list[dict[str, object]]] = {}
-    for row in source:
+def _population_state_groups(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    extra_fields: tuple[str, ...] = (),
+) -> dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]]:
+    """Group audit rows by persisted cohort/state and explicit population.
+
+    A state is one factual ``scene/rollout/step`` record.  Aggregation must
+    happen after the state reduction: otherwise states with a large candidate
+    shell silently dominate the scientific summary.
+    """
+    grouped: dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]] = {}
+    for raw in rows:
+        row = dict(raw)
         cohort = str(row.get("generation_cohort_id", "unknown"))
-        for population in populations:
+        scene, rollout_id, step_id = _candidate_state_key(row)
+        extra = tuple(str(row.get(field, "unknown")) for field in extra_fields)
+        for population in ("all", "actor_valid"):
             if population == "actor_valid" and not bool(row.get("actor_action")):
                 continue
-            key = (cohort, *(_candidate_state_key(row)), population)
-            states.setdefault(key, []).append(row)
-    for (cohort, scene, rollout_id, step_id, population), state_rows in sorted(states.items()):
+            grouped.setdefault((cohort, scene, rollout_id, step_id, *extra, population), []).append(row)
+    return grouped
+
+
+def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
+    """Summarize directions per factual state, then scene and cohort macros."""
+    source = [dict(row) for row in rows]
+    azimuth_bins, elevation_bins = 12, 6
+    density: list[dict[str, object]] = []
+    cap_rows: list[dict[str, object]] = []
+    angular_rows: list[dict[str, object]] = []
+    states = _population_state_groups(source)
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+
+    def fibonacci_sphere(count: int) -> np.ndarray:
+        index = np.arange(count, dtype=np.float64)
+        z = 1.0 - 2.0 * (index + 0.5) / count
+        theta = 2.0 * np.pi * index / phi
+        return np.column_stack((np.cos(theta) * np.sqrt(1.0 - z * z), np.sin(theta) * np.sqrt(1.0 - z * z), z))
+
+    cap_centers, probes = fibonacci_sphere(128), fibonacci_sphere(512)
+    for key, state_rows in sorted(states.items()):
+        cohort, scene, rollout_id, step_id, population = key
+        vectors: list[np.ndarray] = []
         counts = np.zeros((azimuth_bins, elevation_bins), dtype=np.int64)
-        valid = 0
         for row in state_rows:
             try:
                 vector = np.asarray(
@@ -774,226 +802,210 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 radius = 0.0
             if not np.isfinite(radius) or radius <= _GEOMETRY_EPSILON:
                 continue
+            vector /= radius
+            vectors.append(vector)
             azimuth = float(np.arctan2(vector[1], vector[0]))
-            sin_elevation = float(np.clip(vector[2] / radius, -1.0, 1.0))
+            sin_elevation = float(np.clip(vector[2], -1.0, 1.0))
             ai = min(azimuth_bins - 1, int(((azimuth + np.pi) / (2 * np.pi)) * azimuth_bins))
             ei = min(elevation_bins - 1, int(((sin_elevation + 1.0) / 2.0) * elevation_bins))
             counts[ai, ei] += 1
-            valid += 1
+        valid = len(vectors)
+        base = {
+            "evidence": "equal_area_direction_density",
+            "aggregation_level": "state",
+            "generation_cohort_id": cohort,
+            "scene": scene,
+            "rollout_row_id": rollout_id,
+            "step_row_id": step_id,
+            "population": population,
+            "total_count": len(state_rows),
+            "valid_count": valid,
+            "missing_count": len(state_rows) - valid,
+            "units": "solid-angle fraction",
+            "protocol": {"binning": "azimuth x sin(elevation)"},
+        }
         for ai in range(azimuth_bins):
             for ei in range(elevation_bins):
                 density.append(
                     {
-                        "evidence": "equal_area_direction_density",
+                        **base,
+                        "azimuth_bin": ai,
+                        "sin_elevation_bin": ei,
+                        "count": int(counts[ai, ei]),
+                        "mean_state_fraction": None if not valid else float(counts[ai, ei] / valid),
+                        "available": valid > 0,
+                    }
+                )
+        if vectors:
+            points = np.asarray(vectors)
+            discrepancies = []
+            for radius in (30, 60, 90, 120, 150):
+                threshold = np.cos(np.radians(radius))
+                observed = np.mean(points @ cap_centers.T >= threshold, axis=0)
+                expected = (1.0 - threshold) / 2.0
+                discrepancies.append(float(np.max(np.abs(observed - expected))))
+            for radius, value in zip((30, 60, 90, 120, 150), discrepancies, strict=True):
+                cap_rows.append(
+                    {
+                        "evidence": "spherical_cap_discrepancy",
                         "aggregation_level": "state",
                         "generation_cohort_id": cohort,
                         "scene": scene,
                         "rollout_row_id": rollout_id,
                         "step_row_id": step_id,
                         "population": population,
-                        "azimuth_bin": ai,
-                        "sin_elevation_bin": ei,
-                        "count": int(counts[ai, ei]),
-                        "mean_state_fraction": None if valid == 0 else float(counts[ai, ei] / valid),
-                        "total_count": len(state_rows),
+                        "radius_deg": radius,
+                        "value": value,
+                        "discrepancy": value,
                         "valid_count": valid,
-                        "missing_count": len(state_rows) - valid,
-                        "available": valid > 0,
-                        "units": "solid-angle fraction",
-                        "protocol": {"binning": "azimuth x sin(elevation)"},
+                        "available": True,
+                        "units": "fraction",
+                        "protocol": {"reference": "fixed Fibonacci sphere", "cap_centers": 128, "reference_count": 128},
                     }
                 )
-    for population in populations:
-        scene_groups: dict[tuple[str, str], list[dict[str, object]]] = {}
-        for row in density:
-            if row["aggregation_level"] == "state" and row["population"] == population:
-                scene_groups.setdefault((str(row["generation_cohort_id"]), str(row["scene"])), []).append(row)
-        for (cohort, scene), grouped in sorted(scene_groups.items()):
-            for ai in range(azimuth_bins):
-                for ei in range(elevation_bins):
-                    cells = [r for r in grouped if r["azimuth_bin"] == ai and r["sin_elevation_bin"] == ei]
-                    density.append(
-                        {
-                            "evidence": "equal_area_direction_density",
-                            "aggregation_level": "scene_macro",
-                            "generation_cohort_id": cohort,
-                            "scene": scene,
-                            "population": population,
-                            "azimuth_bin": ai,
-                            "sin_elevation_bin": ei,
-                            "mean_state_fraction": (
-                                float(
-                                    np.mean(
-                                        [
-                                            r["mean_state_fraction"]
-                                            for r in cells
-                                            if r["available"] and r["mean_state_fraction"] is not None
-                                        ]
-                                    )
-                                )
-                                if any(r["available"] and r["mean_state_fraction"] is not None for r in cells)
-                                else None
-                            ),
-                            "available": bool(cells),
-                            "units": "solid-angle fraction",
-                            "protocol": {"binning": "azimuth x sin(elevation)"},
-                        }
-                    )
-        cohort_groups: dict[str, list[dict[str, object]]] = {}
-        for row in density:
-            if row["aggregation_level"] == "scene_macro" and row["population"] == population:
-                cohort_groups.setdefault(str(row["generation_cohort_id"]), []).append(row)
-        for cohort, grouped in sorted(cohort_groups.items()):
-            for ai in range(azimuth_bins):
-                for ei in range(elevation_bins):
-                    cells = [r for r in grouped if r["azimuth_bin"] == ai and r["sin_elevation_bin"] == ei]
-                    density.append(
-                        {
-                            "evidence": "equal_area_direction_density",
-                            "aggregation_level": "cohort_macro",
-                            "generation_cohort_id": cohort,
-                            "cohort_macro_population": population,
-                            "population": population,
-                            "azimuth_bin": ai,
-                            "sin_elevation_bin": ei,
-                            "mean_state_fraction": (
-                                float(
-                                    np.mean(
-                                        [
-                                            r["mean_state_fraction"]
-                                            for r in cells
-                                            if r["available"] and r["mean_state_fraction"] is not None
-                                        ]
-                                    )
-                                )
-                                if any(r["available"] and r["mean_state_fraction"] is not None for r in cells)
-                                else None
-                            ),
-                            "available": bool(cells),
-                            "units": "solid-angle fraction",
-                            "protocol": {"binning": "azimuth x sin(elevation)"},
-                        }
-                    )
-    vectors = []
-    for row in source:
-        try:
-            vec = np.asarray(
-                [row.get("root_relative_x_m"), row.get("root_relative_y_m"), row.get("root_relative_z_m")],
-                dtype=np.float64,
+            cosine = np.clip(points @ points.T, -1.0, 1.0)
+            if len(points) == 1:
+                nearest = np.asarray([0.0])
+            else:
+                np.fill_diagonal(cosine, -1.0)
+                nearest = np.degrees(np.arccos(np.max(cosine, axis=1)))
+            probe_nearest = np.degrees(np.arccos(np.clip(np.max(probes @ points.T, axis=1), -1.0, 1.0)))
+            angular_rows.append(
+                {
+                    "evidence": "nearest_neighbor_angular_separation",
+                    "aggregation_level": "state",
+                    "generation_cohort_id": cohort,
+                    "scene": scene,
+                    "rollout_row_id": rollout_id,
+                    "step_row_id": step_id,
+                    "population": population,
+                    "value": float(np.mean(nearest)),
+                    "nearest_neighbor_deg": float(np.mean(nearest)),
+                    # Keep the historical antipodal convention on the public
+                    # field while exposing the actual fixed-probe estimate for
+                    # scientific consumers.
+                    "covering_radius_deg": float(
+                        180.0 if float(np.mean(nearest)) >= 179.999 else np.max(probe_nearest)
+                    ),
+                    "probe_covering_radius_deg": float(np.max(probe_nearest)),
+                    "valid_count": valid,
+                    "available": True,
+                    "units": "degrees",
+                    "protocol": {
+                        "reference": "fixed Fibonacci sphere",
+                        "covering_probes": 512,
+                        "reference_count": 512,
+                        "covering_reference_count": 512,
+                    },
+                }
             )
-            norm = np.linalg.norm(vec)
-            if np.isfinite(norm) and norm > _GEOMETRY_EPSILON:
-                vectors.append(vec / norm)
-        except (TypeError, ValueError):
-            pass
-    cap_rows = []
-    angular_rows = []
-    if vectors:
-        points = np.asarray(vectors)
-        fibonacci = np.arange(128, dtype=np.float64)
-        phi = (1.0 + np.sqrt(5.0)) / 2.0
-        z = 1.0 - 2.0 * (fibonacci + 0.5) / 128.0
-        theta = 2.0 * np.pi * fibonacci / phi
-        cap_centers = np.column_stack((np.cos(theta) * np.sqrt(1.0 - z * z), np.sin(theta) * np.sqrt(1.0 - z * z), z))
-        probe_index = np.arange(512, dtype=np.float64)
-        probe_z = 1.0 - 2.0 * (probe_index + 0.5) / 512.0
-        probe_theta = 2.0 * np.pi * probe_index / phi
-        probes = np.column_stack(
-            (
-                np.cos(probe_theta) * np.sqrt(1.0 - probe_z * probe_z),
-                np.sin(probe_theta) * np.sqrt(1.0 - probe_z * probe_z),
-                probe_z,
+        else:
+            for radius in (30, 60, 90, 120, 150):
+                cap_rows.append(
+                    {
+                        **base,
+                        "evidence": "spherical_cap_discrepancy",
+                        "radius_deg": radius,
+                        "value": None,
+                        "discrepancy": None,
+                        "available": False,
+                        "units": "fraction",
+                        "protocol": {"reference": "fixed Fibonacci sphere", "cap_centers": 128, "reference_count": 128},
+                    }
+                )
+            angular_rows.append(
+                {
+                    **base,
+                    "evidence": "nearest_neighbor_angular_separation",
+                    "value": None,
+                    "nearest_neighbor_deg": None,
+                    "covering_radius_deg": None,
+                    "available": False,
+                    "units": "degrees",
+                    "protocol": {
+                        "reference": "fixed Fibonacci sphere",
+                        "covering_probes": 512,
+                        "reference_count": 512,
+                        "covering_reference_count": 512,
+                    },
+                }
             )
-        )
-        discrepancies = []
-        for radius in (30, 60, 90, 120, 150):
-            threshold = np.cos(np.radians(radius))
-            observed = np.mean(points @ cap_centers.T >= threshold, axis=0)
-            expected = (1 - threshold) / 2
-            discrepancies.append(float(np.max(np.abs(observed - expected))))
-        cap_rows = [
-            {
-                "evidence": "spherical_cap_discrepancy",
-                "radius_deg": radius,
-                "candidate_count": len(source),
-                "value": value,
-                "discrepancy": value,
-                "available": True,
-                "units": "fraction",
-            }
-            for radius, value in zip((30, 60, 90, 120, 150), discrepancies, strict=True)
-        ]
-        candidate_cosine = np.clip(points @ points.T, -1, 1)
-        np.fill_diagonal(candidate_cosine, -1)
-        nearest_neighbor = (
-            np.degrees(np.arccos(np.max(candidate_cosine, axis=1))) if len(points) > 1 else np.asarray([0.0])
-        )
-        nearest_probe = (
-            np.degrees(np.arccos(np.clip(np.max(probes @ points.T, axis=1), -1, 1))) if len(points) else np.asarray([])
-        )
-        angular_rows = [
-            {
-                "evidence": "nearest_neighbor_angular_separation",
-                "value": None if nearest_neighbor.size == 0 else float(np.mean(nearest_neighbor)),
-                "nearest_neighbor_deg": None if nearest_neighbor.size == 0 else float(np.mean(nearest_neighbor)),
-                "covering_radius_deg": None
-                if nearest_probe.size == 0
-                else float(180.0 if np.max(nearest_neighbor) >= 179.999 else np.max(nearest_probe)),
-                "candidate_count": len(source),
-                "available": True,
-                "units": "degrees",
-            }
-        ]
-    cohorts = sorted({str(row.get("generation_cohort_id", "unknown")) for row in source})
-    cap_rows = [
-        {
-            **row,
-            "generation_cohort_id": cohort,
-            "population": population,
-            "aggregation_level": level,
-            "protocol": {"reference": "fixed Fibonacci sphere", "cap_centers": 128, "reference_count": 128},
-        }
-        for row in cap_rows
-        for cohort in cohorts
-        for population in ("all", "actor_valid")
-        for level in ("state", "scene_macro", "cohort_macro")
-    ]
-    angular_rows = [
-        {
-            **row,
-            "generation_cohort_id": cohort,
-            "population": population,
-            "aggregation_level": level,
-            "protocol": {
-                "reference": "fixed Fibonacci sphere",
-                "covering_probes": 512,
-                "reference_count": 512,
-                "covering_reference_count": 512,
-            },
-        }
-        for row in angular_rows
-        for cohort in cohorts
-        for population in ("all", "actor_valid")
-        for level in ("state", "scene_macro", "cohort_macro")
-    ]
+
+    # Cell-wise macros preserve the complete 12x6 grid while excluding only
+    # unavailable state values from numeric denominators.
+    for level in ("scene_macro", "cohort_macro"):
+        groups: dict[tuple[str, str, str, int, int], list[dict[str, object]]] = {}
+        for row in density:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups.setdefault(
+                (
+                    str(row["generation_cohort_id"]),
+                    scene,
+                    str(row["population"]),
+                    int(row["azimuth_bin"]),
+                    int(row["sin_elevation_bin"]),
+                ),
+                [],
+            ).append(row)
+        for key, grouped in sorted(groups.items()):
+            available = [r for r in grouped if r["available"] and r["mean_state_fraction"] is not None]
+            density.append(
+                {
+                    **grouped[0],
+                    "aggregation_level": level,
+                    "scene": key[1],
+                    "mean_state_fraction": None
+                    if not available
+                    else float(np.mean([r["mean_state_fraction"] for r in available])),
+                    "available": bool(available),
+                    "cohort_macro_population": key[2],
+                }
+            )
+    for rows_out, metric_name in ((cap_rows, "cap"), (angular_rows, "angular")):
+        for level in ("scene_macro", "cohort_macro"):
+            groups: dict[tuple[str, str, str, object], list[dict[str, object]]] = {}
+            for row in rows_out:
+                if row["aggregation_level"] != "state" or not row["available"]:
+                    continue
+                scene = str(row["scene"]) if level == "scene_macro" else "all"
+                facet = row.get("radius_deg", metric_name)
+                groups.setdefault((str(row["generation_cohort_id"]), scene, str(row["population"]), facet), []).append(
+                    row
+                )
+            for key, grouped in sorted(groups.items(), key=lambda item: tuple(map(str, item[0]))):
+                value_key = "discrepancy" if metric_name == "cap" else "nearest_neighbor_deg"
+                if level == "cohort_macro":
+                    by_scene: dict[str, list[float]] = {}
+                    for row in grouped:
+                        value = row.get(value_key)
+                        if value is not None:
+                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(value))
+                    values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                else:
+                    values = [float(r[value_key]) for r in grouped if r.get(value_key) is not None]
+                rows_out.append(
+                    {
+                        **grouped[0],
+                        "aggregation_level": level,
+                        "scene": key[1],
+                        "value": None if not values else float(np.mean(values)),
+                        value_key: None if not values else float(np.mean(values)),
+                        "available": bool(values),
+                        "cohort_macro_population": key[2],
+                    }
+                )
     return {"density_rows": density, "cap_rows": cap_rows, "angular_support_rows": angular_rows}
 
 
 def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    """Summarize root-relative 2-D/3-D support and persisted position shells."""
+    """Summarize spatial support with shell- and population-preserving macros."""
     source = [dict(row) for row in rows]
     output: list[dict[str, object]] = []
-    groups: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
-    for row in source:
-        groups.setdefault(
-            (
-                str(row.get("generation_cohort_id", "unknown")),
-                *_candidate_state_key(row),
-                str(row.get("position", "unknown")),
-            ),
-            [],
-        ).append(row)
+    groups = _population_state_groups(source, extra_fields=("position",))
     for key, grouped in sorted(groups.items()):
+        cohort, scene, rollout_id, step_id, shell, population = key
         values = {
             "root_xy_radius": [
                 float(np.hypot(r["root_relative_x_m"], r["root_relative_y_m"]))
@@ -1005,8 +1017,8 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 float(np.linalg.norm([r["root_relative_x_m"], r["root_relative_y_m"], r["root_relative_z_m"]]))
                 for r in grouped
                 if all(
-                    _finite_or_none(r.get(n)) is not None
-                    for n in ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m")
+                    _finite_or_none(r.get(name)) is not None
+                    for name in ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m")
                 )
             ],
             "root_height": [
@@ -1020,12 +1032,12 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 {
                     "metric": metric,
                     "aggregation_level": "state",
-                    "generation_cohort_id": key[0],
-                    "scene": key[1],
-                    "rollout_row_id": key[2],
-                    "step_row_id": key[3],
-                    "declared_shell": key[4],
-                    "population": "actor_valid" if all(bool(r.get("actor_action")) for r in grouped) else "all",
+                    "generation_cohort_id": cohort,
+                    "scene": scene,
+                    "rollout_row_id": rollout_id,
+                    "step_row_id": step_id,
+                    "declared_shell": shell,
+                    "population": population,
                     "count": len(grouped),
                     "finite_count": len(vals),
                     "missing_count": len(grouped) - len(vals),
@@ -1035,127 +1047,216 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "zero_radius_policy": "included",
                 }
             )
-    for level, _index in (("scene_macro", 1), ("cohort_macro", 0)):
-        grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for level in ("scene_macro", "cohort_macro"):
+        groups_macro: dict[tuple[str, str, str, str, str], list[dict[str, object]]] = {}
         for row in output:
-            if row["aggregation_level"] != "state":
+            if row["aggregation_level"] != "state" or not row["available"]:
                 continue
-            key = (
-                (str(row["generation_cohort_id"]), str(row["scene"]), str(row["declared_shell"]))
-                if level == "scene_macro"
-                else (str(row["generation_cohort_id"]), "all", str(row["declared_shell"]))
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups_macro.setdefault(
+                (
+                    str(row["generation_cohort_id"]),
+                    scene,
+                    str(row["declared_shell"]),
+                    str(row["population"]),
+                    str(row["metric"]),
+                ),
+                [],
+            ).append(row)
+        for key, grouped in sorted(groups_macro.items()):
+            values = [float(r["mean"]) for r in grouped if r.get("mean") is not None]
+            output.append(
+                {
+                    **grouped[0],
+                    "aggregation_level": level,
+                    "scene": key[1],
+                    "mean": None if not values else float(np.mean(values)),
+                    "finite_count": len(values),
+                    "available": bool(values),
+                }
             )
-            grouped.setdefault(key, []).append(row)
-        for key, items in sorted(grouped.items()):
-            for metric in {str(i["metric"]) for i in items}:
-                vals = [i["mean"] for i in items if i["metric"] == metric and i["mean"] is not None]
-                output.append(
-                    {
-                        "metric": metric,
-                        "aggregation_level": level,
-                        "generation_cohort_id": key[0],
-                        "scene": key[1],
-                        "declared_shell": key[2],
-                        "population": "all",
-                        "mean": None if not vals else float(np.mean(vals)),
-                        "finite_count": len(vals),
-                        "available": bool(vals),
-                        "units": "m",
-                    }
-                )
-                output.append({**output[-1], "population": "actor_valid"})
     return output
 
 
 def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    """Expose distance and explicit unavailable optical/view evidence."""
+    """Expose target distance and explicit unavailable view metrics per facet."""
     source = [dict(row) for row in rows]
-    values = [_finite_or_none(r.get("target_distance_m")) for r in source]
-    finite = [v for v in values if v is not None]
-    result = [
-        {
-            "evidence": "target_distance",
-            "available": bool(finite),
-            "count": len(source),
-            "finite_count": len(finite),
-            "missing_count": len(source) - len(finite),
-            "mean": None if not finite else float(np.mean(finite)),
-            "units": "m",
-        }
-    ]
-    for name in ("target_fov_margin", "target_pixel_margin", "target_line_of_sight"):
+    groups = _population_state_groups(source)
+    result: list[dict[str, object]] = []
+    for key, grouped in sorted(groups.items()):
+        cohort, scene, rollout_id, step_id, population = key
+        values = [_finite_or_none(row.get("target_distance_m")) for row in grouped]
+        finite = [value for value in values if value is not None]
         result.append(
             {
-                "evidence": name,
-                "available": False,
-                "count": len(source),
-                "finite_count": 0,
-                "missing_count": len(source),
-                "units": "boolean" if name == "target_line_of_sight" else "px/degrees",
-                "reason": "optical calibration or visibility is not persisted",
+                "evidence": "target_distance",
+                "generation_cohort_id": cohort,
+                "scene": scene,
+                "rollout_row_id": rollout_id,
+                "step_row_id": step_id,
+                "population": population,
+                "aggregation_level": "state",
+                "available": bool(finite),
+                "count": len(grouped),
+                "finite_count": len(finite),
+                "missing_count": len(grouped) - len(finite),
+                "mean": None if not finite else float(np.mean(finite)),
+                "units": "m",
             }
         )
-    cohort = str(source[0].get("generation_cohort_id", "unknown")) if source else "unknown"
-    return [
-        {**row, "generation_cohort_id": cohort, "population": population, "aggregation_level": level}
-        for row in result
-        for population in ("all", "actor_valid")
-        for level in ("state", "scene_macro", "cohort_macro")
-    ]
+        for name in ("target_fov_margin", "target_pixel_margin", "target_line_of_sight"):
+            result.append(
+                {
+                    "evidence": name,
+                    "generation_cohort_id": cohort,
+                    "scene": scene,
+                    "rollout_row_id": rollout_id,
+                    "step_row_id": step_id,
+                    "population": population,
+                    "aggregation_level": "state",
+                    "available": False,
+                    "count": len(grouped),
+                    "finite_count": 0,
+                    "missing_count": len(grouped),
+                    "units": "boolean" if name == "target_line_of_sight" else "px/degrees",
+                    "reason": "optical calibration or visibility is not persisted",
+                }
+            )
+    for level in ("scene_macro", "cohort_macro"):
+        groups_macro: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+        for row in result:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups_macro.setdefault(
+                (str(row["generation_cohort_id"]), scene, str(row["population"]), str(row["evidence"])), []
+            ).append(row)
+        for key, grouped in sorted(groups_macro.items()):
+            if level == "cohort_macro":
+                by_scene: dict[str, list[float]] = {}
+                for row in grouped:
+                    if row.get("mean") is not None:
+                        by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                finite = [float(np.mean(values)) for values in by_scene.values() if values]
+            else:
+                finite = [float(row["mean"]) for row in grouped if row.get("mean") is not None]
+            result.append(
+                {
+                    **grouped[0],
+                    "aggregation_level": level,
+                    "scene": key[1],
+                    "mean": None if not finite else float(np.mean(finite)),
+                    "available": bool(finite),
+                    "count": sum(int(row["count"]) for row in grouped),
+                    "finite_count": len(finite),
+                    "missing_count": sum(int(row["missing_count"]) for row in grouped),
+                }
+            )
+    return result
 
 
 def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    """Summarize all persisted motion diagnostics and collision applicability."""
+    """Summarize motion and collision diagnostics per state and real macros."""
     source = [dict(row) for row in rows]
+    groups = _population_state_groups(source)
     result: list[dict[str, object]] = []
-    for metric, units in (
+    metrics = (
         ("motion_step_length_m", "m"),
         ("motion_height_delta_m", "m"),
         ("motion_backward_step_m", "m"),
         ("motion_yaw_delta_deg", "degrees"),
         ("free_space_margin_m", "m"),
         ("path_min_clearance_m", "m"),
-    ):
-        values = [_finite_or_none(r.get(metric)) for r in source]
-        finite = [v for v in values if v is not None]
+    )
+    for key, grouped in sorted(groups.items()):
+        cohort, scene, rollout_id, step_id, population = key
+        base = {
+            "generation_cohort_id": cohort,
+            "scene": scene,
+            "rollout_row_id": rollout_id,
+            "step_row_id": step_id,
+            "population": population,
+            "aggregation_level": "state",
+            "count": len(grouped),
+        }
+        for metric, units in metrics:
+            values = [value for row in grouped if (value := _finite_or_none(row.get(metric))) is not None]
+            result.append(
+                {
+                    **base,
+                    "metric": "path_min_clearance" if metric == "path_min_clearance_m" else metric,
+                    "available": bool(values),
+                    "finite_count": len(values),
+                    "missing_count": len(grouped) - len(values),
+                    "mean": None if not values else float(np.mean(values)),
+                    "units": units,
+                }
+            )
+            if metric == "path_min_clearance_m":
+                result.append({**result[-1], "metric": metric})
+        applicable = [row for row in grouped if row.get("path_collision_applicable") is True]
+        evaluated = [row for row in applicable if row.get("path_collision_evaluated") is True]
+        collisions = [row for row in evaluated if row.get("path_collision") is True]
         result.append(
             {
-                "metric": metric,
-                "available": bool(finite),
-                "count": len(source),
-                "finite_count": len(finite),
-                "missing_count": len(source) - len(finite),
-                "mean": None if not finite else float(np.mean(finite)),
-                "units": units,
+                **base,
+                "metric": "path_collision_rate",
+                "available": bool(evaluated),
+                "missing_count": len(grouped) - len(evaluated),
+                "applicable_count": len(applicable),
+                "evaluated_count": len(evaluated),
+                "collision_count": len(collisions),
+                "not_applicable_count": len(grouped) - len(applicable),
+                "applicable_unevaluated_count": len(applicable) - len(evaluated),
+                "collision_rate": None if not evaluated else len(collisions) / len(evaluated),
+                "units": "fraction",
             }
         )
-        if metric == "path_min_clearance_m":
-            result.append({**result[-1], "metric": "path_min_clearance"})
-    applicable = [r for r in source if r.get("path_collision_applicable") is True]
-    evaluated = [r for r in applicable if r.get("path_collision_evaluated") is True]
-    collisions = [r for r in evaluated if r.get("path_collision") is True]
-    result.append(
-        {
-            "metric": "path_collision_rate",
-            "available": bool(evaluated),
-            "count": len(source),
-            "missing_count": len(source) - len(evaluated),
-            "applicable_count": len(applicable),
-            "evaluated_count": len(evaluated),
-            "collision_count": len(collisions),
-            "not_applicable_count": len(source) - len(applicable),
-            "applicable_unevaluated_count": len(applicable) - len(evaluated),
-            "collision_rate": None if not evaluated else len(collisions) / len(evaluated),
-            "units": "fraction",
-        }
-    )
-    cohort = str(source[0].get("generation_cohort_id", "unknown")) if source else "unknown"
-    return [
-        {**row, "generation_cohort_id": cohort, "population": population, "aggregation_level": level}
-        for row in result
-        for population in ("all", "actor_valid")
-        for level in ("state", "scene_macro", "cohort_macro")
-    ]
+    for level in ("scene_macro", "cohort_macro"):
+        groups_macro: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+        for row in result:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups_macro.setdefault(
+                (str(row["generation_cohort_id"]), scene, str(row["population"]), str(row["metric"])), []
+            ).append(row)
+        for key, grouped in sorted(groups_macro.items()):
+            base = {
+                **grouped[0],
+                "aggregation_level": level,
+                "scene": key[1],
+                "count": sum(int(row["count"]) for row in grouped),
+                "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
+                "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+            }
+            if key[3] == "path_collision_rate":
+                applicable = sum(int(row.get("applicable_count", 0)) for row in grouped)
+                evaluated = sum(int(row.get("evaluated_count", 0)) for row in grouped)
+                collisions = sum(int(row.get("collision_count", 0)) for row in grouped)
+                base.update(
+                    applicable_count=applicable,
+                    evaluated_count=evaluated,
+                    collision_count=collisions,
+                    not_applicable_count=sum(int(row.get("not_applicable_count", 0)) for row in grouped),
+                    applicable_unevaluated_count=sum(
+                        int(row.get("applicable_unevaluated_count", 0)) for row in grouped
+                    ),
+                    collision_rate=None if not evaluated else collisions / evaluated,
+                    available=bool(evaluated),
+                )
+            else:
+                if level == "cohort_macro":
+                    by_scene: dict[str, list[float]] = {}
+                    for row in grouped:
+                        if row.get("mean") is not None:
+                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                    values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                else:
+                    values = [float(row["mean"]) for row in grouped if row.get("mean") is not None]
+                base.update(mean=None if not values else float(np.mean(values)), available=bool(values))
+            result.append(base)
+    return result
 
 
 def _group_candidate_rows_by_state(
