@@ -43,7 +43,7 @@ from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleCon
 from aria_nbv.oracle.pipelines.offline_vin import _compact_evl_block_signature, _point_feature_schema
 from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
-from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, write_rollout_zarr_store
 from aria_nbv.targets.descriptor import TargetDescriptor
 from aria_nbv.targets.selection import ObservedTargetDescriptor
 from aria_nbv.utils import Stage
@@ -99,6 +99,18 @@ def test_qh_pose_fields_preserve_frame_aware_public_types() -> None:
         "history_pose_relative_root",
     ):
         assert QhActorTensors.__annotations__[field] == "PoseTW"
+
+
+def test_qh_operator_docs_follow_current_schema_and_camera_frame_contract() -> None:
+    package = Path(__file__).resolve().parents[2] / "aria_nbv"
+    readme = (package / "data_handling" / "README.md").read_text(encoding="utf-8")
+    zarr_contract = (package / "rollouts" / "zarr_contract.md").read_text(encoding="utf-8")
+    views = (package / "data_handling" / "qh_data" / "views.py").read_text(encoding="utf-8")
+
+    assert f"`{ROLLOUT_ZARR_SCHEMA_VERSION}`" in readme
+    assert f"`{ROLLOUT_ZARR_SCHEMA_VERSION}` writer" in zarr_contract
+    assert "root-camera-from-candidate-camera poses" in views
+    assert "root-rig-from-candidate-rig poses" not in views
 
 
 @pytest.mark.parametrize(

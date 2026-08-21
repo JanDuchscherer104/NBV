@@ -644,7 +644,7 @@ Current compatibility gates:
   compact-EVL signature and hashed ordered point-feature schema; older stores
   must be rebuilt. Rollout-Zarr compatibility is independent of this VIN bump.
 - Rollout stores must match `ROLLOUT_ZARR_SCHEMA_VERSION`, currently
-  `1.0-target-rollout-core`.
+  `2.0-target-rollout-provenance`.
 - A rollout store with the current schema can still be untrusted if validation
   reports missing `manifest.json`, empty `sources/source_shard_id`, negative
   `sources/source_shard_row`, or another lineage error.

@@ -199,7 +199,7 @@ class QhActorTensors:
     """``Tensor["3", float32]``: target object-frame OBB side lengths ``[x,y,z]`` in metres."""
 
     candidate_pose_relative_root: PoseTW
-    """``PoseTW["S N 12"]``: root-rig-from-candidate-rig poses in stored order. ``N`` is per-state width, never a planning-tree branch axis."""
+    """``PoseTW["S N 12"]``: root-camera-from-candidate-camera poses in stored order. ``N`` is per-state width, never a planning-tree branch axis."""
 
     candidate_mask: Tensor
     """``Tensor["S N", bool]``: materialization support; false means stored-row padding."""

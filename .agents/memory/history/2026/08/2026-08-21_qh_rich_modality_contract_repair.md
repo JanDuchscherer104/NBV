@@ -6,6 +6,7 @@ status: done
 topics: [qh, dataset, datamodule, provenance, tensor-shapes]
 confidence: high
 canonical_updates_needed: []
+codex_thread: codex://threads/01a02339-86df-7f13-a17b-fbd6626ab8c4
 files_touched:
   - aria_nbv/aria_nbv/data_handling/qh_data/views.py
   - aria_nbv/aria_nbv/data_handling/qh_data/dataset.py

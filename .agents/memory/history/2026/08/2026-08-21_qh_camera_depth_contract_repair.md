@@ -6,6 +6,7 @@ status: done
 topics: [qh, rollout, camera, depth, evl]
 confidence: high
 canonical_updates_needed: []
+codex_thread: codex://threads/01a02339-86df-7f13-a17b-fbd6626ab8c4
 files_touched:
   - aria_nbv/aria_nbv/data_handling/qh_data
   - aria_nbv/aria_nbv/data_handling/vin_store/writer.py

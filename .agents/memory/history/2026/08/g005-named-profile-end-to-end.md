@@ -6,7 +6,7 @@ status: done
 topics: [qh, profiles, actor-contract, verification]
 confidence: high
 canonical_updates_needed: []
-codex_thread: codex://threads/g005-named-profile-end-to-end
+codex_thread: codex://threads/01a02339-86df-7f13-a17b-fbd6626ab8c4
 ---
 
 # G005 named-profile integration proof

@@ -417,7 +417,7 @@ Recommended tensor shapes:
 
 Multi-step target tensors such as `q_target_target_rri[S,H,C]` are future
 derived views, not part of the current schema
-`1.0-target-rollout-core` writer.
+`2.0-target-rollout-provenance` writer.
 
 Array attributes must record:
 
