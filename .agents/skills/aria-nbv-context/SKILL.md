@@ -66,7 +66,8 @@ additional hop to a leaf; do not chain through another index.
   the resolver documented there, select one library, issue one focused
   query per concept, and verify the answer against the installed owner and
   tests. Do not use Docker MCP Context7.
-- **Prior decision or failed-approach recall:** Read
+- **Prior decision or failed-approach recall:** Before reading memory or invoking
+  a retrieval tool, read
   [`references/semantic-memory-boundary.md`](references/semantic-memory-boundary.md)
   and use only its reviewed, read-only, fail-closed route before opening the
   current owner.

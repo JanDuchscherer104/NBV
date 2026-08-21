@@ -6,15 +6,16 @@
 {"id":"graphify-usable-stale-navigation","task":"Answer an eligible codebase question when Graphify reports usable-stale with bounded stale sources."}
 {"id":"graphify-unusable-bootstrap-repair","task":"Localize an owner when the Codex worktree Graphify bootstrap is broken, corrupt, or otherwise unusable."}
 {"id":"target-admission-protocol","task":"Change the target-input protocol or target admission contract."}
-{"id":"oracle-evidence-scoring","task":"Change privileged Oracle scorer inputs or the shared private scoring engine."}
+{"id":"oracle-evidence-construction","task":"A privileged Oracle label has the right scoring formula but wrong candidate point-cloud evidence; diagnose the owner and focused proof before proposing a fix."}
+{"id":"oracle-private-scoring","task":"Oracle candidate evidence is correct, but the shared scorer returns nonzero gain for an empty candidate point cloud; diagnose the owner and focused proof."}
 {"id":"oracle-scene-rri-scoring","task":"Change scene-level Oracle RRI scoring."}
 {"id":"oracle-target-rri-scoring","task":"Change target-level Oracle RRI scoring or target invalidity."}
 {"id":"oracle-label-dtos","task":"Change Oracle candidate labels, retained evidence, or evaluation DTOs."}
 {"id":"oracle-label-pipeline","task":"Change an Oracle online, offline, rollout-dataset, or scene-label generation pipeline."}
 {"id":"rri-metric-semantics","task":"Change RRI metric semantics or aggregation."}
 {"id":"vin-scorer-input-fields","task":"Change target-conditioned VIN scorer input fields or predictions."}
-{"id":"geometry-pose-generation","task":"Change candidate pose sampling, orientation, or pose-generation geometry."}
-{"id":"geometry-rendering-camera","task":"Change camera projection, backprojection, depth rendering, or candidate-frustum geometry."}
+{"id":"geometry-pose-generation","task":"Candidate positions are correct, but sampled camera orientations violate the pose-generation contract; diagnose the owner and focused proof."}
+{"id":"geometry-rendering-camera","task":"A depth projection/backprojection round trip flips camera-space points while candidate sampling and display-only frusta are correct; diagnose the owner and focused proof."}
 {"id":"geometry-vin-frame-contract","task":"Change VIN pose encoding or frame-conditioned model inputs."}
 {"id":"zarr-rollout-storage-api","task":"Change rollout Zarr schema, writer, reader, or manifest behavior."}
 {"id":"zarr-offline-vin-storage-api","task":"Change immutable offline VIN Zarr shard storage or random-access reads."}
@@ -24,7 +25,7 @@
 {"id":"rerun-rollout-zarr-inspection","task":"Inspect an ARIA-NBV rollout store through Rerun."}
 {"id":"rerun-sdk-api-change","task":"Change Rerun Python SDK usage in the ARIA inspector."}
 {"id":"context7-pytorch3d-conceptual-plan","task":"Create an advisor-facing conceptual plan for a PyTorch3D camera convention change with external API evidence."}
-{"id":"context7-graphify-api-change","task":"Change consequential or uncertain Graphify API/version behavior with current external-library evidence."}
+{"id":"context7-graphify-api-change","task":"Verify whether Graphify 0.9.48 hook installation refreshes semantic indexes using current external documentation, then identify the installed/local owner and focused test for any contract correction."}
 {"id":"thesis-aria-grill-matt-collision","task":"Stress-test a thesis scope or advisor-facing decision."}
 {"id":"aria-grill-progressive-interface-design","task":"Compare high-impact ARIA interface shapes after grounding the owning contract."}
 {"id":"context7-not-needed-target-rri-section","task":"Find a local source family and thesis target-RRI section owner."}
@@ -32,13 +33,13 @@
 {"id":"code-index-frustum-rendering","task":"Locate candidate-frustum rendering implementation with source family and code-index evidence."}
 {"id":"semantic-recall-current-thesis","task":"Recall related current thesis sections before opening authoritative Typst source."}
 {"id":"semantic-recall-literature-primary","task":"Find literature-review domain and verify a claim in matching primary paper."}
-{"id":"semantic-recall-reviewed-history","task":"Recall reviewed historical diagnosis before checking current owner."}
+{"id":"semantic-recall-reviewed-history","task":"Recall the reviewed diagnosis for why stale rollout changes were selectively reconstructed rather than wholesale rebased, then verify the current generation and replay owners."}
 {"id":"semantic-recall-code-direct-source","task":"Localize unknown implementation, test, or active-configuration owner without semantic code retrieval."}
 {"id":"planned-thesis-detail","task":"Place planned research details in canonical thesis or Quarto owners."}
 {"id":"package-contract-owner","task":"Localize nearest aria_nbv package guide before changing Python API contracts."}
 {"id":"skill-truth-leakage-review","task":"Review scaffold skills for duplicated formulas, roadmap claims, plans, or implementation contracts."}
 {"id":"durable-workpackage-completion","task":"Complete a durable local workpackage before starting unrelated work; the prompt does not mention Git."}
-{"id":"concrete-failure","task":"Diagnose a failing command, traceback, suspicious metric, or bad runtime output."}
+{"id":"concrete-failure","task":"The command make scaffold-audit reports a missing repository pointer after a skill edit; diagnose from that reproducer and name the exact owner and proof without guessing a patch."}
 {"id":"code-review","task":"Review ARIA-NBV working-tree or PR diffs with severity-ranked findings."}
 {"id":"python-docstring-contract","task":"Write or refactor docstrings for Python public API contracts."}
 {"id":"typst-thesis-edit","task":"Edit Typst thesis prose, notation, citations, figures, or rendered-page QA."}

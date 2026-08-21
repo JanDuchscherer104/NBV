@@ -508,7 +508,6 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
     fixture = fixtures["context7-graphify-api-change"]
     assert _fixture_owner_paths_exist(ROOT, fixture)
     assert fixture["expected_tool_refs"] == [
-        "mcp__codex_apps__context7_resolve_library_id",
         "mcp__codex_apps__context7_query_docs",
     ]
     assert fixture["forbidden_tool_refs"] == [
@@ -667,7 +666,8 @@ def test_route_only_domain_skill_contract() -> None:
         "aria_nbv/aria_nbv/targets/protocol.py",
     ]
     oracle_routes = {
-        "oracle-evidence-scoring": "aria_nbv/aria_nbv/oracle/evidence.py",
+        "oracle-evidence-construction": "aria_nbv/aria_nbv/oracle/evidence.py",
+        "oracle-private-scoring": "aria_nbv/aria_nbv/oracle/_scoring.py",
         "oracle-scene-rri-scoring": "aria_nbv/aria_nbv/oracle/scene_rri.py",
         "oracle-target-rri-scoring": "aria_nbv/aria_nbv/oracle/target_rri.py",
         "oracle-label-dtos": "aria_nbv/aria_nbv/oracle/labels.py",
@@ -1042,11 +1042,15 @@ def test_thesis_context_and_context7_routing() -> None:
     assert "never owns the facts it locates" in context_map
 
     for owner_label in (
-        "Oracle evidence and private scoring engine",
+        "Oracle evidence construction",
+        "Oracle private scoring engine",
         "Scene-RRI scoring",
         "Target-RRI scoring",
         "Oracle label DTOs and retained evidence",
         "Oracle label-generation pipelines",
+        "Candidate pose generation and orientation",
+        "Camera projection, backprojection, and depth rendering",
+        "VIN pose encoding and frame-conditioned inputs",
     ):
         assert owner_label in context_map
 
