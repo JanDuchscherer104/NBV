@@ -291,6 +291,36 @@ def test_module_rejects_every_learning_contract_field_mutation() -> None:
             module._validate_datamodule_contract(data)
 
 
+def test_predict_start_uses_the_same_exact_datamodule_admission() -> None:
+    data = type(
+        "Data",
+        (),
+        {
+            "experiment_profile": "qh_cf0_v1",
+            "actor_state_contract_hash": _CF0_ACTOR_HASH,
+            "learning_contract_hash": _LEARNING_CONTRACT_HASH,
+            "geometry_contract_hash": None,
+        },
+    )()
+    trainer = type("Trainer", (), {"datamodule": data})()
+    matching = _module()
+    matching._trainer = trainer  # noqa: SLF001
+
+    matching.on_predict_start()
+
+    mismatching = QhLightningModule(
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash="other-learning-contract",
+        ),
+        scorer=_TableScorer(),
+    )
+    mismatching._trainer = trainer  # noqa: SLF001
+    with pytest.raises(ValueError, match="learning contract hashes"):
+        mismatching.on_predict_start()
+
+
 def test_cfplus_geometry_hash_survives_config_reload_and_rejects_drift() -> None:
     """Reloaded module hparams keep geometry admission bound before fit."""
 

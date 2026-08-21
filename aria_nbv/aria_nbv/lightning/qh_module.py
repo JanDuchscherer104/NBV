@@ -192,8 +192,23 @@ class QhLightningModule(pl.LightningModule):
                 raise ValueError("Q_H supports only non-plateau per-step learning-rate schedulers.")
         self._validate_datamodule_contract(self.trainer.datamodule)
 
+    def on_validation_start(self) -> None:
+        """Reject validation when the attached DataModule contract has drifted."""
+
+        self._validate_datamodule_contract(self.trainer.datamodule)
+
+    def on_test_start(self) -> None:
+        """Reject testing when the attached DataModule contract has drifted."""
+
+        self._validate_datamodule_contract(self.trainer.datamodule)
+
+    def on_predict_start(self) -> None:
+        """Reject any supported prediction lifecycle after DataModule drift."""
+
+        self._validate_datamodule_contract(self.trainer.datamodule)
+
     def _validate_datamodule_contract(self, data_module: object) -> None:
-        """Reject DataModule profile/hash drift before the first training batch."""
+        """Reject DataModule profile/hash drift before any lifecycle batch."""
 
         if getattr(data_module, "experiment_profile", None) != self.config.experiment_profile:
             raise ValueError("Q_H module and DataModule experiment profiles must match exactly.")
