@@ -43,3 +43,28 @@ def test_generation_labeling_does_not_change_factual_dataframe_schema() -> None:
     displayed = raw.rename(columns={column: column for column in raw.columns})
     assert list(displayed.columns) == list(raw.columns)
     assert displayed.equals(raw)
+
+
+def test_plotly_facing_generation_labels_are_plain_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plotly receives readable labels because it does not render TeX markup."""
+
+    monkeypatch.setattr(counterfactual_rollouts, "get_label_display_mode", lambda: "Both")
+    figure = counterfactual_rollouts._build_fanout_band_figure(
+        pd.DataFrame(
+            {
+                "trajectory": [0],
+                "step": [1],
+                "fanout_q025": [0.1],
+                "fanout_q975": [0.2],
+                "selected_target_rri": [0.15],
+                "selected_target_root_gain": [0.16],
+            }
+        )
+    )
+    labels = [
+        figure.layout.title.text,
+        figure.layout.xaxis.title.text,
+        figure.layout.yaxis.title.text,
+        *(trace.name for trace in figure.data),
+    ]
+    assert all("$" not in str(label) and "\\" not in str(label) for label in labels)

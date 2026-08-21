@@ -864,7 +864,7 @@ def _render_live_step_candidate_diagnostics(
                 color="position",
                 symbol="selected",
                 hover_data=hover_cols,
-                title=f"Selection score vs {_label(score_metric, math_capable=True)}",
+                title=f"Selection score vs {_label(score_metric)}",
             ),
             width="stretch",
         )
@@ -877,7 +877,7 @@ def _render_live_step_candidate_diagnostics(
                 color="selected",
                 points="outliers",
                 hover_data=hover_cols,
-                title=f"{_label(score_metric, math_capable=True)} by Position Family",
+                title=f"{_label(score_metric)} by Position Family",
             ),
             width="stretch",
         )
@@ -1049,13 +1049,13 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
                 mode="lines+markers",
                 line={"color": color, "width": 3},
                 marker={"color": color, "size": 7},
-                name=f"traj {traj_idx} selected {_label('selected_target_root_gain', math_capable=True)}",
+                name=f"traj {traj_idx} selected {_label('selected_target_root_gain')}",
             )
         )
     fig.update_layout(
         title="Valid-candidate empirical central 95% range",
         xaxis_title="rollout step",
-        yaxis_title=f"{_label('target_root_gain', math_capable=True)} / {_label('target_rri', math_capable=True)}",
+        yaxis_title=f"{_label('target_root_gain')} / {_label('target_rri')}",
     )
     return fig
 
@@ -1939,7 +1939,7 @@ def _render_live_rollout_metric_dashboard(
                 x=traj_df["step"],
                 y=traj_df["selected_target_root_gain"].fillna(traj_df["selected_target_rri"]),
                 mode="lines+markers",
-                name=f"traj {traj_idx} selected {_label('selected_target_root_gain', math_capable=True)}",
+                name=f"traj {traj_idx} selected {_label('selected_target_root_gain')}",
             )
         )
         rri_fig.add_trace(
@@ -1947,14 +1947,14 @@ def _render_live_rollout_metric_dashboard(
                 x=traj_df["step"],
                 y=traj_df["G_target"],
                 mode="lines+markers",
-                name=f"traj {traj_idx} {_label('cumulative_target_root_gain', math_capable=True)} prefix",
+                name=f"traj {traj_idx} {_label('cumulative_target_root_gain')} prefix",
                 line={"dash": "dash"},
             )
         )
     rri_fig.update_layout(
         title="Selected target return by rollout step",
         xaxis_title="rollout step",
-        yaxis_title=f"{_label('target_root_gain', math_capable=True)} / {_label('return_h', math_capable=True)}",
+        yaxis_title=f"{_label('target_root_gain')} / {_label('return_h')}",
     )
 
     fanout_fig = _build_fanout_band_figure(step_df)
@@ -2003,9 +2003,9 @@ def _render_live_rollout_metric_dashboard(
                 )
             )
         top_fig.update_layout(
-            title=f"Top-k valid candidate {_label('target_root_gain', math_capable=True)} / {_label('target_rri', math_capable=True)} per step",
+            title=f"Top-k valid candidate {_label('target_root_gain')} / {_label('target_rri')} per step",
             xaxis_title="rollout step",
-            yaxis_title=f"{_label('target_root_gain', math_capable=True)} / {_label('target_rri', math_capable=True)}",
+            yaxis_title=f"{_label('target_root_gain')} / {_label('target_rri')}",
         )
         _render_live_quality_plot(
             top_fig,
@@ -2016,12 +2016,8 @@ def _render_live_rollout_metric_dashboard(
 
     if rows_df["J_endpoint"].notna().any() or rows_df["log_gain"].notna().any():
         endpoint_fig = go.Figure()
-        endpoint_fig.add_trace(
-            go.Bar(x=rows_df["trajectory"], y=rows_df["J_endpoint"], name=_label("endpoint_gain", math_capable=True))
-        )
-        endpoint_fig.add_trace(
-            go.Bar(x=rows_df["trajectory"], y=rows_df["log_gain"], name=_label("log_gain", math_capable=True))
-        )
+        endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["J_endpoint"], name=_label("endpoint_gain")))
+        endpoint_fig.add_trace(go.Bar(x=rows_df["trajectory"], y=rows_df["log_gain"], name=_label("log_gain")))
         endpoint_fig.update_layout(
             title="Endpoint target-quality metrics",
             xaxis_title="trajectory",
