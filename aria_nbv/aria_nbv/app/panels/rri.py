@@ -15,19 +15,7 @@ from ...data_handling import EfmSnippetView
 from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...rri_metrics.rri import RriResult
-from ..scientific_labels import format_scientific_label
-from ..state import get_label_display_mode
-from .common import _info_popover, _pretty_label, render_scientific_notation
-
-
-def _label(identifier: str, *, math_capable: bool = False) -> str:
-    """Render a canonical scientific label at the final UI boundary."""
-
-    return format_scientific_label(
-        identifier,
-        mode=get_label_display_mode(),
-        surface="markdown" if math_capable else "plain",
-    )
+from .common import _info_popover, _pretty_label, current_scientific_label, render_scientific_notation
 
 
 def render_rri_page(
@@ -68,7 +56,7 @@ def render_rri_page(
             rri,
             labels,
             bar_color_map,
-            title=_label("oracle_rri") + " per candidate",
+            title=current_scientific_label("oracle_rri") + " per candidate",
         ),
         width="stretch",
     )
@@ -86,7 +74,11 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_label("point_to_mesh_error") + " and " + _label("mesh_to_point_error"),
+            title=(
+                current_scientific_label("point_to_mesh_error")
+                + " and "
+                + current_scientific_label("mesh_to_point_error")
+            ),
         ),
         width="stretch",
     )
@@ -103,7 +95,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_label("point_to_mesh_error"),
+            title=current_scientific_label("point_to_mesh_error"),
         ),
         width="stretch",
     )
@@ -120,7 +112,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_label("mesh_to_point_error"),
+            title=current_scientific_label("mesh_to_point_error"),
         ),
         width="stretch",
     )

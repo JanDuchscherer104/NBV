@@ -17,18 +17,15 @@ from ....data_handling.vin_store.diagnostics import collect_vin_offline_dataset_
 from ....data_handling.vin_store.source import VinOfflineSourceConfig
 from ....utils.plotting import _histogram_overlay, _to_numpy
 from ....vin.diagnostics.plotting import _parameter_distribution
-from ...scientific_labels import format_scientific_label, scientific_label
-from ...state import get_label_display_mode
-from ..common import _info_popover, _offline_summary_rows, _pretty_label, _strip_ansi, render_scientific_notation
+from ..common import (
+    _info_popover,
+    _offline_summary_rows,
+    _pretty_label,
+    _strip_ansi,
+    current_scientific_label,
+    render_scientific_notation,
+)
 from .context import VinDiagContext
-
-
-def _rri_label() -> str:
-    return format_scientific_label(
-        scientific_label("rri"),
-        mode=get_label_display_mode(),
-        surface="plain",
-    )
 
 
 def render_summary_tab(ctx: VinDiagContext) -> None:
@@ -122,7 +119,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
             x=rri,
             y=expected,
             labels={
-                "x": f"Oracle {_rri_label()}",
+                "x": f"Oracle {current_scientific_label('rri')}",
                 "y": _pretty_label("VIN expected (normalized)"),
             },
             title=_pretty_label("Predicted score vs oracle RRI"),

@@ -28,24 +28,12 @@ from ...dataset_bundle import (
 )
 from ...dataset_topology import discover_vin_store_dirs
 from ...rollouts.inspection import discover_rollout_store_paths
-from ..scientific_labels import format_scientific_label, scientific_label
-from ..state import get_label_display_mode
-from .common import render_scientific_notation
+from .common import current_scientific_label, render_scientific_notation
 
 _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"
 _QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
 _QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
-
-
-def _scientific_label(identifier: str) -> str:
-    """Render a curated scientific field label for this page's text surfaces."""
-
-    return format_scientific_label(
-        scientific_label(identifier),
-        mode=get_label_display_mode(),
-        surface="plain",
-    )
 
 
 def _artifact_identity(path: Path) -> tuple[tuple[str, int, int], ...]:
@@ -433,9 +421,10 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         else:
             st.success("No readiness findings.")
     with qh_tab:
-        st.subheader(f"{_scientific_label('q_h')} dataset and collation readiness")
+        st.subheader(f"{current_scientific_label('q_h')} dataset and collation readiness")
         st.caption(
-            f"This action constructs the selected stage datasets and the production {_scientific_label('q_h')}DataModule. "
+            "This action constructs the selected stage datasets and the production "
+            f"{current_scientific_label('q_h')} DataModule. "
             "It does not create a model or Trainer."
         )
         render_scientific_notation("q_h", "return_h", "horizon")
@@ -476,7 +465,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 st.dataframe(pd.DataFrame(stage_rows), hide_index=True, width="stretch")
                 storage_rows = [
                     {
-                        "metric": _scientific_label(metric.name),
+                        "metric": current_scientific_label(metric.name),
                         "value": metric.value,
                         "unit": metric.unit,
                         "bytes": metric.numerator_bytes,

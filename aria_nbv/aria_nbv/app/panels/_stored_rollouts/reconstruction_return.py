@@ -13,9 +13,8 @@ import streamlit as st
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import rollout_endpoint_metric_summary
 from ....rollouts.reporting import RolloutCorpusSummary
-from ...scientific_labels import LabelSurface, TheoryReferences, format_scientific_label, scientific_label
-from ...state import get_label_display_mode
-from ..common import render_scientific_notation
+from ...scientific_labels import LabelSurface, TheoryReferences
+from ..common import current_scientific_label, render_scientific_notation
 from .session import _cached_projection
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
@@ -81,20 +80,10 @@ _TEMPORAL_THEORY: dict[str, TheoryReferences] = {
 }
 
 
-def _scientific_label(identifier: str, *, surface: LabelSurface = "plain") -> str:
-    """Render a curated scientific label using the global display preference."""
-
-    return format_scientific_label(
-        scientific_label(identifier),
-        mode=get_label_display_mode(),
-        surface=surface,
-    )
-
-
 def _temporal_metric_label(metric: str, *, surface: LabelSurface = "plain") -> str:
     """Return the UI label for a persisted temporal metric key."""
 
-    return _scientific_label(metric, surface=surface)
+    return current_scientific_label(metric, surface=surface)
 
 
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
@@ -198,7 +187,7 @@ def _render_corpus_temporal_plot(rows: pd.DataFrame, *, contract_id: object, met
     cols[2].metric("Maximum IQR width", "n/a" if pd.isna(iqr_width) else f"{float(iqr_width):.3g}")
     render_scientific_notation(metric)
     _render_plot(
-        _temporal_summary_figure(rows, group_field="trajectory", metric_label=label),
+        _temporal_summary_figure(rows, group_field="trajectory"),
         ScientificExplanation(
             question=f"How does {label.lower()} evolve across all compatible selected shards?",
             answer=(
@@ -440,7 +429,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
         help="One terminal factual step per rollout, including rollouts whose persisted horizon ends earlier.",
     )
     _render_plot(
-        _temporal_summary_figure(summary, group_field=group_field, metric_label=metric_label),
+        _temporal_summary_figure(summary, group_field=group_field),
         ScientificExplanation(
             question=f"How does {metric_label.lower()} change over persisted rollout depth?",
             answer=f"The trace summarizes how {metric_label.lower()} is observed to change with acquisition number for the selected descriptive grouping.",
@@ -521,7 +510,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
             )
 
 
-def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_label: str) -> go.Figure:
+def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str) -> go.Figure:
     """Build deterministic median/IQR traces without connecting rollout rows."""
 
     figure = go.Figure()

@@ -5,21 +5,19 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from aria_nbv.app.panels import candidates, counterfactual_rollouts, rri
+from aria_nbv.app.panels import common, counterfactual_rollouts
 
 
 @pytest.mark.parametrize("mode", ["Symbols", "Text", "Both"])
 def test_generation_panels_share_three_mode_scientific_labels(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
     """The three generation panels use the global display mode consistently."""
 
-    monkeypatch.setattr(candidates, "get_label_display_mode", lambda: mode)
-    monkeypatch.setattr(rri, "get_label_display_mode", lambda: mode)
-    monkeypatch.setattr(counterfactual_rollouts, "get_label_display_mode", lambda: mode)
+    monkeypatch.setattr(common, "get_label_display_mode", lambda: mode)
 
     labels = (
-        candidates._label("validity_mask", math_capable=True),
-        rri._label("point_to_mesh_error", math_capable=True),
-        counterfactual_rollouts._label("target_root_gain", math_capable=True),
+        common.current_scientific_label("validity_mask", surface="markdown"),
+        common.current_scientific_label("point_to_mesh_error", surface="markdown"),
+        common.current_scientific_label("target_root_gain", surface="markdown"),
     )
     if mode == "Text":
         assert all("$" not in label for label in labels)
@@ -48,7 +46,7 @@ def test_generation_labeling_does_not_change_factual_dataframe_schema() -> None:
 def test_plotly_facing_generation_labels_are_plain_text(monkeypatch: pytest.MonkeyPatch) -> None:
     """Plotly receives readable labels because it does not render TeX markup."""
 
-    monkeypatch.setattr(counterfactual_rollouts, "get_label_display_mode", lambda: "Both")
+    monkeypatch.setattr(common, "get_label_display_mode", lambda: "Both")
     figure = counterfactual_rollouts._build_fanout_band_figure(
         pd.DataFrame(
             {

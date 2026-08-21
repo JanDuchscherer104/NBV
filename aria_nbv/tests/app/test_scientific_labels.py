@@ -48,11 +48,12 @@ def test_label_modes_share_one_registry_backed_formatter(tmp_path: Path) -> None
     assert equation_label("demo.identity", mode="Text", root=tmp_path) == "Demo.Identity"
 
 
-def test_unknown_labels_fail_closed_to_readable_identifier(tmp_path: Path) -> None:
+def test_unknown_theory_labels_fail_closed(tmp_path: Path) -> None:
     _write_registry(tmp_path)
-    assert symbol_label("missing_value", root=tmp_path) == "Missing Value"
     with pytest.raises(TheoryResolutionError):
-        resolve_theory(TheoryReferences(symbol_ids=("missing_value",)), root=tmp_path)
+        symbol_label("missing_value", root=tmp_path)
+    with pytest.raises(TheoryResolutionError):
+        equation_label("missing_equation", root=tmp_path)
 
 
 def test_scientific_inventory_formats_only_at_the_presentation_boundary(tmp_path: Path) -> None:
@@ -87,6 +88,24 @@ def test_chart_notation_uses_markdown_surface_only_when_requested(monkeypatch) -
     assert len(captions) == 1
 
 
+def test_ui_label_warns_and_uses_no_formula_when_registry_resolution_fails(monkeypatch) -> None:
+    from aria_nbv.app.panels import common
+
+    warnings: list[str] = []
+    monkeypatch.setattr(common, "get_label_display_mode", lambda: "Both")
+    monkeypatch.setattr(
+        common,
+        "validate_theory_registry",
+        lambda references: (_ for _ in ()).throw(TheoryResolutionError("missing canonical symbol")),
+    )
+    monkeypatch.setattr(common.st, "warning", warnings.append)
+
+    label = common.current_scientific_label("cumulative_target_root_gain", surface="markdown")
+
+    assert label == "Cumulative target root gain (fraction)"
+    assert warnings == ["Canonical notation is unavailable for 'cumulative_target_root_gain': missing canonical symbol"]
+
+
 def test_every_configured_symbol_key_resolves_exactly() -> None:
     references = TheoryReferences(
         symbol_ids=tuple(
@@ -98,3 +117,8 @@ def test_every_configured_symbol_key_resolves_exactly() -> None:
 
     assert {symbol.identifier for symbol in resolved.symbols} == set(references.symbol_ids)
     assert all(symbol.typst == f"#symb.{symbol.identifier}" for symbol in resolved.symbols)
+
+
+def test_persisted_point_mesh_components_use_their_canonical_meanings() -> None:
+    assert SCIENTIFIC_LABELS["pm_acc_after"].symbol_key == "oracle.dist_pm"
+    assert SCIENTIFIC_LABELS["pm_comp_after"].symbol_key == "oracle.dist_mp"

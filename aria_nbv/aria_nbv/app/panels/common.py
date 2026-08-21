@@ -11,7 +11,15 @@ import streamlit as st
 
 from ...data_handling.vin_store.diagnostics import VinOfflineDatasetStats
 from ...utils.reporting import _pretty_label
-from ..scientific_labels import format_scientific_label, scientific_label
+from ..scientific_labels import (
+    LabelSurface,
+    TheoryReferences,
+    TheoryResolutionError,
+    format_identifier,
+    format_scientific_label,
+    scientific_label,
+    validate_theory_registry,
+)
 from ..state import get_label_display_mode
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -58,11 +66,23 @@ def render_scientific_notation(*identifiers: str) -> None:
     mode = get_label_display_mode()
     if mode == "Text" or not identifiers:
         return
-    labels = [
-        format_scientific_label(scientific_label(identifier), mode=mode, surface="markdown")
-        for identifier in identifiers
-    ]
+    labels = [current_scientific_label(identifier, surface="markdown") for identifier in identifiers]
     st.caption("**Notation:** " + " · ".join(labels))
+
+
+def current_scientific_label(identifier: str, *, surface: LabelSurface = "plain") -> str:
+    """Format a canonical label using the global mode and warn on registry drift."""
+
+    label = scientific_label(identifier)
+    if label.symbol_key is not None:
+        try:
+            validate_theory_registry(TheoryReferences(symbol_ids=(label.symbol_key,)))
+        except TheoryResolutionError as exc:
+            st.warning(f"Canonical notation is unavailable for {identifier!r}: {exc}")
+            readable = label.text or format_identifier(label.identifier)
+            units = f" ({label.units})" if label.units else ""
+            return f"{readable}{units}"
+    return format_scientific_label(label, mode=get_label_display_mode(), surface=surface)
 
 
 def _report_exception(exc: Exception, *, context: str) -> None:
@@ -92,5 +112,6 @@ __all__ = [
     "_pretty_label",
     "_report_exception",
     "_strip_ansi",
+    "current_scientific_label",
     "render_scientific_notation",
 ]

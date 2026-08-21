@@ -30,23 +30,11 @@ from ...lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from ...rollouts.inspection import discover_rollout_store_paths
 from ...rri_metrics.ordinal import RriOrdinalBinner
 from ..rerun_launch import build_rerun_offline_spawn_command, format_command, repo_root, spawn_background_command
-from ..scientific_labels import LabelSurface, format_scientific_label, scientific_label
-from ..state import get_label_display_mode
-from .common import _offline_summary_rows, render_scientific_notation
+from .common import _offline_summary_rows, current_scientific_label, render_scientific_notation
 
 _STATS_CACHE_KEY = "vin_offline_dataset_page_stats"
 _COVERAGE_CACHE_KEY = "vin_offline_dataset_page_coverage"
 _SECTIONS = ("Overview", "Content", "Runtime", "Details")
-
-
-def _scientific_label(identifier: str, *, surface: LabelSurface = "plain") -> str:
-    """Render a canonical field label without changing persisted dataframe keys."""
-
-    return format_scientific_label(
-        scientific_label(identifier),
-        mode=get_label_display_mode(),
-        surface=surface,
-    )
 
 
 def _load_offline_store_from_toml(toml_path: Path) -> VinOfflineStoreConfig:
@@ -173,7 +161,7 @@ def _render_rri_components(stats: VinOfflineDatasetStats, *, hist_bins: int, log
         _render_histogram(
             values,
             title=f"{name} Distribution",
-            x_label=_scientific_label(name),
+            x_label=current_scientific_label(name),
             nbins=hist_bins,
             log_y=log_y,
         )
@@ -184,10 +172,10 @@ def _render_rri_components(stats: VinOfflineDatasetStats, *, hist_bins: int, log
             x=stats.rri_values[:count],
             y=stats.rri_component_values["pm_comp_after"][:count],
             labels={
-                "x": _scientific_label("rri"),
-                "y": _scientific_label("point_to_mesh_error"),
+                "x": current_scientific_label("rri"),
+                "y": current_scientific_label("mesh_to_point_error"),
             },
-            title=(f"{_scientific_label('rri')} vs {_scientific_label('point_to_mesh_error')}"),
+            title=(f"{current_scientific_label('rri')} vs {current_scientific_label('mesh_to_point_error')}"),
         )
         st.plotly_chart(fig, width="stretch")
 
@@ -197,10 +185,10 @@ def _render_rri_components(stats: VinOfflineDatasetStats, *, hist_bins: int, log
             x=stats.rri_values[:count],
             y=stats.rri_component_values["pm_acc_after"][:count],
             labels={
-                "x": _scientific_label("rri"),
-                "y": _scientific_label("mesh_to_point_error"),
+                "x": current_scientific_label("rri"),
+                "y": current_scientific_label("point_to_mesh_error"),
             },
-            title=(f"{_scientific_label('rri')} vs {_scientific_label('mesh_to_point_error')}"),
+            title=(f"{current_scientific_label('rri')} vs {current_scientific_label('point_to_mesh_error')}"),
         )
         st.plotly_chart(fig, width="stretch")
 
@@ -317,8 +305,8 @@ def _render_binner(stats: VinOfflineDatasetStats, *, binner_classes: int, hist_b
     fig = px.histogram(
         x=stats.rri_values,
         nbins=hist_bins,
-        title=f"Raw {_scientific_label('oracle_rri')} with Quantile Edges",
-        labels={"x": _scientific_label("oracle_rri"), "y": "count"},
+        title=f"Raw {current_scientific_label('oracle_rri')} with Quantile Edges",
+        labels={"x": current_scientific_label("oracle_rri"), "y": "count"},
     )
     render_scientific_notation("oracle_rri")
     if log_y:
@@ -414,8 +402,8 @@ def _render_stats(
             )
             _render_histogram(
                 stats.rri_values,
-                title=_scientific_label("oracle_rri"),
-                x_label=_scientific_label("oracle_rri"),
+                title=current_scientific_label("oracle_rri"),
+                x_label=current_scientific_label("oracle_rri"),
                 nbins=hist_bins,
                 log_y=log_y,
             )

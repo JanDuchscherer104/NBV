@@ -682,7 +682,7 @@ def test_candidate_geometry_diagnostics_include_root_relative_3d_view(monkeypatc
     captured: list[object] = []
     monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(candidate_generation.st, "selectbox", lambda _label, options: options[0])
+    monkeypatch.setattr(candidate_generation.st, "selectbox", lambda _label, options, **_kwargs: options[0])
     monkeypatch.setattr(
         candidate_generation,
         "_render_plot",
@@ -1042,7 +1042,6 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
     figure = reconstruction_return._temporal_summary_figure(
         summary,
         group_field="policy",
-        metric_label="Selected one-step target root gain",
     )
 
     median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
