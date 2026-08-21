@@ -22,7 +22,7 @@ from aria_nbv.data_handling.qh_data import (
     QhDatasetConfig,
     collate_qh_chains,
 )
-from aria_nbv.data_handling.qh_data.dataset import _tensor_chain
+from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
 from aria_nbv.data_handling.qh_data.views import (
     QhAudit,
     QhChainKey,
@@ -208,6 +208,7 @@ def test_derived_selected_and_successor_masks_share_exact_support() -> None:
 @dataclass
 class _Manifest:
     version: int = 7
+    shards: tuple[object, ...] = ()
 
 
 _RECORD = VinOfflineIndexRecord(0, "sample-0", "scene-0", "snippet-0", "train", "shard-0", 0)

@@ -25,7 +25,7 @@ from aria_nbv.data_handling import (
     VinOracleBatch,
     VinSnippetView,
 )
-from aria_nbv.data_handling.qh_data.dataset import _evl_block_signature, _read_static_context
+from aria_nbv.data_handling.qh_data.materialization import _evl_block_signature, _read_static_context
 from aria_nbv.data_handling.vin_store.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
