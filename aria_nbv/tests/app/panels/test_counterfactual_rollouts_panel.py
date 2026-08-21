@@ -726,6 +726,11 @@ def test_candidate_support_plot_has_fixed_anchors_equal_axes_and_unjoined_candid
     monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
     monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(
+        stored_rollouts_page.st,
+        "columns",
+        lambda *_args, **_kwargs: (SimpleNamespace(selectbox=lambda _label, options, **_kw: options[0]),) * 2,
+    )
     monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
@@ -755,7 +760,14 @@ def test_candidate_support_plot_has_fixed_anchors_equal_axes_and_unjoined_candid
         ]
     )
 
-    stored_rollouts_page._render_candidate_geometry_diagnostics(candidates, candidates, total_candidates=2)
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence, candidate_geometry_evidence_rows
+
+    population = {
+        "geometry": candidate_geometry_evidence_rows(candidates.to_dict("records")),
+        "direction": candidate_direction_evidence(candidates.to_dict("records")),
+        "population_count": 2,
+    }
+    stored_rollouts_page._render_complete_candidate_support(population)
 
     assert figures
     normalized = figures[0]
@@ -763,7 +775,9 @@ def test_candidate_support_plot_has_fixed_anchors_equal_axes_and_unjoined_candid
     assert normalized.layout.yaxis.scaleanchor == "x"
     assert any("root" in str(trace.name).lower() for trace in normalized.data)
     assert any("target" in str(trace.name).lower() for trace in normalized.data)
-    assert not any(getattr(trace, "mode", None) == "lines" for trace in normalized.data)
+    rays = [trace for trace in normalized.data if getattr(trace, "mode", None) == "lines"]
+    assert rays
+    assert any(None in list(trace.x) for trace in rays)
 
 
 def test_candidate_direction_heatmap_declares_azimuth_and_sine_elevation_axes(
@@ -785,18 +799,39 @@ def test_candidate_direction_heatmap_declares_azimuth_and_sine_elevation_axes(
     monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
     monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(
+        stored_rollouts_page.st,
+        "columns",
+        lambda *_args, **_kwargs: (SimpleNamespace(selectbox=lambda _label, options, **_kw: options[0]),) * 2,
+    )
     monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
 
     candidates = pd.DataFrame(_direction_fixture_rows())
-    stored_rollouts_page._render_candidate_geometry_diagnostics(
-        candidates, candidates, total_candidates=len(candidates)
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    stored_rollouts_page._render_complete_candidate_support(
+        {"geometry": [], "direction": candidate_direction_evidence(candidates.to_dict("records"))}
     )
 
     heatmap = next(figure for figure in figures if "direction" in str(figure.layout.title.text).lower())
     assert "azimuth" in str(heatmap.layout.xaxis.title.text).lower()
     assert "sin" in str(heatmap.layout.yaxis.title.text).lower()
+
+
+def test_bounded_candidate_helper_only_renders_raw_metric_distribution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bounded candidate reads must not rerun complete-store scientific reducers."""
+
+    calls: list[tuple[pd.DataFrame, int]] = []
+    monkeypatch.setattr(
+        stored_rollouts_page,
+        "_render_raw_candidate_metrics",
+        lambda candidates, *, total_candidates: calls.append((candidates, total_candidates)),
+    )
+    candidates = pd.DataFrame({"candidate_row_id": [1], "target_root_gain": [0.1]})
+    stored_rollouts_page._render_candidate_geometry_diagnostics(candidates, candidates, total_candidates=1)
+    assert calls == [(candidates, 1)]
 
 
 def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result() -> None:

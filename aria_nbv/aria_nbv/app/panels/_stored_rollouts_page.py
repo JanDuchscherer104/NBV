@@ -29,8 +29,6 @@ from ...rerun_inspector import RolloutLayerName, RolloutLayerPreset
 from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
-    candidate_direction_evidence,
-    candidate_geometry_evidence_rows,
     rollout_endpoint_metric_summary,
     selected_depth_preview,
 )
@@ -1137,36 +1135,60 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
     """Render complete-population support plots before their collapsed rows."""
 
     geometry = pd.DataFrame(population.get("geometry", []))
-    points = geometry.dropna(subset=["target_normalized_forward", "target_normalized_lateral"])
+    required_geometry = {"target_normalized_forward", "target_normalized_lateral"}
+    points = (
+        geometry.dropna(subset=sorted(required_geometry)) if required_geometry <= set(geometry.columns) else geometry
+    )
     if not points.empty:
         if "generation_cohort_id" not in points:
             points = points.assign(generation_cohort_id="unknown")
+        st.caption(
+            f"Showing {len(points):,} finite normalized rows from the deterministic display sample "
+            f"({int(population.get('population_count', len(geometry))):,} total candidate rows)."
+        )
         fig = go.Figure()
         for label, x, y in (("root", 0.0, 0.0), ("target", 1.0, 0.0)):
             fig.add_trace(go.Scatter(x=[x], y=[y], mode="markers", name=label))
-        for cohort, cohort_rows in points.groupby("generation_cohort_id", sort=True, dropna=False):
+        context_columns = [column for column in ("position", "policy", "selected") if column in points]
+        group_columns = ["generation_cohort_id", *context_columns]
+        for context, cohort_rows in points.groupby(group_columns, sort=True, dropna=False):
+            context = context if isinstance(context, tuple) else (context,)
+            cohort = str(context[0])
+            label = " · ".join(f"{column}={value}" for column, value in zip(group_columns, context, strict=True))
             x_values: list[float | None] = []
             y_values: list[float | None] = []
             for row in cohort_rows.itertuples(index=False):
                 x_values.extend([0.0, float(row.target_normalized_forward), None])
                 y_values.extend([0.0, float(row.target_normalized_lateral), None])
-            fig.add_trace(go.Scatter(x=x_values, y=y_values, mode="lines", name=f"rays · {cohort}"))
+            fig.add_trace(go.Scatter(x=x_values, y=y_values, mode="lines", name=f"rays · {label}"))
             fig.add_trace(
                 go.Scatter(
                     x=cohort_rows["target_normalized_forward"],
                     y=cohort_rows["target_normalized_lateral"],
                     mode="markers",
-                    name=f"candidate · {cohort}",
+                    name=f"candidate · {label}",
+                    customdata=cohort_rows[context_columns].to_numpy() if context_columns else None,
+                    hovertemplate=(
+                        "forward=%{x:.3f}<br>lateral=%{y:.3f}<br>"
+                        + "<br>".join(
+                            f"{column}=%{{customdata[{index}]}}" for index, column in enumerate(context_columns)
+                        )
+                        + "<extra></extra>"
+                    )
+                    if context_columns
+                    else None,
                 )
             )
-        fig.update_layout(title="Target-normalized candidate endpoints", xaxis_title="forward", yaxis_title="lateral")
+        fig.update_layout(
+            title="Target-normalized candidate endpoints (display sample)", xaxis_title="forward", yaxis_title="lateral"
+        )
         fig.update_xaxes(scaleanchor="y", scaleratio=1)
         fig.update_yaxes(scaleanchor="x", scaleratio=1)
         _render_plot(
             fig,
             ScientificExplanation(
-                question="Where do the complete candidate endpoints lie relative to root and target?",
-                population="Complete candidate audit population with finite target-normalized baselines.",
+                question="Where do the displayed candidate endpoints lie relative to root and target?",
+                population="Deterministic bounded display sample; aggregate conclusions require the complete audit population.",
                 metric="Dimensionless forward/lateral coordinates; root=(0,0), target=(1,0).",
                 denominator_masks="Degenerate target baselines are unavailable, never zero-filled.",
                 comparability="Use the same target protocol and generation contract.",
@@ -1181,17 +1203,23 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             _download_frame("Download normalized candidate positions CSV", "candidate-normalized-positions.csv", points)
     direction = population.get("direction", {})
     density = pd.DataFrame(direction.get("density_rows", []) if isinstance(direction, dict) else [])
-    state_density = (
-        density[(density.get("aggregation_level") == "state") & (density.get("population") == "all")]
-        if not density.empty
-        else density
-    )
+    state_density = density[density.get("aggregation_level") == "state"] if not density.empty else density
     if not state_density.empty:
         if "generation_cohort_id" not in state_density:
             state_density = state_density.assign(generation_cohort_id="unknown")
+        if "population" not in state_density:
+            state_density = state_density.assign(population="all")
         cohorts = sorted(str(value) for value in state_density["generation_cohort_id"].dropna().unique())
-        cohort = st.selectbox("Direction generation cohort", options=cohorts, key="candidate_direction_cohort")
-        state_density = state_density[state_density["generation_cohort_id"].astype(str) == cohort]
+        populations = sorted(str(value) for value in state_density["population"].dropna().unique())
+        cohort_col, population_col = st.columns(2)
+        cohort = cohort_col.selectbox("Direction generation cohort", options=cohorts, key="candidate_direction_cohort")
+        direction_population = population_col.selectbox(
+            "Direction population", options=populations, key="candidate_direction_population"
+        )
+        state_density = state_density[
+            (state_density["generation_cohort_id"].astype(str) == cohort)
+            & (state_density["population"].astype(str) == direction_population)
+        ]
         matrix = state_density.pivot_table(
             index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
         )
@@ -1206,7 +1234,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             fig,
             ScientificExplanation(
                 question="Does direction support cover solid angle without latitude bias?",
-                population="Complete candidate rows, normalized per factual state.",
+                population=f"Complete candidate rows, normalized per factual state; cohort={cohort}, population={direction_population}.",
                 metric="Fraction per azimuth × sin(elevation) bin.",
                 denominator_masks="Zero-length vectors remain missing.",
                 comparability="Match binning and candidate contract.",
@@ -1239,10 +1267,29 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             frame = frame[frame["aggregation_level"].eq("state")]
         if frame.empty or value not in frame:
             continue
-        x = "radius_deg" if "radius_deg" in frame else "generation_cohort_id"
-        fig = px.line(
-            frame, x=x, y=value, color="population" if "population" in frame else None, markers=True, title=title
-        )
+        if "generation_cohort_id" not in frame:
+            frame = frame.assign(generation_cohort_id="unknown")
+        if "population" not in frame:
+            frame = frame.assign(population="all")
+        if "radius_deg" in frame:
+            fig = px.line(
+                frame,
+                x="radius_deg",
+                y=value,
+                color="population",
+                facet_col="generation_cohort_id",
+                markers=True,
+                title=title,
+            )
+        else:
+            fig = px.bar(
+                frame,
+                x="generation_cohort_id",
+                y=value,
+                color="population",
+                barmode="group",
+                title=title,
+            )
         _render_plot(
             fig,
             _candidate_population_explanation(
@@ -1270,13 +1317,18 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             continue
         if "aggregation_level" in frame:
             frame = frame[frame["aggregation_level"].eq("state")]
+        if "generation_cohort_id" not in frame:
+            frame = frame.assign(generation_cohort_id="unknown")
+        if "population" not in frame:
+            frame = frame.assign(population="all")
         y = "mean" if "mean" in frame else "count"
         x = "metric" if "metric" in frame else "evidence"
         fig = px.bar(
             frame,
             x=x,
             y=y,
-            color="generation_cohort_id" if "generation_cohort_id" in frame else None,
+            color="population",
+            facet_col="generation_cohort_id",
             title=title,
             barmode="group",
         )
@@ -1296,6 +1348,36 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
         with st.expander(f"{title} rows and CSV"):
             st.dataframe(frame, hide_index=True, width="stretch")
             _download_frame(f"Download {key} support CSV", f"candidate-{key}.csv", frame)
+        if key == "target_view" and "missing_count" in frame:
+            missing = frame[["evidence", "missing_count", "generation_cohort_id", "population"]].copy()
+            missing = missing.rename(columns={"missing_count": "unavailable_count"})
+            missing_fig = px.bar(
+                missing,
+                x="evidence",
+                y="unavailable_count",
+                color="population",
+                facet_col="generation_cohort_id",
+                barmode="group",
+                title="Target-view unavailable evidence counts",
+            )
+            _render_plot(
+                missing_fig,
+                _candidate_population_explanation(
+                    "Where is target-view evidence unavailable?",
+                    "The same factual-state target-view rows as the distance plot.",
+                    "Unavailable row count for FOV, pixel, line-of-sight, and distance evidence.",
+                    "Missing counts are explicit; unavailable values are not treated as zero-valued quality.",
+                    "Optical and line-of-sight evidence is available for the intended target-view protocol.",
+                    "Large missing counts identify evaluator coverage gaps and must not be read as poor visibility.",
+                    "candidate target-view evidence",
+                    "actor-visible",
+                ),
+            )
+            with st.expander("Target-view availability rows and CSV"):
+                st.dataframe(missing, hide_index=True, width="stretch")
+                _download_frame(
+                    "Download target-view availability CSV", "candidate-target-view-availability.csv", missing
+                )
 
     collision = pd.DataFrame(population.get("collision", []))
     if not collision.empty:
@@ -1899,93 +1981,15 @@ def _render_candidate_geometry_diagnostics(
     *,
     total_candidates: int,
 ) -> None:
-    """Restore bounded candidate plots in scientifically valid root-relative coordinates."""
+    """Compatibility wrapper for the bounded raw metric view."""
 
-    if candidates.empty:
-        return
-    with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
-        st.caption(
-            f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
-            "Coordinates are root-relative ARIA world metres (RIGHT_HAND_Z_UP), never pooled absolute scene origins."
-        )
-        normalized = pd.DataFrame(candidate_geometry_evidence_rows(candidates.to_dict("records")))
-        if {"target_normalized_forward", "target_normalized_lateral"}.issubset(normalized.columns):
-            points = normalized.dropna(subset=["target_normalized_forward", "target_normalized_lateral"])
-            if not points.empty:
-                fig = go.Figure()
-                for label, x, y, color in (("root", 0.0, 0.0, "#4c78a8"), ("target", 1.0, 0.0, "#e45756")):
-                    fig.add_trace(
-                        go.Scatter(x=[x], y=[y], mode="markers", name=label, marker={"size": 10, "color": color})
-                    )
-                fig.add_trace(
-                    go.Scatter(
-                        x=points["target_normalized_forward"],
-                        y=points["target_normalized_lateral"],
-                        mode="markers",
-                        name="candidate",
-                        marker={"size": 5, "opacity": 0.45},
-                        text=points["position"] if "position" in points else None,
-                    )
-                )
-                fig.update_layout(
-                    title="Target-normalized candidate position support",
-                    xaxis_title="forward (target-normalized)",
-                    yaxis_title="lateral (target-normalized)",
-                )
-                fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                fig.update_xaxes(scaleanchor="y", scaleratio=1)
-                _render_plot(
-                    fig,
-                    ScientificExplanation(
-                        question="Where do candidate centers lie relative to the rollout root and observed target?",
-                        population="Bounded candidate rows translated into one root=(0,0), target=(1,0) frame per row.",
-                        metric="Dimensionless target-normalized forward/lateral coordinates; positive lateral is right-handed.",
-                        denominator_masks="Only rows with finite, non-degenerate root-to-target baselines enter the heatmap.",
-                        comparability="Target protocol, frame convention, and candidate-generation contract must match.",
-                        expected_pattern="Support forms the intended local shell around the root and does not collapse to one direction.",
-                        failure_interpretation="Offset, mirrored, or collapsed support indicates frame, target-join, or generator defects.",
-                        evidence_role="actor-visible",
-                        source_fields=(
-                            "candidate audit/root_relative_*",
-                            "target center",
-                            "inspection.candidate_geometry_evidence_rows",
-                        ),
-                    ),
-                )
-                with st.expander("Normalized position rows and CSV"):
-                    st.dataframe(points, hide_index=True, width="stretch")
-                    _download_frame(
-                        "Download normalized candidate positions CSV", "candidate-normalized-positions.csv", points
-                    )
-        direction = candidate_direction_evidence(candidates.to_dict("records"))
-        density = pd.DataFrame([row for row in direction["density_rows"] if row["aggregation_level"] == "state"])
-        if not density.empty and density["available"].any():
-            fig = px.imshow(
-                density.pivot_table(
-                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
-                ).fillna(0.0),
-                origin="lower",
-                aspect="auto",
-                labels={"x": "azimuth bin", "y": "sin(elevation) bin", "color": "fraction"},
-                title="Candidate direction density (equal-area angular bins)",
-            )
-            _render_plot(
-                fig,
-                ScientificExplanation(
-                    question="Does candidate direction support cover the sphere without solid-angle bias?",
-                    population="Candidate direction vectors grouped by factual state; each state is normalized independently.",
-                    metric="Fraction per azimuth × sin(elevation) bin; dimensionless solid-angle density.",
-                    denominator_masks="Zero-length and missing vectors are explicit missing rows and excluded from directional denominators.",
-                    comparability="Bin resolution, coordinate convention, and candidate profile must match.",
-                    expected_pattern="Equal-area bins reveal genuine directional concentration rather than latitude-area artifacts.",
-                    failure_interpretation="One-sided or polar spikes suggest generator, frame, or orientation-support defects.",
-                    evidence_role="actor-visible",
-                    source_fields=("candidate root-relative vectors", "inspection.candidate_direction_evidence"),
-                ),
-            )
-            with st.expander("Direction density rows and CSV"):
-                st.dataframe(density, hide_index=True, width="stretch")
-                _download_frame("Download candidate direction density CSV", "candidate-direction-density.csv", density)
+    del root_geometry
+    _render_raw_candidate_metrics(candidates, total_candidates=total_candidates)
+    return
+
+    # The historical bounded geometry implementation is retained as inert text
+    # solely while old external callers migrate to the complete-population view.
+    """
         metric_options = [
             name
             for name in (
@@ -2158,6 +2162,8 @@ def _render_candidate_geometry_diagnostics(
                         ),
                     ),
                 )
+
+    """
 
 
 def _render_failure_triage(
