@@ -68,7 +68,7 @@ def render_rri_page(
             rri,
             labels,
             bar_color_map,
-            title=_label("oracle_rri", math_capable=True) + " per candidate",
+            title=_label("oracle_rri") + " per candidate",
         ),
         width="stretch",
     )
@@ -85,9 +85,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_label("point_to_mesh_error", math_capable=True)
-            + " and "
-            + _label("mesh_to_point_error", math_capable=True),
+            title=_label("point_to_mesh_error") + " and " + _label("mesh_to_point_error"),
         ),
         width="stretch",
     )
@@ -103,7 +101,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_label("point_to_mesh_error", math_capable=True),
+            title=_label("point_to_mesh_error"),
         ),
         width="stretch",
     )
@@ -119,7 +117,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_label("mesh_to_point_error", math_capable=True),
+            title=_label("mesh_to_point_error"),
         ),
         width="stretch",
     )

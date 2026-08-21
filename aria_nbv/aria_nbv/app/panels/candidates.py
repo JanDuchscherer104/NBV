@@ -113,7 +113,7 @@ def _full_shell_color_payload(candidates: CandidateSamplingResult, mode: str) ->
 
     mask_valid = candidates.mask_valid.detach().cpu().reshape(-1)
     if mode == "validity":
-        return mask_valid.to(dtype=torch.float32), _label("validity_mask", math_capable=True)
+        return mask_valid.to(dtype=torch.float32), _label("validity_mask")
     if mode == "position_family" and candidates.position_id is not None:
         return candidates.position_id.detach().cpu().to(dtype=torch.float32).reshape(-1), "position_id"
     if mode == "strategy" and candidates.strategy_id is not None:
