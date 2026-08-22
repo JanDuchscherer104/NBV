@@ -180,13 +180,13 @@ _THEORY = {
             "Spatial candidate normalization",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/spatial.typ",
             "equation",
-            "spatial.candidate_root_target_normalization",
+            "spatial.candidate_reference_transform",
         ),
         TheoryReference(
             "Spatial notation registry",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/notation.yml",
             "symbol",
-            "spatial.candidate_root_target_normalization",
+            "spatial.candidate_reference_transform",
         ),
     ),
     "direction": (
@@ -228,7 +228,7 @@ _THEORY = {
             "Target-view glossary",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/glossary.typ",
             "glossary",
-            "target-view",
+            "frustum",
         ),
     ),
     "code": (
@@ -236,7 +236,7 @@ _THEORY = {
             "Inspection diagnostic implementation",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
             "source",
-            "rollouts.inspection",
+            None,
         ),
     ),
     "validity": (
@@ -252,7 +252,7 @@ _THEORY = {
             "RRI equation",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
             "equation",
-            "rri.target_root_gain",
+            "entity.endpoint_gain",
         ),
         TheoryReference(
             "RRI glossary definition",

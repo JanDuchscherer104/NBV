@@ -957,6 +957,51 @@ def test_support_macros_expose_candidate_and_macro_denominators_without_pooling(
     assert motion["candidate_missing_count"] == 3
 
 
+def test_spatial_and_target_cohort_macros_count_two_states_in_one_scene() -> None:
+    """Cohort macros count factual states independently of scene multiplicity."""
+
+    from aria_nbv.rollouts.inspection import candidate_spatial_support_evidence, candidate_target_view_evidence
+
+    common = {**_direction_fixture_rows()[0], "scene": "scene-a", "generation_cohort_id": "cohort-a"}
+    rows = [
+        {
+            **common,
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "candidate_row_id": 0,
+            "target_distance_m": 1.0,
+        },
+        {
+            **common,
+            "rollout_row_id": 1,
+            "step_row_id": 1,
+            "candidate_row_id": 1,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 1.0,
+            "target_distance_m": 2.0,
+        },
+    ]
+
+    spatial = next(
+        row
+        for row in candidate_spatial_support_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["metric"] == "root_xy_radius"
+    )
+    target = next(
+        row
+        for row in candidate_target_view_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["evidence"] == "target_distance"
+    )
+    for summary in (spatial, target):
+        assert summary["state_count"] == 2
+        assert summary["defined_state_count"] == 2
+        assert summary["scene_count"] == 1
+
+
 def test_support_counts_remain_explicit_when_one_candidate_is_missing_in_one_state() -> None:
     """Support facets count the candidate shell separately from defined states."""
 
