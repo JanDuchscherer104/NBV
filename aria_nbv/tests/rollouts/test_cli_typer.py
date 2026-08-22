@@ -117,6 +117,29 @@ def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> Non
     assert [Path(tar).parts[-2] for tar in resolved.dataset.tar_urls] == [row["scene_id"] for row in rows]
 
 
+def test_current_backbone_configs_explicitly_select_derived_free_input() -> None:
+    """The TOML parser must preserve fail-closed defaults and current overrides."""
+
+    repo_root = Path(__file__).resolve().parents[3]
+    current = (
+        ".configs/build_vin_offline_81286.toml",
+        ".configs/build_vin_offline_rerun_smoke_v7.toml",
+        ".configs/build_vin_offline_rollout_campaign100_v10.toml",
+    )
+    for relative_path in current:
+        config = VinOfflineWriterConfig.from_toml(repo_root / relative_path)
+        assert config.include_backbone is True
+        assert config.backbone is not None
+        assert config.backbone.free_input_mode == "derived"
+
+    historical = VinOfflineWriterConfig.from_toml(
+        repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml"
+    )
+    assert historical.include_backbone is True
+    assert historical.backbone is not None
+    assert historical.backbone.free_input_mode == "native"
+
+
 def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(tmp_path, monkeypatch) -> None:
     writer_path = tmp_path / "writer.toml"
     writer_path.write_text("[source.store]\nstore_dir = 'local-store'\n", encoding="utf-8")

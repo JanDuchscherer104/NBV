@@ -80,9 +80,21 @@ def test_free_input_derived_uses_observed_complement_formula() -> None:
     resolved, provenance = resolve_free_input(
         mode="derived", native_free_input=torch.full_like(occ_input, 99), counts=counts, occ_input=occ_input
     )
-    expected = (counts > 0).unsqueeze(1) * (1 - occ_input)
+    expected = torch.tensor([[[[[0.0, 0.7]], [[0.6, 0.0]]]]])
     assert torch.equal(resolved, expected)  # noqa: S101
     assert provenance == "derived_observed_complement_occ_input_v1"  # noqa: S101
+
+
+def test_backbone_serialization_validates_provenance_and_preserves_legacy_none() -> None:
+    output = _backbone_output()
+    payload = output.to_serializable()
+    payload.pop("free_input_provenance")
+    decoded = EvlBackboneOutput.from_serializable(payload, device=torch.device("cpu"))
+    assert decoded.free_input_provenance is None  # noqa: S101
+
+    payload["free_input_provenance"] = "future_unknown_provenance"
+    with pytest.raises(ValueError, match="Unknown free-input provenance"):
+        EvlBackboneOutput.from_serializable(payload, device=torch.device("cpu"))
 
 
 def test_features_mode_neck_drops_head_outputs() -> None:

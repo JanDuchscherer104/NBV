@@ -109,3 +109,4 @@ model_ckpt    = ".logs/ckpts/model_lite.pth"
 device        = "cuda"
 freeze        = true
 features_mode = "heads"
+free_input_mode = "derived"

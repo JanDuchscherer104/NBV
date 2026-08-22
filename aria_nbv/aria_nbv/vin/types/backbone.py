@@ -198,12 +198,15 @@ class EvlBackboneOutput:
             Reconstructed backbone output.
         """
 
-        return from_serializable(
+        output = from_serializable(
             cls,
             payload,
             device=device,
             include_fields=include_fields,
         )
+        if output.free_input_provenance is not None:
+            output.free_input_provenance = validate_free_input_provenance(output.free_input_provenance)
+        return output
 
     def to(self, device: torch.device) -> EvlBackboneOutput:
         """Move all tensors to the specified device."""
