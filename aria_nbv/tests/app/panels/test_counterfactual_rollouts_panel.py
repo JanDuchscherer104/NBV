@@ -564,7 +564,7 @@ def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolat
     assert not any(number.label == "Candidate preview row limit" for number in app.number_input)
 
 
-def test_stored_rollouts_default_candidate_flow_uses_only_bounded_geometry_audit(
+def test_stored_rollouts_default_candidate_flow_defers_geometry_audit(
     isolated_path_config,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
@@ -591,7 +591,7 @@ def test_stored_rollouts_default_candidate_flow_uses_only_bounded_geometry_audit
     app = _set_stored_rollout_workspace(app, "Targets & Action Support")
 
     assert not app.exception
-    assert calls and all(limit is not None for limit in calls)
+    assert calls == []
     assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
 
