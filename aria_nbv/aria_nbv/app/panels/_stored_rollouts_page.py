@@ -174,10 +174,13 @@ class TheoryReference:
             raise ValueError("Theory references require a title and HTTPS URL.")
 
 
-_THEORY = {
+TheoryKind = Literal["geometry", "direction", "action", "target", "code", "validity", "rri"]
+
+
+_THEORY: dict[TheoryKind, tuple[TheoryReference, ...]] = {
     "geometry": (
         TheoryReference(
-            "Spatial candidate normalization",
+            "Candidate reference-frame transform",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/spatial.typ",
             "equation",
             "spatial.candidate_reference_transform",
@@ -1227,7 +1230,7 @@ def _candidate_population_explanation(
     intuition: str | None = None,
     visual_encoding: str | None = None,
     uncertainty: str | None = None,
-    theory_kind: str | None = None,
+    theory_kind: TheoryKind | None = None,
 ) -> ScientificExplanation:
     return ScientificExplanation(
         question=question,
@@ -1243,7 +1246,7 @@ def _candidate_population_explanation(
         visual_encoding=visual_encoding or "Colours identify populations; facets identify compatible cohorts.",
         uncertainty=uncertainty
         or "Missing values remain unavailable; descriptive summaries do not imply inferential uncertainty.",
-        theory_references=_THEORY.get(theory_kind or "", ()),
+        theory_references=() if theory_kind is None else _THEORY[theory_kind],
     )
 
 
