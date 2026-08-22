@@ -15,6 +15,17 @@ NON_GIT_WORKTREE_ROOT="${SANDBOX}/non-git-worktree"
 NON_GIT_SHARED_ROOT="${SANDBOX}/non-git-shared"
 FAKE_BIN="${SANDBOX}/bin"
 
+GRAPHIFY_CLI="$(command -v graphify)"
+[[ -n "${GRAPHIFY_CLI}" && -f "${GRAPHIFY_CLI}" ]] || {
+  echo "graphify CLI is required for the seeder trust fixture" >&2
+  exit 1
+}
+GRAPHIFY_INTERPRETER="$(sed -n '1s/^#!//p' "${GRAPHIFY_CLI}")"
+[[ -n "${GRAPHIFY_INTERPRETER}" && "${GRAPHIFY_INTERPRETER}" == /* ]] || {
+  echo "graphify CLI must have an absolute interpreter shebang" >&2
+  exit 1
+}
+
 mkdir -p \
   "${SHARED_ROOT}/aria_nbv/.venv/bin" \
   "${SHARED_ROOT}/.data/ase_efm" \
@@ -35,11 +46,6 @@ git -C "${SHARED_ROOT}" config extensions.worktreeConfig true
 git -C "${SHARED_ROOT}" add .
 git -C "${SHARED_ROOT}" commit -qm fixture
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
-cat >"${SHARED_ROOT}/fake-graphify-python" <<'EOF'
-#!/usr/bin/env sh
-printf '%s\n' 0.9.48
-EOF
-chmod +x "${SHARED_ROOT}/fake-graphify-python"
 git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
@@ -62,7 +68,8 @@ EOF
 cat >"${SHARED_ROOT}/graphify-out/manifest.json" <<'EOF'
 {"graphify-input/index.md":{"semantic_hash":"fixture"}}
 EOF
-printf '%s\n' "${SHARED_ROOT}/fake-graphify-python" >"${SHARED_ROOT}/graphify-out/.graphify_python"
+printf '%s\n' "${GRAPHIFY_INTERPRETER}" >"${SHARED_ROOT}/graphify-out/.graphify_python"
+[[ "$(cat "${SHARED_ROOT}/graphify-out/.graphify_python")" == "${GRAPHIFY_INTERPRETER}" ]]
 cat >"${SHARED_ROOT}/graphify-input/index.md" <<'EOF'
 ---
 title: fixture
@@ -188,7 +195,8 @@ run_setup "${SECOND_WORKTREE_ROOT}"
 [[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 printf 'cache-hit\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 grep -Fqx cache-hit "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
-printf '{"built_at_commit":"child","nodes":[{"source_file":"graphify-input/index.md"}]}\n' >"${WORKTREE_ROOT}/graphify-out/graph.json"
+printf '{"built_at_commit":"%s","nodes":[{"source_file":"graphify-input/index.md"}],"fixture":"child"}\n' \
+  "$(git -C "${WORKTREE_ROOT}" rev-parse HEAD)" >"${WORKTREE_ROOT}/graphify-out/graph.json"
 grep -Fq 'graphify-input/index.md' "${SHARED_ROOT}/graphify-out/graph.json"
 [[ ! -e "${SECOND_WORKTREE_ROOT}/graphify-out/graph.json" || "$(cat "${SECOND_WORKTREE_ROOT}/graphify-out/graph.json")" != "$(cat "${WORKTREE_ROOT}/graphify-out/graph.json")" ]]
 
