@@ -828,6 +828,10 @@ class VinOracleBatch:
 
         feat2d = cls._stack_tensor_dict([output.feat2d_upsampled for output in outputs], name="feat2d_upsampled")
         token2d = cls._stack_tensor_dict([output.token2d for output in outputs], name="token2d")
+        provenance = {output.free_input_provenance for output in outputs}
+        if len(provenance) > 1 or None in provenance:
+            raise ValueError("free_input_provenance must be present and homogeneous across a backbone batch.")
+        free_input_provenance = next(iter(provenance))
 
         return EvlBackboneOutput(
             t_world_voxel=t_world_voxel,
@@ -838,6 +842,7 @@ class VinOracleBatch:
             occ_pr=cls._stack_tensor_field([output.occ_pr for output in outputs], name="occ_pr"),
             occ_input=cls._stack_tensor_field([output.occ_input for output in outputs], name="occ_input"),
             free_input=cls._stack_tensor_field([output.free_input for output in outputs], name="free_input"),
+            free_input_provenance=free_input_provenance,
             counts=cls._stack_tensor_field([output.counts for output in outputs], name="counts"),
             counts_m=cls._stack_tensor_field([output.counts_m for output in outputs], name="counts_m"),
             voxel_select_t=cls._stack_tensor_field(

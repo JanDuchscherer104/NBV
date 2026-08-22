@@ -282,6 +282,7 @@ def _make_stub_backbone() -> EvlBackboneOutput:
         occ_pr=scalar_grid,
         occ_input=scalar_grid * 2.0,
         free_input=scalar_grid * 3.0,
+        free_input_provenance="native_evl_v1",
         counts=torch.ones((1, 2, 2, 2), dtype=torch.int64),
         counts_m=torch.ones((1, 2, 2, 2), dtype=torch.int64) * 2,
         voxel_select_t=torch.zeros((1, 1), dtype=torch.int64),
@@ -800,7 +801,7 @@ def _write_test_store(
         created_at="2026-03-29T00:00:00Z",
         source={"dataset_config": dataset_config or {}},
         oracle={"max_candidates": 4},
-        vin={"pad_points": 4},
+        vin={"pad_points": 4, "free_input_provenance": "native_evl_v1"} if include_backbone else {"pad_points": 4},
         materialized_blocks=VinOfflineMaterializedBlocks(
             backbone=include_backbone,
             depths=True,
@@ -1448,7 +1449,7 @@ def test_vin_offline_manifest_omits_counterfactual_placeholders(tmp_path: Path) 
     store_cfg = _write_test_store(tmp_path)
     manifest_payload = json.loads(store_cfg.manifest_path.read_text(encoding="utf-8"))
 
-    assert OFFLINE_DATASET_VERSION == 9  # noqa: S101
+    assert OFFLINE_DATASET_VERSION == 10  # noqa: S101
     assert "counterfactuals" not in manifest_payload  # noqa: S101
     assert "counterfactuals" not in manifest_payload["materialized_blocks"]  # noqa: S101
 

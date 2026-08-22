@@ -26,6 +26,7 @@ import torch
 from efm3d.aria.aria_constants import ARIA_OBB_SEM_ID_TO_NAME
 
 from ...utils.semantic_names import normalize_semantic_name_map
+from ...vin.types import validate_free_input_provenance
 from ..ase_efm.views import EfmSnippetView
 from ..identifiers import compact_ase_atek_sample_id
 from .format import (
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
     from ...rendering.candidate_depth_renderer import CandidateDepths
     from ...rendering.candidate_pointclouds import CandidatePointClouds
     from ...rri_metrics.rri import RriResult
-    from ...vin.types import EvlBackboneOutput
+    from ...vin.types import EvlBackboneOutput, FreeInputProvenance
 
 DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS: tuple[str, ...] = (
     "t_world_voxel",
@@ -63,7 +64,7 @@ DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS: tuple[str, ...] = (
 REQUIRED_COMPACT_EVL_NUMERIC_FIELDS: tuple[str, ...] = tuple(
     f"backbone.{name}" for name in DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS
 )
-"""Exact actor-visible root-EVL blocks required by VIN format version 9."""
+"""Exact actor-visible root-EVL blocks required by VIN format version 10."""
 
 COMPACT_EVL_DTYPES: dict[str, np.dtype[Any]] = {
     **{name: np.dtype(np.float32) for name in REQUIRED_COMPACT_EVL_NUMERIC_FIELDS if name != "backbone.counts"},
@@ -73,6 +74,7 @@ COMPACT_EVL_DTYPES: dict[str, np.dtype[Any]] = {
 DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS: tuple[str, ...] = (
     "t_world_voxel",
     "voxel_extent",
+    "free_input_provenance",
     "occ_pr",
     "cent_pr",
     "bbox_pr",
@@ -403,6 +405,9 @@ class PreparedVinOfflineSample:
     snippet_id: str
     """ASE snippet identifier."""
 
+    free_input_provenance: FreeInputProvenance | None = None
+    """Typed EVL free-input provenance for this row, when backbone is present."""
+
     numeric_blocks: dict[str, NDArray[Any]] = field(default_factory=dict)
     """Fixed-size numeric blocks stored per row."""
 
@@ -665,6 +670,11 @@ def prepare_vin_offline_sample(
         else _default_sample_key(scene_id, snippet_id),
         scene_id=scene_id,
         snippet_id=compact_ase_atek_sample_id(snippet_id),
+        free_input_provenance=(
+            validate_free_input_provenance(backbone_out.free_input_provenance)
+            if include_backbone and backbone_out is not None
+            else None
+        ),
         numeric_blocks=numeric_blocks,
         record_blocks=record_blocks,
     )
@@ -693,11 +703,17 @@ def flush_prepared_samples_to_shard(
     numeric_block_names = sorted({name for row in rows for name in row.numeric_blocks})
     backbone_names = {name for name in numeric_block_names if name.startswith("backbone.")}
     if backbone_names:
+        provenance = {row.free_input_provenance for row in rows}
+        if len(provenance) != 1 or None in provenance:
+            raise ValueError(
+                "VIN backbone rows require one known homogeneous free_input_provenance value; "
+                f"got {sorted(provenance, key=str)}."
+            )
         missing_fields = sorted(set(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS) - backbone_names)
         unexpected_fields = sorted(backbone_names - set(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS))
         if missing_fields or unexpected_fields:
             raise ValueError(
-                "VIN version-9 compact EVL rows require exactly the eight canonical backbone blocks; "
+                "VIN version-10 compact EVL rows require exactly the eight canonical backbone blocks; "
                 f"missing={missing_fields}, unexpected={unexpected_fields}."
             )
         for block_name in REQUIRED_COMPACT_EVL_NUMERIC_FIELDS:

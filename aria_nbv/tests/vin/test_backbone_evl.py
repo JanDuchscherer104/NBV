@@ -5,9 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import omegaconf
+import pytest
 import torch
 
-from aria_nbv.vin.backbones.evl import _normalize_evl_model_config_paths, filter_backbone_output_for_features_mode
+from aria_nbv.vin.backbones.evl import (
+    _normalize_evl_model_config_paths,
+    filter_backbone_output_for_features_mode,
+    resolve_free_input,
+)
 from aria_nbv.vin.types import EvlBackboneOutput
 
 PoseTW = __import__("efm3d.aria.pose", fromlist=["PoseTW"]).PoseTW
@@ -58,6 +63,26 @@ def test_features_mode_heads_drops_neck_and_internal_features() -> None:
     assert filtered.obb_feat is None  # noqa: S101
     assert filtered.feat2d_upsampled == {}  # noqa: S101
     assert filtered.token2d == {}  # noqa: S101
+
+
+def test_free_input_native_requires_upstream_and_preserves_typed_provenance() -> None:
+    native = torch.full((1, 1, 2, 2, 2), 0.25)
+    resolved, provenance = resolve_free_input(mode="native", native_free_input=native, counts=None, occ_input=None)
+    assert torch.equal(resolved, native)  # noqa: S101
+    assert provenance == "native_evl_v1"  # noqa: S101
+    with pytest.raises(RuntimeError, match="requires EVL to provide"):
+        resolve_free_input(mode="native", native_free_input=None, counts=None, occ_input=None)
+
+
+def test_free_input_derived_uses_observed_complement_formula() -> None:
+    counts = torch.tensor([[[[0, 2]], [[1, 0]]]], dtype=torch.int64)
+    occ_input = torch.tensor([[[[[0.2, 0.3]], [[0.4, 0.5]]]]])
+    resolved, provenance = resolve_free_input(
+        mode="derived", native_free_input=torch.full_like(occ_input, 99), counts=counts, occ_input=occ_input
+    )
+    expected = (counts > 0).unsqueeze(1) * (1 - occ_input)
+    assert torch.equal(resolved, expected)  # noqa: S101
+    assert provenance == "derived_observed_complement_occ_input_v1"  # noqa: S101
 
 
 def test_features_mode_neck_drops_head_outputs() -> None:

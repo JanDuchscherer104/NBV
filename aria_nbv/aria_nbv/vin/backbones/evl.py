@@ -36,11 +36,35 @@ from torch import Tensor
 
 from ...configs import PathConfig
 from ...utils import BaseConfig, Console, TargetConfig
-from ..types import EfmDict, EvlBackboneOutput
+from ..types import EfmDict, EvlBackboneOutput, FreeInputMode, FreeInputProvenance
 
 
 def _target_cls() -> type["EvlBackbone"]:
     return EvlBackbone
+
+
+def resolve_free_input(
+    *,
+    mode: FreeInputMode,
+    native_free_input: Tensor | None,
+    counts: Tensor | None,
+    occ_input: Tensor | None,
+) -> tuple[Tensor, FreeInputProvenance]:
+    """Resolve EVL free-space evidence under the closed source contract."""
+
+    if mode == "native":
+        if not isinstance(native_free_input, torch.Tensor):
+            raise RuntimeError(
+                "EVL free_input_mode='native' requires EVL to provide voxel/free_input; "
+                "select free_input_mode='derived' explicitly to use the canonical fallback."
+            )
+        return native_free_input, "native_evl_v1"
+    if mode == "derived":
+        if not isinstance(counts, torch.Tensor) or not isinstance(occ_input, torch.Tensor):
+            raise RuntimeError("EVL free_input_mode='derived' requires voxel/counts and voxel/occ_input tensors.")
+        observed = (counts > 0).unsqueeze(1)
+        return observed * (1 - occ_input), "derived_observed_complement_occ_input_v1"
+    raise ValueError(f"Unsupported free_input_mode={mode!r}.")
 
 
 def filter_backbone_output_for_features_mode(
@@ -174,6 +198,9 @@ class EvlBackboneConfig(TargetConfig["EvlBackbone"]):
     - ``both``: expose both sets for ablations.
     """
 
+    free_input_mode: FreeInputMode = "native"
+    """Source of free-space input: native EVL output or explicit derivation."""
+
     @field_validator("model_cfg", "model_ckpt", mode="before")
     @classmethod
     def _resolve_paths(cls, value: str | Path, info: ValidationInfo) -> Path:
@@ -257,7 +284,7 @@ class EvlBackbone:
         obb_feat = out.get("neck/obb_feat")
         occ_pr = out.get("occ_pr")
         occ_input = out.get("voxel/occ_input")
-        free_input = out.get("voxel/free_input")
+        native_free_input = out.get("voxel/free_input")
         counts = out.get("voxel/counts")
         counts_m = out.get("voxel/counts_m")
         cent_pr = out.get("cent_pr")
@@ -294,6 +321,13 @@ class EvlBackbone:
         if ref_tensor is None:
             raise RuntimeError("EVL backbone produced no tensor features; check the model output payload.")
 
+        free_input, free_input_provenance = resolve_free_input(
+            mode=self.config.free_input_mode,
+            native_free_input=native_free_input,
+            counts=counts,
+            occ_input=occ_input,
+        )
+
         t_world_voxel = out["voxel/T_world_voxel"]
         voxel_extent = out.get("voxel_extent")
         if voxel_extent is None:
@@ -310,6 +344,7 @@ class EvlBackbone:
             occ_pr=occ_pr,
             occ_input=occ_input,
             free_input=free_input,
+            free_input_provenance=free_input_provenance,
             counts=counts,
             counts_m=counts_m,
             voxel_select_t=voxel_select_t,

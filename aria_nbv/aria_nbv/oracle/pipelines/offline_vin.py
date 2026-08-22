@@ -36,6 +36,7 @@ from ...data_handling.vin_store.writer import (
 from ...utils import Console, TargetConfig, Verbosity
 from ...utils.fingerprints import stable_json_signature, stable_msgspec_hash
 from ...vin.backbones import EvlBackboneConfig
+from ...vin.types import validate_free_input_provenance
 
 if TYPE_CHECKING:
     from ...vin.types import EvlBackboneOutput
@@ -224,6 +225,7 @@ class VinOfflineWriter:
         failures = 0
         processed = 0
         interrupted = False
+        free_input_provenance: set[str] = set()
 
         try:
             for sample in self._dataset:
@@ -232,6 +234,10 @@ class VinOfflineWriter:
                 try:
                     label_batch = self._labeler.run(sample)
                     backbone_out = self._backbone.forward(sample.efm) if self._backbone is not None else None
+                    if self.config.include_backbone:
+                        if backbone_out is None:
+                            raise ValueError("VIN backbone materialization requires an EVL backbone output.")
+                        free_input_provenance.add(validate_free_input_provenance(backbone_out.free_input_provenance))
                     prepared_rows.append(
                         self._prepare_row(
                             sample=sample,
@@ -282,8 +288,13 @@ class VinOfflineWriter:
         compact_evl_signature = _compact_evl_block_signature(shard_specs)
         if self.config.include_backbone and not compact_evl_signature:
             raise ValueError(
-                "VIN backbone materialization requires the complete version-9 compact-EVL numeric keep-list; "
+                "VIN backbone materialization requires the complete version-10 compact-EVL numeric keep-list; "
                 "rebuild with all eight required backbone fields enabled."
+            )
+        if self.config.include_backbone and len(free_input_provenance) != 1:
+            raise ValueError(
+                "VIN backbone materialization requires one known homogeneous free_input_provenance value; "
+                f"got {sorted(free_input_provenance)}."
             )
         point_feature_schema = _point_feature_schema(include_obs_count=self.config.semidense_include_obs_count)
         dataset_config = self.config.dataset.model_dump_cache(exclude_none=True)
@@ -315,6 +326,7 @@ class VinOfflineWriter:
                 "point_feature_schema": point_feature_schema,
                 "point_feature_schema_hash": stable_msgspec_hash(point_feature_schema),
                 "backbone_block_signature": compact_evl_signature,
+                "free_input_provenance": next(iter(free_input_provenance), None),
             },
             materialized_blocks=VinOfflineMaterializedBlocks(
                 backbone=bool(self.config.include_backbone),
@@ -390,7 +402,7 @@ def _compact_evl_block_signature(shard_specs: list[VinOfflineShardSpec]) -> list
         return []
     expected = tuple(sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS))
     if tuple(name for name, _dtype, _shape in signature) != expected:
-        raise ValueError("VIN version-9 manifest requires the exact eight compact EVL blocks in every shard.")
+        raise ValueError("VIN version-10 manifest requires the exact eight compact EVL blocks in every shard.")
     return [{"name": name, "dtype": dtype, "shape": list(shape)} for name, dtype, shape in signature]
 
 

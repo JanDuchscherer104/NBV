@@ -1,0 +1,145 @@
+# Strict-v10 profile-independent VIN source for the reviewed 100-row campaign.
+#
+# This source cache preserves full root VIN points, GT OBBs, trajectory metadata,
+# and full-resolution GT meshes for live rollout reattachment. Its one stored
+# one-step oracle candidate exists only to satisfy the strict-v10 cache schema;
+# rollout campaigns regenerate their scientific 60-action candidate mixtures.
+#
+# Usage from the repository root:
+#   uv run nbv-build-offline \
+#     --config-path .configs/build_vin_offline_rollout_campaign100_v10.toml
+
+include_backbone = true
+include_depths = false
+include_pointclouds = false
+include_diagnostic_payloads = false
+include_gt_obbs = true
+include_detected_obbs = true
+include_trajectory_metadata = true
+vin_pad_points = 50000
+semidense_max_points = 50000
+semidense_include_obs_count = false
+max_candidates = 1
+samples_per_shard = 10
+max_samples = 100
+train_val_split = 0.0
+overwrite = false
+num_failures_allowed = 0
+
+[store]
+store_dir = "vin_offline_rollout_campaign100_v10_rebuilt"
+
+[backbone]
+free_input_mode = "derived"
+
+[dataset]
+atek_variant = "efm"
+cache_meshes = false
+scene_ids = [
+  "889", "8517", "8559", "8671", "8694", "8715", "8777", "8822", "8857", "8860",
+  "8938", "81022", "81048", "81056", "81128", "81161", "81180", "81181", "81184", "81188",
+  "81226", "81272", "81283", "81286", "81366", "81387", "81426", "81477", "81483", "81625",
+  "81693", "81772", "81807", "81964", "82004", "82254", "82257", "82258", "82271", "82294",
+  "82309", "82311", "82342", "82448", "82517", "82545", "82555", "82620", "82630", "82647",
+  "82658", "82700", "82832", "82889", "82902", "82953", "83036", "83078", "83086", "83098",
+  "83121", "83269", "83307", "83317", "83379", "83393", "83397", "83400", "83448", "83467",
+  "83506", "83515", "83522", "83550", "83560", "83577", "83598", "83678", "83692", "83713",
+  "83730", "83746", "83780", "83803", "83833", "83836", "83998", "84001", "84003", "84009",
+  "84052", "84074", "84080", "84171", "84185", "84186", "84230", "84271", "84309", "84320",
+]
+snippet_ids = [
+  ".data/ase_efm/889/shards-0001.tar", ".data/ase_efm/8517/shards-0000.tar", ".data/ase_efm/8559/shards-0000.tar", ".data/ase_efm/8671/shards-0005.tar", ".data/ase_efm/8694/shards-0003.tar",
+  ".data/ase_efm/8715/shards-0001.tar", ".data/ase_efm/8777/shards-0001.tar", ".data/ase_efm/8822/shards-0002.tar", ".data/ase_efm/8857/shards-0004.tar", ".data/ase_efm/8860/shards-0005.tar",
+  ".data/ase_efm/8938/shards-0006.tar", ".data/ase_efm/81022/shards-0002.tar", ".data/ase_efm/81048/shards-0005.tar", ".data/ase_efm/81056/shards-0002.tar", ".data/ase_efm/81128/shards-0003.tar",
+  ".data/ase_efm/81161/shards-0002.tar", ".data/ase_efm/81180/shards-0001.tar", ".data/ase_efm/81181/shards-0002.tar", ".data/ase_efm/81184/shards-0000.tar", ".data/ase_efm/81188/shards-0003.tar",
+  ".data/ase_efm/81226/shards-0000.tar", ".data/ase_efm/81272/shards-0000.tar", ".data/ase_efm/81283/shards-0002.tar", ".data/ase_efm/81286/shards-0014.tar", ".data/ase_efm/81366/shards-0001.tar",
+  ".data/ase_efm/81387/shards-0003.tar", ".data/ase_efm/81426/shards-0000.tar", ".data/ase_efm/81477/shards-0010.tar", ".data/ase_efm/81483/shards-0006.tar", ".data/ase_efm/81625/shards-0000.tar",
+  ".data/ase_efm/81693/shards-0001.tar", ".data/ase_efm/81772/shards-0000.tar", ".data/ase_efm/81807/shards-0003.tar", ".data/ase_efm/81964/shards-0009.tar", ".data/ase_efm/82004/shards-0004.tar",
+  ".data/ase_efm/82254/shards-0001.tar", ".data/ase_efm/82257/shards-0002.tar", ".data/ase_efm/82258/shards-0000.tar", ".data/ase_efm/82271/shards-0002.tar", ".data/ase_efm/82294/shards-0001.tar",
+  ".data/ase_efm/82309/shards-0000.tar", ".data/ase_efm/82311/shards-0000.tar", ".data/ase_efm/82342/shards-0004.tar", ".data/ase_efm/82448/shards-0001.tar", ".data/ase_efm/82517/shards-0000.tar",
+  ".data/ase_efm/82545/shards-0002.tar", ".data/ase_efm/82555/shards-0001.tar", ".data/ase_efm/82620/shards-0000.tar", ".data/ase_efm/82630/shards-0001.tar", ".data/ase_efm/82647/shards-0001.tar",
+  ".data/ase_efm/82658/shards-0000.tar", ".data/ase_efm/82700/shards-0002.tar", ".data/ase_efm/82832/shards-0005.tar", ".data/ase_efm/82889/shards-0001.tar", ".data/ase_efm/82902/shards-0000.tar",
+  ".data/ase_efm/82953/shards-0000.tar", ".data/ase_efm/83036/shards-0004.tar", ".data/ase_efm/83078/shards-0000.tar", ".data/ase_efm/83086/shards-0003.tar", ".data/ase_efm/83098/shards-0000.tar",
+  ".data/ase_efm/83121/shards-0006.tar", ".data/ase_efm/83269/shards-0007.tar", ".data/ase_efm/83307/shards-0002.tar", ".data/ase_efm/83317/shards-0007.tar", ".data/ase_efm/83379/shards-0000.tar",
+  ".data/ase_efm/83393/shards-0002.tar", ".data/ase_efm/83397/shards-0000.tar", ".data/ase_efm/83400/shards-0004.tar", ".data/ase_efm/83448/shards-0001.tar", ".data/ase_efm/83467/shards-0000.tar",
+  ".data/ase_efm/83506/shards-0004.tar", ".data/ase_efm/83515/shards-0010.tar", ".data/ase_efm/83522/shards-0003.tar", ".data/ase_efm/83550/shards-0018.tar", ".data/ase_efm/83560/shards-0002.tar",
+  ".data/ase_efm/83577/shards-0009.tar", ".data/ase_efm/83598/shards-0000.tar", ".data/ase_efm/83678/shards-0004.tar", ".data/ase_efm/83692/shards-0001.tar", ".data/ase_efm/83713/shards-0002.tar",
+  ".data/ase_efm/83730/shards-0000.tar", ".data/ase_efm/83746/shards-0001.tar", ".data/ase_efm/83780/shards-0000.tar", ".data/ase_efm/83803/shards-0000.tar", ".data/ase_efm/83833/shards-0006.tar",
+  ".data/ase_efm/83836/shards-0002.tar", ".data/ase_efm/83998/shards-0003.tar", ".data/ase_efm/84001/shards-0000.tar", ".data/ase_efm/84003/shards-0000.tar", ".data/ase_efm/84009/shards-0003.tar",
+  ".data/ase_efm/84052/shards-0001.tar", ".data/ase_efm/84074/shards-0003.tar", ".data/ase_efm/84080/shards-0000.tar", ".data/ase_efm/84171/shards-0001.tar", ".data/ase_efm/84185/shards-0000.tar",
+  ".data/ase_efm/84186/shards-0000.tar", ".data/ase_efm/84230/shards-0002.tar", ".data/ase_efm/84271/shards-0001.tar", ".data/ase_efm/84309/shards-0000.tar", ".data/ase_efm/84320/shards-0006.tar",
+]
+snippet_key_filter = [
+  "ASE_889_Atek_000008", "ASE_8517_Atek_000000", "ASE_8559_Atek_000000", "ASE_8671_Atek_000040", "ASE_8694_Atek_000024",
+  "ASE_8715_Atek_000008", "ASE_8777_Atek_000008", "ASE_8822_Atek_000016", "ASE_8857_Atek_000032", "ASE_8860_Atek_000040",
+  "ASE_8938_Atek_000048", "ASE_81022_Atek_000016", "ASE_81048_Atek_000040", "ASE_81056_Atek_000016", "ASE_81128_Atek_000024",
+  "ASE_81161_Atek_000016", "ASE_81180_Atek_000008", "ASE_81181_Atek_000016", "ASE_81184_Atek_000000", "ASE_81188_Atek_000024",
+  "ASE_81226_Atek_000000", "ASE_81272_Atek_000000", "ASE_81283_Atek_000016", "ASE_81286_Atek_000112", "ASE_81366_Atek_000008",
+  "ASE_81387_Atek_000024", "ASE_81426_Atek_000000", "ASE_81477_Atek_000080", "ASE_81483_Atek_000048", "ASE_81625_Atek_000000",
+  "ASE_81693_Atek_000008", "ASE_81772_Atek_000000", "ASE_81807_Atek_000024", "ASE_81964_Atek_000072", "ASE_82004_Atek_000032",
+  "ASE_82254_Atek_000008", "ASE_82257_Atek_000016", "ASE_82258_Atek_000000", "ASE_82271_Atek_000016", "ASE_82294_Atek_000008",
+  "ASE_82309_Atek_000000", "ASE_82311_Atek_000000", "ASE_82342_Atek_000032", "ASE_82448_Atek_000008", "ASE_82517_Atek_000000",
+  "ASE_82545_Atek_000016", "ASE_82555_Atek_000008", "ASE_82620_Atek_000000", "ASE_82630_Atek_000008", "ASE_82647_Atek_000008",
+  "ASE_82658_Atek_000000", "ASE_82700_Atek_000016", "ASE_82832_Atek_000040", "ASE_82889_Atek_000008", "ASE_82902_Atek_000000",
+  "ASE_82953_Atek_000000", "ASE_83036_Atek_000032", "ASE_83078_Atek_000000", "ASE_83086_Atek_000024", "ASE_83098_Atek_000000",
+  "ASE_83121_Atek_000048", "ASE_83269_Atek_000056", "ASE_83307_Atek_000016", "ASE_83317_Atek_000056", "ASE_83379_Atek_000000",
+  "ASE_83393_Atek_000016", "ASE_83397_Atek_000000", "ASE_83400_Atek_000032", "ASE_83448_Atek_000008", "ASE_83467_Atek_000000",
+  "ASE_83506_Atek_000032", "ASE_83515_Atek_000080", "ASE_83522_Atek_000024", "ASE_83550_Atek_000144", "ASE_83560_Atek_000016",
+  "ASE_83577_Atek_000072", "ASE_83598_Atek_000000", "ASE_83678_Atek_000032", "ASE_83692_Atek_000008", "ASE_83713_Atek_000016",
+  "ASE_83730_Atek_000000", "ASE_83746_Atek_000008", "ASE_83780_Atek_000000", "ASE_83803_Atek_000000", "ASE_83833_Atek_000048",
+  "ASE_83836_Atek_000016", "ASE_83998_Atek_000024", "ASE_84001_Atek_000000", "ASE_84003_Atek_000000", "ASE_84009_Atek_000024",
+  "ASE_84052_Atek_000008", "ASE_84074_Atek_000024", "ASE_84080_Atek_000000", "ASE_84171_Atek_000008", "ASE_84185_Atek_000000",
+  "ASE_84186_Atek_000000", "ASE_84230_Atek_000016", "ASE_84271_Atek_000008", "ASE_84309_Atek_000000", "ASE_84320_Atek_000048",
+]
+batch_size = 1
+wds_shuffle = false
+wds_repeat = false
+load_meshes = true
+require_mesh = true
+mesh_simplify_ratio = 1.0
+crop_mesh = false
+device = "cpu"
+
+[labeler]
+device = "cuda"
+backprojection_stride = 16
+
+    [labeler.generator]
+    device = "cuda"
+    camera_label = "rgb"
+    num_samples = 4
+    oversample_factor = 2.0
+    max_resamples = 2
+    align_to_gravity = true
+    min_radius = 0.5
+    max_radius = 1.8
+    min_elev_deg = -20.0
+    max_elev_deg = 25.0
+    delta_azimuth_deg = 170.0
+    sampling_strategy = "uniform_sphere"
+    min_distance_to_mesh = 0.2
+    ensure_collision_free = false
+    ensure_free_space = true
+    collision_backend = "pytorch3d"
+    view_direction_mode = "radial_away"
+    view_max_azimuth_deg = 60.0
+    view_max_elevation_deg = 30.0
+    view_roll_jitter_deg = 0.0
+    seed = 0
+
+    [labeler.depth]
+    max_candidates_final = 1
+    resolution_scale = 0.05
+
+        [labeler.depth.renderer]
+        device = "cuda"
+        znear = 0.001
+        zfar = 20.0
+        cull_backfaces = true
+        blur_radius = 0.0
+        bin_size = 0
+        dtype = "float32"
+
+    [labeler.oracle]
+    fusion_voxel_size_m = 0.05
+    fusion_max_points = 1024

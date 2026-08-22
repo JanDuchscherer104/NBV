@@ -81,6 +81,7 @@ def _make_backbone() -> EvlBackboneOutput:
         occ_pr=occ.clone(),
         occ_input=occ.clone(),
         free_input=occ.clone(),
+        free_input_provenance="native_evl_v1",
         counts=counts,
         cent_pr=occ.clone(),
         pts_world=pts_world,
