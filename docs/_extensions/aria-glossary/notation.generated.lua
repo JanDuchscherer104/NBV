@@ -32,6 +32,12 @@ return {
       description = "Final rig pose used as an anchor for gravity-aligned local fields.",
       thesis_list = true,
     },
+    ["entity.center"] = {
+      tex = "\\boldsymbol{p}_e^w",
+      typst = "#symb.entity.center",
+      description = "World-space center of the selected target entity e.",
+      thesis_list = true,
+    },
     ["entity.endpoint_gain"] = {
       tex = "J_e^{(H)}",
       typst = "#symb.entity.endpoint_gain",
@@ -72,6 +78,30 @@ return {
       tex = "\\boldsymbol{\\phi}_e",
       typst = "#symb.entity.target_desc",
       description = "Actor-visible target/entity descriptor used to condition target-specific value prediction.",
+      thesis_list = true,
+    },
+    ["entity.target_error"] = {
+      tex = "\\Delta_t^e",
+      typst = "#symb.entity.target_error",
+      description = "Target-specific reconstruction error at rollout step t.",
+      thesis_list = true,
+    },
+    ["entity.target_error_0"] = {
+      tex = "\\Delta_0^e",
+      typst = "#symb.entity.target_error_0",
+      description = "Target-specific reconstruction error at rollout start.",
+      thesis_list = true,
+    },
+    ["entity.target_error_next"] = {
+      tex = "\\Delta_{t+1}^e",
+      typst = "#symb.entity.target_error_next",
+      description = "Target-specific reconstruction error after the next observation.",
+      thesis_list = true,
+    },
+    ["entity.target_reward"] = {
+      tex = "r_t^e",
+      typst = "#symb.entity.target_reward",
+      description = "Canonical target-specific reward at rollout step t.",
       thesis_list = true,
     },
     ["model.candidate_row"] = {
@@ -158,6 +188,12 @@ return {
       description = "Candidate-view set available at rollout step t.",
       thesis_list = true,
     },
+    ["oracle.center"] = {
+      tex = "\\boldsymbol{c}",
+      typst = "#symb.oracle.center",
+      description = "World-space camera-center vector; subscripts identify a rollout root or candidate pose.",
+      thesis_list = true,
+    },
     ["oracle.comp"] = {
       tex = "D_{M\\to P}",
       typst = "#symb.oracle.comp",
@@ -168,6 +204,18 @@ return {
       tex = "\\boldsymbol{D}_q",
       typst = "#symb.oracle.depth_q",
       description = "Oracle-rendered or candidate-specific depth map for a proposed view.",
+      thesis_list = true,
+    },
+    ["oracle.dist_mp"] = {
+      tex = "D_{M\\to P}",
+      typst = "#symb.oracle.dist_mp",
+      description = "Mesh-to-point directional reconstruction error component.",
+      thesis_list = true,
+    },
+    ["oracle.dist_pm"] = {
+      tex = "D_{P\\to M}",
+      typst = "#symb.oracle.dist_pm",
+      description = "Point-to-mesh directional reconstruction error component.",
       thesis_list = true,
     },
     ["oracle.err"] = {
@@ -236,6 +284,12 @@ return {
       description = "Finite candidate-view table at rollout step t.",
       thesis_list = true,
     },
+    ["rl.epsilon"] = {
+      tex = "\\varepsilon",
+      typst = "#symb.rl.epsilon",
+      description = "Small positive numerical stabilizer used in denominators and logarithms.",
+      thesis_list = true,
+    },
     ["rl.gamma"] = {
       tex = "\\gamma",
       typst = "#symb.rl.gamma",
@@ -252,6 +306,12 @@ return {
       tex = "\\mathcal{M}_{\\mathrm{NBV}}",
       typst = "#symb.rl.mdp_nbv",
       description = "Target-conditioned finite-candidate NBV decision process.",
+      thesis_list = true,
+    },
+    ["rl.observed_cumulative_root_gain"] = {
+      tex = "G_{0:s,\\mathrm{root}}^e",
+      typst = "#symb.rl.observed_cumulative_root_gain",
+      description = "Observed cumulative target-root gain through factual rollout step s.",
       thesis_list = true,
     },
     ["rl.qh"] = {
@@ -736,6 +796,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.observed_cumulative_root_gain"] = {
+      tex = "G_{0:s,\\mathrm{root}}^e=\\sum_{k=0}^{s-1}r_{k,\\mathrm{root}}^e",
+      typst = "#eqs.rl.observed_cumulative_root_gain",
+      description = "Observed cumulative target-root gain through factual rollout step s.",
+      thesis_list = false,
+    },
     ["rl.q_backup"] = {
       tex = "y_t^Q=r_t+\\gamma V(s_{t+1})",
       typst = "#eqs.rl.q_backup",
@@ -833,9 +899,9 @@ return {
       thesis_list = false,
     },
     ["rl.target_rri_reward"] = {
-      tex = "r_t^e=\\mathrm{RRI}_e(q_t\\mid \\mathcal{P}_t,\\mathcal{M}_e^{\\mathrm{GT}})",
+      tex = "r_t^e=(\\Delta_t^e-\\Delta_{t+1}^e)/(\\Delta_0^e+\\varepsilon)",
       typst = "#eqs.rl.target_rri_reward",
-      description = "",
+      description = "Normalized factual target-root reconstruction gain at rollout step t.",
       thesis_list = false,
     },
     ["rri.acc"] = {
@@ -928,6 +994,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["spatial.candidate_proposal_support_normalization"] = {
+      tex = "d_{t,e}^{\\mathrm{current}}=\\lVert\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_t}^w\\rVert_2,\\quad \\widetilde{\\boldsymbol{c}}_{t,i}^{\\mathrm{support}}=(\\boldsymbol{B}_{r,t}^{\\mathrm{Z-up}})^\\top(\\boldsymbol{c}_{t,i}^w-\\boldsymbol{c}_{r_t}^w)/d_{t,e}^{\\mathrm{current}},\\quad \\widetilde{\\boldsymbol{p}}_{t,e}^{\\mathrm{support}}=(\\boldsymbol{B}_{r,t}^{\\mathrm{Z-up}})^\\top(\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_t}^w)/d_{t,e}^{\\mathrm{current}},\\quad \\lVert\\widetilde{\\boldsymbol{p}}_{t,e}^{\\mathrm{support}}\\rVert_2=1",
+      typst = "#eqs.spatial.candidate_proposal_support_normalization",
+      description = "Candidate support centered on the factual expansion pose, yaw-aligned with Z-up, and scaled by current target distance.",
+      thesis_list = false,
+    },
     ["spatial.candidate_query_local_frame"] = {
       tex = "\\boldsymbol{\\delta}_{a\\mid i}^{p}=\\boldsymbol{R}_{t,i}^{\\top}(\\boldsymbol{p}_a-\\boldsymbol{c}_{t,i})",
       typst = "#eqs.spatial.candidate_query_local_frame",
@@ -974,6 +1046,12 @@ return {
       tex = "\\boldsymbol{d}_k(\\boldsymbol{v})=(\\boldsymbol{c}_k-\\boldsymbol{v})/\\|\\boldsymbol{c}_k-\\boldsymbol{v}\\|_2",
       typst = "#eqs.spatial.direction_unit",
       description = "",
+      thesis_list = false,
+    },
+    ["spatial.rollout_trajectory_normalization"] = {
+      tex = "d_{0,e}^{\\mathrm{initial}}=\\lVert\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_0}^w\\rVert_2,\\quad \\widetilde{\\boldsymbol{x}}_{r,t}^{\\mathrm{trajectory}}=(\\boldsymbol{B}_{r,0}^{\\mathrm{target-Z-up}})^\\top(\\boldsymbol{x}_{r,t}^w-\\boldsymbol{c}_{r_0}^w)/d_{0,e}^{\\mathrm{initial}}",
+      typst = "#eqs.spatial.rollout_trajectory_normalization",
+      description = "Factual selected trajectory in one initial-root, target-aligned Z-up frame and scale.",
       thesis_list = false,
     },
     ["vin.aux_reg_mse"] = {

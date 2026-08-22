@@ -38,6 +38,12 @@ symbols:
     description: 'Candidate pose i at rollout step t.'
     thesis_list: true
     order: 60
+  oracle.center:
+    tex: '\boldsymbol{c}'
+    typst: '#symb.oracle.center'
+    description: 'World-space camera-center vector; subscripts identify a rollout root or candidate pose.'
+    thesis_list: true
+    order: 65
   oracle.depth_q:
     tex: '\boldsymbol{D}_q'
     typst: '#symb.oracle.depth_q'
@@ -62,6 +68,18 @@ symbols:
     description: 'Aggregate point-mesh reconstruction error used by RRI definitions.'
     thesis_list: true
     order: 100
+  oracle.dist_pm:
+    tex: 'D_{P\to M}'
+    typst: '#symb.oracle.dist_pm'
+    description: 'Point-to-mesh directional reconstruction error component.'
+    thesis_list: true
+    order: 102
+  oracle.dist_mp:
+    tex: 'D_{M\to P}'
+    typst: '#symb.oracle.dist_mp'
+    description: 'Mesh-to-point directional reconstruction error component.'
+    thesis_list: true
+    order: 104
   ase.mesh:
     tex: '\mathcal{M}^{\mathrm{GT}}'
     typst: '#symb.ase.mesh'
@@ -128,6 +146,30 @@ symbols:
     description: 'Actor-visible target/entity descriptor used to condition target-specific value prediction.'
     thesis_list: true
     order: 205
+  entity.center:
+    tex: '\boldsymbol{p}_e^w'
+    typst: '#symb.entity.center'
+    description: 'World-space center of the selected target entity e.'
+    thesis_list: true
+    order: 206
+  entity.target_error:
+    tex: '\Delta_t^e'
+    typst: '#symb.entity.target_error'
+    description: 'Target-specific reconstruction error at rollout step t.'
+    thesis_list: true
+    order: 207
+  entity.target_error_next:
+    tex: '\Delta_{t+1}^e'
+    typst: '#symb.entity.target_error_next'
+    description: 'Target-specific reconstruction error after the next observation.'
+    thesis_list: true
+    order: 208
+  entity.target_error_0:
+    tex: '\Delta_0^e'
+    typst: '#symb.entity.target_error_0'
+    description: 'Target-specific reconstruction error at rollout start.'
+    thesis_list: true
+    order: 209
   rl.s:
     tex: 's'
     typst: '#symb.rl.s'
@@ -206,6 +248,18 @@ symbols:
     description: 'Target-specific reward at rollout step t.'
     thesis_list: true
     order: 330
+  entity.target_reward:
+    tex: 'r_t^e'
+    typst: '#symb.entity.target_reward'
+    description: 'Canonical target-specific reward at rollout step t.'
+    thesis_list: true
+    order: 331
+  rl.observed_cumulative_root_gain:
+    tex: 'G_{0:s,\mathrm{root}}^e'
+    typst: '#symb.rl.observed_cumulative_root_gain'
+    description: 'Observed cumulative target-root gain through factual rollout step s.'
+    thesis_list: true
+    order: 332
   rl.return_h:
     tex: 'G_t^{(H)}'
     typst: '#symb.rl.return_h'
@@ -224,6 +278,12 @@ symbols:
     description: 'Return discount factor.'
     thesis_list: true
     order: 360
+  rl.epsilon:
+    tex: '\varepsilon'
+    typst: '#symb.rl.epsilon'
+    description: 'Small positive numerical stabilizer used in denominators and logarithms.'
+    thesis_list: true
+    order: 365
   rl.H:
     tex: 'H'
     typst: '#symb.rl.H'
@@ -653,9 +713,15 @@ equations:
     thesis_list: false
     order: 9999
   rl.target_rri_reward:
-    tex: 'r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})'
+    tex: 'r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/(\Delta_0^e+\varepsilon)'
     typst: '#eqs.rl.target_rri_reward'
-    description: ''
+    description: 'Normalized factual target-root reconstruction gain at rollout step t.'
+    thesis_list: false
+    order: 9999
+  rl.observed_cumulative_root_gain:
+    tex: 'G_{0:s,\mathrm{root}}^e=\sum_{k=0}^{s-1}r_{k,\mathrm{root}}^e'
+    typst: '#eqs.rl.observed_cumulative_root_gain'
+    description: 'Observed cumulative target-root gain through factual rollout step s.'
     thesis_list: false
     order: 9999
   rl.finite_horizon_return:
@@ -770,6 +836,18 @@ equations:
     tex: '\boldsymbol{T}_{r_t,i}^{\mathrm{rel}}=\boldsymbol{T}_{w,r_t}^{-1}\boldsymbol{T}_{w,c_{t,i}},\quad \boldsymbol{\delta}_{r_t,i}^{p}=\boldsymbol{R}_{r_t}^{\top}(\boldsymbol{c}_{t,i}-\boldsymbol{c}_{r_t}),\quad \boldsymbol{R}_{r_t,i}=\boldsymbol{R}_{r_t}^{\top}\boldsymbol{R}_{t,i}'
     typst: '#eqs.spatial.candidate_reference_transform'
     description: ''
+    thesis_list: false
+    order: 9999
+  spatial.candidate_proposal_support_normalization:
+    tex: 'd_{t,e}^{\mathrm{current}}=\lVert\boldsymbol{p}_e^w-\boldsymbol{c}_{r_t}^w\rVert_2,\quad \widetilde{\boldsymbol{c}}_{t,i}^{\mathrm{support}}=(\boldsymbol{B}_{r,t}^{\mathrm{Z-up}})^\top(\boldsymbol{c}_{t,i}^w-\boldsymbol{c}_{r_t}^w)/d_{t,e}^{\mathrm{current}},\quad \widetilde{\boldsymbol{p}}_{t,e}^{\mathrm{support}}=(\boldsymbol{B}_{r,t}^{\mathrm{Z-up}})^\top(\boldsymbol{p}_e^w-\boldsymbol{c}_{r_t}^w)/d_{t,e}^{\mathrm{current}},\quad \lVert\widetilde{\boldsymbol{p}}_{t,e}^{\mathrm{support}}\rVert_2=1'
+    typst: '#eqs.spatial.candidate_proposal_support_normalization'
+    description: 'Candidate support centered on the factual expansion pose, yaw-aligned with Z-up, and scaled by current target distance.'
+    thesis_list: false
+    order: 9999
+  spatial.rollout_trajectory_normalization:
+    tex: 'd_{0,e}^{\mathrm{initial}}=\lVert\boldsymbol{p}_e^w-\boldsymbol{c}_{r_0}^w\rVert_2,\quad \widetilde{\boldsymbol{x}}_{r,t}^{\mathrm{trajectory}}=(\boldsymbol{B}_{r,0}^{\mathrm{target-Z-up}})^\top(\boldsymbol{x}_{r,t}^w-\boldsymbol{c}_{r_0}^w)/d_{0,e}^{\mathrm{initial}}'
+    typst: '#eqs.spatial.rollout_trajectory_normalization'
+    description: 'Factual selected trajectory in one initial-root, target-aligned Z-up frame and scale.'
     thesis_list: false
     order: 9999
   spatial.candidate_pose_features:
