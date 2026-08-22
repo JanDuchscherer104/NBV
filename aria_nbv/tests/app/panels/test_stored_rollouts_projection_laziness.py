@@ -415,9 +415,7 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert len(failure_calls) == 2
 
 
-def test_stored_rollout_session_rejects_mid_handle_swap(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_stored_rollout_session_rejects_mid_handle_swap(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Explicit report/topology requests refresh identity after a store swap."""
 
     first = tmp_path / "topology-session-first.zarr"

@@ -600,9 +600,7 @@ def candidate_audit_rows(
                 relative = np.asarray(pose[9:12], dtype=np.float64) - root_center
                 reference_rotation = reference_pose[:9].reshape(3, 3)
                 reference_center = reference_pose[9:12]
-                proposal_relative = reference_rotation.T @ (
-                    np.asarray(pose[9:12], dtype=np.float64) - reference_center
-                )
+                proposal_relative = reference_rotation.T @ (np.asarray(pose[9:12], dtype=np.float64) - reference_center)
                 candidate_row = {
                     "candidate_row_id": int(step.candidate_row_ids[local]),
                     "rollout_row_id": rollout.rollout_row_id,
@@ -686,7 +684,9 @@ def candidate_audit_rows(
                     rows.append(candidate_row)
                 emitted += 1
             if step.selected_local_index >= 0:
-                reference_pose = np.asarray(step.pose_world_cam[step.selected_local_index], dtype=np.float64).reshape(12)
+                reference_pose = np.asarray(step.pose_world_cam[step.selected_local_index], dtype=np.float64).reshape(
+                    12
+                )
     return rows
 
 
