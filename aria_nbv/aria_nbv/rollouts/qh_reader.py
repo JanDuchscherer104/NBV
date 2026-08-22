@@ -148,7 +148,6 @@ class _StoreFacts:
     manifest_hash: str
     state_count: int
     contract: QhDataContract
-    max_horizon: int
     chains: tuple[_ChainRef, ...]
     source_refs: tuple[_QhSourceRef, ...]
 
@@ -163,6 +162,10 @@ class _ChainRef:
     target_position: int
     target_row_id: int
     source_sample_index: int
+    configured_horizon: int
+    candidate_config_hash: str
+    rollout_config_hash: str
+    selection_policy: str
 
 
 class QhRolloutReader:
@@ -201,7 +204,6 @@ class QhRolloutReader:
             for store_index, path in enumerate(paths)
         )
         _validate_homogeneous(self._stores, include_selected_depth=include_selected_depth)
-        self._contract = _merge_corpus_contract(self._stores, include_selected_depth=include_selected_depth)
         if include_selected_depth:
             _validate_rich_selected_depth_contract(self._stores[0].contract)
         source_ref_lookup = _merge_source_refs(self._stores)
@@ -210,6 +212,11 @@ class QhRolloutReader:
             for store in self._stores
             for chain in store.chains
             if _matches_campaign_split(source_ref_lookup[chain.source_sample_index], campaign_split)
+        )
+        self._contract = _merge_corpus_contract(
+            self._stores,
+            self._chains,
+            include_selected_depth=include_selected_depth,
         )
         admitted_sample_indices = {chain.source_sample_index for chain in self._chains}
         self._source_ref_lookup = {
@@ -253,17 +260,9 @@ class QhRolloutReader:
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest configured horizon among stores with admitted chains."""
+        """Return the largest configured horizon among admitted chains."""
 
-        admitted_store_indices = {chain.store_index for chain in self._chains}
-        return max(
-            (
-                store.max_horizon
-                for store_index, store in enumerate(self._stores)
-                if store_index in admitted_store_indices
-            ),
-            default=0,
-        )
+        return max((chain.configured_horizon for chain in self._chains), default=0)
 
     @property
     def contract(self) -> QhDataContract:
@@ -334,7 +333,6 @@ def _preflight_store(path: Path, store_index: int, *, include_selected_depth: bo
         manifest_hash=str(root.attrs["manifest_sha256"]),
         state_count=validation.num_steps,
         contract=contract,
-        max_horizon=int(np.asarray(root["rollouts/horizon"], dtype=np.int64).max()),
         chains=chains,
         source_refs=tuple(source_refs_by_row.values()),
     )
@@ -663,14 +661,36 @@ def _read_chain_refs(
     step_indices = np.asarray(root["steps/step_index"], dtype=np.int64).reshape(-1)
     source_ids = np.asarray(rollout["source_row_id"], dtype=np.int64).reshape(-1)
     target_ids = np.asarray(rollout["target_row_id"], dtype=np.int64).reshape(-1)
+    candidate_config_ids = np.asarray(root["lineage/candidate_config_id"], dtype=np.int64).reshape(-1)
+    rollout_config_ids = np.asarray(root["lineage/rollout_config_id"], dtype=np.int64).reshape(-1)
+    policy_ids = np.asarray(rollout["policy_id"], dtype=np.int64).reshape(-1)
+    config_values = _decode_dictionary(root, "config")
+    policy_values = _decode_dictionary(root, "policy")
     target_positions = {
         int(target_id): position
         for position, target_id in enumerate(np.asarray(root["targets/target_row_id"], dtype=np.int64).reshape(-1))
     }
     chains: list[_ChainRef] = []
     state_start = 0
-    for position, (horizon, rollout_id, source_id, target_id) in enumerate(
-        zip(horizons, rollout_ids, source_ids, target_ids, strict=True)
+    for position, (
+        horizon,
+        rollout_id,
+        source_id,
+        target_id,
+        candidate_config_id,
+        rollout_config_id,
+        policy_id,
+    ) in enumerate(
+        zip(
+            horizons,
+            rollout_ids,
+            source_ids,
+            target_ids,
+            candidate_config_ids,
+            rollout_config_ids,
+            policy_ids,
+            strict=True,
+        )
     ):
         if state_start >= step_rollout_ids.size or int(step_rollout_ids[state_start]) != int(rollout_id):
             raise ValueError(
@@ -700,6 +720,10 @@ def _read_chain_refs(
                 target_position=target_positions[int(target_id)],
                 target_row_id=int(target_id),
                 source_sample_index=source_ref.source_sample_index,
+                configured_horizon=int(horizon),
+                candidate_config_hash=config_values[int(candidate_config_id)],
+                rollout_config_hash=config_values[int(rollout_config_id)],
+                selection_policy=policy_values[int(policy_id)],
             )
         )
         state_start = state_stop
@@ -738,19 +762,25 @@ def _validate_homogeneous(stores: tuple[_StoreFacts, ...], *, include_selected_d
             )
 
 
-def _merge_corpus_contract(stores: tuple[_StoreFacts, ...], *, include_selected_depth: bool) -> QhDataContract:
+def _merge_corpus_contract(
+    stores: tuple[_StoreFacts, ...],
+    chains: tuple[_ChainRef, ...],
+    *,
+    include_selected_depth: bool,
+) -> QhDataContract:
     """Combine compatible store contracts into one exact replay-support mixture."""
 
     base = _effective_contract(stores[0].contract, include_selected_depth=include_selected_depth)
 
-    def merged(name: str) -> tuple[str, ...]:
-        return tuple(sorted({value for store in stores for value in getattr(store.contract, name)}))
-
     return replace(
         base,
-        candidate_config_hashes=merged("candidate_config_hashes"),
-        rollout_config_hashes=merged("rollout_config_hashes"),
-        selection_policies=merged("selection_policies"),
+        candidate_config_hashes=tuple(
+            sorted({chain.candidate_config_hash for chain in chains if chain.candidate_config_hash})
+        ),
+        rollout_config_hashes=tuple(
+            sorted({chain.rollout_config_hash for chain in chains if chain.rollout_config_hash})
+        ),
+        selection_policies=tuple(sorted({chain.selection_policy for chain in chains if chain.selection_policy})),
     )
 
 

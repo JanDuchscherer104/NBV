@@ -189,7 +189,10 @@ def test_reader_normalizes_validation_campaign_split_without_changing_source_spl
 
 
 def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows(tmp_path: Path) -> None:
-    records = build_rollout_records(horizon=2, num_samples=6, seed=7)
+    records = [
+        build_rollout_records(horizon=horizon, num_samples=6, seed=7 + index)[index]
+        for index, horizon in enumerate((2, 3, 4))
+    ]
     for record, campaign_split in zip(records, ("train", "validation", "test"), strict=True):
         record.lineage.source.campaign_split = campaign_split
         record.lineage.source.scene_id = f"scene-{campaign_split}"
@@ -210,8 +213,17 @@ def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows
         "scene-test",
     ]
     assert all(len(reader.source_refs) == 1 for reader in readers.values())
-    assert all(reader.provenance["stores"][0]["state_count"] == 2 for reader in readers.values())
+    assert [
+        readers[split].provenance["stores"][0]["state_count"] for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)
+    ] == [2, 3, 4]
     assert {readers[split][0].source_ref.source_sample_index for split in readers} == {0, 1, 2}
+    assert [readers[split].max_horizon for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)] == [2, 3, 4]
+    assert all(len(reader.contract.candidate_config_hashes) == 1 for reader in readers.values())
+    assert all(len(reader.contract.rollout_config_hashes) == 1 for reader in readers.values())
+    assert all(len(reader.contract.selection_policies) == 1 for reader in readers.values())
+    assert len({reader.contract.candidate_config_hashes for reader in readers.values()}) == 3
+    assert len({reader.contract.rollout_config_hashes for reader in readers.values()}) == 3
+    assert len({reader.contract.selection_policies for reader in readers.values()}) == 3
 
 
 def test_reader_rejects_double_erased_campaign_identity(tmp_path: Path) -> None:
