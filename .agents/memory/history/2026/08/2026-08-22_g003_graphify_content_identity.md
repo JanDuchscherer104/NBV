@@ -7,6 +7,10 @@ topics: [graphify, freshness, projection]
 confidence: high
 canonical_updates_needed: []
 codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
+repo_object_format: sha1
+repo_head: 7ee7ec7e7a5f89e2e74d346d48aa3de75d7da98f
+repo_branch: codex/graphify-content-identity
+worktree_kind: linked
 ---
 
 ## Task
