@@ -6,7 +6,21 @@ status: done
 topics: [qh, learning-contract, thesis, rri, state]
 confidence: high
 canonical_updates_needed: []
+touched_owner_paths:
+  - .agents/skills/agent-behavior/SKILL.md
+  - aria_nbv/aria_nbv/lightning/qh_datamodule.py
+  - aria_nbv/aria_nbv/rollouts/qh_reader.py
+  - docs/typst/shared/equations/rl.typ
+  - docs/typst/shared/glossary.typ
+  - docs/typst/shared/symbols.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ
+  - docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ
+  - docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ
 codex_thread: codex://threads/01a02a39-bcfd-76f0-bd84-6da1d9d0abb2
+repo_object_format: sha1
+repo_head: 818ba45f40c73a2dbded51708a44a3ddb10cf24b
+repo_branch: "codex/qh-rich-contract-fix-20260821"
+worktree_kind: linked
 ---
 
 ## Task
