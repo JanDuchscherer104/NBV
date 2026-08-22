@@ -183,6 +183,7 @@ TheoryKind = Literal[
     "validity",
     "endpoint_gain",
     "rri",
+    "selection",
 ]
 
 
@@ -285,6 +286,14 @@ _THEORY: dict[TheoryKind, tuple[TheoryReference, ...]] = {
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/glossary.typ",
             "glossary",
             "target-rri-reward",
+        ),
+    ),
+    "selection": (
+        TheoryReference(
+            "Temperature-softmax selection equation",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/action.typ",
+            "equation",
+            "action.robust_temperature_softmax",
         ),
     ),
 }
@@ -916,13 +925,20 @@ def _temporal_evidence_role(
 def _temporal_theory_kind(metric: str) -> TheoryKind:
     """Return the canonical theory owner for one temporal metric."""
 
-    if metric in {"cumulative_target_root_gain", "selected_target_root_gain"}:
-        return "endpoint_gain"
-    if metric in {"selected_target_rri", "marginal_target_rri"}:
-        return "rri"
-    if metric in {"valid_fanout", "invalid_fraction"}:
-        return "validity"
-    return "action"
+    mapping: dict[str, TheoryKind] = {
+        "cumulative_target_root_gain": "endpoint_gain",
+        "selected_target_root_gain": "endpoint_gain",
+        "selected_target_rri": "rri",
+        "marginal_target_rri": "rri",
+        "valid_fanout": "validity",
+        "invalid_fraction": "validity",
+        "selected_probability": "selection",
+        "selected_entropy": "selection",
+    }
+    try:
+        return mapping[metric]
+    except KeyError as exc:
+        raise ValueError(f"Temporal metric {metric!r} has no canonical theory owner.") from exc
 
 
 def _render_selected_rank_and_geometry(stored_session: session.StoredRolloutSession) -> None:

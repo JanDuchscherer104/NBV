@@ -964,6 +964,7 @@ def test_restored_explanation_reference_census_is_nonempty_and_owner_correct() -
         "target": ("glossary.typ", {"frustum"}),
         "code": ("inspection.py", {None}),
         "validity": ("metrics.typ", {"metrics.candidate_validity"}),
+        "selection": ("action.typ", {"action.robust_temperature_softmax"}),
     }
     for kind, (owner, keys) in expected.items():
         references = stored_rollouts_page._THEORY[kind]
@@ -975,6 +976,10 @@ def test_restored_explanation_reference_census_is_nonempty_and_owner_correct() -
 
     assert stored_rollouts_page._temporal_theory_kind("cumulative_target_root_gain") == "endpoint_gain"
     assert stored_rollouts_page._temporal_theory_kind("selected_target_rri") == "rri"
+    assert stored_rollouts_page._temporal_theory_kind("selected_probability") == "selection"
+    assert stored_rollouts_page._temporal_theory_kind("selected_entropy") == "selection"
+    with pytest.raises(ValueError, match="canonical theory owner"):
+        stored_rollouts_page._temporal_theory_kind("unknown_metric")
     for references in stored_rollouts_page._THEORY.values():
         for reference in references:
             if reference.registry_key is not None:
