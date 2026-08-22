@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-
+from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SEEDER = ROOT / "scripts" / "graphify_worktree_seed.py"
@@ -31,12 +33,10 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         self.git("add", "README.md")
         self.git("commit", "-qm", "seed fixture")
         self.git("worktree", "add", "--detach", str(self.destination), "HEAD")
-        self.graphify_python = self.sandbox / "fake-graphify-python"
-        self.graphify_python.write_text(
-            "#!/usr/bin/env sh\nprintf '%s\\n' 0.9.48\n",
-            encoding="utf-8",
+        graphify = Path(shutil.which("graphify") or "").resolve(strict=True)
+        self.graphify_python = Path(
+            graphify.read_text(encoding="utf-8").splitlines()[0][2:].strip()
         )
-        self.graphify_python.chmod(0o755)
         self.write_valid_source()
 
     def tearDown(self) -> None:
@@ -81,7 +81,7 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             json.dumps(
                 {
                     "nodes": [{"id": "aria", "source_file": "graphify-input/index.md"}],
-                    "built_at_commit": "abc123",
+                    "built_at_commit": self.git_output("rev-parse", "HEAD"),
                 }
             ),
             encoding="utf-8",
@@ -107,6 +107,13 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         (output / "cache" / "stat-index.json").write_text("{}\n", encoding="utf-8")
         (output / ".graphify_ast.json").write_text("{}\n", encoding="utf-8")
         (output / "GRAPH_REPORT.md").write_text("# report\n", encoding="utf-8")
+
+    @staticmethod
+    def set_graph_revision(root: Path, revision: str) -> None:
+        graph_path = root / "graphify-out/graph.json"
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        graph["built_at_commit"] = revision
+        graph_path.write_text(json.dumps(graph), encoding="utf-8")
 
     def seed(self, *extra: str, check: bool = True) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -181,7 +188,9 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         self.assertEqual(sentinel["schema_version"], 1)
         self.assertEqual(sentinel["source_worktree"], str(self.source.resolve()))
         self.assertEqual(sentinel["target_root"], str(self.destination.resolve()))
-        self.assertEqual(sentinel["source_graph_revision"], "abc123")
+        self.assertEqual(
+            sentinel["source_graph_revision"], self.git_output("rev-parse", "HEAD")
+        )
         self.assertEqual(
             sentinel["source_worktree_head"], self.git_output("rev-parse", "HEAD")
         )
@@ -230,6 +239,85 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         )
         (self.source / "graphify-out/graph.json").unlink()
         self.seed("--check")
+
+    def test_source_graph_revision_requires_canonical_commit_oid(self) -> None:
+        head = self.git_output("rev-parse", "HEAD")
+        tree = self.git_output("rev-parse", "HEAD^{tree}")
+        self.git("tag", "-a", "provenance-tag", "-m", "provenance", head)
+        tag = self.git_output("rev-parse", "provenance-tag^{tag}")
+        cases = (
+            ("tree", tree, "commit object"),
+            ("tag", tag, "commit object"),
+            ("symbolic", "HEAD", "canonical full commit OID"),
+            ("short", head[:12], "canonical full commit OID"),
+            ("missing", "0" * len(head), "Git metadata unavailable"),
+        )
+        for label, revision, expected in cases:
+            with self.subTest(label=label):
+                self.set_graph_revision(self.source, revision)
+                result = self.seed(check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
+                self.assertFalse(
+                    (
+                        self.destination / "graphify-out/.aria-worktree-seed.json"
+                    ).exists()
+                )
+                self.set_graph_revision(self.source, head)
+
+    def test_existing_destination_graph_revision_is_revalidated(self) -> None:
+        self.seed()
+        self.set_graph_revision(self.destination, "HEAD")
+
+        result = self.seed("--check", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("destination graph built_at_commit", result.stderr)
+        self.assertIn("canonical full commit OID", result.stderr)
+
+    def test_malicious_source_interpreter_marker_is_not_executed(self) -> None:
+        marker = self.source / "graphify-out/.graphify_python"
+        executed = self.sandbox / "seed-marker-executed"
+        malicious = self.sandbox / "malicious-seed-interpreter"
+        malicious.write_text(f"#!/usr/bin/env sh\ntouch {executed}\n", encoding="utf-8")
+        malicious.chmod(0o755)
+        marker.write_text(f"{malicious}\n", encoding="utf-8")
+
+        result = self.seed(check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not match trusted CLI", result.stderr)
+        self.assertFalse(executed.exists())
+
+    def test_repo_local_graphify_shadow_is_not_imported(self) -> None:
+        executed = self.sandbox / "seed-graphify-shadow-executed"
+        (self.source / "graphify.py").write_text(
+            f"from pathlib import Path\nPath({str(executed)!r}).touch()\n",
+            encoding="utf-8",
+        )
+
+        with mock.patch.dict(os.environ, {"PYTHONPATH": str(self.source)}):
+            result = self.seed(check=False)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(executed.exists())
+
+    def test_repo_local_graphify_cli_is_not_executed(self) -> None:
+        bin_dir = self.source / "bin"
+        bin_dir.mkdir()
+        executed = self.sandbox / "seed-graphify-cli-executed"
+        cli = bin_dir / "graphify"
+        cli.write_text(f"#!/bin/sh\ntouch {executed}\n", encoding="utf-8")
+        cli.chmod(0o755)
+        with mock.patch.dict(
+            os.environ,
+            {"PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"},
+        ):
+            result = self.seed(check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("inside repository", result.stderr)
+        self.assertFalse(executed.exists())
 
     def test_prepares_only_a_regular_local_cache_parent(self) -> None:
         self.prepare_cache()

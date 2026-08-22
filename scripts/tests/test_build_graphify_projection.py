@@ -832,6 +832,10 @@ class ProjectionTests(unittest.TestCase):
             index_value(present, "source_revision"),
             index_value(missing, "source_revision"),
         )
+        self.assertEqual(
+            index_value(present, "source_tree"),
+            _git(self.fixture.root, "rev-parse", "HEAD^{tree}"),
+        )
 
     def test_pdf_symlink_does_not_leak_realpath_or_target_bytes(self) -> None:
         outside = self.fixture.root.parent / "outside.pdf"

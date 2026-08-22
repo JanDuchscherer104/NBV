@@ -5,17 +5,49 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
-
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 CHECKER = ROOT / "scripts/check_graphify_freshness.py"
 sys.path.insert(0, str(ROOT / "scripts"))
+import check_graphify_freshness as freshness  # noqa: E402
 from check_graphify_freshness import _detector_stale_sources  # noqa: E402
+
+
+def _clean_detector_payload(root: Path) -> dict[str, object]:
+    empty_files = {kind: [] for kind in ("code", "document", "paper", "image", "video")}
+    return {
+        "files": empty_files,
+        "new_files": empty_files,
+        "deleted_files": [],
+        "excluded_files": [],
+        "unclassified": [],
+        "walk_errors": [],
+        "skipped_sensitive": [],
+        "scan_root": str(root.resolve()),
+    }
+
+
+def _clean_snapshot_detector(
+    scan_root: Path, **_: object
+) -> tuple[dict[str, object], dict[str, object]]:
+    detector = _clean_detector_payload(scan_root)
+    return detector, detector
+
+
+def _graphify_out_bytes(root: Path) -> dict[Path, bytes]:
+    output = root / "graphify-out"
+    return {
+        path.relative_to(output): path.read_bytes()
+        for path in output.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
 
 
 def graphify_python() -> Path:
@@ -158,6 +190,7 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
             cwd=self.root,
             capture_output=True,
             text=True,
+            check=False,
         )
 
     def payload(self) -> dict[str, object]:
@@ -165,20 +198,11 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         return json.loads(result.stdout)
 
     def test_fresh_and_detector_does_not_mutate_graphify_artifacts(self) -> None:
-        before = {
-            path.relative_to(self.root): path.read_bytes()
-            for path in (self.root / "graphify-out").rglob("*")
-            if path.is_file()
-        }
+        before = _graphify_out_bytes(self.root)
         result = self.run_checker("--json")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.payload()["state"], "fresh")
-        after = {
-            path.relative_to(self.root): path.read_bytes()
-            for path in (self.root / "graphify-out").rglob("*")
-            if path.is_file()
-        }
-        self.assertEqual(after, before)
+        self.assertEqual(_graphify_out_bytes(self.root), before)
 
     def test_ast_and_semantic_drift_use_their_respective_upstream_hashes(self) -> None:
         code = self.root / "src/example.py"
@@ -207,6 +231,331 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         self.assertEqual(strict.returncode, 1)
         self.assertEqual(usable.returncode, 0)
         self.assertEqual(self.payload()["state"], "usable-stale")
+
+    def test_ancestor_snapshot_without_detector_drift_is_fresh(
+        self,
+    ) -> None:
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-qm", "later"],
+            cwd=self.root,
+            check=True,
+        )
+
+        with mock.patch.object(
+            freshness,
+            "_detect_incremental",
+            side_effect=_clean_snapshot_detector,
+        ):
+            payload = freshness.check(self.root)
+        self.assertEqual(payload["state"], "fresh", payload)
+        self.assertEqual(payload["stale_sources"], [])
+
+    def test_nonancestor_same_tree_snapshot_is_fresh(self) -> None:
+        tree = self.git("rev-parse", f"{self.head}^{{tree}}")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "same tree rebase"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True
+        )
+
+        with mock.patch.object(
+            freshness, "_detect_incremental", side_effect=_clean_snapshot_detector
+        ):
+            payload = freshness.check(self.root)
+        self.assertEqual(payload["state"], "fresh", payload)
+        self.assertEqual(payload["next_action"], 'graphify query "<question>"')
+
+    def test_legacy_missing_projection_revision_fails_with_exact_repair_command(
+        self,
+    ) -> None:
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                f"source_revision: {self.head}\n",
+                "source_revision: deadbeef\n",
+            ),
+            encoding="utf-8",
+        )
+
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertEqual(payload["next_action"], "git fetch --all --prune")
+        self.assertIn("git fetch --all --prune", payload["reasons"][-1])
+
+    def test_revision_identity_requires_existing_commit_object(self) -> None:
+        tree = self.git("rev-parse", f"{self.head}^{{tree}}")
+        subprocess.run(
+            ["git", "tag", "-a", "-m", "annotated", "v-identity", self.head],
+            cwd=self.root,
+            check=True,
+        )
+        tag = self.git("rev-parse", "v-identity^{tag}")
+        for label, revision in (
+            ("symbolic-head", "HEAD"),
+            ("tree", tree),
+            ("tag", tag),
+            ("missing", "0" * 40),
+        ):
+            with self.subTest(label=label):
+                index = self.root / "graphify-input/index.md"
+                index.write_text(
+                    index.read_text(encoding="utf-8").replace(
+                        f"source_revision: {self.head}\n",
+                        f"source_revision: {revision}\n",
+                    ),
+                    encoding="utf-8",
+                )
+                payload = self.payload()
+                self.assertEqual(payload["state"], "unusable", payload)
+                expected_reason = "full OID" if label == "symbolic-head" else "commit"
+                self.assertIn(expected_reason, " ".join(payload["reasons"]))
+                index.write_text(
+                    index.read_text(encoding="utf-8").replace(
+                        f"source_revision: {revision}\n",
+                        f"source_revision: {self.head}\n",
+                    ),
+                    encoding="utf-8",
+                )
+
+    def test_merge_base_operational_error_is_not_treated_as_nonancestor(self) -> None:
+        result = subprocess.CompletedProcess(
+            ["git", "merge-base"], 2, "", "fatal: unavailable"
+        )
+        with mock.patch.object(freshness.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(ValueError, "merge-base failed"):
+                freshness._is_ancestor(self.root, self.head, self.head)
+
+    def test_malicious_interpreter_marker_is_not_executed(self) -> None:
+        marker = self.root / "graphify-out/.graphify_python"
+        executed = self.root / "marker-executed"
+        malicious = self.root / "malicious-interpreter"
+        malicious.write_text(f"#!/usr/bin/env sh\ntouch {executed}\n", encoding="utf-8")
+        malicious.chmod(0o755)
+        marker.write_text(f"{malicious}\n", encoding="utf-8")
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("inside repository", " ".join(payload["reasons"]))
+        self.assertFalse(executed.exists())
+
+    def test_relative_interpreter_marker_is_rejected(self) -> None:
+        marker = self.root / "graphify-out/.graphify_python"
+        marker.write_text("python3\n", encoding="utf-8")
+
+        payload = self.payload()
+
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("invalid Graphify interpreter marker", payload["reasons"])
+
+    def test_repo_local_graphify_shadow_is_not_imported(self) -> None:
+        executed = self.root / "graphify-shadow-executed"
+        (self.root / "graphify.py").write_text(
+            f"from pathlib import Path\nPath({str(executed)!r}).touch()\n",
+            encoding="utf-8",
+        )
+
+        with mock.patch.dict(
+            os.environ,
+            {"PYTHONPATH": str(self.root)},
+        ):
+            payload = self.payload()
+
+        self.assertNotEqual(payload["state"], "unusable", payload)
+        self.assertFalse(executed.exists())
+
+    def test_repo_local_graphify_cli_is_not_executed(self) -> None:
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        executed = self.root / "graphify-cli-executed"
+        cli = bin_dir / "graphify"
+        cli.write_text(f"#!/bin/sh\ntouch {executed}\n", encoding="utf-8")
+        cli.chmod(0o755)
+        with mock.patch.dict(
+            os.environ,
+            {"PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"},
+        ):
+            payload = self.payload()
+
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("inside repository", " ".join(payload["reasons"]))
+        self.assertFalse(executed.exists())
+
+    def test_unresolved_cli_shebang_inside_repository_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix=f"{self.root.name}-bin-", dir=self.root.parent
+        ) as bin_tmp:
+            bin_dir = Path(bin_tmp)
+            cli = bin_dir / "graphify"
+            cli.write_text(
+                f"#!{self.root / 'missing-graphify-python'}\n", encoding="utf-8"
+            )
+            cli.chmod(0o755)
+            with mock.patch.dict(
+                os.environ,
+                {"PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"},
+            ):
+                payload = self.payload()
+
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("inside repository", " ".join(payload["reasons"]))
+
+    def test_recorded_source_tree_cannot_override_resolvable_revision_tree(
+        self,
+    ) -> None:
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                f"source_revision: {self.head}\n",
+                f"source_revision: {self.head}\nsource_tree: {'0' * 40}\n",
+            ),
+            encoding="utf-8",
+        )
+
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("does not match", payload["reasons"][-1])
+
+    def test_same_tree_admission_still_reports_tracked_byte_drift(self) -> None:
+        tree = self.git("rev-parse", f"{self.head}^{{tree}}")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "same tree rebase"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True
+        )
+        (self.root / "src/example.py").write_text(
+            "def example(): return 2\n", encoding="utf-8"
+        )
+
+        payload = self.payload()
+        self.assertNotEqual(payload["state"], "fresh", payload)
+        self.assertIn("src/example.py", payload["stale_sources"])
+
+    def test_nonancestor_ignored_plan_change_is_fresh_from_corpus_identity(
+        self,
+    ) -> None:
+        ignored = self.root / ".omx/plans/plan.md"
+        ignored.parent.mkdir(parents=True, exist_ok=True)
+        ignored.write_text("first\n", encoding="utf-8")
+        (self.root / ".graphifyignore").write_text(".omx/**\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "commit", "-qm", "ignored baseline"], cwd=self.root, check=True
+        )
+        self._write_projection()
+        self._write_graph()
+        self._save_upstream_manifest()
+        ignored.write_text("second\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(ignored)], cwd=self.root, check=True)
+        tree = self.git("write-tree")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "ignored plan rebase"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True
+        )
+
+        with mock.patch.object(
+            freshness, "_detect_incremental", side_effect=_clean_snapshot_detector
+        ):
+            payload = freshness.check(self.root)
+        self.assertEqual(payload["state"], "fresh", payload)
+
+    def test_nonancestor_admitted_source_change_is_unusable(self) -> None:
+        source = self.root / "src/example.py"
+        source.write_text("def example(): return 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(source)], cwd=self.root, check=True)
+        tree = self.git("write-tree")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "source rebase"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True
+        )
+
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("src/example.py", payload["stale_sources"])
+        self.assertEqual(payload["next_action"], freshness.STALE_ACTION)
+
+    def test_nonancestor_committed_source_drift_is_seen_after_worktree_restore(
+        self,
+    ) -> None:
+        source = self.root / "src/example.py"
+        original = source.read_bytes()
+        source.write_text("def example(): return 2\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(source)], cwd=self.root, check=True)
+        tree = self.git("write-tree")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "committed source drift"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True
+        )
+        source.write_bytes(original)
+        before_head = self.git("rev-parse", "HEAD")
+        before_status = self.git("status", "--porcelain=v1", "--untracked-files=all")
+        before_graphify_out = _graphify_out_bytes(self.root)
+
+        payload = self.payload()
+
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("src/example.py", payload["stale_sources"])
+        self.assertEqual(self.git("rev-parse", "HEAD"), before_head)
+        self.assertEqual(
+            self.git("status", "--porcelain=v1", "--untracked-files=all"),
+            before_status,
+        )
+        self.assertEqual(
+            before_graphify_out,
+            _graphify_out_bytes(self.root),
+        )
+
+    def test_same_tree_admission_rejects_excluded_tracked_byte_drift(self) -> None:
+        tree = self.git("rev-parse", f"{self.head}^{{tree}}")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "same tree rebase"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(
+            ["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True
+        )
+        (self.root / ".graphifyignore").write_text("src/example.py\n", encoding="utf-8")
+        (self.root / "src/example.py").write_text(
+            "def example(): return 2\n", encoding="utf-8"
+        )
+
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertTrue(
+            any(
+                "Graphify detector reported" in reason for reason in payload["reasons"]
+            ),
+            payload,
+        )
 
     def test_corrupt_nonancestor_marker_projection_and_detector_failures_are_unusable(
         self,

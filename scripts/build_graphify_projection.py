@@ -113,6 +113,7 @@ class _Heading:
 @dataclass(frozen=True)
 class _RenderData:
     revision: str
+    source_tree: str
     aria_code_oid: str
     aria_code_pin_kind: str
     closure: Sequence[Path]
@@ -1393,6 +1394,7 @@ def _render_index(
         "",
         f"schema_version: {SCHEMA_VERSION}",
         f"source_revision: {data.revision}",
+        f"source_tree: {data.source_tree}",
         f"aria_code_ref: {config.aria_code_ref}",
         f"aria_code_ref_source: {config.aria_code_ref_source}",
         f"aria_code_ref_pin_kind: {data.aria_code_pin_kind}",
@@ -1633,7 +1635,22 @@ def build_projection(
         if (value := _compiled_value(row, "dest", "destination", "url")) is not None
     ]
     targets, relations = _code_targets(config, runner, repository, macros, link_values)
-    revision = _run(runner, ["git", "rev-parse", "HEAD"], config.repo_root).strip()
+    revision = _run(
+        runner,
+        ["git", "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
+        config.repo_root,
+    ).strip()
+    source_tree = _run(
+        runner,
+        [
+            "git",
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            f"{revision}^{{tree}}",
+        ],
+        config.repo_root,
+    ).strip()
     aria_code_oid, aria_code_pin_kind = _resolve_ref(
         config, runner, config.aria_code_ref
     )
@@ -1642,6 +1659,7 @@ def build_projection(
         runner,
         _RenderData(
             revision=revision,
+            source_tree=source_tree,
             aria_code_oid=aria_code_oid,
             aria_code_pin_kind=aria_code_pin_kind,
             closure=closure,
