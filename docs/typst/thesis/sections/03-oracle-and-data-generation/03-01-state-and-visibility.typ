@@ -24,7 +24,7 @@ The learned component in this thesis is a masked finite-horizon candidate-value 
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, masks, and reason codes. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
+  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, and masks. Reason codes remain audit evidence rather than scorer inputs. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
 ) <fig:qh-actor-oracle-contract>
 
 The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: privileged mesh-rendered depth, a declared sensor simulation, or an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
