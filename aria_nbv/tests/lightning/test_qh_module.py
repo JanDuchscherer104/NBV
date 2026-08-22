@@ -259,6 +259,8 @@ def test_module_rejects_every_learning_contract_field_mutation() -> None:
         "candidate_config_hashes": ("other-candidate-config",),
         "rollout_config_hashes": ("other-rollout-config",),
         "selection_policies": ("other-policy",),
+        "oracle_query_mode": "dense_valid",
+        "label_support_semantics": "equals_action_on_realized_steps_v1",
         "selected_depth_enabled": True,
         "selected_depth_role": "selected_successor_state_history",
         "selected_depth_renderer": "Pytorch3DDepthRenderer",

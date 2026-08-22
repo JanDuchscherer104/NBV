@@ -132,8 +132,10 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("optimizer_updates", torch.zeros((), dtype=torch.int64), persistent=True)
         self.register_buffer("training_loss_sum", torch.zeros((), dtype=torch.float64), persistent=False)
         self.register_buffer("training_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
-        self.register_buffer("validation_loss_sum", torch.zeros((), dtype=torch.float64), persistent=False)
-        self.register_buffer("validation_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
+        # Persist exact validation aggregates so experiment-level checkpoint
+        # selection can implement the closed loss/update tie-break itself.
+        self.register_buffer("validation_loss_sum", torch.zeros((), dtype=torch.float64), persistent=True)
+        self.register_buffer("validation_row_count", torch.zeros((), dtype=torch.int64), persistent=True)
         self.register_buffer("test_loss_sum", torch.zeros((), dtype=torch.float64), persistent=False)
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
         self.save_hyperparameters({"config": config.model_dump_jsonable()})

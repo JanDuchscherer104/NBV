@@ -11,7 +11,8 @@ transfer for :class:`QhBatch`.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Literal
 
 import torch
 from efm3d.aria.camera import CameraTW
@@ -28,6 +29,8 @@ from .views import (
     QhStaticContext,
     QhSupervision,
 )
+
+QhObjectiveProfile = Literal["legacy_selected_rows_v1", "qh_dense_valid_fitted_q_v1"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,7 +158,11 @@ class QhBatch:
         return _transform_batch(self, lambda value: value.to(device=device, non_blocking=non_blocking))
 
 
-def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
+def collate_qh_chains(
+    chains: list[QhChain],
+    *,
+    objective_profile: QhObjectiveProfile = "legacy_selected_rows_v1",
+) -> QhBatch:
     """Pad heterogeneous chain axes and validate factual mask implications.
 
     Args:
@@ -169,7 +176,9 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
         poses use zero; selected indices use ``-1``; terminal padding is true;
         VIN point padding is NaN. Padding never creates actor-valid or
         label-supported entries, and validation enforces
-        ``label_mask <= action_mask <= candidate_mask``.
+        ``label_mask <= action_mask <= candidate_mask``. The dense-valid
+        objective additionally canonicalizes both supervision tables to finite
+        values exactly on realized actor-valid support and NaN elsewhere.
     """
 
     if not chains:
@@ -218,7 +227,31 @@ def collate_qh_chains(chains: list[QhChain]) -> QhBatch:
         raise ValueError("Q_H label_mask must imply action_mask.")
     if bool((batch.actor.action_mask & ~batch.actor.candidate_mask).any()):
         raise ValueError("Q_H action_mask must imply candidate_mask.")
+    if objective_profile not in {"legacy_selected_rows_v1", "qh_dense_valid_fitted_q_v1"}:
+        raise ValueError(f"Q_H collation received unsupported objective_profile={objective_profile!r}.")
+    if objective_profile == "qh_dense_valid_fitted_q_v1":
+        return _canonicalize_dense_valid(batch)
     return batch
+
+
+def _canonicalize_dense_valid(batch: QhBatch) -> QhBatch:
+    """Validate and canonicalize the deployable dense-valid fitted-Q support."""
+
+    expected = batch.actor.action_mask & batch.actor.step_mask.unsqueeze(-1)
+    if not torch.equal(batch.supervision.label_mask, expected):
+        raise ValueError("Dense-valid Q_H label_mask must equal action_mask on every realized step.")
+    reward = batch.supervision.candidate_reward
+    target_rri = batch.supervision.one_step_target_rri
+    if not bool(torch.isfinite(reward[expected]).all()):
+        raise ValueError("Dense-valid Q_H candidate_reward must be finite on exact actor-valid support.")
+    if not bool(torch.isfinite(target_rri[expected]).all()):
+        raise ValueError("Dense-valid Q_H one_step_target_rri must be finite on exact actor-valid support.")
+    supervision = replace(
+        batch.supervision,
+        candidate_reward=torch.where(expected, reward, torch.full_like(reward, float("nan"))),
+        one_step_target_rri=torch.where(expected, target_rri, torch.full_like(target_rri, float("nan"))),
+    )
+    return replace(batch, supervision=supervision)
 
 
 def _collate_static_context(actors: list[QhActorTensors], vin_snippet: VinSnippetView) -> QhStaticContext | None:
