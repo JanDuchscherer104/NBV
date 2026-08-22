@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
+import tempfile
 from collections import Counter
-from collections.abc import Callable, Collection, Iterable, Mapping
-from dataclasses import asdict, dataclass
-from enum import StrEnum
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Any, Literal
@@ -23,10 +24,10 @@ import zarr
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
+from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetInputProtocol
 from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
-    StoredStep,
     decode_invalid_reason,
     decode_position_id,
     rollout_at,
@@ -53,20 +54,8 @@ CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
     "invalid_reason",
     "policy",
 )
-CandidateSelectionGroupField = Literal["position", "strategy", "mixture", "position_strategy"]
-CANDIDATE_SELECTION_GROUP_FIELDS: tuple[CandidateSelectionGroupField, ...] = (
-    "position",
-    "strategy",
-    "mixture",
-    "position_strategy",
-)
-_CANDIDATE_SELECTION_TEMPORAL_METRICS = (
-    "allocation_share",
-    "valid_share",
-    "policy_mass",
-    "selected_share",
-)
 _SAMPLER_PROBABILITY_TOLERANCE = 1e-5
+_GEOMETRY_EPSILON = 1e-9
 
 _TARGET_INVALID_REASON_NAMES = {int(code): name for name, code in TARGET_INVALID_REASON_CODES.items()}
 _STRATEGY_NAMES = {candidate_strategy_id(mode): mode.value for mode in ViewDirectionMode}
@@ -96,19 +85,18 @@ _TEMPORAL_METRICS = {
     "selected_probability": ("selected_probability", "probability"),
     "selected_entropy": ("selected_entropy", "nats"),
 }
-_TEMPORAL_GROUP_FIELDS = (
-    "contract_id",
-    "contract",
-    "profile",
-    "policy",
-    "horizon",
-    "branch_factor",
-    "beam_width",
-    "temperature",
-    "budget_configuration",
-    "selected_position",
-    "selected_strategy",
-    "selected_mixture",
+_TEMPORAL_GROUP_FIELDS = frozenset(
+    {
+        "policy",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+        "temperature",
+        "budget_configuration",
+        "selected_position",
+        "selected_strategy",
+        "selected_mixture",
+    }
 )
 _RECONSTRUCTION_METRIC_SPECS = (
     ("cumulative", "cumulative_target_root_gain", "Cumulative root-normalized target gain"),
@@ -143,98 +131,105 @@ _HEADROOM_INVARIANT_FIELDS = (
     "explicit_target_hash",
 )
 _HEADROOM_TREATMENT_FIELDS = ("policy", "branch_schedule", "branch_factor", "beam_width", "rollout_recipe")
-_GEOMETRY_EPSILON = 1e-8
-
-
-class ProposalAlignment(StrEnum):
-    """Yaw-only frame used to compare per-step candidate proposal support."""
-
-    TARGET_ALIGNED_Z_UP = "target_aligned_z_up"
-    RIG_FORWARD_Z_UP = "rig_forward_z_up"
 
 
 @dataclass(frozen=True, slots=True)
-class GeometryFrame:
-    """One normalized Z-up frame used by a geometry projection."""
+class ManifestFacts:
+    """The single manifest snapshot shared by one inspection demand."""
 
-    frame_id: str
-    rollout_row_id: int
-    step_row_id: int | None
-    step_index: int | None
-    origin_kind: Literal["expansion_pose", "rollout_root"]
-    expansion_pose_source: Literal["root", "previous_selected", "initial_root"]
-    scale_kind: Literal["current_target_distance", "initial_target_distance"]
-    alignment: str
-    scale_m: float
-    initial_scale_m: float
-    target_x: float
-    target_y: float
-    target_z: float
-    reference_axis_x: tuple[float, float, float]
-    reference_axis_y: tuple[float, float, float]
-    reference_axis_z: tuple[float, float, float]
-    target_axis_x: tuple[float, float, float]
-    target_axis_y: tuple[float, float, float]
-    target_axis_z: tuple[float, float, float]
-    rig_target_yaw_error_deg: float | None = None
-    target_elevation_deg: float | None = None
+    payload: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
-class GeometryPoint:
-    """One candidate or factual trajectory point in a normalized frame."""
+class SchemaValidation:
+    """Immutable schema-validation result with ordered errors."""
 
-    frame_id: str
-    role: Literal["candidate", "root", "selected_action"]
-    rollout_row_id: int
-    step_row_id: int | None
-    step_index: int | None
-    candidate_row_id: int | None
-    path_order: int | None
-    actor_action: bool | None
-    selected: bool
-    position: str | None
-    strategy: str | None
-    mixture: str | None
-    x: float
-    y: float
-    z: float
-    displacement_m: float
-    normalization_distance_m: float
-    initial_target_distance_m: float
-    normalized_radius: float = 0.0
-    target_facing_error_deg: float | None = None
+    ok: bool
+    num_rollouts: int
+    num_steps: int
+    num_candidates: int
+    errors: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class GeometryIssue:
-    """Explicit exclusion or truncation affecting a geometry projection."""
+class PromotionEvidence:
+    """Optional promotion error for a validated rollout store."""
 
-    code: str
-    message: str
-    rollout_row_id: int | None = None
-    step_row_id: int | None = None
+    error: str | None
 
 
 @dataclass(frozen=True, slots=True)
-class GeometryProjection:
-    """Presentation-free candidate geometry with auditable frames and issues."""
+class EffectiveTrust:
+    """Streamlit trust composition, preserving schema then promotion errors."""
 
-    view: Literal["proposal_support", "rollout_trajectory"]
-    points: tuple[GeometryPoint, ...]
-    frames: tuple[GeometryFrame, ...]
-    issues: tuple[GeometryIssue, ...]
-    truncated: bool = False
+    ok: bool
+    num_rollouts: int
+    num_steps: int
+    num_candidates: int
+    errors: tuple[str, ...]
 
-    def point_rows(self) -> list[dict[str, object]]:
-        """Return serializable point mappings for reporting and plotting clients."""
 
-        return [asdict(point) for point in self.points]
+@dataclass(frozen=True, slots=True)
+class CompactStatistics:
+    """Compact statistics demanded by CLI stats and report consumers."""
 
-    def frame_rows(self) -> list[dict[str, object]]:
-        """Return serializable frame mappings for anchor rendering clients."""
+    payload: dict[str, Any]
 
-        return [asdict(frame) for frame in self.frames]
+
+def build_manifest_facts(
+    reader: RolloutZarrStoreReader, *, manifest_payload: dict[str, Any] | None = None
+) -> ManifestFacts:
+    """Read or reuse exactly one manifest snapshot."""
+
+    return ManifestFacts(reader.manifest() if manifest_payload is None else manifest_payload)
+
+
+def build_schema_validation(reader: RolloutZarrStoreReader) -> SchemaValidation:
+    """Validate one store without exposing the reader's mutable result."""
+
+    result = reader.validate()
+    return SchemaValidation(
+        ok=bool(result.ok),
+        num_rollouts=int(result.num_rollouts),
+        num_steps=int(result.num_steps),
+        num_candidates=int(result.num_candidates),
+        errors=tuple(str(error) for error in result.errors),
+    )
+
+
+def build_promotion_evidence(
+    reader: RolloutZarrStoreReader,
+    *,
+    manifest_payload: dict[str, Any] | None = None,
+    evaluator: Callable[..., str | None] | None = None,
+) -> PromotionEvidence:
+    """Evaluate promotion evidence only for consumers that demand it."""
+
+    check = promoted_store_validation_error if evaluator is None else evaluator
+    return PromotionEvidence(check(reader, manifest_payload=manifest_payload))
+
+
+def build_effective_streamlit_trust(schema: SchemaValidation, promotion: PromotionEvidence) -> EffectiveTrust:
+    """Compose independent trust facets without mutating either input."""
+
+    errors = list(schema.errors)
+    if promotion.error is not None:
+        errors.append(promotion.error)
+    return EffectiveTrust(
+        ok=schema.ok and promotion.error is None,
+        num_rollouts=schema.num_rollouts,
+        num_steps=schema.num_steps,
+        num_candidates=schema.num_candidates,
+        errors=tuple(errors),
+    )
+
+
+def build_compact_statistics(
+    reader: RolloutZarrStoreReader, *, manifest_payload: dict[str, Any] | None = None
+) -> CompactStatistics:
+    """Compute compact statistics, reusing a supplied manifest snapshot."""
+
+    return CompactStatistics(rollout_statistics(reader, manifest_payload=manifest_payload))
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,6 +548,12 @@ def candidate_audit_rows(
     candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
     branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
+    protocol = str(reader.root.attrs.get("target_protocol_version", "")).replace("-", "_")
+    target_records = {target.target_row_id: target for target in target_rows(reader)}
+    target_centers = {
+        target_row_id: np.asarray(target.center_world, dtype=np.float64).reshape(3)
+        for target_row_id, target in target_records.items()
+    }
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
@@ -572,6 +573,22 @@ def candidate_audit_rows(
         cohort_json = json.dumps(cohort_fields, sort_keys=True, separators=(",", ":"))
         generation_cohort_id = hashlib.sha256(cohort_json.encode()).hexdigest()[:16]
         root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+        target_delta = target_centers.get(rollout.target_row_id)
+        target_record = target_records.get(rollout.target_row_id)
+        target_source = None if target_record is None else target_record.source
+        target_valid = None if target_record is None else target_record.target_valid
+        target_gt_label_valid = None if target_record is None else target_record.gt_label_valid
+        target_match_status = None if target_record is None else target_record.gt_match_status
+        target_evidence_role = (
+            "oracle/evaluation"
+            if protocol == TargetInputProtocol.V0_GT_INPUT.value or target_source == ORACLE_GT_TARGET_SOURCE
+            else "actor-visible"
+            if target_source
+            else "unknown"
+        )
+        if target_delta is not None:
+            target_delta = target_delta - root_center
+        reference_pose = np.asarray(rollout.root_pose_world, dtype=np.float64).reshape(12)
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
@@ -581,6 +598,11 @@ def candidate_audit_rows(
                 strategy_id = int(strategy_ids[row])
                 pose = step.pose_world_cam[local]
                 relative = np.asarray(pose[9:12], dtype=np.float64) - root_center
+                reference_rotation = reference_pose[:9].reshape(3, 3)
+                reference_center = reference_pose[9:12]
+                proposal_relative = reference_rotation.T @ (
+                    np.asarray(pose[9:12], dtype=np.float64) - reference_center
+                )
                 candidate_row = {
                     "candidate_row_id": int(step.candidate_row_ids[local]),
                     "rollout_row_id": rollout.rollout_row_id,
@@ -601,6 +623,12 @@ def candidate_audit_rows(
                     "generation_cohort_id": generation_cohort_id,
                     "generation_cohort": cohort_json,
                     "target_row_id": rollout.target_row_id,
+                    "target_source": target_source,
+                    "target_protocol": protocol,
+                    "target_valid": target_valid,
+                    "target_gt_label_valid": target_gt_label_valid,
+                    "target_match_status": target_match_status,
+                    "target_evidence_role": target_evidence_role,
                     "selected": bool(step.selected_mask[local]),
                     "actor_action": bool(step.actor_action_mask[local]),
                     "oracle_label": bool(oracle_label_mask[row]),
@@ -609,7 +637,6 @@ def candidate_audit_rows(
                     "strategy": decode_strategy_id(strategy_id),
                     "position_id": int(step.position_ids[local]),
                     "position": str(step.position_names[local]),
-                    "position_strategy": f"{step.position_names[local]} · {decode_strategy_id(strategy_id)}",
                     "mixture_id": int(step.mixture_ids[local]),
                     "mixture": str(step.mixture_names[local]),
                     "sampler_probability": _finite_or_none(step.sampler_probabilities[local]),
@@ -617,7 +644,6 @@ def candidate_audit_rows(
                     "invalid_reason_bitset": int(step.invalid_reason_bitsets[local]),
                     "target_rri": _finite_or_none(step.target_rri[local]),
                     "target_root_gain": _finite_or_none(step.target_root_gain[local]),
-                    "cumulative_target_root_gain": _finite_or_none(step.cumulative_target_root_gain),
                     "target_log_error_gain": _finite_or_none(target_log_error_gain[row]),
                     "target_pm_dist_before": _finite_or_none(target_pm_dist_before[row]),
                     "target_pm_dist_after": _finite_or_none(target_pm_dist_after[row]),
@@ -629,6 +655,12 @@ def candidate_audit_rows(
                     "root_relative_x_m": float(relative[0]),
                     "root_relative_y_m": float(relative[1]),
                     "root_relative_z_m": float(relative[2]),
+                    "decision_relative_x_m": float(proposal_relative[0]),
+                    "decision_relative_y_m": float(proposal_relative[1]),
+                    "decision_relative_z_m": float(proposal_relative[2]),
+                    "decision_reference_frame": (
+                        "root pose world frame for step 0; previous selected camera frame thereafter"
+                    ),
                     "root_distance_m": float(np.linalg.norm(relative)),
                     "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
                     "units": "m",
@@ -644,12 +676,17 @@ def candidate_audit_rows(
                     "motion_yaw_delta_deg": _finite_or_none(motion_yaw_delta_deg[row]),
                     "target_distance_m": _finite_or_none(step.target_distance_m[local]),
                     "target_bearing_yaw_deg": _finite_or_none(target_bearing_yaw_deg[row]),
+                    "root_to_target_x_m": None if target_delta is None else float(target_delta[0]),
+                    "root_to_target_y_m": None if target_delta is None else float(target_delta[1]),
+                    "root_to_target_z_m": None if target_delta is None else float(target_delta[2]),
                 }
                 if row_callback is not None:
                     row_callback(candidate_row)
                 else:
                     rows.append(candidate_row)
                 emitted += 1
+            if step.selected_local_index >= 0:
+                reference_pose = np.asarray(step.pose_world_cam[step.selected_local_index], dtype=np.float64).reshape(12)
     return rows
 
 
@@ -672,50 +709,817 @@ def candidate_population_evidence(
     if sample_size < 0:
         raise ValueError("sample_size must be non-negative")
     accumulator = _CandidatePopulationAccumulator(max_sample_rows=sample_size)
+    # Scientific reducers replay a bounded spooled stream instead of retaining
+    # a second in-memory copy of every candidate row.  The spool stays in RAM
+    # for small stores and transparently moves to a temporary file for large
+    # stores; the display sample remains the only retained candidate subset.
+    spooled_rows = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024, mode="w+b")
+
+    def consume(row: Mapping[str, object]) -> None:
+        accumulator.consume(row)
+        pickle.dump(dict(row), spooled_rows, protocol=pickle.HIGHEST_PROTOCOL)
+
     try:
-        audit_reader(reader, row_callback=accumulator.consume)
+        audit_reader(reader, row_callback=consume)
     except TypeError as error:
         if "row_callback" not in str(error):
             raise
         for row in audit_reader(reader):  # type: ignore[operator]
-            accumulator.consume(row)
-    sample = accumulator.sample()
-    compositions = accumulator.compositions()
-    calibrations = accumulator.calibrations()
-    groups = accumulator.groups()
-    collision = accumulator.collision()
-    selection_dynamics = accumulator.selection_dynamics()
-    selection_transitions = {
-        group_by: (
-            candidate_selection_transition_rows(selection_dynamics[group_by])
-            if _selection_rows_have_factual_identity(selection_dynamics[group_by])
-            else []
+            consume(row)
+    spooled_rows.seek(0)
+
+    def replay_rows() -> Iterable[dict[str, object]]:
+        spooled_rows.seek(0)
+        while True:
+            try:
+                yield pickle.load(spooled_rows)
+            except EOFError:
+                return
+
+    try:
+        sample = accumulator.sample()
+        compositions = accumulator.compositions()
+        calibrations = accumulator.calibrations()
+        groups = accumulator.groups()
+        collision = accumulator.collision()
+        sample_rows = list(sample["rows"])
+        return {
+            "composition": compositions,
+            "calibration": calibrations,
+            "collision": collision,
+            "groups": groups,
+            "sample": sample,
+            "population_count": accumulator.population_count,
+            "geometry": candidate_geometry_evidence_rows(sample_rows),
+            "direction": candidate_direction_evidence(replay_rows()),
+            "spatial": candidate_spatial_support_evidence(replay_rows()),
+            "target_view": candidate_target_view_evidence(replay_rows()),
+            "motion": candidate_motion_support_evidence(replay_rows()),
+        }
+    finally:
+        spooled_rows.close()
+
+
+def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Attach a target-normalized, root-centred 2-D frame to audit rows.
+
+    The frame is deliberately local: the root is ``(0, 0)`` and the observed
+    target is ``(1, 0)``.  A positive lateral coordinate is the right-handed
+    perpendicular to the root-to-target direction.  Degenerate or absent
+    target baselines remain unavailable rather than being fabricated.
+    """
+
+    output: list[dict[str, object]] = []
+    frame = "root=(0,0), target=(1,0), right-handed lateral axis"
+    for raw in rows:
+        row = dict(raw)
+        x = _finite_or_none(row.get("root_relative_x_m"))
+        y = _finite_or_none(row.get("root_relative_y_m"))
+        tx = _finite_or_none(row.get("root_to_target_x_m"))
+        ty = _finite_or_none(row.get("root_to_target_y_m"))
+        norm = None if tx is None or ty is None else float(np.hypot(tx, ty))
+        if norm is None or norm <= _GEOMETRY_EPSILON or x is None or y is None:
+            forward = lateral = None
+        else:
+            forward = float((x * tx + y * ty) / (norm * norm))
+            lateral = float((-x * ty + y * tx) / (norm * norm))
+        row.update(
+            target_normalized_forward=forward,
+            target_normalized_lateral=lateral,
+            target_normalized_coordinate_frame=frame,
         )
-        for group_by in CANDIDATE_SELECTION_GROUP_FIELDS
-    }
-    selection_sequences = {
-        group_by: (
-            candidate_selection_sequence_rows(selection_dynamics[group_by])
-            if _selection_rows_have_factual_identity(selection_dynamics[group_by])
-            else []
+        output.append(row)
+    return output
+
+
+def _candidate_state_key(row: Mapping[str, object]) -> tuple[str, str, str]:
+    return (
+        str(row.get("scene", "unknown")),
+        str(row.get("rollout_row_id", "unknown")),
+        str(row.get("step_row_id", "unknown")),
+    )
+
+
+def _population_state_groups(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    extra_fields: tuple[str, ...] = (),
+) -> dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]]:
+    """Group audit rows by persisted cohort/state and explicit population.
+
+    A state is one factual ``scene/rollout/step`` record.  Aggregation must
+    happen after the state reduction: otherwise states with a large candidate
+    shell silently dominate the scientific summary.
+    """
+    grouped: dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]] = {}
+    state_keys: set[tuple[str, str, str, str, *tuple[str, ...]]] = set()
+    for raw in rows:
+        row = dict(raw)
+        cohort = str(row.get("generation_cohort_id", "unknown"))
+        scene, rollout_id, step_id = _candidate_state_key(row)
+        extra = tuple(str(row.get(field, "unknown")) for field in extra_fields)
+        state_keys.add((cohort, scene, rollout_id, step_id, *extra))
+        for population in ("all", "actor_valid"):
+            if population == "actor_valid" and not bool(row.get("actor_action")):
+                continue
+            grouped.setdefault((cohort, scene, rollout_id, step_id, *extra, population), []).append(row)
+    for state_key in state_keys:
+        grouped.setdefault((*state_key, "actor_valid"), [])
+    return grouped
+
+
+def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
+    """Summarize directions per factual state, then scene and cohort macros."""
+    source = [dict(row) for row in rows]
+    azimuth_bins, elevation_bins = 12, 6
+    density: list[dict[str, object]] = []
+    cap_rows: list[dict[str, object]] = []
+    angular_rows: list[dict[str, object]] = []
+    states = _population_state_groups(source)
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+
+    def fibonacci_sphere(count: int) -> np.ndarray:
+        index = np.arange(count, dtype=np.float64)
+        z = 1.0 - 2.0 * (index + 0.5) / count
+        theta = 2.0 * np.pi * index / phi
+        return np.column_stack((np.cos(theta) * np.sqrt(1.0 - z * z), np.sin(theta) * np.sqrt(1.0 - z * z), z))
+
+    cap_centers, probes = fibonacci_sphere(128), fibonacci_sphere(512)
+    for key, state_rows in sorted(states.items()):
+        cohort, scene, rollout_id, step_id, population = key
+        vectors: list[np.ndarray] = []
+        counts = np.zeros((azimuth_bins, elevation_bins), dtype=np.int64)
+        for row in state_rows:
+            try:
+                vector = np.asarray(
+                    [
+                        row.get("decision_relative_x_m", row.get("root_relative_x_m")),
+                        row.get("decision_relative_y_m", row.get("root_relative_y_m")),
+                        row.get("decision_relative_z_m", row.get("root_relative_z_m")),
+                    ],
+                    dtype=np.float64,
+                )
+                radius = float(np.linalg.norm(vector))
+            except (TypeError, ValueError):
+                radius = 0.0
+            if not np.isfinite(radius) or radius <= _GEOMETRY_EPSILON:
+                continue
+            vector /= radius
+            vectors.append(vector)
+            azimuth = float(np.arctan2(vector[1], vector[0]))
+            sin_elevation = float(np.clip(vector[2], -1.0, 1.0))
+            ai = min(azimuth_bins - 1, int(((azimuth + np.pi) / (2 * np.pi)) * azimuth_bins))
+            ei = min(elevation_bins - 1, int(((sin_elevation + 1.0) / 2.0) * elevation_bins))
+            counts[ai, ei] += 1
+        valid = len(vectors)
+        base = {
+            "evidence": "equal_area_direction_density",
+            "aggregation_level": "state",
+            "generation_cohort_id": cohort,
+            "scene": scene,
+            "rollout_row_id": rollout_id,
+            "step_row_id": step_id,
+            "population": population,
+            "state_count": 1,
+            "total_count": len(state_rows),
+            "valid_count": valid,
+            "finite_count": valid,
+            "missing_count": len(state_rows) - valid,
+            "candidate_total_count": len(state_rows),
+            "candidate_finite_count": valid,
+            "candidate_missing_count": len(state_rows) - valid,
+            "defined_state_count": int(valid > 0),
+            "scene_count": 1,
+            "candidate_direction_count": len(state_rows),
+            "units": "solid-angle fraction",
+            "protocol": {"binning": "azimuth x sin(elevation)"},
+        }
+        for ai in range(azimuth_bins):
+            for ei in range(elevation_bins):
+                density.append(
+                    {
+                        **base,
+                        "azimuth_bin": ai,
+                        "sin_elevation_bin": ei,
+                        "count": int(counts[ai, ei]),
+                        "mean_state_fraction": None if not valid else float(counts[ai, ei] / valid),
+                        "available": valid > 0,
+                    }
+                )
+        if vectors:
+            points = np.asarray(vectors)
+            discrepancies = []
+            for radius in (30, 60, 90, 120, 150):
+                threshold = np.cos(np.radians(radius))
+                observed = np.mean(points @ cap_centers.T >= threshold, axis=0)
+                expected = (1.0 - threshold) / 2.0
+                discrepancies.append(float(np.max(np.abs(observed - expected))))
+            for radius, value in zip((30, 60, 90, 120, 150), discrepancies, strict=True):
+                cap_rows.append(
+                    {
+                        "evidence": "spherical_cap_discrepancy",
+                        "metric_name": "distance_from_isotropy",
+                        "aggregation_level": "state",
+                        "generation_cohort_id": cohort,
+                        "scene": scene,
+                        "rollout_row_id": rollout_id,
+                        "step_row_id": step_id,
+                        "population": population,
+                        "radius_deg": radius,
+                        "value": value,
+                        "discrepancy": value,
+                        "valid_count": valid,
+                        "candidate_total_count": len(state_rows),
+                        "candidate_finite_count": valid,
+                        "candidate_missing_count": len(state_rows) - valid,
+                        "state_count": 1,
+                        "defined_state_count": 1,
+                        "available": True,
+                        "units": "fraction",
+                        "protocol": {
+                            "reference": "fixed Fibonacci sphere",
+                            "null_model": "uniform S2",
+                            "cap_centers": 128,
+                            "reference_count": 128,
+                            "interpretation": "distance from isotropy only; not a generator-defect test",
+                        },
+                    }
+                )
+            cosine = np.clip(points @ points.T, -1.0, 1.0)
+            if len(points) == 1:
+                nearest = np.asarray([], dtype=np.float64)
+            else:
+                np.fill_diagonal(cosine, -1.0)
+                nearest = np.degrees(np.arccos(np.max(cosine, axis=1)))
+            # The fixed reference is augmented with each observed antipode so
+            # a singleton has an explicit ~180 degree uncovered direction,
+            # while an antipodal pair has the expected ~90 degree radius.
+            probe_directions = np.vstack((probes, -points))
+            probe_nearest = np.degrees(np.arccos(np.clip(np.max(probe_directions @ points.T, axis=1), -1.0, 1.0)))
+            angular_rows.append(
+                {
+                    "evidence": "nearest_neighbor_angular_separation",
+                    "aggregation_level": "state",
+                    "generation_cohort_id": cohort,
+                    "scene": scene,
+                    "rollout_row_id": rollout_id,
+                    "step_row_id": step_id,
+                    "population": population,
+                    "value": None if nearest.size == 0 else float(np.mean(nearest)),
+                    "nearest_neighbor_deg": None if nearest.size == 0 else float(np.mean(nearest)),
+                    "nearest_neighbor_available": bool(nearest.size),
+                    "nearest_neighbor_reason": None if nearest.size else "undefined for a singleton state",
+                    "covering_radius_deg": float(np.max(probe_nearest)),
+                    "probe_covering_radius_deg": float(np.max(probe_nearest)),
+                    "valid_count": valid,
+                    "candidate_total_count": len(state_rows),
+                    "candidate_finite_count": valid,
+                    "candidate_missing_count": len(state_rows) - valid,
+                    "state_count": 1,
+                    "defined_state_count": 1,
+                    "available": True,
+                    "units": "degrees",
+                    "protocol": {
+                        "reference": "fixed Fibonacci sphere",
+                        "covering_probes": 512,
+                        "reference_count": 512,
+                        "covering_reference_count": 512,
+                    },
+                }
+            )
+        else:
+            for radius in (30, 60, 90, 120, 150):
+                cap_rows.append(
+                    {
+                        **base,
+                        "evidence": "spherical_cap_discrepancy",
+                        "metric_name": "distance_from_isotropy",
+                        "radius_deg": radius,
+                        "value": None,
+                        "discrepancy": None,
+                        "available": False,
+                        "units": "fraction",
+                        "protocol": {
+                            "reference": "fixed Fibonacci sphere",
+                            "null_model": "uniform S2",
+                            "cap_centers": 128,
+                            "reference_count": 128,
+                            "interpretation": "distance from isotropy only; not a generator-defect test",
+                        },
+                    }
+                )
+            angular_rows.append(
+                {
+                    **base,
+                    "evidence": "nearest_neighbor_angular_separation",
+                    "value": None,
+                    "nearest_neighbor_deg": None,
+                    "covering_radius_deg": None,
+                    "available": False,
+                    "units": "degrees",
+                    "protocol": {
+                        "reference": "fixed Fibonacci sphere",
+                        "covering_probes": 512,
+                        "reference_count": 512,
+                        "covering_reference_count": 512,
+                    },
+                }
+            )
+
+    # Cell-wise macros preserve the complete 12x6 grid while excluding only
+    # unavailable state values from numeric denominators.
+    for level in ("scene_macro", "cohort_macro"):
+        groups: dict[tuple[str, str, str, int, int], list[dict[str, object]]] = {}
+        for row in density:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups.setdefault(
+                (
+                    str(row["generation_cohort_id"]),
+                    scene,
+                    str(row["population"]),
+                    int(row["azimuth_bin"]),
+                    int(row["sin_elevation_bin"]),
+                ),
+                [],
+            ).append(row)
+        for key, grouped in sorted(groups.items()):
+            state_facets: dict[tuple[str, str, str], dict[str, object]] = {}
+            for row in grouped:
+                state_key = (str(row["scene"]), str(row["rollout_row_id"]), str(row["step_row_id"]))
+                state_facets.setdefault(state_key, row)
+            facet_rows = list(state_facets.values())
+            total_count = sum(int(row["total_count"]) for row in facet_rows)
+            valid_count = sum(int(row["valid_count"]) for row in facet_rows)
+            missing_count = sum(int(row["missing_count"]) for row in facet_rows)
+            if level == "cohort_macro":
+                by_scene: dict[str, list[float]] = {}
+                for row in grouped:
+                    if row["available"] and row["mean_state_fraction"] is not None:
+                        by_scene.setdefault(str(row.get("scene", "unknown")), []).append(
+                            float(row["mean_state_fraction"])
+                        )
+                values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+            else:
+                values = [
+                    float(row["mean_state_fraction"])
+                    for row in grouped
+                    if row["available"] and row["mean_state_fraction"] is not None
+                ]
+            density.append(
+                {
+                    **grouped[0],
+                    "aggregation_level": level,
+                    "scene": key[1],
+                    "state_count": len(facet_rows),
+                    "defined_state_count": sum(int(row.get("available", False)) for row in facet_rows),
+                    "scene_count": len({str(row.get("scene", "unknown")) for row in facet_rows}),
+                    "total_count": total_count,
+                    "candidate_direction_count": total_count,
+                    "valid_count": valid_count,
+                    "finite_count": valid_count,
+                    "missing_count": missing_count,
+                    "candidate_total_count": total_count,
+                    "candidate_finite_count": valid_count,
+                    "candidate_missing_count": missing_count,
+                    "mean_state_fraction": None if not values else float(np.mean(values)),
+                    "available": bool(values),
+                    "cohort_macro_population": key[2],
+                }
+            )
+    for rows_out, metric_name in ((cap_rows, "cap"), (angular_rows, "angular")):
+        for level in ("scene_macro", "cohort_macro"):
+            groups: dict[tuple[str, str, str, object], list[dict[str, object]]] = {}
+            for row in rows_out:
+                if row["aggregation_level"] != "state":
+                    continue
+                scene = str(row["scene"]) if level == "scene_macro" else "all"
+                facet = row.get("radius_deg", metric_name)
+                groups.setdefault((str(row["generation_cohort_id"]), scene, str(row["population"]), facet), []).append(
+                    row
+                )
+            for key, grouped in sorted(groups.items(), key=lambda item: tuple(map(str, item[0]))):
+                value_key = "discrepancy" if metric_name == "cap" else "nearest_neighbor_deg"
+                if level == "cohort_macro":
+                    by_scene: dict[str, list[float]] = {}
+                    for row in grouped:
+                        value = row.get(value_key)
+                        if value is not None:
+                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(value))
+                    values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                else:
+                    values = [float(r[value_key]) for r in grouped if r.get(value_key) is not None]
+                covering_values = [
+                    float(row["covering_radius_deg"]) for row in grouped if row.get("covering_radius_deg") is not None
+                ]
+                if level == "cohort_macro":
+                    by_scene_covering: dict[str, list[float]] = {}
+                    for row in grouped:
+                        value = row.get("covering_radius_deg")
+                        if value is not None:
+                            by_scene_covering.setdefault(str(row.get("scene", "unknown")), []).append(float(value))
+                    covering_values = [
+                        float(np.mean(scene_values)) for scene_values in by_scene_covering.values() if scene_values
+                    ]
+                rows_out.append(
+                    {
+                        **grouped[0],
+                        "aggregation_level": level,
+                        "scene": key[1],
+                        "state_count": len(grouped),
+                        "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
+                        "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
+                        "total_count": sum(int(row["candidate_total_count"]) for row in grouped),
+                        "finite_count": sum(int(row["candidate_finite_count"]) for row in grouped),
+                        "missing_count": sum(int(row["candidate_missing_count"]) for row in grouped),
+                        "candidate_total_count": sum(int(row["candidate_total_count"]) for row in grouped),
+                        "candidate_finite_count": sum(int(row["candidate_finite_count"]) for row in grouped),
+                        "candidate_missing_count": sum(int(row["candidate_missing_count"]) for row in grouped),
+                        "value": None if not values else float(np.mean(values)),
+                        value_key: None if not values else float(np.mean(values)),
+                        "covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
+                        "probe_covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
+                        "available": bool(values or covering_values),
+                        "cohort_macro_population": key[2],
+                    }
+                )
+    return {"density_rows": density, "cap_rows": cap_rows, "angular_support_rows": angular_rows}
+
+
+def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Summarize spatial support with shell- and population-preserving macros."""
+    source = [dict(row) for row in rows]
+    output: list[dict[str, object]] = []
+    groups = _population_state_groups(source, extra_fields=("position",))
+    for key, grouped in sorted(groups.items()):
+        cohort, scene, rollout_id, step_id, shell, population = key
+        values = {
+            "root_xy_radius": [
+                float(
+                    np.hypot(
+                        r.get("decision_relative_x_m", r.get("root_relative_x_m")),
+                        r.get("decision_relative_y_m", r.get("root_relative_y_m")),
+                    )
+                )
+                for r in grouped
+                if _finite_or_none(r.get("decision_relative_x_m", r.get("root_relative_x_m"))) is not None
+                and _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m"))) is not None
+            ],
+            "root_3d_distance": [
+                float(
+                    np.linalg.norm(
+                        [
+                            r.get("decision_relative_x_m", r.get("root_relative_x_m")),
+                            r.get("decision_relative_y_m", r.get("root_relative_y_m")),
+                            r.get("decision_relative_z_m", r.get("root_relative_z_m")),
+                        ]
+                    )
+                )
+                for r in grouped
+                if all(
+                    _finite_or_none(r.get(decision, r.get(root))) is not None
+                    for decision, root in zip(
+                        ("decision_relative_x_m", "decision_relative_y_m", "decision_relative_z_m"),
+                        ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m"),
+                        strict=True,
+                    )
+                )
+            ],
+            "root_height": [
+                float(r.get("decision_relative_z_m", r.get("root_relative_z_m")))
+                for r in grouped
+                if _finite_or_none(r.get("decision_relative_z_m", r.get("root_relative_z_m"))) is not None
+            ],
+        }
+        for metric, vals in values.items():
+            output.append(
+                {
+                    "metric": metric,
+                    "aggregation_level": "state",
+                    "generation_cohort_id": cohort,
+                    "scene": scene,
+                    "rollout_row_id": rollout_id,
+                    "step_row_id": step_id,
+                    "declared_shell": shell,
+                    "population": population,
+                    "count": len(grouped),
+                    "total_count": len(grouped),
+                    "finite_count": len(vals),
+                    "missing_count": len(grouped) - len(vals),
+                    "candidate_total_count": len(grouped),
+                    "candidate_finite_count": len(vals),
+                    "candidate_missing_count": len(grouped) - len(vals),
+                    "state_count": 1,
+                    "defined_state_count": int(bool(vals)),
+                    "scene_count": 1,
+                    "mean": None if not vals else float(np.mean(vals)),
+                    "units": "m",
+                    "available": bool(vals),
+                    "zero_radius_policy": "included",
+                }
+            )
+    for level in ("scene_macro", "cohort_macro"):
+        groups_macro: dict[tuple[str, str, str, str, str], list[dict[str, object]]] = {}
+        for row in output:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups_macro.setdefault(
+                (
+                    str(row["generation_cohort_id"]),
+                    scene,
+                    str(row["declared_shell"]),
+                    str(row["population"]),
+                    str(row["metric"]),
+                ),
+                [],
+            ).append(row)
+        for key, grouped in sorted(groups_macro.items()):
+            if level == "cohort_macro":
+                by_scene: dict[str, list[float]] = {}
+                for row in grouped:
+                    if row.get("mean") is not None:
+                        by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+            else:
+                values = [float(r["mean"]) for r in grouped if r.get("mean") is not None]
+            output.append(
+                {
+                    **grouped[0],
+                    "aggregation_level": level,
+                    "scene": key[1],
+                    "mean": None if not values else float(np.mean(values)),
+                    "count": sum(int(row.get("count", 0)) for row in grouped),
+                    "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
+                    "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
+                    "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                    "candidate_total_count": sum(
+                        int(row.get("candidate_total_count", row.get("count", 0))) for row in grouped
+                    ),
+                    "candidate_finite_count": sum(
+                        int(row.get("candidate_finite_count", row.get("finite_count", 0))) for row in grouped
+                    ),
+                    "candidate_missing_count": sum(
+                        int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
+                    ),
+                    "state_count": len(grouped),
+                    "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
+                    "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
+                    "available": bool(values),
+                }
+            )
+    return output
+
+
+def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Expose target distance and explicit unavailable view metrics per facet."""
+    source = [dict(row) for row in rows]
+    groups = _population_state_groups(source)
+    result: list[dict[str, object]] = []
+    for key, grouped in sorted(groups.items()):
+        cohort, scene, rollout_id, step_id, population = key
+        values = [_finite_or_none(row.get("target_distance_m")) for row in grouped]
+        finite = [value for value in values if value is not None]
+        result.append(
+            {
+                "evidence": "target_distance",
+                "generation_cohort_id": cohort,
+                "scene": scene,
+                "rollout_row_id": rollout_id,
+                "step_row_id": step_id,
+                "population": population,
+                "aggregation_level": "state",
+                "available": bool(finite),
+                "count": len(grouped),
+                "total_count": len(grouped),
+                "finite_count": len(finite),
+                "missing_count": len(grouped) - len(finite),
+                "candidate_total_count": len(grouped),
+                "candidate_finite_count": len(finite),
+                "candidate_missing_count": len(grouped) - len(finite),
+                "state_count": 1,
+                "defined_state_count": int(bool(finite)),
+                "scene_count": 1,
+                "mean": None if not finite else float(np.mean(finite)),
+                "units": "m",
+            }
         )
-        for group_by in CANDIDATE_SELECTION_GROUP_FIELDS
-    }
-    return {
-        "composition": compositions,
-        "calibration": calibrations,
-        "collision": collision,
-        "selection_dynamics": selection_dynamics,
-        "selection_transitions": selection_transitions,
-        "selection_sequences": selection_sequences,
-        "sequence_returns": {
-            group_by: candidate_sequence_return_summary_rows(selection_sequences[group_by])
-            for group_by in CANDIDATE_SELECTION_GROUP_FIELDS
-        },
-        "groups": groups,
-        "sample": sample,
-        "population_count": accumulator.population_count,
-    }
+        for name in ("target_fov_margin", "target_pixel_margin", "target_line_of_sight"):
+            result.append(
+                {
+                    "evidence": name,
+                    "generation_cohort_id": cohort,
+                    "scene": scene,
+                    "rollout_row_id": rollout_id,
+                    "step_row_id": step_id,
+                    "population": population,
+                    "aggregation_level": "state",
+                    "available": False,
+                    "count": len(grouped),
+                    "total_count": len(grouped),
+                    "finite_count": 0,
+                    "missing_count": len(grouped),
+                    "candidate_total_count": len(grouped),
+                    "candidate_finite_count": 0,
+                    "candidate_missing_count": len(grouped),
+                    "state_count": 1,
+                    "defined_state_count": 0,
+                    "scene_count": 1,
+                    "units": "boolean" if name == "target_line_of_sight" else "px/degrees",
+                    "reason": "optical calibration or visibility is not persisted",
+                }
+            )
+    for level in ("scene_macro", "cohort_macro"):
+        groups_macro: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+        for row in result:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups_macro.setdefault(
+                (str(row["generation_cohort_id"]), scene, str(row["population"]), str(row["evidence"])), []
+            ).append(row)
+        for key, grouped in sorted(groups_macro.items()):
+            if level == "cohort_macro":
+                by_scene: dict[str, list[float]] = {}
+                for row in grouped:
+                    if row.get("mean") is not None:
+                        by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                finite = [float(np.mean(values)) for values in by_scene.values() if values]
+            else:
+                finite = [float(row["mean"]) for row in grouped if row.get("mean") is not None]
+            result.append(
+                {
+                    **grouped[0],
+                    "aggregation_level": level,
+                    "scene": key[1],
+                    "mean": None if not finite else float(np.mean(finite)),
+                    "available": bool(finite),
+                    "count": sum(int(row["count"]) for row in grouped),
+                    "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
+                    "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
+                    "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                    "candidate_total_count": sum(
+                        int(row.get("candidate_total_count", row.get("count", 0))) for row in grouped
+                    ),
+                    "candidate_finite_count": sum(
+                        int(row.get("candidate_finite_count", row.get("finite_count", 0))) for row in grouped
+                    ),
+                    "candidate_missing_count": sum(
+                        int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
+                    ),
+                    "state_count": len(grouped),
+                    "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
+                    "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
+                }
+            )
+    return result
+
+
+def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+    """Summarize motion and collision diagnostics per state and real macros."""
+    source = [dict(row) for row in rows]
+    groups = _population_state_groups(source)
+    result: list[dict[str, object]] = []
+    metrics = (
+        ("motion_step_length_m", "m"),
+        ("motion_height_delta_m", "m"),
+        ("motion_backward_step_m", "m"),
+        ("motion_yaw_delta_deg", "degrees"),
+        ("free_space_margin_m", "m"),
+        ("path_min_clearance_m", "m"),
+    )
+    for key, grouped in sorted(groups.items()):
+        cohort, scene, rollout_id, step_id, population = key
+        base = {
+            "generation_cohort_id": cohort,
+            "scene": scene,
+            "rollout_row_id": rollout_id,
+            "step_row_id": step_id,
+            "population": population,
+            "aggregation_level": "state",
+            "count": len(grouped),
+            "total_count": len(grouped),
+            "candidate_total_count": len(grouped),
+            "scene_count": 1,
+        }
+        for metric, units in metrics:
+            values = [value for row in grouped if (value := _finite_or_none(row.get(metric))) is not None]
+            result.append(
+                {
+                    **base,
+                    "metric": metric,
+                    "available": bool(values),
+                    "finite_count": len(values),
+                    "missing_count": len(grouped) - len(values),
+                    "candidate_finite_count": len(values),
+                    "candidate_missing_count": len(grouped) - len(values),
+                    "defined_state_count": int(bool(values)),
+                    "mean": None if not values else float(np.mean(values)),
+                    "units": units,
+                }
+            )
+        applicable = [row for row in grouped if row.get("path_collision_applicable") is True]
+        evaluated = [row for row in applicable if row.get("path_collision_evaluated") is True]
+        collisions = [row for row in evaluated if row.get("path_collision") is True]
+        result.append(
+            {
+                **base,
+                "metric": "path_collision_rate",
+                "available": bool(evaluated),
+                "finite_count": len(evaluated),
+                "missing_count": len(grouped) - len(evaluated),
+                "candidate_finite_count": len(evaluated),
+                "candidate_missing_count": len(grouped) - len(evaluated),
+                "defined_state_count": int(bool(evaluated)),
+                "applicable_count": len(applicable),
+                "evaluated_count": len(evaluated),
+                "collision_count": len(collisions),
+                "not_applicable_count": len(grouped) - len(applicable),
+                "applicable_unevaluated_count": len(applicable) - len(evaluated),
+                "collision_rate": None if not evaluated else len(collisions) / len(evaluated),
+                "units": "fraction",
+            }
+        )
+    for level in ("scene_macro", "cohort_macro"):
+        groups_macro: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+        for row in result:
+            if row["aggregation_level"] != "state":
+                continue
+            scene = str(row["scene"]) if level == "scene_macro" else "all"
+            groups_macro.setdefault(
+                (str(row["generation_cohort_id"]), scene, str(row["population"]), str(row["metric"])), []
+            ).append(row)
+        for key, grouped in sorted(groups_macro.items()):
+            base = {
+                **grouped[0],
+                "aggregation_level": level,
+                "scene": key[1],
+                "count": sum(int(row["count"]) for row in grouped),
+                "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
+                "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
+                "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                "candidate_total_count": sum(
+                    int(row.get("candidate_total_count", row.get("count", 0))) for row in grouped
+                ),
+                "candidate_finite_count": sum(
+                    int(row.get("candidate_finite_count", row.get("finite_count", 0))) for row in grouped
+                ),
+                "candidate_missing_count": sum(
+                    int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
+                ),
+                "state_count": len(grouped),
+                "defined_state_count": sum(
+                    int(row.get("defined_state_count", row.get("available", False))) for row in grouped
+                ),
+                "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
+            }
+            if key[3] == "path_collision_rate":
+                applicable = sum(int(row.get("applicable_count", 0)) for row in grouped)
+                evaluated = sum(int(row.get("evaluated_count", 0)) for row in grouped)
+                collisions = sum(int(row.get("collision_count", 0)) for row in grouped)
+                state_rates = [float(row["collision_rate"]) for row in grouped if row.get("collision_rate") is not None]
+                if level == "cohort_macro":
+                    by_scene: dict[str, list[float]] = {}
+                    for row in grouped:
+                        rate = row.get("collision_rate")
+                        if rate is not None:
+                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(rate))
+                    scene_rates = [float(np.mean(rates)) for rates in by_scene.values() if rates]
+                else:
+                    scene_rates = state_rates
+                base.update(
+                    applicable_count=applicable,
+                    evaluated_count=evaluated,
+                    collision_count=collisions,
+                    not_applicable_count=sum(int(row.get("not_applicable_count", 0)) for row in grouped),
+                    applicable_unevaluated_count=sum(
+                        int(row.get("applicable_unevaluated_count", 0)) for row in grouped
+                    ),
+                    collision_rate=None if not scene_rates else float(np.mean(scene_rates)),
+                    available=bool(scene_rates),
+                )
+            else:
+                if level == "cohort_macro":
+                    by_scene: dict[str, list[float]] = {}
+                    for row in grouped:
+                        if row.get("mean") is not None:
+                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                    values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                else:
+                    values = [float(row["mean"]) for row in grouped if row.get("mean") is not None]
+                base.update(mean=None if not values else float(np.mean(values)), available=bool(values))
+            result.append(base)
+    return result
+
+
+def _group_candidate_rows_by_state(
+    rows: Iterable[Mapping[str, object]],
+) -> dict[tuple[str, str, str], list[dict[str, object]]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        grouped.setdefault(_candidate_state_key(row), []).append(dict(row))
+    return grouped
 
 
 def _probability_state_error(state: Mapping[str, object]) -> str | None:
@@ -756,8 +1560,6 @@ class _CandidatePopulationAccumulator:
             key: {} for key in CANDIDATE_GROUP_FIELDS
         }
         self._collision: dict[str, dict[str, object]] = {}
-        self._selection_states: dict[tuple[str, str], dict[str, object]] = {}
-        self._selection_vocab: dict[tuple[str, CandidateSelectionGroupField], set[str]] = {}
 
     def consume(self, row: Mapping[str, object]) -> None:
         normalized = dict(row)
@@ -802,61 +1604,6 @@ class _CandidatePopulationAccumulator:
             state["probability_sum"] += probability
             state["finite_probability_count"] += 1
             state["negative"] |= probability < 0.0
-        selection_probability = _finite_or_none(normalized.get("selection_probability"))
-        selection_state = self._selection_states.setdefault(
-            (cohort_id, state_id),
-            {
-                "generation_cohort": normalized.get("generation_cohort"),
-                "scene": scene,
-                "rollout_row_id": normalized.get("rollout_row_id"),
-                "step_row_id": normalized.get("step_row_id"),
-                "step_index": normalized.get("step_index"),
-                "policy": normalized.get("policy"),
-                "temperature": normalized.get("temperature"),
-                "horizon": normalized.get("horizon"),
-                "branch_factor": normalized.get("branch_factor"),
-                "beam_width": normalized.get("beam_width"),
-                "cumulative_target_root_gain": normalized.get("cumulative_target_root_gain"),
-                "total": 0,
-                "actor_valid": 0,
-                "selected": 0,
-                "probability_sum": 0.0,
-                "finite_probability_count": 0,
-                "missing": False,
-                "negative": False,
-                "families": {group_by: {} for group_by in CANDIDATE_SELECTION_GROUP_FIELDS},
-            },
-        )
-        selection_state["total"] += 1
-        selection_state["actor_valid"] += int(bool(normalized.get("actor_action")))
-        selection_state["selected"] += int(bool(normalized.get("selected")))
-        if selection_probability is None:
-            selection_state["missing"] = True
-        else:
-            selection_state["probability_sum"] += selection_probability
-            selection_state["finite_probability_count"] += 1
-            selection_state["negative"] |= selection_probability < 0.0
-        selection_families = selection_state["families"]
-        assert isinstance(selection_families, dict)
-        for group_by in CANDIDATE_SELECTION_GROUP_FIELDS:
-            family = _candidate_selection_family(normalized, group_by)
-            self._selection_vocab.setdefault((cohort_id, group_by), set()).add(family)
-            family_state = selection_families[group_by].setdefault(
-                family,
-                {
-                    "allocated": 0,
-                    "actor_valid": 0,
-                    "selected": 0,
-                    "probability_sum": 0.0,
-                    "finite_probability_count": 0,
-                },
-            )
-            family_state["allocated"] += 1
-            family_state["actor_valid"] += int(bool(normalized.get("actor_action")))
-            family_state["selected"] += int(bool(normalized.get("selected")))
-            if selection_probability is not None:
-                family_state["probability_sum"] += selection_probability
-                family_state["finite_probability_count"] += 1
         collision = self._collision.setdefault(
             cohort_id,
             {
@@ -1176,68 +1923,6 @@ class _CandidatePopulationAccumulator:
                 }
             )
         return rows
-
-    def selection_dynamics(self) -> dict[CandidateSelectionGroupField, list[dict[str, object]]]:
-        """Return state-level family availability, policy mass, and realized selection."""
-
-        output: dict[CandidateSelectionGroupField, list[dict[str, object]]] = {}
-        for group_by in CANDIDATE_SELECTION_GROUP_FIELDS:
-            rows: list[dict[str, object]] = []
-            for (cohort_id, _state_id), state in sorted(
-                self._selection_states.items(),
-                key=lambda item: (
-                    item[0][0],
-                    int(item[1].get("rollout_row_id") or -1),
-                    int(item[1].get("step_index") or 0),
-                ),
-            ):
-                probability_error = _probability_state_error(state)
-                families = state["families"]
-                assert isinstance(families, dict)
-                selected_total = int(state["selected"])
-                for family in sorted(self._selection_vocab.get((cohort_id, group_by), set())):
-                    family_state = families[group_by].get(
-                        family,
-                        {
-                            "allocated": 0,
-                            "actor_valid": 0,
-                            "selected": 0,
-                            "probability_sum": 0.0,
-                            "finite_probability_count": 0,
-                        },
-                    )
-                    policy_mass = None if probability_error is not None else float(family_state["probability_sum"])
-                    rows.append(
-                        {
-                            "group_by": group_by,
-                            "family": family,
-                            "generation_cohort_id": cohort_id,
-                            "generation_cohort": state["generation_cohort"],
-                            "scene": state["scene"],
-                            "rollout_row_id": state["rollout_row_id"],
-                            "step_row_id": state["step_row_id"],
-                            "step_index": state["step_index"],
-                            "policy": state["policy"],
-                            "temperature": state["temperature"],
-                            "horizon": state["horizon"],
-                            "branch_factor": state["branch_factor"],
-                            "beam_width": state["beam_width"],
-                            "cumulative_target_root_gain": _finite_or_none(state["cumulative_target_root_gain"]),
-                            "candidate_count": int(state["total"]),
-                            "actor_valid_count": int(state["actor_valid"]),
-                            "family_candidate_count": int(family_state["allocated"]),
-                            "family_actor_valid_count": int(family_state["actor_valid"]),
-                            "family_selected_count": int(family_state["selected"]),
-                            "allocation_share": _safe_fraction(int(family_state["allocated"]), int(state["total"])),
-                            "valid_share": _safe_fraction(int(family_state["actor_valid"]), int(state["actor_valid"])),
-                            "policy_mass": policy_mass,
-                            "selected_share": _safe_fraction(int(family_state["selected"]), selected_total),
-                            "probability_available": probability_error is None,
-                            "probability_unavailable_reason": probability_error,
-                        }
-                    )
-            output[group_by] = rows
-        return output
 
     def groups(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
         output: dict[CandidateGroupField, list[dict[str, object]]] = {}
@@ -2125,539 +2810,6 @@ def _group_candidate_states(rows: Iterable[Mapping[str, object]]) -> dict[tuple[
         key = (row.get("rollout_row_id"), row.get("step_row_id"))
         grouped.setdefault(key, []).append(row)
     return grouped
-
-
-def _candidate_selection_family(row: Mapping[str, object], group_by: CandidateSelectionGroupField) -> str:
-    """Return one closed-vocabulary family label for selection diagnostics."""
-
-    if group_by == "position_strategy":
-        return f"{row.get('position', 'unknown')} · {row.get('strategy', 'unknown')}"
-    return str(row.get(group_by, "unknown"))
-
-
-def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, object]]) -> bool:
-    """Return whether state rows can form ordered factual sequences."""
-
-    materialized = list(rows)
-    return bool(materialized) and all(
-        row.get("rollout_row_id") is not None and row.get("step_index") is not None for row in materialized
-    )
-
-
-def _materialize_selection_family_union(
-    rows: Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    """Add zero-valued rows for families absent from compatible factual states."""
-
-    materialized = [dict(row) for row in rows]
-    families_by_contract: dict[tuple[object, ...], set[str]] = {}
-    for row in materialized:
-        contract = (
-            row.get("group_by"),
-            row.get("policy"),
-            row.get("horizon"),
-            row.get("branch_factor"),
-            row.get("beam_width"),
-        )
-        families_by_contract.setdefault(contract, set()).add(str(row["family"]))
-
-    states: dict[tuple[object, ...], list[dict[str, object]]] = {}
-    for row in materialized:
-        contract = (
-            row.get("group_by"),
-            row.get("policy"),
-            row.get("horizon"),
-            row.get("branch_factor"),
-            row.get("beam_width"),
-        )
-        state = (
-            contract,
-            row.get("generation_cohort_id"),
-            row.get("scene"),
-            row.get("rollout_row_id"),
-            row.get("step_row_id"),
-            row.get("step_index"),
-        )
-        states.setdefault(state, []).append(row)
-
-    output: list[dict[str, object]] = []
-    zero_fields = (
-        "family_candidate_count",
-        "family_actor_valid_count",
-        "family_selected_count",
-        "allocation_share",
-        "valid_share",
-        "selected_share",
-    )
-    for state_rows in states.values():
-        template = state_rows[0]
-        contract = (
-            template.get("group_by"),
-            template.get("policy"),
-            template.get("horizon"),
-            template.get("branch_factor"),
-            template.get("beam_width"),
-        )
-        present = {str(row["family"]) for row in state_rows}
-        output.extend(state_rows)
-        for family in sorted(families_by_contract[contract] - present):
-            zero_row = dict(template)
-            zero_row["family"] = family
-            for field in zero_fields:
-                zero_row[field] = 0 if field.endswith("_count") else 0.0
-            zero_row["policy_mass"] = 0.0 if _finite_or_none(template.get("policy_mass")) is not None else None
-            zero_row["probability_available"] = template.get("probability_available")
-            zero_row["probability_unavailable_reason"] = template.get("probability_unavailable_reason")
-            output.append(zero_row)
-    return output
-
-
-def candidate_selection_transition_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
-    *,
-    pool_temperatures: bool = False,
-) -> list[dict[str, object]]:
-    """Summarize expected and realized family transitions over factual depth.
-
-    ``policy_mass`` is the complete candidate-level selection-probability mass
-    for the next family. Realized transitions use the one persisted selected
-    family. Both remain conditioned on the previous selected family and exact
-    generation cohort unless ``pool_temperatures`` is requested. The pooled
-    view recomputes frequencies from factual states while retaining the policy,
-    horizon, branch-factor, and beam-width compatibility controls.
-    """
-
-    rows = [dict(row) for row in dynamics_rows]
-    if pool_temperatures:
-        rows = _materialize_selection_family_union(rows)
-    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
-    for row in rows:
-        rollout_row_id = row.get("rollout_row_id")
-        step_index = row.get("step_index")
-        if rollout_row_id is None or step_index is None:
-            raise ValueError("Selection dynamics require rollout_row_id and step_index.")
-        key = (str(row.get("generation_cohort_id", "unknown")), int(rollout_row_id))
-        by_rollout.setdefault(key, {}).setdefault(int(step_index), []).append(row)
-
-    grouped: dict[tuple[object, ...], dict[str, object]] = {}
-    for (_cohort_id, _rollout_row_id), steps in sorted(by_rollout.items()):
-        indices = sorted(steps)
-        if indices != list(range(len(indices))):
-            raise ValueError(f"Selection dynamics require contiguous zero-based factual steps; received {indices}.")
-        for step_index in indices[1:]:
-            previous_rows = steps[step_index - 1]
-            current_rows = steps[step_index]
-            previous_selected = [str(row["family"]) for row in previous_rows if int(row["family_selected_count"]) == 1]
-            if len(previous_selected) != 1:
-                raise ValueError("Each factual selection state must identify exactly one previously selected family.")
-            previous_family = previous_selected[0]
-            for row in current_rows:
-                key = (
-                    (
-                        row.get("group_by"),
-                        row.get("policy"),
-                        row.get("horizon"),
-                        row.get("branch_factor"),
-                        row.get("beam_width"),
-                        int(step_index),
-                        previous_family,
-                        str(row["family"]),
-                    )
-                    if pool_temperatures
-                    else (
-                        row.get("group_by"),
-                        row.get("generation_cohort_id"),
-                        row.get("generation_cohort"),
-                        row.get("policy"),
-                        row.get("temperature"),
-                        row.get("horizon"),
-                        row.get("branch_factor"),
-                        row.get("beam_width"),
-                        int(step_index),
-                        previous_family,
-                        str(row["family"]),
-                    )
-                )
-                summary = grouped.setdefault(
-                    key,
-                    {
-                        "context_count": 0,
-                        "realized_count": 0,
-                        "expected_values": [],
-                        "missing_probability_count": 0,
-                    },
-                )
-                summary["context_count"] = int(summary["context_count"]) + 1
-                summary["realized_count"] = int(summary["realized_count"]) + int(row["family_selected_count"])
-                policy_mass = _finite_or_none(row.get("policy_mass"))
-                expected_values = summary["expected_values"]
-                assert isinstance(expected_values, list)
-                if policy_mass is None:
-                    summary["missing_probability_count"] = int(summary["missing_probability_count"]) + 1
-                else:
-                    expected_values.append(policy_mass)
-
-    output: list[dict[str, object]] = []
-    for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
-        expected = np.asarray(summary["expected_values"], dtype=np.float64)
-        q25, median, q75 = (
-            (None, None, None)
-            if not expected.size
-            else tuple(
-                float(value) for value in np.quantile(np.sort(expected), (0.25, 0.5, 0.75), method="linear").tolist()
-            )
-        )
-        if pool_temperatures:
-            group_by, policy, horizon, branch_factor, beam_width, step_index, previous_family, next_family = key
-            cohort_id = None
-            cohort = None
-            temperature = None
-        else:
-            (
-                group_by,
-                cohort_id,
-                cohort,
-                policy,
-                temperature,
-                horizon,
-                branch_factor,
-                beam_width,
-                step_index,
-                previous_family,
-                next_family,
-            ) = key
-        context_count = int(summary["context_count"])
-        output.append(
-            {
-                "group_by": group_by,
-                "generation_cohort_id": cohort_id,
-                "generation_cohort": cohort,
-                "policy": policy,
-                "temperature": temperature,
-                "pooled_temperatures": pool_temperatures,
-                "horizon": horizon,
-                "branch_factor": branch_factor,
-                "beam_width": beam_width,
-                "step_index": step_index,
-                "previous_family": previous_family,
-                "next_family": next_family,
-                "context_count": context_count,
-                "expected_finite_count": int(expected.size),
-                "expected_missing_count": int(summary["missing_probability_count"]),
-                "expected_policy_mass_mean": None if not expected.size else float(np.mean(expected)),
-                "expected_policy_mass_median": median,
-                "expected_policy_mass_q25": q25,
-                "expected_policy_mass_q75": q75,
-                "realized_count": int(summary["realized_count"]),
-                "realized_rate": _safe_fraction(int(summary["realized_count"]), context_count),
-            }
-        )
-    return output
-
-
-def candidate_selection_temporal_summary_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
-    *,
-    metric: str,
-) -> list[dict[str, object]]:
-    """Summarize one state-level candidate-family quantity over factual depth."""
-
-    if metric not in _CANDIDATE_SELECTION_TEMPORAL_METRICS:
-        raise ValueError(
-            f"Unsupported candidate selection metric {metric!r}; "
-            f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
-        )
-    grouped: dict[tuple[object, ...], list[object]] = {}
-    for source_row in dynamics_rows:
-        row = dict(source_row)
-        step_index = row.get("step_index")
-        if step_index is None:
-            raise ValueError("Candidate selection summaries require factual step_index values.")
-        key = (
-            row.get("group_by"),
-            row.get("generation_cohort_id"),
-            row.get("generation_cohort"),
-            row.get("policy"),
-            row.get("temperature"),
-            row.get("horizon"),
-            row.get("branch_factor"),
-            row.get("beam_width"),
-            int(step_index),
-            row.get("family"),
-        )
-        grouped.setdefault(key, []).append(row.get(metric))
-    output: list[dict[str, object]] = []
-    for key, values in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
-        finite = np.asarray(
-            [value for value in (_finite_or_none(value) for value in values) if value is not None],
-            dtype=np.float64,
-        )
-        q25, median, q75 = (
-            (None, None, None)
-            if not finite.size
-            else tuple(
-                float(value) for value in np.quantile(np.sort(finite), (0.25, 0.5, 0.75), method="linear").tolist()
-            )
-        )
-        (
-            group_by,
-            cohort_id,
-            cohort,
-            policy,
-            temperature,
-            horizon,
-            branch_factor,
-            beam_width,
-            step_index,
-            family,
-        ) = key
-        output.append(
-            {
-                "metric": metric,
-                "group_by": group_by,
-                "generation_cohort_id": cohort_id,
-                "generation_cohort": cohort,
-                "policy": policy,
-                "temperature": temperature,
-                "horizon": horizon,
-                "branch_factor": branch_factor,
-                "beam_width": beam_width,
-                "step_index": step_index,
-                "family": family,
-                "total_count": len(values),
-                "finite_count": int(finite.size),
-                "missing_count": len(values) - int(finite.size),
-                "mean": None if not finite.size else float(np.mean(finite)),
-                "median": median,
-                "q25": q25,
-                "q75": q75,
-            }
-        )
-    return output
-
-
-def candidate_selection_pooled_summary_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
-    *,
-    metric: str,
-) -> list[dict[str, object]]:
-    """Pool one compatible candidate-family fraction over factual trajectories.
-
-    This is a sample-population view for one selected store. It deliberately
-    omits temperature and exact generation-cohort identity while retaining
-    policy, horizon, branch factor, and beam width as compatibility controls.
-    Candidate and selected shares are recomputed from additive counts; policy
-    mass is the equal-state mean of complete persisted probability vectors.
-    """
-
-    if metric not in _CANDIDATE_SELECTION_TEMPORAL_METRICS:
-        raise ValueError(
-            f"Unsupported candidate selection metric {metric!r}; "
-            f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
-        )
-    grouped: dict[tuple[object, ...], dict[str, object]] = {}
-    for row in _materialize_selection_family_union(dynamics_rows):
-        step_index = row.get("step_index")
-        if step_index is None:
-            raise ValueError("Candidate selection summaries require factual step_index values.")
-        key = (
-            row.get("group_by"),
-            row.get("policy"),
-            row.get("horizon"),
-            row.get("branch_factor"),
-            row.get("beam_width"),
-            int(step_index),
-            row.get("family"),
-        )
-        summary = grouped.setdefault(
-            key,
-            {
-                "state_ids": set(),
-                "numerator": 0,
-                "denominator": 0,
-                "policy_values": [],
-                "policy_missing_count": 0,
-            },
-        )
-        state_ids = summary["state_ids"]
-        assert isinstance(state_ids, set)
-        state_ids.add((row.get("generation_cohort_id"), row.get("rollout_row_id"), int(step_index)))
-        if metric == "policy_mass":
-            value = _finite_or_none(row.get("policy_mass"))
-            if value is None:
-                summary["policy_missing_count"] = int(summary["policy_missing_count"]) + 1
-            else:
-                values = summary["policy_values"]
-                assert isinstance(values, list)
-                values.append(value)
-            continue
-        numerator_field, denominator_field = {
-            "allocation_share": ("family_candidate_count", "candidate_count"),
-            "valid_share": ("family_actor_valid_count", "actor_valid_count"),
-            "selected_share": ("family_selected_count", None),
-        }[metric]
-        summary["numerator"] = int(summary["numerator"]) + int(row[numerator_field])
-        denominator = 1 if denominator_field is None else int(row[denominator_field])
-        summary["denominator"] = int(summary["denominator"]) + denominator
-
-    output: list[dict[str, object]] = []
-    for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
-        group_by, policy, horizon, branch_factor, beam_width, step_index, family = key
-        state_ids = summary["state_ids"]
-        assert isinstance(state_ids, set)
-        state_count = len(state_ids)
-        if metric == "policy_mass":
-            values = summary["policy_values"]
-            assert isinstance(values, list)
-            finite_count = len(values)
-            fraction = None if not finite_count else float(np.mean(np.asarray(values, dtype=np.float64)))
-            numerator = None
-            denominator = None
-        else:
-            finite_count = state_count
-            numerator = int(summary["numerator"])
-            denominator = int(summary["denominator"])
-            fraction = _safe_fraction(numerator, denominator)
-        output.append(
-            {
-                "metric": metric,
-                "group_by": group_by,
-                "policy": policy,
-                "horizon": horizon,
-                "branch_factor": branch_factor,
-                "beam_width": beam_width,
-                "step_index": step_index,
-                "family": family,
-                "state_count": state_count,
-                "finite_state_count": finite_count,
-                "missing_state_count": state_count - finite_count,
-                "numerator": numerator,
-                "denominator": denominator,
-                "fraction": fraction,
-            }
-        )
-    return output
-
-
-def candidate_selection_sequence_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    """Return one selected-family sequence and terminal gain per factual rollout."""
-
-    rows = [dict(row) for row in dynamics_rows]
-    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
-    for row in rows:
-        rollout_row_id = row.get("rollout_row_id")
-        step_index = row.get("step_index")
-        if rollout_row_id is None or step_index is None:
-            raise ValueError("Selection dynamics require rollout_row_id and step_index.")
-        key = (str(row.get("generation_cohort_id", "unknown")), int(rollout_row_id))
-        by_rollout.setdefault(key, {}).setdefault(int(step_index), []).append(row)
-
-    output: list[dict[str, object]] = []
-    for (cohort_id, rollout_row_id), steps in sorted(by_rollout.items()):
-        indices = sorted(steps)
-        if indices != list(range(len(indices))):
-            raise ValueError(f"Selection sequences require contiguous zero-based factual steps; received {indices}.")
-        selected_sequence: list[str] = []
-        for step_index in indices:
-            selected = [str(row["family"]) for row in steps[step_index] if int(row["family_selected_count"]) == 1]
-            if len(selected) != 1:
-                raise ValueError("Each factual selection state must identify exactly one selected family.")
-            selected_sequence.append(selected[0])
-        terminal = steps[indices[-1]][0]
-        horizon = int(terminal.get("horizon") or len(indices))
-        output.append(
-            {
-                "group_by": terminal.get("group_by"),
-                "generation_cohort_id": cohort_id,
-                "generation_cohort": terminal.get("generation_cohort"),
-                "scene": terminal.get("scene"),
-                "rollout_row_id": rollout_row_id,
-                "policy": terminal.get("policy"),
-                "temperature": terminal.get("temperature"),
-                "horizon": horizon,
-                "branch_factor": terminal.get("branch_factor"),
-                "beam_width": terminal.get("beam_width"),
-                "observed_steps": len(indices),
-                "completed_horizon": len(indices) == horizon,
-                "sequence": " → ".join(selected_sequence),
-                "sequence_families": tuple(selected_sequence),
-                "terminal_cumulative_target_root_gain": _finite_or_none(terminal.get("cumulative_target_root_gain")),
-            }
-        )
-    return output
-
-
-def candidate_sequence_return_summary_rows(
-    sequence_rows: Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    """Summarize terminal return by exact selected-family sequence."""
-
-    grouped: dict[tuple[object, ...], list[dict[str, object]]] = {}
-    for source_row in sequence_rows:
-        row = dict(source_row)
-        key = (
-            row.get("group_by"),
-            row.get("generation_cohort_id"),
-            row.get("generation_cohort"),
-            row.get("policy"),
-            row.get("temperature"),
-            row.get("horizon"),
-            row.get("branch_factor"),
-            row.get("beam_width"),
-            row.get("sequence"),
-        )
-        grouped.setdefault(key, []).append(row)
-    output: list[dict[str, object]] = []
-    for key, rows in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
-        gains = np.asarray(
-            [
-                value
-                for row in rows
-                if (value := _finite_or_none(row.get("terminal_cumulative_target_root_gain"))) is not None
-            ],
-            dtype=np.float64,
-        )
-        q25, median, q75 = (
-            (None, None, None)
-            if not gains.size
-            else tuple(
-                float(value) for value in np.quantile(np.sort(gains), (0.25, 0.5, 0.75), method="linear").tolist()
-            )
-        )
-        (
-            group_by,
-            cohort_id,
-            cohort,
-            policy,
-            temperature,
-            horizon,
-            branch_factor,
-            beam_width,
-            sequence,
-        ) = key
-        output.append(
-            {
-                "group_by": group_by,
-                "generation_cohort_id": cohort_id,
-                "generation_cohort": cohort,
-                "policy": policy,
-                "temperature": temperature,
-                "horizon": horizon,
-                "branch_factor": branch_factor,
-                "beam_width": beam_width,
-                "sequence": sequence,
-                "rollout_count": len(rows),
-                "completed_count": sum(bool(row.get("completed_horizon")) for row in rows),
-                "finite_return_count": int(gains.size),
-                "terminal_return_mean": None if not gains.size else float(np.mean(gains)),
-                "terminal_return_median": median,
-                "terminal_return_q25": q25,
-                "terminal_return_q75": q75,
-            }
-        )
-    return output
 
 
 def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -3638,416 +3790,68 @@ def selected_candidate_rank_rows(
     return rows
 
 
-def proposal_support_geometry(
+def root_relative_candidate_rows(
     reader: RolloutZarrStoreReader,
     *,
-    alignment: ProposalAlignment = ProposalAlignment.TARGET_ALIGNED_Z_UP,
-    rollout_row_ids: Collection[int] | None = None,
-    max_candidates: int | None = 50_000,
-) -> GeometryProjection:
-    r"""Project complete candidate shells around their factual expansion poses.
+    rollout_row_id: int | None = None,
+    step_row_id: int | None = None,
+    actor_valid_only: bool = False,
+) -> list[dict[str, object]]:
+    """Return candidate centers relative to each rollout root in Z-up metres.
 
-    Step zero uses the persisted rollout root; later steps use the preceding
-    factual selected pose. Coordinates are divided by that expansion pose's
-    current 3D target distance, then yaw-aligned while preserving world Z-up.
+    The translation is ``candidate_center_world - root_center_world``. This
+    keeps ARIA world axes, including the gravity-aligned Z axis, while removing
+    unrelated scene origins. It intentionally does not aggregate or expose raw
+    absolute world coordinates as comparison axes.
+
+    Args:
+        reader: Read-only rollout-store adapter.
+        rollout_row_id: Optional stable rollout-row filter.
+        step_row_id: Optional stable step-row filter.
+        actor_valid_only: Exclude candidates outside the hard actor action set.
+
+    Returns:
+        Candidate rows in root-centered ARIA world coordinates with metres as
+        units and ``RIGHT_HAND_Z_UP`` as the frame convention.
     """
 
-    requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
-    if max_candidates is not None and max_candidates <= 0:
-        raise ValueError("max_candidates must be positive when provided.")
-    targets = {target.target_row_id: target for target in target_rows(reader)}
-    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
-    frames: list[GeometryFrame] = []
-    points: list[GeometryPoint] = []
-    issues: list[GeometryIssue] = []
-    truncated = False
+    rows: list[dict[str, object]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
-        if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
+        if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
-        target = targets.get(rollout.target_row_id)
-        if target is None:
-            issues.append(
-                GeometryIssue(
-                    "missing_target",
-                    "Rollout has no persisted observed-target geometry.",
-                    rollout_row_id=rollout.rollout_row_id,
-                )
-            )
-            continue
-        root_pose = _geometry_pose(rollout.root_pose_world, role="rollout root")
-        target_pose = _geometry_pose(target.pose_world_object, role="observed target")
-        target_center = target_pose[9:12]
-        initial_scale = _positive_distance(target_center - root_pose[9:12])
-        if initial_scale is None:
-            issues.append(
-                GeometryIssue(
-                    "invalid_initial_target_distance",
-                    "Initial root-to-target distance is missing, non-finite, or zero.",
-                    rollout_row_id=rollout.rollout_row_id,
-                )
-            )
-            continue
-        steps = rollout_steps(reader, rollout)
-        _validate_factual_steps(rollout.rollout_row_id, steps)
-        reference_pose = root_pose
-        for expected_index, step in enumerate(steps):
-            selected_pose = _selected_pose(step)
-            shell_size = len(step.candidate_row_ids)
-            if max_candidates is not None and points and len(points) + shell_size > max_candidates:
-                truncated = True
-                issues.append(
-                    GeometryIssue(
-                        "candidate_limit_reached",
-                        f"Stopped before a {shell_size}-row shell to preserve complete factual shells.",
-                        rollout_row_id=rollout.rollout_row_id,
-                        step_row_id=step.step_row_id,
-                    )
-                )
-                return GeometryProjection("proposal_support", tuple(points), tuple(frames), tuple(issues), True)
-            reference_center = reference_pose[9:12]
-            scale = _positive_distance(target_center - reference_center)
-            if scale is None:
-                issues.append(
-                    GeometryIssue(
-                        "invalid_current_target_distance",
-                        "Expansion-pose-to-target distance is missing, non-finite, or zero.",
-                        rollout_row_id=rollout.rollout_row_id,
-                        step_row_id=step.step_row_id,
-                    )
-                )
-                reference_pose = selected_pose
+        root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+        for step in rollout_steps(reader, rollout):
+            if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
-            basis = _proposal_basis(reference_pose, target_center, alignment)
-            if basis is None:
-                issues.append(
-                    GeometryIssue(
-                        "degenerate_alignment",
-                        f"{alignment.value} has no finite horizontal direction at this step.",
-                        rollout_row_id=rollout.rollout_row_id,
-                        step_row_id=step.step_row_id,
-                    )
-                )
-                reference_pose = selected_pose
-                continue
-            frame_id = f"proposal:{rollout.rollout_row_id}:{step.step_row_id}:{alignment.value}"
-            target_normalized = basis.T @ (target_center - reference_center) / scale
-            frames.append(
-                _geometry_frame(
-                    frame_id=frame_id,
-                    rollout_row_id=rollout.rollout_row_id,
-                    step_row_id=step.step_row_id,
-                    step_index=expected_index,
-                    origin_kind="expansion_pose",
-                    expansion_pose_source="root" if expected_index == 0 else "previous_selected",
-                    scale_kind="current_target_distance",
-                    alignment=alignment.value,
-                    scale=scale,
-                    initial_scale=initial_scale,
-                    target_normalized=target_normalized,
-                    reference_rotation=reference_pose[:9].reshape(3, 3),
-                    target_rotation=target_pose[:9].reshape(3, 3),
-                    basis=basis,
-                )
-            )
             for local, candidate_row_id in enumerate(step.candidate_row_ids.tolist()):
-                candidate_pose = _geometry_pose(
-                    step.pose_world_cam[local],
-                    role=f"step {step.step_row_id} candidate {int(candidate_row_id)} pose",
+                if actor_valid_only and not bool(step.actor_action_mask[local]):
+                    continue
+                relative = np.asarray(step.pose_world_cam[local, 9:12], dtype=np.float64) - root_center
+                rows.append(
+                    {
+                        "candidate_row_id": int(candidate_row_id),
+                        "rollout_row_id": rollout.rollout_row_id,
+                        "step_row_id": step.step_row_id,
+                        "step_index": step.step_index,
+                        "source_row_id": rollout.source_row_id,
+                        "scene": rollout.scene,
+                        "policy": rollout.policy,
+                        "target_row_id": rollout.target_row_id,
+                        "actor_action": bool(step.actor_action_mask[local]),
+                        "selected": bool(step.selected_mask[local]),
+                        "position": str(step.position_names[local]),
+                        "mixture": str(step.mixture_names[local]),
+                        "root_relative_x_m": float(relative[0]),
+                        "root_relative_y_m": float(relative[1]),
+                        "root_relative_z_m": float(relative[2]),
+                        "root_distance_m": float(np.linalg.norm(relative)),
+                        "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                        "units": "m",
+                    }
                 )
-                candidate_center = candidate_pose[9:12]
-                displacement = candidate_center - reference_center
-                normalized = basis.T @ displacement / scale
-                points.append(
-                    GeometryPoint(
-                        frame_id=frame_id,
-                        role="candidate",
-                        rollout_row_id=rollout.rollout_row_id,
-                        step_row_id=step.step_row_id,
-                        step_index=step.step_index,
-                        candidate_row_id=int(candidate_row_id),
-                        path_order=None,
-                        actor_action=bool(step.actor_action_mask[local]),
-                        selected=bool(step.selected_mask[local]),
-                        position=str(step.position_names[local]),
-                        strategy=decode_strategy_id(int(strategy_ids[int(step.candidate_row_positions[local])])),
-                        mixture=str(step.mixture_names[local]),
-                        x=float(normalized[0]),
-                        y=float(normalized[1]),
-                        z=float(normalized[2]),
-                        displacement_m=float(np.linalg.norm(displacement)),
-                        normalization_distance_m=scale,
-                        initial_target_distance_m=initial_scale,
-                        normalized_radius=float(np.linalg.norm(normalized)),
-                        target_facing_error_deg=_target_facing_error_deg(candidate_pose, target_center),
-                    )
-                )
-            reference_pose = selected_pose
-    return GeometryProjection("proposal_support", tuple(points), tuple(frames), tuple(issues), truncated)
-
-
-def rollout_trajectory_geometry(
-    reader: RolloutZarrStoreReader,
-    *,
-    rollout_row_ids: Collection[int] | None = None,
-) -> GeometryProjection:
-    r"""Project factual selected trajectories in one initial target-aligned frame."""
-
-    requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
-    targets = {target.target_row_id: target for target in target_rows(reader)}
-    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
-    frames: list[GeometryFrame] = []
-    points: list[GeometryPoint] = []
-    issues: list[GeometryIssue] = []
-    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
-    for rollout_position in range(rollout_count):
-        rollout = rollout_at(reader, rollout_position)
-        if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
-            continue
-        target = targets.get(rollout.target_row_id)
-        if target is None:
-            issues.append(
-                GeometryIssue(
-                    "missing_target",
-                    "Rollout has no persisted observed-target geometry.",
-                    rollout_row_id=rollout.rollout_row_id,
-                )
-            )
-            continue
-        root_pose = _geometry_pose(rollout.root_pose_world, role="rollout root")
-        target_pose = _geometry_pose(target.pose_world_object, role="observed target")
-        target_center = target_pose[9:12]
-        root_center = root_pose[9:12]
-        scale = _positive_distance(target_center - root_center)
-        basis = _target_aligned_basis(target_center - root_center)
-        if scale is None or basis is None:
-            issues.append(
-                GeometryIssue(
-                    "invalid_initial_target_frame",
-                    "Initial target distance or horizontal target bearing is degenerate.",
-                    rollout_row_id=rollout.rollout_row_id,
-                )
-            )
-            continue
-        steps = rollout_steps(reader, rollout)
-        _validate_factual_steps(rollout.rollout_row_id, steps)
-        frame_id = f"trajectory:{rollout.rollout_row_id}:target_aligned_z_up"
-        target_normalized = basis.T @ (target_center - root_center) / scale
-        frames.append(
-            _geometry_frame(
-                frame_id=frame_id,
-                rollout_row_id=rollout.rollout_row_id,
-                step_row_id=None,
-                step_index=None,
-                origin_kind="rollout_root",
-                expansion_pose_source="initial_root",
-                scale_kind="initial_target_distance",
-                alignment=ProposalAlignment.TARGET_ALIGNED_Z_UP.value,
-                scale=scale,
-                initial_scale=scale,
-                target_normalized=target_normalized,
-                reference_rotation=root_pose[:9].reshape(3, 3),
-                target_rotation=target_pose[:9].reshape(3, 3),
-                basis=basis,
-            )
-        )
-        points.append(
-            GeometryPoint(
-                frame_id=frame_id,
-                role="root",
-                rollout_row_id=rollout.rollout_row_id,
-                step_row_id=None,
-                step_index=None,
-                candidate_row_id=None,
-                path_order=0,
-                actor_action=None,
-                selected=False,
-                position=None,
-                strategy=None,
-                mixture=None,
-                x=0.0,
-                y=0.0,
-                z=0.0,
-                displacement_m=0.0,
-                normalization_distance_m=scale,
-                initial_target_distance_m=scale,
-                normalized_radius=0.0,
-                target_facing_error_deg=None,
-            )
-        )
-        for path_order, step in enumerate(steps, start=1):
-            selected_pose = _selected_pose(step)
-            selected = step.selected_local_index
-            displacement = selected_pose[9:12] - root_center
-            normalized = basis.T @ displacement / scale
-            candidate_position = int(step.candidate_row_positions[selected])
-            points.append(
-                GeometryPoint(
-                    frame_id=frame_id,
-                    role="selected_action",
-                    rollout_row_id=rollout.rollout_row_id,
-                    step_row_id=step.step_row_id,
-                    step_index=step.step_index,
-                    candidate_row_id=int(step.selected_candidate_row_id),
-                    path_order=path_order,
-                    actor_action=bool(step.actor_action_mask[selected]),
-                    selected=True,
-                    position=str(step.position_names[selected]),
-                    strategy=decode_strategy_id(int(strategy_ids[candidate_position])),
-                    mixture=str(step.mixture_names[selected]),
-                    x=float(normalized[0]),
-                    y=float(normalized[1]),
-                    z=float(normalized[2]),
-                    displacement_m=float(np.linalg.norm(displacement)),
-                    normalization_distance_m=scale,
-                    initial_target_distance_m=scale,
-                    normalized_radius=float(np.linalg.norm(normalized)),
-                    target_facing_error_deg=_target_facing_error_deg(selected_pose, target_center),
-                )
-            )
-    return GeometryProjection("rollout_trajectory", tuple(points), tuple(frames), tuple(issues))
-
-
-def _validate_factual_steps(rollout_row_id: int, steps: tuple[StoredStep, ...]) -> None:
-    indices = [int(step.step_index) for step in steps]
-    if indices != list(range(len(indices))):
-        raise ValueError(f"Rollout row {rollout_row_id} has non-contiguous factual step indices: {indices}.")
-    for step in steps:
-        _selected_pose(step)
-
-
-def _selected_pose(step: StoredStep) -> np.ndarray:
-    matches = np.flatnonzero(np.asarray(step.selected_mask, dtype=np.bool_))
-    if matches.size != 1:
-        raise ValueError(f"Step row {step.step_row_id} must have exactly one selected candidate; found {matches.size}.")
-    selected = int(matches[0])
-    if int(step.candidate_row_ids[selected]) != int(step.selected_candidate_row_id):
-        raise ValueError(f"Step row {step.step_row_id} selected mask disagrees with selected_candidate_row_id.")
-    return _geometry_pose(step.pose_world_cam[selected], role=f"step {step.step_row_id} selected pose")
-
-
-def _geometry_pose(pose: Any, *, role: str) -> np.ndarray:
-    value = np.asarray(pose, dtype=np.float64).reshape(12)
-    if not np.isfinite(value).all():
-        raise ValueError(f"{role} contains non-finite pose values.")
-    rotation = value[:9].reshape(3, 3)
-    if not np.allclose(rotation.T @ rotation, np.eye(3), rtol=0.0, atol=1e-4) or not np.isclose(
-        np.linalg.det(rotation),
-        1.0,
-        rtol=0.0,
-        atol=1e-4,
-    ):
-        raise ValueError(f"{role} contains an invalid rotation matrix.")
-    return value
-
-
-def _positive_distance(delta: np.ndarray) -> float | None:
-    distance = float(np.linalg.norm(np.asarray(delta, dtype=np.float64)))
-    return distance if np.isfinite(distance) and distance > _GEOMETRY_EPSILON else None
-
-
-def _target_facing_error_deg(pose: np.ndarray, target_center: np.ndarray) -> float | None:
-    """Return the unsigned 3D angle from LUF camera forward to the target."""
-
-    target_direction = np.asarray(target_center, dtype=np.float64) - pose[9:12]
-    target_distance = _positive_distance(target_direction)
-    if target_distance is None:
-        return None
-    forward = pose[:9].reshape(3, 3)[:, 2]
-    cosine = float(np.dot(forward, target_direction / target_distance))
-    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
-
-
-def _horizontal_angle_deg(left: np.ndarray, right: np.ndarray) -> float | None:
-    """Return the unsigned angle between two horizontal directions."""
-
-    left_xy = np.asarray(left, dtype=np.float64).reshape(3)[:2]
-    right_xy = np.asarray(right, dtype=np.float64).reshape(3)[:2]
-    left_norm = float(np.linalg.norm(left_xy))
-    right_norm = float(np.linalg.norm(right_xy))
-    if min(left_norm, right_norm) <= _GEOMETRY_EPSILON:
-        return None
-    cosine = float(np.dot(left_xy / left_norm, right_xy / right_norm))
-    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
-
-
-def _proposal_basis(
-    reference_pose: np.ndarray, target_center: np.ndarray, alignment: ProposalAlignment
-) -> np.ndarray | None:
-    if alignment is ProposalAlignment.TARGET_ALIGNED_Z_UP:
-        return _target_aligned_basis(target_center - reference_pose[9:12])
-    if alignment is ProposalAlignment.RIG_FORWARD_Z_UP:
-        return _z_up_basis(reference_pose[:9].reshape(3, 3)[:, 2])
-    raise ValueError(f"Unsupported proposal alignment: {alignment!r}.")
-
-
-def _target_aligned_basis(target_delta: np.ndarray) -> np.ndarray | None:
-    return _z_up_basis(target_delta)
-
-
-def _z_up_basis(forward_world: np.ndarray) -> np.ndarray | None:
-    forward = np.asarray(forward_world, dtype=np.float64).reshape(3).copy()
-    forward[2] = 0.0
-    norm = float(np.linalg.norm(forward))
-    if not np.isfinite(norm) or norm <= _GEOMETRY_EPSILON:
-        return None
-    forward /= norm
-    up = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
-    left = np.cross(up, forward)
-    return np.column_stack((forward, left, up))
-
-
-def _geometry_frame(
-    *,
-    frame_id: str,
-    rollout_row_id: int,
-    step_row_id: int | None,
-    step_index: int | None,
-    origin_kind: Literal["expansion_pose", "rollout_root"],
-    expansion_pose_source: Literal["root", "previous_selected", "initial_root"],
-    scale_kind: Literal["current_target_distance", "initial_target_distance"],
-    alignment: str,
-    scale: float,
-    initial_scale: float,
-    target_normalized: np.ndarray,
-    reference_rotation: np.ndarray,
-    target_rotation: np.ndarray,
-    basis: np.ndarray,
-) -> GeometryFrame:
-    local_reference = basis.T @ reference_rotation
-    local_target = basis.T @ target_rotation
-    target_delta_local = np.asarray(target_normalized, dtype=np.float64)
-    target_horizontal = float(np.linalg.norm(target_delta_local[:2]))
-    target_elevation = float(np.degrees(np.arctan2(target_delta_local[2], target_horizontal)))
-    rig_target_yaw_error = _horizontal_angle_deg(reference_rotation[:, 2], basis @ target_delta_local)
-
-    def axis(rotation: np.ndarray, index: int) -> tuple[float, float, float]:
-        return tuple(float(value) for value in rotation[:, index])
-
-    return GeometryFrame(
-        frame_id=frame_id,
-        rollout_row_id=rollout_row_id,
-        step_row_id=step_row_id,
-        step_index=step_index,
-        origin_kind=origin_kind,
-        expansion_pose_source=expansion_pose_source,
-        scale_kind=scale_kind,
-        alignment=alignment,
-        scale_m=scale,
-        initial_scale_m=initial_scale,
-        target_x=float(target_normalized[0]),
-        target_y=float(target_normalized[1]),
-        target_z=float(target_normalized[2]),
-        reference_axis_x=axis(local_reference, 0),
-        reference_axis_y=axis(local_reference, 1),
-        reference_axis_z=axis(local_reference, 2),
-        target_axis_x=axis(local_target, 0),
-        target_axis_y=axis(local_target, 1),
-        target_axis_z=axis(local_target, 2),
-        rig_target_yaw_error_deg=rig_target_yaw_error,
-        target_elevation_deg=target_elevation,
-    )
+    return rows
 
 
 def rollout_step_objective_rows(
@@ -5613,11 +5417,6 @@ def _safe_fraction(numerator: int, denominator: int) -> float | None:
 
 
 __all__ = [
-    "GeometryFrame",
-    "GeometryIssue",
-    "GeometryPoint",
-    "GeometryProjection",
-    "ProposalAlignment",
     "RolloutSuspiciousQueryConfig",
     "candidate_audit_rows",
     "candidate_flow_rows",
@@ -5636,13 +5435,12 @@ __all__ = [
     "mask_combination_rows",
     "paired_policy_comparison_rows",
     "promoted_store_validation_error",
-    "proposal_support_geometry",
+    "root_relative_candidate_rows",
     "rollout_store_inventory_rows",
     "rollout_statistics",
     "q_h_evidence_rows",
     "runtime_storage_statistics",
     "rollout_step_objective_rows",
-    "rollout_trajectory_geometry",
     "rollout_endpoint_metric_summary",
     "selected_candidate_rank_rows",
     "selected_depth_preview",
