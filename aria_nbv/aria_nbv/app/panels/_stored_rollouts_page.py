@@ -1603,12 +1603,12 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
         _render_plot(
             fig,
             _candidate_population_explanation(
-                "Does candidate direction support cover solid angle without collapse?",
+                "How far does the observed proposal direction distribution depart from an isotropic null?",
                 "Stored candidate direction rows at the factual-state grain.",
                 "Angular discrepancy or separation in degrees/fraction as labelled.",
                 "Finite normalized vectors only; missing vectors remain unavailable.",
-                "Low cap discrepancy and small covering gaps indicate broad directional support.",
-                "Large discrepancy or angular gaps indicate directional collapse or missing generator families.",
+                "Low distance-from-isotropy means the observed directions resemble the uniform-S² reference at that angular scale.",
+                "A large value is descriptive evidence of anisotropy, not proof of generator collapse; interpret it against the declared sampler configuration.",
                 "candidate direction evidence",
                 "actor-visible",
                 theory_kind="direction",
