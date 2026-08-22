@@ -2146,13 +2146,17 @@ def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, object]]) 
 
 def candidate_selection_transition_rows(
     dynamics_rows: Iterable[Mapping[str, object]],
+    *,
+    pool_temperatures: bool = False,
 ) -> list[dict[str, object]]:
     """Summarize expected and realized family transitions over factual depth.
 
     ``policy_mass`` is the complete candidate-level selection-probability mass
     for the next family. Realized transitions use the one persisted selected
     family. Both remain conditioned on the previous selected family and exact
-    generation cohort.
+    generation cohort unless ``pool_temperatures`` is requested. The pooled
+    view recomputes frequencies from factual states while retaining the policy,
+    horizon, branch-factor, and beam-width compatibility controls.
     """
 
     rows = [dict(row) for row in dynamics_rows]
@@ -2179,17 +2183,30 @@ def candidate_selection_transition_rows(
             previous_family = previous_selected[0]
             for row in current_rows:
                 key = (
-                    row.get("group_by"),
-                    row.get("generation_cohort_id"),
-                    row.get("generation_cohort"),
-                    row.get("policy"),
-                    row.get("temperature"),
-                    row.get("horizon"),
-                    row.get("branch_factor"),
-                    row.get("beam_width"),
-                    int(step_index),
-                    previous_family,
-                    str(row["family"]),
+                    (
+                        row.get("group_by"),
+                        row.get("policy"),
+                        row.get("horizon"),
+                        row.get("branch_factor"),
+                        row.get("beam_width"),
+                        int(step_index),
+                        previous_family,
+                        str(row["family"]),
+                    )
+                    if pool_temperatures
+                    else (
+                        row.get("group_by"),
+                        row.get("generation_cohort_id"),
+                        row.get("generation_cohort"),
+                        row.get("policy"),
+                        row.get("temperature"),
+                        row.get("horizon"),
+                        row.get("branch_factor"),
+                        row.get("beam_width"),
+                        int(step_index),
+                        previous_family,
+                        str(row["family"]),
+                    )
                 )
                 summary = grouped.setdefault(
                     key,
@@ -2220,19 +2237,25 @@ def candidate_selection_transition_rows(
                 float(value) for value in np.quantile(np.sort(expected), (0.25, 0.5, 0.75), method="linear").tolist()
             )
         )
-        (
-            group_by,
-            cohort_id,
-            cohort,
-            policy,
-            temperature,
-            horizon,
-            branch_factor,
-            beam_width,
-            step_index,
-            previous_family,
-            next_family,
-        ) = key
+        if pool_temperatures:
+            group_by, policy, horizon, branch_factor, beam_width, step_index, previous_family, next_family = key
+            cohort_id = None
+            cohort = None
+            temperature = None
+        else:
+            (
+                group_by,
+                cohort_id,
+                cohort,
+                policy,
+                temperature,
+                horizon,
+                branch_factor,
+                beam_width,
+                step_index,
+                previous_family,
+                next_family,
+            ) = key
         context_count = int(summary["context_count"])
         output.append(
             {
@@ -2241,6 +2264,7 @@ def candidate_selection_transition_rows(
                 "generation_cohort": cohort,
                 "policy": policy,
                 "temperature": temperature,
+                "pooled_temperatures": pool_temperatures,
                 "horizon": horizon,
                 "branch_factor": branch_factor,
                 "beam_width": beam_width,
@@ -2337,6 +2361,110 @@ def candidate_selection_temporal_summary_rows(
                 "median": median,
                 "q25": q25,
                 "q75": q75,
+            }
+        )
+    return output
+
+
+def candidate_selection_pooled_summary_rows(
+    dynamics_rows: Iterable[Mapping[str, object]],
+    *,
+    metric: str,
+) -> list[dict[str, object]]:
+    """Pool one compatible candidate-family fraction over factual trajectories.
+
+    This is a sample-population view for one selected store. It deliberately
+    omits temperature and exact generation-cohort identity while retaining
+    policy, horizon, branch factor, and beam width as compatibility controls.
+    Candidate and selected shares are recomputed from additive counts; policy
+    mass is the equal-state mean of complete persisted probability vectors.
+    """
+
+    if metric not in _CANDIDATE_SELECTION_TEMPORAL_METRICS:
+        raise ValueError(
+            f"Unsupported candidate selection metric {metric!r}; "
+            f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
+        )
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    for source_row in dynamics_rows:
+        row = dict(source_row)
+        step_index = row.get("step_index")
+        if step_index is None:
+            raise ValueError("Candidate selection summaries require factual step_index values.")
+        key = (
+            row.get("group_by"),
+            row.get("policy"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+            int(step_index),
+            row.get("family"),
+        )
+        summary = grouped.setdefault(
+            key,
+            {
+                "state_ids": set(),
+                "numerator": 0,
+                "denominator": 0,
+                "policy_values": [],
+                "policy_missing_count": 0,
+            },
+        )
+        state_ids = summary["state_ids"]
+        assert isinstance(state_ids, set)
+        state_ids.add((row.get("generation_cohort_id"), row.get("rollout_row_id"), int(step_index)))
+        if metric == "policy_mass":
+            value = _finite_or_none(row.get("policy_mass"))
+            if value is None:
+                summary["policy_missing_count"] = int(summary["policy_missing_count"]) + 1
+            else:
+                values = summary["policy_values"]
+                assert isinstance(values, list)
+                values.append(value)
+            continue
+        numerator_field, denominator_field = {
+            "allocation_share": ("family_candidate_count", "candidate_count"),
+            "valid_share": ("family_actor_valid_count", "actor_valid_count"),
+            "selected_share": ("family_selected_count", None),
+        }[metric]
+        summary["numerator"] = int(summary["numerator"]) + int(row[numerator_field])
+        denominator = 1 if denominator_field is None else int(row[denominator_field])
+        summary["denominator"] = int(summary["denominator"]) + denominator
+
+    output: list[dict[str, object]] = []
+    for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
+        group_by, policy, horizon, branch_factor, beam_width, step_index, family = key
+        state_ids = summary["state_ids"]
+        assert isinstance(state_ids, set)
+        state_count = len(state_ids)
+        if metric == "policy_mass":
+            values = summary["policy_values"]
+            assert isinstance(values, list)
+            finite_count = len(values)
+            fraction = None if not finite_count else float(np.mean(np.asarray(values, dtype=np.float64)))
+            numerator = None
+            denominator = None
+        else:
+            finite_count = state_count
+            numerator = int(summary["numerator"])
+            denominator = int(summary["denominator"])
+            fraction = _safe_fraction(numerator, denominator)
+        output.append(
+            {
+                "metric": metric,
+                "group_by": group_by,
+                "policy": policy,
+                "horizon": horizon,
+                "branch_factor": branch_factor,
+                "beam_width": beam_width,
+                "step_index": step_index,
+                "family": family,
+                "state_count": state_count,
+                "finite_state_count": finite_count,
+                "missing_state_count": state_count - finite_count,
+                "numerator": numerator,
+                "denominator": denominator,
+                "fraction": fraction,
             }
         )
     return output

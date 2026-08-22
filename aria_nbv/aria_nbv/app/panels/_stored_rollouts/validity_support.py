@@ -143,11 +143,11 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
         _render_candidate_aggregate_breakdowns(store_path)
 
     if st.toggle(
-        "Load candidate choice, calibration, and collision comparisons",
+        "Load candidate-choice probabilities and transitions",
         value=False,
         help=(
-            "Materializes the complete candidate audit only after this explicit request, then reuses it for "
-            "family-over-depth, conditional-transition, calibration, and collision evidence."
+            "Materializes the complete candidate audit only after this explicit request. It pools compatible factual "
+            "states across temperatures for per-step family fractions and next-step transition probabilities."
         ),
     ):
         _render_candidate_population_evidence(store_path)

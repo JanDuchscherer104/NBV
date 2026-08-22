@@ -18,7 +18,8 @@ from ....rollouts.inspection import (
     CANDIDATE_SELECTION_GROUP_FIELDS,
     GeometryProjection,
     ProposalAlignment,
-    candidate_selection_temporal_summary_rows,
+    candidate_selection_pooled_summary_rows,
+    candidate_selection_transition_rows,
 )
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
@@ -66,105 +67,48 @@ class _PairwiseCorrelation(TypedDict):
     has_finite_off_diagonal: bool
 
 
-def _selection_stratum_columns() -> tuple[str, ...]:
-    """Return the exact persisted controls that selection plots never pool."""
-
-    return (
-        "generation_cohort_id",
-        "policy",
-        "temperature",
-        "horizon",
-        "branch_factor",
-        "beam_width",
-    )
-
-
-def _selection_stratum_label(row: pd.Series) -> str:
-    """Return a compact exact-cohort label for controls and traces."""
-
-    return (
-        f"{row['generation_cohort_id']} · {row['policy']} · T={row['temperature']} · "
-        f"H={row['horizon']} · B={row['branch_factor']} · beam={row['beam_width']}"
-    )
-
-
-def _candidate_selection_temporal_figure(summary: pd.DataFrame) -> go.Figure:
-    """Plot family-level state summaries without pooling persisted cohorts."""
+def _pooled_candidate_selection_figure(summary: pd.DataFrame) -> go.Figure:
+    """Plot one compatible sample-population family fraction per factual step."""
 
     figure = go.Figure()
-    summary = summary.dropna(subset=["median", "q25", "q75"]).copy()
-    if summary.empty:
+    finite = summary.dropna(subset=["fraction"]).copy()
+    if finite.empty:
         figure.update_layout(title="Candidate choice over factual acquisition: no finite rows")
         return figure
     palette = px.colors.qualitative.Plotly
-    stratum_columns = list(_selection_stratum_columns())
-    stratum_count = summary[stratum_columns].drop_duplicates().shape[0]
-    trace_columns = [*stratum_columns, "family"]
-    for index, (trace_key, rows) in enumerate(summary.groupby(trace_columns, sort=True, dropna=False)):
+    for index, (family, rows) in enumerate(finite.groupby("family", sort=True, dropna=False)):
         ordered = rows.sort_values("step_index")
-        acquisition = ordered["step_index"].to_numpy(dtype=np.int64) + 1
-        color = palette[index % len(palette)]
-        family = str(trace_key[-1])
-        trace_name = family if stratum_count == 1 else f"{family} · {_selection_stratum_label(ordered.iloc[0])}"
-        hover = [
-            (
-                f"family={family}<br>acquisition={int(step) + 1}<br>median={median:.4g}"
-                f"<br>IQR=[{q25:.4g}, {q75:.4g}]<br>finite={int(finite)} / {int(total)}"
-                f"<br>{_selection_stratum_label(row)}"
-            )
-            for step, median, q25, q75, finite, total, (_, row) in zip(
-                ordered["step_index"],
-                ordered["median"],
-                ordered["q25"],
-                ordered["q75"],
-                ordered["finite_count"],
-                ordered["total_count"],
-                ordered.iterrows(),
-                strict=True,
-            )
-        ]
         figure.add_trace(
             go.Scatter(
-                x=acquisition,
-                y=ordered["q25"],
-                mode="lines",
-                line={"color": color, "width": 0},
-                legendgroup=trace_name,
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-        figure.add_trace(
-            go.Scatter(
-                x=acquisition,
-                y=ordered["q75"],
-                mode="lines",
-                line={"color": color, "width": 0},
-                fill="tonexty",
-                fillcolor=_rgba(color, 0.18),
-                legendgroup=trace_name,
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-        figure.add_trace(
-            go.Scatter(
-                x=acquisition,
-                y=ordered["median"],
+                x=ordered["step_index"].to_numpy(dtype=np.int64) + 1,
+                y=ordered["fraction"],
                 mode="lines+markers",
-                line={"color": color},
+                name=str(family),
+                line={"color": palette[index % len(palette)]},
                 marker={"size": 7},
-                name=trace_name,
-                legendgroup=trace_name,
-                text=hover,
-                hovertemplate="%{text}<extra></extra>",
+                customdata=np.column_stack(
+                    (
+                        ordered["state_count"],
+                        ordered["finite_state_count"],
+                        ordered["missing_state_count"],
+                        pd.to_numeric(ordered["numerator"], errors="coerce"),
+                        pd.to_numeric(ordered["denominator"], errors="coerce"),
+                    )
+                ),
+                hovertemplate=(
+                    "family=%{fullData.name}<br>acquisition=%{x}<br>fraction=%{y:.3f}"
+                    "<br>factual states=%{customdata[0]:.0f}<br>finite probability states=%{customdata[1]:.0f}"
+                    "<br>missing probability states=%{customdata[2]:.0f}"
+                    "<br>additive numerator=%{customdata[3]:.0f}<br>additive denominator=%{customdata[4]:.0f}"
+                    "<extra></extra>"
+                ),
             )
         )
-    metric = str(summary["metric"].iloc[0])
+    metric = str(finite["metric"].iloc[0]).replace("_", " ")
     figure.update_layout(
-        title=f"{metric.replace('_', ' ').title()} by factual acquisition",
+        title=f"Pooled {metric} by factual acquisition",
         xaxis_title="acquisition number (1 = first selected view)",
-        yaxis_title="state-level fraction",
+        yaxis_title="fraction across compatible factual states",
         yaxis={"range": [0.0, 1.0]},
         hovermode="x unified",
     )
@@ -210,56 +154,55 @@ def _candidate_transition_figure(rows: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def _rgba(color: str, alpha: float) -> str:
-    """Convert a Plotly hexadecimal color to a transparent fill."""
-
-    red, green, blue = (int(color[index : index + 2], 16) for index in (1, 3, 5))
-    return f"rgba({red},{green},{blue},{alpha})"
-
-
 def _render_candidate_population_evidence(store_path: str) -> None:
     """Render plot-first candidate choice evidence and collapsed audit tables."""
 
     group_by = st.selectbox(
         "Candidate family vocabulary",
         options=list(CANDIDATE_SELECTION_GROUP_FIELDS),
+        index=list(CANDIDATE_SELECTION_GROUP_FIELDS).index("position_strategy"),
         format_func=_CANDIDATE_SELECTION_GROUP_LABELS.__getitem__,
         help="Compare position, direction, generator component, or their exact position-direction combination.",
     )
     population = _cached_projection(store_path, "candidate_population")
-    dynamics = pd.DataFrame(population["selection_dynamics"][group_by])
-    transitions = pd.DataFrame(population["selection_transitions"][group_by])
-    if dynamics.empty:
+    raw_dynamics = pd.DataFrame(population["selection_dynamics"][group_by])
+    if raw_dynamics.empty:
         st.info("No factual candidate-choice states are available for this family vocabulary.")
         return
-    stratum_columns = list(_selection_stratum_columns())
-    strata = dynamics[stratum_columns].drop_duplicates().reset_index(drop=True)
-    strata["label"] = strata.apply(_selection_stratum_label, axis=1)
-    selected_label = st.selectbox("Candidate choice cohort", options=strata["label"].tolist())
-    selected_stratum = strata.loc[strata["label"] == selected_label].iloc[0]
-    for column in stratum_columns:
-        dynamics = dynamics.loc[dynamics[column].astype(str) == str(selected_stratum[column])]
-        if not transitions.empty:
-            transitions = transitions.loc[transitions[column].astype(str) == str(selected_stratum[column])]
 
     metric_label = st.segmented_control(
-        "State-level quantity",
+        "Per-step quantity",
         options=tuple(_CANDIDATE_SELECTION_METRIC_LABELS),
         default="Policy selection mass",
         help=(
-            "Policy mass sums the persisted softmax probabilities in each family. Allocation and validity describe "
-            "the offered action set; realized share describes the selected action."
+            "Policy mass is the mean selection probability assigned to a family across factual states. Allocation and "
+            "validity use additive candidate counts; realized share is the selected-family frequency."
         ),
     )
     metric = _CANDIDATE_SELECTION_METRIC_LABELS[metric_label or "Policy selection mass"]
-    temporal = pd.DataFrame(candidate_selection_temporal_summary_rows(dynamics.to_dict("records"), metric=metric))
+    pooled = pd.DataFrame(candidate_selection_pooled_summary_rows(raw_dynamics.to_dict("records"), metric=metric))
+    control_columns = ["policy", "horizon", "branch_factor", "beam_width"]
+    controls = pooled[control_columns].drop_duplicates().reset_index(drop=True)
+    if len(controls) > 1:
+        controls["label"] = controls.apply(
+            lambda row: f"{row['policy']} · H={row['horizon']} · B={row['branch_factor']} · beam={row['beam_width']}",
+            axis=1,
+        )
+        selected_label = st.selectbox("Compatible candidate-choice contract", options=controls["label"].tolist())
+        selected_controls = controls.loc[controls["label"] == selected_label].iloc[0]
+        for column in control_columns:
+            pooled = pooled.loc[pooled[column].astype(str) == str(selected_controls[column])]
+            raw_dynamics = raw_dynamics.loc[raw_dynamics[column].astype(str) == str(selected_controls[column])]
+    transitions = pd.DataFrame(
+        candidate_selection_transition_rows(raw_dynamics.to_dict("records"), pool_temperatures=True)
+    )
     _render_plot(
-        _candidate_selection_temporal_figure(temporal),
+        _pooled_candidate_selection_figure(pooled),
         ScientificExplanation(
             question="How does candidate-family availability and selection evolve along factual rollout depth?",
             answer=(
-                "The traces compare one state-level family quantity at each observed acquisition while keeping every "
-                "persisted generation cohort and policy control separate."
+                "The traces pool factual states across temperatures in this store while retaining a compatible policy, "
+                "horizon, branch-factor, and beam-width contract."
             ),
             sections=(
                 ExplanationSection(
@@ -270,13 +213,13 @@ def _render_candidate_population_evidence(store_path: str) -> None:
                 ),
                 ExplanationSection(
                     "Depth and uncertainty",
-                    "Acquisition 1 is persisted step_index 0. Lines are medians and ribbons are descriptive IQRs across "
-                    "factual states; hover gives finite/total n. Early-terminated rollouts contribute only observed depths.",
+                    "Acquisition 1 is persisted step_index 0. Each point is a pooled fraction, not a median or uncertainty "
+                    "interval; hover gives the factual-state support. Early-terminated rollouts contribute only observed depths.",
                 ),
                 ExplanationSection(
                     "Comparison limits",
-                    "Exact cohort, policy, temperature, horizon, branch factor, and beam width are never pooled. "
-                    "A family can dominate because it was offered more often, remained valid, received more policy mass, "
+                    "Temperature and exact cohort are intentionally pooled for this debugging view. Other displayed controls remain "
+                    "separate. A family can dominate because it was offered more often, remained valid, received more policy mass, "
                     "or was selected; compare the four quantities before attributing a policy preference.",
                 ),
             ),
@@ -304,8 +247,8 @@ def _render_candidate_population_evidence(store_path: str) -> None:
             ScientificExplanation(
                 question="How does the next selected family vary with the previously selected family?",
                 answer=(
-                    "The left heatmap averages the next-family selection probability mass; the right reports the "
-                    "realized next-family frequency for the same previous-family contexts."
+                    "The left heatmap averages next-family selection probability mass across compatible factual contexts; the right "
+                    "reports realized next-family frequency for the same previous-family contexts. Temperatures are pooled."
                 ),
                 sections=(
                     ExplanationSection(
@@ -340,8 +283,11 @@ def _render_candidate_population_evidence(store_path: str) -> None:
     sample = population["sample"]
     with st.expander("Candidate choice rows, aggregate tables, and CSV", expanded=False):
         st.markdown("#### State-level family dynamics")
-        st.dataframe(dynamics, hide_index=True, width="stretch")
-        _download_frame("Download candidate choice dynamics CSV", "candidate-choice-dynamics.csv", dynamics)
+        st.dataframe(pooled, hide_index=True, width="stretch")
+        _download_frame("Download pooled candidate choice CSV", "candidate-choice-pooled.csv", pooled)
+        st.markdown("#### Exact factual state rows")
+        st.dataframe(raw_dynamics, hide_index=True, width="stretch")
+        _download_frame("Download candidate choice dynamics CSV", "candidate-choice-dynamics.csv", raw_dynamics)
         if not transitions.empty:
             st.markdown("#### Conditional family transitions")
             st.dataframe(transitions, hide_index=True, width="stretch")

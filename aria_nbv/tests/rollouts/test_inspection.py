@@ -26,6 +26,7 @@ from aria_nbv.rollouts.inspection import (
     candidate_group_summary_rows,
     candidate_population_evidence,
     candidate_proposal_calibration_rows,
+    candidate_selection_pooled_summary_rows,
     candidate_selection_sequence_rows,
     candidate_selection_temporal_summary_rows,
     candidate_selection_transition_rows,
@@ -1115,6 +1116,31 @@ def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_s
     assert a_to_a["context_count"] == 2
     assert a_to_a["expected_policy_mass_mean"] == pytest.approx(0.45)
     assert a_to_a["realized_rate"] == pytest.approx(0.5)
+
+    temperature_pooled_dynamics = [
+        {
+            **row,
+            "generation_cohort_id": f"cohort-{row['rollout_row_id']}",
+            "temperature": 0.5 if row["rollout_row_id"] == 0 else 2.0,
+        }
+        for row in dynamics
+    ]
+    pooled = candidate_selection_pooled_summary_rows(temperature_pooled_dynamics, metric="policy_mass")
+    pooled_forward_step_one = next(row for row in pooled if row["step_index"] == 1 and row["family"] == "forward")
+    assert pooled_forward_step_one["state_count"] == 2
+    assert pooled_forward_step_one["fraction"] == pytest.approx(0.45)
+    assert "temperature" not in pooled_forward_step_one
+
+    pooled_transitions = candidate_selection_transition_rows(temperature_pooled_dynamics, pool_temperatures=True)
+    pooled_a_to_a = next(
+        row
+        for row in pooled_transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "forward"
+    )
+    assert pooled_a_to_a["context_count"] == 2
+    assert pooled_a_to_a["expected_policy_mass_mean"] == pytest.approx(0.45)
+    assert pooled_a_to_a["temperature"] is None
+    assert pooled_a_to_a["pooled_temperatures"] is True
 
     sequences = candidate_selection_sequence_rows(dynamics)
     assert [row["sequence"] for row in sequences] == [
