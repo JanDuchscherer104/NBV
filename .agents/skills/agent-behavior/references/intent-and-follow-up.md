@@ -23,3 +23,8 @@ verification checks; this branch must not weaken that route.
 When a choice remains unresolved after consulting reviewed intent, state the
 conflict, scope, and missing proof instead of inferring acceptance. Return to
 the smallest exact owner once the choice is settled.
+
+Future lifecycle boundaries: durable history and verification are defined by
+the repository [memory owner](../../../memory/README.md); actionable work is
+owned by the [agents-db skill](../../agents-db/SKILL.md). This reference does
+not activate those future lifecycle workflows.

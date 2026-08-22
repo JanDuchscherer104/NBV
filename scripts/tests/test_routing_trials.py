@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import inspect
 import json
 import subprocess
 import sys
@@ -19,6 +21,7 @@ import run_routing_trials as trials  # noqa: E402
 def _complete_event_evidence() -> dict[str, object]:
     items = [
         {
+            "event_index": 0,
             "event_type": "item.completed",
             "item_type": "command_execution",
             "command": "rg -n owner AGENTS.md",
@@ -122,6 +125,48 @@ def test_prompt_and_rubric_ids_match_without_prompt_leakage() -> None:
         assert "mcp__" not in task
 
 
+def test_trial_prompt_has_generic_protocol_and_only_fixture_task_is_specific() -> None:
+    task = "Choose the owner."
+    prompt = trials.build_trial_prompt(task)
+
+    assert prompt.startswith(trials.TRIAL_EXECUTION_PROTOCOL)
+    assert "abstract routing simulation" in prompt
+    assert "focused, bounded evidence" in prompt
+    assert "concrete representative existing contract" in prompt
+    assert "exact owner or owners" in prompt
+    assert "precise scoped edit or decision" in prompt
+    assert "bounded read-only proof" in prompt
+    assert "Do not mutate the checkout" in prompt
+    assert "ask the user for missing scenario details" in prompt
+    assert "abstract or for missing scenario details" not in prompt
+    assert "code-only Graphify graph" in prompt
+    assert "same evaluator-free tested snapshot" in prompt
+    assert "graphify query" in prompt
+    assert "graphify path" in prompt
+    assert "graphify explain" in prompt
+    assert "before exact-source verification" in prompt
+    assert "Do not run ARIA repository freshness or bootstrap" in prompt
+    assert "navigation only, never authority" in prompt
+    assert prompt.endswith("Task:\nChoose the owner.")
+    for leaked_term in (
+        "expected_owner_paths",
+        "required_outcomes",
+        "forbidden_outcomes",
+        "expected outcome",
+        "forbidden outcome",
+        "candidate diff",
+        "hidden rubric",
+    ):
+        assert leaked_term not in prompt.lower()
+
+
+def test_frozen_fixture_bytes_match_attested_commit() -> None:
+    for relative_path in trials.EVALUATOR_FIXTURE_PATHS:
+        assert trials.read_git_blob("a815f5bb03", relative_path) == (
+            trials.ROOT / relative_path
+        ).read_bytes()
+
+
 def test_pr1_routing_trials_are_frozen_and_non_proposal() -> None:
     ids = {
         "reviewed-intent-underdetermined-choice",
@@ -133,6 +178,12 @@ def test_pr1_routing_trials_are_frozen_and_non_proposal() -> None:
     rubric = trials.load_rubric()
     assert ids <= set(rubric)
     for trial_id in ids:
+        serialized = json.dumps(rubric[trial_id], sort_keys=True)
+        assert serialized
+    for trial_id in (
+        "reviewed-intent-underdetermined-choice",
+        "reviewed-intent-known-owner-near-miss",
+    ):
         serialized = json.dumps(rubric[trial_id], sort_keys=True)
         assert "proposal routing" in serialized.lower()
 
@@ -173,7 +224,7 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
     for field in ("missing_requirements", "forbidden_observations"):
         items = verdict_schema["properties"][field]["items"]
         assert verdict_schema["properties"][field]["maxItems"] == trials.VERDICT_MAX_ITEMS
-        assert items["maxLength"] == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
+        assert items["maxLength"] == trials.VERDICT_MAX_FIELD_CHARS
 
 
 def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
@@ -229,11 +280,251 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
         )
 
 
+def test_materialized_snapshot_is_standalone_fixture_free_and_clean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "routing@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Routing Test"], cwd=repo, check=True)
+    (repo / "AGENTS.md").write_text("owner guidance\n", encoding="utf-8")
+    executable = repo / "owner.sh"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o755)
+    for relative_path, content in (
+        (trials.PROMPTS_RELATIVE, '{"id":"trial","task":"first"}\n'),
+        (trials.RUBRIC_RELATIVE, '{"fixtures":[{"id":"trial"}]}\n'),
+    ):
+        path = repo / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "tested"], cwd=repo, check=True)
+    tested_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    source_graph = repo / "graphify-out" / "graph.json"
+    source_graph.parent.mkdir()
+    source_graph.write_text('{"nodes":[{"id":"root"}]}', encoding="utf-8")
+
+    hook_dir = tmp_path / "global-hooks"
+    hook_dir.mkdir()
+    hook_marker = tmp_path / "hook-ran"
+    hook = hook_dir / "pre-commit"
+    hook.write_text(f"#!/bin/sh\ntouch {hook_marker}\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    global_config = tmp_path / "gitconfig"
+    global_config.write_text(
+        f"[core]\n\thooksPath = {hook_dir}\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+
+    checkout = tmp_path / "checkout"
+    git_calls: list[tuple[str, ...]] = []
+    original_run_git = trials.run_git
+
+    def recording_run_git(*args: str, **kwargs: object) -> str:
+        git_calls.append(args)
+        return original_run_git(*args, **kwargs)
+
+    with patch.object(trials, "run_git", side_effect=recording_run_git):
+        trials.materialize_trial_snapshot(
+            tested_commit=tested_commit, checkout=checkout, root=repo
+        )
+
+    assert (checkout / "AGENTS.md").read_text(encoding="utf-8") == "owner guidance\n"
+    assert ((checkout / "owner.sh").stat().st_mode & 0o777) == 0o755
+    assert not (checkout / "graphify-out").exists()
+    for relative_path in trials.EVALUATOR_FIXTURE_PATHS:
+        assert not (checkout / relative_path).exists()
+        assert subprocess.run(
+            ["git", "show", f"HEAD:{relative_path.as_posix()}"],
+            cwd=checkout,
+            check=False,
+            capture_output=True,
+        ).returncode != 0
+        assert subprocess.run(
+            ["git", "log", "--all", "--format=", "--", relative_path.as_posix()],
+            cwd=checkout,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout == ""
+    assert subprocess.run(
+        ["git", "status", "--porcelain"], cwd=checkout, check=True, capture_output=True, text=True
+    ).stdout == ""
+    assert not (checkout / ".git" / "objects" / "info" / "alternates").exists()
+    assert not hook_marker.exists()
+    assert not any(
+        call[:3] == ("worktree", "remove", "--force") for call in git_calls
+    )
+
+
+def test_provision_trial_graph_runs_code_only_and_accepts_clean_graph(
+    tmp_path: Path,
+) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+
+    def write_graph(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        graph = checkout / "graphify-out" / "graph.json"
+        graph.parent.mkdir()
+        graph.write_text('{"nodes":[{"id":"owner"}],"edges":[]}', encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="built", stderr="")
+
+    with (
+        patch.object(trials.subprocess, "run", side_effect=write_graph) as run,
+        patch.object(trials, "run_git", return_value="") as run_git,
+    ):
+        trials.provision_trial_graph(checkout)
+
+    expected_command = [
+        "graphify",
+        "extract",
+        ".",
+        "--code-only",
+        "--no-cluster",
+        "--out",
+        ".",
+    ]
+    run.assert_called_once_with(
+        expected_command,
+        cwd=checkout,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert not {"--deep", "--mode", "--model", "--semantic"} & set(expected_command)
+    run_git.assert_called_once_with(
+        "status", "--porcelain", "--untracked-files=all", cwd=checkout
+    )
+
+
+@pytest.mark.parametrize(
+    ("graph_case", "reason"),
+    [
+        ("missing", "regular non-symlink"),
+        ("symlink", "regular non-symlink"),
+        ("malformed", "unreadable or malformed"),
+        ("non-object", "object with nonempty nodes"),
+        ("missing-nodes", "object with nonempty nodes"),
+        ("empty-nodes", "object with nonempty nodes"),
+    ],
+)
+def test_provision_trial_graph_rejects_invalid_graph(
+    tmp_path: Path, graph_case: str, reason: str
+) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+
+    def write_invalid_graph(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        graph = checkout / "graphify-out" / "graph.json"
+        if graph_case != "missing":
+            graph.parent.mkdir()
+        if graph_case == "symlink":
+            target = checkout / "elsewhere.json"
+            target.write_text('{"nodes":[{"id":"owner"}]}', encoding="utf-8")
+            graph.symlink_to(target)
+        elif graph_case == "malformed":
+            graph.write_text("{", encoding="utf-8")
+        elif graph_case == "non-object":
+            graph.write_text("[]", encoding="utf-8")
+        elif graph_case == "missing-nodes":
+            graph.write_text("{}", encoding="utf-8")
+        elif graph_case == "empty-nodes":
+            graph.write_text('{"nodes":[]}', encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="built", stderr="")
+
+    with (
+        patch.object(trials.subprocess, "run", side_effect=write_invalid_graph),
+        patch.object(trials, "run_git", return_value=""),
+        pytest.raises(ValueError, match=reason),
+    ):
+        trials.provision_trial_graph(checkout)
+
+
+def test_provision_trial_graph_fails_closed_on_nonzero_command(
+    tmp_path: Path,
+) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    result = subprocess.CompletedProcess([], 7, stdout="partial", stderr="failed")
+
+    with (
+        patch.object(trials.subprocess, "run", return_value=result),
+        patch.object(trials, "run_git") as run_git,
+        pytest.raises(ValueError, match="exit code 7"),
+    ):
+        trials.provision_trial_graph(checkout)
+
+    run_git.assert_not_called()
+
+
+def test_provision_trial_graph_rejects_dirty_snapshot(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+
+    def write_graph(
+        command: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        graph = checkout / "graphify-out" / "graph.json"
+        graph.parent.mkdir()
+        graph.write_text('{"nodes":[{"id":"owner"}]}', encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="built", stderr="")
+
+    with (
+        patch.object(trials.subprocess, "run", side_effect=write_graph),
+        patch.object(trials, "run_git", return_value="?? unexpected.txt"),
+        pytest.raises(ValueError, match="dirtied the trial snapshot"),
+    ):
+        trials.provision_trial_graph(checkout)
+
+
+def test_provision_trial_graph_rejects_evaluator_fixture_before_command(
+    tmp_path: Path,
+) -> None:
+    checkout = tmp_path / "checkout"
+    fixture = checkout / trials.PROMPTS_RELATIVE
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text('{"id":"hidden"}', encoding="utf-8")
+
+    with (
+        patch.object(trials.subprocess, "run") as run,
+        pytest.raises(ValueError, match="evaluator fixture remains"),
+    ):
+        trials.provision_trial_graph(checkout)
+
+    run.assert_not_called()
+
+
+def test_main_provisions_graph_after_snapshot_before_trials() -> None:
+    source = inspect.getsource(trials.main)
+
+    assert (
+        source.index("materialize_trial_snapshot(")
+        < source.index("provision_trial_graph(")
+        < source.index("ThreadPoolExecutor(")
+    )
+
+
 def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
     tmp_path: Path,
 ) -> None:
     events = tmp_path / "events.jsonl"
     records = [
+        {
+            "type": "item.started",
+            "item": {
+                "type": "command_execution",
+                "command": "rg -n owner AGENTS.md aria_nbv/AGENTS.md",
+                "status": "in_progress",
+            },
+        },
         {
             "type": "item.completed",
             "item": {
@@ -277,9 +568,11 @@ def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
     assert evidence["invalid_items"] == 0
     assert len(evidence["items"]) == 2
     command, tool = evidence["items"]
+    assert [item["event_index"] for item in evidence["items"]] == [0, 1]
     assert command["command"] == "rg -n owner AGENTS.md aria_nbv/AGENTS.md"
     assert command["status"] == "completed"
     assert command["exit_code"] == 0
+    assert all(item["event_type"] == "item.completed" for item in evidence["items"])
     assert tool["server"] == "codex_apps"
     assert tool["tool"] == "context7_query_docs"
     assert "/graphify-labs/graphify" in tool["arguments"]
@@ -334,11 +627,12 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     long_text = "x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS * 2)
     records = [
         {
-            "type": long_text,
+            "type": "item.completed",
             "item": {
-                "type": long_text,
+                "type": "command_execution",
                 "command": long_text,
-                "status": "completed",
+                "status": long_text,
+                "arguments": long_text,
                 "exit_code": 0,
             },
         }
@@ -363,10 +657,68 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     assert evidence["field_truncations"] == 3
     assert evidence["dropped_items"] > 0
     assert evidence["truncated"] is True
-    for field in ("event_type", "item_type", "command"):
+    for field in ("command", "status", "arguments"):
         assert len(evidence["items"][0][field]) == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
     serialized = json.dumps(evidence, sort_keys=True, separators=(",", ":"))
     assert len(serialized) <= trials.EVENT_EVIDENCE_MAX_TOTAL_CHARS
+    assert trials.validate_event_evidence(evidence)[0] is False
+
+
+def test_event_evidence_accepts_complete_2424_character_command(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    command = "x" * 2_424
+    events.write_text(
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "command": command,
+                    "status": "completed",
+                    "exit_code": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert evidence["items"][0]["command"] == command
+    assert evidence["field_truncations"] == 0
+    assert trials.validate_event_evidence(evidence) == (
+        True,
+        "complete raw event evidence",
+    )
+
+
+def test_event_evidence_rejects_command_truncated_above_4096(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    command = "x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS + 1)
+    events.write_text(
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "command": command,
+                    "status": "completed",
+                    "exit_code": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert len(evidence["items"][0]["command"]) == 4_096
+    assert evidence["field_truncations"] == 1
+    assert evidence["truncated"] is True
     assert trials.validate_event_evidence(evidence)[0] is False
 
 
@@ -380,6 +732,60 @@ def test_event_evidence_rejects_oversized_raw_stream(tmp_path: Path) -> None:
     assert evidence["dropped_items"] == 1
     assert evidence["truncated"] is True
     assert trials.validate_event_evidence(evidence)[0] is False
+
+
+def test_event_evidence_parses_complete_stream_past_old_raw_bound(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    records = [
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "rg owner AGENTS.md --before-context 2",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        },
+        {
+            "type": "turn.completed",
+            "aggregated_output": "x" * 70_000,
+            "usage": {"input_tokens": 1000},
+        },
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "rg owner scripts/scaffold",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        },
+        {
+            "type": "turn.completed",
+            "aggregated_output": "y" * 70_000,
+            "usage": {"input_tokens": 2000},
+        },
+        {
+            "type": "turn.completed",
+            "aggregated_output": "z" * 70_000,
+            "usage": {"input_tokens": 3000},
+        },
+    ]
+    events.write_text("\n".join(json.dumps(record) for record in records) + "\n")
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert events.stat().st_size > 131_072
+    assert events.stat().st_size <= trials.EVENT_EVIDENCE_MAX_RAW_BYTES
+    assert [item["command"] for item in evidence["items"]] == [
+        "rg owner AGENTS.md --before-context 2",
+        "rg owner scripts/scaffold",
+    ]
+    assert evidence["dropped_items"] == 0
+    assert evidence["truncated"] is False
+    assert trials.validate_event_evidence(evidence)[0] is True
 
 
 def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
@@ -411,6 +817,132 @@ def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
     assert bounded["tested_commit"] == "tested"
     assert bounded["rubric_commit"] == "rubric"
     assert payload["rubric_commit"] == "rubric"
+
+
+def test_verifier_prompt_defines_event_index_sequence() -> None:
+    prompt = trials.build_verifier_prompt(
+        rubric={"id": "trial"}, report=_trial_report(), rubric_commit="rubric"
+    )
+
+    instruction = json.loads(prompt)["instruction"]
+    assert "copy the exact event_index from the retained item" in instruction
+    assert "bounded_trial_evidence.event_evidence.items" in instruction
+    assert "concrete representative existing contract" in instruction
+    assert "precise intended change or decision" in instruction
+    assert "Checkout mutation is forbidden" in instruction
+    assert "clean checkout is required" in instruction
+
+
+def test_run_trial_hashes_the_protocol_augmented_prompt(tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> object:
+        captured.update(kwargs)
+        return type("Result", (), {"returncode": 0})()
+
+    with (
+        patch.object(trials, "run_git", return_value=""),
+        patch.object(trials.subprocess, "run", side_effect=fake_run),
+    ):
+        report = trials.run_trial(
+            trial_id="trial",
+            task="Choose the owner.",
+            head="tested",
+            rubric_commit="rubric",
+            checkout=tmp_path / "checkout",
+            output_dir=tmp_path / "output",
+            codex_version="codex test",
+            model=None,
+            effort=None,
+            timeout_seconds=1,
+        )
+
+    executed_prompt = captured["input"]
+    assert executed_prompt == trials.build_trial_prompt("Choose the owner.")
+    assert report["prompt_sha256"] == hashlib.sha256(executed_prompt.encode()).hexdigest()
+
+
+def test_synthetic_event_evidence_uses_completed_ordinals_and_stays_bounded(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    records: list[dict[str, object]] = []
+    for ordinal in range(9):
+        records.extend(
+            [
+                {
+                    "type": "item.started",
+                    "item": {
+                        "type": "command_execution",
+                        "command": f"started-{ordinal}",
+                    },
+                },
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "command_execution",
+                        "command": f"completed-{ordinal}",
+                        "status": "completed",
+                        "exit_code": 0,
+                    },
+                },
+            ]
+        )
+    events.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8"
+    )
+
+    evidence = trials.extract_event_evidence(events)
+    assert [item["command"] for item in evidence["items"]] == [
+        f"completed-{ordinal}" for ordinal in range(9)
+    ]
+    assert [item["event_index"] for item in evidence["items"]] == list(range(9))
+    verdict = _verdict(
+        evidence=[
+            _event_reference(event_index=4, claim="completed ordinal four"),
+            _event_reference(event_index=8, claim="completed ordinal eight"),
+        ]
+    )
+    assert trials.validate_event_evidence(evidence) == (True, "complete raw event evidence")
+    assert _validate_verdict(verdict, evidence) == (True, "pass")
+
+    bounded_records = [
+        {
+            "type": "item.started",
+            "item": {
+                "type": "command_execution",
+                "command": f"started-only-{ordinal}",
+            },
+        }
+        for ordinal in range(65)
+    ]
+    bounded_records.extend(
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": f"completed-{ordinal}",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        }
+        for ordinal in range(64)
+    )
+    bounded_events = tmp_path / "bounded-events.jsonl"
+    bounded_events.write_text(
+        "\n".join(json.dumps(record) for record in bounded_records) + "\n",
+        encoding="utf-8",
+    )
+    bounded_evidence = trials.extract_event_evidence(bounded_events)
+    assert len(bounded_records) > trials.EVENT_EVIDENCE_MAX_ITEMS
+    assert len(bounded_evidence["items"]) == trials.EVENT_EVIDENCE_MAX_ITEMS
+    assert [item["event_index"] for item in bounded_evidence["items"]] == list(
+        range(trials.EVENT_EVIDENCE_MAX_ITEMS)
+    )
+    assert trials.validate_event_evidence(bounded_evidence) == (
+        True,
+        "complete raw event evidence",
+    )
 
 
 def test_read_trial_response_reads_bounded_stream_once(tmp_path: Path) -> None:
@@ -449,7 +981,7 @@ def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
         evidence,
     )[0]
     assert not _validate_verdict(
-        _verdict(forbidden_observations=["x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS + 1)]),
+        _verdict(forbidden_observations=["x" * (trials.VERDICT_MAX_FIELD_CHARS + 1)]),
         evidence,
     )[0]
 
@@ -476,6 +1008,19 @@ def test_pass_rejects_incomplete_raw_evidence(mutation: object, reason: str) -> 
     valid, actual_reason = _validate_verdict(_verdict(), evidence)
     assert valid is False
     assert reason in actual_reason
+
+
+@pytest.mark.parametrize("event_index", [True, "0", 1.0, 1, -1])
+def test_event_evidence_rejects_invalid_or_mismatched_event_index(
+    event_index: object,
+) -> None:
+    evidence = _complete_event_evidence()
+    evidence["items"][0]["event_index"] = event_index  # type: ignore[index]
+    evidence["payload_chars"] = len(
+        json.dumps(evidence["items"], sort_keys=True, separators=(",", ":"))
+    )
+
+    assert trials.validate_event_evidence(evidence)[0] is False
 
 
 @pytest.mark.parametrize(

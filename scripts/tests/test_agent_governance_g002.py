@@ -757,7 +757,9 @@ def test_capture_and_routing_contracts() -> None:
     assert ".agents/references/human_owner_intent.md" in intent_reference
     assert "Open Choices" in intent_reference
     assert "durable-capture.md" in intent_reference
-    assert "agents-db" not in intent_reference.lower()
+    assert "../../../memory/README.md" in intent_reference
+    assert "../../agents-db/SKILL.md" in intent_reference
+    assert "does\nnot activate those future lifecycle workflows" in intent_reference
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
@@ -839,7 +841,12 @@ def test_pr1_reviewed_intent_fixture_contracts() -> None:
         assert fixture["expected_owner_paths"]
         assert fixture["required_outcomes"]
         assert fixture["forbidden_outcomes"]
-        assert any("Open Choices" in value for value in fixture["forbidden_outcomes"])
+    assert any(
+        "Open Choices" in value
+        for value in fixtures["reviewed-intent-underdetermined-choice"][
+            "forbidden_outcomes"
+        ]
+    )
 
 
 def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:

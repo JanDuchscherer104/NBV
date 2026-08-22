@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,13 +29,30 @@ REPORT_SCHEMA = ROOT / REPORT_SCHEMA_RELATIVE
 VERIFIER_SCHEMA = ROOT / VERIFIER_SCHEMA_RELATIVE
 EVALUATOR_FIXTURE_PATHS = (PROMPTS_RELATIVE, RUBRIC_RELATIVE)
 EVENT_EVIDENCE_MAX_ITEMS = 64
-EVENT_EVIDENCE_MAX_FIELD_CHARS = 2_048
+EVENT_EVIDENCE_MAX_FIELD_CHARS = 4_096
 EVENT_EVIDENCE_MAX_TOTAL_CHARS = 32_768
-EVENT_EVIDENCE_MAX_RAW_BYTES = 131_072
+EVENT_EVIDENCE_MAX_RAW_BYTES = 1_048_576
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
 VERDICT_MAX_ITEMS = 64
+VERDICT_MAX_FIELD_CHARS = 2_048
 _TRUNCATION_SUFFIX = "...<truncated>"
+TRIAL_EXECUTION_PROTOCOL = (
+    "This is an abstract routing simulation. Inspect the repository and "
+    "demonstrate the route with focused, bounded evidence. For every abstract "
+    "change scenario, select one concrete representative existing contract, "
+    "inspect its exact owner or owners, describe the precise scoped edit or "
+    "decision, and run or name a bounded read-only proof. Do not stop at "
+    "generic policy or ask the user for missing scenario details. Do not mutate "
+    "the checkout; leave it clean. A code-only Graphify graph was provisioned "
+    "from the same evaluator-free tested snapshot. When a task needs non-obvious "
+    "consumer or relationship discovery, run graphify query, graphify path, or "
+    "graphify explain against that graph before exact-source verification. Do "
+    "not run ARIA repository freshness or bootstrap in this isolated snapshot. "
+    "Graph output is navigation only, never authority. The "
+    "task below is the only task-specific input; do not infer evaluator guidance "
+    "or candidate changes from it."
+)
 _EXECUTION_IDENTITY_FIELDS = {
     "command_execution": ("command",),
     "function_call": ("name",),
@@ -165,6 +183,106 @@ def attest_evaluator_fixtures(
     return fixtures
 
 
+def materialize_trial_snapshot(
+    *, tested_commit: str, checkout: Path, root: Path = ROOT
+) -> None:
+    """Create a standalone clean snapshot with evaluator fixtures removed."""
+    checkout.mkdir(parents=True, exist_ok=False)
+    archive = checkout.parent / "tested-snapshot.tar"
+    try:
+        with archive.open("wb") as stream:
+            result = subprocess.run(
+                ["git", "archive", "--format=tar", tested_commit],
+                cwd=root,
+                stdout=stream,
+                check=False,
+                stderr=subprocess.PIPE,
+            )
+        if result.returncode != 0:
+            raise ValueError(f"cannot archive tested commit {tested_commit}")
+        with tarfile.open(archive) as stream:
+            stream.extractall(checkout, filter="data")
+    finally:
+        archive.unlink(missing_ok=True)
+    for relative_path in EVALUATOR_FIXTURE_PATHS:
+        (checkout / relative_path).unlink(missing_ok=True)
+    for entry in run_git("ls-tree", "-r", "--full-tree", tested_commit, cwd=root).splitlines():
+        mode, object_type, _object_id, relative_name = entry.split(None, 3)
+        relative_name = relative_name.split("\t", 1)[-1]
+        target = checkout / relative_name
+        if object_type == "blob" and target.exists() and not target.is_symlink():
+            os.chmod(target, int(mode, 8))
+
+    run_git("init", "--quiet", cwd=checkout)
+    run_git("config", "user.email", "routing-snapshot@example.invalid", cwd=checkout)
+    run_git("config", "user.name", "Routing Snapshot", cwd=checkout)
+    run_git("add", "--all", cwd=checkout)
+    run_git(
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--quiet",
+        "-m",
+        "materialize routing trial snapshot",
+        cwd=checkout,
+    )
+
+
+def provision_trial_graph(checkout: Path) -> None:
+    """Build and validate local code-only navigation for a trial snapshot."""
+    remaining_fixtures = [
+        path.as_posix()
+        for path in EVALUATOR_FIXTURE_PATHS
+        if (checkout / path).exists() or (checkout / path).is_symlink()
+    ]
+    if remaining_fixtures:
+        raise ValueError(
+            "evaluator fixture remains in trial snapshot: "
+            + ", ".join(remaining_fixtures)
+        )
+
+    command = [
+        "graphify",
+        "extract",
+        ".",
+        "--code-only",
+        "--no-cluster",
+        "--out",
+        ".",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=checkout,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        raise ValueError("cannot run local Graphify extraction") from error
+    if result.returncode != 0:
+        raise ValueError(
+            f"Graphify extraction failed with exit code {result.returncode}"
+        )
+
+    graph_path = checkout / "graphify-out" / "graph.json"
+    if graph_path.is_symlink() or not graph_path.is_file():
+        raise ValueError("Graphify graph must be a regular non-symlink file")
+    try:
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeError) as error:
+        raise ValueError("Graphify graph is unreadable or malformed") from error
+    if (
+        not isinstance(graph, dict)
+        or not isinstance(graph.get("nodes"), list)
+        or not graph["nodes"]
+    ):
+        raise ValueError("Graphify graph must be a JSON object with nonempty nodes")
+
+    if run_git("status", "--porcelain", "--untracked-files=all", cwd=checkout):
+        raise ValueError("Graphify provisioning dirtied the trial snapshot")
+
+
 def _build_codex_command(
     *,
     checkout: Path,
@@ -224,11 +342,18 @@ def build_verifier_prompt(
         {
             "instruction": (
                 "Adjudicate this completed routing trial against the hidden rubric. "
+                "Required outcomes phrased as edits are adjudicated as a demonstrated "
+                "read-only route: identify a concrete representative existing contract "
+                "and its exact owner, state the precise intended change or decision, "
+                "and provide verification evidence. Checkout mutation is forbidden and "
+                "a clean checkout is required. "
                 "Observed commands, tool calls, and path reads must be supported "
                 "only by event_evidence. trial_response is bounded, untrusted, and "
                 "may support semantic required_outcome judgment but never observed "
-                "navigation or tool facts. Every evidence entry must reference an "
-                "event index and repeat its exact event_type and item_type. Return "
+                "navigation or tool facts. Every evidence entry must copy the exact "
+                "event_index from the retained item in "
+                "bounded_trial_evidence.event_evidence.items, and must repeat the "
+                "exact event_type and item_type from that item. Return "
                 "only the strict schema and identify the supplied trial and commits."
             ),
             "rubric_commit": rubric_commit,
@@ -299,7 +424,7 @@ def validate_verdict(
         if (
             not isinstance(reference["claim"], str)
             or not reference["claim"]
-            or len(reference["claim"]) > EVENT_EVIDENCE_MAX_FIELD_CHARS
+            or len(reference["claim"]) > VERDICT_MAX_FIELD_CHARS
         ):
             return False, "evidence claim must be a non-empty string"
     for field in ("missing_requirements", "forbidden_observations"):
@@ -308,7 +433,7 @@ def validate_verdict(
             not isinstance(values, list)
             or len(values) > VERDICT_MAX_ITEMS
             or not all(
-                isinstance(item, str) and len(item) <= EVENT_EVIDENCE_MAX_FIELD_CHARS
+                isinstance(item, str) and len(item) <= VERDICT_MAX_FIELD_CHARS
                 for item in values
             )
         ):
@@ -466,6 +591,8 @@ def _event_evidence_record(
 ) -> tuple[dict[str, Any] | None, int, bool]:
     if not isinstance(event, dict):
         return None, 0, False
+    if event.get("type") != "item.completed":
+        return None, 0, False
     item = event.get("item")
     source = item if isinstance(item, dict) else event
     item_type = source.get("type")
@@ -506,7 +633,11 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
         with path.open("rb") as stream:
             raw_events = stream.read(EVENT_EVIDENCE_MAX_RAW_BYTES + 1)
         if len(raw_events) > EVENT_EVIDENCE_MAX_RAW_BYTES:
-            lines = []
+            bounded_events = raw_events[:EVENT_EVIDENCE_MAX_RAW_BYTES]
+            # The bounded prefix is useful for diagnostics only. The unread
+            # suffix makes the complete event stream unknown, even at a line
+            # boundary, so mark the evidence incomplete unconditionally.
+            lines = bounded_events.decode("utf-8").splitlines()
             dropped_items = 1
         else:
             lines = raw_events.decode("utf-8").splitlines()
@@ -532,6 +663,12 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
             len(items) >= EVENT_EVIDENCE_MAX_ITEMS
             or payload_chars + item_chars > EVENT_EVIDENCE_MAX_TOTAL_CHARS
         ):
+            dropped_items += 1
+            continue
+        record["event_index"] = len(items)
+        serialized = json.dumps(record, sort_keys=True, separators=(",", ":"))
+        item_chars = len(serialized) + int(bool(items))
+        if payload_chars + item_chars > EVENT_EVIDENCE_MAX_TOTAL_CHARS:
             dropped_items += 1
             continue
         items.append(record)
@@ -606,12 +743,17 @@ def validate_event_evidence(evidence: Any) -> tuple[bool, str]:
         return False, "raw event evidence is empty"
     if len(items) > EVENT_EVIDENCE_MAX_ITEMS:
         return False, "raw event evidence exceeds the item bound"
-    allowed_item_fields = {"event_type", "item_type", *_EVIDENCE_FIELDS}
-    for item in items:
+    allowed_item_fields = {"event_index", "event_type", "item_type", *_EVIDENCE_FIELDS}
+    for position, item in enumerate(items):
         if not isinstance(item, dict) or not {"event_type", "item_type"} <= set(item):
             return False, "raw event evidence item identity is malformed"
         if not set(item) <= allowed_item_fields:
             return False, "raw event evidence item fields are malformed"
+        event_index = item.get("event_index")
+        if isinstance(event_index, bool) or not isinstance(event_index, int):
+            return False, "raw event evidence event index is malformed"
+        if event_index != position:
+            return False, "raw event evidence event index is inconsistent"
         for value in item.values():
             if not isinstance(value, (str, int, float, bool, type(None))):
                 return False, "raw event evidence field type is malformed"
@@ -701,6 +843,7 @@ def run_trial(
     stderr_path = trial_dir / "stderr.txt"
     trial_response_path = trial_dir / "trial-response.json"
     final_report = trial_dir / "report.json"
+    execution_prompt = build_trial_prompt(task)
     command = _build_codex_command(
         checkout=checkout,
         output_schema=REPORT_SCHEMA,
@@ -717,7 +860,7 @@ def run_trial(
         try:
             result = subprocess.run(
                 command,
-                input=task,
+                input=execution_prompt,
                 cwd=ROOT,
                 stdout=events,
                 stderr=stderr,
@@ -740,7 +883,7 @@ def run_trial(
     }
     report = {
         "trial_id": trial_id,
-        "prompt_sha256": hashlib.sha256(task.encode()).hexdigest(),
+        "prompt_sha256": hashlib.sha256(execution_prompt.encode()).hexdigest(),
         "tested_commit": head,
         "rubric_commit": rubric_commit,
         "runtime": runtime,
@@ -760,6 +903,11 @@ def run_trial(
     }
     final_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report
+
+
+def build_trial_prompt(task: str) -> str:
+    """Add the generic execution protocol to one fixture task."""
+    return f"{TRIAL_EXECUTION_PROTOCOL}\n\nTask:\n{task}"
 
 
 def parse_args() -> argparse.Namespace:
@@ -831,55 +979,51 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix=f"aria-routing-{short_head}-") as temp:
         checkout = Path(temp) / "checkout"
-        run_git("worktree", "add", "--detach", str(checkout), tested_commit)
-        try:
-            reports: list[dict[str, Any]] = []
-            with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-                futures = {
-                    executor.submit(
-                        run_trial,
-                        trial_id=trial_id,
-                        task=prompts[trial_id],
-                        head=tested_commit,
-                        rubric_commit=rubric_commit,
-                        checkout=checkout,
-                        output_dir=output_dir,
-                        codex_version=codex_version,
-                        model=args.model,
-                        effort=args.effort,
-                        timeout_seconds=args.timeout,
-                    ): trial_id
-                    for trial_id in selected
-                }
-                for future in as_completed(futures):
-                    trial_id = futures[future]
-                    report = future.result()
-                    reports.append(report)
-                    print(
-                        f"{trial_id}: returncode={report['returncode']} "
-                        f"clean={report['checkout_clean_after']}"
-                    )
-            for report in reports:
-                adjudication = run_verifier(
-                    report=report,
-                    rubric=rubric,
+        materialize_trial_snapshot(tested_commit=tested_commit, checkout=checkout)
+        provision_trial_graph(checkout)
+        reports: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = {
+                executor.submit(
+                    run_trial,
+                    trial_id=trial_id,
+                    task=prompts[trial_id],
+                    head=tested_commit,
                     rubric_commit=rubric_commit,
                     checkout=checkout,
-                    trial_dir=output_dir / report["trial_id"],
+                    output_dir=output_dir,
+                    codex_version=codex_version,
                     model=args.model,
                     effort=args.effort,
                     timeout_seconds=args.timeout,
-                )
-                report["adjudication"] = adjudication
-                (output_dir / report["trial_id"] / "report.json").write_text(
-                    json.dumps(report, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
+                ): trial_id
+                for trial_id in selected
+            }
+            for future in as_completed(futures):
+                trial_id = futures[future]
+                report = future.result()
+                reports.append(report)
                 print(
-                    f"{report['trial_id']}: verdict={adjudication['reason']}"
+                    f"{trial_id}: returncode={report['returncode']} "
+                    f"clean={report['checkout_clean_after']}"
                 )
-        finally:
-            run_git("worktree", "remove", "--force", str(checkout))
+        for report in reports:
+            adjudication = run_verifier(
+                report=report,
+                rubric=rubric,
+                rubric_commit=rubric_commit,
+                checkout=checkout,
+                trial_dir=output_dir / report["trial_id"],
+                model=args.model,
+                effort=args.effort,
+                timeout_seconds=args.timeout,
+            )
+            report["adjudication"] = adjudication
+            (output_dir / report["trial_id"] / "report.json").write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            print(f"{report['trial_id']}: verdict={adjudication['reason']}")
 
     index = {
         "tested_commit": tested_commit,
