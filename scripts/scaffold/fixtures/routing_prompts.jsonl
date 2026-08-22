@@ -1,4 +1,8 @@
 {"id":"local-file-lookup","task":"Find where a cross-surface ARIA-NBV symbol or document owner lives."}
+{"id":"reviewed-intent-underdetermined-choice","task":"Choose between two otherwise valid scaffold policy designs when current exact owners do not settle the tradeoff."}
+{"id":"reviewed-intent-known-owner-near-miss","task":"Fix a concrete local behavior in its exact source owner when no policy choice is underdetermined."}
+{"id":"thesis-code-shared-contract","task":"Change a behavioral contract expressed in both executable code and the active thesis."}
+{"id":"helper-lowest-shared-domain-owner","task":"Place a helper used by two demonstrated domain consumers at the lowest shared domain owner."}
 {"id":"deliberate-angle-bracket-capture-read-only","task":"Inspect only: <Preserve this operator preference in its smallest durable owner and name the owner's verification.>"}
 {"id":"active-thesis-scientific-language","task":"Locate the active thesis section plus the owning glossary, shared symbol, or shared equation before editing scientific prose."}
 {"id":"docs-qh-scientific-hazard-routing","task":"Determine whether privileged V0/GT, the conditional online Q_H bridge, and its development gate are current thesis commitments."}
