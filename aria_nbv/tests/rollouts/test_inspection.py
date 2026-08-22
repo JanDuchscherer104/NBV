@@ -1157,6 +1157,77 @@ def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_s
     assert evidence["sequence_returns"]["position"] == summaries
 
 
+def test_pooled_selection_materializes_families_absent_from_a_temperature_cohort() -> None:
+    rows: list[dict[str, object]] = []
+
+    def add_state(cohort: str, temperature: float, step_index: int, families: tuple[str, ...], selected: str) -> None:
+        for family in families:
+            rows.append(
+                {
+                    "group_by": "position",
+                    "family": family,
+                    "generation_cohort_id": cohort,
+                    "generation_cohort": cohort,
+                    "scene": cohort,
+                    "rollout_row_id": 0,
+                    "step_row_id": 10 + step_index,
+                    "step_index": step_index,
+                    "policy": "temperature_softmax",
+                    "temperature": temperature,
+                    "horizon": 2,
+                    "branch_factor": 1,
+                    "beam_width": 1,
+                    "candidate_count": len(families),
+                    "actor_valid_count": len(families),
+                    "family_candidate_count": 1,
+                    "family_actor_valid_count": 1,
+                    "family_selected_count": int(family == selected),
+                    "allocation_share": 1.0 / len(families),
+                    "valid_share": 1.0 / len(families),
+                    "selected_share": float(family == selected),
+                    "policy_mass": 0.25 if family == "side" else 0.75 if len(families) == 2 else 1.0,
+                    "probability_available": True,
+                    "probability_unavailable_reason": None,
+                }
+            )
+
+    add_state("hot", 2.0, 0, ("forward", "side"), "forward")
+    add_state("hot", 2.0, 1, ("forward", "side"), "side")
+    add_state("cold", 0.5, 0, ("forward",), "forward")
+    add_state("cold", 0.5, 1, ("forward",), "forward")
+
+    pooled_allocation = candidate_selection_pooled_summary_rows(rows, metric="allocation_share")
+    side_allocation = next(row for row in pooled_allocation if row["step_index"] == 1 and row["family"] == "side")
+    assert side_allocation["state_count"] == 2
+    assert side_allocation["numerator"] == 1
+    assert side_allocation["denominator"] == 3
+    assert side_allocation["fraction"] == pytest.approx(1 / 3)
+
+    pooled_policy = candidate_selection_pooled_summary_rows(rows, metric="policy_mass")
+    side_policy = next(row for row in pooled_policy if row["step_index"] == 1 and row["family"] == "side")
+    assert side_policy["state_count"] == 2
+    assert side_policy["finite_state_count"] == 2
+    assert side_policy["fraction"] == pytest.approx(0.125)
+
+    pooled_selected = candidate_selection_pooled_summary_rows(rows, metric="selected_share")
+    side_selected = next(row for row in pooled_selected if row["step_index"] == 1 and row["family"] == "side")
+    assert side_selected["state_count"] == 2
+    assert side_selected["numerator"] == 1
+    assert side_selected["denominator"] == 2
+    assert side_selected["fraction"] == pytest.approx(0.5)
+
+    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
+    forward_to_side = next(
+        row
+        for row in transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "side"
+    )
+    assert forward_to_side["context_count"] == 2
+    assert forward_to_side["expected_policy_mass_mean"] == pytest.approx(0.125)
+    assert forward_to_side["realized_count"] == 1
+    assert forward_to_side["realized_rate"] == pytest.approx(0.5)
+
+
 def test_candidate_selection_probability_failure_closes_policy_mass_only() -> None:
     rows = [
         {

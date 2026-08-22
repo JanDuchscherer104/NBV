@@ -2144,6 +2144,74 @@ def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, object]]) 
     )
 
 
+def _materialize_selection_family_union(
+    rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Add zero-valued rows for families absent from compatible factual states."""
+
+    materialized = [dict(row) for row in rows]
+    families_by_contract: dict[tuple[object, ...], set[str]] = {}
+    for row in materialized:
+        contract = (
+            row.get("group_by"),
+            row.get("policy"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+        )
+        families_by_contract.setdefault(contract, set()).add(str(row["family"]))
+
+    states: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for row in materialized:
+        contract = (
+            row.get("group_by"),
+            row.get("policy"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+        )
+        state = (
+            contract,
+            row.get("generation_cohort_id"),
+            row.get("scene"),
+            row.get("rollout_row_id"),
+            row.get("step_row_id"),
+            row.get("step_index"),
+        )
+        states.setdefault(state, []).append(row)
+
+    output: list[dict[str, object]] = []
+    zero_fields = (
+        "family_candidate_count",
+        "family_actor_valid_count",
+        "family_selected_count",
+        "allocation_share",
+        "valid_share",
+        "selected_share",
+    )
+    for state_rows in states.values():
+        template = state_rows[0]
+        contract = (
+            template.get("group_by"),
+            template.get("policy"),
+            template.get("horizon"),
+            template.get("branch_factor"),
+            template.get("beam_width"),
+        )
+        present = {str(row["family"]) for row in state_rows}
+        output.extend(state_rows)
+        for family in sorted(families_by_contract[contract] - present):
+            zero_row = dict(template)
+            zero_row["family"] = family
+            for field in zero_fields:
+                zero_row[field] = 0 if field.endswith("_count") else 0.0
+            zero_row["policy_mass"] = 0.0 if _finite_or_none(template.get("policy_mass")) is not None else None
+            zero_row["probability_available"] = template.get("probability_available")
+            zero_row["probability_unavailable_reason"] = template.get("probability_unavailable_reason")
+            output.append(zero_row)
+    return output
+
+
 def candidate_selection_transition_rows(
     dynamics_rows: Iterable[Mapping[str, object]],
     *,
@@ -2160,6 +2228,8 @@ def candidate_selection_transition_rows(
     """
 
     rows = [dict(row) for row in dynamics_rows]
+    if pool_temperatures:
+        rows = _materialize_selection_family_union(rows)
     by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
     for row in rows:
         rollout_row_id = row.get("rollout_row_id")
@@ -2386,8 +2456,7 @@ def candidate_selection_pooled_summary_rows(
             f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
         )
     grouped: dict[tuple[object, ...], dict[str, object]] = {}
-    for source_row in dynamics_rows:
-        row = dict(source_row)
+    for row in _materialize_selection_family_union(dynamics_rows):
         step_index = row.get("step_index")
         if step_index is None:
             raise ValueError("Candidate selection summaries require factual step_index values.")
