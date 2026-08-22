@@ -85,30 +85,53 @@ def test_candidate_transition_figure_pairs_expected_and_realized_conditionals() 
     assert "acquisition 1" in str(figure.layout.title.text)
 
 
-def test_candidate_sequence_return_figure_selects_highest_observed_sequences() -> None:
-    summary = pd.DataFrame(
+def _factual_sequence_rows() -> pd.DataFrame:
+    return pd.DataFrame(
         [
             {
-                "sequence": sequence,
-                "rollout_count": count,
-                "completed_count": completed,
-                "finite_return_count": count,
-                "terminal_return_median": median,
-                "terminal_return_q25": median - 0.1,
-                "terminal_return_q75": median + 0.1,
+                "generation_cohort_id": cohort,
+                "temperature": temperature,
+                "rollout_row_id": rollout_row_id,
+                "sequence": " → ".join(families),
+                "sequence_families": families,
+                "observed_steps": len(families),
+                "horizon": 3,
+                "completed_horizon": len(families) == 3,
+                "terminal_cumulative_target_root_gain": gain,
             }
-            for sequence, count, completed, median in (
-                ("forward → forward", 3, 3, 0.2),
-                ("forward → side", 2, 2, 0.8),
-                ("side → forward", 4, 3, 0.5),
+            for cohort, temperature, rollout_row_id, families, gain in (
+                ("cohort-a", 0.5, 7, ("forward", "side", "forward"), 0.2),
+                ("cohort-b", 2.0, 11, ("side", "forward"), 0.8),
             )
         ]
     )
 
-    figure = reconstruction_return._candidate_sequence_return_figure(summary, max_sequences=2)
+
+def test_selected_family_trajectory_rows_and_figure_show_one_cell_per_factual_acquisition() -> None:
+    rows, truncated = reconstruction_return._selected_family_trajectory_rows(_factual_sequence_rows())
+
+    assert not truncated
+    assert rows[["trace_label", "acquisition", "family"]].to_dict("records") == [
+        {"trace_label": "T=0.5 · rollout 7 · cohort-a", "acquisition": 1, "family": "forward"},
+        {"trace_label": "T=0.5 · rollout 7 · cohort-a", "acquisition": 2, "family": "side"},
+        {"trace_label": "T=0.5 · rollout 7 · cohort-a", "acquisition": 3, "family": "forward"},
+        {"trace_label": "T=2.0 · rollout 11 · cohort-b", "acquisition": 1, "family": "side"},
+        {"trace_label": "T=2.0 · rollout 11 · cohort-b", "acquisition": 2, "family": "forward"},
+    ]
+    figure = reconstruction_return._selected_family_trajectory_figure(rows)
+
+    assert np.asarray(figure.data[0].z).shape == (2, 3)
+    assert "Factual selected family" in str(figure.layout.title.text)
+    assert figure.layout.xaxis.title.text == "acquisition number (1 = first selected view)"
+
+
+def test_selected_sequence_endpoint_figure_has_one_marker_per_factual_trajectory() -> None:
+    figure = reconstruction_return._selected_sequence_endpoint_figure(_factual_sequence_rows())
 
     trace = figure.data[0]
-    assert list(trace.y) == ["side → forward", "forward → side"]
-    assert list(trace.x) == [0.5, 0.8]
-    assert list(trace.customdata[:, 0]) == [4.0, 2.0]
-    assert "top 2" in str(figure.layout.title.text)
+    assert trace.mode == "markers"
+    assert list(trace.x) == [0.5, 2.0]
+    assert list(trace.y) == [0.2, 0.8]
+    assert trace.error_x.array is None
+    assert trace.error_x.arrayminus is None
+    assert "exact rollout configuration" in str(figure.layout.title.text)

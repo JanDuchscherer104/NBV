@@ -186,93 +186,139 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
             _download_frame("Download diagnostic temporal CSV", "corpus-diagnostics.csv", diagnostics)
 
 
-def _sequence_stratum_columns() -> tuple[str, ...]:
-    """Return the persisted controls that selected-family sequences never pool."""
+def _selection_trace_label(row: pd.Series) -> str:
+    """Return a concise factual-trajectory label without collapsing its controls."""
 
-    return (
-        "generation_cohort_id",
-        "policy",
-        "temperature",
-        "horizon",
-        "branch_factor",
-        "beam_width",
+    return f"T={row['temperature']} · rollout {row['rollout_row_id']} · {str(row['generation_cohort_id'])[:8]}"
+
+
+def _selected_family_trajectory_rows(
+    sequences: pd.DataFrame,
+    *,
+    max_trajectories: int = 32,
+) -> tuple[pd.DataFrame, bool]:
+    """Expand persisted selected-family sequences into ordered factual acquisition rows."""
+
+    ordered = sequences.sort_values(
+        ["temperature", "generation_cohort_id", "rollout_row_id"],
+        kind="stable",
+    ).reset_index(drop=True)
+    truncated = len(ordered) > max_trajectories
+    rows: list[dict[str, object]] = []
+    for _, sequence_row in ordered.head(max_trajectories).iterrows():
+        families = sequence_row.get("sequence_families")
+        if not isinstance(families, (tuple, list)):
+            families = tuple(str(sequence_row["sequence"]).split(" → "))
+        trace_label = _selection_trace_label(sequence_row)
+        for acquisition, family in enumerate(families, start=1):
+            rows.append(
+                {
+                    "trace_label": trace_label,
+                    "acquisition": acquisition,
+                    "family": str(family),
+                    "temperature": sequence_row["temperature"],
+                    "rollout_row_id": sequence_row["rollout_row_id"],
+                    "generation_cohort_id": sequence_row["generation_cohort_id"],
+                    "observed_steps": sequence_row["observed_steps"],
+                    "horizon": sequence_row["horizon"],
+                    "completed_horizon": sequence_row["completed_horizon"],
+                    "terminal_cumulative_target_root_gain": sequence_row["terminal_cumulative_target_root_gain"],
+                }
+            )
+    return pd.DataFrame(rows), truncated
+
+
+def _selected_family_trajectory_figure(rows: pd.DataFrame) -> go.Figure:
+    """Render one categorical cell per persisted selected action."""
+
+    traces = list(dict.fromkeys(rows["trace_label"].tolist()))
+    acquisitions = list(range(1, int(rows["acquisition"].max()) + 1))
+    families = sorted(rows["family"].drop_duplicates().tolist())
+    family_codes = {family: code for code, family in enumerate(families)}
+    lookup = {
+        (row.trace_label, int(row.acquisition)): row.family
+        for row in rows[["trace_label", "acquisition", "family"]].itertuples(index=False)
+    }
+    z = np.array(
+        [
+            [family_codes.get(lookup.get((trace, acquisition)), np.nan) for acquisition in acquisitions]
+            for trace in traces
+        ],
+        dtype=float,
     )
-
-
-def _sequence_stratum_label(row: pd.Series) -> str:
-    """Return a compact exact-cohort label for the sequence comparison."""
-
-    return (
-        f"{row['generation_cohort_id']} · {row['policy']} · T={row['temperature']} · "
-        f"H={row['horizon']} · B={row['branch_factor']} · beam={row['beam_width']}"
+    labels = np.array(
+        [[lookup.get((trace, acquisition), "not observed") for acquisition in acquisitions] for trace in traces],
+        dtype=object,
     )
+    colors = px.colors.qualitative.Safe
+    colorscale = [(index / max(len(families) - 1, 1), colors[index % len(colors)]) for index in range(len(families))]
+    figure = go.Figure(
+        go.Heatmap(
+            x=acquisitions,
+            y=traces,
+            z=z,
+            customdata=labels,
+            colorscale=colorscale,
+            zmin=0,
+            zmax=max(len(families) - 1, 1),
+            colorbar={"title": "selected family", "tickvals": list(family_codes.values()), "ticktext": families},
+            hovertemplate="trajectory=%{y}<br>acquisition=%{x}<br>selected family=%{customdata}<extra></extra>",
+        )
+    )
+    figure.update_layout(
+        title="Factual selected family at each acquisition",
+        xaxis_title="acquisition number (1 = first selected view)",
+        yaxis_title="factual trajectory (temperature · rollout · cohort)",
+    )
+    return figure
 
 
-def _candidate_sequence_return_figure(summary: pd.DataFrame, *, max_sequences: int = 20) -> go.Figure:
-    """Plot observed terminal return for the best-supported selected-family sequences."""
+def _selected_sequence_endpoint_figure(sequences: pd.DataFrame) -> go.Figure:
+    """Plot one observed endpoint per factual trajectory without invented uncertainty."""
 
-    finite = summary.dropna(subset=["terminal_return_median"]).copy()
-    finite = finite.sort_values(
-        ["terminal_return_median", "rollout_count", "sequence"],
-        ascending=[False, False, True],
-    ).head(max_sequences)
-    finite = finite.sort_values(["terminal_return_median", "sequence"], ascending=[True, True])
-    median = pd.to_numeric(finite["terminal_return_median"], errors="coerce")
-    q25 = pd.to_numeric(finite["terminal_return_q25"], errors="coerce")
-    q75 = pd.to_numeric(finite["terminal_return_q75"], errors="coerce")
-    completion = finite["completed_count"] / finite["rollout_count"].clip(lower=1)
+    finite = sequences.dropna(subset=["terminal_cumulative_target_root_gain"]).copy()
+    finite = finite.sort_values(["temperature", "generation_cohort_id", "rollout_row_id"], kind="stable")
+    trace_labels = finite.apply(_selection_trace_label, axis=1)
+    customdata = np.column_stack(
+        (
+            trace_labels,
+            finite["observed_steps"],
+            finite["horizon"],
+            finite["completed_horizon"],
+            finite["sequence"],
+        )
+    )
     figure = go.Figure(
         go.Scatter(
-            x=median,
-            y=finite["sequence"],
+            x=finite["temperature"],
+            y=finite["terminal_cumulative_target_root_gain"],
             mode="markers",
-            marker={
-                "size": 10,
-                "color": completion,
-                "colorscale": "Viridis",
-                "cmin": 0.0,
-                "cmax": 1.0,
-                "colorbar": {"title": "completed horizon"},
-            },
-            error_x={
-                "type": "data",
-                "symmetric": False,
-                "array": (q75 - median).clip(lower=0.0),
-                "arrayminus": (median - q25).clip(lower=0.0),
-            },
-            customdata=np.column_stack(
-                (
-                    finite["rollout_count"],
-                    finite["finite_return_count"],
-                    finite["completed_count"],
-                    q25,
-                    q75,
-                )
-            ),
+            marker={"size": 11},
+            customdata=customdata,
             hovertemplate=(
-                "sequence=%{y}<br>median terminal gain=%{x:.4g}<br>IQR=[%{customdata[3]:.4g}, "
-                "%{customdata[4]:.4g}]<br>finite returns=%{customdata[1]:.0f} / %{customdata[0]:.0f}"
-                "<br>completed horizon=%{customdata[2]:.0f}<extra></extra>"
+                "%{customdata[0]}<br>terminal cumulative target root gain=%{y:.4g}"
+                "<br>observed steps=%{customdata[1]:.0f} / %{customdata[2]:.0f}"
+                "<br>completed horizon=%{customdata[3]}<br>selected sequence=%{customdata[4]}<extra></extra>"
             ),
         )
     )
     figure.update_layout(
-        title=f"Observed terminal gain by selected-family sequence (top {len(finite)})",
-        xaxis_title="terminal cumulative target root gain",
-        yaxis_title="selected family sequence",
+        title="Observed terminal gain by temperature and exact rollout configuration",
+        xaxis_title="temperature",
+        yaxis_title="terminal cumulative target root gain",
     )
     return figure
 
 
 def _render_active_store_sequence_returns(store_path: str) -> None:
-    """Render one explicit, cached sequence/return comparison for the active store."""
+    """Render factual selected-family trajectories and their observed endpoints."""
 
     if not st.toggle(
-        "Load active-store selected-family sequence comparison",
+        "Load active-store selected-family trajectories and endpoints",
         value=False,
         help=(
-            "Reuses the complete candidate-population audit to compare factual selected-family sequences with their "
-            "observed terminal cumulative target root gain."
+            "Reuses the complete candidate-population audit. It renders one categorical cell per selected action and "
+            "one unaggregated endpoint marker per factual trajectory."
         ),
     ):
         return
@@ -285,75 +331,96 @@ def _render_active_store_sequence_returns(store_path: str) -> None:
     population = _cached_projection(store_path, "candidate_population")
     summary = pd.DataFrame(population["sequence_returns"][group_by])
     sequences = pd.DataFrame(population["selection_sequences"][group_by])
-    if summary.empty:
+    if sequences.empty:
         st.info("No complete factual selected-family sequences are available for this vocabulary.")
         return
 
-    stratum_columns = list(_sequence_stratum_columns())
-    strata = summary[stratum_columns].drop_duplicates().reset_index(drop=True)
-    strata["label"] = strata.apply(_sequence_stratum_label, axis=1)
-    selected_label = st.selectbox("Sequence comparison cohort", options=strata["label"].tolist())
-    selected_stratum = strata.loc[strata["label"] == selected_label].iloc[0]
-    selected_summary = summary.copy()
-    selected_sequences = sequences.copy()
-    for column in stratum_columns:
-        selected_summary = selected_summary.loc[selected_summary[column].astype(str) == str(selected_stratum[column])]
-        selected_sequences = selected_sequences.loc[
-            selected_sequences[column].astype(str) == str(selected_stratum[column])
-        ]
-    finite = selected_summary.dropna(subset=["terminal_return_median"])
-    if finite.empty:
-        st.info("This exact cohort has no finite terminal cumulative target root gain.")
-        return
-
+    trajectory_rows, truncated = _selected_family_trajectory_rows(sequences)
+    finite = sequences.dropna(subset=["terminal_cumulative_target_root_gain"])
     cols = st.columns(3)
-    cols[0].metric("Observed rollouts", int(selected_summary["rollout_count"].sum()))
-    cols[1].metric("Distinct sequences", len(selected_summary))
-    cols[2].metric("Repeated sequences", int((selected_summary["rollout_count"] > 1).sum()))
+    cols[0].metric("Factual trajectories", len(sequences))
+    cols[1].metric("Distinct exact paths", int(sequences["sequence"].nunique()))
+    cols[2].metric("Finite endpoints", len(finite))
+    st.caption(
+        "Each row is one factual selected trajectory. Exact cohorts are shown side by side, never averaged; a shared "
+        "path across temperatures is descriptive rather than a matched causal comparison."
+    )
+    if truncated:
+        st.caption("Showing the first 32 factual trajectories in stable temperature, cohort, and rollout order.")
+
     _render_plot(
-        _candidate_sequence_return_figure(selected_summary),
+        _selected_family_trajectory_figure(trajectory_rows),
         ScientificExplanation(
-            question="Which factual selected-family sequences coincide with the largest observed terminal gain?",
+            question="Which candidate family did each factual trajectory select at each acquisition?",
             answer=(
-                "Each point summarizes terminal cumulative target root gain for one exact ordered family sequence in "
-                "one persisted generation cohort."
+                "Each heatmap cell is one persisted selected action. This remains readable when an exact generation "
+                "cohort has only one rollout, where a median and IQR would have no population meaning."
             ),
             sections=(
                 ExplanationSection(
                     "Population and marks",
-                    "A sequence contains one family label per factual selected acquisition. The point is the median "
-                    "terminal cumulative target root gain; horizontal whiskers are the descriptive IQR; color is the "
-                    "fraction that reached the configured horizon. Hover reports rollout support.",
+                    "Rows are factual trajectories labelled by temperature, rollout identity, and exact generation cohort. "
+                    "Columns are acquisition number. Color is the selected family—not a probability, reward, or uncertainty estimate.",
                 ),
                 ExplanationSection(
-                    "Matched controls",
-                    "The selected cohort fixes generation cohort, policy, temperature, horizon, branch factor, and beam "
-                    "width. Early-terminated trajectories remain shorter sequences rather than fabricated continuations.",
+                    "Temporal support",
+                    "Only observed factual selected actions appear. An early-terminated trajectory leaves later cells blank "
+                    "rather than fabricating a continuation.",
                 ),
                 ExplanationSection(
-                    "Exploratory interpretation",
-                    "The ranking is post-selection and descriptive. Geometry and state difficulty influence both family "
-                    "choice and gain, so a high-return sequence is a debugging lead—not evidence that forcing that "
-                    "sequence will improve return. Sequences with n=1 have no population uncertainty estimate.",
+                    "Comparison limit",
+                    "Cohort identifiers preserve all generator controls. Rows grouped by temperature help debugging, but geometry "
+                    "and stochastic selection jointly affect the realized path; this is not causal evidence for forcing a family.",
                 ),
             ),
-            theory=TheoryReferences(equation_ids=("rl.observed_cumulative_root_gain",)),
-            evidence_role="oracle/evaluation",
+            evidence_role="actor-visible",
             source_fields=(
-                "inspection.candidate_population_evidence.sequence_returns",
+                "inspection.candidate_population_evidence.selection_sequences",
                 "steps/selected_candidate_row_id",
-                "steps/cumulative_target_root_gain",
             ),
             external_references=(_EVIDENCE_REPORTING_REFERENCE,),
         ),
     )
-    with st.expander("Selected-family sequence rows and CSV", expanded=False):
-        st.dataframe(selected_summary, hide_index=True, width="stretch")
-        _download_frame("Download sequence return summary CSV", "candidate-sequence-returns.csv", selected_summary)
-        st.dataframe(selected_sequences, hide_index=True, width="stretch")
-        _download_frame(
-            "Download factual selected sequences CSV", "candidate-selected-sequences.csv", selected_sequences
+    if not finite.empty:
+        _render_plot(
+            _selected_sequence_endpoint_figure(sequences),
+            ScientificExplanation(
+                question="How do observed terminal gains differ across factual selected trajectories?",
+                answer=(
+                    "Each marker is one persisted terminal cumulative target root gain, not a sequence median, fitted "
+                    "temperature response, or uncertainty interval."
+                ),
+                sections=(
+                    ExplanationSection(
+                        "One marker, one trajectory",
+                        "There are no whiskers or ribbons because every exact cohort in this store may contribute a single endpoint. "
+                        "Hover exposes temperature, exact cohort, observed depth, completion, and the full selected path.",
+                    ),
+                    ExplanationSection(
+                        "Reading temperature",
+                        "Temperature is displayed on the horizontal axis only to make the configured runs visible. No line is fitted: "
+                        "the small factual sample does not identify a temperature-response curve.",
+                    ),
+                    ExplanationSection(
+                        "Interpretation limit",
+                        "The endpoint is privileged evaluation evidence, while the displayed path is post-selection provenance. Their "
+                        "association is a debugging lead, not proof that choosing that path causes the observed gain.",
+                    ),
+                ),
+                theory=TheoryReferences(equation_ids=("rl.observed_cumulative_root_gain",)),
+                evidence_role="oracle/evaluation",
+                source_fields=(
+                    "inspection.candidate_population_evidence.selection_sequences",
+                    "steps/cumulative_target_root_gain",
+                ),
+                external_references=(_EVIDENCE_REPORTING_REFERENCE,),
+            ),
         )
+    with st.expander("Selected-family trajectory rows and CSV", expanded=False):
+        st.dataframe(summary, hide_index=True, width="stretch")
+        _download_frame("Download sequence return summary CSV", "candidate-sequence-returns.csv", summary)
+        st.dataframe(sequences, hide_index=True, width="stretch")
+        _download_frame("Download factual selected sequences CSV", "candidate-selected-sequences.csv", sequences)
 
 
 def _trajectory_label(rows: pd.DataFrame) -> pd.Series:
