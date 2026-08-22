@@ -77,7 +77,7 @@ class _StoredChain:
 
 @dataclass(frozen=True, slots=True)
 class QhDataContract:
-    """Horizon-independent learning and selected-observation compatibility."""
+    """Replay support, learning semantics, and selected-observation compatibility."""
 
     schema_version: str
     target_protocol: str
@@ -87,6 +87,15 @@ class QhDataContract:
     discount_gamma: float
     reason_code_version: str
     actor_store_version: str
+    candidate_config_hashes: tuple[str, ...] = ()
+    """Referenced candidate-generation configurations admitted by the corpus."""
+
+    rollout_config_hashes: tuple[str, ...] = ()
+    """Referenced rollout configurations admitted by the corpus."""
+
+    selection_policies: tuple[str, ...] = ()
+    """Referenced behavior-policy vocabulary admitted by the corpus."""
+
     selected_depth_enabled: bool = False
     """Whether each factual step has aligned selected-action depth evidence."""
 
@@ -192,6 +201,7 @@ class QhRolloutReader:
             for store_index, path in enumerate(paths)
         )
         _validate_homogeneous(self._stores, include_selected_depth=include_selected_depth)
+        self._contract = _merge_corpus_contract(self._stores, include_selected_depth=include_selected_depth)
         if include_selected_depth:
             _validate_rich_selected_depth_contract(self._stores[0].contract)
         source_ref_lookup = _merge_source_refs(self._stores)
@@ -243,13 +253,23 @@ class QhRolloutReader:
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest realized chain length among admitted chains."""
-        return max((chain.state_stop - chain.state_start for chain in self._chains), default=0)
+        """Return the largest configured horizon among stores with admitted chains."""
+
+        admitted_store_indices = {chain.store_index for chain in self._chains}
+        return max(
+            (
+                store.max_horizon
+                for store_index, store in enumerate(self._stores)
+                if store_index in admitted_store_indices
+            ),
+            default=0,
+        )
 
     @property
     def contract(self) -> QhDataContract:
-        """Return the common horizon-independent learning contract."""
-        return _effective_contract(self._stores[0].contract, include_selected_depth=self.include_selected_depth)
+        """Return common semantics plus the exact admitted replay-support mixture."""
+
+        return self._contract
 
     @property
     def provenance(self) -> dict[str, object]:
@@ -314,7 +334,7 @@ def _preflight_store(path: Path, store_index: int, *, include_selected_depth: bo
         manifest_hash=str(root.attrs["manifest_sha256"]),
         state_count=validation.num_steps,
         contract=contract,
-        max_horizon=max(chain.state_stop - chain.state_start for chain in chains),
+        max_horizon=int(np.asarray(root["rollouts/horizon"], dtype=np.int64).max()),
         chains=chains,
         source_refs=tuple(source_refs_by_row.values()),
     )
@@ -439,6 +459,15 @@ def _read_contract(root: zarr.Group, *, include_selected_depth: bool) -> QhDataC
         discount_gamma=float(root.attrs["discount_gamma"]),
         reason_code_version=str(root.attrs["reason_code_version"]),
         actor_store_version=str(root.attrs["source_offline_store_version"]),
+        candidate_config_hashes=_decode_referenced_dictionary_values(
+            root, group_name="lineage", array_name="candidate_config_id", dictionary_name="config"
+        ),
+        rollout_config_hashes=_decode_referenced_dictionary_values(
+            root, group_name="lineage", array_name="rollout_config_id", dictionary_name="config"
+        ),
+        selection_policies=_decode_referenced_dictionary_values(
+            root, group_name="rollouts", array_name="policy_id", dictionary_name="policy"
+        ),
         selected_depth_enabled=selected_depth_enabled,
         selected_depth_role=_optional_string(selected("selected_depth_role")),
         selected_depth_renderer=_optional_string(selected("selected_depth_renderer")),
@@ -700,9 +729,29 @@ def _validate_homogeneous(stores: tuple[_StoreFacts, ...], *, include_selected_d
         mismatches = [
             field.name
             for field in fields(QhDataContract)
+            if field.name not in {"candidate_config_hashes", "rollout_config_hashes", "selection_policies"}
             if getattr(expected, field.name) != getattr(actual, field.name)
         ]
-        raise ValueError(f"Q_H rollout stores are heterogeneous at {store.path}: incompatible {', '.join(mismatches)}.")
+        if mismatches:
+            raise ValueError(
+                f"Q_H rollout stores are heterogeneous at {store.path}: incompatible {', '.join(mismatches)}."
+            )
+
+
+def _merge_corpus_contract(stores: tuple[_StoreFacts, ...], *, include_selected_depth: bool) -> QhDataContract:
+    """Combine compatible store contracts into one exact replay-support mixture."""
+
+    base = _effective_contract(stores[0].contract, include_selected_depth=include_selected_depth)
+
+    def merged(name: str) -> tuple[str, ...]:
+        return tuple(sorted({value for store in stores for value in getattr(store.contract, name)}))
+
+    return replace(
+        base,
+        candidate_config_hashes=merged("candidate_config_hashes"),
+        rollout_config_hashes=merged("rollout_config_hashes"),
+        selection_policies=merged("selection_policies"),
+    )
 
 
 def _effective_contract(contract: QhDataContract, *, include_selected_depth: bool) -> QhDataContract:
@@ -947,6 +996,22 @@ def _decode_dictionary(root: zarr.Group, name: str) -> tuple[str, ...]:
     if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
         raise ValueError(f"Q_H dictionary {name!r} is malformed.")
     return tuple(values)
+
+
+def _decode_referenced_dictionary_values(
+    root: zarr.Group,
+    *,
+    group_name: str,
+    array_name: str,
+    dictionary_name: str,
+) -> tuple[str, ...]:
+    """Return the sorted non-empty vocabulary referenced by one ID column."""
+
+    dictionary = _decode_dictionary(root, dictionary_name)
+    value_ids = np.asarray(root[f"{group_name}/{array_name}"], dtype=np.int64).reshape(-1)
+    if np.any((value_ids < 0) | (value_ids >= len(dictionary))):
+        raise ValueError(f"Q_H {group_name}/{array_name} contains an out-of-range dictionary id.")
+    return tuple(sorted({dictionary[int(value_id)] for value_id in value_ids if dictionary[int(value_id)]}))
 
 
 def _find_sorted_row(array: zarr.Array, value: int) -> int:

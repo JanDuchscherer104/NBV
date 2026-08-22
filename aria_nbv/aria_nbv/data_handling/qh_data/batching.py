@@ -232,7 +232,7 @@ def _collate_static_context(actors: list[QhActorTensors], vin_snippet: VinSnippe
     values = [context for context in contexts if context is not None]
     presence = torch.stack([context.evl_presence for context in values])
 
-    def collate(name: str, fill: int | float = 0) -> Tensor | None:
+    def collate(name: str) -> Tensor | None:
         fields = [getattr(context, name) for context in values]
         if not any(field is not None for field in fields):
             return None

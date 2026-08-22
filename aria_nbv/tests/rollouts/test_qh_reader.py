@@ -713,7 +713,7 @@ def test_reader_indexes_packed_early_terminal_chains_by_factual_steps(tmp_path: 
     assert [len(chain.candidate_pose_relative_root) for chain in chains] == [3, 1, 2]
     assert [chain.rollout_row_id for chain in chains] == [0, 1, 2]
     assert [chain.horizon_remaining.tolist() for chain in chains] == [[4, 3, 2], [4], [4, 3]]
-    assert reader.max_horizon == 3
+    assert reader.max_horizon == 4
 
 
 def test_reader_materialization_preserves_n60_identity_across_packed_chains(
@@ -898,6 +898,7 @@ def test_reader_composes_h2_and_h4_without_horizon_compatibility(tmp_path: Path)
 
     assert [len(reader[index].candidate_pose_relative_root) for index in range(len(reader))] == [2, 4]
     assert reader.max_horizon == 4
+    assert len(reader.contract.rollout_config_hashes) == 2
     assert not hasattr(reader.contract, "horizon")
     assert not hasattr(reader.contract, "split_manifest_hash")
 

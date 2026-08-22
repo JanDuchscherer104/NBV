@@ -11,7 +11,7 @@ module seed, and derive Python/NumPy worker seeds from each worker's
 from __future__ import annotations
 
 import random
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from typing import Protocol, cast
 
 import numpy as np
@@ -23,6 +23,17 @@ from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProfile, validate_experiment_profile
 from ..rollouts.qh_reader import QhDataContract
 from ..utils.fingerprints import stable_msgspec_hash
+
+QH_HORIZON_WEIGHTING = "uniform-admitted-selected-row-huber-mean-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class QhLearningContract:
+    """Complete identity of replay semantics used to optimize and evaluate ``Q_H``."""
+
+    data_contract: QhDataContract
+    max_horizon: int
+    horizon_weighting: str = QH_HORIZON_WEIGHTING
 
 
 class _QhDataset(Protocol):
@@ -81,7 +92,16 @@ class QhDataModule(pl.LightningDataModule):
             raise ValueError(f"Q_H configured corpus stages must contain at least one chain: {empty}.")
         if any(dataset.contract != train.contract for dataset in stages.values()):
             raise ValueError("Q_H corpus stages have incompatible learning contracts.")
-        self.learning_contract_hash = stable_msgspec_hash(train.contract)
+        horizon_mismatches = {
+            name: dataset.max_horizon for name, dataset in stages.items() if dataset.max_horizon != train.max_horizon
+        }
+        if horizon_mismatches:
+            raise ValueError(
+                "Q_H corpus stages must share one maximum horizon; "
+                f"train={train.max_horizon}, mismatches={horizon_mismatches}."
+            )
+        self.learning_contract = QhLearningContract(data_contract=train.contract, max_horizon=train.max_horizon)
+        self.learning_contract_hash = stable_msgspec_hash(self.learning_contract)
         self.actor_state_contract_hash = stable_msgspec_hash(train.actor_state_contract)
         self.geometry_contract_hash = train.actor_state_contract.geometry_contract_hash
         if experiment_profile is not None:
@@ -148,4 +168,4 @@ def _seed_worker(_worker_id: int) -> None:
     np.random.seed(seed)
 
 
-__all__ = ["QhDataModule"]
+__all__ = ["QH_HORIZON_WEIGHTING", "QhDataModule", "QhLearningContract"]

@@ -51,16 +51,22 @@ class _StructuralDataset(Dataset[object]):
         return index
 
 
-def test_datamodule_admits_stage_datasets_with_differing_maximum_horizons() -> None:
-    data = qh_datamodule.QhDataModule(  # type: ignore[arg-type]
-        train=_StructuralDataset("train", max_horizon=4),
-        val=_StructuralDataset("val", max_horizon=2),
-        test=_StructuralDataset("test", max_horizon=3),
-        seed=7,
-    )
+def test_datamodule_rejects_stage_datasets_with_differing_maximum_horizons() -> None:
+    with pytest.raises(ValueError, match="share one maximum horizon"):
+        qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+            train=_StructuralDataset("train", max_horizon=4),
+            val=_StructuralDataset("val", max_horizon=2),
+            test=_StructuralDataset("test", max_horizon=3),
+            seed=7,
+        )
 
-    assert data.val_dataset is not None and data.test_dataset is not None
-    assert (data.train_dataset.max_horizon, data.val_dataset.max_horizon, data.test_dataset.max_horizon) == (4, 2, 3)
+
+def test_learning_contract_hash_binds_maximum_horizon_and_weighting() -> None:
+    short = qh_datamodule.QhDataModule(train=_StructuralDataset("short", max_horizon=2), seed=7)  # type: ignore[arg-type]
+    long = qh_datamodule.QhDataModule(train=_StructuralDataset("long", max_horizon=3), seed=7)  # type: ignore[arg-type]
+
+    assert short.learning_contract.horizon_weighting == qh_datamodule.QH_HORIZON_WEIGHTING
+    assert short.learning_contract_hash != long.learning_contract_hash
 
 
 def test_datamodule_rejects_an_empty_configured_stage() -> None:
@@ -82,6 +88,23 @@ def test_datamodule_rejects_different_semantic_contracts() -> None:
         qh_datamodule.QhDataModule(  # type: ignore[arg-type]
             train=_StructuralDataset("train"),
             val=_StructuralDataset("val", contract=replace(_CONTRACT, reward_metric="scene-rri")),
+            seed=7,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("candidate_config_hashes", ("candidate-v2",)),
+        ("rollout_config_hashes", ("rollout-v2",)),
+        ("selection_policies", ("softmax-v2",)),
+    ),
+)
+def test_datamodule_rejects_different_replay_support_identity(field_name: str, value: tuple[str, ...]) -> None:
+    with pytest.raises(ValueError, match="incompatible learning contracts"):
+        qh_datamodule.QhDataModule(  # type: ignore[arg-type]
+            train=_StructuralDataset("train"),
+            val=_StructuralDataset("val", contract=replace(_CONTRACT, **{field_name: value})),
             seed=7,
         )
 
@@ -128,7 +151,8 @@ def test_datamodule_requires_exact_named_experiment_profile() -> None:
     qh = _StructuralDataset("train", actor_state_contract=actor)
     data = qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cf0_v1")  # type: ignore[arg-type]
     assert data.experiment_profile == "qh_cf0_v1"
-    assert data.learning_contract_hash == stable_msgspec_hash(_CONTRACT)
+    assert data.learning_contract == qh_datamodule.QhLearningContract(data_contract=_CONTRACT, max_horizon=1)
+    assert data.learning_contract_hash == stable_msgspec_hash(data.learning_contract)
     assert data.actor_state_contract_hash == stable_msgspec_hash(actor)
     with pytest.raises(ValueError, match="experiment profile|selected_observation_protocol"):
         qh_datamodule.QhDataModule(train=qh, seed=7, experiment_profile="qh_cfplus_gt_depth_v1")  # type: ignore[arg-type]

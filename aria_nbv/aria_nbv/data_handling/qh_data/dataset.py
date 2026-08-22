@@ -241,17 +241,17 @@ class QhDataset(Dataset[QhChain]):
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest realized horizon among the validated chains."""
+        """Return the largest configured horizon among the validated stores."""
 
         return self.rollout_reader.max_horizon
 
     @property
     def contract(self) -> QhDataContract:
-        """Return compatibility facts shared across the corpus's realized horizons.
+        """Return semantic compatibility and the exact replay-support mixture.
 
-        Horizon length is a per-chain fact represented by state count and
-        ``horizon_remaining``; it is intentionally absent from this common
-        reward, return, discount, schema, and provenance contract.
+        :class:`~aria_nbv.lightning.qh_datamodule.QhLearningContract` adds the
+        configured maximum horizon and loss-aggregation identity at stage
+        admission.
         """
 
         return self.rollout_reader.contract
