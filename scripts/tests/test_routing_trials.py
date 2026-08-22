@@ -484,6 +484,51 @@ def test_event_evidence_retains_started_execution_and_ignores_chatter(
     ) == []
 
 
+def test_empty_started_web_search_placeholder_is_ignorable(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "type": "item.started",
+                "item": {
+                    "id": "exec-placeholder",
+                    "type": "web_search",
+                    "query": "",
+                    "action": {"type": "other"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert evidence["items"] == []
+    assert evidence["invalid_items"] == 0
+
+
+@pytest.mark.parametrize("item_type", ["function_call", "tool_call"])
+def test_identityless_started_executable_call_remains_invalid(
+    tmp_path: Path, item_type: str
+) -> None:
+    events = tmp_path / f"{item_type}.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "type": "item.started",
+                "item": {"id": "exec-missing-identity", "type": item_type},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert evidence["items"] == []
+    assert evidence["invalid_items"] == 1
+    assert trials.validate_event_evidence(evidence)[0] is False
+
+
 def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     tmp_path: Path,
 ) -> None:
@@ -648,6 +693,8 @@ def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
     assert "exclusive_leading_owner" not in payload["instruction"]
     assert "required_unloaded_paths" not in payload["instruction"]
     assert "rubric_evaluations" in payload["instruction"]
+    assert "representative relevant" in payload["instruction"]
+    assert "all matching" not in payload["instruction"]
     for field in (
         "expected_owner_paths",
         "stable_skill_ids",
@@ -837,6 +884,99 @@ def test_forbidden_tool_ref_cannot_be_ignored() -> None:
     assert not _validate_verdict(verdict, events, rubric)[0]
 
 
+def test_tool_constraint_accepts_representative_matching_citation() -> None:
+    tool_ref = "mcp__codex_apps__context7_query_docs"
+    rubric = {**TEST_RUBRIC, "expected_tool_refs": [tool_ref]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.started",
+                "item_type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "context7_query_docs",
+                "status": "in_progress",
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "context7_query_docs",
+                "status": "completed",
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("expected_tool_ref", tool_ref, "satisfied", "event_evidence", [2]),
+        *_rubric_evaluations()[1:],
+    ]
+
+    assert _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    ) == (True, "pass")
+
+
+@pytest.mark.parametrize("indices", [[], [0, 2]])
+def test_tool_constraint_rejects_empty_or_unrelated_observed_citation(
+    indices: list[int],
+) -> None:
+    tool_ref = "mcp__codex_apps__context7_query_docs"
+    rubric = {**TEST_RUBRIC, "expected_tool_refs": [tool_ref]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "context7_query_docs",
+                "status": "completed",
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("expected_tool_ref", tool_ref, "satisfied", "event_evidence", indices),
+        *_rubric_evaluations()[1:],
+    ]
+
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    )[0]
+
+
+def test_absent_tool_constraint_requires_empty_citation() -> None:
+    tool_ref = "mcp__codex_apps__context7_query_docs"
+    rubric = {**TEST_RUBRIC, "expected_tool_refs": [tool_ref]}
+    evaluations = [
+        *_rubric_evaluations()[:1],
+        _evaluation("expected_tool_ref", tool_ref, "not_satisfied", "event_evidence", []),
+        *_rubric_evaluations()[1:],
+    ]
+    verdict = _verdict(
+        verdict="fail",
+        rubric_evaluations=evaluations,
+        missing_requirements=[tool_ref],
+    )
+
+    assert _validate_verdict(
+        verdict, _complete_event_evidence(), rubric
+    ) == (True, "semantic fail")
+
+
 def test_started_path_bearing_forbidden_tool_cannot_be_adjudicated_absent() -> None:
     tool_ref = "mcp__codex_apps__read_file"
     forbidden_path = ".agents/skills/typst-authoring/SKILL.md"
@@ -972,6 +1112,212 @@ def test_expected_owner_path_rejects_failed_read() -> None:
         missing_requirements=[owner_path],
     )
     assert _validate_verdict(verdict, events, rubric) == (True, "semantic fail")
+
+
+def test_nested_shell_success_observes_exact_path() -> None:
+    owner_path = "owner/AGENTS.md"
+    event = {
+        "command": f'/usr/bin/zsh -lc "sed -n \'1,80p\' {owner_path}"',
+        "status": "completed",
+        "exit_code": 0,
+    }
+
+    assert trials._is_successful_path_observation(event, owner_path) is True
+
+
+def test_nested_shell_rejects_path_suffix_collision() -> None:
+    owner_path = "owner/AGENTS.md"
+    event = {
+        "command": f'/bin/bash -lc "sed -n \'1,80p\' {owner_path}.bak"',
+        "status": "completed",
+        "exit_code": 0,
+    }
+
+    assert trials._is_successful_path_observation(event, owner_path) is False
+
+
+def test_nested_shell_rejects_malformed_payload() -> None:
+    owner_path = "owner/AGENTS.md"
+    event = {
+        "command": f"/usr/bin/zsh -lc 'sed -n \"1,80p {owner_path}'",
+        "status": "completed",
+        "exit_code": 0,
+    }
+
+    assert trials._is_successful_path_observation(event, owner_path) is False
+
+
+def test_path_evidence_accepts_started_and_completed_exact_mentions() -> None:
+    owner_path = "owner/AGENTS.md"
+    rubric = {**TEST_RUBRIC, "expected_owner_paths": [owner_path]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.started",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "status": "in_progress",
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation(
+            "expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]
+        ),
+        *_rubric_evaluations()[1:],
+    ]
+
+    assert _validate_verdict(
+        _verdict(
+            evidence=[_event_reference(event_index=1)],
+            rubric_evaluations=evaluations,
+        ),
+        events,
+        rubric,
+    ) == (True, "pass")
+
+
+def test_path_evidence_accepts_omitted_duplicate_success() -> None:
+    owner_path = "owner/AGENTS.md"
+    rubric = {**TEST_RUBRIC, "expected_owner_paths": [owner_path]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.started",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "status": "in_progress",
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"rg -n owner {owner_path}",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation(
+            "expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]
+        ),
+        *_rubric_evaluations()[1:],
+    ]
+
+    assert _validate_verdict(
+        _verdict(
+            evidence=[_event_reference(event_index=1)],
+            rubric_evaluations=evaluations,
+        ),
+        events,
+        rubric,
+    ) == (True, "pass")
+
+
+@pytest.mark.parametrize("indices", [[0, 1, 2], [0]])
+def test_path_evidence_rejects_unrelated_extra_or_omitted_success(
+    indices: list[int],
+) -> None:
+    owner_path = "owner/AGENTS.md"
+    rubric = {**TEST_RUBRIC, "expected_owner_paths": [owner_path]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.started",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "status": "in_progress",
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p unrelated/AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation(
+            "expected_owner_path", owner_path, "satisfied", "event_evidence", indices
+        ),
+        *_rubric_evaluations()[1:],
+    ]
+
+    assert not _validate_verdict(
+        _verdict(
+            evidence=[_event_reference(event_index=1)],
+            rubric_evaluations=evaluations,
+        ),
+        events,
+        rubric,
+    )[0]
+
+
+def test_canonical_forbidden_path_accepts_started_and_completed_mentions() -> None:
+    path = ".agents/skills/typst-authoring/SKILL.md"
+    subject = f"{trials.NON_APPLICABLE_PATH_PREFIX}{path}"
+    rubric = {**TEST_RUBRIC, "forbidden_outcomes": [subject]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.started",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {path}",
+                "status": "in_progress",
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {path}",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation("forbidden_outcome", subject, "observed", "event_evidence", [1, 2]),
+    ]
+
+    assert _validate_verdict(
+        _verdict(
+            verdict="fail",
+            rubric_evaluations=evaluations,
+            forbidden_observations=[subject],
+        ),
+        events,
+        rubric,
+    ) == (True, "semantic fail")
 
 
 def test_loaded_forbidden_path_cannot_use_trial_response_basis() -> None:

@@ -27,9 +27,10 @@ to `typst-authoring`. Do not edit Typst realization or certify validity.
    [`literature-synthesis.md`](references/literature-synthesis.md).
 4. Propagate only bounded claims with explicit evidence and limitations.
    Unsupported strength becomes a limitation or hypothesis.
-5. Hand accepted content and its contract to `typst-authoring`; hand concerns
-   about leakage, confounding, uncertainty, or overclaiming to
-   `scientific-review`.
+5. Handoff by naming the destination and bounded payload: accepted content plus
+   its contract for `typst-authoring`, or the unresolved validity concern for
+   `scientific-review`. Keep the destination skill unloaded until executing its
+   work.
 
 ## Completion
 

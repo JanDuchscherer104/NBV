@@ -32,7 +32,11 @@ when owners conflict.
   and literature synthesis; `typst-authoring` owns accepted-content Typst
   realization and release mechanics; `scientific-review` is an independent,
   non-mutating, advisory red-team. Exact sources remain authoritative, and
-  skills hand off at their boundary rather than copying source inventories.
+  handoffs name a destination and bounded payload; load the destination skill
+  only when executing its work.
+- Inspect a technical or generated Typst data consumer for producer-schema
+  synchronization under the producer owner. Activate `typst-authoring` only
+  when changing accepted content, rendering, or release mechanics.
 - `aria-nbv-mermaid` owns Mermaid procedure and local rendering.
 - Role-disjoint setup and documentation verification commands route through
   [`docs/README.md`](README.md); executable behavior remains owned by the

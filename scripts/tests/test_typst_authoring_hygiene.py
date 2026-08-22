@@ -313,6 +313,22 @@ class HygieneTests(unittest.TestCase):
             r"// evidence:\n// - @[^ ]+ -> [^\n:]+:[0-9]+-[0-9]+ \([^\n]+\)",
         )
 
+    def test_handoffs_and_typst_consumer_inspection_stay_progressive(self) -> None:
+        academic = (SKILLS_ROOT / "academic-writing" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        docs_guide = (ROOT / "docs" / "AGENTS.md").read_text(encoding="utf-8")
+        for term in ("destination", "bounded payload", "unloaded", "executing"):
+            self.assertIn(term, academic)
+        for term in (
+            "producer-schema",
+            "producer owner",
+            "accepted content",
+            "rendering",
+            "release mechanics",
+        ):
+            self.assertIn(term, docs_guide)
+
     def test_raw_display_is_blocking(self) -> None:
         path = ROOT / "docs/typst/thesis/sections/fixture.typ"
         self.assertTrue(scan_text(path, "$$\nx = 1\n$$"))

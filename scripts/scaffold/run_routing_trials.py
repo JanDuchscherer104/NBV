@@ -267,10 +267,12 @@ def build_verifier_prompt(
                 "statuses are satisfied/not_satisfied; forbidden statuses are "
                 "not_observed/observed. Owner paths and tool refs require "
                 "event_evidence. Canonical 'non-applicable path is loaded: <path>' "
-                "outcomes also require event_evidence. Expected occurrences cite all "
-                "matching bounded event indices; forbidden path/tool absences use "
-                "empty indices because the validator proves absence from complete "
-                "event evidence. Stable skill IDs and semantic outcomes may use the "
+                "outcomes also require event_evidence. Observed path and tool "
+                "constraints cite representative relevant bounded event indices; "
+                "path citations include a successful proof and tool citations match "
+                "the tool reference. Path/tool absences use empty indices because "
+                "the validator proves absence from complete event evidence. Stable "
+                "skill IDs and semantic outcomes may use the "
                 "bounded trial_response with empty indices. Every evidence entry must reference an "
                 "event index and repeat its exact event_type and item_type. Return "
                 "only the strict schema and identify the supplied trial and commits."
@@ -354,6 +356,32 @@ def _contains_stable_id(text: str, subject: str) -> bool:
     return re.search(pattern, text) is not None
 
 
+def _is_exact_path_mention(event: dict[str, Any], subject: str) -> bool:
+    if event.get("path") == subject:
+        return True
+    command = event.get("command")
+    if not isinstance(command, str):
+        return False
+    try:
+        outer_tokens = shlex.split(command)
+    except ValueError:
+        return False
+    if subject in outer_tokens:
+        return True
+    shell = outer_tokens[0].rsplit("/", 1)[-1] if outer_tokens else ""
+    if shell not in {"bash", "zsh"}:
+        return False
+    try:
+        option_index = outer_tokens.index("-lc")
+        nested_command = outer_tokens[option_index + 1]
+    except (ValueError, IndexError):
+        return False
+    try:
+        return subject in shlex.split(nested_command)
+    except ValueError:
+        return False
+
+
 def _is_successful_path_observation(event: dict[str, Any], subject: str) -> bool:
     if event.get("status") != "completed":
         return False
@@ -362,15 +390,17 @@ def _is_successful_path_observation(event: dict[str, Any], subject: str) -> bool
         isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0
     ):
         return False
-    if event.get("path") == subject:
-        return True
-    command = event.get("command")
-    if not isinstance(command, str):
-        return False
-    try:
-        return subject in shlex.split(command)
-    except ValueError:
-        return False
+    return _is_exact_path_mention(event, subject)
+
+
+def _matching_path_mention_indices(
+    events: list[dict[str, Any]], subject: str
+) -> list[int]:
+    return [
+        index
+        for index, event in enumerate(events)
+        if _is_exact_path_mention(event, subject)
+    ]
 
 
 def _matching_event_indices(
@@ -512,6 +542,10 @@ def validate_verdict(
                 kind=deterministic_kind,
                 subject=deterministic_subject,
             )
+            path_constraint = deterministic_kind in {
+                "expected_owner_path",
+                "forbidden_path",
+            }
             expected_status = (
                 "satisfied"
                 if kind in POSITIVE_CONSTRAINT_KINDS and matches
@@ -521,7 +555,24 @@ def validate_verdict(
                 if matches
                 else "not_observed"
             )
-            if status != expected_status or indices != matches:
+            if path_constraint and matches:
+                mentions = _matching_path_mention_indices(
+                    events, deterministic_subject
+                )
+                indices_valid = (
+                    bool(indices)
+                    and any(index in matches for index in indices)
+                    and all(index in mentions for index in indices)
+                )
+            elif path_constraint:
+                indices_valid = not indices
+            elif matches:
+                indices_valid = bool(indices) and all(
+                    index in matches for index in indices
+                )
+            else:
+                indices_valid = not indices
+            if status != expected_status or not indices_valid:
                 return False, "event-evidence constraint does not match observed events"
         elif kind == "stable_skill_id":
             if basis == "event_evidence":
@@ -765,6 +816,14 @@ def _event_evidence_record(
         return None, 0, False
     present_fields = [field for field in _EVIDENCE_FIELDS if field in source]
     if not _has_observed_identity(item_type, source):
+        empty_started_web_search = (
+            event.get("type") == "item.started"
+            and item_type == "web_search"
+            and source.get("query") == ""
+            and source.get("action") == {"type": "other"}
+        )
+        if empty_started_web_search:
+            return None, 0, False
         return None, 0, item_type in _EXECUTION_IDENTITY_FIELDS
 
     record: dict[str, Any] = {}
