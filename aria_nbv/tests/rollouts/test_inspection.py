@@ -18,6 +18,8 @@ pytest.importorskip("efm3d")
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
+    _decision_relative_vector,
+    _iter_candidate_state_chunks,
     candidate_audit_rows,
     candidate_collision_support_rows,
     candidate_composition_rows,
@@ -232,6 +234,54 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     flow = candidate_flow_rows(reader)
     assert {row["root_denominator"] for row in flow} == {result.num_candidates}
     assert sum(row["count"] for row in flow if row["source_stage"] == "root") == result.num_candidates
+
+
+def test_decision_relative_vector_uses_previous_selected_pose_and_is_global_invariant() -> None:
+    identity = np.eye(3)
+    root = np.r_[identity.reshape(-1), [0.0, 0.0, 0.0]]
+    selected_rotation = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    selected = np.r_[selected_rotation.reshape(-1), [1.0, 0.0, 0.0]]
+    candidate = np.r_[identity.reshape(-1), [1.0, 1.0, 0.0]]
+
+    assert _decision_relative_vector(root, candidate) == pytest.approx([1.0, 1.0, 0.0])
+    assert _decision_relative_vector(selected, candidate) == pytest.approx([1.0, 0.0, 0.0])
+
+    yaw = np.deg2rad(37.0)
+    global_rotation = np.array([[np.cos(yaw), -np.sin(yaw), 0.0], [np.sin(yaw), np.cos(yaw), 0.0], [0.0, 0.0, 1.0]])
+    translation = np.array([4.0, -3.0, 2.0])
+
+    def transform(pose: np.ndarray) -> np.ndarray:
+        rotation = pose[:9].reshape(3, 3)
+        center = pose[9:12]
+        return np.r_[(global_rotation @ rotation).reshape(-1), global_rotation @ center + translation]
+
+    assert _decision_relative_vector(transform(selected), transform(candidate)) == pytest.approx([1.0, 0.0, 0.0])
+
+
+def test_decision_relative_vector_fails_closed_without_reference() -> None:
+    assert _decision_relative_vector(np.full(12, np.nan), np.zeros(12)) is None
+
+
+def test_candidate_scientific_state_chunks_bound_raw_retention_and_reject_interleave() -> None:
+    rows = [
+        {
+            "generation_cohort_id": "cohort",
+            "scene": "scene",
+            "rollout_row_id": rollout,
+            "step_row_id": step,
+            "candidate_row_id": candidate,
+        }
+        for rollout in range(12)
+        for step in range(3)
+        for candidate in range(60)
+    ]
+    chunks = list(_iter_candidate_state_chunks(rows))
+    assert len(chunks) == 36
+    assert max(map(len, chunks)) == 60
+
+    interleaved = [rows[0], rows[60], rows[1]]
+    with pytest.raises(ValueError, match="interleave"):
+        list(_iter_candidate_state_chunks(interleaved))
 
 
 def test_candidate_geometry_evidence_maps_root_target_and_rightward_lateral() -> None:

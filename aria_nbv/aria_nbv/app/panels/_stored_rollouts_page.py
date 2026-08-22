@@ -11,7 +11,7 @@ import hashlib
 import html
 import json
 from collections import Counter
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import asdict, dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -1216,10 +1216,22 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
 
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
     population = stored_session.candidate_population()
-    _render_complete_candidate_support(population)
+    evidence_role = _candidate_population_role(population)
+    explanation_role = evidence_role or "provenance"
+    if evidence_role is None:
+        st.warning(
+            "Normalized candidate/support plots are withheld: the complete candidate audit contains mixed, "
+            "unclassified, or unknown target-evidence roles. Review the role counts below; no bounded sample "
+            "is used to infer provenance."
+        )
+    else:
+        _render_complete_candidate_support(population, evidence_role=evidence_role)
     composition = pd.DataFrame(population["composition"][group_by])
     calibration = pd.DataFrame(population["calibration"][group_by])
     sample = population["sample"]
+    role_counts = pd.DataFrame(population.get("target_evidence_roles", []))
+    with st.expander("Complete target-evidence role counts"):
+        st.dataframe(role_counts, hide_index=True, width="stretch")
 
     if not composition.empty:
         _render_plot(
@@ -1232,7 +1244,7 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
                 "A healthy family remains available without monopolizing selected support.",
                 "Zero availability or selected-without-actor-valid support points to a generator or mask defect.",
                 "candidate audit masks and generation cohort",
-                "actor-visible",
+                explanation_role,
                 theory_kind="validity",
             ),
         )
@@ -1251,7 +1263,7 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
                 "Useful families retain availability and non-degenerate selection.",
                 "High frequency with low selection suggests proposal surplus; high enrichment with tiny support is unstable.",
                 "candidate proposal counts, mixture mass, and selected mask",
-                "actor-visible",
+                explanation_role,
                 theory_kind="validity",
             ),
         )
@@ -1268,6 +1280,24 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
             )
             st.dataframe(sample_rows, hide_index=True, width="stretch")
             _download_frame("Download deterministic candidate sample CSV", "candidate-sample.csv", sample_rows)
+
+
+def _candidate_population_role(
+    population: Mapping[str, object],
+) -> Literal["actor-visible", "oracle/evaluation"] | None:
+    """Return one complete-store evidence role, never inferred from the sample."""
+
+    rows = population.get("target_evidence_roles", [])
+    if not isinstance(rows, list):
+        return None
+    roles = {
+        str(row.get("target_evidence_role"))
+        for row in rows
+        if isinstance(row, Mapping) and int(row.get("candidate_count", 0)) > 0
+    }
+    return (
+        next(iter(roles)) if len(roles) == 1 and next(iter(roles)) in {"actor-visible", "oracle/evaluation"} else None
+    )
 
 
 def _candidate_population_explanation(
@@ -1393,7 +1423,11 @@ def _select_evidence_grain(frame: pd.DataFrame, *, level: str, key: str) -> pd.D
     raise ValueError(f"Unsupported evidence aggregation level: {level}")
 
 
-def _render_complete_candidate_support(population: dict[str, object]) -> None:
+def _render_complete_candidate_support(
+    population: dict[str, object],
+    *,
+    evidence_role: Literal["actor-visible", "oracle/evaluation", "provenance"] = "provenance",
+) -> None:
     """Render complete-population support plots before their collapsed rows."""
 
     geometry = pd.DataFrame(population.get("geometry", []))
@@ -1456,7 +1490,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 comparability="Use the same target protocol and generation contract.",
                 expected_pattern="Support covers the intended local shell without frame mirroring or collapse.",
                 failure_interpretation="Offsets and asymmetry indicate frame or generator defects.",
-                evidence_role="actor-visible",
+                evidence_role=evidence_role,
                 source_fields=("candidate audit", "target center"),
                 intuition="Each ray starts at the root and ends at the candidate in a target-aligned frame.",
                 visual_encoding="The fixed root and target anchors establish the frame; each candidate has its own line segment.",
@@ -1524,7 +1558,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 comparability="Match binning and candidate contract.",
                 expected_pattern="No unexplained directional collapse.",
                 failure_interpretation="Spikes expose orientation or generator support defects.",
-                evidence_role="actor-visible",
+                evidence_role=evidence_role,
                 source_fields=("root-relative vectors",),
                 intuition="Equal-area bins prevent latitude bands from being over-counted simply because of the coordinate system.",
                 visual_encoding="Colour is the fraction of each factual state in an azimuth × sin(elevation) bin.",
@@ -1610,7 +1644,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 "Low distance-from-isotropy means the observed directions resemble the uniform-S² reference at that angular scale.",
                 "A large value is descriptive evidence of anisotropy, not proof of generator collapse; interpret it against the declared sampler configuration.",
                 "candidate direction evidence",
-                "actor-visible",
+                evidence_role,
                 theory_kind="direction",
             ),
         )
@@ -1695,7 +1729,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                     "Support spans configured shell, target-view, and motion bounds.",
                     "Concentration, clipping, or missingness points to an invalid component or evaluator coverage issue.",
                     f"candidate {key} evidence",
-                    "actor-visible",
+                    evidence_role,
                     theory_kind=(
                         "geometry"
                         if key == "spatial"
@@ -1733,7 +1767,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                     "Optical and line-of-sight evidence is available for the intended target-view protocol.",
                     "Large missing counts identify evaluator coverage gaps and must not be read as poor visibility.",
                     "candidate target-view evidence",
-                    "actor-visible",
+                    evidence_role,
                     theory_kind="target",
                 ),
             )
@@ -1785,7 +1819,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                         "Collision fractions remain low under the configured path contract.",
                         "A high fraction can indicate invalid geometry or evaluator coverage problems.",
                         "candidate diagnostics/path collision",
-                        "actor-visible",
+                        evidence_role,
                         theory_kind="code",
                     ),
                 )
@@ -1814,7 +1848,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                         "Positive clearance with low spread indicates feasible paths.",
                         "Low or missing clearance requires checking path applicability and evaluator coverage.",
                         "candidate diagnostics/path clearance",
-                        "actor-visible",
+                        evidence_role,
                         theory_kind="code",
                     ),
                 )
@@ -1857,7 +1891,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                     "Evaluated counts account for most applicable rows and denominators are reproducible.",
                     "Unevaluated or missing-denominator rows indicate evaluator coverage gaps, not safe free space.",
                     "candidate diagnostics/path collision and clearance",
-                    "actor-visible",
+                    evidence_role,
                     theory_kind="code",
                 ),
             )

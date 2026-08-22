@@ -591,6 +591,7 @@ def candidate_audit_rows(
         if target_delta is not None:
             target_delta = target_delta - root_center
         reference_pose = np.asarray(rollout.root_pose_world, dtype=np.float64).reshape(12)
+        reference_available = True
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
@@ -600,9 +601,7 @@ def candidate_audit_rows(
                 strategy_id = int(strategy_ids[row])
                 pose = step.pose_world_cam[local]
                 relative = np.asarray(pose[9:12], dtype=np.float64) - root_center
-                reference_rotation = reference_pose[:9].reshape(3, 3)
-                reference_center = reference_pose[9:12]
-                proposal_relative = reference_rotation.T @ (np.asarray(pose[9:12], dtype=np.float64) - reference_center)
+                proposal_relative = _decision_relative_vector(reference_pose, pose) if reference_available else None
                 candidate_row = {
                     "candidate_row_id": int(step.candidate_row_ids[local]),
                     "rollout_row_id": rollout.rollout_row_id,
@@ -655,9 +654,10 @@ def candidate_audit_rows(
                     "root_relative_x_m": float(relative[0]),
                     "root_relative_y_m": float(relative[1]),
                     "root_relative_z_m": float(relative[2]),
-                    "decision_relative_x_m": float(proposal_relative[0]),
-                    "decision_relative_y_m": float(proposal_relative[1]),
-                    "decision_relative_z_m": float(proposal_relative[2]),
+                    "decision_relative_x_m": None if proposal_relative is None else float(proposal_relative[0]),
+                    "decision_relative_y_m": None if proposal_relative is None else float(proposal_relative[1]),
+                    "decision_relative_z_m": None if proposal_relative is None else float(proposal_relative[2]),
+                    "decision_reference_available": reference_available,
                     "decision_reference_frame": (
                         "root pose world frame for step 0; previous selected camera frame thereafter"
                     ),
@@ -689,7 +689,26 @@ def candidate_audit_rows(
                 reference_pose = np.asarray(step.pose_world_cam[step.selected_local_index], dtype=np.float64).reshape(
                     12
                 )
+                reference_available = True
+            else:
+                reference_available = False
     return rows
+
+
+def _decision_relative_vector(reference_pose: np.ndarray, candidate_pose: np.ndarray) -> np.ndarray | None:
+    """Return a candidate translation in the current decision reference frame."""
+
+    reference = np.asarray(reference_pose, dtype=np.float64).reshape(-1)
+    candidate = np.asarray(candidate_pose, dtype=np.float64).reshape(-1)
+    if reference.size < 12 or candidate.size < 12:
+        return None
+    rotation = reference[:9].reshape(3, 3)
+    center = reference[9:12]
+    candidate_center = candidate[9:12]
+    if not np.isfinite(rotation).all() or not np.isfinite(center).all() or not np.isfinite(candidate_center).all():
+        return None
+    relative = rotation.T @ (candidate_center - center)
+    return relative if np.isfinite(relative).all() else None
 
 
 def candidate_population_evidence(
@@ -750,6 +769,7 @@ def candidate_population_evidence(
             "calibration": calibrations,
             "collision": collision,
             "groups": groups,
+            "target_evidence_roles": accumulator.target_evidence_roles(),
             "sample": sample,
             "population_count": accumulator.population_count,
             "geometry": candidate_geometry_evidence_rows(sample_rows),
@@ -830,14 +850,49 @@ def _population_state_groups(
     return grouped
 
 
+def _candidate_scientific_state_key(row: Mapping[str, object]) -> tuple[str, str, str, str]:
+    """Return the ordered factual state identity used by scientific reducers."""
+
+    cohort = str(row.get("generation_cohort_id", "unknown"))
+    return (cohort, *_candidate_state_key(row))
+
+
+def _iter_candidate_state_chunks(rows: Iterable[Mapping[str, object]]) -> Iterable[list[dict[str, object]]]:
+    """Yield contiguous factual states while retaining no prior candidate rows."""
+
+    current_key: tuple[str, str, str, str] | None = None
+    current: list[dict[str, object]] = []
+    closed: set[tuple[str, str, str, str]] = set()
+    for raw in rows:
+        row = dict(raw)
+        key = _candidate_scientific_state_key(row)
+        if current_key is not None and key != current_key:
+            closed.add(current_key)
+            yield current
+            current = []
+        if key in closed:
+            raise ValueError(f"candidate scientific rows interleave factual state {key!r}")
+        current_key = key
+        current.append(row)
+    if current:
+        yield current
+
+
+def _iter_candidate_state_groups(
+    rows: Iterable[Mapping[str, object]], *, extra_fields: tuple[str, ...] = ()
+) -> Iterable[tuple[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]]]:
+    """Reduce each bounded state chunk before advancing the source stream."""
+
+    for chunk in _iter_candidate_state_chunks(rows):
+        yield from _population_state_groups(chunk, extra_fields=extra_fields).items()
+
+
 def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
     """Summarize directions per factual state, then scene and cohort macros."""
-    source = [dict(row) for row in rows]
     azimuth_bins, elevation_bins = 12, 6
     density: list[dict[str, object]] = []
     cap_rows: list[dict[str, object]] = []
     angular_rows: list[dict[str, object]] = []
-    states = _population_state_groups(source)
     phi = (1.0 + np.sqrt(5.0)) / 2.0
 
     def fibonacci_sphere(count: int) -> np.ndarray:
@@ -847,7 +902,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
         return np.column_stack((np.cos(theta) * np.sqrt(1.0 - z * z), np.sin(theta) * np.sqrt(1.0 - z * z), z))
 
     cap_centers, probes = fibonacci_sphere(128), fibonacci_sphere(512)
-    for key, state_rows in sorted(states.items()):
+    for key, state_rows in _iter_candidate_state_groups(rows):
         cohort, scene, rollout_id, step_id, population = key
         vectors: list[np.ndarray] = []
         counts = np.zeros((azimuth_bins, elevation_bins), dtype=np.int64)
@@ -1151,10 +1206,8 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
 
 def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
     """Summarize spatial support with shell- and population-preserving macros."""
-    source = [dict(row) for row in rows]
     output: list[dict[str, object]] = []
-    groups = _population_state_groups(source, extra_fields=("position",))
-    for key, grouped in sorted(groups.items()):
+    for key, grouped in _iter_candidate_state_groups(rows, extra_fields=("position",)):
         cohort, scene, rollout_id, step_id, shell, population = key
         values = {
             "root_xy_radius": [
@@ -1276,10 +1329,8 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
 
 def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
     """Expose target distance and explicit unavailable view metrics per facet."""
-    source = [dict(row) for row in rows]
-    groups = _population_state_groups(source)
     result: list[dict[str, object]] = []
-    for key, grouped in sorted(groups.items()):
+    for key, grouped in _iter_candidate_state_groups(rows):
         cohort, scene, rollout_id, step_id, population = key
         values = [_finite_or_none(row.get("target_distance_m")) for row in grouped]
         finite = [value for value in values if value is not None]
@@ -1380,8 +1431,6 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
 
 def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
     """Summarize motion and collision diagnostics per state and real macros."""
-    source = [dict(row) for row in rows]
-    groups = _population_state_groups(source)
     result: list[dict[str, object]] = []
     metrics = (
         ("motion_step_length_m", "m"),
@@ -1391,7 +1440,7 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
         ("free_space_margin_m", "m"),
         ("path_min_clearance_m", "m"),
     )
-    for key, grouped in sorted(groups.items()):
+    for key, grouped in _iter_candidate_state_groups(rows):
         cohort, scene, rollout_id, step_id, population = key
         base = {
             "generation_cohort_id": cohort,
@@ -1562,11 +1611,15 @@ class _CandidatePopulationAccumulator:
             key: {} for key in CANDIDATE_GROUP_FIELDS
         }
         self._collision: dict[str, dict[str, object]] = {}
+        self._target_evidence_roles: dict[str, dict[str, int]] = {}
 
     def consume(self, row: Mapping[str, object]) -> None:
         normalized = dict(row)
         self.population_count += 1
         cohort_id = str(normalized.get("generation_cohort_id", "unknown"))
+        role = str(normalized.get("target_evidence_role", "unknown"))
+        role_counts = self._target_evidence_roles.setdefault(cohort_id, {})
+        role_counts[role] = role_counts.get(role, 0) + 1
         scene = str(normalized.get("scene", "unknown"))
         state_id = f"{scene}\0{normalized.get('rollout_row_id', 'unknown')}\0{normalized.get('step_row_id', 'unknown')}"
         cohort = self._cohorts.setdefault(
@@ -1760,6 +1813,19 @@ class _CandidatePopulationAccumulator:
                 )
             output[group_by] = rows
         return output
+
+    def target_evidence_roles(self) -> list[dict[str, object]]:
+        """Return complete, cohort-qualified target evidence-role counts."""
+
+        return [
+            {
+                "generation_cohort_id": cohort_id,
+                "target_evidence_role": role,
+                "candidate_count": count,
+            }
+            for cohort_id, roles in sorted(self._target_evidence_roles.items())
+            for role, count in sorted(roles.items())
+        ]
 
     def calibrations(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
         compositions = self.compositions()
