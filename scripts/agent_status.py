@@ -308,25 +308,49 @@ def _upstream(
     )
 
 
-def _readiness(boundary: GitBoundary) -> ReadinessStatus:
+def _runtime_action(boundary: GitBoundary, kind: Kind) -> str | None:
+    """Return the topology-valid, non-executed runtime setup action."""
+    if kind == "linked" and (boundary.path / "scripts" / "setup_worktree_env.sh").is_file():
+        return _graphify_command(boundary.path, "bash", "scripts/setup_worktree_env.sh")
+    if kind in {"primary", "standalone"} and (
+        boundary.path / "aria_nbv" / "pyproject.toml"
+    ).is_file():
+        return _graphify_command(boundary.path / "aria_nbv", "uv", "sync", "--extra", "dev")
+    return None
+
+
+def _readiness(boundary: GitBoundary, kind: Kind) -> ReadinessStatus:
     runtime_path = boundary.path / "aria_nbv" / ".venv" / "bin" / "python"
     if runtime_path.is_file() and os.access(runtime_path, os.X_OK):
-        runtime: RuntimeStatus = {
-            "state": "healthy",
-            "details": [],
-            "next_action": None,
-            "path": str(runtime_path),
-        }
+        try:
+            result = subprocess.run(
+                [str(runtime_path), "-c", "import sys; raise SystemExit(not bool(sys.executable))"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError as error:
+            runtime: RuntimeStatus = {
+                "state": "unusable",
+                "details": [f"configured package runtime could not start: {error}"],
+                "next_action": _runtime_action(boundary, kind),
+                "path": str(runtime_path),
+            }
+        else:
+            probe = ProbeResult(result.returncode, result.stdout, result.stderr)
+            runtime = {
+                "state": "healthy" if result.returncode == 0 else "unusable",
+                "details": [] if result.returncode == 0 else _details(probe),
+                "next_action": None
+                if result.returncode == 0
+                else _runtime_action(boundary, kind),
+                "path": str(runtime_path),
+            }
     else:
-        setup_action = (
-            _graphify_command(boundary.path, "bash", "scripts/setup_worktree_env.sh")
-            if (boundary.path / "scripts" / "setup_worktree_env.sh").is_file()
-            else None
-        )
         runtime = {
             "state": "uninitialized",
             "details": ["configured package runtime is absent or not executable"],
-            "next_action": setup_action,
+            "next_action": _runtime_action(boundary, kind),
             "path": str(runtime_path),
         }
     submodule_result = boundary.run("submodule", "status", "--recursive")
@@ -379,8 +403,10 @@ def _aria_graphify_action(boundary: GitBoundary, kind: Kind) -> str | None:
         return (
             f"cd {shlex.quote(str(boundary.path))} && python3 "
             "scripts/build_graphify_projection.py --output graphify-input "
-            '--aria-code-ref "$(git rev-parse HEAD)"'
+            '--aria-code-ref "$(git rev-parse HEAD)" && graphify . --update'
         )
+    if (boundary.path / "scripts" / "build_graphify_projection.py").is_file():
+        return _graphify_command(boundary.path, "graphify", ".", "--update")
     return None
 
 
@@ -489,7 +515,7 @@ def _graphify(boundary: GitBoundary, *, bare: bool, kind: Kind) -> GraphifyStatu
     }
 
 
-def _identity(boundary: GitBoundary) -> tuple[RepositoryStatus, Path, bool]:
+def _identity(boundary: GitBoundary) -> tuple[RepositoryStatus, GitBoundary, bool]:
     bare_result = boundary.run("rev-parse", "--is-bare-repository")
     bare_text = _text(bare_result)
     if bare_result.returncode or bare_text not in {"true", "false"}:
@@ -503,6 +529,7 @@ def _identity(boundary: GitBoundary) -> tuple[RepositoryStatus, Path, bool]:
         raise RuntimeError("Git worktree root identity is unavailable")
     else:
         root = Path(top).resolve()
+        boundary = GitBoundary(root)
     git_dir_result = boundary.run("rev-parse", "--git-dir")
     common_result = boundary.run("rev-parse", "--git-common-dir")
     if git_dir_result.returncode or common_result.returncode:
@@ -620,14 +647,14 @@ def _identity(boundary: GitBoundary) -> tuple[RepositoryStatus, Path, bool]:
         "common_git_directory": str(common),
         "warning": warning,
     }
-    return repository, common, bare
+    return repository, boundary, bare
 
 
 def inspect(path: Path) -> StatusEnvelope:
     """Return a fixed success/error envelope for one checkout path."""
     boundary = GitBoundary(path)
     try:
-        repository, _, bare = _identity(boundary)
+        repository, boundary, bare = _identity(boundary)
         result: StatusResult = {
             "repository": repository,
             "readiness": {
@@ -644,7 +671,7 @@ def inspect(path: Path) -> StatusEnvelope:
                 },
             }
             if bare
-            else _readiness(boundary),
+            else _readiness(boundary, repository["kind"]),
             "graphify": _graphify(boundary, bare=bare, kind=repository["kind"]),
         }
     except (OSError, RuntimeError, ValueError) as error:

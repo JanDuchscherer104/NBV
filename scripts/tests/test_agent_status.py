@@ -265,6 +265,46 @@ class AgentStatusTests(unittest.TestCase):
         )
         self.assertIn("upstream: unavailable", render(self.root))
 
+    def test_nested_path_uses_discovered_checkout_root_for_all_probes(self) -> None:
+        nested = self.root / "nested"
+        nested.mkdir()
+        (self.root / "aria_nbv").mkdir()
+        (self.root / "aria_nbv" / "pyproject.toml").write_text(
+            "[project]\n", encoding="utf-8"
+        )
+        scripts = self.root / "scripts"
+        scripts.mkdir()
+        (scripts / "check_graphify_freshness.py").write_text("# fixture\n", encoding="utf-8")
+        (scripts / "build_graphify_projection.py").write_text("# fixture\n", encoding="utf-8")
+
+        payload = self.assert_immutable(nested, self.root / ".git")
+
+        result = payload["result"]
+        assert result is not None
+        self.assertEqual(result["repository"]["root"], str(self.root))
+        self.assertEqual(result["repository"]["kind"], "standalone")
+        self.assertEqual(
+            result["readiness"]["runtime"]["path"],
+            str(self.root / "aria_nbv" / ".venv" / "bin" / "python"),
+        )
+        self.assertEqual(
+            result["readiness"]["runtime"]["next_action"],
+            f"cd {self.root / 'aria_nbv'} && uv sync --extra dev",
+        )
+        self.assertIn(f"cd {self.root}", result["graphify"]["next_action"])
+
+    def test_broken_executable_runtime_is_not_healthy(self) -> None:
+        runtime = self.root / "aria_nbv" / ".venv" / "bin" / "python"
+        runtime.parent.mkdir(parents=True)
+        runtime.write_text("#!/missing/python\n", encoding="utf-8")
+        runtime.chmod(0o755)
+
+        payload = self.assert_immutable(self.root, self.root / ".git")
+
+        runtime_status = payload["result"]["readiness"]["runtime"]
+        self.assertEqual(runtime_status["state"], "unusable")
+        self.assertTrue(any("could not start" in detail for detail in runtime_status["details"]))
+
     def test_missing_upstream_does_not_suggest_invalid_repair(self) -> None:
         payload = self.assert_immutable(self.root, self.root / ".git")
         upstream = payload["result"]["repository"]["upstream"]
@@ -398,6 +438,22 @@ class AgentStatusTests(unittest.TestCase):
         )
         self.assert_shape(payload)
 
+    def test_primary_graphify_action_builds_then_refreshes(self) -> None:
+        scripts = self.root / "scripts"
+        scripts.mkdir()
+        (scripts / "check_graphify_freshness.py").write_text("# fixture\n", encoding="utf-8")
+        (scripts / "build_graphify_projection.py").write_text("# fixture\n", encoding="utf-8")
+
+        graphify = _graphify(GitBoundary(self.root), bare=False, kind="standalone")
+
+        self.assertEqual(graphify["state"], "unavailable")
+        self.assertEqual(
+            graphify["next_action"],
+            f"cd {self.root} && python3 scripts/build_graphify_projection.py "
+            '--output graphify-input --aria-code-ref "$(git rev-parse HEAD)" '
+            "&& graphify . --update",
+        )
+
     def test_healthy_graphify_preserves_owner_evidence_without_action(self) -> None:
         (self.root / "graphify-out").mkdir()
         (self.root / "graphify-input").mkdir()
@@ -513,6 +569,9 @@ class AgentStatusTests(unittest.TestCase):
         (self.root / "scripts" / "setup_worktree_env.sh").write_text(
             "# fixture\n", encoding="utf-8"
         )
+        (self.root / "scripts" / "build_graphify_projection.py").write_text(
+            "# fixture\n", encoding="utf-8"
+        )
         (self.root / "graphify-input").mkdir()
         (self.root / "graphify-input" / "index.md").write_text(
             "index\n", encoding="utf-8"
@@ -531,7 +590,7 @@ class AgentStatusTests(unittest.TestCase):
         with patch("agent_status.subprocess.run", return_value=checker):
             graphify = _graphify(GitBoundary(self.root), bare=False, kind="linked")
         self.assertEqual(graphify["state"], "unusable")
-        self.assertIsNone(graphify["next_action"])
+        self.assertEqual(graphify["next_action"], f"cd {self.root} && graphify . --update")
         self.assertIn("Graphify checker state: unusable", graphify["details"])
         self.assertIn("fixture reason", graphify["details"])
         self.assertIn("Graphify checker next_action: repair prose", graphify["details"])
