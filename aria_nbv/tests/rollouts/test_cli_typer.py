@@ -132,9 +132,7 @@ def test_current_backbone_configs_explicitly_select_derived_free_input() -> None
         assert config.backbone is not None
         assert config.backbone.free_input_mode == "derived"
 
-    historical = VinOfflineWriterConfig.from_toml(
-        repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml"
-    )
+    historical = VinOfflineWriterConfig.from_toml(repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml")
     assert historical.include_backbone is True
     assert historical.backbone is not None
     assert historical.backbone.free_input_mode == "native"
