@@ -259,6 +259,19 @@ class HygieneTests(unittest.TestCase):
             for term in terms:
                 self.assertIn(term.lower(), description, path)
 
+    def test_typst_description_excludes_handoffs_and_schema_inspection(self) -> None:
+        text = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        description = text.split("description:", 1)[1].split("\n", 1)[0].lower()
+        for term in (
+            "use only when",
+            "do not load",
+            "handoffs addressed to typst-authoring",
+            "technical/generated typst data-consumer schema inspection",
+        ):
+            self.assertIn(term, description)
+
     def test_routing_make_targets_and_runner_flags_exist(self) -> None:
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("thesis-authoring-routing-self-test:", makefile)

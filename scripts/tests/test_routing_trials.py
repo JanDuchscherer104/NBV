@@ -793,11 +793,14 @@ def test_verdict_rejects_invalid_event_references(reference: object) -> None:
     )[0]
 
 
-def test_verdict_rejects_duplicate_event_references() -> None:
-    reference = _event_reference()
-    assert not _validate_verdict(
-        _verdict(evidence=[reference, reference]), _complete_event_evidence()
-    )[0]
+def test_verdict_accepts_repeated_event_index_for_distinct_grounded_claims() -> None:
+    evidence = [
+        _event_reference(claim="The trial read the owner guidance."),
+        _event_reference(claim="The same command established the owner path."),
+    ]
+    assert _validate_verdict(
+        _verdict(evidence=evidence), _complete_event_evidence()
+    ) == (True, "pass")
 
 
 def test_verdict_validation_rejects_malformed_payload() -> None:

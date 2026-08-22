@@ -1,9 +1,13 @@
 ---
 name: typst-authoring
-description: Use when accepted scientific content must be realized in Typst, including notation, equations, figures, tables, citations, compilation, rendering, or release QA; hand off argument construction and independent review.
+description: Use only when the current task executes accepted-content Typst realization, notation, figures, tables, citations, compilation, rendering, or release work; do not load for handoffs addressed to typst-authoring or technical/generated Typst data-consumer schema inspection.
 ---
 
 # Typst Authoring
+
+Activate only for accepted-content Typst execution. A handoff names its
+destination and payload without loading this skill; technical or generated
+Typst data-consumer schema inspection stays with the producer owner.
 
 Own the accepted-content surface: express agreed scientific content in Typst,
 preserve shared notation and local style, and prove the build and release
