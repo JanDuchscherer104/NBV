@@ -136,14 +136,20 @@ def test_qh_readiness_reuses_only_exact_loader_controls() -> None:
     readiness = object()
 
     assert _qh_readiness_for_identity((identity, readiness), identity) is readiness
-    assert _qh_readiness_for_identity(
-        (identity, readiness),
-        _qh_readiness_identity(selection_identity, batch_size=2, seed=7),
-    ) is None
-    assert _qh_readiness_for_identity(
-        (identity, readiness),
-        _qh_readiness_identity(selection_identity, batch_size=1, seed=8),
-    ) is None
+    assert (
+        _qh_readiness_for_identity(
+            (identity, readiness),
+            _qh_readiness_identity(selection_identity, batch_size=2, seed=7),
+        )
+        is None
+    )
+    assert (
+        _qh_readiness_for_identity(
+            (identity, readiness),
+            _qh_readiness_identity(selection_identity, batch_size=1, seed=8),
+        )
+        is None
+    )
 
 
 def test_refresh_rollout_caches_clears_each_page_family(monkeypatch: pytest.MonkeyPatch) -> None:
