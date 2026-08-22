@@ -283,6 +283,8 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     manifest.write(root / "manifest.json")
 
     valid = np.zeros((34,), dtype=np.float32)
+    valid[:6] = [0, 2, 0, 1, 0, 3]
+    valid[18:30] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 20, 30]
     padded = np.full((34,), -1.0, dtype=np.float32)
     nonfinite = valid.copy()
     nonfinite[0] = np.nan
@@ -294,7 +296,10 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
         def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
             return np.stack([valid, padded if record.sample_index == 0 else nonfinite])
 
-    monkeypatch.setattr("aria_nbv.dataset_bundle.VinOfflineStoreReader", _Reader)
+        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> object | None:
+            return None
+
+    monkeypatch.setattr("aria_nbv.data_handling.vin_store.target_inventory.VinOfflineStoreReader", _Reader)
     scan = scan_root_gt_obb_target_opportunities(root)
 
     assert scan["available"] is True
@@ -312,3 +317,55 @@ def test_root_gt_obb_scan_does_not_fall_back_when_blocks_are_absent(tmp_path: Pa
     assert scan["available"] is False
     assert scan["target_opportunity_count"] is None
     assert scan["reason"] == "gt_obb_block_missing:shard-a,shard-b"
+
+
+def test_legacy_gt_scan_retains_zero_target_sample_identity(monkeypatch, tmp_path: Path) -> None:
+    root, _source_hash = _write_root_store(tmp_path)
+    manifest = VinOfflineManifest.read(root / "manifest.json")
+    block = VinOfflineBlockSpec.for_zarr_array(
+        name="gt.obbs",
+        array_path="gt/obbs",
+        dtype="float32",
+        shape=[1, 1, 34],
+    )
+    manifest.shards = [
+        VinOfflineShardSpec("shard-a", "shards/shard-a", 0, 1, {"gt.obbs": block}),
+        VinOfflineShardSpec("shard-b", "shards/shard-b", 1, 1, {"gt.obbs": block}),
+    ]
+    manifest.write(root / "manifest.json")
+    valid = np.zeros((34,), dtype=np.float32)
+    valid[:6] = [0, 1, 0, 1, 0, 1]
+    valid[18:30] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 2, 3]
+    padded = np.full((34,), -1.0, dtype=np.float32)
+
+    class _Reader:
+        def __init__(self, _config: object) -> None:
+            pass
+
+        def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
+            return (padded if record.sample_index == 0 else valid).reshape(1, 34)
+
+        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> object | None:
+            return None
+
+    monkeypatch.setattr("aria_nbv.data_handling.vin_store.target_inventory.VinOfflineStoreReader", _Reader)
+    scan = scan_root_gt_obb_target_opportunities(root)
+
+    assert scan["per_sample"] == [
+        {
+            "sample_index": 0,
+            "sample_key": "snippet-a",
+            "scene_id": "scene-a",
+            "snippet_id": "snippet-a",
+            "split": "train",
+            "gt_obb_target_opportunities": 0,
+        },
+        {
+            "sample_index": 1,
+            "sample_key": "snippet-b",
+            "scene_id": "scene-b",
+            "snippet_id": "snippet-b",
+            "split": "val",
+            "gt_obb_target_opportunities": 1,
+        },
+    ]

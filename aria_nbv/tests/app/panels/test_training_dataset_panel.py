@@ -11,7 +11,13 @@ import numpy as np
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from aria_nbv.app.panels.training_dataset import _artifact_identity, _deep_metric_value, _download_payload
+from aria_nbv.app.panels.training_dataset import (
+    _artifact_identity,
+    _deep_metric_value,
+    _download_payload,
+    _target_inventory_frames,
+    _zero_target_summary,
+)
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
@@ -265,3 +271,67 @@ def test_deep_metric_value_marks_partial_counts_and_unavailable_failures() -> No
 
     assert _deep_metric_value(partial, "q_h_trainable_candidates", deep_available=True) == "17 (partial)"
     assert _deep_metric_value(unavailable, "q_h_trainable_candidates", deep_available=True) == "Unavailable"
+
+
+def test_target_inventory_frames_preserve_zero_samples_and_class_scene_support() -> None:
+    inventory = {
+        "detected": {
+            "available": True,
+            "sample_rows": [
+                {"sample_index": 0, "scene_id": "scene-a", "count": 0},
+                {"sample_index": 1, "scene_id": "scene-b", "count": 2},
+            ],
+            "rows": [
+                {
+                    "population": "detected",
+                    "source_row": 0,
+                    "scene_id": "scene-b",
+                    "class_name": "chair",
+                    "confidence": 0.8,
+                    "volume": 1.0,
+                },
+                {
+                    "population": "detected",
+                    "source_row": 1,
+                    "scene_id": "scene-b",
+                    "class_name": "chair",
+                    "confidence": 0.6,
+                    "volume": 2.0,
+                },
+            ],
+        },
+        "gt": {
+            "available": True,
+            "sample_rows": [
+                {"sample_index": 0, "scene_id": "scene-a", "count": 1},
+                {"sample_index": 1, "scene_id": "scene-b", "count": 1},
+            ],
+            "rows": [
+                {
+                    "population": "gt",
+                    "source_row": 0,
+                    "scene_id": "scene-a",
+                    "class_name": "chair",
+                    "confidence": 1.0,
+                    "volume": 1.5,
+                },
+                {
+                    "population": "gt",
+                    "source_row": 0,
+                    "scene_id": "scene-b",
+                    "class_name": "table",
+                    "confidence": 1.0,
+                    "volume": 3.0,
+                },
+            ],
+        },
+    }
+
+    samples, classes, targets = _target_inventory_frames(inventory)
+
+    assert len(samples) == 4
+    assert _zero_target_summary(samples, "detected") == "1 / 2 (50.0%)"
+    chair_detected = classes.loc[(classes["population"] == "detected") & (classes["class_name"] == "chair")].iloc[0]
+    assert chair_detected["target_count"] == 2
+    assert chair_detected["scene_count"] == 1
+    assert set(targets["population"]) == {"detected", "gt"}

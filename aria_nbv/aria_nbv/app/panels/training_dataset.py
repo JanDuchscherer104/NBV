@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from ...configs import PathConfig
@@ -204,6 +205,232 @@ def _deep_metric_value(aggregate: dict[str, Any], key: str, *, deep_available: b
         return "Unavailable"
     rendered = f"{int(value):,}"
     return f"{rendered} (partial)" if status == "partial" else rendered
+
+
+def _target_inventory_frames(
+    inventory: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Return sample, class, and geometry frames from typed target evidence."""
+
+    sample_rows: list[dict[str, Any]] = []
+    target_rows: list[dict[str, Any]] = []
+    for population in ("detected", "gt"):
+        evidence = inventory.get(population, {})
+        if not bool(evidence.get("available")):
+            continue
+        sample_rows.extend({**row, "population": population} for row in evidence.get("sample_rows", ()))
+        target_rows.extend(evidence.get("rows", ()))
+    sample_frame = pd.DataFrame(sample_rows)
+    target_frame = pd.DataFrame(target_rows)
+    if target_frame.empty:
+        return sample_frame, pd.DataFrame(), target_frame
+    class_frame = (
+        target_frame.groupby(["population", "class_name"], dropna=False)
+        .agg(target_count=("source_row", "size"), scene_count=("scene_id", "nunique"))
+        .reset_index()
+        .sort_values(["population", "target_count", "class_name"], ascending=[True, False, True])
+        .reset_index(drop=True)
+    )
+    return sample_frame, class_frame, target_frame
+
+
+def _render_target_context(*, question: str, interpretation: str, caveat: str) -> None:
+    """Provide concise scientific context beside a target-inventory plot."""
+
+    with st.popover("Interpret this plot", icon=":material/info:"):
+        st.markdown(f"**Question.** {question}")
+        st.markdown(interpretation)
+        st.markdown(f"**Important limitation.** {caveat}")
+
+
+def _zero_target_summary(sample_frame: pd.DataFrame, population: str) -> str:
+    rows = sample_frame.loc[sample_frame["population"] == population] if not sample_frame.empty else sample_frame
+    if rows.empty:
+        return "Unavailable"
+    zero_count = int((rows["count"] == 0).sum())
+    return f"{zero_count:,} / {len(rows):,} ({zero_count / len(rows):.1%})"
+
+
+def _render_target_inventory(inventory: dict[str, Any]) -> None:
+    """Render complete detected/GT availability before campaign selection."""
+
+    sample_frame, class_frame, target_frame = _target_inventory_frames(inventory)
+    detected = inventory.get("detected", {})
+    gt = inventory.get("gt", {})
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Detected targets", _metric_value(detected.get("row_count")))
+    metric_cols[1].metric("GT targets", _metric_value(gt.get("row_count")))
+    metric_cols[2].metric("Samples without detections", _zero_target_summary(sample_frame, "detected"))
+    metric_cols[3].metric("Samples without GT targets", _zero_target_summary(sample_frame, "gt"))
+
+    unavailable = [
+        f"{population}: {evidence.get('reason', 'unavailable')}"
+        for population, evidence in (("detected", detected), ("gt", gt))
+        if not bool(evidence.get("available"))
+    ]
+    if unavailable:
+        st.warning("Target populations unavailable — " + "; ".join(unavailable))
+
+    exclusion_rows = [
+        {"population": population, "reason": reason, "count": int(evidence.get(field, 0))}
+        for population, evidence in (("detected", detected), ("gt", gt))
+        for reason, field in (
+            ("padding", "excluded_padding_count"),
+            ("non-finite", "excluded_nonfinite_count"),
+            ("invalid geometry", "excluded_invalid_geometry_count"),
+        )
+        if int(evidence.get(field, 0)) > 0
+    ]
+    if exclusion_rows:
+        exclusion_figure = px.bar(
+            pd.DataFrame(exclusion_rows),
+            x="reason",
+            y="count",
+            color="population",
+            barmode="group",
+            title="Target rows excluded from statistical summaries",
+            labels={"reason": "exclusion reason", "count": "excluded OBB rows", "population": "population"},
+        )
+        st.plotly_chart(exclusion_figure, width="stretch")
+        _render_target_context(
+            question="How much target evidence was withheld before computing the population summaries?",
+            interpretation=(
+                "These rows are counted but excluded from every downstream distribution. Padding is expected fixed-width "
+                "storage; non-finite values and non-positive extents indicate unusable geometry."
+            ),
+            caveat="A clean plot has no bars. Padding is not a detector error and should be interpreted separately.",
+        )
+
+    if not sample_frame.empty:
+        sample_figure = px.histogram(
+            sample_frame,
+            x="count",
+            color="population",
+            barmode="overlay",
+            opacity=0.65,
+            marginal="box",
+            title="Detected and GT targets per physical sample",
+            labels={"count": "finite valid OBB rows per sample", "population": "target population"},
+        )
+        st.plotly_chart(sample_figure, width="stretch")
+        _render_target_context(
+            question="How consistently are actor-visible detections and privileged GT targets available across samples?",
+            interpretation=(
+                "Every physical sample contributes once, including samples with zero targets. The histogram shows the "
+                "distribution while the marginal box summarizes its median and interquartile range."
+            ),
+            caveat=(
+                "Detected and GT counts are two different evidence populations. Their ratio is descriptive and is not "
+                "object-detection recall because no global one-to-one assignment is performed here."
+            ),
+        )
+
+    if not class_frame.empty:
+        class_figure = px.bar(
+            class_frame,
+            x="class_name",
+            y="target_count",
+            color="population",
+            barmode="group",
+            hover_data=["scene_count"],
+            title="Target support by semantic class",
+            labels={"class_name": "semantic class", "target_count": "target rows", "population": "population"},
+        )
+        st.plotly_chart(class_figure, width="stretch")
+        _render_target_context(
+            question="Which semantic classes dominate or disappear from detected and GT target pools?",
+            interpretation=(
+                "Bars count finite valid OBB rows. Hovered scene support helps distinguish a broadly represented class "
+                "from many repeated targets in only a few scenes."
+            ),
+            caveat=(
+                "Counts are inventory evidence, not class accuracy. Unknown semantic names retain their numeric ID rather "
+                "than being merged into a guessed class."
+            ),
+        )
+
+    if not target_frame.empty:
+        geometry_frame = target_frame.loc[(target_frame["volume"] > 0) & target_frame["volume"].notna()]
+        if not geometry_frame.empty:
+            volume_figure = px.histogram(
+                geometry_frame,
+                x="volume",
+                color="population",
+                barmode="overlay",
+                opacity=0.65,
+                log_x=True,
+                title="Target OBB volume distribution",
+                labels={"volume": "oriented-box volume (m³)", "population": "target population"},
+            )
+            st.plotly_chart(volume_figure, width="stretch")
+            _render_target_context(
+                question="Does the dataset overrepresent very small or very large target geometry?",
+                interpretation=(
+                    "Volume is the product of the three positive OBB extents. The logarithmic x-axis makes multiplicative "
+                    "scale differences visible across detected and GT populations."
+                ),
+                caveat="Non-finite, padded, and non-positive geometry is excluded and reported separately in the evidence.",
+            )
+            aspect_figure = px.histogram(
+                geometry_frame,
+                x="aspect_ratio",
+                color="population",
+                barmode="overlay",
+                opacity=0.65,
+                log_x=True,
+                title="Target OBB aspect-ratio distribution",
+                labels={"aspect_ratio": "largest / smallest OBB extent", "population": "target population"},
+            )
+            st.plotly_chart(aspect_figure, width="stretch")
+            _render_target_context(
+                question="Are detected or GT boxes dominated by unusually elongated geometry?",
+                interpretation=(
+                    "An aspect ratio of 1 is isotropic; larger values indicate increasing elongation. The logarithmic "
+                    "axis separates ordinary variation from extreme geometric tails."
+                ),
+                caveat=(
+                    "Aspect ratio diagnoses box shape, not semantic correctness. Compare populations and inspect raw rows "
+                    "before treating an extreme value as an annotation or detector defect."
+                ),
+            )
+        detected_confidence = target_frame.loc[
+            (target_frame["population"] == "detected") & target_frame["confidence"].notna()
+        ]
+        if not detected_confidence.empty:
+            confidence_figure = px.histogram(
+                detected_confidence,
+                x="confidence",
+                color="class_name",
+                nbins=20,
+                title="Actor-visible detection confidence",
+                labels={"confidence": "persisted detection confidence", "class_name": "semantic class"},
+            )
+            st.plotly_chart(confidence_figure, width="stretch")
+            st.caption(
+                "Confidence describes the detector output only. Calibration against campaign admission belongs to the "
+                "Campaign Generation admission audit."
+            )
+            _render_target_context(
+                question="How concentrated are the detector's persisted confidence scores across semantic classes?",
+                interpretation=(
+                    "The histogram exposes low-confidence mass, class-dependent score ranges, and saturation near the "
+                    "bounds before any campaign matching is applied."
+                ),
+                caveat=(
+                    "Confidence is not accuracy or calibration. Relating it to matching success requires a joined, "
+                    "identity-validated admission view and is intentionally not inferred here."
+                ),
+            )
+
+    with st.expander("Target inventory rows and export", expanded=False):
+        st.dataframe(target_frame, hide_index=True, width="stretch")
+        st.download_button(
+            "Download target inventory JSON",
+            data=(json.dumps(inventory, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+            file_name="target_inventory.json",
+            mime="application/json",
+            on_click="ignore",
+        )
 
 
 def _render_verdict(evidence: DatasetBundleEvidence) -> None:
@@ -410,7 +637,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     _render_summary_metrics(evidence, deep)
 
     overview_tab, stores_tab, topology_tab, targets_tab, coral_tab, findings_tab = st.tabs(
-        ["Overview", "Stores & splits", "Topology", "Target supervision", "CORAL artifacts", "Findings"]
+        ["Overview", "Stores & splits", "Topology", "Target inventory", "CORAL artifacts", "Findings"]
     )
     with overview_tab:
         st.subheader("Bundle overview")
@@ -444,11 +671,16 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         st.subheader("Root-store → rollout-store → Q_H dependency")
         _render_topology(evidence)
     with targets_tab:
-        st.subheader("Target and Q_H supervision")
+        st.subheader("Detected and GT target inventory")
+        st.caption(
+            "This view describes the complete VIN root-store populations before campaign matching or rollout selection."
+        )
         if deep is None:
-            st.info("Run **Deep statistics / target scan** to count unique persisted target tasks and Q_H rows.")
+            st.info("Run **Deep statistics / target scan** to load target availability and geometry distributions.")
         else:
-            st.json(deep)
+            inventory = deep.get("root_target_inventory", {})
+            if inventory:
+                _render_target_inventory(inventory)
         root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
         if not bool(root_target_scan.get("available")):
             reason = root_target_scan.get("reason", "deep scan not run")

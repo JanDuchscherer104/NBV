@@ -21,7 +21,8 @@ import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
-from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
+from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION
+from .data_handling.vin_store.target_inventory import TargetInventory, inspect_target_inventory
 from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils.fingerprints import stable_msgspec_hash
@@ -198,7 +199,8 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
     """
 
     light = build_dataset_bundle_summary(selection, validate_rollouts=False)
-    root_target_scan = scan_root_gt_obb_target_opportunities(selection.root_store)
+    root_target_inventory = inspect_target_inventory(selection.root_store)
+    root_target_scan = _legacy_gt_target_opportunities(root_target_inventory)
     stores: list[dict[str, Any]] = []
     unique_targets: set[tuple[str, int, str]] = set()
     q_train_total = 0
@@ -261,6 +263,7 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
             "rollout_stores": [path.as_posix() for path in selection.rollout_stores],
         },
         "stores": stores,
+        "root_target_inventory": root_target_inventory.to_jsonable(),
         "root_gt_obb_target_opportunities": root_target_scan,
         "aggregate": {
             "root_gt_obb_target_opportunities": root_target_scan["target_opportunity_count"],
@@ -282,79 +285,48 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
 
 
 def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, Any]:
-    """Count materialized finite, non-padding GT-OBB rows in a VIN root store.
+    """Return the legacy GT-only view from the canonical target inventory."""
 
-    This opt-in scan reads only persisted ``gt.obbs`` numeric blocks. It never
-    falls back to raw ATEK snippets. Counts represent GT label/evaluation OBB
-    rows available as potential target evidence, not actor-visible proposals,
-    selector-admitted target tasks, or trainable rollout targets.
+    return _legacy_gt_target_opportunities(inspect_target_inventory(root_store))
 
-    Args:
-        root_store: Immutable VIN offline-store directory.
 
-    Returns:
-        JSON-compatible availability, total, and per-sample/scene/split counts.
-        An unavailable result includes an exact reason and no inferred count.
-    """
+def _legacy_gt_target_opportunities(inventory: TargetInventory) -> dict[str, Any]:
+    """Project canonical GT inventory into the historical bundle payload."""
 
-    store = Path(root_store).expanduser().resolve()
-    try:
-        manifest = VinOfflineManifest.read(store / "manifest.json")
-        records = tuple(VinOfflineIndexRecord.read_many(store / "sample_index.jsonl"))
-    except (OSError, ValueError, TypeError, msgspec.MsgspecError) as exc:
-        return _unavailable_target_opportunities(store, f"root_store_unreadable:{type(exc).__name__}:{exc}")
-    if not manifest.materialized_blocks.gt_obbs:
-        return _unavailable_target_opportunities(store, "gt_obbs_not_materialized")
-    shard_specs = {spec.shard_id: spec for spec in manifest.shards}
-    missing = sorted(
-        {
-            record.shard_id
-            for record in records
-            if record.shard_id not in shard_specs or "gt.obbs" not in shard_specs[record.shard_id].blocks
+    gt = inventory.gt
+    if not gt.available:
+        reason = gt.reason.replace("gt.obbs", "gt_obb") if gt.reason is not None else None
+        return {
+            "path": inventory.path,
+            "available": False,
+            "reason": reason,
+            "semantic_role": "gt_obb_label_evaluation_target_opportunities",
+            "target_opportunity_count": None,
+            "sample_count": None,
+            "scene_counts": {},
+            "split_counts": {},
+            "per_sample": [],
         }
-    )
-    if missing:
-        return _unavailable_target_opportunities(store, f"gt_obb_block_missing:{','.join(missing)}")
-
-    try:
-        reader = VinOfflineStoreReader(VinOfflineStoreConfig(store_dir=store))
-        per_sample = []
-        scene_counts: Counter[str] = Counter()
-        split_counts: Counter[str] = Counter()
-        for record in records:
-            values = np.asarray(reader.read_numeric_block(record, "gt.obbs"), dtype=np.float64)
-            if values.ndim < 2 or values.shape[-1] != 34:
-                return _unavailable_target_opportunities(
-                    store,
-                    f"gt_obb_shape_invalid:{record.sample_index}:{list(values.shape)}",
-                )
-            rows = values.reshape(-1, values.shape[-1])
-            finite = np.all(np.isfinite(rows), axis=-1)
-            padding = np.all(rows == -1.0, axis=-1)
-            count = int(np.count_nonzero(finite & ~padding))
-            per_sample.append(
-                {
-                    "sample_index": record.sample_index,
-                    "sample_key": record.sample_key,
-                    "scene_id": record.scene_id,
-                    "snippet_id": record.snippet_id,
-                    "split": record.split,
-                    "gt_obb_target_opportunities": count,
-                }
-            )
-            scene_counts[record.scene_id] += count
-            split_counts[record.split] += count
-    except Exception as exc:
-        return _unavailable_target_opportunities(store, f"gt_obb_block_unreadable:{type(exc).__name__}:{exc}")
+    per_sample = [
+        {
+            "sample_index": sample.sample_index,
+            "sample_key": sample.sample_key,
+            "scene_id": sample.scene_id,
+            "snippet_id": sample.snippet_id,
+            "split": sample.split,
+            "gt_obb_target_opportunities": sample.count,
+        }
+        for sample in gt.sample_rows
+    ]
     return {
-        "path": store.as_posix(),
+        "path": inventory.path,
         "available": True,
         "reason": None,
         "semantic_role": "gt_obb_label_evaluation_target_opportunities",
-        "target_opportunity_count": int(sum(scene_counts.values())),
-        "sample_count": len(records),
-        "scene_counts": dict(sorted(scene_counts.items())),
-        "split_counts": dict(sorted(split_counts.items())),
+        "target_opportunity_count": gt.row_count,
+        "sample_count": len(gt.sample_counts),
+        "scene_counts": dict(gt.scene_counts),
+        "split_counts": dict(gt.split_counts),
         "per_sample": per_sample,
     }
 
