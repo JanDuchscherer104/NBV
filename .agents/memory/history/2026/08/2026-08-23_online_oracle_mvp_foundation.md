@@ -39,10 +39,12 @@ context invariants before the affected-owner suite was run.
 The production `TargetFiniteHorizonScorer` is actor-only and differentiates its
 parameters while keeping persisted EVL/semidense evidence detached. Q_H bundle
 publication is immutable and validation-selected; loading verifies closed
-contracts and all four required artifacts. Dense-valid query, support, and
-objective identities now propagate through readers, collation, data admission,
-and Zarr persistence. The online scoring seam binds candidate and actor payloads
-to a frozen context and rejects stale or hard-invalid requests.
+contracts, exact dependency/source identity, and all four required artifacts;
+checkpoint selection also rejects malformed candidates instead of silently
+skipping them. Dense-valid query, support, and objective identities now
+propagate through readers, collation, data admission, and Zarr persistence. The
+online scoring seam binds candidate and actor payloads to a frozen context and
+rejects stale or hard-invalid requests.
 
 Complete WP0a, WP4, and the collection/retraining part of WP5 remain closed:
 the checkout has no representative CUDA replay/oracle source bundle with the
@@ -52,7 +54,7 @@ No hierarchical proposer or policy-improvement claim was introduced.
 ## Verification
 `uv run ruff check` and `uv run ruff format --check` passed on all changed
 Python owners and tests. Targeted mypy passed for the five new production
-modules. `make qh-ci PYTEST_WORKERS=0` passed 393 tests, including distributed
+modules. `make qh-ci PYTEST_WORKERS=0` passed 437 tests, including distributed
 smokes and API discovery. The deterministic golden contract passed through
 `make replay-oracle-golden`.
 

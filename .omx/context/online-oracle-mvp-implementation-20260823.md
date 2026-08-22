@@ -21,7 +21,8 @@ consensus receipt, and no Ultragoal state was minted.
   scorer-parameter gradients.
 - WP2: immutable Q_H experiment/bundle composition, validation-selected
   checkpointing with exact earliest-update tie-break, deterministic canonical resume payload, strict inference
-  reconstruction, manifest/artifact verification, compatible-resume admission,
+  reconstruction, fail-closed dependency/source identity and manifest/artifact
+  verification, malformed-checkpoint rejection, compatible-resume admission,
   receipts, and atomic publication.
 - WP2a: dense-valid query/label/objective identities and post-padding tensor
   admission while preserving the legacy collation profile.
@@ -32,7 +33,7 @@ consensus receipt, and no Ultragoal state was minted.
 
 ## Verification
 
-- `make qh-ci PYTEST_WORKERS=0`: 393 passed.
+- `make qh-ci PYTEST_WORKERS=0`: 437 passed.
 - targeted mypy for the five new production modules: passed.
 - changed-file Ruff format/check: passed.
 - `make replay-oracle-golden`: passed with frozen source, configuration,

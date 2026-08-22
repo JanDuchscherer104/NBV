@@ -162,6 +162,35 @@ def test_qh_bundle_strict_load_rejects_missing_state_key(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("missing_dependencies", "manifest fields"),
+        ("dependency_drift", "dependency identity"),
+        ("implementation_drift", "implementation identity"),
+        ("missing_seed", "identity fields"),
+    ],
+)
+def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, message: str) -> None:
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if mutation == "missing_dependencies":
+        del manifest["dependencies"]
+    elif mutation == "dependency_drift":
+        manifest["dependencies"]["torch"] = "other"
+    elif mutation == "implementation_drift":
+        manifest["implementation"]["scorer_source_sha256"] = "0" * 64
+    else:
+        del manifest["identity"]["seed"]
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match=message):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
+@pytest.mark.parametrize(
     ("module_update", "message"),
     [
         ({"root_evl_profile": "none"}, "observation profiles differ"),
@@ -222,6 +251,33 @@ def test_qh_checkpoint_selection_breaks_exact_loss_tie_by_earliest_update(tmp_pa
     assert selected.name == "earlier.ckpt"
     assert validation_loss == 1.0
     assert optimizer_updates == 3
+
+
+def test_qh_checkpoint_selection_fails_closed_on_malformed_candidate(tmp_path) -> None:
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    torch.save(
+        {
+            "state_dict": {
+                "validation_loss_sum": torch.tensor(1.0),
+                "optimizer_updates": torch.tensor(1),
+            }
+        },
+        checkpoint_dir / "malformed.ckpt",
+    )
+    torch.save(
+        {
+            "state_dict": {
+                "validation_loss_sum": torch.tensor(1.0),
+                "validation_row_count": torch.tensor(1),
+                "optimizer_updates": torch.tensor(2),
+            }
+        },
+        checkpoint_dir / "valid.ckpt",
+    )
+
+    with pytest.raises(ValueError, match="malformed.ckpt.*validation_row_count"):
+        QhExperiment._selected_checkpoint(tmp_path)  # noqa: SLF001
 
 
 class _DatasetConfig:

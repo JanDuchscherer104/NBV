@@ -38,6 +38,19 @@ _SCORER_STATE_FILENAME = "scorer-state.pt"
 _RESUME_CHECKPOINT_FILENAME = "resume.ckpt"
 _TRAINING_RECEIPT_FILENAME = "training-receipt.json"
 _SELECTION_RECEIPT_FILENAME = "held-out-selection-receipt.json"
+_IDENTITY_FIELDS = {
+    "actor_state_contract",
+    "actor_state_contract_hash",
+    "learning_contract",
+    "learning_contract_hash",
+    "geometry_contract_hash",
+    "datasets",
+    "dataset_provenance",
+    "ordered_store_manifests",
+    "ordered_store_paths",
+    "resume_bundle_manifest_sha256",
+    "seed",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,17 +390,8 @@ class QhExperiment:
             "scorer_config_hash": stable_config_hash(self.config.scorer, length=64),
             "module_config": module_config.model_dump_jsonable(),
             "identity": _jsonable(identity),
-            "dependencies": {
-                "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-                "torch": torch.__version__,
-                "pytorch_lightning": importlib.metadata.version("pytorch-lightning"),
-            },
-            "implementation": {
-                "experiment_source_sha256": _sha256_file(Path(__file__)),
-                "scorer_source_sha256": _sha256_file(
-                    Path(__file__).resolve().parents[1] / "vin" / "models" / "target_finite_horizon.py"
-                ),
-            },
+            "dependencies": _bundle_dependencies(),
+            "implementation": _bundle_implementation(),
             "artifacts": artifacts,
         }
         manifest["manifest_sha256"] = _manifest_hash(manifest)
@@ -490,18 +494,36 @@ class QhExperiment:
 
         ranked: list[tuple[float, int, str, Path]] = []
         for path in sorted((output / "checkpoints").glob("*.ckpt")):
-            payload = torch.load(path, map_location="cpu", weights_only=False)
+            try:
+                payload = torch.load(path, map_location="cpu", weights_only=False)
+            except Exception as error:  # noqa: BLE001
+                raise ValueError(f"Q_H selection checkpoint {path.name!r} cannot be loaded.") from error
             state = payload.get("state_dict")
             if not isinstance(state, dict):
-                continue
-            try:
-                loss_sum = float(torch.as_tensor(state["validation_loss_sum"]).item())
-                row_count = int(torch.as_tensor(state["validation_row_count"]).item())
-                optimizer_updates = int(torch.as_tensor(state["optimizer_updates"]).item())
-            except (KeyError, TypeError, ValueError, RuntimeError):
-                continue
-            if row_count < 1 or not math.isfinite(loss_sum):
-                continue
+                raise ValueError(f"Q_H selection checkpoint {path.name!r} has no state_dict.")
+            scalars: dict[str, float] = {}
+            for field in ("validation_loss_sum", "validation_row_count", "optimizer_updates"):
+                if field not in state:
+                    raise ValueError(f"Q_H selection checkpoint {path.name!r} is missing {field!r}.")
+                try:
+                    scalars[field] = float(torch.as_tensor(state[field]).item())
+                except (TypeError, ValueError, RuntimeError) as error:
+                    raise ValueError(f"Q_H selection checkpoint {path.name!r} has invalid scalar {field!r}.") from error
+            loss_sum = scalars["validation_loss_sum"]
+            row_count_value = scalars["validation_row_count"]
+            optimizer_updates_value = scalars["optimizer_updates"]
+            if (
+                not math.isfinite(loss_sum)
+                or not math.isfinite(row_count_value)
+                or not row_count_value.is_integer()
+                or row_count_value < 1
+                or not math.isfinite(optimizer_updates_value)
+                or not optimizer_updates_value.is_integer()
+                or optimizer_updates_value < 0
+            ):
+                raise ValueError(f"Q_H selection checkpoint {path.name!r} has invalid selection aggregates.")
+            row_count = int(row_count_value)
+            optimizer_updates = int(optimizer_updates_value)
             ranked.append((loss_sum / row_count, optimizer_updates, path.name, path.resolve()))
         if not ranked:
             raise RuntimeError(
@@ -514,6 +536,20 @@ class QhExperiment:
     def _validate_manifest_contract(manifest: dict[str, Any]) -> None:
         """Validate the closed bundle schema and its cross-field identities."""
 
+        required_manifest_fields = {
+            "schema_version",
+            "scorer_type",
+            "scorer_config",
+            "scorer_config_hash",
+            "module_config",
+            "identity",
+            "dependencies",
+            "implementation",
+            "artifacts",
+            "manifest_sha256",
+        }
+        if set(manifest) != required_manifest_fields:
+            raise ValueError("Q_H bundle manifest fields do not match the closed V1 schema.")
         if manifest.get("scorer_type") != "TargetFiniteHorizonScorer":
             raise ValueError("Q_H bundle scorer_type is missing or unsupported.")
         try:
@@ -534,8 +570,15 @@ class QhExperiment:
             datasets = identity["datasets"]
             dataset_provenance = identity["dataset_provenance"]
             ordered_store_manifests = identity["ordered_store_manifests"]
+            ordered_store_paths = identity["ordered_store_paths"]
         except (KeyError, TypeError, ValueError) as error:
             raise ValueError("Q_H bundle manifest is missing a required closed contract field.") from error
+        if set(identity) != _IDENTITY_FIELDS:
+            raise ValueError("Q_H bundle identity fields do not match the closed V1 schema.")
+        if manifest["dependencies"] != _bundle_dependencies():
+            raise ValueError("Q_H bundle dependency identity does not match the current runtime.")
+        if manifest["implementation"] != _bundle_implementation():
+            raise ValueError("Q_H bundle implementation identity does not match the current source owners.")
         if manifest.get("scorer_config_hash") != stable_config_hash(scorer, length=64):
             raise ValueError("Q_H bundle scorer_config_hash does not match scorer_config.")
         actor_hash = stable_msgspec_hash(actor_contract)
@@ -565,8 +608,17 @@ class QhExperiment:
             raise ValueError("Q_H deployable bundle requires the dense-valid fitted-Q objective.")
         if set(datasets) != {"train", "validation", "test"}:
             raise ValueError("Q_H bundle must bind train, validation, and test dataset configs.")
-        if set(dataset_provenance) != set(datasets) or set(ordered_store_manifests) != set(datasets):
+        if (
+            set(dataset_provenance) != set(datasets)
+            or set(ordered_store_manifests) != set(datasets)
+            or set(ordered_store_paths) != set(datasets)
+        ):
             raise ValueError("Q_H bundle dataset provenance stages are incomplete.")
+        if isinstance(identity["seed"], bool) or not isinstance(identity["seed"], int):
+            raise ValueError("Q_H bundle seed identity must be one integer.")
+        resume_identity = identity["resume_bundle_manifest_sha256"]
+        if resume_identity is not None and (not isinstance(resume_identity, str) or not resume_identity):
+            raise ValueError("Q_H bundle resume identity must be absent or one non-empty manifest hash.")
         required_artifacts = {
             _SCORER_STATE_FILENAME,
             _RESUME_CHECKPOINT_FILENAME,
@@ -661,6 +713,28 @@ def _verify_all_artifacts(bundle_path: Path, manifest: dict[str, Any]) -> None:
         path = _verified_artifact_path(bundle_path, manifest, name)
         if _sha256_file(path) != str(artifact["sha256"]):
             raise ValueError(f"Q_H bundle artifact {name!r} hash does not match the manifest.")
+
+
+def _bundle_dependencies() -> dict[str, str]:
+    """Return the exact runtime identity admitted by the V1 bundle schema."""
+
+    return {
+        "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        "torch": str(torch.__version__),
+        "pytorch_lightning": importlib.metadata.version("pytorch-lightning"),
+    }
+
+
+def _bundle_implementation() -> dict[str, str]:
+    """Return source fingerprints for the bundle's training and inference owners."""
+
+    package = Path(__file__).resolve().parents[1]
+    return {
+        "experiment_source_sha256": _sha256_file(Path(__file__)),
+        "module_source_sha256": _sha256_file(package / "lightning" / "qh_module.py"),
+        "scorer_source_sha256": _sha256_file(package / "vin" / "models" / "target_finite_horizon.py"),
+        "bundle_ref_source_sha256": _sha256_file(package / "vin" / "qh_bundle.py"),
+    }
 
 
 def _manifest_hash(manifest: dict[str, Any]) -> str:
