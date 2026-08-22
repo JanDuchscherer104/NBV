@@ -1,0 +1,52 @@
+---
+config:
+  theme: base
+  htmlLabels: true
+  flowchart:
+    htmlLabels: true
+    nodeSpacing: 24
+    rankSpacing: 42
+    curve: basis
+  layout: elk
+  themeVariables:
+    background: "#ffffff"
+    fontFamily: "Inter, DejaVu Sans, Arial, sans-serif"
+    fontSize: "17px"
+    primaryTextColor: "#1f2937"
+    lineColor: "#64748b"
+  themeCSS: |
+    .nodeLabel { font-size: 17px; }
+    .edgeLabel { font-size: 15px; }
+    .cluster-label { font-size: 18px; font-weight: 700; }
+---
+flowchart TB
+  Assets["<b>ASE / ATEK / EFM3D assets</b>"]
+  BuildOffline["<b>Offline evidence generation</b><br/><code>nbv-build-offline</code>"]
+  Offline[("<b>vin_offline</b><br/>immutable one-step evidence")]
+  BuildRollouts["<b>Rollout generation</b><br/><code>nbv-build-rollouts</code>"]
+  Rollouts[("<b>rollouts.zarr</b><br/>lineage + factual replay")]
+  Joined["<b>Joined training view</b><br/>source rows + causal rollout rows"]
+  Vin["<b>One-step VIN</b>"]
+  QH["<b>Finite-horizon Q_H</b>"]
+  Inspect["<b>Streamlit / Rerun</b><br/>read-only inspection"]
+
+  Assets -->|"RGB · calibration · trajectory<br/>semi-dense points · EVL · GT geometry"| BuildOffline
+  BuildOffline -->|"candidate poses · masks · provenance<br/>cached features · scene/target RRI"| Offline
+  Offline -->|"immutable sample references<br/>root observation evidence"| BuildRollouts
+  BuildRollouts -->|"targets · steps · candidates<br/>selected depth · derived Q_H rows"| Rollouts
+  Offline -->|"source rows · EVL/backbone evidence"| Joined
+  Rollouts -->|"causal chains · masks · returns"| Joined
+  Offline -->|"one-step candidate batches"| Vin
+  Joined -->|"actor tensors · supported backups"| QH
+  Offline -->|"manifests · candidates · geometry"| Inspect
+  Rollouts -->|"lineage · selected transitions · diagnostics"| Inspect
+
+  classDef input fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0;
+  classDef output fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0;
+  classDef compute fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8;
+  classDef data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0;
+
+  class Assets input;
+  class BuildOffline,BuildRollouts,Joined compute;
+  class Offline,Rollouts data;
+  class Vin,QH,Inspect output;
