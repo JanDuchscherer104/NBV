@@ -241,10 +241,10 @@ return {
     short = "target",
     anchor = "term-target-of-interest",
   },
-  ["target-rri-reward"] = {
-    label = "Target-RRI Reward",
+  ["target-root-gain-reward"] = {
+    label = "Target Root-Gain Reward",
     short = "reward",
-    anchor = "term-target-rri-reward",
+    anchor = "term-target-root-gain-reward",
   },
   ["target-specific-rri"] = {
     label = "Target-Specific RRI",

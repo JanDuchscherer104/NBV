@@ -74,6 +74,24 @@ return {
       description = "Actor-visible target/entity descriptor used to condition target-specific value prediction.",
       thesis_list = true,
     },
+    ["entity.target_root_gain_cumulative"] = {
+      tex = "J_t^e",
+      typst = "#symb.entity.target_root_gain_cumulative",
+      description = "Running cumulative target gain normalized by rollout-root error.",
+      thesis_list = true,
+    },
+    ["entity.target_rri_cumulative"] = {
+      tex = "C_t^{\\mathrm{RRI},e}",
+      typst = "#symb.entity.target_rri_cumulative",
+      description = "Running sum of selected state-relative target RRIs.",
+      thesis_list = true,
+    },
+    ["entity.target_rri_marginal"] = {
+      tex = "\\mathrm{RRI}_{t,i}^e",
+      typst = "#symb.entity.target_rri_marginal",
+      description = "State-relative marginal target RRI for candidate i at rollout step t.",
+      thesis_list = true,
+    },
     ["model.candidate_row"] = {
       tex = "\\boldsymbol{x}_{t,i}",
       typst = "#symb.model.candidate_row",
@@ -296,6 +314,12 @@ return {
       description = "Geometry-enriched counterfactual successor state.",
       thesis_list = true,
     },
+    ["rl.s_cf_gt_carrier"] = {
+      tex = "s_t^{\\mathrm{CF-GT-carrier}}",
+      typst = "#symb.rl.s_cf_gt_carrier",
+      description = "Implemented privileged selected-depth carrier used by qh_cfplus_gt_depth_v1.",
+      thesis_list = true,
+    },
     ["rl.s_hist"] = {
       tex = "s_t^{\\mathrm{hist}}",
       typst = "#symb.rl.s_hist",
@@ -312,6 +336,12 @@ return {
       tex = "s_t^{\\mathrm{oracle}}",
       typst = "#symb.rl.s_oracle",
       description = "Oracle-only state used for labels, upper bounds, and evaluation.",
+      thesis_list = true,
+    },
+    ["rl.s_pose"] = {
+      tex = "s_t^{\\mathrm{S0-pose}}",
+      typst = "#symb.rl.s_pose",
+      description = "Implemented fixed-root pose-history state used by qh_cf0_v1.",
       thesis_list = true,
     },
     ["rl.target"] = {
@@ -694,6 +724,18 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.cumulative_target_root_gain"] = {
+      tex = "J_t^e=\\sum_{k=0}^{t-1}r_k^e=(\\Delta_0^e-\\Delta_t^e)/\\max(\\Delta_0^e,\\varepsilon)",
+      typst = "#eqs.rl.cumulative_target_root_gain",
+      description = "Telescoping cumulative target root gain.",
+      thesis_list = true,
+    },
+    ["rl.cumulative_target_rri"] = {
+      tex = "C_t^{\\mathrm{RRI},e}=\\sum_{k=0}^{t-1}\\mathrm{RRI}_{k,a_k}^e",
+      typst = "#eqs.rl.cumulative_target_rri",
+      description = "Running selected-chain diagnostic persisted as cumulative_target_rri.",
+      thesis_list = true,
+    },
     ["rl.evidence_chain"] = {
       tex = "\\mathcal{U}_{\\mathrm{cov/unc}}\\to\\hat r_t^e(i)\\to r_t^e\\to G_t^{(H)}\\to Q_{H,\\theta}",
       typst = "#eqs.rl.evidence_chain",
@@ -711,6 +753,12 @@ return {
       typst = "#eqs.rl.finite_horizon_return",
       description = "",
       thesis_list = false,
+    },
+    ["rl.marginal_target_rri"] = {
+      tex = "\\mathrm{RRI}_{t,i}^e=(\\Delta_t^e-\\Delta_{t\\mid i}^e)/\\max(\\Delta_t^e,\\varepsilon)",
+      typst = "#eqs.rl.marginal_target_rri",
+      description = "State-relative candidate diagnostic persisted as one_step_target_rri.",
+      thesis_list = true,
     },
     ["rl.masked_candidate_selection"] = {
       tex = "\\mathcal{A}_t=\\{i:m_{t,i}=1\\},\\quad a_t^\\theta=\\operatorname*{argmax}_{i\\in\\mathcal{A}_t} f_{\\theta,i}(X_t,m_t)",
@@ -814,6 +862,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["rl.s_cf_gt_carrier"] = {
+      tex = "s_t^{\\mathrm{CF-GT-carrier}}=(s_t^{\\mathrm{S0-pose}},(D,V,K,T_{\\mathrm{root}\\leftarrow\\mathrm{cam}})_{1:t}^{\\mathrm{sel}})",
+      typst = "#eqs.rl.s_cf_gt_carrier",
+      description = "Implemented qh_cfplus_gt_depth_v1 carrier; no fused points or normals are claimed.",
+      thesis_list = true,
+    },
     ["rl.s_hist"] = {
       tex = "s_t^{\\mathrm{hist}}=(I_{1:t},T_{1:t},P_{1:t}^{\\mathrm{semi}},V^{\\mathrm{root}},e_t,b_t)",
       typst = "#eqs.rl.s_hist",
@@ -832,11 +886,17 @@ return {
       description = "",
       thesis_list = false,
     },
-    ["rl.target_rri_reward"] = {
-      tex = "r_t^e=\\mathrm{RRI}_e(q_t\\mid \\mathcal{P}_t,\\mathcal{M}_e^{\\mathrm{GT}})",
-      typst = "#eqs.rl.target_rri_reward",
-      description = "",
-      thesis_list = false,
+    ["rl.s_pose"] = {
+      tex = "s_t^{\\mathrm{S0-pose}}=(\\mathcal{S}_{\\mathrm{root}}^{\\mathrm{VIN}},V^{\\mathrm{root}},(T_{r,e},l_e),\\mathcal{Q}_t,m_{t,i},H_t^{\\mathrm{pose}},b_t)",
+      typst = "#eqs.rl.s_pose",
+      description = "Implemented qh_cf0_v1 actor carrier.",
+      thesis_list = true,
+    },
+    ["rl.target_root_gain_reward"] = {
+      tex = "r_t^e=(\\Delta_t^e-\\Delta_{t+1}^e)/\\max(\\Delta_0^e,\\varepsilon)",
+      typst = "#eqs.rl.target_root_gain_reward",
+      description = "Root-normalized target gain optimized by Q_H.",
+      thesis_list = true,
     },
     ["rri.acc"] = {
       tex = "D_{P\\to M}(\\mathcal{P},\\mathcal{M}^{\\mathrm{GT}})=\\frac{1}{\\lVert\\mathcal{P}\\rVert}\\sum_{\\boldsymbol{p}\\in\\mathcal{P}}\\min_{\\boldsymbol{f}\\in\\mathcal{F}^{\\mathrm{GT}}} d(\\boldsymbol{p},\\boldsymbol{f})^2",

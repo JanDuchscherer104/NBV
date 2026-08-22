@@ -49,7 +49,7 @@
   (id: "target-conditioned-nbv-mdp", label: "Target-Conditioned NBV MDP", short: "NBV MDP", anchor: "term-target-conditioned-nbv-mdp"),
   (id: "target-conditioned-scorer", label: "Target-Conditioned Scorer", short: "target-conditioned scorer", anchor: "term-target-conditioned-scorer"),
   (id: "target-of-interest", label: "Target of Interest", short: "target", anchor: "term-target-of-interest"),
-  (id: "target-rri-reward", label: "Target-RRI Reward", short: "reward", anchor: "term-target-rri-reward"),
+  (id: "target-root-gain-reward", label: "Target Root-Gain Reward", short: "reward", anchor: "term-target-root-gain-reward"),
   (id: "target-specific-rri", label: "Target-Specific RRI", short: "target RRI", anchor: "term-target-specific-rri"),
   (id: "three-dimensional-gaussian-splatting", label: "3D Gaussian Splatting", short: "3DGS", anchor: "term-three-dimensional-gaussian-splatting"),
   (id: "track", label: "Track", short: "track", anchor: "term-track"),
@@ -151,9 +151,9 @@
   - *6DoF - Six Degrees of Freedom*: Pose parameterization with three translational and three rotational degrees of freedom.
   - *snippet - Snippet*: Short synchronized temporal window of Aria sensor data used as one EVL/VIN input sample.
   - *target - Target of Interest*: Selected entity, object crop, point, region, or surface-deficit hypothesis whose reconstruction quality should be improved.
+  - *reward - Target Root-Gain Reward*: Quality-only immediate reward equal to root-normalized target gain for the selected candidate.
   - *NBV MDP - Target-Conditioned NBV MDP*: Finite-horizon MDP contract for target-conditioned ARIA-NBV rollouts and fitted Q_H training.
   - *target-conditioned scorer - Target-Conditioned Scorer*: VIN-style candidate scorer that receives scene state, a candidate view, and an encoding of the target of interest.
-  - *reward - Target-RRI Reward*: Quality-only immediate reward equal to root-normalized target gain for the selected candidate.
   - *target RRI - Target-Specific RRI*: RRI computed only on the ground-truth and reconstructed geometry associated with a selected target of interest.
   - *track - Track*: Temporal sequence of corresponding image-feature detections across frames, usually carrying per-frame image coordinates, timestamps, and camera IDs.
   - *mask - Validity Mask*: Hard mask that separates feasible candidate actions from invalid candidates.

@@ -60,11 +60,16 @@ $cal(M)_e^"GT"$ the matched target surface. The oracle-only target crop gives
 The primary fixed-budget metric is endpoint gain $J_H^e$. The default
 multi-step reward is root-normalized target gain,
 
-#eqs.rl.target_rri_reward
+#eqs.rl.target_root_gain_reward
 #eqs.rl.finite_horizon_return
 
 State-relative target RRI remains a diagnostic and VIN-compatible one-step
-label; log-error gain and motion or feasibility costs are explicit ablations.
+label. We report both its marginal and selected-chain cumulative forms,
+
+#eqs.rl.marginal_target_rri
+#eqs.rl.cumulative_target_rri
+
+without treating their non-telescoping sum as endpoint gain. Log-error gain and motion or feasibility costs are explicit ablations.
 Invalid candidates are hard constraints, never the lowest-RRI class. Report
 endpoint gain, cumulative root gain, diagnostic target RRI, scene RRI, view count,
 path length, invalid-action rate, and runtime at matched budgets.

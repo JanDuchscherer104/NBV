@@ -55,7 +55,7 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   implementation: "partial",
   evidence: "pending",
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_datamodule.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
   gate: [fixed-H versus requested-horizon source-owner decision, production scorer, exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
 )[A masked selected-transition Double-Q learner for an injected scorer is implemented. No H=2 oracle-task pose-history scorer, shared requested-horizon scorer, task-sufficient dynamic state, or policy evidence is available.]
 
@@ -75,7 +75,7 @@ The masked argmax is already the discrete decision rule. A separate actor networ
 
 If the source-owner decision selects an explicit requested-horizon interface, one candidate model is $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H$. The boundary target is
 
-#eqs.rl.target_rri_reward
+#eqs.rl.target_root_gain_reward
 
 and the recursive target is
 
@@ -117,7 +117,7 @@ Double Q addresses one maximization bias. It does not create missing successor t
 
 === Horizon-balanced replay and evaluation
 
-Dense one-step rows vastly outnumber selected-action targets at longer horizons. An unweighted row mean can therefore optimize the myopic task while obscuring longer-horizon failure. If one shared requested-horizon learner is selected, the training manifest must freeze either:
+Dense one-step rows vastly outnumber selected-action targets at longer horizons. An unweighted row mean can therefore optimize the myopic task while obscuring longer-horizon failure. The implemented learning contract freezes this aggregation as `uniform-admitted-selected-row-huber-mean-v1`, binds it with the maximum horizon, replay candidate/rollout configuration identities, behavior-policy vocabulary, reward/return semantics, and discount, and rejects cross-stage mismatches. Checkpoint admission binds the actor-state identity separately. Alternative sampling or weighting schemes must receive new versioned learning identities. Candidate alternatives are:
 
 - a horizon-stratified sampler;
 - per-horizon loss weights $w_h$;
@@ -130,9 +130,11 @@ Every run reports, separately for each $h$:
 - candidate ranking and top-action regret where oracle comparison is available;
 - bootstrap, terminal, and no-valid-successor fractions;
 - online/target disagreement for Double-Q runs;
+- marginal selected target RRI and the selected-chain cumulative target RRI diagnostic;
+- cumulative target root gain, kept distinct from cumulative RRI;
 - endpoint performance of the masked policy requested at the remaining budget.
 
-A single scalar validation loss is insufficient for model selection unless its horizon aggregation is frozen in advance. Cross-stage corpus admission must also require the same maximum horizon, reward and return semantics, discount, state/source protocol, candidate/reason vocabulary, and horizon-weighting rule.
+A single scalar validation loss is insufficient for model selection unless its horizon aggregation is frozen in advance. Cross-stage corpus admission enforces the same maximum horizon, reward and return semantics, discount, state/source protocol, candidate/reason vocabulary, replay-support identity, and horizon-weighting rule.
 
 The optimality claim remains bounded under either interface. A learned finite-horizon value can approximate the best continuation only within the sampled finite candidate generator, hard-validity regime, represented actor state, and offline transition support. The same checkpoint cannot silently mix a pose-only state with privileged selected-depth, sensor-like, or actor-visible dynamic states. Longer horizons increase—not decrease—the need for selected-observation geometry and a sufficiently Markov scene state.
 

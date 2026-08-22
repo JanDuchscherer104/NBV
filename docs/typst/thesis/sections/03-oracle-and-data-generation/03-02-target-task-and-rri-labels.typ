@@ -269,10 +269,28 @@ This thesis therefore treats the metric as an operational estimand over a frozen
 
 The thesis objective is not the absolute point--mesh error alone, but its normalized reduction after a fixed acquisition budget. Root normalization makes gains dimensionless and keeps every step on one rollout-specific denominator, so equal-horizon returns telescope to the endpoint change when the discount is unity.
 
-The immediate training reward adapts VIN-NBV's reconstruction-improvement idea to a target crop and normalizes by the root target error rather than the current error @VIN-NBV-frahm2025. This makes equal-horizon rollouts additive against a common root baseline:
+The state-relative marginal target RRI remains the VIN-compatible candidate diagnostic:
 
 $
-  #eqs.rl.target_rri_reward
+  #eqs.rl.marginal_target_rri
+$
+
+The implementation also reports its selected-chain running sum:
+
+$
+  #eqs.rl.cumulative_target_rri
+$
+
+Because the marginal RRI denominator changes with state, this cumulative diagnostic does not telescope to endpoint improvement. The immediate training reward instead adapts the same error reduction to a target crop and normalizes by the rollout-root target error @VIN-NBV-frahm2025:
+
+$
+  #eqs.rl.target_root_gain_reward
+$
+
+Its undiscounted selected-chain sum does telescope under the frozen sequential error pipeline:
+
+$
+  #eqs.rl.cumulative_target_root_gain
 $
 
 The finite-horizon return is the discounted sum of those target rewards along a selected counterfactual branch. It is a training target for #symb.rl.qh, not a claim that the deployed system has an online continuous-control policy:
