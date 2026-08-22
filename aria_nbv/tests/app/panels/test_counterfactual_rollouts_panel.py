@@ -907,6 +907,54 @@ def test_candidate_support_ui_preserves_angular_measures_and_macro_facets(monkey
     assert any("Collision rate" in str(figure.layout.title.text) for figure in figures)
 
 
+def test_candidate_family_breakdown_ui_uses_cohort_composition_facets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Visible family plots must use typed cohort composition, not pooled legacy groups."""
+
+    figures: list[object] = []
+
+    class _Expander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    rows = [
+        {
+            "group_by": "position",
+            "generation_cohort_id": cohort,
+            "family": "forward_local",
+            "actor_valid_count": 1,
+            "selected_count": 1,
+            "trainable_count": 1,
+            "macro_actor_valid_rate": 1.0,
+        }
+        for cohort in ("cohort-a", "cohort-b")
+    ]
+    population = {
+        "composition": {
+            **{field: [] for field in ("strategy", "mixture", "invalid_reason", "policy")},
+            "position": rows,
+        }
+    }
+    fake_session = SimpleNamespace(
+        candidate_population=lambda: population,
+        steps=lambda: [],
+        candidate_group=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("legacy pooled groups used")),
+    )
+    monkeypatch.setattr(stored_rollouts_page.st, "expander", lambda *_args, **_kwargs: _Expander())
+    monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[0])
+    monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
+
+    stored_rollouts_page._render_candidate_aggregate_breakdowns(fake_session)
+
+    family = next(figure for figure in figures if "Candidate-family" in str(figure.layout.title.text))
+    annotation_text = " ".join(str(annotation.text) for annotation in family.layout.annotations)
+    assert "cohort-a" in annotation_text and "cohort-b" in annotation_text
+
+
 def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result() -> None:
     """Query transitions should be explicit, copied, deterministic, and failure-preserving."""
 

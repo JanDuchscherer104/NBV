@@ -957,6 +957,89 @@ def test_support_macros_expose_candidate_and_macro_denominators_without_pooling(
     assert motion["candidate_missing_count"] == 3
 
 
+def test_support_counts_remain_explicit_when_one_candidate_is_missing_in_one_state() -> None:
+    """Support facets count the candidate shell separately from defined states."""
+
+    from aria_nbv.rollouts.inspection import (
+        candidate_direction_evidence,
+        candidate_spatial_support_evidence,
+        candidate_target_view_evidence,
+    )
+
+    common = {**_direction_fixture_rows()[0], "generation_cohort_id": "cohort-a"}
+    rows = [
+        {
+            **common,
+            "candidate_row_id": 0,
+            "root_relative_x_m": 1.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+            "target_distance_m": 1.0,
+        },
+        {
+            **common,
+            "candidate_row_id": 1,
+            "root_relative_x_m": 0.0,
+            "root_relative_y_m": 0.0,
+            "root_relative_z_m": 0.0,
+            "target_distance_m": None,
+        },
+    ]
+
+    angular = next(
+        row
+        for row in candidate_direction_evidence(rows)["angular_support_rows"]
+        if row["aggregation_level"] == "state" and row["population"] == "all"
+    )
+    cap = next(
+        row
+        for row in candidate_direction_evidence(rows)["cap_rows"]
+        if row["aggregation_level"] == "state" and row["population"] == "all"
+    )
+    for row in (cap, angular):
+        assert row["candidate_total_count"] == 2
+        assert row["candidate_finite_count"] == 1
+        assert row["candidate_missing_count"] == 1
+        assert row["state_count"] == 1
+        assert row["defined_state_count"] == 1
+
+    spatial = next(
+        row
+        for row in candidate_spatial_support_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["metric"] == "root_xy_radius"
+    )
+    target = next(
+        row
+        for row in candidate_target_view_evidence(rows)
+        if row["aggregation_level"] == "cohort_macro"
+        and row["population"] == "all"
+        and row["evidence"] == "target_distance"
+    )
+    assert spatial["defined_state_count"] == 1
+    assert target["defined_state_count"] == 1
+
+
+def test_candidate_population_composition_keeps_incompatible_cohorts_faceted() -> None:
+    """Family summaries retain exact generation cohorts instead of pooling them."""
+
+    from aria_nbv.rollouts.inspection import candidate_population_evidence
+
+    rows = [
+        {**_direction_fixture_rows()[0], "generation_cohort_id": cohort, "candidate_row_id": index}
+        for index, cohort in enumerate(("cohort-a", "cohort-b"))
+    ]
+
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+    composition = evidence["composition"]["position"]
+    assert {row["generation_cohort_id"] for row in composition} == {"cohort-a", "cohort-b"}
+    assert len(composition) == 2
+
+
 def test_angular_covering_cohort_macro_aggregates_scene_values() -> None:
     """Angular macros aggregate covering radii as scene summaries."""
 

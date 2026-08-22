@@ -823,6 +823,9 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
             "valid_count": valid,
             "finite_count": valid,
             "missing_count": len(state_rows) - valid,
+            "candidate_total_count": len(state_rows),
+            "candidate_finite_count": valid,
+            "candidate_missing_count": len(state_rows) - valid,
             "defined_state_count": int(valid > 0),
             "scene_count": 1,
             "candidate_direction_count": len(state_rows),
@@ -863,6 +866,11 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                         "value": value,
                         "discrepancy": value,
                         "valid_count": valid,
+                        "candidate_total_count": len(state_rows),
+                        "candidate_finite_count": valid,
+                        "candidate_missing_count": len(state_rows) - valid,
+                        "state_count": 1,
+                        "defined_state_count": 1,
                         "available": True,
                         "units": "fraction",
                         "protocol": {"reference": "fixed Fibonacci sphere", "cap_centers": 128, "reference_count": 128},
@@ -895,6 +903,11 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     "covering_radius_deg": float(np.max(probe_nearest)),
                     "probe_covering_radius_deg": float(np.max(probe_nearest)),
                     "valid_count": valid,
+                    "candidate_total_count": len(state_rows),
+                    "candidate_finite_count": valid,
+                    "candidate_missing_count": len(state_rows) - valid,
+                    "state_count": 1,
+                    "defined_state_count": 1,
                     "available": True,
                     "units": "degrees",
                     "protocol": {
@@ -991,6 +1004,9 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     "valid_count": valid_count,
                     "finite_count": valid_count,
                     "missing_count": missing_count,
+                    "candidate_total_count": total_count,
+                    "candidate_finite_count": valid_count,
+                    "candidate_missing_count": missing_count,
                     "mean_state_fraction": None if not values else float(np.mean(values)),
                     "available": bool(values),
                     "cohort_macro_population": key[2],
@@ -1036,14 +1052,14 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                         "aggregation_level": level,
                         "scene": key[1],
                         "state_count": len(grouped),
-                        "defined_state_count": sum(
-                            int(row.get(value_key) is not None or row.get("covering_radius_deg") is not None)
-                            for row in grouped
-                        ),
+                        "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
                         "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
-                        "total_count": sum(int(row.get("total_count", row.get("valid_count", 0))) for row in grouped),
-                        "finite_count": sum(int(row.get("valid_count", 0)) for row in grouped),
-                        "missing_count": sum(int(row.get("missing_count", 0)) for row in grouped),
+                        "total_count": sum(int(row["candidate_total_count"]) for row in grouped),
+                        "finite_count": sum(int(row["candidate_finite_count"]) for row in grouped),
+                        "missing_count": sum(int(row["candidate_missing_count"]) for row in grouped),
+                        "candidate_total_count": sum(int(row["candidate_total_count"]) for row in grouped),
+                        "candidate_finite_count": sum(int(row["candidate_finite_count"]) for row in grouped),
+                        "candidate_missing_count": sum(int(row["candidate_missing_count"]) for row in grouped),
                         "value": None if not values else float(np.mean(values)),
                         value_key: None if not values else float(np.mean(values)),
                         "covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
@@ -1155,7 +1171,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                         int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
                     ),
                     "state_count": len(grouped),
-                    "defined_state_count": len(values),
+                    "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
                     "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
                     "available": bool(values),
                 }
@@ -1260,7 +1276,7 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                         int(row.get("candidate_missing_count", row.get("missing_count", 0))) for row in grouped
                     ),
                     "state_count": len(grouped),
-                    "defined_state_count": len(finite),
+                    "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
                     "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
                 }
             )

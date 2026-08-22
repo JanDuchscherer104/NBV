@@ -1823,25 +1823,31 @@ def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: s
 def _render_candidate_aggregate_breakdowns(stored_session: session.StoredRolloutSession) -> None:
     """Render restored complete-store candidate audit plots on demand."""
 
-    families = pd.DataFrame(stored_session.candidate_group(group_by="position"))
+    population = stored_session.candidate_population()
+    composition = population["composition"]
+    families = pd.DataFrame(composition["position"])
     if not families.empty:
+        families["actor_valid"] = families["actor_valid_count"]
+        families["selected"] = families["selected_count"]
+        families["actor_valid_fraction"] = families["macro_actor_valid_rate"]
         families["selection_rate_given_available"] = np.where(
-            families["actor_valid"] > 0,
-            families["selected"] / families["actor_valid"],
+            families["actor_valid_count"] > 0,
+            families["selected_count"] / families["actor_valid_count"],
             np.nan,
         )
         long = families.melt(
-            id_vars="position",
+            id_vars=["family", "generation_cohort_id"],
             value_vars=["actor_valid_fraction", "selection_rate_given_available"],
             var_name="metric",
             value_name="fraction",
         )
         fig = px.bar(
             long,
-            x="position",
+            x="family",
             y="fraction",
             color="metric",
             barmode="group",
+            facet_col="generation_cohort_id",
             title="Candidate-family availability and normalized selection",
         )
         _render_plot(
@@ -1865,21 +1871,28 @@ def _render_candidate_aggregate_breakdowns(stored_session: session.StoredRollout
         options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
-    breakdown = pd.DataFrame(stored_session.candidate_group(group_by=breakdown_by))
-    count_fields = [name for name in ("actor_valid", "q_train", "selected") if name in breakdown]
+    breakdown = pd.DataFrame(composition[breakdown_by])
+    count_field_map = {
+        "actor_valid_count": "actor_valid",
+        "trainable_count": "q_train",
+        "selected_count": "selected",
+    }
+    count_fields = [name for name in count_field_map if name in breakdown]
     if not breakdown.empty and count_fields:
+        breakdown = breakdown.rename(columns=count_field_map)
         long = breakdown.melt(
-            id_vars=breakdown_by,
-            value_vars=count_fields,
+            id_vars=["family", "generation_cohort_id"],
+            value_vars=[count_field_map[name] for name in count_fields],
             var_name="mask_population",
             value_name="count",
         )
         fig = px.bar(
             long,
-            x=breakdown_by,
+            x="family",
             y="count",
             color="mask_population",
             barmode="group",
+            facet_col="generation_cohort_id",
             title=f"Candidate support by {breakdown_by}",
         )
         _render_plot(
@@ -1902,7 +1915,7 @@ def _render_candidate_aggregate_breakdowns(stored_session: session.StoredRollout
         )
 
     with st.expander("Invalid reasons and valid fanout"):
-        invalid = pd.DataFrame(stored_session.candidate_group(group_by="invalid_reason"))
+        invalid = pd.DataFrame(composition["invalid_reason"])
         fanout = pd.DataFrame(stored_session.steps())
         if not invalid.empty:
             st.dataframe(invalid, hide_index=True, width="stretch")
