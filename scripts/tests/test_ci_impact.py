@@ -107,6 +107,11 @@ class SelectionTests(unittest.TestCase):
         self.assertIn(
             "make agents-db-validate check-agent-memory scaffold-audit", workflow
         )
+        self.assertIn(
+            "python3 -m pytest -q scripts/tests/test_debrief_index.py "
+            "scripts/tests/test_validate_agent_memory_threads.py",
+            workflow,
+        )
         self.assertIn("python3 scripts/tests/test_agent_governance_g002.py", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_worktree_seed.py", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
@@ -118,6 +123,10 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
         self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
+        self.assertIn('"scripts/debrief_index.py"', workflow)
+        self.assertIn('"scripts/debrief_nudge.sh"', workflow)
+        self.assertIn('"scripts/new_debrief.py"', workflow)
+        self.assertIn('"scripts/tests/test_debrief_index.py"', workflow)
         self.assertIn('"scripts/tests/test_agent_governance_g002.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
@@ -126,6 +135,7 @@ class SelectionTests(unittest.TestCase):
             '"scripts/tests/test_ownership_consolidation_contract.py"', workflow
         )
         self.assertIn('"scripts/tests/test_validate_agent_memory_retired.py"', workflow)
+        self.assertIn('"scripts/tests/test_validate_agent_memory_threads.py"', workflow)
         self.assertIn('"scripts/tests/test_setup_worktree_env.sh"', workflow)
         self.assertIn("bash scripts/tests/test_setup_worktree_env.sh", workflow)
         self.assertIn("python3 scripts/tests/test_graphify_freshness.py", workflow)
@@ -188,11 +198,16 @@ class SelectionTests(unittest.TestCase):
             "scripts/scaffold_audit.py": {"scaffold"},
             "scripts/scaffold/fixtures/routing.json": {"scaffold"},
             "scripts/setup_worktree_env.sh": {"scaffold"},
+            "scripts/debrief_index.py": {"scaffold"},
+            "scripts/debrief_nudge.sh": {"scaffold"},
+            "scripts/new_debrief.py": {"scaffold"},
             "scripts/tests/test_agent_governance_g002.py": {"scaffold"},
+            "scripts/tests/test_debrief_index.py": {"scaffold"},
             "scripts/tests/test_graphify_freshness.py": {"scaffold"},
             "scripts/tests/test_graphify_upstream_skill.py": {"scaffold"},
             "scripts/tests/test_graphify_worktree_seed.py": {"scaffold"},
             "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
+            "scripts/tests/test_validate_agent_memory_threads.py": {"scaffold"},
             "docs/literature/sources.jsonl": {"docs"},
             "docs/literature/README.md": {"docs"},
         }

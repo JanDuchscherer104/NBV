@@ -14,7 +14,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -24,6 +26,7 @@ HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
 CODEX_THREAD_ID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
+OBJECT_FORMAT_OID_LENGTHS = {"sha1": 40, "sha256": 64}
 
 
 def slugify(title: str) -> str:
@@ -34,7 +37,57 @@ def slugify(title: str) -> str:
     return slug
 
 
-def render(today: date, title: str, codex_thread_id: str) -> tuple[Path, str]:
+def git_provenance() -> dict[str, str]:
+    """Return portable Git identity or fail closed when it is unavailable."""
+    commands = {
+        "repo_object_format": ["git", "rev-parse", "--show-object-format"],
+        "repo_head": ["git", "rev-parse", "--verify", "HEAD"],
+        "repo_branch": ["git", "symbolic-ref", "--short", "-q", "HEAD"],
+        "git_dir": ["git", "rev-parse", "--git-dir"],
+        "git_common_dir": ["git", "rev-parse", "--git-common-dir"],
+    }
+    values: dict[str, str] = {}
+    for key, command in commands.items():
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            if key == "repo_branch":
+                values[key] = "detached"
+                continue
+            raise SystemExit(f"Git provenance unavailable: {' '.join(command)}")
+        values[key] = result.stdout.strip()
+    object_format = values["repo_object_format"]
+    oid_length = OBJECT_FORMAT_OID_LENGTHS.get(object_format)
+    if oid_length is None:
+        raise SystemExit(f"Git provenance unavailable: unsupported {object_format=}")
+    if not re.fullmatch(rf"[0-9a-f]{{{oid_length}}}", values["repo_head"]):
+        raise SystemExit(
+            f"Git provenance unavailable: HEAD is not a full {object_format} OID"
+        )
+    if not values["repo_branch"]:
+        values["repo_branch"] = "detached"
+    git_dir = Path(values.pop("git_dir"))
+    common_dir = Path(values.pop("git_common_dir"))
+    if not git_dir.is_absolute():
+        git_dir = (REPO_ROOT / git_dir).resolve()
+    else:
+        git_dir = git_dir.resolve()
+    if not common_dir.is_absolute():
+        common_dir = (REPO_ROOT / common_dir).resolve()
+    else:
+        common_dir = common_dir.resolve()
+    values["worktree_kind"] = "primary" if git_dir == common_dir else "linked"
+    return values
+
+
+def render(
+    today: date, title: str, codex_thread_id: str, provenance: dict[str, str]
+) -> tuple[Path, str]:
     slug = slugify(title)
     target_dir = HISTORY_ROOT / f"{today.year:04d}" / f"{today.month:02d}"
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -43,12 +96,17 @@ def render(today: date, title: str, codex_thread_id: str) -> tuple[Path, str]:
     body = f"""---
 id: {record_id}
 date: {today.isoformat()}
-title: "{title}"
+title: {json.dumps(title, ensure_ascii=False)}
 status: done
 topics: []
 confidence: high
 canonical_updates_needed: []
+touched_owner_paths: []
 codex_thread: codex://threads/{codex_thread_id}
+repo_object_format: {provenance["repo_object_format"]}
+repo_head: {provenance["repo_head"]}
+repo_branch: {json.dumps(provenance["repo_branch"])}
+worktree_kind: {provenance["worktree_kind"]}
 ---
 
 ## Task
@@ -87,7 +145,7 @@ def main() -> int:
     if not CODEX_THREAD_ID_PATTERN.fullmatch(args.thread_id):
         parser.error("--thread-id must be a Codex thread ID")
 
-    file_path, body = render(date.today(), args.title, args.thread_id)
+    file_path, body = render(date.today(), args.title, args.thread_id, git_provenance())
     if file_path.exists() and not args.force:
         print(
             f"debrief already exists: {file_path.relative_to(REPO_ROOT)}",
