@@ -560,11 +560,19 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             payload = self._store.read_optional_record(record, "backbone.payload")
             if payload is not None:
                 keep_fields = set(self.config.backbone_keep_fields) if self.config.backbone_keep_fields else None
-                return EvlBackboneOutput.from_serializable(
+                output = EvlBackboneOutput.from_serializable(
                     payload,
                     device=self.config.map_location,
                     include_fields=keep_fields,
                 )
+                manifest_provenance = validate_free_input_provenance(self.manifest.vin.get("free_input_provenance"))
+                if output.free_input_provenance is not None and output.free_input_provenance != manifest_provenance:
+                    raise ValueError(
+                        "Backbone payload free_input_provenance does not match the V10 store manifest: "
+                        f"payload={output.free_input_provenance!r}, manifest={manifest_provenance!r}."
+                    )
+                output.free_input_provenance = manifest_provenance
+                return output
 
         keep = set(self.config.backbone_keep_fields or [])
 
