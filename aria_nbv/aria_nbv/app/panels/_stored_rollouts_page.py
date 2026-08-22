@@ -1116,14 +1116,6 @@ def _render_targets_and_support(
     # Geometry is a bounded, deterministic inspection aid.  It deliberately
     # uses the existing limited candidate projection and never opens the
     # complete candidate audit used by the aggregate support views below.
-    bounded_candidates = pd.DataFrame(stored_session.candidates(limit=candidate_plot_limit))
-    if not bounded_candidates.empty:
-        _render_complete_candidate_support(
-            {
-                "geometry": candidate_geometry_evidence_rows(bounded_candidates.to_dict("records")),
-                "population_count": int(reader.array("candidates/candidate_row_id").size),
-            }
-        )
     targets = pd.DataFrame(stored_session.targets())
     if not targets.empty:
         protocol = (
@@ -1205,6 +1197,14 @@ def _render_targets_and_support(
         value=False,
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
     ):
+        bounded_candidates = pd.DataFrame(stored_session.candidates(limit=candidate_plot_limit))
+        if not bounded_candidates.empty:
+            _render_complete_candidate_support(
+                {
+                    "geometry": candidate_geometry_evidence_rows(bounded_candidates.to_dict("records")),
+                    "population_count": int(reader.array("candidates/candidate_row_id").size),
+                }
+            )
         _render_raw_candidate_metrics(
             bounded_candidates,
             total_candidates=int(reader.array("candidates/candidate_row_id").size),
