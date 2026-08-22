@@ -730,7 +730,11 @@ def test_candidate_support_plot_has_fixed_anchors_equal_axes_and_unjoined_candid
     )
     monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
+    monkeypatch.setattr(
+        stored_rollouts_page,
+        "_render_plot",
+        lambda figure, _explanation: figures.append(figure),
+    )
 
     candidates = pd.DataFrame(
         [
@@ -837,6 +841,7 @@ def test_candidate_support_ui_preserves_angular_measures_and_macro_facets(monkey
     """Support views expose covering evidence, macro aggregation, and collision denominators."""
 
     figures: list[object] = []
+    explanations: list[stored_rollouts_page.ScientificExplanation] = []
     select_options: list[tuple[str, ...]] = []
 
     class _Expander:
@@ -850,7 +855,11 @@ def test_candidate_support_ui_preserves_angular_measures_and_macro_facets(monkey
     monkeypatch.setattr(stored_rollouts_page.st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(stored_rollouts_page, "_render_plot", lambda figure, _explanation: figures.append(figure))
+    monkeypatch.setattr(
+        stored_rollouts_page,
+        "_render_plot",
+        lambda figure, explanation: (figures.append(figure), explanations.append(explanation)),
+    )
 
     def _selectbox(_label, options, **_kwargs):
         select_options.append(tuple(str(option) for option in options))
@@ -911,6 +920,13 @@ def test_candidate_support_ui_preserves_angular_measures_and_macro_facets(monkey
     assert set(angular.data[0].x) == {"nearest_neighbor_deg", "covering_radius_deg"}
     assert any("cohort_macro" in options for options in select_options)
     assert any("Collision rate" in str(figure.layout.title.text) for figure in figures)
+    denominator_explanation = next(
+        explanation
+        for figure, explanation in zip(figures, explanations, strict=True)
+        if "Collision applicability" in str(figure.layout.title.text)
+    )
+    assert {reference.registry_key for reference in denominator_explanation.theory_references} == {None}
+    assert all("rollouts/inspection.py" in reference.url for reference in denominator_explanation.theory_references)
 
 
 def test_candidate_support_finer_grains_require_exact_scene_or_state(monkeypatch: pytest.MonkeyPatch) -> None:

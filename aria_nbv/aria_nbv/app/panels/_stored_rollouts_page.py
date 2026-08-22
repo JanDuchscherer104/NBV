@@ -1858,7 +1858,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                     "Unevaluated or missing-denominator rows indicate evaluator coverage gaps, not safe free space.",
                     "candidate diagnostics/path collision and clearance",
                     "actor-visible",
-                    theory_kind="validity",
+                    theory_kind="code",
                 ),
             )
         with st.expander("Collision and clearance rows and CSV"):
