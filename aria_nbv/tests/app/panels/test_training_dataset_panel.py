@@ -14,7 +14,12 @@ from streamlit.testing.v1 import AppTest
 
 from aria_nbv.app.panels import training_dataset as panel
 from aria_nbv.app.panels._stored_rollouts import session
-from aria_nbv.app.panels.training_dataset import _artifact_identity, _download_payload
+from aria_nbv.app.panels.training_dataset import (
+    _artifact_identity,
+    _download_payload,
+    _qh_preview_for_identity,
+    _qh_preview_identity,
+)
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
@@ -72,6 +77,53 @@ def test_qh_ui_dispatchers_cross_real_owners_only_when_called(monkeypatch: pytes
     assert panel._cached_qh_readiness.__wrapped__("/root", ("/rollout",), (), 2, 7) is readiness
     assert panel._cached_qh_preview.__wrapped__("/root", ("/rollout",), (), "train", 0, 2, 7) is preview
     assert [name for name, _payload in calls] == ["readiness", "preview"]
+
+
+class _PreviewEvidence:
+    def to_jsonable(self) -> dict[str, str]:
+        return {"status": "previewed"}
+
+
+@pytest.mark.parametrize(
+    ("changed", "value"),
+    (("stage", "val"), ("chain_index", 1), ("batch_size", 2), ("seed", 8)),
+)
+def test_qh_preview_controls_invalidate_preview_and_export_until_rerun(
+    changed: str,
+    value: str | int,
+) -> None:
+    """Any effective preview-control change hides old evidence and its export."""
+
+    selection_identity = ("/root", ("/rollout",), ("metadata",))
+    controls = {"stage": "train", "chain_index": 0, "batch_size": 1, "seed": 7}
+    previous_identity = _qh_preview_identity(selection_identity, **controls)
+    next_controls = {**controls, changed: value}
+    next_identity = _qh_preview_identity(selection_identity, **next_controls)
+    previous_state = (previous_identity, _PreviewEvidence())
+
+    assert _qh_preview_for_identity(previous_state, previous_identity) is previous_state[1]
+    evidence = SimpleNamespace(to_jsonable=lambda: {})
+    visible_preview = _qh_preview_for_identity(previous_state, next_identity)
+    payload = json.loads(_download_payload(evidence, None, qh_preview=visible_preview))
+    assert payload["q_h_batch_preview"] is None
+
+
+def test_qh_preview_reuses_evidence_when_selection_and_controls_are_unchanged() -> None:
+    """An exact identity reuses the explicit preview until a control changes."""
+
+    identity = _qh_preview_identity(
+        ("/root", ("/rollout",), ("metadata",)),
+        stage="train",
+        chain_index=0,
+        batch_size=1,
+        seed=7,
+    )
+    preview = _PreviewEvidence()
+
+    assert _qh_preview_for_identity((identity, preview), identity) is preview
+    evidence = SimpleNamespace(to_jsonable=lambda: {})
+    payload = json.loads(_download_payload(evidence, None, qh_preview=preview))
+    assert payload["q_h_batch_preview"] == {"status": "previewed"}
 
 
 def test_refresh_rollout_caches_clears_each_page_family(monkeypatch: pytest.MonkeyPatch) -> None:

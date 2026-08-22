@@ -35,6 +35,8 @@ _DEEP_STATE_KEY = "training_dataset_deep_statistics"
 _QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
 _QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
 
+QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int]
+
 
 def _artifact_identity(path: Path) -> tuple[tuple[str, int, int], ...]:
     """Return a bounded cache key for persisted artifact metadata.
@@ -75,6 +77,28 @@ def _selection_cache_key(selection: DatasetBundleSelection) -> tuple[Any, ...]:
         _artifact_identity(selection.root_store),
         tuple(_artifact_identity(path) for path in selection.rollout_stores),
     )
+
+
+def _qh_preview_identity(
+    selection_identity: tuple[Any, ...],
+    *,
+    stage: str,
+    chain_index: int,
+    batch_size: int,
+    seed: int,
+) -> QhPreviewIdentity:
+    """Return the exact selection and controls that produced one preview."""
+
+    return (selection_identity, stage, chain_index, batch_size, seed)
+
+
+def _qh_preview_for_identity(
+    preview_state: tuple[QhPreviewIdentity, QhBatchPreview] | None,
+    identity: QhPreviewIdentity,
+) -> QhBatchPreview | None:
+    """Return preview evidence only when its selection and controls still match."""
+
+    return preview_state[1] if preview_state is not None and preview_state[0] == identity else None
 
 
 @st.cache_data(show_spinner="Inspecting manifests and indexes…", max_entries=32)
@@ -394,8 +418,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     deep = deep_state[1] if deep_state and deep_state[0] == identity else None
     qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
     qh_readiness = qh_state[1] if qh_state and qh_state[0] == identity else None
-    preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
-    qh_preview = preview_state[1] if preview_state and preview_state[0] == identity else None
+    qh_preview: QhBatchPreview | None = None
 
     _render_verdict(evidence)
     _render_summary_metrics(qh_readiness)
@@ -482,6 +505,15 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 preview_index = int(
                     preview_controls[1].number_input("Preview chain index", min_value=0, value=0, step=1)
                 )
+                preview_identity = _qh_preview_identity(
+                    identity,
+                    stage=preview_stage,
+                    chain_index=preview_index,
+                    batch_size=batch_size,
+                    seed=seed,
+                )
+                preview_state = st.session_state.get(_QH_PREVIEW_STATE_KEY)
+                qh_preview = _qh_preview_for_identity(preview_state, preview_identity)
                 if preview_controls[2].button("Preview one chain and batch", width="stretch"):
                     try:
                         qh_preview = _cached_qh_preview(
@@ -496,7 +528,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     except Exception as exc:
                         st.error(f"Q_H preview failed: {type(exc).__name__}: {exc}")
                     else:
-                        st.session_state[_QH_PREVIEW_STATE_KEY] = (identity, qh_preview)
+                        st.session_state[_QH_PREVIEW_STATE_KEY] = (preview_identity, qh_preview)
             if qh_preview is not None:
                 preview_cols = st.columns(4)
                 preview_cols[0].metric("Selected chain steps", qh_preview.selected_chain_steps)
