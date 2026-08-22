@@ -7,6 +7,10 @@ topics: []
 confidence: high
 canonical_updates_needed: []
 codex_thread: codex://threads/019fffa4-b85c-7db1-8404-d69c73e6485e
+repo_branch: codex/rollout-supervision-inspection-refresh
+repo_head: e1945d1f1cd6541cde332ddaa7f3ef0a22878ba5
+repo_object_format: sha1
+worktree_kind: linked
 ---
 
 ## Task

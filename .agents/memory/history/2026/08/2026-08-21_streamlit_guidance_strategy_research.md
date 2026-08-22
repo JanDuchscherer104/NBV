@@ -9,6 +9,7 @@ canonical_updates_needed: []
 artifacts:
   - .omx/specs/autoresearch-streamlit-guidance/report.md
   - .omx/specs/autoresearch-streamlit-guidance/result.json
+codex_thread: codex://threads/019fffa4-b85c-7db1-8404-d69c73e6485e
 ---
 
 ## Task

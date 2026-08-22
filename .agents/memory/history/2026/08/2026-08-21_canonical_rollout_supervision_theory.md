@@ -6,6 +6,7 @@ status: done
 topics: [rollout-supervision, streamlit, typst, scientific-notation]
 confidence: high
 canonical_updates_needed: []
+codex_thread: codex://threads/019fffa4-b85c-7db1-8404-d69c73e6485e
 ---
 
 ## Task
