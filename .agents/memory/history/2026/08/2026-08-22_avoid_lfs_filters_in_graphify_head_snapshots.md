@@ -7,6 +7,10 @@ topics: [graphify, git, lfs, validation]
 confidence: high
 canonical_updates_needed: []
 codex_thread: codex://threads/01a02a37-03a9-7402-b176-6554619a99e7
+repo_object_format: sha1
+repo_head: 34eb748a1af1e1ab4665592dffe768cc702ab98c
+repo_branch: codex/graphify-content-identity
+worktree_kind: linked
 ---
 
 ## Task
