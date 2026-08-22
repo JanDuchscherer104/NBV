@@ -18,17 +18,18 @@ Pass Streamlit options before `--`, for example:
 uv run nbv-st --server.port 8502
 ```
 
-The wrapper uses Streamlit's `auto` file watcher by default, so source edits
-reload when watchdog is available and it otherwise falls back to polling. For
-machines with constrained inotify capacity, force polling or disable watching:
+The wrapper uses Streamlit's `auto` file watcher and `runOnSave=true` by default,
+so source edits rerun automatically with watchdog when available and otherwise
+with polling. For machines with constrained inotify capacity, force polling or
+disable watching:
 
 ```bash
 uv run nbv-st --server.fileWatcherType=poll
 ```
 
 or set `STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll`. Use
-`--server.fileWatcherType=none` for a stable, long-running session where code
-reload is intentionally unnecessary.
+`--server.fileWatcherType=none --server.runOnSave=false` for a stable,
+long-running session where code reload is intentionally unnecessary.
 
 ## Navigation
 
@@ -51,9 +52,11 @@ pages expose typed path or store selectors where their owner permits overrides.
 
 ## Troubleshooting
 
-- **Code changed but the page did not:** the default `auto` watcher should reload
-  it. If watchdog is unavailable or exceeds host inotify capacity, restart with
-  `--server.fileWatcherType=poll`.
+- **Code changed but the page did not:** the default `auto` watcher plus
+  `runOnSave=true` should rerun it. If watchdog is unavailable or exceeds host
+  inotify capacity, restart with `--server.fileWatcherType=poll`. Explicit
+  `STREAMLIT_SERVER_RUN_ON_SAVE=false` or `--server.runOnSave=false` disables
+  automatic reruns.
 - **A store still shows old evidence:** use the page's refresh action. Store
   caches bind validated identity, but an already rendered browser session may
   still need a rerun.

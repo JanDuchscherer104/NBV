@@ -23,6 +23,9 @@ __all__ = ["NbvStreamlitApp", "NbvStreamlitAppConfig", "main", "streamlit_entry"
 _FILE_WATCHER_ENV = "STREAMLIT_SERVER_FILE_WATCHER_TYPE"
 _FILE_WATCHER_FLAG = "--server.fileWatcherType"
 _DEFAULT_FILE_WATCHER_TYPE = "auto"
+_RUN_ON_SAVE_ENV = "STREAMLIT_SERVER_RUN_ON_SAVE"
+_RUN_ON_SAVE_FLAG = "--server.runOnSave"
+_DEFAULT_RUN_ON_SAVE = "true"
 
 
 def main() -> None:  # pragma: no cover - Streamlit runner
@@ -47,8 +50,10 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def _has_file_watcher_override(args: Sequence[str]) -> bool:
-    return any(arg == _FILE_WATCHER_FLAG or arg.startswith(f"{_FILE_WATCHER_FLAG}=") for arg in args)
+def _has_streamlit_override(args: Sequence[str], flag: str) -> bool:
+    """Return whether forwarded CLI arguments explicitly set one Streamlit option."""
+
+    return any(arg == flag or arg.startswith(f"{flag}=") for arg in args)
 
 
 def _build_streamlit_argv(app_path: Path, forwarded_args: Sequence[str]) -> list[str]:
@@ -59,10 +64,16 @@ def _build_streamlit_argv(app_path: Path, forwarded_args: Sequence[str]) -> list
         script_args = streamlit_args[delimiter_index:]
         streamlit_args = streamlit_args[:delimiter_index]
 
-    if not _has_file_watcher_override(streamlit_args) and _FILE_WATCHER_ENV not in os.environ:
+    if not _has_streamlit_override(streamlit_args, _FILE_WATCHER_FLAG) and _FILE_WATCHER_ENV not in os.environ:
         streamlit_args = [
             _FILE_WATCHER_FLAG,
             _DEFAULT_FILE_WATCHER_TYPE,
+            *streamlit_args,
+        ]
+    if not _has_streamlit_override(streamlit_args, _RUN_ON_SAVE_FLAG) and _RUN_ON_SAVE_ENV not in os.environ:
+        streamlit_args = [
+            _RUN_ON_SAVE_FLAG,
+            _DEFAULT_RUN_ON_SAVE,
             *streamlit_args,
         ]
 
@@ -72,10 +83,11 @@ def _build_streamlit_argv(app_path: Path, forwarded_args: Sequence[str]) -> list
 def streamlit_entry() -> None:  # pragma: no cover - console script
     """Launch via `nbv-st` console entry.
 
-    The wrapper uses Streamlit's ``auto`` watcher by default: watchdog when it
-    is available, otherwise polling. Set ``STREAMLIT_SERVER_FILE_WATCHER_TYPE``
-    or pass ``--server.fileWatcherType`` before ``--`` to force ``poll`` or
-    disable watching for constrained long-running sessions.
+    The wrapper uses Streamlit's ``auto`` watcher and automatic rerun by default:
+    watchdog when it is available, otherwise polling. Set
+    ``STREAMLIT_SERVER_FILE_WATCHER_TYPE`` or ``STREAMLIT_SERVER_RUN_ON_SAVE``,
+    or pass the corresponding Streamlit option before ``--``, to override either
+    behavior for a constrained or intentionally stable session.
     """
 
     from streamlit.web.cli import main as st_main
