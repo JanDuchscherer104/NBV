@@ -955,6 +955,49 @@ def test_candidate_support_explanations_include_canonical_theory_context() -> No
     }
 
 
+def test_restored_explanation_reference_census_is_nonempty_and_owner_correct() -> None:
+    """Restored temporal/support views use canonical references owned by their documents."""
+
+    expected = {
+        "endpoint_gain": ("entity.typ", {"entity.endpoint_gain"}),
+        "rri": ("rri.typ", {"rri.rri", "rri.target_rri"}),
+        "target": ("glossary.typ", {"frustum"}),
+        "code": ("inspection.py", {None}),
+        "validity": ("metrics.typ", {"metrics.candidate_validity"}),
+    }
+    for kind, (owner, keys) in expected.items():
+        references = stored_rollouts_page._THEORY[kind]
+        assert references, kind
+        assert {reference.registry_key for reference in references} >= keys
+        for reference in references:
+            if reference.registry_key in keys:
+                assert owner in reference.url
+
+    assert stored_rollouts_page._temporal_theory_kind("cumulative_target_root_gain") == "endpoint_gain"
+    assert stored_rollouts_page._temporal_theory_kind("selected_target_rri") == "rri"
+    for references in stored_rollouts_page._THEORY.values():
+        for reference in references:
+            if reference.registry_key is not None:
+                assert (
+                    reference.registry_key.startswith("entity.")
+                    and "entity.typ" in reference.url
+                    or reference.registry_key.startswith("rri.")
+                    and "rri.typ" in reference.url
+                    or reference.registry_key.startswith("metrics.")
+                    and "metrics.typ" in reference.url
+                    or reference.registry_key.startswith("action.")
+                    and "action.typ" in reference.url
+                    or reference.registry_key.startswith("spatial.")
+                    and ("spatial.typ" in reference.url or "notation.yml" in reference.url)
+                    or reference.registry_key == "frustum"
+                    and "glossary.typ" in reference.url
+                    or reference.registry_key == "finite-candidate-action-set"
+                    and "glossary.typ" in reference.url
+                    or reference.registry_key == "target-rri-reward"
+                    and "glossary.typ" in reference.url
+                ), reference
+
+
 def test_candidate_family_breakdown_ui_uses_cohort_composition_facets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Visible family plots must use typed cohort composition, not pooled legacy groups."""
 

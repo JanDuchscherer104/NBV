@@ -174,7 +174,16 @@ class TheoryReference:
             raise ValueError("Theory references require a title and HTTPS URL.")
 
 
-TheoryKind = Literal["geometry", "direction", "action", "target", "code", "validity", "rri"]
+TheoryKind = Literal[
+    "geometry",
+    "direction",
+    "action",
+    "target",
+    "code",
+    "validity",
+    "endpoint_gain",
+    "rri",
+]
 
 
 _THEORY: dict[TheoryKind, tuple[TheoryReference, ...]] = {
@@ -250,12 +259,26 @@ _THEORY: dict[TheoryKind, tuple[TheoryReference, ...]] = {
             "metrics.candidate_validity",
         ),
     ),
+    "endpoint_gain": (
+        TheoryReference(
+            "Endpoint gain equation",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/entity.typ",
+            "equation",
+            "entity.endpoint_gain",
+        ),
+    ),
     "rri": (
         TheoryReference(
             "RRI equation",
             "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
             "equation",
-            "entity.endpoint_gain",
+            "rri.rri",
+        ),
+        TheoryReference(
+            "Target RRI equation",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+            "equation",
+            "rri.target_rri",
         ),
         TheoryReference(
             "RRI glossary definition",
@@ -764,6 +787,7 @@ def _render_temporal_explorer(
                 "inspection.temporal_metric_summary_rows",
                 f"steps/{_TEMPORAL_SOURCE_FIELDS.get(metric, metric)}",
             ),
+            theory_references=_THEORY[_temporal_theory_kind(metric)],
         ),
     )
     st.dataframe(summary, hide_index=True, width="stretch")
@@ -798,6 +822,7 @@ def _render_temporal_explorer(
                     failure_interpretation="Abrupt jumps or negative valid gains can identify an interesting case for Inspect/Rerun.",
                     evidence_role=_temporal_evidence_role(metric),
                     source_fields=("inspection.rollout_step_objective_rows", f"steps/{source_field}"),
+                    theory_references=_THEORY[_temporal_theory_kind(metric)],
                 ),
             )
 
@@ -886,6 +911,18 @@ def _temporal_evidence_role(
         return _TEMPORAL_EVIDENCE_ROLES[metric]
     except KeyError as exc:
         raise ValueError(f"Temporal metric {metric!r} has no explicit evidence role.") from exc
+
+
+def _temporal_theory_kind(metric: str) -> TheoryKind:
+    """Return the canonical theory owner for one temporal metric."""
+
+    if metric in {"cumulative_target_root_gain", "selected_target_root_gain"}:
+        return "endpoint_gain"
+    if metric in {"selected_target_rri", "marginal_target_rri"}:
+        return "rri"
+    if metric in {"valid_fanout", "invalid_fraction"}:
+        return "validity"
+    return "action"
 
 
 def _render_selected_rank_and_geometry(stored_session: session.StoredRolloutSession) -> None:
@@ -1681,6 +1718,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                     "Large missing counts identify evaluator coverage gaps and must not be read as poor visibility.",
                     "candidate target-view evidence",
                     "actor-visible",
+                    theory_kind="target",
                 ),
             )
             with st.expander("Target-view availability rows and CSV"):
@@ -1804,6 +1842,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                     "Unevaluated or missing-denominator rows indicate evaluator coverage gaps, not safe free space.",
                     "candidate diagnostics/path collision and clearance",
                     "actor-visible",
+                    theory_kind="validity",
                 ),
             )
         with st.expander("Collision and clearance rows and CSV"):
@@ -2124,6 +2163,7 @@ def _render_candidate_aggregate_breakdowns(stored_session: session.StoredRollout
                 failure_interpretation="High raw selection with tiny availability can be unstable; zero availability is a generator/mask clue.",
                 evidence_role="actor-visible",
                 source_fields=("candidate position_id", "actor_action_mask", "selected_mask"),
+                theory_references=_THEORY["validity"],
             ),
         )
         _download_frame("Download family support CSV", "candidate-family-support.csv", families)
@@ -2173,6 +2213,7 @@ def _render_candidate_aggregate_breakdowns(stored_session: session.StoredRollout
                     f"candidate {breakdown_by}",
                     "candidate masks",
                 ),
+                theory_references=_THEORY["validity"],
             ),
         )
 
@@ -2367,7 +2408,9 @@ def _render_raw_candidate_metrics(candidates: pd.DataFrame, *, total_candidates:
                 "Tails and invalidity-specific modes guide row-level debugging; use aggregate plots for cohort conclusions.",
                 f"candidate audit/{metric}",
                 "oracle/evaluation" if metric in {"target_root_gain", "target_rri"} else "actor-visible",
-                theory_kind="rri" if metric in {"target_root_gain", "target_rri"} else None,
+                theory_kind=(
+                    "endpoint_gain" if metric == "target_root_gain" else "rri" if metric == "target_rri" else None
+                ),
             ),
         )
         with st.expander("Raw candidate metric rows and CSV"):
