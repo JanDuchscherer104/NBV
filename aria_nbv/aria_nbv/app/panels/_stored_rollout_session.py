@@ -179,7 +179,7 @@ def _cached_discounted_returns_cached(store_path: str, *, store_identity: str = 
     attrs = manifest.get("root_attrs", {})
     attrs = attrs if isinstance(attrs, dict) else {}
     return discounted_rollout_return_rows(
-        reader, reader, return_semantics=attrs.get("return_semantics"), discount_gamma=attrs.get("discount_gamma")
+        reader, return_semantics=attrs.get("return_semantics"), discount_gamma=attrs.get("discount_gamma")
     )
 
 

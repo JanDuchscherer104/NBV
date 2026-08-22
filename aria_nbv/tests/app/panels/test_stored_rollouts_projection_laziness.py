@@ -694,6 +694,42 @@ def test_stored_rollout_session_candidate_population_uses_captured_identity(
     assert calls == [("/selected.zarr", "first", 17)]
 
 
+def test_stored_rollout_session_discounted_returns_reads_generated_store(
+    tmp_path: Path,
+) -> None:
+    """The session return projection accepts the typed single-source reader contract."""
+
+    first = write_rollout_zarr_store(
+        tmp_path / "discounted-first.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=1201)[:1],
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "discounted-second.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=1202)[:2],
+    )
+    selected = tmp_path / "discounted-selected.zarr"
+    selected.symlink_to(first.store_dir, target_is_directory=True)
+
+    old = session.open_stored_rollout_session(selected)
+    old_returns = old.discounted_returns()
+
+    replacement = tmp_path / "discounted-replacement-link.zarr"
+    replacement.symlink_to(second.store_dir, target_is_directory=True)
+    replacement.replace(selected)
+
+    new = session.open_stored_rollout_session(selected)
+    new_returns = new.discounted_returns()
+
+    assert old_returns["available"] is True
+    assert new_returns["available"] is True
+    assert all(
+        {"rollout_row_id", "discount_gamma", "discounted_return", "available"}.issubset(row)
+        for row in old_returns["rows"] + new_returns["rows"]
+    )
+    assert len(new_returns["rows"]) > len(old_returns["rows"])
+    assert new.store_identity != old.store_identity
+
+
 def test_stored_rollout_session_failure_projection_stays_bound_to_old_handle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
