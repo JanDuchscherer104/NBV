@@ -38,9 +38,11 @@ records dated on or after 2026-08-21. Use `make new-debrief TITLE="..."
 CODEX_THREAD_ID="<thread-id>"` to create the canonical frontmatter and body.
 Earlier historical records are grandfathered.
 Native records dated on or after 2026-08-22 also include portable checkout
-provenance: the full `repo_head`, attached `repo_branch` or `detached`, and
-`worktree_kind` (`primary` or `linked`). Earlier and legacy-imported records
-are grandfathered; provenance is never backfilled.
+provenance: `repo_object_format` (`sha1` or `sha256`), the corresponding full
+`repo_head`, attached `repo_branch` or `detached`, and `worktree_kind`
+(`primary` or `linked`). The recorded object format makes OID validation
+portable across checkouts. Earlier and legacy-imported records are
+grandfathered; provenance is never backfilled.
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.

@@ -75,7 +75,7 @@ def test_provenance_cutoff_requires_new_checkout_metadata(
     assert any("checkout provenance" in error for error in errors)
     valid = (
         record.rsplit("---\n", 1)[0]
-        + "repo_head: "
+        + "repo_object_format: sha1\nrepo_head: "
         + "a" * 40
         + "\nrepo_branch: detached\nworktree_kind: primary\n---\n"
     )
@@ -88,8 +88,33 @@ def test_provenance_accepts_all_git_valid_branch_names(
     record = _record(record_date="2026-08-22", codex_thread=THREAD_URI)
     valid = (
         record.rsplit("---\n", 1)[0]
-        + "repo_head: "
+        + "repo_object_format: sha1\nrepo_head: "
         + "a" * 40
         + "\nrepo_branch: feature@x\nworktree_kind: primary\n---\n"
     )
     assert _check(tmp_path, monkeypatch, valid) == []
+
+
+def test_provenance_accepts_sha256_oid(tmp_path: Path, monkeypatch) -> None:
+    record = _record(record_date="2026-08-22", codex_thread=THREAD_URI)
+    valid = (
+        record.rsplit("---\n", 1)[0]
+        + "repo_object_format: sha256\nrepo_head: "
+        + "a" * 64
+        + "\nrepo_branch: detached\nworktree_kind: linked\n---\n"
+    )
+    assert _check(tmp_path, monkeypatch, valid) == []
+
+
+def test_provenance_rejects_oid_mismatched_to_object_format(
+    tmp_path: Path, monkeypatch
+) -> None:
+    record = _record(record_date="2026-08-22", codex_thread=THREAD_URI)
+    invalid = (
+        record.rsplit("---\n", 1)[0]
+        + "repo_object_format: sha256\nrepo_head: "
+        + "a" * 40
+        + "\nrepo_branch: detached\nworktree_kind: primary\n---\n"
+    )
+    errors = _check(tmp_path, monkeypatch, invalid)
+    assert any("repo_head must be a full sha256 Git OID" in error for error in errors)

@@ -19,6 +19,18 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_PREFIX = ".agents/memory/history/"
 INDEX_PATH = REPO_ROOT / ".agents" / "memory" / "index" / "debriefs.jsonl"
+REPO_OBJECT_FORMAT_OID_LENGTHS = {"sha1": 40, "sha256": 64}
+WORKTREE_KINDS = {"primary", "linked"}
+
+
+def is_full_repo_oid(value: str, object_format: str) -> bool:
+    """Return whether an OID matches its recorded Git object format."""
+    length = REPO_OBJECT_FORMAT_OID_LENGTHS.get(object_format)
+    return (
+        length is not None
+        and len(value) == length
+        and all(character in "0123456789abcdef" for character in value)
+    )
 
 
 def visible_history_paths(root: Path = REPO_ROOT) -> list[Path]:
@@ -114,7 +126,12 @@ def row_for_path(path: Path, root: Path = REPO_ROOT) -> dict[str, Any]:
             raise ValueError("codex_thread must be a string when present")
         row["codex_thread"] = codex_thread
 
-    provenance_keys = ("repo_head", "repo_branch", "worktree_kind")
+    provenance_keys = (
+        "repo_object_format",
+        "repo_head",
+        "repo_branch",
+        "worktree_kind",
+    )
     provenance = {
         key: str(frontmatter[key]) for key in provenance_keys if key in frontmatter
     }
@@ -191,6 +208,45 @@ def _parse_index(content: bytes) -> list[dict[str, Any]]:
             raise TypeError(f"line {line_number} codex_thread must be a string or null")
         if "codex_thread" not in value:
             raise KeyError(f"line {line_number} missing fields: codex_thread")
+        provenance = value.get("checkout_provenance")
+        if provenance is not None:
+            if not isinstance(provenance, dict):
+                raise TypeError(
+                    f"line {line_number} checkout_provenance must be an object"
+                )
+            provenance_fields = {
+                "repo_object_format",
+                "repo_head",
+                "repo_branch",
+                "worktree_kind",
+            }
+            missing_provenance = sorted(provenance_fields - provenance.keys())
+            if missing_provenance:
+                raise KeyError(
+                    f"line {line_number} checkout_provenance missing fields: "
+                    f"{', '.join(missing_provenance)}"
+                )
+            if not all(
+                isinstance(provenance[field], str) for field in provenance_fields
+            ):
+                raise TypeError(
+                    f"line {line_number} checkout_provenance fields must be strings"
+                )
+            object_format = provenance["repo_object_format"]
+            repo_head = provenance["repo_head"]
+            if not is_full_repo_oid(repo_head, object_format):
+                raise ValueError(
+                    f"line {line_number} checkout_provenance repo_head does not "
+                    "match repo_object_format"
+                )
+            if not provenance["repo_branch"]:
+                raise ValueError(
+                    f"line {line_number} checkout_provenance repo_branch is empty"
+                )
+            if provenance["worktree_kind"] not in WORKTREE_KINDS:
+                raise ValueError(
+                    f"line {line_number} checkout_provenance worktree_kind is invalid"
+                )
         source_path = value["source_path"]
         relative = PurePosixPath(source_path)
         if (
