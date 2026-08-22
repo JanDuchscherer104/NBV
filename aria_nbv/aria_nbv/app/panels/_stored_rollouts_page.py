@@ -29,6 +29,7 @@ from ...rerun_inspector import RolloutLayerName, RolloutLayerPreset
 from ...rollouts import RolloutZarrStoreReader
 from ...rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
+    candidate_geometry_evidence_rows,
     rollout_endpoint_metric_summary,
     selected_depth_preview,
 )
@@ -131,6 +132,18 @@ class ScientificExplanation:
     source_fields: tuple[str, ...]
     """Persisted arrays or shared inspection helpers that own the evidence."""
 
+    intuition: str | None = None
+    """Plain-language intuition for exploring the visualization."""
+
+    visual_encoding: str | None = None
+    """How marks, colours, facets, and missingness are encoded."""
+
+    uncertainty: str | None = None
+    """What spread, missingness, or finite-sample limitation means here."""
+
+    theory_references: tuple["TheoryReference", ...] = ()
+    """Canonical project references for the equations and terms behind the view."""
+
     def __post_init__(self) -> None:
         """Reject incomplete explanation contracts before a plot can render."""
 
@@ -145,6 +158,110 @@ class ScientificExplanation:
         )
         if any(not value.strip() for value in required) or not self.source_fields:
             raise ValueError("Scientific explanations require every interpretation field and at least one source.")
+
+
+@dataclass(frozen=True, slots=True)
+class TheoryReference:
+    """One browser-addressable canonical notation or theory reference."""
+
+    title: str
+    url: str
+    kind: Literal["equation", "symbol", "glossary", "source"]
+    registry_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.title.strip() or not self.url.startswith("https://"):
+            raise ValueError("Theory references require a title and HTTPS URL.")
+
+
+_THEORY = {
+    "geometry": (
+        TheoryReference(
+            "Spatial candidate normalization",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/spatial.typ",
+            "equation",
+            "spatial.candidate_root_target_normalization",
+        ),
+        TheoryReference(
+            "Spatial notation registry",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/notation.yml",
+            "symbol",
+            "spatial.candidate_root_target_normalization",
+        ),
+    ),
+    "direction": (
+        TheoryReference(
+            "Candidate angles and shell",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/action.typ",
+            "equation",
+            "action.angle_cap_transform",
+        ),
+        TheoryReference(
+            "Finite candidate-view glossary",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/glossary.typ",
+            "glossary",
+            "finite-candidate-action-set",
+        ),
+    ),
+    "action": (
+        TheoryReference(
+            "Candidate angle transform",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/action.typ",
+            "equation",
+            "action.angle_cap_transform",
+        ),
+        TheoryReference(
+            "Candidate shell and motion limits",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/action.typ",
+            "equation",
+            "action.candidate_shell",
+        ),
+        TheoryReference(
+            "Motion pruning limits",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/action.typ",
+            "equation",
+            "action.motion_pruning_limits",
+        ),
+    ),
+    "target": (
+        TheoryReference(
+            "Target-view glossary",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/glossary.typ",
+            "glossary",
+            "target-view",
+        ),
+    ),
+    "code": (
+        TheoryReference(
+            "Inspection diagnostic implementation",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+            "source",
+            "rollouts.inspection",
+        ),
+    ),
+    "validity": (
+        TheoryReference(
+            "Candidate validity equations",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/metrics.typ",
+            "equation",
+            "metrics.candidate_validity",
+        ),
+    ),
+    "rri": (
+        TheoryReference(
+            "RRI equation",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/equations/rri.typ",
+            "equation",
+            "rri.target_root_gain",
+        ),
+        TheoryReference(
+            "RRI glossary definition",
+            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/typst/shared/glossary.typ",
+            "glossary",
+            "target-rri-reward",
+        ),
+    ),
+}
 
 
 def render_stored_rollouts_page() -> None:
@@ -940,6 +1057,17 @@ def _render_targets_and_support(
             help="Bounds interactive geometry traces only; aggregate masks and family counts still use the full store.",
         )
     )
+    # Geometry is a bounded, deterministic inspection aid.  It deliberately
+    # uses the existing limited candidate projection and never opens the
+    # complete candidate audit used by the aggregate support views below.
+    bounded_candidates = pd.DataFrame(stored_session.candidates(limit=candidate_plot_limit))
+    if not bounded_candidates.empty:
+        _render_complete_candidate_support(
+            {
+                "geometry": candidate_geometry_evidence_rows(bounded_candidates.to_dict("records")),
+                "population_count": int(reader.array("candidates/candidate_row_id").size),
+            }
+        )
     targets = pd.DataFrame(stored_session.targets())
     if not targets.empty:
         protocol = (
@@ -1021,9 +1149,8 @@ def _render_targets_and_support(
         value=False,
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
     ):
-        candidate_rows = stored_session.candidates(limit=candidate_plot_limit)
         _render_raw_candidate_metrics(
-            pd.DataFrame(candidate_rows),
+            bounded_candidates,
             total_candidates=int(reader.array("candidates/candidate_row_id").size),
         )
 
@@ -1050,6 +1177,7 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
                 "Zero availability or selected-without-actor-valid support points to a generator or mask defect.",
                 "candidate audit masks and generation cohort",
                 "actor-visible",
+                theory_kind="validity",
             ),
         )
         with st.expander("Candidate composition rows and CSV"):
@@ -1068,6 +1196,7 @@ def _render_candidate_population_evidence(stored_session: session.StoredRolloutS
                 "High frequency with low selection suggests proposal surplus; high enrichment with tiny support is unstable.",
                 "candidate proposal counts, mixture mass, and selected mask",
                 "actor-visible",
+                theory_kind="validity",
             ),
         )
         with st.expander("Proposal calibration rows and CSV"):
@@ -1094,6 +1223,11 @@ def _candidate_population_explanation(
     failure_interpretation: str,
     source: str,
     role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"],
+    *,
+    intuition: str | None = None,
+    visual_encoding: str | None = None,
+    uncertainty: str | None = None,
+    theory_kind: str | None = None,
 ) -> ScientificExplanation:
     return ScientificExplanation(
         question=question,
@@ -1105,6 +1239,11 @@ def _candidate_population_explanation(
         failure_interpretation=failure_interpretation,
         evidence_role=role,
         source_fields=(source,),
+        intuition=intuition or "Read this as a diagnostic of persisted support, not as a causal policy comparison.",
+        visual_encoding=visual_encoding or "Colours identify populations; facets identify compatible cohorts.",
+        uncertainty=uncertainty
+        or "Missing values remain unavailable; descriptive summaries do not imply inferential uncertainty.",
+        theory_references=_THEORY.get(theory_kind or "", ()),
     )
 
 
@@ -1151,6 +1290,51 @@ def _direction_count_context(frame: pd.DataFrame) -> dict[str, str]:
         else:
             context[label] = f"{int(values[0]):,}"
     return context
+
+
+def _select_evidence_grain(frame: pd.DataFrame, *, level: str, key: str) -> pd.DataFrame:
+    """Apply an exact scene/state selector before plotting a finer grain.
+
+    ``cohort_macro`` is already a single compatible population.  A scene or
+    state macro is not: selecting it without its identity would silently
+    combine rows from multiple scenes or factual states.
+    """
+
+    if level == "cohort_macro" or frame.empty:
+        return frame
+    if "scene" not in frame:
+        st.warning(f"{level} evidence is unavailable because no scene identity was persisted.")
+        return frame.iloc[0:0]
+    if level == "scene_macro":
+        scenes = sorted(str(value) for value in frame["scene"].dropna().unique())
+        if not scenes:
+            return frame.iloc[0:0]
+        scene = st.selectbox("Exact scene", options=scenes, key=f"{key}_scene")
+        return frame[frame["scene"].astype(str).eq(str(scene))]
+    if level == "state":
+        required = {"rollout_row_id", "step_row_id"}
+        if not required <= set(frame.columns):
+            st.warning("State evidence is unavailable because the factual state identity is incomplete.")
+            return frame.iloc[0:0]
+        state_rows = (
+            frame[["scene", "rollout_row_id", "step_row_id"]]
+            .drop_duplicates()
+            .sort_values(["scene", "rollout_row_id", "step_row_id"], kind="stable")
+        )
+        state_options = [
+            f"scene={row.scene} · rollout={row.rollout_row_id} · step={row.step_row_id}"
+            for row in state_rows.itertuples(index=False)
+        ]
+        if not state_options:
+            return frame.iloc[0:0]
+        selected = st.selectbox("Exact factual state", options=state_options, key=f"{key}_state")
+        selected_row = state_rows.iloc[state_options.index(selected)]
+        return frame[
+            frame["scene"].astype(str).eq(str(selected_row.scene))
+            & frame["rollout_row_id"].astype(str).eq(str(selected_row.rollout_row_id))
+            & frame["step_row_id"].astype(str).eq(str(selected_row.step_row_id))
+        ]
+    raise ValueError(f"Unsupported evidence aggregation level: {level}")
 
 
 def _render_complete_candidate_support(population: dict[str, object]) -> None:
@@ -1218,6 +1402,10 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 failure_interpretation="Offsets and asymmetry indicate frame or generator defects.",
                 evidence_role="actor-visible",
                 source_fields=("candidate audit", "target center"),
+                intuition="Each ray starts at the root and ends at the candidate in a target-aligned frame.",
+                visual_encoding="The fixed root and target anchors establish the frame; each candidate has its own line segment.",
+                uncertainty="Only the bounded deterministic sample is shown; it is not a complete-store estimate.",
+                theory_references=_THEORY["geometry"],
             ),
         )
         with st.expander("Target-normalized endpoint rows and CSV"):
@@ -1249,6 +1437,9 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             & (density["population"].astype(str) == direction_population)
             & (density["aggregation_level"].astype(str) == aggregation)
         ]
+        selected_density = _select_evidence_grain(
+            selected_density, level=aggregation, key="candidate_direction_density"
+        )
         matrix = selected_density.pivot_table(
             index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
         )
@@ -1279,6 +1470,10 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 failure_interpretation="Spikes expose orientation or generator support defects.",
                 evidence_role="actor-visible",
                 source_fields=("root-relative vectors",),
+                intuition="Equal-area bins prevent latitude bands from being over-counted simply because of the coordinate system.",
+                visual_encoding="Colour is the fraction of each factual state in an azimuth × sin(elevation) bin.",
+                uncertainty="Missing or zero-length directions are excluded from the finite denominator, not treated as a direction.",
+                theory_references=_THEORY["direction"],
             ),
         )
         with st.expander("Direction density rows and CSV"):
@@ -1306,6 +1501,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             ]
             level = st.selectbox(f"{title} aggregation", options=levels, key=f"{key}_aggregation")
             frame = frame[frame["aggregation_level"].eq(level)]
+            frame = _select_evidence_grain(frame, level=level, key=key)
         if frame.empty or value not in frame:
             continue
         if "generation_cohort_id" not in frame:
@@ -1359,6 +1555,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 "Large discrepancy or angular gaps indicate directional collapse or missing generator families.",
                 "candidate direction evidence",
                 "actor-visible",
+                theory_kind="direction",
             ),
         )
         with st.expander(f"{title} rows and CSV"):
@@ -1379,6 +1576,7 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             ]
             level = st.selectbox(f"{title} aggregation", options=levels, key=f"{key}_aggregation")
             frame = frame[frame["aggregation_level"].eq(level)]
+            frame = _select_evidence_grain(frame, level=level, key=key)
         if "generation_cohort_id" not in frame:
             frame = frame.assign(generation_cohort_id="unknown")
         if "population" not in frame:
@@ -1407,28 +1605,53 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
                 )
         y = "mean" if "mean" in frame else "count"
         x = "metric" if "metric" in frame else "evidence"
-        fig = px.bar(
-            frame,
-            x=x,
-            y=y,
-            color="population",
-            facet_col="generation_cohort_id",
-            title=title,
-            barmode="group",
-        )
-        _render_plot(
-            fig,
-            _candidate_population_explanation(
-                f"What physical support is present in {title.lower()}?",
-                "Complete candidate audit support summaries at factual-state grain.",
-                "Metric units follow the persisted field (`m`, `deg`, or dimensionless).",
-                "Finite support is plotted; unavailable optical and numeric values remain missing.",
-                "Support spans configured shell, target-view, and motion bounds.",
-                "Concentration, clipping, or missingness points to an invalid component or evaluator coverage issue.",
-                f"candidate {key} evidence",
-                "actor-visible",
-            ),
-        )
+        unit_frames = [(None, frame)]
+        if key == "motion" and "units" in frame:
+            unit_frames = list(frame.groupby("units", sort=True, dropna=False))
+        for units, unit_frame in unit_frames:
+            # Metres, degrees, fractions, and counts are separate visual
+            # scales.  Shell identity remains visible rather than being
+            # collapsed into a human-readable family label.
+            if key == "motion" and units == "fraction":
+                unit_title = "Motion collision fraction"
+            elif key == "motion" and units:
+                unit_title = f"Motion support ({units})"
+            else:
+                unit_title = title
+            fig_kwargs: dict[str, object] = {
+                "x": x,
+                "y": y,
+                "color": "population",
+                "facet_col": "generation_cohort_id",
+                "title": unit_title,
+                "barmode": "group",
+            }
+            if key == "spatial" and "declared_shell" in unit_frame:
+                fig_kwargs["facet_row"] = "declared_shell"
+            fig = px.bar(unit_frame, **fig_kwargs)
+            _render_plot(
+                fig,
+                _candidate_population_explanation(
+                    f"What physical support is present in {unit_title.lower()}?",
+                    "Complete candidate audit support summaries at factual-state grain.",
+                    f"Metric units are {units or 'as labelled by each persisted evidence row'}.",
+                    "Finite support is plotted; unavailable optical and numeric values remain missing.",
+                    "Support spans configured shell, target-view, and motion bounds.",
+                    "Concentration, clipping, or missingness points to an invalid component or evaluator coverage issue.",
+                    f"candidate {key} evidence",
+                    "actor-visible",
+                    theory_kind=(
+                        "geometry"
+                        if key == "spatial"
+                        else "action"
+                        if key == "motion"
+                        else "target"
+                        if key == "target_view"
+                        else None
+                    ),
+                    uncertainty="Macro rows are descriptive summaries; they are not confidence intervals.",
+                ),
+            )
         with st.expander(f"{title} rows and CSV"):
             st.dataframe(frame, hide_index=True, width="stretch")
             _download_frame(f"Download {key} support CSV", f"candidate-{key}.csv", frame)
@@ -1478,30 +1701,66 @@ def _render_complete_candidate_support(population: dict[str, object]) -> None:
             if column in collision
         ]
         if rate_columns:
-            rates = collision.melt(
-                id_vars=["generation_cohort_id"], value_vars=rate_columns, var_name="measure", value_name="value"
-            )
-            rate_fig = px.bar(
-                rates,
-                x="measure",
-                y="value",
-                color="generation_cohort_id",
-                barmode="group",
-                title="Collision rate and mean clearance",
-            )
-            _render_plot(
-                rate_fig,
-                _candidate_population_explanation(
-                    "What collision rate and clearance does the evaluated candidate population exhibit?",
-                    "Validated candidate collision/clearance summaries, separated by generation cohort.",
-                    "Collision rates are fractions; clearance means are metres. Population and macro measures are distinct.",
-                    "Collision rate uses the evaluated denominator; clearance mean uses finite-clearance rows only.",
-                    "Rates remain low while clearance stays positive under the configured path contract.",
-                    "High collision or low clearance requires checking applicable support and evaluator coverage below.",
-                    "candidate diagnostics/path collision and clearance",
-                    "actor-visible",
-                ),
-            )
+            fraction_columns = [column for column in rate_columns if "collision_rate" in column]
+            clearance_columns = [column for column in rate_columns if "clearance" in column]
+            if fraction_columns:
+                rates = collision.melt(
+                    id_vars=["generation_cohort_id"],
+                    value_vars=fraction_columns,
+                    var_name="measure",
+                    value_name="value",
+                )
+                rate_fig = px.bar(
+                    rates,
+                    x="measure",
+                    y="value",
+                    color="generation_cohort_id",
+                    barmode="group",
+                    title="Collision rate (fraction)",
+                )
+                _render_plot(
+                    rate_fig,
+                    _candidate_population_explanation(
+                        "How often do evaluated candidate paths collide?",
+                        "Validated collision rows, separated by generation cohort.",
+                        "Collision fraction over the applicable evaluated denominator.",
+                        "Only evaluated applicable paths enter the fraction; unavailable and not-applicable rows stay separate.",
+                        "Collision fractions remain low under the configured path contract.",
+                        "A high fraction can indicate invalid geometry or evaluator coverage problems.",
+                        "candidate diagnostics/path collision",
+                        "actor-visible",
+                        theory_kind="code",
+                    ),
+                )
+            if clearance_columns:
+                clearance = collision.melt(
+                    id_vars=["generation_cohort_id"],
+                    value_vars=clearance_columns,
+                    var_name="measure",
+                    value_name="value",
+                )
+                clearance_fig = px.bar(
+                    clearance,
+                    x="measure",
+                    y="value",
+                    color="generation_cohort_id",
+                    barmode="group",
+                    title="Mean path clearance (m)",
+                )
+                _render_plot(
+                    clearance_fig,
+                    _candidate_population_explanation(
+                        "How much free-space clearance do evaluated paths retain?",
+                        "Validated finite-clearance rows, separated by generation cohort.",
+                        "Mean minimum path clearance in metres; this is not a collision fraction.",
+                        "Only finite clearance values contribute to the clearance denominator.",
+                        "Positive clearance with low spread indicates feasible paths.",
+                        "Low or missing clearance requires checking path applicability and evaluator coverage.",
+                        "candidate diagnostics/path clearance",
+                        "actor-visible",
+                        theory_kind="code",
+                    ),
+                )
         count_columns = [
             column
             for column in (
@@ -2105,6 +2364,7 @@ def _render_raw_candidate_metrics(candidates: pd.DataFrame, *, total_candidates:
                 "Tails and invalidity-specific modes guide row-level debugging; use aggregate plots for cohort conclusions.",
                 f"candidate audit/{metric}",
                 "oracle/evaluation" if metric in {"target_root_gain", "target_rri"} else "actor-visible",
+                theory_kind="rri" if metric in {"target_root_gain", "target_rri"} else None,
             ),
         )
         with st.expander("Raw candidate metric rows and CSV"):
@@ -2888,12 +3148,23 @@ def _render_plot(fig: go.Figure, explanation: ScientificExplanation) -> None:
     )
     with col_info.popover("How to read this", icon="ℹ️"):
         _explanation_item("Question", explanation.question)
+        if explanation.intuition:
+            _explanation_item("Intuition", explanation.intuition)
         _explanation_item("Population / grain", explanation.population)
         _explanation_item("Metric / units", explanation.metric)
         _explanation_item("Denominator / masks", explanation.denominator_masks)
+        if explanation.visual_encoding:
+            _explanation_item("Visual encoding", explanation.visual_encoding)
         _explanation_item("Valid comparison conditions", explanation.comparability)
         _explanation_item("Expected pattern", explanation.expected_pattern)
         _explanation_item("Warnings / failure modes", explanation.failure_interpretation)
+        if explanation.uncertainty:
+            _explanation_item("Uncertainty / missingness", explanation.uncertainty)
+        if explanation.theory_references:
+            st.markdown("**Canonical theory references**")
+            for reference in explanation.theory_references:
+                registry = f" · `{reference.registry_key}`" if reference.registry_key else ""
+                st.markdown(f"- [{reference.title}]({reference.url}) ({reference.kind}){registry}")
         _explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
     st.plotly_chart(fig, width="stretch")
 
@@ -2956,5 +3227,6 @@ def _json_default(value: object) -> object:
 
 __all__ = [
     "ScientificExplanation",
+    "TheoryReference",
     "render_stored_rollouts_page",
 ]

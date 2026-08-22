@@ -564,7 +564,7 @@ def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolat
     assert not any(number.label == "Candidate preview row limit" for number in app.number_input)
 
 
-def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
+def test_stored_rollouts_default_candidate_flow_uses_only_bounded_geometry_audit(
     isolated_path_config,
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
@@ -577,14 +577,21 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
     )
     stored_rollout_session.clear_stored_rollout_caches()
 
-    def fail_heavy_audit(*_args, **_kwargs):
-        raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
+    calls: list[int | None] = []
+    original_candidate_audit_rows = stored_rollout_session.candidate_audit_rows
 
-    monkeypatch.setattr(stored_rollout_session, "candidate_audit_rows", fail_heavy_audit)
+    def bounded_audit(*args, **kwargs):
+        calls.append(kwargs.get("limit"))
+        if kwargs.get("limit") is None:
+            raise AssertionError("default candidate flow loaded an unbounded candidate audit")
+        return original_candidate_audit_rows(*args, **kwargs)
+
+    monkeypatch.setattr(stored_rollout_session, "candidate_audit_rows", bounded_audit)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Targets & Action Support")
 
     assert not app.exception
+    assert calls and all(limit is not None for limit in calls)
     assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
 
@@ -904,6 +911,48 @@ def test_candidate_support_ui_preserves_angular_measures_and_macro_facets(monkey
     assert set(angular.data[0].x) == {"nearest_neighbor_deg", "covering_radius_deg"}
     assert any("cohort_macro" in options for options in select_options)
     assert any("Collision rate" in str(figure.layout.title.text) for figure in figures)
+
+
+def test_candidate_support_finer_grains_require_exact_scene_or_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scene/state plots may not silently recombine rows from another grain."""
+
+    frame = pd.DataFrame(
+        [
+            {"scene": "scene-a", "rollout_row_id": "0", "step_row_id": "0", "value": 1.0},
+            {"scene": "scene-b", "rollout_row_id": "1", "step_row_id": "2", "value": 2.0},
+        ]
+    )
+    monkeypatch.setattr(stored_rollouts_page.st, "selectbox", lambda _label, options, **_kwargs: options[-1])
+
+    scene = stored_rollouts_page._select_evidence_grain(frame, level="scene_macro", key="test")
+    assert scene["scene"].tolist() == ["scene-b"]
+    state = stored_rollouts_page._select_evidence_grain(frame, level="state", key="test")
+    assert state[["scene", "rollout_row_id", "step_row_id"]].to_dict("records") == [
+        {"scene": "scene-b", "rollout_row_id": "1", "step_row_id": "2"}
+    ]
+
+
+def test_candidate_support_explanations_include_canonical_theory_context() -> None:
+    """Restored support views expose stable browser-valid theory references."""
+
+    explanation = stored_rollouts_page._candidate_population_explanation(
+        "Question",
+        "Population",
+        "Metric",
+        "Masks",
+        "Expected",
+        "Failure",
+        "inspection",
+        "actor-visible",
+        theory_kind="direction",
+    )
+    assert explanation.intuition and explanation.visual_encoding and explanation.uncertainty
+    assert explanation.theory_references
+    assert all(reference.url.startswith("https://github.com/") for reference in explanation.theory_references)
+    assert {reference.registry_key for reference in explanation.theory_references} >= {
+        "action.angle_cap_transform",
+        "finite-candidate-action-set",
+    }
 
 
 def test_candidate_family_breakdown_ui_uses_cohort_composition_facets(monkeypatch: pytest.MonkeyPatch) -> None:
