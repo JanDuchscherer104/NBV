@@ -16,7 +16,10 @@ metadata; it is not a narrative owner.
 - The migration inventory is recorded in `index/codex_migration_manifest.md`.
 
 ## Current Policy
-- Non-trivial tasks should leave a debrief in `history/YYYY/MM/`.
+- Capture only reusable evidence, durable decisions, failed approaches,
+  consequential verification, or canonical-owner impact. Task length alone
+  does not make work eligible for a debrief.
+- Eligible tasks should leave a debrief in `history/YYYY/MM/`.
 - If a task changes current truth, update its exact canonical owner selected by
   `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy`.
 - Architect and critic review outputs remain session-local. Capture only their
@@ -29,10 +32,15 @@ metadata; it is not a narrative owner.
 
 Native debriefs use absolute ISO dates and include `id`, `date`, `title`,
 `status`, `topics`, `confidence`, `canonical_updates_needed`, and the
-originating Codex thread as `codex_thread: codex://threads/<thread-id>`. This
-field is required for native records dated on or after 2026-08-21. Use `make
-new-debrief TITLE="..." CODEX_THREAD_ID="<thread-id>"` to create the canonical
-frontmatter and body. Earlier historical records are grandfathered.
+stable `touched_owner_paths` list. The originating Codex thread is recorded as
+`codex_thread: codex://threads/<thread-id>`; this field is required for native
+records dated on or after 2026-08-21. Use `make new-debrief TITLE="..."
+CODEX_THREAD_ID="<thread-id>"` to create the canonical frontmatter and body.
+Earlier historical records are grandfathered.
+Native records dated on or after 2026-08-22 also include portable checkout
+provenance: the full `repo_head`, attached `repo_branch` or `detached`, and
+`worktree_kind` (`primary` or `linked`). Earlier and legacy-imported records
+are grandfathered; provenance is never backfilled.
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.
@@ -53,6 +61,7 @@ status: done
 topics: [scaffold, codex, memory]
 confidence: high
 canonical_updates_needed: []
+touched_owner_paths: []
 codex_thread: codex://threads/<thread-id>
 ---
 ```
@@ -70,9 +79,34 @@ confidence: high
 canonical_updates_needed:
   - docs/typst/thesis/development/roadmap.typ
   - aria_nbv/aria_nbv/<owner>.py
+touched_owner_paths: []
 codex_thread: codex://threads/<thread-id>
 ---
 ```
 
 When it materially clarifies the work, note staged or commit scope in a dirty
 worktree and whether compatibility was deliberately preserved or removed.
+The JSONL file at `index/debriefs.jsonl` is a derived navigation index only.
+It contains no findings, rankings, authority scores, or current-truth claims.
+Every row exposes `touched_owner_paths` and `codex_thread`. Older
+`files_touched` metadata is normalized without backfilling historical
+Markdown; missing legacy owner paths become an empty list and a missing legacy
+thread becomes `null`.
+Regenerate it with `make debrief-index`; `make check-agent-memory` rejects
+added, edited, deleted, renamed, or malformed visible history sources until it
+matches. Open each indexed `source_path` before consequential historical use.
+
+### Filter, Then Open
+
+Use the index to narrow candidates; use the source opener for evidence:
+
+```sh
+jq -r 'select(.topics | index("scaffold")) | [.date, .status, .source_path] | @tsv' \
+  .agents/memory/index/debriefs.jsonl
+jq -r 'select(.date >= "2026-08-01" and .status == "done") | .source_path' \
+  .agents/memory/index/debriefs.jsonl
+source_path=$(jq -r 'select(.topics | index("scaffold")) | .source_path' \
+  .agents/memory/index/debriefs.jsonl | head -n 1)
+test -n "$source_path"
+python3 scripts/debrief_index.py --query "$source_path"
+```
