@@ -386,6 +386,7 @@ class StoredRolloutSession:
         validation: Any,
         manifest_payload: dict[str, Any],
         inventory_row: dict[str, object] | None,
+        selected_path: Path | None = None,
     ) -> None:
         self.canonical_path = canonical_path
         self.store_identity = store_identity
@@ -393,11 +394,12 @@ class StoredRolloutSession:
         self.validation = validation
         self.manifest_payload = manifest_payload
         self.inventory_row = inventory_row
+        self._selected_path = selected_path or canonical_path
 
     def _assert_current_identity(self) -> str:
         """Reject projections after the selected path was atomically replaced."""
 
-        current = _store_projection_identity(self.canonical_path)
+        current = _store_projection_identity(self._selected_path)
         if current != self.store_identity:
             raise RuntimeError(
                 "selected rollout store changed after this session opened; reopen the store before projecting evidence"
@@ -405,71 +407,86 @@ class StoredRolloutSession:
         return self.store_identity
 
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
-        return _cached_candidate_population_cached(self.canonical_path.as_posix(), self.store_identity, sample_size)
+        identity = self._assert_current_identity()
+        return _cached_candidate_population_cached(self.canonical_path.as_posix(), identity, sample_size)
 
     def invariants(self) -> Any:
-        return _cached_invariants_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_invariants_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def header(self) -> Any:
-        return _cached_header_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_header_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def cohorts(self) -> Any:
-        return _cached_cohorts_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_cohorts_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def paired(self) -> Any:
-        return _cached_paired_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_paired_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def steps(self, **kwargs: Any) -> Any:
-        return _cached_steps_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)
+        return _cached_steps_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
+        )
 
     def reconstruction_metrics(self) -> Any:
-        return _cached_reconstruction_metrics_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_reconstruction_metrics_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity()
+        )
 
     def reconstruction_endpoints(self) -> Any:
         return _cached_reconstruction_endpoints_cached(
-            self.canonical_path.as_posix(), store_identity=self.store_identity
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity()
         )
 
     def discounted_returns(self) -> Any:
-        return _cached_discounted_returns_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_discounted_returns_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity()
+        )
 
     def headroom(self) -> Any:
-        return _cached_headroom_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_headroom_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def temporal(self, **kwargs: Any) -> Any:
-        return _cached_temporal_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)
+        return _cached_temporal_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
+        )
 
     def candidate_flow(self, **kwargs: Any) -> Any:
         return _cached_candidate_flow_cached(
-            self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
         )
 
     def ranks(self, **kwargs: Any) -> Any:
-        return _cached_ranks_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)
+        return _cached_ranks_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
+        )
 
     def targets(self) -> Any:
-        return _cached_targets_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_targets_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def masks(self) -> Any:
-        return _cached_masks_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_masks_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def candidates(self, **kwargs: Any) -> Any:
-        return _cached_candidates_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)
+        return _cached_candidates_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
+        )
 
     def q_h(self, **kwargs: Any) -> Any:
-        return _cached_q_h_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)
+        return _cached_q_h_cached(
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
+        )
 
     def tree(self) -> Any:
-        return _cached_tree_cached(self.canonical_path.as_posix(), store_identity=self.store_identity)
+        return _cached_tree_cached(self.canonical_path.as_posix(), store_identity=self._assert_current_identity())
 
     def root_geometry(self, **kwargs: Any) -> Any:
         return _cached_root_geometry_cached(
-            self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
         )
 
     def depth_summary(self, **kwargs: Any) -> Any:
         return _cached_depth_summary_cached(
-            self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs
+            self.canonical_path.as_posix(), store_identity=self._assert_current_identity(), **kwargs
         )
 
     def failures(
@@ -480,7 +497,7 @@ class StoredRolloutSession:
             min_valid_candidates,
             dominant_invalid_fraction,
             max_step_distance_m,
-            store_identity=self.store_identity,
+            store_identity=self._assert_current_identity(),
         )
 
     def topology(
@@ -499,7 +516,7 @@ class StoredRolloutSession:
         bundle = _cached_evidence_bundle_cached(
             self.canonical_path.as_posix(), evidence_status, store_identity=identity
         )
-        if _store_projection_identity(self.canonical_path) != identity:
+        if _store_projection_identity(self._selected_path) != identity:
             raise RuntimeError("selected rollout store changed while serializing evidence; reopen the store")
         return bundle
 
@@ -509,9 +526,15 @@ def open_stored_rollout_session(
 ) -> StoredRolloutSession:
     """Open one fixed-identity selected-store session without deep reads."""
 
-    canonical_path = Path(path).expanduser().resolve()
-    identity = _store_projection_identity(canonical_path.as_posix())
+    # Cache/readers use the resolved store so equivalent aliases share one
+    # owner, while identity checks use the selected directory entry so an
+    # atomic replacement of that entry is visible to the session.
+    selected_path = Path(path).expanduser().absolute()
+    canonical_path = selected_path.resolve()
+    identity = _store_projection_identity(selected_path.as_posix())
     reader, validation, manifest_payload = _cached_store_bundle_cached(
         canonical_path.as_posix(), store_identity=identity
     )
-    return StoredRolloutSession(canonical_path, identity, reader, validation, manifest_payload, inventory_row)
+    return StoredRolloutSession(
+        canonical_path, identity, reader, validation, manifest_payload, inventory_row, selected_path
+    )

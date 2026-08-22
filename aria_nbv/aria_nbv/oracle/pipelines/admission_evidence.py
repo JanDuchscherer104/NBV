@@ -194,7 +194,21 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
     scene_id = _required_str(raw, "scene_id", index=index)
     target_id = _optional_str(raw, "target_id", index=index) or ""
     reason = _required_str(raw, "reason", index=index)
-    row_kind = raw.get("row_kind", "observed_target")
+    observed_count_raw = raw.get("observed_target_count")
+    row_kind_raw = raw.get("row_kind")
+    # Older writer output omitted ``row_kind`` but emitted the complete
+    # sentinel tuple.  Infer only that exact tuple; any partial or
+    # contradictory combination remains a malformed observed-target row and
+    # fails closed below.
+    if row_kind_raw is None and (
+        observed_count_raw == 0
+        and target_id == ""
+        and raw.get("admitted") is False
+        and reason == "excluded_no_observed_target"
+    ):
+        row_kind = "zero_observation_sample"
+    else:
+        row_kind = row_kind_raw if row_kind_raw is not None else "observed_target"
     if row_kind not in {"observed_target", "zero_observation_sample"}:
         raise ValueError(f"admission audit row {index} row_kind is unsupported")
     observed_count = raw.get("observed_target_count", 1 if row_kind == "observed_target" else 0)
@@ -208,6 +222,8 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
             raise ValueError(f"admission audit row {index} zero-observation sentinel is malformed")
         if reason != "excluded_no_observed_target":
             raise ValueError(f"admission audit row {index} zero-observation sentinel has wrong reason")
+    elif observed_count != 1:
+        raise ValueError(f"admission audit row {index} observed-target row must describe exactly one target")
     iou = raw.get("oriented_iou")
     if iou is not None:
         if type(iou) not in (int, float) or isinstance(iou, bool) or not math.isfinite(float(iou)):

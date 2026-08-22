@@ -349,10 +349,36 @@ def test_open_session_binds_real_projections_until_next_open(tmp_path: Path) -> 
     replacement.symlink_to(second.store_dir, target_is_directory=True)
     replacement.replace(selected)
 
-    assert old.header() == old_header
-    assert old.steps() == old_steps
-    assert old.candidate_population() == old_population
-    assert old.failures(100, 0.0, 1.0) == old_failures
+    for name, projection in (
+        ("header", lambda: old.header()),
+        ("invariants", lambda: old.invariants()),
+        ("cohorts", lambda: old.cohorts()),
+        ("paired", lambda: old.paired()),
+        ("steps", lambda: old.steps()),
+        ("reconstruction_metrics", lambda: old.reconstruction_metrics()),
+        ("reconstruction_endpoints", lambda: old.reconstruction_endpoints()),
+        ("discounted_returns", lambda: old.discounted_returns()),
+        ("headroom", lambda: old.headroom()),
+        ("temporal", lambda: old.temporal()),
+        ("candidate_flow", lambda: old.candidate_flow()),
+        ("ranks", lambda: old.ranks()),
+        ("targets", lambda: old.targets()),
+        ("masks", lambda: old.masks()),
+        ("candidates", lambda: old.candidates()),
+        ("q_h", lambda: old.q_h()),
+        ("tree", lambda: old.tree()),
+        ("root_geometry", lambda: old.root_geometry()),
+        ("depth_summary", lambda: old.depth_summary()),
+        ("failures", lambda: old.failures(100, 0.0, 1.0)),
+        ("topology", lambda: old.topology((), PathConfig())),
+        ("evidence_bundle", lambda: old.evidence_bundle("validated")),
+    ):
+        try:
+            projection()
+        except RuntimeError as error:
+            assert "store changed" in str(error)
+        else:
+            pytest.fail(f"stale session projection did not fail closed: {name}")
 
     new = session.open_stored_rollout_session(selected)
     assert new.store_identity != old.store_identity
@@ -695,6 +721,7 @@ def test_stored_rollout_session_candidate_population_uses_captured_identity(
     """A bound session keeps candidate evidence on its opened store identity."""
 
     calls: list[tuple[str, str, int]] = []
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "first")
     monkeypatch.setattr(
         session,
         "_cached_candidate_population_cached",
@@ -748,6 +775,7 @@ def test_stored_rollout_session_failure_projection_stays_bound_to_old_handle(
     """Failure evidence uses the opened identity even when the path is later replaced."""
 
     calls: list[str] = []
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "first")
     monkeypatch.setattr(
         session,
         "_cached_failures_cached",

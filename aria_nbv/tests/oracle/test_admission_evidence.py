@@ -169,6 +169,51 @@ def test_zero_observation_sample_sentinel_is_not_an_observed_target() -> None:
     assert evidence.to_jsonable()["counts"]["zero_observation_samples"] == 1
 
 
+def test_writer_shaped_legacy_zero_observation_sentinel_is_inferred() -> None:
+    sentinel = {
+        "sample_key": "sample-empty",
+        "scene_id": "scene-empty",
+        "target_id": "",
+        "reason": "excluded_no_observed_target",
+        "admitted": False,
+        "oriented_iou": None,
+        "qualified_gt_match_count": 0,
+        "gt_match_id": None,
+        "detected_source_row": None,
+        "observed_target_count": 0,
+    }
+    evidence = read_campaign_admission_evidence(_payload([sentinel]))
+
+    assert evidence.observed_count == 0
+    assert evidence.zero_observation_sample_count == 1
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda row: row.update(target_id="target-1"),
+        lambda row: row.update(admitted=True),
+        lambda row: row.update(reason="wrong_class"),
+    ],
+)
+def test_partial_legacy_zero_observation_sentinel_fails_closed(change) -> None:
+    row = {
+        "sample_key": "sample-empty",
+        "scene_id": "scene-empty",
+        "target_id": "",
+        "reason": "excluded_no_observed_target",
+        "admitted": False,
+        "oriented_iou": None,
+        "qualified_gt_match_count": 0,
+        "gt_match_id": None,
+        "detected_source_row": None,
+        "observed_target_count": 0,
+    }
+    change(row)
+    with pytest.raises(ValueError):
+        read_campaign_admission_evidence(_payload([row]))
+
+
 def test_consistency_and_iou_checks_run_after_hash_validation() -> None:
     payload = _payload([_row(admitted=False, reason="wrong_class", oriented_iou=1.2)])
     with pytest.raises(ValueError, match=r"outside \[0, 1\]"):
