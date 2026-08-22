@@ -56,7 +56,9 @@ No hierarchical proposer or policy-improvement claim was introduced.
 Python owners and tests. Targeted mypy passed for the five new production
 modules. `make qh-ci PYTEST_WORKERS=0` passed 437 tests, including distributed
 smokes and API discovery. The deterministic golden contract passed through
-`make replay-oracle-golden`.
+`make replay-oracle-golden`; its V2 identity binds the Python major/minor ABI
+and applies declared numeric tolerances to candidate poses instead of hashing
+patch-runtime float serialization.
 
 ## Canonical Owner Impact
 Current truth changed in the Python owners listed by `touched_owner_paths`,

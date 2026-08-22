@@ -77,7 +77,7 @@ def _snapshot() -> dict[str, Any]:
                     "candidate_shell_indices_sha256": _array_digest(
                         step.candidates.candidate_shell_indices().detach().cpu()
                     ),
-                    "candidate_pose_world_sha256": _array_digest(step.candidates.shell_poses.tensor().detach().cpu()),
+                    "candidate_pose_world": _json_array(step.candidates.shell_poses.tensor().detach().cpu()),
                     "selected_valid_index": step.selected_valid_index,
                     "selected_shell_index": step.selected_shell_index,
                     "selection_scores_sha256": _array_digest(step.selection_scores.detach().cpu()),
@@ -139,7 +139,7 @@ def _snapshot() -> dict[str, Any]:
         }
     fixture_config = {"device": "cpu", "horizon": 2, "num_samples": 6, "seed": 23}
     return {
-        "schema_version": "replay-oracle-cpu-golden-v1",
+        "schema_version": "replay-oracle-cpu-golden-v2",
         "fixture": fixture_config,
         "identity": {
             "configuration_sha256": _json_digest(fixture_config),
@@ -150,7 +150,7 @@ def _snapshot() -> dict[str, Any]:
             "dependencies": {
                 "efm3d": _dependency_version("efm3d"),
                 "numpy": np.__version__,
-                "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                "python": f"{sys.version_info.major}.{sys.version_info.minor}",
                 "torch": _dependency_version("torch"),
                 "zarr": _dependency_version("zarr"),
             },

@@ -37,7 +37,9 @@ consensus receipt, and no Ultragoal state was minted.
 - targeted mypy for the five new production modules: passed.
 - changed-file Ruff format/check: passed.
 - `make replay-oracle-golden`: passed with frozen source, configuration,
-  contract, dependency, and numeric-tolerance identity.
+  contract, dependency, and numeric-tolerance identity. The V2 fixture binds
+  the Python major/minor ABI while comparing candidate poses numerically, so
+  patch-runtime float serialization is not treated as behavioral drift.
 
 ## Gates still closed
 
