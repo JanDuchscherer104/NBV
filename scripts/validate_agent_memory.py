@@ -11,12 +11,15 @@ This checker intentionally stays narrow:
 from __future__ import annotations
 
 import ast
+import json
 import re
 import subprocess
 import sys
 from collections import Counter
 from datetime import date
 from pathlib import Path
+
+from debrief_index import check_index, visible_history_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
@@ -47,9 +50,12 @@ REQUIRED_NATIVE_KEYS = {
     "canonical_updates_needed",
 }
 NATIVE_THREAD_CUTOFF = date(2026, 8, 21)
+NATIVE_PROVENANCE_CUTOFF = date(2026, 8, 22)
 CODEX_THREAD_URI_PATTERN = re.compile(
     r"^codex://threads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
+REPO_HEAD_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+WORKTREE_KINDS = {"primary", "linked"}
 RETIRED_SOURCE_PATHS = {
     "docs/contents/thesis/roadmap.qmd",
     "docs/contents/thesis/questions.qmd",
@@ -95,6 +101,19 @@ def parse_inline_list(value: str) -> list[str]:
     return [item.strip().strip("\"'") for item in inner.split(",") if item.strip()]
 
 
+def parse_scalar(value: str) -> str:
+    """Decode generated JSON strings while preserving legacy scalar behavior."""
+    if value.startswith('"') and value.endswith('"'):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            pass
+        else:
+            if isinstance(decoded, str):
+                return decoded
+    return value.strip("\"'")
+
+
 def parse_frontmatter(path: Path) -> dict[str, object]:
     text = path.read_text(encoding="utf-8")
     if not text.startswith("---\n"):
@@ -125,7 +144,7 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
             if value.startswith("[") and value.endswith("]"):
                 data[key] = parse_inline_list(value)
             else:
-                data[key] = value.strip("\"'")
+                data[key] = parse_scalar(value)
             current_key = None
             continue
 
@@ -148,6 +167,19 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         raise ValueError(f"unsupported frontmatter line: {raw_line!r}")
 
     return data
+
+
+def is_valid_repo_branch(value: str) -> bool:
+    """Accept the detached sentinel or any Git-valid branch name."""
+    if value == "detached":
+        return True
+    result = subprocess.run(
+        ["git", "check-ref-format", "--branch", value],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def allows_retired_canonical_update(
@@ -274,7 +306,11 @@ def check_history_records() -> list[str]:
             f"missing history root: {HISTORY_ROOT.relative_to(REPO_ROOT).as_posix()}"
         ]
 
-    for path in sorted(HISTORY_ROOT.rglob("*.md")):
+    if HISTORY_ROOT == REPO_ROOT / ".agents" / "memory" / "history":
+        history_paths = visible_history_paths(REPO_ROOT)
+    else:
+        history_paths = sorted(HISTORY_ROOT.rglob("*.md"))
+    for path in history_paths:
         rel = path.relative_to(REPO_ROOT).as_posix()
         try:
             frontmatter = parse_frontmatter(path)
@@ -319,6 +355,27 @@ def check_history_records() -> list[str]:
                     f"{rel}: `codex_thread` must be codex://threads/<uuid> "
                     f"for native records dated on or after {NATIVE_THREAD_CUTOFF}"
                 )
+
+        if record_date >= NATIVE_PROVENANCE_CUTOFF:
+            provenance_fields = {"repo_head", "repo_branch", "worktree_kind"}
+            missing_provenance = sorted(provenance_fields - frontmatter.keys())
+            if missing_provenance:
+                errors.append(
+                    f"{rel}: missing required checkout provenance: "
+                    f"{', '.join(missing_provenance)}"
+                )
+            else:
+                repo_head = str(frontmatter["repo_head"]).strip()
+                repo_branch = str(frontmatter["repo_branch"]).strip()
+                worktree_kind = str(frontmatter["worktree_kind"]).strip()
+                if not REPO_HEAD_PATTERN.fullmatch(repo_head):
+                    errors.append(f"{rel}: repo_head must be a full Git OID")
+                if not is_valid_repo_branch(repo_branch):
+                    errors.append(
+                        f"{rel}: repo_branch must be a valid Git branch or detached"
+                    )
+                if worktree_kind not in WORKTREE_KINDS:
+                    errors.append(f"{rel}: worktree_kind must be primary or linked")
 
         if not isinstance(canonical_updates, list):
             errors.append(f"{rel}: `canonical_updates_needed` must be a list or []")
@@ -380,7 +437,7 @@ def check_migration_receipt() -> list[str]:
         return errors
     if len({row[0] for row in rows}) != 47:
         errors.append("migration receipt row IDs must be unique")
-    source_counts = Counter()
+    source_counts: Counter[str] = Counter()
     immutable = re.compile(
         r"8fcabeffed7c898b6c7d0ec02c65e24097ea68d8\s*/\s*[0-9a-f]{40}\s*/\s*[^|]+\s+\([^)]*\)"
     )
@@ -533,6 +590,7 @@ def main() -> int:
     errors = [
         *check_codex_notes(),
         *check_history_records(),
+        *check_index(),
         *check_migration_receipt(),
         *check_scaffold_alignment(),
     ]

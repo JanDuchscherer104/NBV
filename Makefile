@@ -5,7 +5,7 @@
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
 .PHONY: context-match context-qmd-outline context-typst-outline context-typst-includes
 .PHONY: context-literature-index context-literature-search codex-transcripts
-.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory new-debrief install-git-hooks install-hooks
+.PHONY: context-heavy context-uml context-uml-preview context-docstrings context-tree context-dir-tree context-dir-tree-external scaffold-audit scaffold-audit-self-test check-agent-memory debrief-index new-debrief install-git-hooks install-hooks
 .PHONY: agents-db glossary
 .PHONY: lrz-probe lrz-resources lrz-resources-gpu lrz-resources-cpu lrz-jobs lrz-dss-init lrz-container-shell lrz-sbatch-cpu lrz-sbatch-single-gpu lrz-sbatch-multigpu
 .PHONY: mermaid-lint
@@ -265,6 +265,9 @@ api-docs-self-test: ## 📚 Exercise Quartodoc stale-alias recovery with a fake 
 
 check-agent-memory: _check_python ## 🗺️ Validate agent memory scaffolding and debrief hygiene
 	@$(PYTHON_INTERPRETER) scripts/validate_agent_memory.py
+
+debrief-index: _check_python ## 🗺️ Regenerate the deterministic debrief navigation index
+	@$(PYTHON_INTERPRETER) scripts/debrief_index.py
 
 new-debrief: _check_python ## 🗺️ Scaffold a dated debrief under .agents/memory/history/ (set TITLE='...')
 	@if [ -z "$(TITLE)" ]; then echo "usage: make new-debrief TITLE='short title'" >&2; exit 2; fi

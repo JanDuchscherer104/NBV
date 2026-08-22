@@ -59,11 +59,15 @@ tests, configuration, and Typst own behavior and scientific claims.
   source-order owner and names that owner's verification.
 - Unavailable optional retrieval falls back to exact sources; guidance, state,
   memory, and debrief owners use `make check-agent-memory`.
+- Debrief eligibility and derived-index policy live in
+  `.agents/memory/README.md`; historical Markdown is evidence and the index is
+  navigation only, so open its `source_path` before making consequential
+  historical claims. MemPalace is optional.
 
 ## Verification And Debriefs
 
 - Follow the nearest guide and run the narrowest proof of the changed contract.
   Advisor-facing claims require the cited primary source and exact local evidence.
-- Non-trivial work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
+- Eligible work leaves a debrief under `.agents/memory/history/YYYY/MM/`.
   Native debriefs follow `.agents/memory/README.md`; do not recreate `.codex` as
   a notes bucket.
