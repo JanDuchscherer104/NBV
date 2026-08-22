@@ -2,8 +2,11 @@
 
 `aria-nbv` provides the executable data, oracle-RRI, finite-candidate rollout,
 inspection, VIN, and training infrastructure for the ARIA-NBV research project.
-It requires Python 3.11; full ASE generation, PyTorch3D rendering, and training
-are designed for the repository's Linux CUDA 12.1 environment.
+It requires Python 3.11; full
+[ASE](https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset)
+generation, [PyTorch3D](https://github.com/facebookresearch/pytorch3d) rendering,
+and training are designed for the repository's Linux environment with CUDA
+12.1.
 
 - [Project overview](https://github.com/JanDuchscherer104/ARIA-NBV)
 - [Setup and data requirements](https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/SETUP.md)
@@ -16,7 +19,10 @@ status.
 ## Evidence and Data Lineage
 
 ARIA-NBV keeps source evidence, one-step supervision, and multi-step replay in
-separate physical stores. Raw ASE/ATEK/EFM3D assets remain external;
+separate physical stores. Raw or upstream-managed assets from
+[ASE](https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_synthetic_environments_dataset),
+[ATEK](https://github.com/facebookresearch/ATEK), and
+[EFM3D](https://github.com/facebookresearch/efm3d) remain external;
 `vin_offline` stores immutable one-step evidence; `rollouts.zarr` stores compact
 factual replay plus stable references to its source rows. Joined readers expose
 the modalities needed for one-step VIN, finite-horizon `Q_H`, and inspection

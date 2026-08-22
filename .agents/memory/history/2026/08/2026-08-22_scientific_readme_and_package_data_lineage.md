@@ -33,6 +33,9 @@ with the official Mermaid CLI 11.16.0 container.
 ## Findings
 `README.md` now distinguishes implemented substrate, open evidence gates, and
 deferred scope without claiming a completed target-conditioned policy result.
+Its introduction cites ASE, EFM3D, and VIN-NBV, first mentions link to their
+authoritative external sources, and thesis navigation includes verified
+rendered-PDF page destinations alongside canonical Typst sources.
 `aria_nbv/README.md` now explains the physical-store split and links to the
 detailed data-handling and rollout owners. The source and rendered overview live
 at `docs/figures/diagrams/data_handling/mermaid/package_data_lineage.{mmd,svg}`.
@@ -42,6 +45,9 @@ Passed Mermaid lint with zero warnings, 21 ownership-consolidation tests,
 relative-link checks, GitHub GFM rendering, `make docs-render-core`, and
 `uv build` for both sdist and wheel. The documentation render retained existing
 generated API-link warnings but exited successfully.
+The citation follow-up additionally verified every external URL, GitHub
+footnote rendering, and the exact physical PDF pages linked for the introduction,
+research questions, method, experimental design, results, and roadmap.
 
 ## Canonical Owner Impact
 The two README owners and their diagram were updated. No Typst, Python,
