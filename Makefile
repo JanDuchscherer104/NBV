@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -40,6 +40,8 @@ SLIDES_PDF ?= $(SLIDES_SRC:.typ=.pdf)
 # Python interpreter (uv-managed .venv by default)
 VENV_PYTHON ?= $(CURDIR)/aria_nbv/.venv/bin/python
 PYTHON_INTERPRETER ?= $(VENV_PYTHON)
+AGENT_STATUS_PYTHON ?= python3
+AGENT_STATUS_ARGS ?=
 CONTEXT_DIR ?= docs/_generated/context
 CONTEXT_OUT ?= $(CONTEXT_DIR)/context_snapshot.md
 CONTEXT_INDEX_OUT ?= $(CONTEXT_DIR)/source_index.md
@@ -235,6 +237,9 @@ codex-transcripts: _check_python ## 🧠 Write ARIA-NBV Codex transcript memory 
 
 scaffold-audit: _check_python ## 🧭 Validate skill frontmatter, references, handoffs, and routing fixtures
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py
+
+agent-status: ## 🧭 Report read-only checkout and scaffold readiness status
+	@$(AGENT_STATUS_PYTHON) scripts/agent_status.py $(AGENT_STATUS_ARGS)
 
 scaffold-audit-self-test: _check_python ## 🧭 Run negative probes for scaffold-audit invariants
 	@$(PYTHON_INTERPRETER) scripts/scaffold_audit.py --self-test
