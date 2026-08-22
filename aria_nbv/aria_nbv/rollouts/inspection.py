@@ -24,7 +24,7 @@ import zarr
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
-from ..targets.protocol import ActorVisibleTargetSource, ORACLE_GT_TARGET_SOURCE, TargetInputProtocol
+from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, ActorVisibleTargetSource, TargetInputProtocol
 from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
