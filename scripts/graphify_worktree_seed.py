@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any
-
+from pathlib import Path, PurePosixPath
+from typing import Any, NoReturn
 
 CORE = (
     Path("graphify-out/graph.json"),
@@ -24,9 +24,10 @@ SENTINEL = Path("graphify-out/.aria-worktree-seed.json")
 CACHE = Path("graphify-out/cache")
 GRAPHIFY_DISTRIBUTION = "graphifyy"
 PINNED_GRAPHIFY_VERSION = "0.9.48"
+OID = re.compile(r"^[0-9a-f]+$")
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise ValueError(message)
 
 
@@ -131,22 +132,67 @@ def manifest_markdown(root: Path) -> list[Path]:
     return sorted(set(result))
 
 
-def validate_graph(root: Path) -> str:
-    graph = json_object(root / CORE[0], "source graph")
+def validate_commit_oid(
+    root: Path, git_dir: Path | None, value: Any, label: str
+) -> str:
+    object_format = git(root, git_dir, "rev-parse", "--show-object-format")
+    if object_format not in {"sha1", "sha256"}:
+        fail(f"{label} Git object format is unavailable")
+    length = 40 if object_format == "sha1" else 64
+    if not isinstance(value, str) or len(value) != length or not OID.fullmatch(value):
+        fail(f"{label} must be a canonical full commit OID")
+    object_type = git(root, git_dir, "cat-file", "-t", "--end-of-options", value)
+    if object_type != "commit":
+        fail(f"{label} must resolve as a commit object")
+    return value
+
+
+def validate_graph(root: Path, git_dir: Path | None, label: str) -> str:
+    graph = json_object(root / CORE[0], f"{label} graph")
     if not isinstance(graph.get("nodes"), list) or any(
         not isinstance(node, dict) for node in graph["nodes"]
     ):
-        fail("invalid source graph: nodes must be a list of objects")
-    if (
-        not isinstance(graph.get("built_at_commit"), str)
-        or not graph["built_at_commit"]
-    ):
-        fail("invalid source graph: built_at_commit must be a non-empty string")
+        fail(f"invalid {label} graph: nodes must be a list of objects")
+    revision = validate_commit_oid(
+        root, git_dir, graph.get("built_at_commit"), f"{label} graph built_at_commit"
+    )
     if not any(
         node.get("source_file") == "graphify-input/index.md" for node in graph["nodes"]
     ):
-        fail("invalid source graph: missing graphify-input/index.md node")
-    return graph["built_at_commit"]
+        fail(f"invalid {label} graph: missing graphify-input/index.md node")
+    return revision
+
+
+def trusted_interpreter(root: Path) -> Path:
+    graphify = shutil.which("graphify")
+    if graphify is None:
+        fail("trusted Graphify CLI is unavailable")
+    root = root.resolve()
+    cli_path = Path(graphify).absolute()
+    if cli_path.is_relative_to(root):
+        fail("trusted Graphify CLI is inside repository")
+    cli = cli_path.resolve(strict=True)
+    if not cli.is_file() or not os.access(cli, os.X_OK):
+        fail("trusted Graphify CLI is unsafe")
+    try:
+        shebang = cli.read_text(encoding="utf-8").splitlines()[0]
+    except (OSError, UnicodeDecodeError, IndexError) as error:
+        fail(f"trusted Graphify CLI shebang is unavailable: {error}")
+    if not shebang.startswith("#!"):
+        fail("trusted Graphify CLI has no interpreter shebang")
+    interpreter = Path(shebang[2:].strip())
+    if not interpreter.is_absolute():
+        fail("trusted Graphify CLI interpreter is not absolute")
+    if interpreter.is_relative_to(root):
+        fail("trusted Graphify CLI interpreter is inside repository")
+    canonical = interpreter.resolve(strict=True)
+    if (
+        canonical.is_relative_to(root)
+        or not interpreter.is_file()
+        or not os.access(interpreter, os.X_OK)
+    ):
+        fail("trusted Graphify CLI interpreter is unsafe")
+    return interpreter
 
 
 def validate_interpreter(root: Path) -> None:
@@ -156,22 +202,33 @@ def validate_interpreter(root: Path) -> None:
         configured = Path(marker.read_text(encoding="utf-8").strip())
     except (OSError, UnicodeDecodeError) as error:
         fail(f"invalid source Graphify interpreter marker: {error}")
-    if (
-        not configured.is_absolute()
-        or not configured.is_file()
-        or not os.access(configured, os.X_OK)
-    ):
+    if not configured.is_absolute():
         fail("invalid source Graphify interpreter marker")
-    result = subprocess.run(
-        [
-            str(configured),
-            "-c",
-            "import graphify; from importlib.metadata import version; print(version('graphifyy'))",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    trusted = trusted_interpreter(root)
+    try:
+        configured = configured.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        fail(f"invalid source Graphify interpreter marker: {error}")
+    if configured != trusted.resolve(strict=True):
+        fail("source Graphify interpreter marker does not match trusted CLI")
+    with tempfile.TemporaryDirectory(prefix="aria-graphify-seed-trust-") as neutral:
+        child_env = {
+            key: value
+            for key, value in os.environ.items()
+            if key not in {"PYTHONPATH", "PYTHONHOME"}
+        }
+        result = subprocess.run(
+            [
+                str(trusted),
+                "-c",
+                "import graphify; from importlib.metadata import version; print(version('graphifyy'))",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=neutral,
+            env=child_env,
+        )
     if result.returncode:
         fail("source Graphify interpreter cannot import graphify")
     if result.stdout.strip() != PINNED_GRAPHIFY_VERSION:
@@ -181,14 +238,16 @@ def validate_interpreter(root: Path) -> None:
         )
 
 
-def validate_source(source: Path) -> tuple[list[Path], str]:
+def validate_source(
+    source: Path, source_git_dir: Path | None
+) -> tuple[list[Path], str]:
     for path in (*CORE, Path("graphify-out/needs_update")):
         validate_parent_chain(source, path, "source", require_existing=True)
     if (source / "graphify-out/needs_update").exists() or (
         source / "graphify-out/needs_update"
     ).is_symlink():
         fail("source Graphify refresh is pending: graphify-out/needs_update exists")
-    graph_revision = validate_graph(source)
+    graph_revision = validate_graph(source, source_git_dir, "source")
     markdown = manifest_markdown(source)
     validate_interpreter(source)
     return markdown, graph_revision
@@ -206,7 +265,9 @@ def owned_files(payload: dict[str, Any]) -> list[Path]:
     return files
 
 
-def validate_owned(destination: Path, common: Path) -> None:
+def validate_owned(
+    destination: Path, common: Path, destination_git_dir: Path | None
+) -> None:
     validate_parent_chain(destination, SENTINEL, "destination", require_existing=True)
     payload = json_object(destination / SENTINEL, "worktree seed sentinel")
     if payload.get("target_root") != str(destination) or payload.get(
@@ -225,7 +286,7 @@ def validate_owned(destination: Path, common: Path) -> None:
         fail(f"invalid child .graphify_root: {error}")
     if root_marker not in {str(destination), f"{destination}\n"}:
         fail("child .graphify_root is not bound to this worktree")
-    validate_graph(destination)
+    validate_graph(destination, destination_git_dir, "destination")
     manifest_markdown(destination)
 
 
@@ -245,9 +306,9 @@ def seed(
         validate_parent_chain(destination, path, "destination", require_existing=False)
     sentinel = destination / SENTINEL
     if sentinel.exists() or sentinel.is_symlink():
-        validate_owned(destination, common)
+        validate_owned(destination, common, destination_git_dir)
         return
-    markdown, graph_revision = validate_source(source)
+    markdown, graph_revision = validate_source(source, source_git_dir)
     source_head = git(source, source_git_dir, "rev-parse", "HEAD")
     targets = [*CORE, *markdown, ROOT, SENTINEL]
     for path in targets:

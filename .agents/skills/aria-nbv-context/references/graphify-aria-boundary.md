@@ -19,12 +19,24 @@ repository owners remain authoritative for behavior and scientific claims.
    query. If repair still cannot produce a usable artifact, report the state and
    use direct sources only. Never query the unusable artifact.
 
-The public states are exhaustive. `fresh` has current provenance and intact
-required artifacts. `usable-stale` is an ancestor snapshot with valid
-provenance, a present ARIA projection node, intact artifacts, and an exact
-bounded stale-source list. Every other incomplete, corrupt, wrong-root,
-non-ancestor, or unscoped result is `unusable`. These states govern navigation
-only; Graphify never owns the located fact.
+The public states are exhaustive. `fresh` has intact artifacts, valid owner and
+detector checks, and a mandatory detector-proven zero-delta corpus. Matching
+recorded or locally derived Git trees establishes non-ancestor identity but
+never bypasses that detector requirement. `usable-stale` has an exact bounded
+`stale_sources` list or owner reasons; full-tree equality may retain this state
+for a bounded worktree delta. Every other incomplete, corrupt, wrong-root, true
+corpus mismatch, missing-object, or unscoped result is `unusable`. These states
+govern navigation only; Graphify never owns the located fact.
+
+The checker records and accepts only canonical full hexadecimal commit OIDs and
+derives trees from objects independently verified as commits. It always scans
+the mutable worktree with Graphify's pinned detector. When the recorded
+projection and graph trees do not equal `HEAD`, it also scans a fail-closed,
+read-only `git archive HEAD` snapshot with the local generated projection
+overlaid; committed and overlay deltas are combined without reproducing
+Graphify's hashing, ignore, or type rules. A non-ancestor committed corpus
+delta is `unusable`; an ancestor committed delta or bounded overlay delta is
+`usable-stale`.
 
 ## Freshness And Refresh
 
@@ -88,3 +100,7 @@ navigation, and require direct verification of affected sources.
   `semantic` and `semantic-deep` content-addressed caches are linked. Mutable
   graphs, projections, manifests, AST state, and semantic run state are local
   copies; cache presence never proves freshness.
+- The interpreter marker is advisory input only: checker and seeder validation
+  anchor it to the independently discovered `graphify` CLI shebang, require
+  canonical equality, and execute only that trusted interpreter for the pinned
+  `graphifyy` version. Missing, unsafe, or mismatched setup state fails closed.
