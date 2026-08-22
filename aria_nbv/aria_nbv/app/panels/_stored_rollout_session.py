@@ -23,7 +23,6 @@ from ...rollouts.inspection import (
     build_schema_validation,
     candidate_audit_rows,
     candidate_flow_rows,
-    candidate_group_summary_rows,
     candidate_population_evidence,
     comparable_policy_cohorts,
     discounted_rollout_return_rows,
@@ -252,20 +251,6 @@ def _cached_candidates_cached(
 
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-def _cached_candidate_group_cached(
-    store_path: str, *, group_by: str, limit: int | None = None, store_identity: str = ""
-) -> Any:
-    reader, _, _ = _projection_reader(store_path, store_identity)
-    if not hasattr(reader, "array"):
-        return candidate_group_summary_rows(
-            reader,
-            group_by=group_by,
-            audit_rows=_cached_candidates_cached(store_path, limit=limit, store_identity=store_identity),
-        )
-    return _cached_candidate_population_cached(store_path, store_identity)["groups"][group_by]
-
-
-@st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
 def _cached_q_h_cached(
     store_path: str,
     *,
@@ -376,7 +361,6 @@ def clear_stored_rollout_caches() -> None:
         _cached_targets_cached,
         _cached_masks_cached,
         _cached_candidates_cached,
-        _cached_candidate_group_cached,
         _cached_q_h_cached,
         _cached_tree_cached,
         _cached_root_geometry_cached,
@@ -459,11 +443,6 @@ class StoredRolloutSession:
 
     def candidates(self, **kwargs: Any) -> Any:
         return _cached_candidates_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)
-
-    def candidate_group(self, **kwargs: Any) -> Any:
-        return _cached_candidate_group_cached(
-            self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs
-        )
 
     def q_h(self, **kwargs: Any) -> Any:
         return _cached_q_h_cached(self.canonical_path.as_posix(), store_identity=self.store_identity, **kwargs)

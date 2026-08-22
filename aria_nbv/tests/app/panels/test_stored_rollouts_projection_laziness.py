@@ -62,40 +62,13 @@ def test_lightweight_dispatch_does_not_materialize_candidate_audit(
     assert result == expected
 
 
-def test_candidate_group_materializes_one_candidate_projection_and_reuses_its_rows(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The explicit group branch may read candidates once and must reuse them."""
+def test_stored_rollout_session_has_no_legacy_candidate_group_owner() -> None:
+    """Candidate grouping remains a domain/reporting concern, not a session owner."""
 
-    reader = object()
-    candidate_rows = [{"candidate_row_id": 7}, {"candidate_row_id": 11}]
-    recursive_calls: list[tuple[str, int | None]] = []
-    summary_calls: list[tuple[object, str, object]] = []
-    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda _path, **_kwargs: (reader, object(), {}))
+    source = Path(session.__file__).read_text(encoding="utf-8")
 
-    def candidate_projection(_store_path: str, *, limit: int | None = None, **_kwargs: object) -> list[dict[str, int]]:
-        recursive_calls.append(("candidates", limit))
-        return candidate_rows
-
-    def summarize(
-        source: object,
-        *,
-        group_by: str,
-        audit_rows: object,
-    ) -> list[dict[str, object]]:
-        summary_calls.append((source, group_by, audit_rows))
-        return [{"family": "fixture", "candidate_count": len(candidate_rows)}]
-
-    monkeypatch.setattr(session, "_cached_candidates_cached", candidate_projection)
-    monkeypatch.setattr(session, "candidate_group_summary_rows", summarize)
-
-    result = session._cached_candidate_group_cached.__wrapped__(
-        "/fixture.zarr", group_by="mixture", limit=25, store_identity="fixture"
-    )
-
-    assert recursive_calls == [("candidates", 25)]
-    assert summary_calls == [(reader, "mixture", candidate_rows)]
-    assert result == [{"family": "fixture", "candidate_count": 2}]
+    assert "_cached_candidate_group_cached" not in source
+    assert "def candidate_group(" not in source
 
 
 def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -600,7 +573,6 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
         "_cached_targets_cached",
         "_cached_masks_cached",
         "_cached_candidates_cached",
-        "_cached_candidate_group_cached",
         "_cached_q_h_cached",
         "_cached_tree_cached",
         "_cached_root_geometry_cached",
@@ -771,6 +743,7 @@ def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
     assert '@st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)' in source
     assert "_cached_projection" not in source
     assert "_named_projection" not in source
+    assert "_cached_candidate_group_cached" not in source
     assert "projection: str" not in source
     assert "Unknown cached rollout projection" not in source
 

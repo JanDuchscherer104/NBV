@@ -603,7 +603,6 @@ def test_stored_rollouts_unopened_heavy_evidence_calls_are_exactly_zero(
     stored_rollout_session.clear_stored_rollout_caches()
     heavy_owners = {
         "_cached_candidates_cached": "candidates",
-        "_cached_candidate_group_cached": "candidate_group",
         "_cached_ranks_cached": "ranks",
         "_cached_root_geometry_cached": "root_geometry",
         "_cached_tree_cached": "tree",
