@@ -38,6 +38,7 @@ def test_renamed_data_modules_are_discovered_for_api_generation() -> None:
         "data_handling.vin_store.inventory",
         "data_handling.vin_store.source",
         "data_handling.vin_store.store",
+        "data_handling.vin_store.target_inventory",
         "data_handling.vin_store.views",
         "data_handling.vin_store.writer",
     }
