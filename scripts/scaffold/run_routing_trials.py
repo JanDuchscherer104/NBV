@@ -29,12 +29,15 @@ RUBRIC_PATH = ROOT / RUBRIC_RELATIVE
 REPORT_SCHEMA = ROOT / REPORT_SCHEMA_RELATIVE
 VERIFIER_SCHEMA = ROOT / VERIFIER_SCHEMA_RELATIVE
 EVALUATOR_FIXTURE_PATHS = (PROMPTS_RELATIVE, RUBRIC_RELATIVE)
-EVENT_EVIDENCE_MAX_ITEMS = 64
-EVENT_EVIDENCE_MAX_FIELD_CHARS = 2_048
-EVENT_EVIDENCE_MAX_TOTAL_CHARS = 32_768
-EVENT_EVIDENCE_MAX_RAW_BYTES = 131_072
-TRIAL_RESPONSE_MAX_CHARS = 16_384
+# Normal Codex trials currently produce roughly 1.2 MiB and 252 final execution
+# records. These caps retain more than 2x item headroom while keeping normalized
+# evidence to half of the verifier's 1 MiB bounded JSON budget.
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
+EVENT_EVIDENCE_MAX_ITEMS = 512
+EVENT_EVIDENCE_MAX_FIELD_CHARS = 2_048
+EVENT_EVIDENCE_MAX_TOTAL_CHARS = VERIFIER_REPORT_MAX_BYTES // 2
+EVENT_EVIDENCE_MAX_RAW_BYTES = 8_388_608
+TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERDICT_MAX_ITEMS = 64
 _TRUNCATION_SUFFIX = "...<truncated>"
 RUBRIC_CONSTRAINT_FIELDS = (
@@ -793,38 +796,45 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
     read_error = False
     try:
         with path.open("rb") as stream:
-            raw_events = stream.read(EVENT_EVIDENCE_MAX_RAW_BYTES + 1)
-        if len(raw_events) > EVENT_EVIDENCE_MAX_RAW_BYTES:
-            lines = []
-            dropped_items = 1
-        else:
-            lines = raw_events.decode("utf-8").splitlines()
-    except (OSError, UnicodeError):
-        lines = []
+            raw_bytes = 0
+            while True:
+                remaining = EVENT_EVIDENCE_MAX_RAW_BYTES - raw_bytes
+                raw_line = stream.readline(remaining + 1)
+                if not raw_line:
+                    break
+                if len(raw_line) > remaining:
+                    dropped_items += 1
+                    break
+                raw_bytes += len(raw_line)
+                try:
+                    line = raw_line.decode("utf-8")
+                except UnicodeError:
+                    malformed_lines += 1
+                    continue
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    malformed_lines += 1
+                    continue
+                record, truncated_fields, invalid = _event_evidence_record(event)
+                field_truncations += truncated_fields
+                invalid_items += int(invalid)
+                if record is None:
+                    continue
+                serialized = json.dumps(record, sort_keys=True, separators=(",", ":"))
+                item_chars = len(serialized) + int(bool(items))
+                if (
+                    len(items) >= EVENT_EVIDENCE_MAX_ITEMS
+                    or payload_chars + item_chars > EVENT_EVIDENCE_MAX_TOTAL_CHARS
+                ):
+                    dropped_items += 1
+                    continue
+                items.append(record)
+                payload_chars += item_chars
+    except OSError:
         read_error = True
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            malformed_lines += 1
-            continue
-        record, truncated_fields, invalid = _event_evidence_record(event)
-        field_truncations += truncated_fields
-        invalid_items += int(invalid)
-        if record is None:
-            continue
-        serialized = json.dumps(record, sort_keys=True, separators=(",", ":"))
-        item_chars = len(serialized) + int(bool(items))
-        if (
-            len(items) >= EVENT_EVIDENCE_MAX_ITEMS
-            or payload_chars + item_chars > EVENT_EVIDENCE_MAX_TOTAL_CHARS
-        ):
-            dropped_items += 1
-            continue
-        items.append(record)
-        payload_chars += item_chars
     while True:
         result = {
             "bounds": {

@@ -424,6 +424,58 @@ def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
     )
 
 
+def test_event_evidence_retains_started_execution_and_ignores_chatter(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    forbidden_path = ".agents/skills/typst-authoring/SKILL.md"
+    records = [
+        {
+            "type": "item.started",
+            "item": {
+                "type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "read_file",
+                "arguments": {"path": forbidden_path},
+                "status": "in_progress",
+            },
+        },
+        {
+            "type": "item.started",
+            "item": {
+                "type": "command_execution",
+                "command": f"sed -n 1,80p {forbidden_path}",
+                "path": forbidden_path,
+                "status": "in_progress",
+            },
+        },
+        {
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": "non-execution chatter"},
+        },
+        {"type": "turn.completed", "usage": {"input_tokens": 100}},
+    ]
+    events.write_text(
+        "\n".join(json.dumps(record) for record in records),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert len(evidence["items"]) == 2
+    assert [item["event_type"] for item in evidence["items"]] == [
+        "item.started",
+        "item.started",
+    ]
+    assert evidence["items"][0]["tool"] == "read_file"
+    assert forbidden_path in evidence["items"][0]["arguments"]
+    assert evidence["items"][1]["path"] == forbidden_path
+    assert trials.validate_event_evidence(evidence)[0] is True
+    assert trials._matching_event_indices(
+        evidence["items"], kind="expected_owner_path", subject=forbidden_path
+    ) == []
+
+
 def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     tmp_path: Path,
 ) -> None:
@@ -432,12 +484,9 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     records = [
         {
             "type": long_text,
-            "item": {
-                "type": long_text,
-                "command": long_text,
-                "status": "completed",
-                "exit_code": 0,
-            },
+            "command": long_text,
+            "status": "completed",
+            "exit_code": 0,
         }
     ]
     records.extend(
@@ -467,13 +516,93 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     assert trials.validate_event_evidence(evidence)[0] is False
 
 
-def test_event_evidence_rejects_oversized_raw_stream(tmp_path: Path) -> None:
+def test_event_evidence_streams_large_valid_codex_jsonl_without_chatter_counting(
+    tmp_path: Path,
+) -> None:
     events = tmp_path / "events.jsonl"
-    events.write_bytes(b"x" * (trials.EVENT_EVIDENCE_MAX_RAW_BYTES + 1))
+    chatter = {
+        "type": "item.completed",
+        "item": {"type": "agent_message", "text": "x" * 2_000},
+    }
+    commands = [
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": f"rg -n owner-{index} AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        }
+        for index in range(252)
+    ]
+    records = [chatter] * 600 + commands
+    events.write_text(
+        "\n".join(json.dumps(record) for record in records),
+        encoding="utf-8",
+    )
+    assert events.stat().st_size > 1_000_000
 
     evidence = trials.extract_event_evidence(events)
 
-    assert evidence["items"] == []
+    assert len(evidence["items"]) == 252
+    assert evidence["dropped_items"] == 0
+    assert evidence["truncated"] is False
+    assert trials.validate_event_evidence(evidence) == (
+        True,
+        "complete raw event evidence",
+    )
+
+
+def test_event_evidence_item_cap_is_complete_at_boundary(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    records = [
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": f"rg -n owner-{index} AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        }
+        for index in range(trials.EVENT_EVIDENCE_MAX_ITEMS)
+    ]
+    events.write_text(
+        "\n".join(json.dumps(record) for record in records),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert len(evidence["items"]) == trials.EVENT_EVIDENCE_MAX_ITEMS
+    assert evidence["dropped_items"] == 0
+    assert trials.validate_event_evidence(evidence)[0] is True
+
+
+def test_event_evidence_rejects_oversized_raw_stream(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    command = json.dumps(
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "rg -n owner AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+        }
+    )
+    chatter = json.dumps({"type": "turn.completed", "padding": "x" * 4_000})
+    repetitions = trials.EVENT_EVIDENCE_MAX_RAW_BYTES // (len(chatter) + 1) + 1
+    events.write_text(
+        "\n".join([command, *([chatter] * repetitions)]),
+        encoding="utf-8",
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert len(evidence["items"]) == 1
     assert evidence["dropped_items"] == 1
     assert evidence["truncated"] is True
     assert trials.validate_event_evidence(evidence)[0] is False
@@ -693,6 +822,40 @@ def test_forbidden_tool_ref_cannot_be_ignored() -> None:
     ]
     verdict = _verdict(rubric_evaluations=evaluations)
     assert not _validate_verdict(verdict, events, rubric)[0]
+
+
+def test_started_path_bearing_forbidden_tool_cannot_be_adjudicated_absent() -> None:
+    tool_ref = "mcp__codex_apps__read_file"
+    forbidden_path = ".agents/skills/typst-authoring/SKILL.md"
+    rubric = {**TEST_RUBRIC, "forbidden_tool_refs": [tool_ref]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.started",
+                "item_type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "read_file",
+                "arguments": json.dumps({"path": forbidden_path}),
+                "status": "in_progress",
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("forbidden_tool_ref", tool_ref, "not_observed", "event_evidence", []),
+        *_rubric_evaluations()[1:],
+    ]
+
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    )[0]
 
 
 @pytest.mark.parametrize("omitted_kind", ["expected_owner_path", "expected_tool_ref"])
