@@ -85,6 +85,10 @@ HISTORICAL_PREFIXES = (
     "docs/typst/thesis_slides/",
 )
 
+DERIVED_HISTORICAL_EVIDENCE_PATHS = {
+    ".agents/memory/index/debriefs.jsonl",
+}
+
 MIGRATION_TEST_PATHS = {
     "scripts/tests/test_agent_governance_g002.py",
     "scripts/tests/test_ownership_consolidation_contract.py",
@@ -147,6 +151,12 @@ def _tracked_paths() -> list[str]:
     payload = result.stdout.rstrip(b"\0")
     paths = [item.decode("utf-8") for item in payload.split(b"\0")] if payload else []
     return [path for path in paths if (ROOT / path).is_file()]
+
+
+def _is_historical_evidence_path(relative: str) -> bool:
+    return relative.startswith(HISTORICAL_PREFIXES) or (
+        relative in DERIVED_HISTORICAL_EVIDENCE_PATHS
+    )
 
 
 def _frontmatter(text: str) -> str:
@@ -258,7 +268,7 @@ def test_active_sources_do_not_reference_retired_paths() -> None:
     for relative in _tracked_paths():
         if relative in MIGRATION_TEST_PATHS or relative == ".agents/resolved.toml":
             continue
-        if relative.startswith(HISTORICAL_PREFIXES):
+        if _is_historical_evidence_path(relative):
             continue
         path = ROOT / relative
         if path.suffix.lower() not in TEXT_SUFFIXES or not path.is_file():
@@ -268,6 +278,11 @@ def test_active_sources_do_not_reference_retired_paths() -> None:
             if retired in text:
                 violations.append(f"{relative}: {retired}")
     assert not violations
+
+
+def test_only_debrief_index_is_derived_historical_evidence() -> None:
+    assert _is_historical_evidence_path(".agents/memory/index/debriefs.jsonl")
+    assert not _is_historical_evidence_path(".agents/memory/index/owners.jsonl")
 
 
 def test_generated_omx_inventory_is_not_tracked() -> None:
