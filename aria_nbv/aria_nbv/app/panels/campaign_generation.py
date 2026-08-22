@@ -73,13 +73,13 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
     """Render plot-first validated campaign admission evidence."""
 
     counts = payload["counts"]
-    metric_cols = st.columns(6)
-    metric_cols[0].metric("Observed targets", f"{int(counts['observed']):,}")
-    metric_cols[1].metric("Admitted", f"{int(counts['admitted']):,}")
-    metric_cols[2].metric("Rejected", f"{int(counts['rejected']):,}")
-    metric_cols[3].metric("Ambiguous", f"{int(counts['ambiguous']):,}")
-    metric_cols[4].metric("Same-class overlap scored", f"{int(counts['same_class_scored']):,}")
-    metric_cols[5].metric("Duplicate GT groups", f"{int(counts['duplicate_gt_groups']):,}")
+    with st.container(horizontal=True):
+        st.metric("Observed targets", f"{int(counts['observed']):,}", border=True)
+        st.metric("Admitted", f"{int(counts['admitted']):,}", border=True)
+        st.metric("Rejected", f"{int(counts['rejected']):,}", border=True)
+        st.metric("Ambiguous", f"{int(counts['ambiguous']):,}", border=True)
+        st.metric("Same-class overlap scored", f"{int(counts['same_class_scored']):,}", border=True)
+        st.metric("Duplicate GT groups", f"{int(counts['duplicate_gt_groups']):,}", border=True)
 
     reason_frame = pd.DataFrame(payload["reason_rows"])
     if not reason_frame.empty:

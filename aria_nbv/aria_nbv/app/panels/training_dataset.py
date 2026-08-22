@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -231,6 +232,8 @@ def _target_inventory_frames(
         .sort_values(["population", "target_count", "class_name"], ascending=[True, False, True])
         .reset_index(drop=True)
     )
+    population_totals = class_frame.groupby("population")["target_count"].transform("sum")
+    class_frame["class_fraction"] = class_frame["target_count"] / population_totals
     return sample_frame, class_frame, target_frame
 
 
@@ -271,35 +274,19 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
     if unavailable:
         st.warning("Target populations unavailable — " + "; ".join(unavailable))
 
-    exclusion_rows = [
-        {"population": population, "reason": reason, "count": int(evidence.get(field, 0))}
-        for population, evidence in (("detected", detected), ("gt", gt))
-        for reason, field in (
-            ("padding", "excluded_padding_count"),
-            ("non-finite", "excluded_nonfinite_count"),
-            ("invalid geometry", "excluded_invalid_geometry_count"),
-        )
-        if int(evidence.get(field, 0)) > 0
-    ]
-    if exclusion_rows:
-        exclusion_figure = px.bar(
-            pd.DataFrame(exclusion_rows),
-            x="reason",
-            y="count",
-            color="population",
-            barmode="group",
-            title="Target rows excluded from statistical summaries",
-            labels={"reason": "exclusion reason", "count": "excluded OBB rows", "population": "population"},
-        )
-        st.plotly_chart(exclusion_figure, width="stretch")
-        _render_target_context(
-            question="How much target evidence was withheld before computing the population summaries?",
-            interpretation=(
-                "These rows are counted but excluded from every downstream distribution. Padding is expected fixed-width "
-                "storage; non-finite values and non-positive extents indicate unusable geometry."
-            ),
-            caveat="A clean plot has no bars. Padding is not a detector error and should be interpreted separately.",
-        )
+    nonfinite_count = int(detected.get("excluded_nonfinite_count", 0)) + int(gt.get("excluded_nonfinite_count", 0))
+    invalid_geometry_count = int(detected.get("excluded_invalid_geometry_count", 0)) + int(
+        gt.get("excluded_invalid_geometry_count", 0)
+    )
+    with st.container(horizontal=True):
+        st.metric("Detected padding", f"{int(detected.get('excluded_padding_count', 0)):,}", border=True)
+        st.metric("GT padding", f"{int(gt.get('excluded_padding_count', 0)):,}", border=True)
+        st.metric("Non-finite rows", f"{nonfinite_count:,}", border=True)
+        st.metric("Invalid geometry", f"{invalid_geometry_count:,}", border=True)
+    st.caption(
+        "Padding is expected fixed-width storage and is not a detector error. Non-finite rows and non-positive extents "
+        "are withheld from every distribution."
+    )
 
     if not sample_frame.empty:
         sample_figure = px.histogram(
@@ -326,22 +313,31 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
         )
 
     if not class_frame.empty:
+        class_order = class_frame.groupby("class_name")["target_count"].sum().sort_values(ascending=True).index.tolist()
         class_figure = px.bar(
             class_frame,
-            x="class_name",
-            y="target_count",
+            x="class_fraction",
+            y="class_name",
             color="population",
             barmode="group",
-            hover_data=["scene_count"],
-            title="Target support by semantic class",
-            labels={"class_name": "semantic class", "target_count": "target rows", "population": "population"},
+            orientation="h",
+            hover_data=["target_count", "scene_count"],
+            category_orders={"class_name": class_order},
+            title="Semantic-class composition within each target population",
+            labels={
+                "class_name": "semantic class",
+                "class_fraction": "fraction of population",
+                "population": "population",
+            },
+            height=max(480, 28 * len(class_order)),
         )
+        class_figure.update_xaxes(tickformat=".0%")
         st.plotly_chart(class_figure, width="stretch")
         _render_target_context(
             question="Which semantic classes dominate or disappear from detected and GT target pools?",
             interpretation=(
-                "Bars count finite valid OBB rows. Hovered scene support helps distinguish a broadly represented class "
-                "from many repeated targets in only a few scenes."
+                "Each bar is normalized within its own population, making detected and GT composition comparable despite "
+                "their different total row counts. Hover reveals absolute rows and scene support."
             ),
             caveat=(
                 "Counts are inventory evidence, not class accuracy. Unknown semantic names retain their numeric ID rather "
@@ -352,15 +348,19 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
     if not target_frame.empty:
         geometry_frame = target_frame.loc[(target_frame["volume"] > 0) & target_frame["volume"].notna()]
         if not geometry_frame.empty:
+            geometry_frame = geometry_frame.assign(
+                log10_volume=np.log10(geometry_frame["volume"]),
+                log10_aspect_ratio=np.log10(geometry_frame["aspect_ratio"]),
+            )
             volume_figure = px.histogram(
                 geometry_frame,
-                x="volume",
+                x="log10_volume",
                 color="population",
                 barmode="overlay",
                 opacity=0.65,
-                log_x=True,
-                title="Target OBB volume distribution",
-                labels={"volume": "oriented-box volume (m³)", "population": "target population"},
+                histnorm="probability",
+                title="Target OBB volume distribution (normalized within population)",
+                labels={"log10_volume": "log10 oriented-box volume [m³]", "population": "target population"},
             )
             st.plotly_chart(volume_figure, width="stretch")
             _render_target_context(
@@ -373,13 +373,13 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
             )
             aspect_figure = px.histogram(
                 geometry_frame,
-                x="aspect_ratio",
+                x="log10_aspect_ratio",
                 color="population",
                 barmode="overlay",
                 opacity=0.65,
-                log_x=True,
-                title="Target OBB aspect-ratio distribution",
-                labels={"aspect_ratio": "largest / smallest OBB extent", "population": "target population"},
+                histnorm="probability",
+                title="Target OBB aspect-ratio distribution (normalized within population)",
+                labels={"log10_aspect_ratio": "log10 largest / smallest OBB extent", "population": "target population"},
             )
             st.plotly_chart(aspect_figure, width="stretch")
             _render_target_context(

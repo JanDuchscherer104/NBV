@@ -334,4 +334,5 @@ def test_target_inventory_frames_preserve_zero_samples_and_class_scene_support()
     chair_detected = classes.loc[(classes["population"] == "detected") & (classes["class_name"] == "chair")].iloc[0]
     assert chair_detected["target_count"] == 2
     assert chair_detected["scene_count"] == 1
+    assert chair_detected["class_fraction"] == 1.0
     assert set(targets["population"]) == {"detected", "gt"}
