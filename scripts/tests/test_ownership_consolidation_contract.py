@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_RECEIPT = (
-    ROOT / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
-)
+MIGRATION_RECEIPT = ROOT / ".agents/memory/history/2026/08/2026-08-16_ownership_migration_receipt.md"
 
 RETIRED_SOURCES = (
     ".agents/references/source_order.md",
@@ -154,9 +152,7 @@ def _tracked_paths() -> list[str]:
 
 
 def _is_historical_evidence_path(relative: str) -> bool:
-    return relative.startswith(HISTORICAL_PREFIXES) or (
-        relative in DERIVED_HISTORICAL_EVIDENCE_PATHS
-    )
+    return relative.startswith(HISTORICAL_PREFIXES) or (relative in DERIVED_HISTORICAL_EVIDENCE_PATHS)
 
 
 def _frontmatter(text: str) -> str:
@@ -177,19 +173,62 @@ def _markdown_table_rows(text: str, header: str) -> list[list[str]]:
     return rows
 
 
+def _local_markdown_links(path: Path) -> list[Path]:
+    text = path.read_text(encoding="utf-8")
+    targets: list[Path] = []
+    for raw_target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+        target = raw_target.split("#", 1)[0]
+        if not target or "://" in target or target.startswith(("#", "mailto:")):
+            continue
+        targets.append((path.parent / target).resolve())
+    return targets
+
+
+def test_readme_routes_and_documented_entrypoints_resolve() -> None:
+    public_docs = (
+        ROOT / "README.md",
+        ROOT / "SETUP.md",
+        ROOT / "aria_nbv/README.md",
+        ROOT / "docs/index.qmd",
+    )
+    broken_links = [
+        target for document in public_docs for target in _local_markdown_links(document) if not target.exists()
+    ]
+    assert not broken_links
+
+    metadata = tomllib.loads((ROOT / "aria_nbv/pyproject.toml").read_text(encoding="utf-8"))
+    entrypoints = set(metadata["project"]["scripts"])
+    documented = set()
+    for path in public_docs:
+        documented.update(re.findall(r"\buv run (nbv-[a-z0-9-]+)\b", path.read_text(encoding="utf-8")))
+    assert documented <= entrypoints
+    assert "nbv-rollout-trace-smoke" not in documented
+
+    config_examples = {
+        value
+        for path in public_docs
+        for value in re.findall(r"--config-path\s+([^\s]+)", path.read_text(encoding="utf-8"))
+    }
+    tracked_paths = set(_tracked_paths())
+    invalid_configs = []
+    for value in config_examples:
+        relative = value.removeprefix("../")
+        candidate = ROOT / relative if relative.startswith(".configs/") else ROOT / ".configs" / relative
+        tracked_candidate = candidate.relative_to(ROOT).as_posix()
+        if not candidate.is_file() or tracked_candidate not in tracked_paths:
+            invalid_configs.append(candidate)
+    assert not invalid_configs
+
+
 def test_retired_sources_are_absent() -> None:
     assert not [path for path in RETIRED_SOURCES if (ROOT / path).exists()]
 
 
 def test_context_skill_owns_hierarchy_and_initialization_map() -> None:
-    context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(
-        encoding="utf-8"
-    )
+    context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(encoding="utf-8")
 
     assert len(context.splitlines()) <= 150
-    assert not [
-        owner for owner in CONTEXT_INITIALIZATION_OWNERS if f"`{owner}`" not in context
-    ]
+    assert not [owner for owner in CONTEXT_INITIALIZATION_OWNERS if f"`{owner}`" not in context]
     for heading in ("## Owner Hierarchy", "## Conflict Rule", "## Capture Rule"):
         assert heading in context
 
@@ -216,10 +255,7 @@ def test_theory_pages_are_deprecated_navigation() -> None:
 
 def test_expected_qmd_page_manifest_is_exact() -> None:
     contents_root = ROOT / "docs/contents"
-    observed = {
-        path.relative_to(contents_root).as_posix()
-        for path in contents_root.rglob("*.qmd")
-    }
+    observed = {path.relative_to(contents_root).as_posix() for path in contents_root.rglob("*.qmd")}
     assert observed == EXPECTED_QMD_PAGES
     assert (
         not {
@@ -313,9 +349,7 @@ def test_active_omx_and_maintained_slides_scope_retired_references() -> None:
         path = ROOT / relative
         if path.suffix.lower() not in {".md", ".typ", ".json", ".html"}:
             continue
-        if relative in RETIRED_REFERENCE_PROVENANCE or relative.startswith(
-            REFERENCE_EXCLUDED_PREFIXES
-        ):
+        if relative in RETIRED_REFERENCE_PROVENANCE or relative.startswith(REFERENCE_EXCLUDED_PREFIXES):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for alias in aliases:
@@ -356,9 +390,7 @@ def test_glossary_rq_links_match_the_six_tier_semantics() -> None:
         # links drift back to the pre-migration owner.
         observed = [
             anchor.removeprefix("ssec:")
-            for anchor in re.findall(
-                r"research-questions\.typ#(ssec:rq\d+)", match.group(1)
-            )
+            for anchor in re.findall(r"research-questions\.typ#(ssec:rq\d+)", match.group(1))
         ]
         assert len(observed) == len(set(observed)), f"{term}: duplicate RQ links"
         assert set(observed) == expected_rqs, term
@@ -374,12 +406,8 @@ def test_glossary_theory_links_target_existing_anchors() -> None:
         assert f"{{#{anchor}}}" in target, link
 
 
-def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_distinct() -> (
-    None
-):
-    context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(
-        encoding="utf-8"
-    )
+def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_distinct() -> None:
+    context = (ROOT / ".agents/skills/aria-nbv-context/SKILL.md").read_text(encoding="utf-8")
     glossary_source = ROOT / "docs/typst/shared/glossary.typ"
     glossary_renderer = ROOT / "docs/contents/glossary.qmd"
     acquisition_owner = ROOT / "docs/literature/sources.jsonl"
@@ -398,9 +426,7 @@ def test_scientific_sources_keep_glossary_renderer_and_bibliography_owners_disti
     assert glossary_source != glossary_renderer
     assert acquisition_owner not in citation_owners
     assert len(set(citation_owners)) == 2
-    assert "Canonical ARIA-NBV glossary source" in glossary_source.read_text(
-        encoding="utf-8"
-    )
+    assert "Canonical ARIA-NBV glossary source" in glossary_source.read_text(encoding="utf-8")
     assert "Generated" in glossary_renderer.read_text(encoding="utf-8")
     assert acquisition_owner.suffix == ".jsonl"
     assert all(path.suffix == ".bib" for path in citation_owners)

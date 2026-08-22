@@ -1,69 +1,123 @@
 # ARIA-NBV
 
-ARIA-NBV develops quality-driven next-best-view planning for egocentric indoor
-reconstruction. The current thesis path focuses on ASE/EFM3D snippets,
-target-specific Relative Reconstruction Improvement (RRI), finite-candidate
-rollouts, and a target-conditioned finite-horizon value model `Q_H`.
+[![Root Verification](https://github.com/JanDuchscherer104/ARIA-NBV/actions/workflows/ci.yml/badge.svg)](https://github.com/JanDuchscherer104/ARIA-NBV/actions/workflows/ci.yml)
+[![Documentation](https://github.com/JanDuchscherer104/ARIA-NBV/actions/workflows/quarto-publish.yml/badge.svg)](https://janduchscherer104.github.io/ARIA-NBV/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-The public documentation is published at
-<https://janduchscherer104.github.io/ARIA-NBV/>.
+ARIA-NBV is a research prototype for target-conditioned, quality-driven
+next-best-view planning in egocentric indoor scenes. It uses Aria Synthetic
+Environments (ASE) and EFM3D/EVL evidence to study finite-candidate policies
+whose utility is target-specific Relative Reconstruction Improvement (RRI).
 
-## Current Focus
+The active thesis asks whether multi-step selection can improve endpoint target
+quality under fixed candidate support, validity rules, and acquisition budgets.
+Current `main` implements the oracle, data, rollout, inspection, and
+finite-horizon training infrastructure; actor-visible target conditioning and a
+production `Q_H` policy evaluation remain active research gates.
 
-- Keep the roadmap and research questions aligned around target-conditioned,
-  RRI-based multi-step NBV.
-- Validate ASE offline-store, pose-frame, candidate-label, invalidity-mask, and
-  oracle-RRI contracts before scale-up.
-- Use one-step VIN-style scoring as the myopic baseline, then measure bounded
-  oracle-lookahead headroom and train `Q_H` over trusted finite candidate sets.
-- Treat online discrete control, continuous actor-critic policies, VLM/global
-  planning, and real-device deployment as gated follow-up work.
+## Key Ideas
 
-## Documentation Map
+- **Quality-driven selection:** optimize reconstruction improvement rather than
+  treating geometric coverage as the final objective.
+- **Actor/oracle separation:** actor-visible state comes from observed evidence;
+  ground-truth geometry and counterfactual renders remain supervision,
+  evaluation, or explicitly named upper bounds.
+- **Finite candidate actions:** every decision uses an auditable candidate
+  table, hard validity mask, and explicit invalid-reason codes.
+- **Two-store lineage:** immutable one-step evidence stays in `vin_offline`;
+  target-conditioned multi-step replay lives in a separate `rollouts.zarr`
+  store that references its source rows.
+- **Matched evaluation:** any learned policy result must re-evaluate selections
+  with the oracle under the same candidate support and acquisition budget as
+  its baselines.
 
-- [Published documentation](https://janduchscherer104.github.io/ARIA-NBV/):
-  rendered Quarto site.
-- [Quarto home](docs/index.qmd) and [Quarto navigation](docs/_quarto.yml):
-  public docs entry point and sidebar/navbar source.
-- [Active thesis](docs/typst/thesis/main.typ), including the
-  [research questions](docs/typst/thesis/sections/01-research-questions.typ),
-  [development roadmap](docs/typst/thesis/development/roadmap.typ), and
-  [M1 contract report](docs/typst/thesis/development/m1-contract-report.typ):
-  canonical thesis direction and development-only gate views.
-- [Literature index](docs/contents/literature/index.qmd): thesis-oriented
-  adoption map for NBV, ARIA/EFM3D, rollout/value learning, 3DGS, and semantic
-  scene references.
-- [Theory reading guides](docs/_quarto.yml): literature background and
-  navigation only. The [Typst thesis](docs/typst/thesis/main.typ) owns
-  scientific theory; Python docstrings, configuration, and tests own
-  executable contracts.
-- [Thesis Typst source](docs/typst/thesis/main.typ): active master's-thesis
-  seed and compile entry point.
-- [Advisor meeting 2026-05-22](docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ):
-  historical advisor-alignment deck; use it as provenance, not as the current
-  thesis source of truth.
-- [API Reference](docs/reference/index.qmd): generated `aria_nbv`
-  implementation contracts.
-- [Local setup](SETUP.md) and [Quarto setup page](docs/contents/setup.qmd):
-  environment, data/cache, and smoke-check instructions.
+## Current State
 
-## Common Local Commands
+| State | Scope |
+| --- | --- |
+| Available | Oracle scene/target RRI, candidate generation and rendering, immutable VIN stores, rollout generation and Zarr persistence, Streamlit/Rerun inspection, and scorer-independent `Q_H` data/training contracts. |
+| Active gates | Observed or predicted target matching, an actor-visible target-conditioned one-step scorer, trusted scene-disjoint support, bounded-lookahead headroom, and a production `Q_H` scorer/evaluation path. |
+| Deferred | Online discrete learning, continuous or simulator-backed control, VLM/global planning, and real-device deployment. |
 
-Run package commands from `aria_nbv/` with the uv-managed environment.
+The [active research questions](docs/typst/thesis/sections/01-research-questions.typ)
+and [development roadmap](docs/typst/thesis/development/roadmap.typ) own the
+current scientific scope and evidence gates.
+
+## Start Here
+
+| Goal | Owner |
+| --- | --- |
+| Install dependencies, obtain data, and run smoke checks | [Portable setup](SETUP.md) |
+| Understand the current thesis and research gates | [Active thesis](docs/typst/thesis/main.typ) and [research questions](docs/typst/thesis/sections/01-research-questions.typ) |
+| Inspect stores and experiments interactively | [Streamlit app](aria_nbv/aria_nbv/app/README.md) |
+| Generate or understand offline and rollout data | [Data-handling and generation runbook](aria_nbv/aria_nbv/data_handling/README.md) |
+| Validate or inspect persisted rollouts | [Rollout storage and read model](aria_nbv/aria_nbv/rollouts/README.md) |
+| Understand one-step VIN and finite-horizon training | [Lightning training contracts](aria_nbv/aria_nbv/lightning/README.md) and [VIN model contracts](aria_nbv/aria_nbv/vin/README.md) |
+| Browse executable package contracts | [Generated API reference](docs/reference/index.qmd) |
+| Find notation, equations, terms, or literature | [Symbols](docs/typst/shared/symbols.typ), [equations](docs/typst/shared/equations.typ), [glossary](docs/typst/shared/glossary.typ), and [literature index](docs/contents/literature/index.qmd) |
+| Contribute code or use a coding agent | [Repository guidance](AGENTS.md), then the nearest package or docs guide |
+
+The [published documentation](https://janduchscherer104.github.io/ARIA-NBV/)
+is the rendered public view. Exact Python source, tests, and active
+configuration own executable behavior; the active Typst thesis owns current
+scientific claims.
+
+## Requirements
+
+- Python 3.11 and recursive Git submodules.
+- Linux with the CUDA 12.1 toolchain for full ASE oracle generation, rendering,
+  and training. CPU-only environments support documentation, lightweight tests,
+  immutable-store reads, and inspection utilities.
+- ASE access manifests and the external checkpoints listed in
+  [SETUP.md](SETUP.md) for real-data workflows.
+
+Follow [SETUP.md](SETUP.md) for the supported environment and data layout. Do
+not treat a successful PyTorch CUDA import as proof that the separately compiled
+PyTorch3D renderer is usable.
+
+## First Useful Commands
+
+List repository-level validation and inspection targets:
 
 ```sh
-# Launch the Streamlit app
-uv run nbv-st
-
-# Train the VIN model
-uv run nbv-train --config-path offline_only.toml
-
-# Single forward pass that summarizes VIN outputs
-uv run nbv-summary --config-path offline_only.toml
-
-# Dump resolved config to stdout
-uv run nbv-cli --run-mode dump-config --config-path offline_only.toml
+make help
 ```
 
-See [SETUP.md](SETUP.md) for downloader usage, Rerun inspection, offline-store
-diagnostics, and smoke checks.
+After completing setup, run package commands from `aria_nbv/`:
+
+```sh
+cd aria_nbv
+
+# Interactive inspection and bounded generation surface
+uv run nbv-st
+
+# Discover immutable-store and rollout-store diagnostics
+uv run nbv-offline-info --help
+uv run nbv-rollouts-info --help
+```
+
+Validate the configured one-step VIN path before starting a training run:
+
+```sh
+uv run nbv-summary --config-path offline_only.toml
+uv run nbv-train --config-path offline_only.toml
+```
+
+`nbv-train` owns the existing one-step VIN/Lightning path. The retained `Q_H`
+surface is scorer-independent infrastructure and does not yet have a dedicated
+production CLI.
+
+## Repository Map
+
+| Path | Purpose |
+| --- | --- |
+| `aria_nbv/aria_nbv/` | Python package: data, oracle, rollout, model, training, app, and inspection owners. |
+| `aria_nbv/tests/` | Focused executable contract and regression tests. |
+| `.configs/` | Active TOML configurations for data generation, inspection, and training. |
+| `docs/typst/thesis/` | Active thesis, research questions, development gates, and scientific claims. |
+| `docs/contents/` | Public Quarto navigation, literature reviews, and background material. |
+| `external/` | Pinned or forked upstream dependencies such as EFM3D, ATEK, and PointNeXt. |
+
+## License
+
+ARIA-NBV is licensed under the [Apache License 2.0](LICENSE).

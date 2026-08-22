@@ -251,16 +251,6 @@ uv run nbv-rerun-inspect --config-path ../.configs/rerun_offline_smoke_v7.toml -
 The Rerun inspector is diagnostic-only. Its point and mesh downsampling are
 display-only and must not be treated as label, ranking, or training changes.
 
-For rollout trace plumbing without ASE data, use the CPU-only synthetic smoke:
-
-```sh
-cd aria_nbv
-uv run nbv-rollout-trace-smoke --output-path ../.artifacts/rollouts/synthetic_rollout_traces.msgpack
-```
-
-The synthetic command verifies replayable trace serialization only. It does not
-replace the ASE one-scene oracle and Rerun smoke path.
-
 ## 7. Training and app entry points
 
 ```sh

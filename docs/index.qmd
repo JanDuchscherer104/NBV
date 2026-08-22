@@ -4,7 +4,7 @@ phase: thesis
 audience: public
 status: current
 owner: jan
-subtitle: "Quality-driven NBV with ASE, EFM3D, Relative Reconstruction Improvement, and VIN-style candidate scoring"
+subtitle: "Target-conditioned finite-candidate NBV with ASE, EFM3D, and Relative Reconstruction Improvement"
 author: "Jan Duchscherer, Munich University of Applied Sciences"
 date: last-modified
 format:
@@ -20,23 +20,32 @@ Next-Best-View (NBV) planning addresses the fundamental challenge of autonomous 
 
 Classical NBV methods rely on hand-crafted criteria, limited action spaces, or per-scene optimized representations. While learning-based NBV methods like GenNBV [@GenNBV-chen2024] have improved generalization by leveraging reinforcement learning, they still optimize for geometric coverage as a proxy for reconstruction quality. Since coverage maximization does not necessarily correlate with improved reconstruction quality, these methods can struggle in complex scenes with occlusions and fine details. Directly optimizing reconstruction quality, as pioneered by VIN-NBV [@VIN-NBV-frahm2025], has shown significant improvements by predicting Relative Reconstruction Improvement (RRI) to quantify the fitness of candidate viewpoints. However, even VIN-NBV's generalization capabilities are limited to simpler object-centric NBV scenarios because it does not leverage pre-trained foundation models with rich 3D spatial understanding.
 
-This project aims to develop an NBV system that integrates VIN-NBV's key insight to directly optimize reconstruction quality rather than proxies like coverage, leveraging a pre-trained _egocentric foundation model_ as backbone to provide strong priors for 3D spatial reasoning in complex indoor scenes. We adapt the [EVL (_Egocentric Voxel Lifting_)](contents/literature/efm3d.qmd) 3D EFM [@EFM3D-straub2024] which is pre-trained on the [Aria Synthetic Environments (ASE)](contents/ase_dataset.qmd) dataset - a large-scale synthetic egocentric dataset with 100k indoor scenes, to provide rich 3D feature volumes that capture scene geometry, semantics, and free-space priors. On top of this frozen backbone, we train a lightweight RRI prediction head that introspects both the current scene representation and candidate viewpoints to express the fitness of given candidate views.
+ARIA-NBV studies whether target-conditioned, finite-candidate selection can improve endpoint reconstruction quality in complex indoor scenes. It uses ASE and the EVL (_Egocentric Voxel Lifting_) 3D EFM [@EFM3D-straub2024] as its egocentric substrate while keeping actor-visible observations separate from ground-truth geometry, target crops, and counterfactual renders used for supervision or evaluation. Current infrastructure covers oracle labels, immutable one-step stores, multi-step rollout persistence, inspection, and scorer-independent finite-horizon training contracts. Actor-visible target matching, a target-conditioned one-step scorer, and production $Q_H$ evaluation remain active thesis gates.
 
 # Project Vision and Goals
 
-## Done
+## Available infrastructure
 
 - Develop an oracle RRI computation pipeline using ASE visibility data,
   semi-dense point clouds, GT meshes, and the generated
   [`rri_metrics` API contracts](reference/index.qmd).
-- Directly optimize reconstruction quality rather than surrogate coverage metrics, following RRI-based policies as per VIN-NBV.
-- Develop computational tools to efficiently simulate candidate viewpoints and their expected observations utilizing [`PyTorch3d`](https://pytorch3d.org/), [EFM3D](https://github.com/facebookresearch/efm3d) and [ATEK](https://github.com/facebookresearch/ATEK).
+- Generate and render finite candidate tables with hard validity masks and
+  explicit invalid-reason codes.
+- Persist immutable VIN root evidence and target-conditioned rollout Zarr stores
+  with source lineage, validation, and Streamlit/Rerun inspection surfaces.
+- Provide reader, dataset, collation, and scorer-independent fitted-$Q$ training
+  contracts for finite-horizon experiments.
 
-## WIP
+## Active evidence gates
 
-- Train an RRI predictor head on top of a frozen EFM backbone that introspects the current reconstruction and a candidate pose via imitation learning on oracle RRIs.
-- Leverage EVL's 3D foundation features—voxel occupancy, centerness, semantic channels, and OBB priors—as state embeddings for RRI estimation and NBV decision making.
-- Entity-aware reconstruction tracking through EVL's OBB detection capabilities.
+- Implement and validate observed or predicted target matching without treating
+  privileged target geometry as an actor input.
+- Establish an actor-visible, target-conditioned one-step scorer as the myopic
+  control.
+- Measure bounded oracle-lookahead headroom on trusted scene-disjoint support;
+  evaluate a production $Q_H$ scorer only when that gate is positive.
+- Treat online discrete learning, continuous or simulator-backed control, and
+  real-device deployment as later work.
 
 # Documentation Navigation
 
