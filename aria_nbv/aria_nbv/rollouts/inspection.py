@@ -24,7 +24,7 @@ import zarr
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
-from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetInputProtocol
+from ..targets.protocol import ActorVisibleTargetSource, ORACLE_GT_TARGET_SOURCE, TargetInputProtocol
 from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
@@ -583,6 +583,8 @@ def candidate_audit_rows(
             "oracle/evaluation"
             if protocol == TargetInputProtocol.V0_GT_INPUT.value or target_source == ORACLE_GT_TARGET_SOURCE
             else "actor-visible"
+            if target_source in {source.value for source in ActorVisibleTargetSource}
+            else "unclassified"
             if target_source
             else "unknown"
         )
