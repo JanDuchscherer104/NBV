@@ -11,7 +11,6 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
-import tarfile
 import tempfile
 from typing import Any
 
@@ -400,48 +399,55 @@ print(json.dumps({
     return payload["ast"], payload["semantic"]
 
 
-def _safe_archive_snapshot(
+def _raw_commit_snapshot(
     root: Path, commit: str, projection: Path
 ) -> tempfile.TemporaryDirectory[str]:
+    """Materialize ``commit`` from Git blobs without applying worktree filters."""
     temporary = tempfile.TemporaryDirectory(prefix="aria-graphify-head-")
     snapshot = Path(temporary.name)
-    archive = snapshot / "head.tar"
-    with archive.open("wb") as archive_file:
-        result = subprocess.run(
-            ["git", "archive", "--format=tar", "--end-of-options", commit],
-            cwd=root,
-            check=False,
-            stdout=archive_file,
-            stderr=subprocess.PIPE,
-            text=False,
-        )
+    result = subprocess.run(
+        ["git", "ls-tree", "-r", "-z", "--full-tree", commit],
+        cwd=root,
+        check=False,
+        capture_output=True,
+    )
     if result.returncode:
         temporary.cleanup()
         detail = result.stderr.decode(errors="replace").strip()
-        raise ValueError(f"Git HEAD archive failed: {detail}")
+        raise ValueError(f"Git HEAD tree listing failed: {detail}")
     try:
-        with tarfile.open(archive, mode="r:") as bundle:
-            for member in bundle.getmembers():
-                member_path = PurePosixPath(member.name)
-                if member_path.is_absolute() or ".." in member_path.parts:
-                    raise ValueError("Git HEAD archive contains an unsafe path")
-                target = snapshot / Path(*member_path.parts)
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                elif member.isfile():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    source = bundle.extractfile(member)
-                    if source is None:
-                        raise ValueError("Git HEAD archive file cannot be read")
-                    target.write_bytes(source.read())
-                else:
-                    raise ValueError(
-                        "Git HEAD archive contains a symlink or special file"
-                    )
-    except (OSError, ValueError, tarfile.TarError) as error:
+        for entry in result.stdout.split(b"\0"):
+            if not entry:
+                continue
+            header, separator, raw_path = entry.partition(b"\t")
+            fields = header.split()
+            if not separator or len(fields) != 3:
+                raise ValueError("Git HEAD tree has an invalid entry")
+            mode, kind, raw_object = fields
+            if mode == b"120000" or (mode == b"160000" and kind == b"commit"):
+                continue
+            if mode not in {b"100644", b"100755"} or kind != b"blob":
+                raise ValueError("Git HEAD tree contains an unsupported entry")
+            object_id = raw_object.decode("ascii")
+            relative = PurePosixPath(raw_path.decode("utf-8", errors="surrogateescape"))
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError("Git HEAD tree contains an unsafe path")
+            target = snapshot / Path(*relative.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("wb") as output:
+                blob = subprocess.run(
+                    ["git", "cat-file", "blob", object_id],
+                    cwd=root,
+                    check=False,
+                    stdout=output,
+                    stderr=subprocess.PIPE,
+                )
+            if blob.returncode:
+                detail = blob.stderr.decode(errors="replace").strip()
+                raise ValueError(f"Git HEAD blob materialization failed: {detail}")
+    except (OSError, UnicodeError, ValueError) as error:
         temporary.cleanup()
-        raise ValueError(f"Git HEAD archive materialization failed: {error}") from error
-    archive.unlink(missing_ok=True)
+        raise ValueError(f"Git HEAD tree materialization failed: {error}") from error
 
     def copy_projection(source: Path, target: Path) -> None:
         if source.is_symlink() or not source.is_dir():
@@ -595,7 +601,7 @@ def check(root: Path) -> dict[str, Any]:
         overlay_stale = _detector_stale_sources(root, ast, semantic)
         committed_stale: list[str] = []
         if projection_commit_tree != head_tree or graph_commit_tree != head_tree:
-            snapshot = _safe_archive_snapshot(
+            snapshot = _raw_commit_snapshot(
                 root, head, root / PROJECTION_INDEX.parent
             )
             try:

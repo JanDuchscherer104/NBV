@@ -531,6 +531,40 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
             _graphify_out_bytes(self.root),
         )
 
+    def test_head_snapshot_reads_raw_git_blobs_without_worktree_filters(self) -> None:
+        asset = self.root / "ignored-large.bin"
+        pointer = b"version https://git-lfs.github.com/spec/v1\noid sha256:deadbeef\n"
+        asset.write_bytes(pointer)
+        (self.root / ".gitattributes").write_text(
+            "ignored-large.bin filter=sentinel\n", encoding="utf-8"
+        )
+        (self.root / "linked-asset").symlink_to(asset.name)
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-qm", "filtered asset"], cwd=self.root, check=True)
+        marker = self.root / "filter-ran"
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "filter.sentinel.smudge",
+                f"sh -c 'touch {marker}; cat'",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+
+        snapshot = freshness._raw_commit_snapshot(
+            self.root,
+            self.git("rev-parse", "HEAD"),
+            self.root / "graphify-input",
+        )
+        try:
+            self.assertEqual((Path(snapshot.name) / asset.name).read_bytes(), pointer)
+            self.assertFalse((Path(snapshot.name) / "linked-asset").exists())
+            self.assertFalse(marker.exists())
+        finally:
+            snapshot.cleanup()
+
     def test_same_tree_admission_rejects_excluded_tracked_byte_drift(self) -> None:
         tree = self.git("rev-parse", f"{self.head}^{{tree}}")
         rebased = subprocess.run(
