@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +25,13 @@ from ..targets.protocol import (
     validate_target_protocol_admission,
 )
 from ..utils import Stage
+from .qh_geometry import QhGeometryContract
 from .shard_manifest import build_rollout_split_manifest_hash
-from .zarr_store import DEFAULT_RETURN_SEMANTICS, RolloutZarrStoreReader
+from .zarr_store import (
+    DEFAULT_RETURN_SEMANTICS,
+    SELECTED_DEPTH_INVALID_FILL_VALUE,
+    RolloutZarrStoreReader,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,9 +59,16 @@ class _StoredChain:
     horizon_remaining: np.ndarray
     label_mask: tuple[np.ndarray, ...]
     candidate_reward: tuple[np.ndarray, ...]
+    one_step_target_rri: tuple[np.ndarray, ...]
     selected_index: np.ndarray
     discount: np.ndarray
     terminal: np.ndarray
+    selected_depth_m: np.ndarray | None
+    selected_depth_valid_mask: np.ndarray | None
+    selected_depth_focal_px: np.ndarray | None
+    selected_depth_principal_point_px: np.ndarray | None
+    selected_depth_image_size_hw: np.ndarray | None
+    selected_depth_renderer: str | None
     store_index: int
     rollout_row_id: int
     target_row_id: int
@@ -65,7 +77,7 @@ class _StoredChain:
 
 @dataclass(frozen=True, slots=True)
 class QhDataContract:
-    """Horizon- and provenance-independent reader/data compatibility."""
+    """Replay support, learning semantics, and selected-observation compatibility."""
 
     schema_version: str
     target_protocol: str
@@ -75,6 +87,59 @@ class QhDataContract:
     discount_gamma: float
     reason_code_version: str
     actor_store_version: str
+    candidate_config_hashes: tuple[str, ...] = ()
+    """Referenced candidate-generation configurations admitted by the corpus."""
+
+    rollout_config_hashes: tuple[str, ...] = ()
+    """Referenced rollout configurations admitted by the corpus."""
+
+    selection_policies: tuple[str, ...] = ()
+    """Referenced behavior-policy vocabulary admitted by the corpus."""
+
+    selected_depth_enabled: bool = False
+    """Whether each factual step has aligned selected-action depth evidence."""
+
+    selected_depth_role: str | None = None
+    """Semantic role of persisted selected depth when enabled."""
+
+    selected_depth_renderer: str | None = None
+    """Renderer provenance for selected depth when enabled."""
+
+    selected_depth_image_size_hw: tuple[int, int] | None = None
+    """Common selected-depth raster height and width in pixels."""
+
+    selected_depth_dtype: str | None = None
+    """Persisted metric-depth dtype name."""
+
+    selected_depth_units: str | None = None
+    """Physical units of finite selected-depth values."""
+
+    selected_depth_znear_m: float | None = None
+    """Near clipping plane in metres."""
+
+    selected_depth_zfar_m: float | None = None
+    """Far clipping plane in metres."""
+
+    selected_depth_source_resolution: str | None = None
+    """Recorded resolution policy used to produce selected depth."""
+
+    selected_depth_projection_model: str | None = None
+    """Versioned camera model implied by the schema and renderer provenance."""
+
+    selected_depth_value_semantics: str | None = None
+    """Meaning of each finite depth value; the supported contract is camera-frame z in metres."""
+
+    selected_depth_pixel_convention: str | None = None
+    """Pixel sampling convention used by rendering and PyTorch3D backprojection."""
+
+    selected_depth_camera_axes: str | None = None
+    """Physical camera-axis convention used by the selected render."""
+
+    selected_depth_pose_convention: str | None = None
+    """Direction of the aligned selected camera pose stored elsewhere in the rollout."""
+
+    selected_depth_geometry: QhGeometryContract | None = None
+    """Complete validated geometry facts for selected depth, when enabled."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +148,6 @@ class _StoreFacts:
     manifest_hash: str
     state_count: int
     contract: QhDataContract
-    max_horizon: int
     chains: tuple[_ChainRef, ...]
     source_refs: tuple[_QhSourceRef, ...]
 
@@ -98,6 +162,10 @@ class _ChainRef:
     target_position: int
     target_row_id: int
     source_sample_index: int
+    configured_horizon: int
+    candidate_config_hash: str
+    rollout_config_hash: str
+    selection_policy: str
 
 
 class QhRolloutReader:
@@ -108,6 +176,7 @@ class QhRolloutReader:
         store_dirs: tuple[str | Path, ...],
         *,
         campaign_split: Stage | str | None = None,
+        include_selected_depth: bool = False,
     ) -> None:
         """Open compatible stores, optionally selecting one learning split.
 
@@ -125,14 +194,29 @@ class QhRolloutReader:
 
         self.store_dirs = paths
         self.campaign_split = campaign_split
-        self._stores = tuple(_preflight_store(path, store_index) for store_index, path in enumerate(paths))
-        _validate_homogeneous(self._stores)
+        self.include_selected_depth = include_selected_depth
+        self._stores = tuple(
+            _preflight_store(
+                path,
+                store_index,
+                include_selected_depth=include_selected_depth,
+            )
+            for store_index, path in enumerate(paths)
+        )
+        _validate_homogeneous(self._stores, include_selected_depth=include_selected_depth)
+        if include_selected_depth:
+            _validate_rich_selected_depth_contract(self._stores[0].contract)
         source_ref_lookup = _merge_source_refs(self._stores)
         self._chains = tuple(
             chain
             for store in self._stores
             for chain in store.chains
             if _matches_campaign_split(source_ref_lookup[chain.source_sample_index], campaign_split)
+        )
+        self._contract = _merge_corpus_contract(
+            self._stores,
+            self._chains,
+            include_selected_depth=include_selected_depth,
         )
         admitted_sample_indices = {chain.source_sample_index for chain in self._chains}
         self._source_ref_lookup = {
@@ -160,6 +244,8 @@ class QhRolloutReader:
             self._root(chain.store_index),
             chain,
             self._source_ref_lookup[chain.source_sample_index],
+            store_path=self._stores[chain.store_index].path,
+            include_selected_depth=self.include_selected_depth,
         )
 
     @property
@@ -174,13 +260,15 @@ class QhRolloutReader:
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest realized chain length among admitted chains."""
-        return max((chain.state_stop - chain.state_start for chain in self._chains), default=0)
+        """Return the largest configured horizon among admitted chains."""
+
+        return max((chain.configured_horizon for chain in self._chains), default=0)
 
     @property
     def contract(self) -> QhDataContract:
-        """Return the common horizon-independent learning contract."""
-        return self._stores[0].contract
+        """Return common semantics plus the exact admitted replay-support mixture."""
+
+        return self._contract
 
     @property
     def provenance(self) -> dict[str, object]:
@@ -223,12 +311,12 @@ class QhRolloutReader:
         return root
 
 
-def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
+def _preflight_store(path: Path, store_index: int, *, include_selected_depth: bool) -> _StoreFacts:
     if not path.is_dir():
         raise ValueError(f"Q_H rollout store does not exist: {path}.")
 
     reader = RolloutZarrStoreReader(path)
-    validation = reader.validate()
+    validation = reader.validate(validate_selected_depth_payload=include_selected_depth)
     if not validation.ok:
         details = "; ".join(validation.errors[:5])
         raise ValueError(
@@ -239,13 +327,12 @@ def _preflight_store(path: Path, store_index: int) -> _StoreFacts:
     _validate_reader_admission(root)
     source_refs_by_row = _read_source_refs(root, path)
     chains = _read_chain_refs(root, path, store_index, source_refs_by_row)
-    contract = _read_contract(root)
+    contract = _read_contract(root, include_selected_depth=include_selected_depth)
     return _StoreFacts(
         path=path,
         manifest_hash=str(root.attrs["manifest_sha256"]),
         state_count=validation.num_steps,
         contract=contract,
-        max_horizon=max(chain.state_stop - chain.state_start for chain in chains),
         chains=chains,
         source_refs=tuple(source_refs_by_row.values()),
     )
@@ -351,8 +438,16 @@ def _validate_target_labels(
             raise ValueError(f"targets/gt_label_valid_mask row {row} disagrees with canonical target evidence.")
 
 
-def _read_contract(root: zarr.Group) -> QhDataContract:
+def _read_contract(root: zarr.Group, *, include_selected_depth: bool) -> QhDataContract:
     q_h = root["q_h"]
+    selected_depth_enabled = include_selected_depth and bool(root.attrs.get("selected_depth_enabled", False))
+
+    def selected(name: str) -> object | None:
+        return root.attrs.get(name) if selected_depth_enabled else None
+
+    selected_height = _optional_int(selected("selected_depth_height_px"))
+    selected_width = _optional_int(selected("selected_depth_width_px"))
+    geometry = _read_selected_depth_geometry(root) if selected_depth_enabled else None
     return QhDataContract(
         schema_version=str(root.attrs["schema_version"]),
         target_protocol=str(root.attrs["target_protocol_version"]),
@@ -362,6 +457,95 @@ def _read_contract(root: zarr.Group) -> QhDataContract:
         discount_gamma=float(root.attrs["discount_gamma"]),
         reason_code_version=str(root.attrs["reason_code_version"]),
         actor_store_version=str(root.attrs["source_offline_store_version"]),
+        candidate_config_hashes=_decode_referenced_dictionary_values(
+            root, group_name="lineage", array_name="candidate_config_id", dictionary_name="config"
+        ),
+        rollout_config_hashes=_decode_referenced_dictionary_values(
+            root, group_name="lineage", array_name="rollout_config_id", dictionary_name="config"
+        ),
+        selection_policies=_decode_referenced_dictionary_values(
+            root, group_name="rollouts", array_name="policy_id", dictionary_name="policy"
+        ),
+        selected_depth_enabled=selected_depth_enabled,
+        selected_depth_role=_optional_string(selected("selected_depth_role")),
+        selected_depth_renderer=_optional_string(selected("selected_depth_renderer")),
+        selected_depth_image_size_hw=(selected_height, selected_width)
+        if selected_height is not None and selected_width is not None
+        else None,
+        selected_depth_dtype=_optional_string(selected("selected_depth_dtype")),
+        selected_depth_units=_optional_string(selected("selected_depth_units")),
+        selected_depth_znear_m=_optional_finite_float(selected("selected_depth_znear_m")),
+        selected_depth_zfar_m=_optional_finite_float(selected("selected_depth_zfar_m")),
+        selected_depth_source_resolution=_optional_string(selected("selected_depth_source_resolution")),
+        selected_depth_projection_model="linear_pinhole_screen" if selected_depth_enabled else None,
+        selected_depth_value_semantics="camera_z_m" if selected_depth_enabled else None,
+        selected_depth_pixel_convention="half_pixel_centers_in_ndc_false" if selected_depth_enabled else None,
+        selected_depth_camera_axes="left_up_forward" if selected_depth_enabled else None,
+        selected_depth_pose_convention="root_from_camera" if selected_depth_enabled else None,
+        selected_depth_geometry=geometry,
+    )
+
+
+def _read_selected_depth_geometry(root: zarr.Group) -> QhGeometryContract:
+    """Read and cross-check persisted calibration rows before payload admission."""
+
+    group = root["selected_depth"]
+    num_steps = int(group["focal_px"].shape[0])
+    if num_steps == 0:
+        raise ValueError("Q_H selected-depth geometry requires non-empty focal_px rows of shape (steps, 2).")
+    chunk_rows = int(group["depth_m"].chunks[0])
+    reference_focal: np.ndarray | None = None
+    reference_principal: np.ndarray | None = None
+    reference_size: np.ndarray | None = None
+    for start in range(0, num_steps, chunk_rows):
+        rows = slice(start, min(start + chunk_rows, num_steps))
+        focal = np.asarray(group["focal_px"][rows], dtype=np.float64)
+        principal = np.asarray(group["principal_point_px"][rows], dtype=np.float64)
+        sizes = np.asarray(group["image_size_hw"][rows], dtype=np.int64)
+        if focal.ndim != 2 or focal.shape[1] != 2 or principal.shape != focal.shape or sizes.shape != focal.shape:
+            raise ValueError("Q_H selected-depth calibration rows must have one aligned (x,y) pair per step.")
+        if not np.isfinite(focal).all() or np.any(focal <= 0) or not np.isfinite(principal).all():
+            raise ValueError("Q_H selected-depth calibration must be finite, with positive focal lengths.")
+        if reference_focal is None:
+            reference_focal = focal[0]
+            reference_principal = principal[0]
+            reference_size = sizes[0]
+        if (
+            not np.all(focal == reference_focal)
+            or not np.all(principal == reference_principal)
+            or not np.all(sizes == reference_size)
+        ):
+            raise ValueError("Q_H selected-depth geometry must be homogeneous across every persisted step.")
+    if reference_focal is None or reference_principal is None or reference_size is None:
+        raise ValueError("Q_H selected-depth geometry requires at least one calibration row.")
+    attrs = root.attrs
+    invalid_fill = float(attrs.get("selected_depth_invalid_fill_value", np.nan))
+    znear = float(attrs.get("selected_depth_znear_m", np.nan))
+    zfar = float(attrs.get("selected_depth_zfar_m", np.nan))
+    if invalid_fill != SELECTED_DEPTH_INVALID_FILL_VALUE:
+        raise ValueError("Q_H selected-depth geometry requires the canonical versioned invalid fill value.")
+    if not np.isfinite(invalid_fill) or not np.isfinite(znear) or not np.isfinite(zfar) or not 0 < znear < zfar:
+        raise ValueError("Q_H selected-depth geometry requires finite ordered clip planes and invalid fill.")
+    return QhGeometryContract(
+        projection_model="linear_pinhole_screen",
+        linearization="camera_z_metres",
+        camera_pose="root_from_camera",
+        depth_semantics="camera_z_m",
+        focal_px=tuple(float(value) for value in reference_focal),
+        principal_point_px=tuple(float(value) for value in reference_principal),
+        image_size_hw=tuple(int(value) for value in reference_size),
+        camera_axes="left_up_forward",
+        camera_forward="+z",
+        camera_handedness="right",
+        pixel_convention="half_pixel_centers",
+        in_ndc=False,
+        znear_m=znear,
+        zfar_m=zfar,
+        invalid_fill_value=invalid_fill,
+        dtype=str(attrs.get("selected_depth_dtype", "")),
+        renderer=str(attrs.get("selected_depth_renderer", "")),
+        source_role="selected_successor_state_history",
+        selected_identity="selected_depth.step_row_id==steps.step_row_id;selected_depth.candidate_row_id==steps.selected_candidate_row_id",
     )
 
 
@@ -473,19 +657,59 @@ def _read_chain_refs(
     if np.any(candidate_widths < 1):
         raise ValueError(f"Q_H store {path} contains an empty candidate state.")
     rollout_ids = np.asarray(rollout["rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_rollout_ids = np.asarray(root["steps/rollout_row_id"], dtype=np.int64).reshape(-1)
+    step_indices = np.asarray(root["steps/step_index"], dtype=np.int64).reshape(-1)
     source_ids = np.asarray(rollout["source_row_id"], dtype=np.int64).reshape(-1)
     target_ids = np.asarray(rollout["target_row_id"], dtype=np.int64).reshape(-1)
+    candidate_config_ids = np.asarray(root["lineage/candidate_config_id"], dtype=np.int64).reshape(-1)
+    rollout_config_ids = np.asarray(root["lineage/rollout_config_id"], dtype=np.int64).reshape(-1)
+    policy_ids = np.asarray(rollout["policy_id"], dtype=np.int64).reshape(-1)
+    config_values = _decode_dictionary(root, "config")
+    policy_values = _decode_dictionary(root, "policy")
     target_positions = {
         int(target_id): position
         for position, target_id in enumerate(np.asarray(root["targets/target_row_id"], dtype=np.int64).reshape(-1))
     }
     chains: list[_ChainRef] = []
     state_start = 0
-    for position, (horizon, rollout_id, source_id, target_id) in enumerate(
-        zip(horizons, rollout_ids, source_ids, target_ids, strict=True)
+    for position, (
+        horizon,
+        rollout_id,
+        source_id,
+        target_id,
+        candidate_config_id,
+        rollout_config_id,
+        policy_id,
+    ) in enumerate(
+        zip(
+            horizons,
+            rollout_ids,
+            source_ids,
+            target_ids,
+            candidate_config_ids,
+            rollout_config_ids,
+            policy_ids,
+            strict=True,
+        )
     ):
+        if state_start >= step_rollout_ids.size or int(step_rollout_ids[state_start]) != int(rollout_id):
+            raise ValueError(
+                f"Q_H store {path} rollout_row_id={int(rollout_id)} does not own one ordered factual step run."
+            )
+        state_stop = state_start
+        while state_stop < step_rollout_ids.size and int(step_rollout_ids[state_stop]) == int(rollout_id):
+            state_stop += 1
+        factual_indices = step_indices[state_start:state_stop]
+        expected_indices = np.arange(state_stop - state_start, dtype=np.int64)
+        if not np.array_equal(factual_indices, expected_indices):
+            raise ValueError(
+                f"Q_H store {path} rollout_row_id={int(rollout_id)} has non-contiguous factual step_index values."
+            )
+        if state_stop - state_start > int(horizon):
+            raise ValueError(
+                f"Q_H store {path} rollout_row_id={int(rollout_id)} has more factual steps than its configured horizon."
+            )
         source_ref = source_refs_by_row[int(source_id)]
-        state_stop = state_start + int(horizon)
         chains.append(
             _ChainRef(
                 store_index=store_index,
@@ -496,9 +720,15 @@ def _read_chain_refs(
                 target_position=target_positions[int(target_id)],
                 target_row_id=int(target_id),
                 source_sample_index=source_ref.source_sample_index,
+                configured_horizon=int(horizon),
+                candidate_config_hash=config_values[int(candidate_config_id)],
+                rollout_config_hash=config_values[int(rollout_config_id)],
+                selection_policy=policy_values[int(policy_id)],
             )
         )
         state_start = state_stop
+    if state_start != step_rollout_ids.size:
+        raise ValueError(f"Q_H store {path} contains orphaned factual steps after the rollout table.")
     return tuple(chains)
 
 
@@ -514,24 +744,171 @@ def _merge_source_refs(stores: tuple[_StoreFacts, ...]) -> dict[int, _QhSourceRe
     return lookup
 
 
-def _validate_homogeneous(stores: tuple[_StoreFacts, ...]) -> None:
-    expected = stores[0].contract
+def _validate_homogeneous(stores: tuple[_StoreFacts, ...], *, include_selected_depth: bool) -> None:
+    expected = _effective_contract(stores[0].contract, include_selected_depth=include_selected_depth)
     for store in stores[1:]:
-        if store.contract == expected:
+        actual = _effective_contract(store.contract, include_selected_depth=include_selected_depth)
+        if actual == expected:
             continue
         mismatches = [
             field.name
             for field in fields(QhDataContract)
-            if getattr(expected, field.name) != getattr(store.contract, field.name)
+            if field.name not in {"candidate_config_hashes", "rollout_config_hashes", "selection_policies"}
+            if getattr(expected, field.name) != getattr(actual, field.name)
         ]
-        raise ValueError(f"Q_H rollout stores are heterogeneous at {store.path}: incompatible {', '.join(mismatches)}.")
+        if mismatches:
+            raise ValueError(
+                f"Q_H rollout stores are heterogeneous at {store.path}: incompatible {', '.join(mismatches)}."
+            )
 
 
-def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) -> _StoredChain:
+def _merge_corpus_contract(
+    stores: tuple[_StoreFacts, ...],
+    chains: tuple[_ChainRef, ...],
+    *,
+    include_selected_depth: bool,
+) -> QhDataContract:
+    """Combine compatible store contracts into one exact replay-support mixture."""
+
+    base = _effective_contract(stores[0].contract, include_selected_depth=include_selected_depth)
+
+    return replace(
+        base,
+        candidate_config_hashes=tuple(
+            sorted({chain.candidate_config_hash for chain in chains if chain.candidate_config_hash})
+        ),
+        rollout_config_hashes=tuple(
+            sorted({chain.rollout_config_hash for chain in chains if chain.rollout_config_hash})
+        ),
+        selection_policies=tuple(sorted({chain.selection_policy for chain in chains if chain.selection_policy})),
+    )
+
+
+def _effective_contract(contract: QhDataContract, *, include_selected_depth: bool) -> QhDataContract:
+    """Hide unconsumed selected-depth metadata from lean corpus compatibility."""
+
+    if include_selected_depth:
+        return contract
+    return replace(
+        contract,
+        selected_depth_enabled=False,
+        selected_depth_role=None,
+        selected_depth_renderer=None,
+        selected_depth_image_size_hw=None,
+        selected_depth_dtype=None,
+        selected_depth_units=None,
+        selected_depth_znear_m=None,
+        selected_depth_zfar_m=None,
+        selected_depth_source_resolution=None,
+        selected_depth_projection_model=None,
+        selected_depth_value_semantics=None,
+        selected_depth_pixel_convention=None,
+        selected_depth_camera_axes=None,
+        selected_depth_pose_convention=None,
+        selected_depth_geometry=None,
+    )
+
+
+def _validate_rich_selected_depth_contract(contract: QhDataContract) -> None:
+    """Fail before payload reads when selected CF-GT evidence is not one supported geometry."""
+
+    if not contract.selected_depth_enabled:
+        raise ValueError("Q_H rich modality read requires selected_depth_enabled=true; rebuild the rollout store.")
+    if contract.selected_depth_role != "selected_successor_state_history":
+        raise ValueError("Q_H rich modality read requires selected successor-state depth provenance.")
+    if contract.selected_depth_renderer != "Pytorch3DDepthRenderer":
+        raise ValueError("Q_H CF-GT depth requires the recorded Pytorch3D mesh renderer provenance.")
+    expected_semantics = (
+        contract.selected_depth_projection_model,
+        contract.selected_depth_value_semantics,
+        contract.selected_depth_pixel_convention,
+        contract.selected_depth_camera_axes,
+        contract.selected_depth_pose_convention,
+    )
+    if expected_semantics != (
+        "linear_pinhole_screen",
+        "camera_z_m",
+        "half_pixel_centers_in_ndc_false",
+        "left_up_forward",
+        "root_from_camera",
+    ):
+        raise ValueError("Q_H selected depth has an unsupported camera/depth semantic contract.")
+    geometry = contract.selected_depth_geometry
+    if geometry is None or geometry.renderer != "Pytorch3DDepthRenderer" or geometry.in_ndc:
+        raise ValueError("Q_H rich modality read requires a complete screen-space geometry contract.")
+    if geometry.image_size_hw != contract.selected_depth_image_size_hw:
+        raise ValueError("Q_H selected-depth geometry raster disagrees with root metadata.")
+    if contract.selected_depth_image_size_hw is None or any(size < 1 for size in contract.selected_depth_image_size_hw):
+        raise ValueError("Q_H rich modality read requires a positive selected-depth raster size.")
+    if contract.selected_depth_dtype != "float16" or contract.selected_depth_units != "m":
+        raise ValueError("Q_H rich modality read requires float16 selected depth in metres.")
+    if (
+        contract.selected_depth_znear_m is None
+        or contract.selected_depth_zfar_m is None
+        or not 0 < contract.selected_depth_znear_m < contract.selected_depth_zfar_m
+    ):
+        raise ValueError("Q_H rich modality read requires finite ordered selected-depth clip planes.")
+
+
+def _recorded_selected_depth_renderer(root: zarr.Group) -> str | None:
+    """Return renderer provenance without materializing selected-depth arrays."""
+
+    if not bool(root.attrs.get("selected_depth_enabled", False)):
+        return None
+    return _optional_string(root.attrs.get("selected_depth_renderer"))
+
+
+def _optional_string(value: object | None) -> str | None:
+    """Normalize absent or empty metadata to ``None``."""
+
+    if value is None:
+        return None
+    normalized = str(value)
+    return normalized or None
+
+
+def _optional_finite_float(value: object | None) -> float | None:
+    """Normalize absent or non-finite numeric metadata to ``None``."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        raise ValueError(f"Q_H selected-depth numeric metadata has unsupported value {value!r}.")
+    normalized = float(value)
+    return normalized if np.isfinite(normalized) else None
+
+
+def _optional_int(value: object | None) -> int | None:
+    """Normalize absent integer metadata while rejecting structured or Boolean values."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        raise ValueError(f"Q_H selected-depth integer metadata has unsupported value {value!r}.")
+    return int(value)
+
+
+def _read_chain(
+    root: zarr.Group,
+    chain: _ChainRef,
+    source_ref: _QhSourceRef,
+    *,
+    store_path: Path,
+    include_selected_depth: bool,
+) -> _StoredChain:
     rows = slice(chain.state_start, chain.state_stop)
     q_h = root["q_h"]
+    step_indices = np.asarray(root["steps/step_index"][rows], dtype=np.int64)
+    configured_horizon = int(root["rollouts/horizon"][chain.rollout_position])
     candidate_ids = np.asarray(q_h["candidate_row_id"][rows], dtype=np.int64)
     widths = np.count_nonzero(candidate_ids >= 0, axis=1)
+    selected_index = np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)
+    _validate_selected_indices(
+        selected_index,
+        widths,
+        store_path=store_path,
+        rollout_row_id=chain.rollout_row_id,
+    )
     root_pose = np.asarray(root["rollouts/root_pose_world"][chain.rollout_position], dtype=np.float32)
     candidate_poses = tuple(
         _read_candidate_poses(root, ids[:width]) for ids, width in zip(candidate_ids, widths, strict=True)
@@ -541,6 +918,11 @@ def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) ->
     target_pose = np.asarray(target["target_pose_world_object"][chain.target_position], dtype=np.float32)
     if not (np.isfinite(target_extents).all() and np.isfinite(target_pose).all()):
         raise ValueError(f"Q_H rollout_row_id={chain.rollout_row_id} has an incomplete canonical V0 descriptor.")
+    selected_depth = (
+        _read_selected_depth(root, q_h, rows)
+        if include_selected_depth
+        else (None, None, None, None, None, _recorded_selected_depth_renderer(root))
+    )
 
     return _StoredChain(
         root_pose_world=_readonly(root_pose),
@@ -548,16 +930,57 @@ def _read_chain(root: zarr.Group, chain: _ChainRef, source_ref: _QhSourceRef) ->
         target_pose_world_object=_readonly(target_pose),
         candidate_pose_relative_root=candidate_poses,
         action_mask=_trim_rows(q_h["valid_action_mask"][rows], widths, np.bool_),
-        horizon_remaining=_readonly(np.arange(len(widths), 0, -1, dtype=np.int64)),
+        horizon_remaining=_readonly(configured_horizon - step_indices),
         label_mask=_trim_rows(q_h["q_train_mask"][rows], widths, np.bool_),
         candidate_reward=_trim_rows(q_h["one_step_target_root_gain"][rows], widths, np.float32),
-        selected_index=_readonly(np.asarray(q_h["selected_candidate_index"][rows], dtype=np.int64)),
+        one_step_target_rri=_trim_rows(q_h["one_step_target_rri"][rows], widths, np.float32),
+        selected_index=_readonly(selected_index),
         discount=_readonly(np.asarray(q_h["td_discount"][rows], dtype=np.float32)),
         terminal=_readonly(np.asarray(q_h["td_terminal_mask"][rows], dtype=np.bool_)),
+        selected_depth_m=selected_depth[0],
+        selected_depth_valid_mask=selected_depth[1],
+        selected_depth_focal_px=selected_depth[2],
+        selected_depth_principal_point_px=selected_depth[3],
+        selected_depth_image_size_hw=selected_depth[4],
+        selected_depth_renderer=selected_depth[5],
         store_index=chain.store_index,
         rollout_row_id=chain.rollout_row_id,
         target_row_id=chain.target_row_id,
         source_ref=source_ref,
+    )
+
+
+def _read_selected_depth(
+    root: zarr.Group,
+    q_h: zarr.Group,
+    rows: slice,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, str]:
+    """Read one validated selected CF-GT depth row for every realized state."""
+
+    attrs = root.attrs
+    if not bool(attrs.get("selected_depth_enabled", False)):
+        raise ValueError("Q_H rich modality read requires selected_depth_enabled=true; rebuild the rollout store.")
+    if attrs.get("selected_depth_role") != "selected_successor_state_history":
+        raise ValueError("Q_H rich modality read requires selected successor-state depth provenance.")
+    renderer = attrs.get("selected_depth_renderer")
+    if renderer != "Pytorch3DDepthRenderer":
+        raise ValueError("Q_H CF-GT depth requires the recorded Pytorch3D mesh renderer provenance.")
+    selected = root["selected_depth"]
+    step_ids = np.asarray(q_h["state_step_row_id"][rows], dtype=np.int64)
+    selected_ids = np.asarray(selected["step_row_id"][rows], dtype=np.int64)
+    if not np.array_equal(selected_ids, step_ids):
+        raise ValueError("Q_H selected-depth rows do not align exactly with realized state rows.")
+    selected_candidate = np.asarray(selected["candidate_row_id"][rows], dtype=np.int64)
+    expected_candidate = np.asarray(root["steps/selected_candidate_row_id"][rows], dtype=np.int64)
+    if not np.array_equal(selected_candidate, expected_candidate):
+        raise ValueError("Q_H selected-depth candidate rows do not align with selected rollout actions.")
+    return (
+        _readonly(np.asarray(selected["depth_m"][rows], dtype=np.float16)),
+        _readonly(np.asarray(selected["valid_mask"][rows], dtype=np.bool_)),
+        _readonly(np.asarray(selected["focal_px"][rows], dtype=np.float32)),
+        _readonly(np.asarray(selected["principal_point_px"][rows], dtype=np.float32)),
+        _readonly(np.asarray(selected["image_size_hw"][rows], dtype=np.int64)),
+        str(renderer),
     )
 
 
@@ -572,6 +995,26 @@ def _read_candidate_poses(
     return _readonly(relative)
 
 
+def _validate_selected_indices(
+    selected_index: np.ndarray,
+    widths: np.ndarray,
+    *,
+    store_path: Path,
+    rollout_row_id: int,
+) -> None:
+    """Reject invalid factual ordinals with enough identity to repair the store."""
+
+    invalid = (selected_index < 0) | (selected_index >= widths)
+    if not np.any(invalid):
+        return
+    step = int(np.flatnonzero(invalid)[0])
+    raise ValueError(
+        "Q_H factual selected candidate index is out of range: "
+        f"store={store_path}, rollout_row_id={rollout_row_id}, step={step}, "
+        f"selected_index={int(selected_index[step])}, candidate_width={int(widths[step])}."
+    )
+
+
 def _trim_rows(values: Any, widths: np.ndarray, dtype: np.dtype[Any]) -> tuple[np.ndarray, ...]:
     array = np.asarray(values, dtype=dtype)
     return tuple(_readonly(row[:width]) for row, width in zip(array, widths, strict=True))
@@ -583,6 +1026,22 @@ def _decode_dictionary(root: zarr.Group, name: str) -> tuple[str, ...]:
     if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
         raise ValueError(f"Q_H dictionary {name!r} is malformed.")
     return tuple(values)
+
+
+def _decode_referenced_dictionary_values(
+    root: zarr.Group,
+    *,
+    group_name: str,
+    array_name: str,
+    dictionary_name: str,
+) -> tuple[str, ...]:
+    """Return the sorted non-empty vocabulary referenced by one ID column."""
+
+    dictionary = _decode_dictionary(root, dictionary_name)
+    value_ids = np.asarray(root[f"{group_name}/{array_name}"], dtype=np.int64).reshape(-1)
+    if np.any((value_ids < 0) | (value_ids >= len(dictionary))):
+        raise ValueError(f"Q_H {group_name}/{array_name} contains an out-of-range dictionary id.")
+    return tuple(sorted({dictionary[int(value_id)] for value_id in value_ids if dictionary[int(value_id)]}))
 
 
 def _find_sorted_row(array: zarr.Array, value: int) -> int:

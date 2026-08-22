@@ -191,10 +191,10 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}_{t+1}=\mathcal{P}_t\cup\mathcal{P}_{q_t}$</span><code>rl.counterfactual_transition</code></span></div></td>
 </tr>
 <tr>
-<td><a href="#term-target-rri-reward">reward - Target-RRI Reward</a></td>
+<td><a href="#term-target-root-gain-reward">reward - Target Root-Gain Reward</a></td>
 <td>Quality-only immediate reward equal to root-normalized target gain for the selected candidate.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_e$</span><code>entity.rri_e</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}_e^{\mathrm{GT}}$</span><code>ase.mesh_target</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})$</span><code>rl.target_rri_reward</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/\max(\Delta_0^e,\varepsilon)$</span><code>rl.target_root_gain_reward</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$J_t^e=\sum_{k=0}^{t-1}r_k^e=(\Delta_0^e-\Delta_t^e)/\max(\Delta_0^e,\varepsilon)$</span><code>rl.cumulative_target_root_gain</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_{t,i}^e=(\Delta_t^e-\Delta_{t\mid i}^e)/\max(\Delta_t^e,\varepsilon)$</span><code>rl.marginal_target_rri</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$C_t^{\mathrm{RRI},e}=\sum_{k=0}^{t-1}\mathrm{RRI}_{k,a_k}^e$</span><code>rl.cumulative_target_rri</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-finite-horizon-return">return - Finite-Horizon Return</a></td>
@@ -717,7 +717,7 @@ $$
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
-<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-rollout-state">state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-target-rri-reward">reward</a> <a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-rollout-state">state</a> <a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-counterfactual-transition">transition</a> <a class="glossary-chip" href="#term-target-root-gain-reward">reward</a> <a class="glossary-chip" href="#term-finite-horizon-return">return</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-validity-mask">mask</a></div></div>
 <div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a> <a class="glossary-chip" href="../typst/thesis/development/roadmap.typ#ssec:milestones" title="docs/typst/thesis/development/roadmap.typ#ssec:milestones">Roadmap</a></div></div>
 <div class="glossary-metadata-row"><span>References</span><div><a class="glossary-chip glossary-citation" href="#ref-VIN-NBV-frahm2025">&#64;VIN-NBV-frahm2025</a> <a class="glossary-chip glossary-citation" href="#ref-DoubleDQN-vanHasselt2015">&#64;DoubleDQN-vanHasselt2015</a></div></div>
 </div>
@@ -1015,9 +1015,9 @@ $$
 
 </article>
 
-<article class="glossary-card glossary-tier-core" id="term-target-rri-reward">
+<article class="glossary-card glossary-tier-core" id="term-target-root-gain-reward">
 <div class="glossary-card-header">
-<div class="glossary-term-title">Target-RRI Reward</div>
+<div class="glossary-term-title">Target Root-Gain Reward</div>
 <div class="glossary-term-badges">
 <span class="glossary-badge glossary-badge-short">reward</span>
 <span class="glossary-badge glossary-tier-badge glossary-tier-badge-core">core</span>
@@ -1027,12 +1027,12 @@ $$
 
 <div class="glossary-aliases">
 <span>Aliases</span>
-<code>target reward</code> <code>quality reward</code> <code>target-specific RRI reward</code>
+<code>target reward</code> <code>quality reward</code> <code>target-specific root-gain reward</code> <code>target-RRI reward</code>
 </div>
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_e$</span><code>entity.rri_e</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{P}$</span><code>oracle.points</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathcal{M}_e^{\mathrm{GT}}$</span><code>ase.mesh_target</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})$</span><code>rl.target_rri_reward</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/\max(\Delta_0^e,\varepsilon)$</span><code>rl.target_root_gain_reward</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$J_t^e=\sum_{k=0}^{t-1}r_k^e=(\Delta_0^e-\Delta_t^e)/\max(\Delta_0^e,\varepsilon)$</span><code>rl.cumulative_target_root_gain</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\mathrm{RRI}_{t,i}^e=(\Delta_t^e-\Delta_{t\mid i}^e)/\max(\Delta_t^e,\varepsilon)$</span><code>rl.marginal_target_rri</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$C_t^{\mathrm{RRI},e}=\sum_{k=0}^{t-1}\mathrm{RRI}_{k,a_k}^e$</span><code>rl.cumulative_target_rri</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Quality-only immediate reward equal to root-normalized target gain for the selected candidate.</p>
@@ -1040,10 +1040,26 @@ $$
 <p class="glossary-detail-text">The main thesis reward is cumulative root-normalized target gain under equal acquisition budget. State-relative target RRI remains a one-step diagnostic and VIN-compatible label; log-improvement variants remain visible follow-up reward ablations, not the default target for the first Q_H result.</p>
 
 ::: {.glossary-formula}
-**Target-RRI reward**
+**Target root-gain reward**
 
 $$
-r_t^e=\mathrm{RRI}_e(q_t\mid \mathcal{P}_t,\mathcal{M}_e^{\mathrm{GT}})
+r_t^e=(\Delta_t^e-\Delta_{t+1}^e)/\max(\Delta_0^e,\varepsilon)
+$$
+:::
+
+::: {.glossary-formula}
+**Marginal target RRI diagnostic**
+
+$$
+\mathrm{RRI}_{t,i}^e=(\Delta_t^e-\Delta_{t\mid i}^e)/\max(\Delta_t^e,\varepsilon)
+$$
+:::
+
+::: {.glossary-formula}
+**Cumulative selected-chain RRI diagnostic**
+
+$$
+C_t^{\mathrm{RRI},e}=\sum_{k=0}^{t-1}\mathrm{RRI}_{k,a_k}^e
 $$
 :::
 
@@ -1101,7 +1117,7 @@ $$
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
-<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-rri-reward">reward</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-target-root-gain-reward">reward</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a></div></div>
 <div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="theory/rl_planning.html#rl-planning-theory" title="docs/contents/theory/rl_planning.qmd#rl-planning-theory">Finite-Candidate Rollouts (reading guide)</a> <a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq2" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2">01 Research Questions</a></div></div>
 </div>
 </details>
@@ -1194,7 +1210,7 @@ $$
 <details class="glossary-details">
 <summary>Links and references</summary>
 <div class="glossary-metadata">
-<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-target-rri-reward">reward</a></div></div>
+<div class="glossary-metadata-row"><span>Related</span><div><a class="glossary-chip" href="#term-finite-candidate-action-set">action set</a> <a class="glossary-chip" href="#term-finite-horizon-q-function">Q_H</a> <a class="glossary-chip" href="#term-target-root-gain-reward">reward</a></div></div>
 <div class="glossary-metadata-row"><span>Docs</span><div><a class="glossary-chip" href="../typst/thesis/sections/01-research-questions.typ#ssec:rq4" title="docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4">01 Research Questions</a> <a class="glossary-chip" href="../reference/aria_nbv.pose_generation.CandidateSamplingResult.html" title="docs/reference/aria_nbv.pose_generation.CandidateSamplingResult.qmd">CandidateSamplingResult</a></div></div>
 </div>
 </details>

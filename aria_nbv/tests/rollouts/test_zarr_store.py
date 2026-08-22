@@ -357,6 +357,60 @@ def test_rollout_zarr_validation_requires_selected_depth_when_enabled(tmp_path) 
     assert any("selected_depth/step_row_id" in error or "selected-depth" in error for error in validation.errors)
 
 
+def test_rollout_zarr_validation_reports_mismatched_selected_depth_shapes(tmp_path) -> None:
+    """Malformed depth/mask shapes must return structured validation errors, not broadcast exceptions."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=9)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    valid_mask = root["selected_depth/valid_mask"]
+    valid_mask.resize((valid_mask.shape[0], valid_mask.shape[1] - 1, valid_mask.shape[2]))
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+
+    assert not validation.ok
+    assert any("selected_depth/valid_mask shape" in error for error in validation.errors)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("zero_focal", "finite positive pinhole focal"),
+        ("nonfinite_principal", "finite pixel coordinates"),
+        ("wrong_raster_size", "equal the persisted depth raster size"),
+        ("valid_below_clip", "within the declared clip range"),
+        ("invalid_nonfill", "declared invalid fill value"),
+    ),
+)
+def test_rollout_zarr_validation_rejects_invalid_selected_camera_depth_contract(
+    tmp_path, mutation: str, message: str
+) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=9)[:1],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    if mutation == "zero_focal":
+        root["selected_depth/focal_px"][0, 0] = 0.0
+    elif mutation == "nonfinite_principal":
+        root["selected_depth/principal_point_px"][0, 0] = np.inf
+    elif mutation == "wrong_raster_size":
+        root["selected_depth/image_size_hw"][0] = np.array([120, 240], dtype=np.int32)
+    elif mutation == "valid_below_clip":
+        root["selected_depth/valid_mask"][0, 0, 0] = True
+        root["selected_depth/depth_m"][0, 0, 0] = 0.0
+    else:
+        root["selected_depth/valid_mask"][0, 0, 0] = False
+        root["selected_depth/depth_m"][0, 0, 0] = 1.0
+
+    validation = validate_rollout_zarr_store(result.store_dir)
+
+    assert not validation.ok
+    assert any(message in error for error in validation.errors)
+
+
 def test_rollout_zarr_selected_action_td_fields_align_with_step_rows(tmp_path) -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=3)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)

@@ -25,6 +25,7 @@ from aria_nbv.data_handling import (
     VinOracleBatch,
     VinSnippetView,
 )
+from aria_nbv.data_handling.qh_data.materialization import _evl_block_signature, _read_static_context
 from aria_nbv.data_handling.vin_store.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
@@ -478,7 +479,16 @@ def test_flush_vin_offline_payloads_normalizes_numpy_scalars(tmp_path: Path) -> 
         include_candidate_pcs=False,
         include_backbone=True,
         include_diagnostic_payloads=True,
-        backbone_numeric_keep_fields={"t_world_voxel", "voxel_extent", "occ_pr", "counts"},
+        backbone_numeric_keep_fields={
+            "t_world_voxel",
+            "voxel_extent",
+            "occ_pr",
+            "occ_input",
+            "free_input",
+            "counts",
+            "cent_pr",
+            "pts_world",
+        },
         backbone_payload_keep_fields={"obb_pred_sem_id_to_name"},
         sample_key="sample-0",
     )
@@ -496,6 +506,103 @@ def test_flush_vin_offline_payloads_normalizes_numpy_scalars(tmp_path: Path) -> 
     payload = msgspec.msgpack.decode(payload_bytes[int(offsets[0]) : int(offsets[1])])
     assert payload["obb_pred_sem_id_to_name"] == {0: "chair", 1: "table"}  # noqa: S101
     assert all(isinstance(name, str) for name in payload["obb_pred_sem_id_to_name"].values())  # noqa: S101
+
+
+def test_flush_rejects_heterogeneous_backbone_block_presence(tmp_path: Path) -> None:
+    """A missing EVL block must not be materialized as a plausible all-zero row."""
+
+    rows = [
+        prepare_vin_offline_sample(
+            scene_id=f"scene-{index}",
+            snippet_id=f"snippet-{index:03d}",
+            vin_snippet=_make_vin_snippet(offset=float(index)),
+            candidates=None,
+            depths=_make_stub_depths(2, offset=float(index)),
+            rri=_make_stub_rri(2),
+            candidate_pcs=None,
+            backbone_out=_make_stub_backbone(),
+            max_candidates=4,
+            include_depths=True,
+            include_candidate_pcs=False,
+            include_backbone=True,
+            include_diagnostic_payloads=False,
+            sample_key=f"sample-{index}",
+        )
+        for index in range(2)
+    ]
+    rows[1].numeric_blocks.pop("backbone.occ_pr")
+    shard_dir = tmp_path / "shard-000000"
+
+    with pytest.raises(ValueError, match=r"backbone\.occ_pr.*sample-1"):
+        flush_prepared_samples_to_shard(shard_index=0, shard_dir=shard_dir, rows=rows)
+
+    assert not shard_dir.exists()  # noqa: S101
+
+
+def test_flush_preserves_present_all_zero_backbone_block(tmp_path: Path) -> None:
+    """A genuinely present all-zero EVL field remains distinguishable from absence."""
+
+    row = prepare_vin_offline_sample(
+        scene_id="scene-a",
+        snippet_id="snippet-000",
+        vin_snippet=_make_vin_snippet(offset=0.0),
+        candidates=None,
+        depths=_make_stub_depths(2, offset=0.0),
+        rri=_make_stub_rri(2),
+        candidate_pcs=None,
+        backbone_out=_make_stub_backbone(),
+        max_candidates=4,
+        include_depths=True,
+        include_candidate_pcs=False,
+        include_backbone=True,
+        include_diagnostic_payloads=False,
+        sample_key="sample-0",
+    )
+    row.numeric_blocks["backbone.occ_pr"].fill(0)
+
+    shard_spec, _ = flush_prepared_samples_to_shard(
+        shard_index=0,
+        shard_dir=tmp_path / "shard-000000",
+        rows=[row],
+    )
+
+    assert "backbone.occ_pr" in shard_spec.blocks  # noqa: S101
+
+
+@pytest.mark.parametrize("mutation", ["dtype", "shape", "all_float64", "counts_dtype"])
+def test_flush_rejects_heterogeneous_compact_evl_dtype_or_row_shape(tmp_path: Path, mutation: str) -> None:
+    rows = [
+        prepare_vin_offline_sample(
+            scene_id=f"scene-{index}",
+            snippet_id=f"snippet-{index:03d}",
+            vin_snippet=_make_vin_snippet(offset=float(index)),
+            candidates=None,
+            depths=_make_stub_depths(2, offset=float(index)),
+            rri=_make_stub_rri(2),
+            candidate_pcs=None,
+            backbone_out=_make_stub_backbone(),
+            max_candidates=4,
+            include_depths=True,
+            include_candidate_pcs=False,
+            include_backbone=True,
+            sample_key=f"sample-{index}",
+        )
+        for index in range(2)
+    ]
+    block = "backbone.occ_pr"
+    value = rows[1].numeric_blocks[block]
+    if mutation == "all_float64":
+        for name in rows[1].numeric_blocks:
+            if name.startswith("backbone."):
+                rows[1].numeric_blocks[name] = rows[1].numeric_blocks[name].astype(np.float64)
+    elif mutation == "counts_dtype":
+        rows[1].numeric_blocks["backbone.counts"] = rows[1].numeric_blocks["backbone.counts"].astype(np.float32)
+    else:
+        rows[1].numeric_blocks[block] = (
+            value.astype(np.float64) if mutation == "dtype" else np.concatenate([value, value], axis=0)
+        )
+    with pytest.raises(ValueError, match="canonical dtype|heterogeneous canonical dtype/row shape"):
+        flush_prepared_samples_to_shard(shard_index=0, shard_dir=tmp_path / "shard-000000", rows=rows)
 
 
 def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_path: Path) -> None:
@@ -879,6 +986,48 @@ def test_collect_vin_offline_dataset_stats_reports_thesis_diagnostics(tmp_path: 
     assert backbone_by_field["occ_pr"].shape == [1, 1, 2, 2, 2]  # noqa: S101
     assert backbone_by_field["occ_pr"].mean == pytest.approx(1.0)  # noqa: S101
     assert backbone_by_field["counts"].nz_frac == pytest.approx(1.0)  # noqa: S101
+
+
+def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: Path) -> None:
+    """The lean store reader should expose persisted actor EVL fields without oracle payloads."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True)
+    reader = VinOfflineStoreReader(store_cfg)
+    evidence = reader.read_backbone_evidence(reader.sample_index[0])
+
+    assert evidence is not None  # noqa: S101
+    assert evidence.t_world_voxel.tensor().shape == (1, 12)  # noqa: S101
+    assert evidence.voxel_extent.shape == (6,)  # noqa: S101
+    assert evidence.occ_pr is not None and evidence.occ_pr.shape == (1, 1, 2, 2, 2)  # noqa: S101
+    assert evidence.occ_input is not None  # noqa: S101
+    assert evidence.free_input is not None  # noqa: S101
+    assert evidence.counts is not None  # noqa: S101
+    assert evidence.cent_pr is not None  # noqa: S101
+    assert evidence.pts_world is not None  # noqa: S101
+
+    snippet = reader.read_actor_snippet(reader.sample_index[0])
+    context = _read_static_context(reader, reader.sample_index[0], snippet)
+    assert context is not None  # noqa: S101
+    assert context.t_world_voxel is not None and context.t_world_voxel.tensor().shape == (12,)  # noqa: S101
+    assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)  # noqa: S101
+    assert context.counts is not None and context.counts.shape == (2, 2, 2)  # noqa: S101
+    assert context.pts_world is not None and context.pts_world.shape == (8, 3)  # noqa: S101
+    signature = {name: (dtype, shape) for name, dtype, shape in _evl_block_signature(reader)}
+    assert signature["backbone.t_world_voxel"] == ("float32", (12,))  # noqa: S101
+    assert signature["backbone.occ_pr"] == ("float32", (1, 2, 2, 2))  # noqa: S101
+    assert signature["backbone.counts"] == ("int64", (2, 2, 2))  # noqa: S101
+    assert signature["backbone.pts_world"] == ("float32", (8, 3))  # noqa: S101
+
+
+def test_qh_evl_signature_rejects_missing_block_in_any_shard(tmp_path: Path) -> None:
+    """Every shard in a rich actor store must expose the full EVL contract."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True)
+    reader = VinOfflineStoreReader(store_cfg)
+    del reader.manifest.shards[0].blocks["backbone.occ_pr"]
+
+    with pytest.raises(ValueError, match=r"shard-000000.*backbone\.occ_pr"):
+        _evl_block_signature(reader)
 
 
 def test_collect_vin_offline_dataset_stats_reports_batch_shape_preview(tmp_path: Path) -> None:
@@ -1299,7 +1448,7 @@ def test_vin_offline_manifest_omits_counterfactual_placeholders(tmp_path: Path) 
     store_cfg = _write_test_store(tmp_path)
     manifest_payload = json.loads(store_cfg.manifest_path.read_text(encoding="utf-8"))
 
-    assert OFFLINE_DATASET_VERSION == 8  # noqa: S101
+    assert OFFLINE_DATASET_VERSION == 9  # noqa: S101
     assert "counterfactuals" not in manifest_payload  # noqa: S101
     assert "counterfactuals" not in manifest_payload["materialized_blocks"]  # noqa: S101
 

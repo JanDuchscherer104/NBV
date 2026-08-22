@@ -523,7 +523,7 @@
         "rollout-state",
         "finite-candidate-action-set",
         "counterfactual-transition",
-        "target-rri-reward",
+        "target-root-gain-reward",
         "finite-horizon-return",
         "finite-horizon-q-function",
         "validity-mask",
@@ -991,17 +991,18 @@
     ),
   ),
   (
-    key: "target-rri-reward",
+    key: "target-root-gain-reward",
     short: "reward",
-    long: "Target-RRI Reward",
+    long: "Target Root-Gain Reward",
     description: "Quality-only immediate reward for thesis-core target-aware rollouts. It is the target-specific point-mesh error reduction normalized by the rollout-root target error; scalar motion, rule, diversity, and validity penalties are later ablations.",
     group: "Metrics",
     custom: (
-      anchor: "term-target-rri-reward",
+      anchor: "term-target-root-gain-reward",
       aliases: (
         "target reward",
         "quality reward",
-        "target-specific RRI reward",
+        "target-specific root-gain reward",
+        "target-RRI reward",
       ),
       category: "metrics.reconstruction_quality",
       parent: "target-specific-rri",
@@ -1034,17 +1035,28 @@
         "ase.mesh_target",
       ),
       equation_refs: (
-        "rl.target_rri_reward",
+        "rl.target_root_gain_reward",
+        "rl.cumulative_target_root_gain",
+        "rl.marginal_target_rri",
+        "rl.cumulative_target_rri",
       ),
       typst_macro: none,
       notation: (
         typst: "$r_t^e$",
       ),
       formula: (
-        label: "Target-RRI reward",
-        tex: "r_t^e=\\mathrm{RRI}_e(q_t\\mid \\mathcal{P}_t,\\mathcal{M}_e^{\\mathrm{GT}})",
+        label: "Target root-gain reward",
+        tex: "r_t^e=(\\Delta_t^e-\\Delta_{t+1}^e)/\\max(\\Delta_0^e,\\varepsilon)",
       ),
       formulae: (
+        (
+          label: "Marginal target RRI diagnostic",
+          tex: "\\mathrm{RRI}_{t,i}^e=(\\Delta_t^e-\\Delta_{t\\mid i}^e)/\\max(\\Delta_t^e,\\varepsilon)",
+        ),
+        (
+          label: "Cumulative selected-chain RRI diagnostic",
+          tex: "C_t^{\\mathrm{RRI},e}=\\sum_{k=0}^{t-1}\\mathrm{RRI}_{k,a_k}^e",
+        ),
         (
           label: "Log-improvement follow-up",
           tex: "r_t^{\\log,e}=\\log(D(\\mathcal{P}_t^e,\\mathcal{M}_e^{\\mathrm{GT}})+\\varepsilon)-\\log(D(\\mathcal{P}_{t+1}^e,\\mathcal{M}_e^{\\mathrm{GT}})+\\varepsilon)",
@@ -1077,7 +1089,7 @@
       ),
       citations: (),
       related: (
-        "target-rri-reward",
+        "target-root-gain-reward",
         "finite-horizon-q-function",
       ),
       kg_tags: (
@@ -1207,7 +1219,7 @@
       related: (
         "finite-candidate-action-set",
         "finite-horizon-q-function",
-        "target-rri-reward",
+        "target-root-gain-reward",
       ),
       kg_tags: (
         "planning",

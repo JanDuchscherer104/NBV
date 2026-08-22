@@ -26,6 +26,7 @@ from pydantic import Field, field_validator
 from ...configs import PathConfig
 from ...utils import BaseConfig, Stage
 from ...utils.config_paths import resolve_cache_artifact_dir
+from ...vin.types import EvlBackboneOutput
 from .format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
@@ -34,7 +35,7 @@ from .format import (
 )
 from .views import VinSnippetView
 
-OFFLINE_DATASET_VERSION = 8
+OFFLINE_DATASET_VERSION = 9
 """Version of the immutable VIN offline dataset format."""
 
 _ACTOR_SNIPPET_BLOCKS = (
@@ -417,6 +418,59 @@ class VinOfflineStoreReader:
             lengths=lengths,
             t_world_rig=t_world_rig,
             t_world_snippet=t_world_snippet,
+        )
+
+    def read_backbone_evidence(
+        self,
+        record: VinOfflineIndexRecord,
+        *,
+        device: str | torch.device = "cpu",
+    ) -> EvlBackboneOutput | None:
+        """Decode persisted actor-visible root EVL evidence for one source row.
+
+        Returns ``None`` when the immutable source store did not materialize a
+        backbone. Required voxel-frame blocks fail with rebuild guidance rather
+        than being replaced by zero tensors; optional head/evidence blocks are
+        represented as ``None`` by :class:`EvlBackboneOutput`.
+        """
+
+        if not self.manifest.materialized_blocks.backbone:
+            return None
+        shard = self._shards.get(record.shard_id)
+        if shard is None:
+            raise ValueError(
+                f"VIN sample {record.sample_key!r} references unknown shard {record.shard_id!r}. "
+                "Rebuild the VIN offline store from the immutable source corpus."
+            )
+        required = ("backbone.t_world_voxel", "backbone.voxel_extent")
+        missing = [name for name in required if name not in shard.blocks]
+        if missing:
+            raise ValueError(
+                f"VIN sample {record.sample_key!r} is missing required root EVL blocks {missing}. "
+                "Rebuild the VIN offline store with backbone materialization."
+            )
+        target = torch.device(device)
+
+        def read_optional(name: str, *, dtype: torch.dtype) -> torch.Tensor | None:
+            if name not in shard.blocks:
+                return None
+            return torch.from_numpy(np.array(self.read_numeric_block(record, name), copy=True)).to(
+                device=target,
+                dtype=dtype,
+            )
+
+        pose = read_optional("backbone.t_world_voxel", dtype=torch.float32)
+        extent = read_optional("backbone.voxel_extent", dtype=torch.float32)
+        assert pose is not None and extent is not None
+        return EvlBackboneOutput(
+            t_world_voxel=PoseTW(pose),
+            voxel_extent=extent,
+            occ_pr=read_optional("backbone.occ_pr", dtype=torch.float32),
+            occ_input=read_optional("backbone.occ_input", dtype=torch.float32),
+            free_input=read_optional("backbone.free_input", dtype=torch.float32),
+            counts=read_optional("backbone.counts", dtype=torch.int64),
+            cent_pr=read_optional("backbone.cent_pr", dtype=torch.float32),
+            pts_world=read_optional("backbone.pts_world", dtype=torch.float32),
         )
 
     def read_numeric_block(self, record: VinOfflineIndexRecord, block_name: str) -> np.ndarray:

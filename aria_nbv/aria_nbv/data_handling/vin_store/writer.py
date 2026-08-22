@@ -60,6 +60,16 @@ DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS: tuple[str, ...] = (
 )
 """Default EVL fields materialized as numeric offline blocks."""
 
+REQUIRED_COMPACT_EVL_NUMERIC_FIELDS: tuple[str, ...] = tuple(
+    f"backbone.{name}" for name in DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS
+)
+"""Exact actor-visible root-EVL blocks required by VIN format version 9."""
+
+COMPACT_EVL_DTYPES: dict[str, np.dtype[Any]] = {
+    **{name: np.dtype(np.float32) for name in REQUIRED_COMPACT_EVL_NUMERIC_FIELDS if name != "backbone.counts"},
+    "backbone.counts": np.dtype(np.int64),
+}
+
 DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS: tuple[str, ...] = (
     "t_world_voxel",
     "voxel_extent",
@@ -680,10 +690,37 @@ def flush_prepared_samples_to_shard(
     if not rows:
         raise ValueError("Cannot flush an empty shard.")
 
+    numeric_block_names = sorted({name for row in rows for name in row.numeric_blocks})
+    backbone_names = {name for name in numeric_block_names if name.startswith("backbone.")}
+    if backbone_names:
+        missing_fields = sorted(set(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS) - backbone_names)
+        unexpected_fields = sorted(backbone_names - set(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS))
+        if missing_fields or unexpected_fields:
+            raise ValueError(
+                "VIN version-9 compact EVL rows require exactly the eight canonical backbone blocks; "
+                f"missing={missing_fields}, unexpected={unexpected_fields}."
+            )
+        for block_name in REQUIRED_COMPACT_EVL_NUMERIC_FIELDS:
+            missing = [row.sample_key for row in rows if block_name not in row.numeric_blocks]
+            if missing:
+                raise ValueError(
+                    f"Backbone block {block_name!r} must be present in every shard row; missing from {missing}."
+                )
+            values = [row.numeric_blocks[block_name] for row in rows]
+            expected_dtype = values[0].dtype
+            expected_shape = values[0].shape
+            required_dtype = COMPACT_EVL_DTYPES[block_name]
+            if expected_dtype != required_dtype:
+                raise ValueError(
+                    f"Backbone block {block_name!r} requires canonical dtype {required_dtype}, got {expected_dtype}."
+                )
+            if any(value.dtype != expected_dtype or value.shape != expected_shape for value in values[1:]):
+                facts = [(str(value.dtype), tuple(value.shape)) for value in values]
+                raise ValueError(f"Backbone block {block_name!r} has heterogeneous canonical dtype/row shape: {facts}.")
+
     shard_dir.mkdir(parents=True, exist_ok=True)
     shard_writer = VinOfflineShardWriter(shard_dir=shard_dir)
     block_specs: dict[str, Any] = {}
-    numeric_block_names = sorted({name for row in rows for name in row.numeric_blocks})
     for block_name in numeric_block_names:
         stacked = _stack_numeric_rows(block_name, rows)
         block_specs[block_name] = shard_writer.write_numeric_block(block_name, stacked)

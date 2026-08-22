@@ -69,7 +69,7 @@ The value family is defined relative to a frozen state and source protocol. An `
 
 Batch fitted Q iteration learns a greedy action-value function from a fixed transition collection through successive supervised regression problems; it does not require online interaction @FittedQIteration-ernst2005. If the requested-horizon design is selected, one candidate lower-horizon recursion is
 
-#eqs.rl.target_rri_reward
+#eqs.rl.target_root_gain_reward
 
 and, for $h>1$,
 
@@ -120,7 +120,7 @@ $
 
 The base $b_(psi,i)$ must predict continuous one-step target root gain
 
-#eqs.rl.target_rri_reward
+#eqs.rl.target_root_gain_reward
 
 in the same additive units as the finite-horizon return. Historical state-relative RRI or an ordinal CORAL score may remain auxiliary ranking and calibration outputs, but they are not interchangeable with this additive base unless an explicit calibrated conversion is learned and validated. The residual captures candidate regeneration, selected-observation state changes, occlusion, support, and the requested residual horizon.
 

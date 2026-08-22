@@ -25,7 +25,10 @@ sys.path.append(str(Path(__file__).resolve().parents[3] / "external" / "efm3d"))
 from efm3d.aria import CameraTW, PoseTW  # noqa: E402
 
 from aria_nbv.rendering.pytorch3d_depth_renderer import Pytorch3DDepthRendererConfig  # noqa: E402
-from aria_nbv.rendering.unproject import backproject_depths_p3d_batch  # noqa: E402
+from aria_nbv.rendering.unproject import (  # noqa: E402
+    backproject_depths_camera_tw_batch,
+    backproject_depths_p3d_batch,
+)
 
 
 def test_p3d_world_to_view_matches_pose_inverse_transform() -> None:
@@ -170,3 +173,32 @@ def test_backproject_batch_matches_single_pixel() -> None:
 
     # Pixel is at cx+10 (right of centre) → X world-coord should be negative (P3D NDC sign).
     assert torch.sign(padded[0, 0, 0]).item() == -1.0
+
+
+def test_camera_tw_backprojection_matches_derived_pytorch3d_camera() -> None:
+    """Typed stored calibration must use the same half-pixel/sign path as rendered cameras."""
+
+    camera = CameraTW.from_parameters(
+        width=torch.tensor([5.0]),
+        height=torch.tensor([3.0]),
+        fx=torch.tensor([7.0]),
+        fy=torch.tensor([8.0]),
+        cx=torch.tensor([1.25]),
+        cy=torch.tensor([0.75]),
+        dist_params=torch.zeros(0),
+    )
+    pose = PoseTW.from_Rt(torch.eye(3).unsqueeze(0), torch.tensor([[1.0, -0.5, 0.2]]))
+    depth = torch.zeros((1, 3, 5), dtype=torch.float32)
+    valid = torch.zeros_like(depth, dtype=torch.bool)
+    depth[0, 1, 3] = 2.0
+    valid[0, 1, 3] = True
+    renderer = Pytorch3DDepthRendererConfig(device="cpu", verbosity=0).setup_target()
+    vertices = torch.tensor([[-1.0, -1.0, 3.0], [1.0, -1.0, 3.0], [0.0, 1.0, 3.0]])
+    faces = torch.tensor([[0, 1, 2]], dtype=torch.int64)
+    _rendered, _faces, p3d_camera = renderer.render(pose, (vertices, faces), camera)
+
+    expected = backproject_depths_p3d_batch(depth, valid, p3d_camera)
+    actual = backproject_depths_camera_tw_batch(depth, valid, camera, pose)
+
+    assert torch.equal(actual[1], expected[1])
+    assert torch.allclose(actual[0], expected[0], atol=1e-6)

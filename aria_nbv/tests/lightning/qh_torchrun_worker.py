@@ -15,7 +15,12 @@ from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from tests.data_handling.test_qh import _chain
 from tests.lightning.test_qh_fast_dev_run import _trainer
-from tests.lightning.test_qh_module import _ChainDataset, _TableScorer
+from tests.lightning.test_qh_module import (
+    _CF0_ACTOR_HASH,
+    _LEARNING_CONTRACT_HASH,
+    _ChainDataset,
+    _TableScorer,
+)
 
 
 class _UnsupportedNanScorer(_TableScorer):
@@ -42,7 +47,14 @@ def main() -> None:
 
     if args.scenario in {"distributed-val", "distributed-test"}:
         torch.distributed.init_process_group("gloo")
-        module = QhLightningModule(QhLightningModuleConfig(lr_scheduler=None), scorer=_TableScorer())
+        module = QhLightningModule(
+            QhLightningModuleConfig(
+                lr_scheduler=None,
+                actor_state_contract_hash=_CF0_ACTOR_HASH,
+                learning_contract_hash=_LEARNING_CONTRACT_HASH,
+            ),
+            scorer=_TableScorer(),
+        )
         log_calls = 0
 
         def _log(*args, **kwargs) -> None:
@@ -106,9 +118,15 @@ def main() -> None:
         train=_ChainDataset(samples),
         batch_size=1,
         seed=43,
+        experiment_profile="qh_cf0_v1",
     )
     module = QhLightningModule(
-        QhLightningModuleConfig(lr_scheduler=None, target_sync_interval=3),
+        QhLightningModuleConfig(
+            lr_scheduler=None,
+            target_sync_interval=3,
+            actor_state_contract_hash=_CF0_ACTOR_HASH,
+            learning_contract_hash=data.learning_contract_hash,
+        ),
         scorer=_UnsupportedNanScorer() if args.scenario == "local-empty" else _TableScorer(),
     )
     initial_state = {name: value.detach().clone() for name, value in module.state_dict().items()}

@@ -86,12 +86,33 @@
     )
     in cal(S)^"cf0"
   $,
+  s_pose: $
+    #symb.rl.s_pose
+    =
+    (
+      cal(S)_"root"^"VIN",
+      #(symb.vin.field_v)^"root",
+      (bold(T)_(r,e), bold(l)_e),
+      #symb.oracle.candidates_t,
+      #symb.rl.validity_mask,
+      bold(H)_t^"pose",
+      #symb.rl.budget
+    )
+  $,
   s_cf_geom: $
     #symb.rl.s_cf_geom
     =
     (
       #symb.rl.s_cf0,
       (#symb.obs.depth, #symb.obs.vis, #symb.obs.points_cf, #symb.obs.face_normal)_(1:t)
+    )
+  $,
+  s_cf_gt_carrier: $
+    #symb.rl.s_cf_gt_carrier
+    =
+    (
+      #symb.rl.s_pose,
+      (#symb.obs.depth, #symb.obs.vis, cal(K), bold(T)_"root<-cam")_(1:t)^"sel"
     )
   $,
   s_oracle: $
@@ -140,12 +161,33 @@
   counterfactual_transition: $
     #(symb.oracle.points) _(t+1) = #(symb.oracle.points) _t union #(symb.oracle.points) _(q_t)
   $,
-  target_rri_reward: $
+  marginal_target_rri: $
+    #symb.entity.target_rri_marginal
+    =
+    (#symb.entity.target_error - Delta_(t|i)^e)
+    /
+    max(#symb.entity.target_error, epsilon)
+  $,
+  cumulative_target_rri: $
+    #symb.entity.target_rri_cumulative
+    =
+    sum_(k=0)^(t-1) op("RRI")_(k,a_k)^e
+  $,
+  target_root_gain_reward: $
     #symb.entity.target_reward
     =
     (#symb.entity.target_error - #symb.entity.target_error_next)
     /
-    (#symb.entity.target_error_0 + epsilon)
+    max(#symb.entity.target_error_0, epsilon)
+  $,
+  cumulative_target_root_gain: $
+    #symb.entity.target_root_gain_cumulative
+    =
+    sum_(k=0)^(t-1) r_k^e
+    =
+    (#symb.entity.target_error_0 - #symb.entity.target_error)
+    /
+    max(#symb.entity.target_error_0, epsilon)
   $,
   finite_horizon_return: $
     G_(t,e)^((h))

@@ -1,26 +1,17 @@
 r"""Validated rollout-to-VIN joins for finite-candidate Q_H chains.
 
 The dataset joins private rollout source references to the exact immutable VIN
-actor sample, verifies manifest and split identity before iteration, and
-tensorizes stored variable-length chains into factual fixed-budget views. It
-never chooses a scorer, learning objective, or fitted-Q admission policy;
-candidate actions, rewards, discounts, terminal flags, and remaining budgets
-are persisted rollout facts.
-This module owns the validated join and tensorization; rollout decoding and VIN
-storage remain with their respective readers.
+actor sample and verifies manifest and split identity before iteration. Typed
+chain materialization lives in :mod:`aria_nbv.data_handling.qh_data.materialization`;
+rollout decoding and VIN storage remain with their respective readers.
 """
 
 from __future__ import annotations
 
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-import numpy as np
-import torch
-from efm3d.aria.pose import PoseTW
 from pydantic import Field, field_validator
-from torch import Tensor
 from torch.utils.data import Dataset
 
 from ...rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
@@ -29,13 +20,17 @@ from ...utils import Stage, TargetConfig
 from ...utils.fingerprints import stable_msgspec_hash
 from ..identifiers import compact_ase_atek_sample_id
 from ..vin_store.format import VinOfflineIndexRecord
-from ..vin_store.store import VinOfflineStoreConfig, VinOfflineStoreReader
-from ..vin_store.views import VinSnippetView
-from .batching import _gather_candidates, _pad
-from .views import QhActorTensors, QhChain, QhChainKey, QhSupervision
-
-if TYPE_CHECKING:
-    from ...rollouts.qh_reader import _StoredChain
+from ..vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
+from ..vin_store.writer import REQUIRED_COMPACT_EVL_NUMERIC_FIELDS
+from .materialization import _audit_for, _evl_block_signature, _read_static_context, _tensor_chain
+from .views import (
+    QhActorStateContract,
+    QhChain,
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,
+)
 
 
 class QhDatasetConfig(TargetConfig["QhDataset"]):
@@ -49,6 +44,18 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
 
     split: Stage | None = None
     """Learning/campaign split admitted by the rollout reader; ``None`` reads all chains."""
+
+    root_evl_profile: QhRootEvlProfile = "none"
+    """Root scene-evidence profile; ``evl_v1`` requires the canonical eight-block EVL carrier."""
+
+    selected_observation_protocol: QhSelectedObservationProtocol = "none"
+    """Causal selected-observation source; ``cf_gt`` explicitly enables privileged rendered depth."""
+
+    experiment_profile: QhExperimentProfile | None = None
+    """Closed CF0/CF+ role; ``None`` retains legacy diagnostic-only setup."""
+
+    include_audit: bool = False
+    """Attach CPU-only chain provenance for debugging; never adds payloads to scorer tensors or device transfer."""
 
     @field_validator("split", mode="before")
     @classmethod
@@ -71,10 +78,37 @@ class QhDatasetConfig(TargetConfig["QhDataset"]):
             the configured actor manifest, split, and source rows.
         """
 
+        if self.selected_observation_protocol == "cf_gt" and self.experiment_profile is None:
+            raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
+        privileged = self.experiment_profile == "qh_cfplus_gt_depth_v1"
+        if self.experiment_profile is not None:
+            validate_experiment_profile(
+                self.experiment_profile,
+                root_evl_profile=self.root_evl_profile,
+                selected_observation_protocol=self.selected_observation_protocol,
+                privileged=privileged,
+            )
+        rollout_reader = QhRolloutReader(
+            self.rollout_store_dirs,
+            campaign_split=self.split,
+            include_selected_depth=self.selected_observation_protocol == "cf_gt",
+        )
+        if self.experiment_profile is not None:
+            validate_experiment_profile(
+                self.experiment_profile,
+                root_evl_profile=self.root_evl_profile,
+                selected_observation_protocol=self.selected_observation_protocol,
+                target_protocol=rollout_reader.contract.target_protocol,
+                privileged=privileged,
+            )
         return QhDataset(
-            rollout_reader=QhRolloutReader(self.rollout_store_dirs, campaign_split=self.split),
+            rollout_reader=rollout_reader,
             actor_reader=VinOfflineStoreReader(self.actor),
             split=self.split,
+            root_evl_profile=self.root_evl_profile,
+            selected_observation_protocol=self.selected_observation_protocol,
+            experiment_profile=self.experiment_profile,
+            include_audit=self.include_audit,
         )
 
 
@@ -83,10 +117,10 @@ class QhDataset(Dataset[QhChain]):
 
     Construction preflights every private source reference against the actor
     manifest and complete immutable actor index. ``split`` has already selected
-    campaign chains at the rollout-reader boundary. ``__getitem__`` then reads one stored chain
-    and its chain-constant root snippet exactly once. The result separates
-    actor state from label support and other oracle transition facts; it does
-    not decide which rows are admissible to a fitted-Q objective.
+    campaign chains at the rollout-reader boundary. ``__getitem__`` then reads
+    one stored chain and its chain-constant root snippet exactly once. The
+    result separates actor state from label support and other oracle transition
+    facts; it does not decide fitted-Q admission.
     """
 
     _REBUILD_GUIDANCE = "Rebuild the VIN offline store and rollout corpus from the same immutable source manifest."
@@ -97,6 +131,10 @@ class QhDataset(Dataset[QhChain]):
         rollout_reader: QhRolloutReader,
         actor_reader: VinOfflineStoreReader,
         split: Stage | None = None,
+        root_evl_profile: QhRootEvlProfile = "none",
+        selected_observation_protocol: QhSelectedObservationProtocol = "none",
+        experiment_profile: QhExperimentProfile | None = None,
+        include_audit: bool = False,
     ) -> None:
         """Validate rollout provenance against the configured immutable actor store.
 
@@ -111,17 +149,48 @@ class QhDataset(Dataset[QhChain]):
 
         self.rollout_reader = rollout_reader
         self.actor_reader = actor_reader
-        reader_split = getattr(rollout_reader, "campaign_split", None)
+        reader_split = rollout_reader.campaign_split
         if split is not None and reader_split != split:
             raise ValueError(
                 "Q_H dataset split must match rollout_reader.campaign_split; "
                 f"received split={split!r}, reader campaign_split={reader_split!r}."
             )
         self.split = reader_split
+        reader_protocol: QhSelectedObservationProtocol = "cf_gt" if rollout_reader.include_selected_depth else "none"
+        if selected_observation_protocol != reader_protocol:
+            raise ValueError(
+                "Q_H selected-observation protocol must match rollout-reader loading; "
+                f"received {selected_observation_protocol!r}, reader provides {reader_protocol!r}."
+            )
+        self.root_evl_profile = root_evl_profile
+        self.selected_observation_protocol = selected_observation_protocol
+        if selected_observation_protocol == "cf_gt" and experiment_profile is None:
+            raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
+        if experiment_profile is not None:
+            validate_experiment_profile(
+                experiment_profile,
+                root_evl_profile=root_evl_profile,
+                selected_observation_protocol=selected_observation_protocol,
+                target_protocol=rollout_reader.contract.target_protocol,
+                privileged=experiment_profile == "qh_cfplus_gt_depth_v1",
+            )
+        self.experiment_profile = experiment_profile
+        self.include_audit = include_audit
+        if experiment_profile is not None:
+            _require_named_profile_store(actor_reader)
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
-        # ``split`` selects campaign chains above; actor rows are loaded from
-        # the complete immutable index so source_ref.split can validate the
-        # physical VIN lineage independently.
+        self._actor_state_contract = QhActorStateContract(
+            root_evl_profile=root_evl_profile,
+            selected_observation_protocol=selected_observation_protocol,
+            actor_manifest_hash=self._manifest_hash,
+            evl_block_signature=_evl_block_signature(actor_reader) if root_evl_profile == "evl_v1" else (),
+            experiment_profile=experiment_profile,
+            geometry_contract_hash=(
+                stable_msgspec_hash(rollout_reader.contract.selected_depth_geometry)
+                if experiment_profile == "qh_cfplus_gt_depth_v1"
+                else None
+            ),
+        )
         self._records = {record.sample_index: record for record in actor_reader.get_split_records(None)}
         self._validate_source_refs()
 
@@ -145,7 +214,24 @@ class QhDataset(Dataset[QhChain]):
         stored = self.rollout_reader[index]
         record = self._record(stored.source_ref)
         snippet = self.actor_reader.read_actor_snippet(record, device="cpu")
-        return _tensor_chain(stored, snippet)
+        static_context = (
+            _read_static_context(self.actor_reader, record, snippet) if self.root_evl_profile == "evl_v1" else None
+        )
+        if self.root_evl_profile == "evl_v1" and (
+            static_context is None or not bool(static_context.evl_presence.all())
+        ):
+            raise ValueError(
+                "Q_H evl_v1 root profile requires every EVL evidence field; rebuild the VIN offline store with backbone materialization."
+            )
+        return _tensor_chain(
+            stored,
+            snippet,
+            static_context=static_context,
+            selected_observation_protocol=self.selected_observation_protocol,
+            audit=_audit_for(stored, self.rollout_reader.store_dirs[stored.store_index])
+            if self.include_audit
+            else None,
+        )
 
     @cached_property
     def scenes(self) -> frozenset[str]:
@@ -155,20 +241,26 @@ class QhDataset(Dataset[QhChain]):
 
     @property
     def max_horizon(self) -> int:
-        """Return the largest realized horizon among the validated chains."""
+        """Return the largest configured horizon among the validated stores."""
 
         return self.rollout_reader.max_horizon
 
     @property
     def contract(self) -> QhDataContract:
-        """Return compatibility facts shared across the corpus's realized horizons.
+        """Return semantic compatibility and the exact replay-support mixture.
 
-        Horizon length is a per-chain fact represented by state count and
-        ``horizon_remaining``; it is intentionally absent from this common
-        reward, return, discount, schema, and provenance contract.
+        :class:`~aria_nbv.lightning.qh_datamodule.QhLearningContract` adds the
+        configured maximum horizon and loss-aggregation identity at stage
+        admission.
         """
 
         return self.rollout_reader.contract
+
+    @property
+    def actor_state_contract(self) -> QhActorStateContract:
+        """Return metadata-only scorer-input compatibility facts for this stage."""
+
+        return self._actor_state_contract
 
     @property
     def provenance(self) -> dict[str, object]:
@@ -186,12 +278,7 @@ class QhDataset(Dataset[QhChain]):
         }
 
     def _validate_source_refs(self) -> None:
-        """Preflight exact actor rows and ordered per-source split membership.
-
-        Each source reference must resolve through :meth:`_record`. References
-        sharing source-manifest, split, and expected split-manifest hashes are
-        then replayed in corpus order to reproduce the persisted split hash.
-        """
+        """Preflight exact actor rows and ordered per-source split membership."""
 
         for source_ref in self.rollout_reader.source_refs:
             self._record(source_ref)
@@ -232,21 +319,7 @@ class QhDataset(Dataset[QhChain]):
                 raise ValueError(f"VIN split manifest does not match rollout source identity. {self._REBUILD_GUIDANCE}")
 
     def _record(self, source_ref: _QhSourceRef) -> VinOfflineIndexRecord:
-        """Resolve one actor row and verify every persisted source-identity field.
-
-        Args:
-            source_ref: Private rollout reference naming the actor row, sample,
-                shard position, scene, snippet, split, store version, and
-                manifest hash expected by the chain.
-
-        Returns:
-            Exact immutable VIN index record admitted by the configured split.
-
-        Raises:
-            KeyError: If the referenced actor sample index is absent.
-            ValueError: If any resolved identity field differs from the
-                persisted rollout reference.
-        """
+        """Resolve one actor row and verify every persisted source-identity field."""
 
         try:
             record = self._records[source_ref.source_sample_index]
@@ -282,107 +355,54 @@ class QhDataset(Dataset[QhChain]):
         return record
 
 
-def _tensor_chain(stored: _StoredChain, snippet: VinSnippetView) -> QhChain:
-    """Tensorize one stored chain and construct strictly causal selected-pose history.
+def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> None:
+    """Require version-9 EVL and semantic point evidence for named profiles."""
 
-    Candidate rows retain stored widths before batch collation.
-    ``candidate_mask`` records materialization, ``action_mask`` is its
-    actor-valid subset, and ``label_mask`` is the label-supported subset of
-    actor validity. Selected indices are factual rollout-policy actions. At
-    state ``s``, history slots ``0`` through ``s-1`` contain those earlier
-    selected poses in chronological order and every slot from ``s`` onward is
-    masked out. Stored remaining budget, TD discount, and terminal state are
-    copied without learner-specific reinterpretation.
-
-    Args:
-        stored: Complete CPU/NumPy rollout chain with ``S`` states and
-            variable candidate-row widths.
-        snippet: Chain-constant immutable VIN actor observation.
-
-    Returns:
-        :class:`QhChain` with float32 pose/reward tensors, int64 action/budget
-        tensors, bool support/terminal tensors, and strict causal history.
-    """
-
-    candidate_pose = _stack_rows(stored.candidate_pose_relative_root, 0, torch.float32)
-    action_mask = _stack_rows(stored.action_mask, False, torch.bool)
-    label_mask = _stack_rows(stored.label_mask, False, torch.bool)
-    reward = _stack_rows(stored.candidate_reward, 0, torch.float32)
-    selected = _from_numpy(stored.selected_index, torch.int64)
-    steps, width = action_mask.shape
-    candidate_mask = torch.zeros((steps, width), dtype=torch.bool)
-    for row, values in enumerate(stored.candidate_pose_relative_root):
-        candidate_mask[row, : values.shape[0]] = True
-    if bool((label_mask & ~action_mask).any() or (action_mask & ~candidate_mask).any()):
-        raise ValueError("Q_H masks must satisfy label_mask <= action_mask <= candidate_mask.")
-    history_pose = torch.zeros((steps, steps, 12), dtype=torch.float32)
-    history_mask = torch.zeros((steps, steps), dtype=torch.bool)
-    selected_pose = _gather_candidates(candidate_pose, selected)
-    for step in range(1, steps):
-        history_pose[step, :step] = selected_pose[:step]
-        history_mask[step, :step] = True
-    root_pose = PoseTW(_from_numpy(stored.root_pose_world, torch.float32))
-    target_pose = PoseTW(_from_numpy(stored.target_pose_world_object, torch.float32))
-    return QhChain(
-        actor=QhActorTensors(
-            vin_snippet=snippet,
-            root_pose_world=root_pose.tensor(),
-            target_pose_relative_root=root_pose.inverse().compose(target_pose).tensor(),
-            target_extents=_from_numpy(stored.target_extents, torch.float32),
-            candidate_pose_relative_root=candidate_pose,
-            candidate_mask=candidate_mask,
-            action_mask=action_mask,
-            history_pose_relative_root=history_pose,
-            history_mask=history_mask,
-            horizon_remaining=_from_numpy(stored.horizon_remaining, torch.int64),
-            step_mask=torch.ones(steps, dtype=torch.bool),
-        ),
-        supervision=QhSupervision(
-            label_mask=label_mask,
-            candidate_reward=reward,
-            selected_index=selected,
-            discount=_from_numpy(stored.discount, torch.float32),
-            terminal=_from_numpy(stored.terminal, torch.bool),
-        ),
-        key=QhChainKey(
-            store_index=stored.store_index,
-            rollout_row_id=stored.rollout_row_id,
-            source_sample_index=stored.source_ref.source_sample_index,
-            scene_id=stored.source_ref.scene_id,
-            target_row_id=stored.target_row_id,
-        ),
+    manifest = actor_reader.manifest
+    if manifest.version != OFFLINE_DATASET_VERSION:
+        raise ValueError(
+            "Named Q_H profiles require VIN offline dataset version 9 with compact EVL semantics; "
+            f"found version {manifest.version}. Rebuild the VIN offline store."
+        )
+    vin = manifest.vin
+    schema = vin.get("point_feature_schema")
+    schema_hash = vin.get("point_feature_schema_hash")
+    if not isinstance(schema, list) or schema_hash != stable_msgspec_hash(schema):
+        raise ValueError("Named Q_H profiles require a hashed ordered VIN point-feature schema; rebuild the store.")
+    expected_names = ["x_m", "y_m", "z_m", "inv_dist_std"]
+    if bool(vin.get("include_obs_count")):
+        expected_names.append("observation_count")
+    if [field.get("name") if isinstance(field, dict) else None for field in schema] != expected_names:
+        raise ValueError("Named Q_H profiles require the canonical ordered point-feature schema; rebuild the store.")
+    expected_units = {"x_m": "m", "y_m": "m", "z_m": "m", "inv_dist_std": "m^-1", "observation_count": "count"}
+    for field in schema:
+        if not isinstance(field, dict) or set(field) != {"name", "dtype", "unit", "version"}:
+            raise ValueError("Named Q_H profiles require complete point-feature schema fields; rebuild the store.")
+        if field["dtype"] != "float32" or field["version"] != "vin_points_v1":
+            raise ValueError("Named Q_H profiles require versioned float32 point-feature semantics; rebuild the store.")
+        if field["unit"] != expected_units[field["name"]]:
+            raise ValueError("Named Q_H profiles require canonical point-feature units; rebuild the store.")
+    signature = vin.get("backbone_block_signature")
+    expected_names = sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS)
+    if not isinstance(signature, list) or [item.get("name") for item in signature] != expected_names:
+        raise ValueError("Named Q_H profiles require the exact eight compact EVL blocks; rebuild the store.")
+    declared_signature = tuple(
+        (item["name"], item["dtype"], tuple(item["shape"]))
+        for item in signature
+        if isinstance(item, dict) and {"name", "dtype", "shape"} <= set(item)
     )
-
-
-def _from_numpy(value: np.ndarray, dtype: torch.dtype) -> Tensor:
-    """Copy a NumPy array into an owned CPU tensor with the requested dtype.
-
-    Args:
-        value: NumPy payload whose shape is preserved.
-        dtype: Destination PyTorch dtype required by the Q_H DTO contract.
-
-    Returns:
-        Owned CPU tensor that cannot alias rollout-reader NumPy storage.
-    """
-
-    return torch.from_numpy(np.array(value, copy=True)).to(dtype=dtype)
-
-
-def _stack_rows(values: tuple[np.ndarray, ...], fill: int | float | bool, dtype: torch.dtype) -> Tensor:
-    """Tensorize variable-width NumPy rows into one rectangular CPU table.
-
-    Args:
-        values: Non-empty equal-rank state rows in chronological order.
-        fill: Padding scalar appropriate to the field's factual support.
-        dtype: Destination dtype shared by every row.
-
-    Returns:
-        Tensor with leading state axis ``S`` and remaining axes padded to their
-        per-axis maxima. Padding does not create support; callers construct the
-        corresponding masks explicitly.
-    """
-
-    return _pad([_from_numpy(value, dtype) for value in values], fill)
-
-
-__all__ = ["QhDataset", "QhDatasetConfig"]
+    if len(declared_signature) != len(expected_names):
+        raise ValueError("Named Q_H profiles require complete EVL block dtype/shape signatures; rebuild the store.")
+    for shard in manifest.shards:
+        names = sorted(name for name in shard.blocks if name.startswith("backbone."))
+        if names != expected_names:
+            raise ValueError(
+                f"Named Q_H profile shard {shard.shard_id!r} lacks homogeneous compact EVL blocks; rebuild the store."
+            )
+        actual_signature = tuple(
+            (name, str(shard.blocks[name].dtype), tuple(shard.blocks[name].shape[1:])) for name in expected_names
+        )
+        if actual_signature != declared_signature:
+            raise ValueError(
+                f"Named Q_H profile shard {shard.shard_id!r} disagrees with declared EVL dtype/shape signature; rebuild the store."
+            )

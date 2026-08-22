@@ -38,10 +38,14 @@
   s_obs: $s_t^"obs"$,
   // Zero-cost counterfactual state at rollout step t.
   s_cf0: $s_t^"cf0"$,
+  // Implemented pose-history actor state used by the qh_cf0_v1 profile.
+  s_pose: $s_t^"S0-pose"$,
   // Reserved next counterfactual state; no direct authored use in the 2026-08-14 audit.
   s_cf0_next: $s_(t+1)^"cf0"$,
   // Counterfactual state augmented with rendered geometry.
   s_cf_geom: $s_t^"cf+"$,
+  // Implemented privileged selected-depth carrier used by qh_cfplus_gt_depth_v1.
+  s_cf_gt_carrier: $s_t^"CF-GT-carrier"$,
   // Privileged oracle state used only for labels or analysis.
   s_oracle: $s_t^"oracle"$,
   // Reserved rollout-state embedding; no direct authored use in the 2026-08-14 audit.

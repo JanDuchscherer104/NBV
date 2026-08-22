@@ -27,13 +27,14 @@ from ...data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOffline
 from ...data_handling.vin_store.writer import (
     DEFAULT_BACKBONE_NUMERIC_KEEP_FIELDS,
     DEFAULT_BACKBONE_PAYLOAD_KEEP_FIELDS,
+    REQUIRED_COMPACT_EVL_NUMERIC_FIELDS,
     PreparedVinOfflineSample,
     assign_offline_splits,
     flush_prepared_samples_to_shard,
     prepare_vin_offline_sample,
 )
 from ...utils import Console, TargetConfig, Verbosity
-from ...utils.fingerprints import stable_json_signature
+from ...utils.fingerprints import stable_json_signature, stable_msgspec_hash
 from ...vin.backbones import EvlBackboneConfig
 
 if TYPE_CHECKING:
@@ -278,6 +279,13 @@ class VinOfflineWriter:
             row_start += int(shard_spec.num_rows)
 
         materialized_block_names = {block_name for shard_spec in shard_specs for block_name in shard_spec.blocks}
+        compact_evl_signature = _compact_evl_block_signature(shard_specs)
+        if self.config.include_backbone and not compact_evl_signature:
+            raise ValueError(
+                "VIN backbone materialization requires the complete version-9 compact-EVL numeric keep-list; "
+                "rebuild with all eight required backbone fields enabled."
+            )
+        point_feature_schema = _point_feature_schema(include_obs_count=self.config.semidense_include_obs_count)
         dataset_config = self.config.dataset.model_dump_cache(exclude_none=True)
         labeler_config = self.config.labeler.model_dump_cache(exclude_none=True)
         backbone_config = (
@@ -304,6 +312,9 @@ class VinOfflineWriter:
                 "semidense_max_points": self.config.semidense_max_points,
                 "include_inv_dist_std": True,
                 "include_obs_count": bool(self.config.semidense_include_obs_count),
+                "point_feature_schema": point_feature_schema,
+                "point_feature_schema_hash": stable_msgspec_hash(point_feature_schema),
+                "backbone_block_signature": compact_evl_signature,
             },
             materialized_blocks=VinOfflineMaterializedBlocks(
                 backbone=bool(self.config.include_backbone),
@@ -344,6 +355,43 @@ class VinOfflineWriter:
         if interrupted:
             self.console.log("Partial VIN offline dataset finalized after Ctrl-C.")
         return manifest
+
+
+def _point_feature_schema(*, include_obs_count: bool) -> list[dict[str, str]]:
+    """Return the ordered semantic schema for persisted VIN point channels."""
+
+    fields = [
+        ("x_m", "float32", "m"),
+        ("y_m", "float32", "m"),
+        ("z_m", "float32", "m"),
+        ("inv_dist_std", "float32", "m^-1"),
+    ]
+    if include_obs_count:
+        fields.append(("observation_count", "float32", "count"))
+    return [{"name": name, "dtype": dtype, "unit": unit, "version": "vin_points_v1"} for name, dtype, unit in fields]
+
+
+def _compact_evl_block_signature(shard_specs: list[VinOfflineShardSpec]) -> list[dict[str, object]]:
+    """Return one homogeneous compact-EVL signature across finalized shards."""
+
+    signatures: set[tuple[tuple[str, str, tuple[int, ...]], ...]] = set()
+    for shard in shard_specs:
+        blocks = shard.blocks
+        signature = tuple(
+            (name, str(blocks[name].dtype), tuple(blocks[name].shape[1:]))
+            for name in sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS)
+            if name in blocks
+        )
+        signatures.add(signature)
+    if len(signatures) > 1:
+        raise ValueError(f"VIN compact EVL block signatures are heterogeneous across shards: {sorted(signatures)}.")
+    signature = next(iter(signatures), ())
+    if not signature:
+        return []
+    expected = tuple(sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS))
+    if tuple(name for name, _dtype, _shape in signature) != expected:
+        raise ValueError("VIN version-9 manifest requires the exact eight compact EVL blocks in every shard.")
+    return [{"name": name, "dtype": dtype, "shape": list(shape)} for name, dtype, shape in signature]
 
 
 __all__ = ["VinOfflineWriter", "VinOfflineWriterConfig"]

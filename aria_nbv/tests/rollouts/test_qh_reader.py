@@ -10,10 +10,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 import zarr
+from efm3d.aria.pose import PoseTW
 
 pytest.importorskip("efm3d")
 
+from aria_nbv.data_handling.qh_data.batching import collate_qh_chains
+from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
+from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.rollouts.inspection import q_h_evidence_rows
 from aria_nbv.rollouts.qh_reader import QhRolloutReader
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
@@ -57,7 +62,15 @@ def _campaign_split_hash(records: list[object]) -> str:
     return split_hash
 
 
-def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_id: int | None = None) -> Path:
+def _write_store(
+    path: Path,
+    *,
+    horizon: int = 2,
+    records: int = 1,
+    source_row_id: int | None = None,
+    selected_depth_enabled: bool = True,
+    selected_depth_chunk_steps: int = 16,
+) -> Path:
     rollout_records = build_rollout_records(horizon=horizon, num_samples=6, seed=7)[:records]
     if source_row_id is not None:
         assert records == 1
@@ -72,6 +85,8 @@ def _write_store(path: Path, *, horizon: int = 2, records: int = 1, source_row_i
         target_protocol_version="v0_gt_input",
         source_offline_store_version="7",
         split_manifest_hash="fixture-split-manifest",
+        selected_depth_enabled=selected_depth_enabled,
+        selected_depth_chunk_steps=selected_depth_chunk_steps,
     ).store_dir
 
 
@@ -123,6 +138,26 @@ def _write_v1_store(path: Path) -> Path:
     ).store_dir
 
 
+def _write_packed_early_terminal_store(path: Path) -> Path:
+    records = build_rollout_records(horizon=4, num_samples=60, seed=7)[:3]
+    factual_lengths = (3, 1, 2)
+    for record, factual_length in zip(records, factual_lengths, strict=True):
+        trajectory = record.evaluated.result.trajectories[0]
+        trajectory.steps[:] = trajectory.steps[:factual_length]
+        trajectory.terminated_early = True
+        record.evaluated.steps = {
+            key: value for key, value in record.evaluated.steps.items() if key[1] < factual_length
+        }
+    return write_rollout_zarr_store(
+        path,
+        records,
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+    ).store_dir
+
+
 def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> None:
     reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr", records=2),))
     first = reader[0]
@@ -154,7 +189,10 @@ def test_reader_normalizes_validation_campaign_split_without_changing_source_spl
 
 
 def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows(tmp_path: Path) -> None:
-    records = build_rollout_records(horizon=2, num_samples=6, seed=7)
+    records = [
+        build_rollout_records(horizon=horizon, num_samples=6, seed=7 + index)[index]
+        for index, horizon in enumerate((2, 3, 4))
+    ]
     for record, campaign_split in zip(records, ("train", "validation", "test"), strict=True):
         record.lineage.source.campaign_split = campaign_split
         record.lineage.source.scene_id = f"scene-{campaign_split}"
@@ -175,8 +213,17 @@ def test_reader_campaign_split_isolates_three_way_corpus_and_hides_excluded_rows
         "scene-test",
     ]
     assert all(len(reader.source_refs) == 1 for reader in readers.values())
-    assert all(reader.provenance["stores"][0]["state_count"] == 2 for reader in readers.values())
+    assert [
+        readers[split].provenance["stores"][0]["state_count"] for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)
+    ] == [2, 3, 4]
     assert {readers[split][0].source_ref.source_sample_index for split in readers} == {0, 1, 2}
+    assert [readers[split].max_horizon for split in (Stage.TRAIN, Stage.VAL, Stage.TEST)] == [2, 3, 4]
+    assert all(len(reader.contract.candidate_config_hashes) == 1 for reader in readers.values())
+    assert all(len(reader.contract.rollout_config_hashes) == 1 for reader in readers.values())
+    assert all(len(reader.contract.selection_policies) == 1 for reader in readers.values())
+    assert len({reader.contract.candidate_config_hashes for reader in readers.values()}) == 3
+    assert len({reader.contract.rollout_config_hashes for reader in readers.values()}) == 3
+    assert len({reader.contract.selection_policies for reader in readers.values()}) == 3
 
 
 def test_reader_rejects_double_erased_campaign_identity(tmp_path: Path) -> None:
@@ -248,6 +295,254 @@ def test_campaign_bound_store_rejects_all_unknown_campaign_assignments(tmp_path:
     assert any("unknown campaign split" in error for error in validation.errors)
     with pytest.raises(ValueError, match="canonical validation|unknown campaign split"):
         QhRolloutReader((store,))
+
+
+def test_reader_reads_selected_cf_gt_depth_only_when_explicitly_requested(tmp_path: Path) -> None:
+    """Rich Q_H reads retain selected mesh-depth evidence with its alignment metadata."""
+
+    store = _write_store(tmp_path / "rollouts.zarr")
+    chain = QhRolloutReader((store,), include_selected_depth=True)[0]
+
+    assert chain.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert chain.selected_depth_m is not None
+    assert chain.selected_depth_valid_mask is not None
+    assert chain.selected_depth_focal_px is not None
+    assert chain.selected_depth_principal_point_px is not None
+    assert chain.selected_depth_image_size_hw is not None
+    assert chain.selected_depth_m.shape[0] == len(chain.candidate_pose_relative_root)
+    assert chain.selected_depth_m.dtype == np.float16
+    assert chain.selected_depth_valid_mask.dtype == np.bool_
+    assert len(chain.one_step_target_rri) == len(chain.candidate_pose_relative_root)
+    for values, mask in zip(chain.one_step_target_rri, chain.label_mask, strict=True):
+        assert np.isfinite(values[mask]).all()
+
+
+def test_reader_preserves_renderer_metadata_without_loading_selected_depth(tmp_path: Path) -> None:
+    enabled = QhRolloutReader((_write_store(tmp_path / "enabled.zarr"),))[0]
+    disabled = QhRolloutReader((_write_store(tmp_path / "disabled.zarr", selected_depth_enabled=False),))[0]
+
+    assert enabled.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert enabled.selected_depth_m is None
+    assert disabled.selected_depth_renderer is None
+    assert disabled.selected_depth_m is None
+
+
+def test_lean_reader_preflight_never_reads_selected_depth_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _write_store(tmp_path / "rollouts.zarr")
+    original_getitem = zarr.Array.__getitem__
+    original_array = zarr.Array.__array__
+
+    def guarded_getitem(array: zarr.Array, selection: object) -> object:
+        if str(array.path).startswith("selected_depth/"):
+            pytest.fail(f"CF0 preflight read unconsumed {array.path} with {selection!r}")
+        return original_getitem(array, selection)
+
+    def guarded_array(array: zarr.Array, *args: object, **kwargs: object) -> np.ndarray:
+        if str(array.path).startswith("selected_depth/"):
+            pytest.fail(f"CF0 preflight materialized unconsumed {array.path}")
+        return original_array(array, *args, **kwargs)
+
+    monkeypatch.setattr(zarr.Array, "__getitem__", guarded_getitem)
+    monkeypatch.setattr(zarr.Array, "__array__", guarded_array)
+
+    reader = QhRolloutReader((store,), include_selected_depth=False)
+
+    assert len(reader) == 1
+
+
+def test_rich_reader_preflight_reads_selected_depth_in_persisted_chunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _write_store(
+        tmp_path / "rollouts.zarr",
+        horizon=3,
+        selected_depth_chunk_steps=2,
+    )
+    depth_chunk_rows = int(zarr.open_group(store, mode="r")["selected_depth/depth_m"].chunks[0])
+    reads: list[tuple[str, slice]] = []
+    original_getitem = zarr.Array.__getitem__
+
+    def guarded_getitem(array: zarr.Array, selection: object) -> object:
+        if str(array.path).startswith("selected_depth/"):
+            assert isinstance(selection, slice)
+            assert selection != slice(None)
+            assert selection.start is not None and selection.stop is not None
+            assert selection.stop - selection.start <= depth_chunk_rows
+            reads.append((str(array.path), selection))
+        return original_getitem(array, selection)
+
+    monkeypatch.setattr(zarr.Array, "__getitem__", guarded_getitem)
+
+    reader = QhRolloutReader((store,), include_selected_depth=True)
+
+    assert len(reader) == 1
+    assert {(selection.start, selection.stop) for path, selection in reads if path == "selected_depth/depth_m"} == {
+        (0, 2),
+        (2, 3),
+    }
+
+
+def test_rich_reader_preflight_reports_corruption_in_final_depth_chunk(tmp_path: Path) -> None:
+    store = _write_store(
+        tmp_path / "rollouts.zarr",
+        horizon=3,
+        selected_depth_chunk_steps=2,
+    )
+    root = zarr.open_group(store, mode="a")
+    final_row = 2
+    root["selected_depth/focal_px"][final_row, 0] = 0.0
+    root["selected_depth/principal_point_px"][final_row, 0] = np.inf
+    root["selected_depth/image_size_hw"][final_row] = np.asarray([120, 240], dtype=np.int32)
+    root["selected_depth/valid_mask"][final_row, 0, 0] = True
+    root["selected_depth/depth_m"][final_row, 0, 0] = 0.0
+    root["selected_depth/valid_mask"][final_row, 0, 1] = False
+    root["selected_depth/depth_m"][final_row, 0, 1] = 1.0
+
+    with pytest.raises(ValueError, match="canonical validation") as error:
+        QhRolloutReader((store,), include_selected_depth=True)
+
+    message = str(error.value)
+    assert "finite positive pinhole focal" in message
+    assert "finite pixel coordinates" in message
+    assert "persisted depth raster size" in message
+    assert "declared invalid fill value" in message
+    assert "declared clip range" in message
+
+
+def test_reader_contract_records_selected_depth_geometry(tmp_path: Path) -> None:
+    contract = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),), include_selected_depth=True).contract
+
+    assert contract.selected_depth_enabled
+    assert contract.selected_depth_role == "selected_successor_state_history"
+    assert contract.selected_depth_renderer == "Pytorch3DDepthRenderer"
+    assert contract.selected_depth_image_size_hw == (240, 240)
+    assert contract.selected_depth_dtype == "float16"
+    assert contract.selected_depth_units == "m"
+    assert contract.selected_depth_znear_m == pytest.approx(1e-3)
+    assert contract.selected_depth_zfar_m == pytest.approx(20.0)
+    assert contract.selected_depth_projection_model == "linear_pinhole_screen"
+    assert contract.selected_depth_value_semantics == "camera_z_m"
+    assert contract.selected_depth_pixel_convention == "half_pixel_centers_in_ndc_false"
+    assert contract.selected_depth_camera_axes == "left_up_forward"
+    geometry = contract.selected_depth_geometry
+    assert geometry is not None
+    assert geometry.focal_px == pytest.approx((120.0, 120.0))
+    assert geometry.principal_point_px == pytest.approx((120.0, 120.0))
+    assert geometry.image_size_hw == (240, 240)
+    assert geometry.in_ndc is False
+    assert geometry.invalid_fill_value == pytest.approx(0.0)
+    assert geometry.selected_identity.startswith("selected_depth.step_row_id")
+    assert contract.selected_depth_pose_convention == "root_from_camera"
+
+
+def test_reader_round_trips_non_square_off_axis_selected_calibration(tmp_path: Path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
+    for step in records[0].evaluated.result.trajectories[0].steps:
+        evidence = records[0].evaluated.step(0, step.step_index).evaluation.evidence
+        evidence.selected_depth_m = np.full((3, 5), 2.0, dtype=np.float32)
+        evidence.selected_depth_valid_mask = np.ones((3, 5), dtype=np.bool_)
+        evidence.selected_depth_focal_px = (7.0, 8.0)
+        evidence.selected_depth_principal_point_px = (1.25, 0.75)
+        evidence.selected_depth_image_size_hw = (3, 5)
+    store = write_rollout_zarr_store(
+        tmp_path / "off-axis.zarr",
+        records,
+        selected_depth_width_px=5,
+        selected_depth_height_px=3,
+    ).store_dir
+
+    chain = QhRolloutReader((store,), include_selected_depth=True)[0]
+
+    assert chain.selected_depth_m is not None and chain.selected_depth_m.shape == (2, 3, 5)
+    assert chain.selected_depth_focal_px is not None
+    assert chain.selected_depth_principal_point_px is not None
+    assert chain.selected_depth_image_size_hw is not None
+    assert chain.selected_depth_focal_px.tolist() == [[7.0, 8.0], [7.0, 8.0]]
+    assert chain.selected_depth_principal_point_px.tolist() == [[1.25, 0.75], [1.25, 0.75]]
+    assert chain.selected_depth_image_size_hw.tolist() == [[3, 5], [3, 5]]
+
+
+def test_reader_rejects_non_cf_gt_selected_depth_provenance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rich reader must not relabel an unknown selected-depth renderer as CF-GT."""
+
+    store = _write_store(tmp_path / "rollouts.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    root = zarr.open_group(store, mode="a")
+    root.attrs["selected_depth_renderer"] = "UnknownDepthRenderer"
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
+
+    with pytest.raises(ValueError, match="CF-GT depth requires"):
+        QhRolloutReader((store,), include_selected_depth=True)
+
+
+def test_reader_rejects_noncanonical_invalid_fill_even_when_payload_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Changing both provenance and invalid pixels cannot redefine versioned fill semantics."""
+
+    store = _write_store(tmp_path / "rollouts.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    root = zarr.open_group(store, mode="a")
+    root.attrs["selected_depth_invalid_fill_value"] = 42.0
+    valid_mask = np.asarray(root["selected_depth/valid_mask"])
+    depth = np.asarray(root["selected_depth/depth_m"])
+    depth[~valid_mask] = 42.0
+    root["selected_depth/depth_m"][:] = depth
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
+
+    with pytest.raises(ValueError, match="canonical versioned invalid fill"):
+        QhRolloutReader((store,), include_selected_depth=True)
+
+
+@pytest.mark.parametrize(
+    ("attribute", "value", "field"),
+    (
+        ("selected_depth_role", "other-role", "selected_depth_role"),
+        ("selected_depth_renderer", "other-renderer", "selected_depth_renderer"),
+        ("selected_depth_width_px", 320, "selected_depth_image_size_hw"),
+        ("selected_depth_dtype", "float32", "selected_depth_dtype"),
+        ("selected_depth_units", "mm", "selected_depth_units"),
+        ("selected_depth_znear_m", 0.1, "selected_depth_znear_m"),
+        ("selected_depth_zfar_m", 10.0, "selected_depth_zfar_m"),
+        ("selected_depth_source_resolution", "resampled", "selected_depth_source_resolution"),
+    ),
+)
+def test_reader_rejects_mixed_selected_depth_contracts_during_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    attribute: str,
+    value: str | int | float,
+    field: str,
+) -> None:
+    first = _write_store(tmp_path / "first.zarr")
+    second = _write_store(tmp_path / "second.zarr")
+    validations = {
+        first.resolve(): RolloutZarrStoreReader(first).validate(),
+        second.resolve(): RolloutZarrStoreReader(second).validate(),
+    }
+    zarr.open_group(second, mode="a").attrs[attribute] = value
+    monkeypatch.setattr(
+        RolloutZarrStoreReader,
+        "validate",
+        lambda reader, **_kwargs: validations[reader.store_dir],
+    )
+
+    with pytest.raises(ValueError, match=f"incompatible {field}"):
+        QhRolloutReader((first, second), include_selected_depth=True)
+
+
+def test_lean_reader_ignores_unconsumed_selected_depth_geometry(tmp_path: Path) -> None:
+    first = _write_store(tmp_path / "first.zarr")
+    second = _write_store(tmp_path / "second.zarr", selected_depth_enabled=False)
+
+    reader = QhRolloutReader((first, second))
+
+    assert len(reader) == 2
+    assert not reader.contract.selected_depth_enabled
 
 
 def test_reader_admits_trainable_v1_store_and_preserves_mask_identity(tmp_path: Path) -> None:
@@ -422,6 +717,160 @@ def test_q_h_evidence_blocks_invalid_store_before_projection(tmp_path: Path) -> 
     assert row["blocking_reason"]
 
 
+def test_reader_indexes_packed_early_terminal_chains_by_factual_steps(tmp_path: Path) -> None:
+    reader = QhRolloutReader((_write_packed_early_terminal_store(tmp_path / "early.zarr"),))
+
+    chains = [reader[index] for index in range(len(reader))]
+    assert len(reader) == 3
+    assert [len(chain.candidate_pose_relative_root) for chain in chains] == [3, 1, 2]
+    assert [chain.rollout_row_id for chain in chains] == [0, 1, 2]
+    assert [chain.horizon_remaining.tolist() for chain in chains] == [[4, 3, 2], [4], [4, 3]]
+    assert reader.max_horizon == 4
+
+
+def test_reader_materialization_preserves_n60_identity_across_packed_chains(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = _write_packed_early_terminal_store(tmp_path / "early-n60.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    root = zarr.open_group(store, mode="a")
+    q_h = root["q_h"]
+    candidate_rows = np.asarray(q_h["candidate_row_id"], dtype=np.int64)
+    selected = np.asarray([0, 11, 12, 59, 0, 11], dtype=np.int64)
+    q_h["selected_candidate_index"][:] = selected
+    selected_rows = candidate_rows[np.arange(selected.size), selected]
+    root["steps/selected_candidate_row_id"][:] = selected_rows
+    q_h["td_selected_candidate_row_id"][:] = selected_rows
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
+
+    reader = QhRolloutReader((store,))
+    chains = [
+        _tensor_chain(
+            reader[index],
+            VinSnippetView(
+                points_world=torch.zeros(2, 3),
+                lengths=torch.tensor([2]),
+                t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
+                t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
+            ),
+        )
+        for index in range(len(reader))
+    ]
+    assert [len(chain.supervision.selected_index) for chain in chains] == [3, 1, 2]
+    for chain in chains:
+        for step, index in enumerate(chain.supervision.selected_index.tolist()):
+            if step + 1 < len(chain.supervision.selected_index):
+                assert torch.equal(
+                    chain.actor.history_pose_relative_root.tensor()[step + 1, step],
+                    chain.actor.candidate_pose_relative_root.tensor()[step, index],
+                )
+    selected_59 = [
+        chain.actor.candidate_pose_relative_root.tensor()[step, index]
+        for chain in chains
+        for step, index in enumerate(chain.supervision.selected_index.tolist())
+        if index == 59
+    ]
+    assert len(selected_59) == 1
+    chain_with_59 = next(chain for chain in chains if 59 in chain.supervision.selected_index.tolist())
+    assert not torch.equal(selected_59[0], chain_with_59.actor.candidate_pose_relative_root.tensor()[0, 11])
+    batch = collate_qh_chains(chains)
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    transferred = batch.pin_memory().to("cpu")
+    assert transferred.actor.step_mask.tolist() == [[True, True, True], [True, False, False], [True, True, False]]
+    assert transferred.keys[0].rollout_row_id != transferred.keys[1].rollout_row_id
+
+
+def test_writer_backed_n60_cfplus_identity_survives_depth_and_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A writer-produced selected-depth chain keeps candidate 59 factual identity."""
+
+    record = build_rollout_records(horizon=3, num_samples=60, seed=7)[0]
+    trajectory = record.evaluated.result.trajectories[0]
+    selected_shell_indices = (12, 59, 0)
+    for step_index, selected_shell_index in enumerate(selected_shell_indices):
+        step = trajectory.steps[step_index]
+        step.selected_shell_index = selected_shell_index
+        step.selected_valid_index = selected_shell_index
+        evidence = record.evaluated.step(0, step.step_index).evaluation.evidence  # type: ignore[union-attr]
+        evidence.selected_depth_m = torch.full((240, 240), float(step_index + 1), dtype=torch.float32)
+        evidence.selected_depth_valid_mask = torch.ones((240, 240), dtype=torch.bool)
+        evidence.selected_depth_focal_px = (100.0, 200.0)
+        evidence.selected_depth_principal_point_px = (4.0, 4.0)
+        evidence.selected_depth_image_size_hw = (240, 240)
+    store = write_rollout_zarr_store(
+        tmp_path / "n60-rich.zarr",
+        [record],
+        discount_gamma=0.95,
+        target_protocol_version="v0_gt_input",
+        source_offline_store_version="7",
+        split_manifest_hash="fixture-split-manifest",
+        selected_depth_enabled=True,
+    ).store_dir
+    root = zarr.open_group(store, mode="r")
+    q_h = root["q_h"]
+    selected = np.asarray(selected_shell_indices, dtype=np.int64)
+    assert np.array_equal(np.asarray(q_h["selected_candidate_index"]), selected)
+    selected_rows = np.asarray(q_h["td_selected_candidate_row_id"], dtype=np.int64)
+    assert RolloutZarrStoreReader(store).validate().ok
+    assert np.array_equal(np.asarray(root["steps/selected_candidate_row_id"]), selected_rows)
+    assert np.array_equal(np.asarray(root["selected_depth/candidate_row_id"]), selected_rows)
+    assert np.array_equal(np.asarray(root["q_h/td_selected_candidate_row_id"]), selected_rows)
+    source_candidate = np.asarray(root["candidates/pose_relative_root"])[selected_rows]
+    source_depth = np.asarray(root["selected_depth/depth_m"])
+    source_focal = np.asarray(root["selected_depth/focal_px"])
+    assert [float(source_depth[index, 0, 0]) for index in range(3)] == [1.0, 2.0, 3.0]
+    reader = QhRolloutReader((store,), include_selected_depth=True)
+    stored = reader[0]
+    snippet = VinSnippetView(
+        points_world=torch.zeros(2, 3),
+        lengths=torch.tensor([2]),
+        t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
+        t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
+    )
+    chain = _tensor_chain(stored, snippet, selected_observation_protocol="cf_gt")
+    expected_candidate = torch.from_numpy(source_candidate[1]).to(dtype=torch.float32)
+    expected_depth = torch.from_numpy(source_depth[1]).to(dtype=torch.float16)
+    expected_focal = torch.from_numpy(source_focal[1]).to(dtype=torch.float32)
+    expected_camera_pose = expected_candidate
+    assert torch.equal(chain.actor.candidate_pose_relative_root.tensor()[1, 59], expected_candidate)
+    assert torch.equal(chain.actor.selected_observation_prefix.depth_m[2, 1], expected_depth)  # type: ignore[union-attr]
+    assert torch.equal(chain.actor.selected_observation_prefix.camera.f[2, 1], expected_focal)  # type: ignore[union-attr]
+    assert torch.equal(chain.actor.history_pose_relative_root.tensor()[2, 1], expected_candidate)
+    batch = collate_qh_chains([chain])
+    monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
+    transferred = batch.pin_memory().to("cpu")
+    prefix = transferred.actor.selected_observation_prefix
+    assert prefix is not None
+    assert torch.equal(transferred.actor.history_pose_relative_root.tensor()[0, 2, 1], expected_candidate)
+    assert torch.equal(prefix.depth_m[0, 2, 1], expected_depth)
+    assert torch.equal(prefix.camera.f[0, 2, 1], expected_focal)
+    assert torch.equal(prefix.camera_pose_relative_root.tensor()[0, 2, 1], expected_camera_pose)
+
+
+@pytest.mark.parametrize(
+    "step_rollout_ids",
+    (
+        (99, 0, 0, 1, 2, 2),  # missing first rollout run
+        (0, 0, 1, 0, 2, 2),  # interleaved first rollout run
+        (0, 0, 0, 1, 2, 99),  # orphaned final step
+    ),
+)
+def test_reader_rejects_invalid_factual_rollout_partition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    step_rollout_ids: tuple[int, ...],
+) -> None:
+    store = _write_packed_early_terminal_store(tmp_path / "early.zarr")
+    validation = RolloutZarrStoreReader(store).validate()
+    zarr.open_group(store, mode="a")["steps/rollout_row_id"][:] = np.asarray(step_rollout_ids, dtype=np.int64)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: validation)
+
+    with pytest.raises(ValueError, match="ordered factual step run|non-contiguous factual|orphaned factual steps"):
+        QhRolloutReader((store,))
+
+
 def test_reader_rejects_v1_store_with_fabricated_target_source(tmp_path: Path) -> None:
     store = _write_v1_store(tmp_path / "v1.zarr")
     root = zarr.open_group(store, mode="a")
@@ -461,6 +910,7 @@ def test_reader_composes_h2_and_h4_without_horizon_compatibility(tmp_path: Path)
 
     assert [len(reader[index].candidate_pose_relative_root) for index in range(len(reader))] == [2, 4]
     assert reader.max_horizon == 4
+    assert len(reader.contract.rollout_config_hashes) == 2
     assert not hasattr(reader.contract, "horizon")
     assert not hasattr(reader.contract, "split_manifest_hash")
 
@@ -473,9 +923,13 @@ def test_reader_validates_each_store_exactly_once(tmp_path: Path, monkeypatch: p
     calls: list[Path] = []
     original = RolloutZarrStoreReader.validate
 
-    def recording_validate(reader: RolloutZarrStoreReader) -> RolloutZarrValidationResult:
+    def recording_validate(
+        reader: RolloutZarrStoreReader,
+        *,
+        validate_selected_depth_payload: bool = True,
+    ) -> RolloutZarrValidationResult:
         calls.append(reader.store_dir)
-        return original(reader)
+        return original(reader, validate_selected_depth_payload=validate_selected_depth_payload)
 
     monkeypatch.setattr(RolloutZarrStoreReader, "validate", recording_validate)
     reader = QhRolloutReader(stores)
@@ -491,7 +945,7 @@ def test_reader_rejects_failed_canonical_validation_before_preflight(
     store = _write_store(tmp_path / "rollouts.zarr")
     errors = [f"validation error {index}" for index in range(6)]
     result = RolloutZarrValidationResult(store, 0, 0, 0, errors)
-    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self: result)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", lambda _self, **_kwargs: result)
 
     with pytest.raises(ValueError) as raised:
         QhRolloutReader((store,))
@@ -537,7 +991,7 @@ def test_reader_rejects_broken_canonical_chain(tmp_path: Path, array_path: str, 
 
 
 def test_reader_uses_bounded_payload_slices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),))
+    reader = QhRolloutReader((_write_store(tmp_path / "rollouts.zarr"),), include_selected_depth=True)
     reads: list[tuple[str, object]] = []
     original = zarr.Array.__getitem__
 
@@ -549,7 +1003,9 @@ def test_reader_uses_bounded_payload_slices(tmp_path: Path, monkeypatch: pytest.
     chain = reader[0]
 
     assert len(chain.candidate_pose_relative_root) == 2
-    payload_reads = [(path, selection) for path, selection in reads if path.startswith(("q_h/", "candidates/"))]
+    payload_reads = [
+        (path, selection) for path, selection in reads if path.startswith(("q_h/", "candidates/", "selected_depth/"))
+    ]
     assert payload_reads
     assert all(selection != slice(None) for _, selection in payload_reads)
 

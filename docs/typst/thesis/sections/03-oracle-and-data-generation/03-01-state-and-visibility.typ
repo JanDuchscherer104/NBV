@@ -24,7 +24,7 @@ The learned component in this thesis is a masked finite-horizon candidate-value 
     "../../figures/actor_oracle_boundary.pdf",
     width: 100%,
   )),
-  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, masks, and reason codes. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
+  caption: [Actor and oracle boundary. Legal #symb.rl.qh inputs are calibrated logged image evidence, poses, semi-dense geometry with uncertainty and observation support, frozen @egocentric-voxel-lifting:short features or predictions, an explicitly sourced target instruction, selected-view history, remaining budget, candidates, and masks. Reason codes remain audit evidence rather than scorer inputs. @ground-truth:short depth, segmentation, boxes, meshes, target crops, counterfactual renders, labels, and endpoint evaluation remain privileged.],
 ) <fig:qh-actor-oracle-contract>
 
 The visibility boundary is protocol-relative and temporal. A dense render for an unselected candidate at the current decision step is oracle evidence. A render from an already selected action may enter a later state only under an explicitly named source protocol: privileged mesh-rendered depth, a declared sensor simulation, or an actor-visible observation. The same array shape can therefore denote different information, and source role must remain explicit.
@@ -51,7 +51,7 @@ The remaining tuple elements are decision context rather than ASE/EFM sensing mo
 
 === Counterfactual Actor State
 
-The counterfactual actor state retains the immutable logged substrate and adds only information causally available after selected actions,
+The conceptual counterfactual actor state retains the immutable logged substrate and adds only information causally available after selected actions,
 
 $
   #eqs.rl.s_cf0
@@ -61,19 +61,33 @@ For the canonical model, this compact tuple is read together with the explicit o
 
 #eqs.scene.actor_state_read
 
-In #symb.rl.s_cf0, the root EVL field remains fixed, whereas the accumulated point set $cal(P)_t$ may grow with selected observations. The finite candidate table #symb.oracle.candidates_t contains poses and generator provenance, not observations from those poses. #symb.rl.validity_mask defines the admissible action set, #symb.rl.invalid_reason records constraint failures, and the ordered history $bold(H)_t$ retains the selected approach sequence.
+In #symb.rl.s_cf0, the root EVL field remains fixed, whereas the accumulated point set $cal(P)_t$ may grow with selected observations. The finite candidate table #symb.oracle.candidates_t contains poses and generator provenance, not observations from those poses. #symb.rl.validity_mask defines the admissible action set, and the ordered history $bold(H)_t$ retains the selected approach sequence. Invalid-reason codes remain audit evidence and are not scorer inputs.
 
-The richer geometry-updated state makes the selected observation channels explicit:
+The implemented profile name `qh_cf0_v1` maps exactly to the weaker `S0-pose` carrier, not to this geometry-updated conceptual state:
+
+$
+  #eqs.rl.s_pose
+$
+
+Its actor DTO carries the immutable VIN snippet and compact root EVL evidence, target pose and extent, current candidate poses and action mask, factual selected-pose prefix, and remaining budget. It carries neither the accumulated oracle point set nor invalid-reason codes.
+
+The richer geometry-updated state remains the planned fusion target:
 
 $
   #eqs.rl.s_cf_geom
 $
 
-In the current `CF-GT` protocol, selected #symb.obs.depth is rendered from #symb.ase.mesh and paired with a validity mask and candidate-camera calibration. Backprojection yields selected-view surface points #symb.obs.points_cf; the corresponding camera-to-surface rays delimit observed free space, and #symb.obs.face_normal records local surface orientation. These quantities form a geometry-only successor observation. They do not contain the RGB or greyscale images required by EFM3D's 2D feature encoder and therefore cannot support a fresh EVL field at the selected pose @EFM3D-straub2024.
+The implemented privileged `qh_cfplus_gt_depth_v1` profile stops at a causal selected-depth carrier:
+
+$
+  #eqs.rl.s_cf_gt_carrier
+$
+
+Selected #symb.obs.depth is rendered from #symb.ase.mesh and paired with its validity mask, candidate-camera calibration, and root-from-camera pose. The implementation does not yet fuse that carrier into #symb.obs.points_cf, free-space rays, #symb.obs.face_normal, or a refreshed EVL field. Those are planned geometry-state derivations. Even after such fusion, the carrier contains none of the RGB or greyscale images required by EFM3D's 2D feature encoder and therefore cannot support a fresh EVL field at the selected pose @EFM3D-straub2024.
 
 The transition from $t$ to $t+1$ may use only the observation produced by the selected row $a_t$. It may fuse its surface and ray evidence and update support, uncertainty, direction, and recency. It may not attach image features, detections, or EVL descriptors unless the protocol also provides the calibrated camera streams from which EFM3D derives them. Counterfactual geometry must therefore retain a source role and explicit absence masks for unavailable image-derived channels.
 
-The counterfactual state is thus an *information state* for decision making, not automatically a complete Markov state of the physical scene. It becomes task-sufficient only if its retained root context, causal dynamic evidence, explicit history, target context, action support, and budget preserve every distinction needed to predict future target-specific return. A pose-only implementation updates #symb.rl.candidate_table, $bold(H)_t$, and #symb.rl.budget without acquiring new scene evidence; it is therefore a deliberately weaker `S0-pose` baseline rather than a realization of the geometry-updated state.
+The counterfactual state is thus an *information state* for decision making, not automatically a complete Markov state of the physical scene. It becomes task-sufficient only if its retained root context, causal dynamic evidence, explicit history, target context, action support, and budget preserve every distinction needed to predict future target-specific return. `qh_cf0_v1` is the deliberately weaker `S0-pose` baseline; `qh_cfplus_gt_depth_v1` is a privileged depth carrier, not yet a realization of the geometry-updated state.
 
 === Privileged Oracle State
 
