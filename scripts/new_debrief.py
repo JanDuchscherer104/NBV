@@ -26,7 +26,7 @@ HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
 CODEX_THREAD_ID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
-FULL_OID_PATTERN = re.compile(r"[0-9a-f]{40}")
+OBJECT_FORMAT_OID_LENGTHS = {"sha1": 40, "sha256": 64}
 
 
 def slugify(title: str) -> str:
@@ -40,6 +40,7 @@ def slugify(title: str) -> str:
 def git_provenance() -> dict[str, str]:
     """Return portable Git identity or fail closed when it is unavailable."""
     commands = {
+        "repo_object_format": ["git", "rev-parse", "--show-object-format"],
         "repo_head": ["git", "rev-parse", "--verify", "HEAD"],
         "repo_branch": ["git", "symbolic-ref", "--short", "-q", "HEAD"],
         "git_dir": ["git", "rev-parse", "--git-dir"],
@@ -60,8 +61,14 @@ def git_provenance() -> dict[str, str]:
                 continue
             raise SystemExit(f"Git provenance unavailable: {' '.join(command)}")
         values[key] = result.stdout.strip()
-    if not FULL_OID_PATTERN.fullmatch(values["repo_head"]):
-        raise SystemExit("Git provenance unavailable: HEAD is not a full OID")
+    object_format = values["repo_object_format"]
+    oid_length = OBJECT_FORMAT_OID_LENGTHS.get(object_format)
+    if oid_length is None:
+        raise SystemExit(f"Git provenance unavailable: unsupported {object_format=}")
+    if not re.fullmatch(rf"[0-9a-f]{{{oid_length}}}", values["repo_head"]):
+        raise SystemExit(
+            f"Git provenance unavailable: HEAD is not a full {object_format} OID"
+        )
     if not values["repo_branch"]:
         values["repo_branch"] = "detached"
     git_dir = Path(values.pop("git_dir"))
@@ -89,13 +96,14 @@ def render(
     body = f"""---
 id: {record_id}
 date: {today.isoformat()}
-title: "{title}"
+title: {json.dumps(title, ensure_ascii=False)}
 status: done
 topics: []
 confidence: high
 canonical_updates_needed: []
 touched_owner_paths: []
 codex_thread: codex://threads/{codex_thread_id}
+repo_object_format: {provenance["repo_object_format"]}
 repo_head: {provenance["repo_head"]}
 repo_branch: {json.dumps(provenance["repo_branch"])}
 worktree_kind: {provenance["worktree_kind"]}

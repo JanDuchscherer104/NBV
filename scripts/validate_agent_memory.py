@@ -19,7 +19,12 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from debrief_index import check_index, visible_history_paths
+from debrief_index import (
+    REPO_OBJECT_FORMAT_OID_LENGTHS,
+    check_index,
+    is_full_repo_oid,
+    visible_history_paths,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HISTORY_ROOT = REPO_ROOT / ".agents" / "memory" / "history"
@@ -54,7 +59,6 @@ NATIVE_PROVENANCE_CUTOFF = date(2026, 8, 22)
 CODEX_THREAD_URI_PATTERN = re.compile(
     r"^codex://threads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
-REPO_HEAD_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 WORKTREE_KINDS = {"primary", "linked"}
 RETIRED_SOURCE_PATHS = {
     "docs/contents/thesis/roadmap.qmd",
@@ -357,7 +361,12 @@ def check_history_records() -> list[str]:
                 )
 
         if record_date >= NATIVE_PROVENANCE_CUTOFF:
-            provenance_fields = {"repo_head", "repo_branch", "worktree_kind"}
+            provenance_fields = {
+                "repo_object_format",
+                "repo_head",
+                "repo_branch",
+                "worktree_kind",
+            }
             missing_provenance = sorted(provenance_fields - frontmatter.keys())
             if missing_provenance:
                 errors.append(
@@ -365,11 +374,16 @@ def check_history_records() -> list[str]:
                     f"{', '.join(missing_provenance)}"
                 )
             else:
+                repo_object_format = str(frontmatter["repo_object_format"]).strip()
                 repo_head = str(frontmatter["repo_head"]).strip()
                 repo_branch = str(frontmatter["repo_branch"]).strip()
                 worktree_kind = str(frontmatter["worktree_kind"]).strip()
-                if not REPO_HEAD_PATTERN.fullmatch(repo_head):
-                    errors.append(f"{rel}: repo_head must be a full Git OID")
+                if repo_object_format not in REPO_OBJECT_FORMAT_OID_LENGTHS:
+                    errors.append(f"{rel}: repo_object_format must be sha1 or sha256")
+                elif not is_full_repo_oid(repo_head, repo_object_format):
+                    errors.append(
+                        f"{rel}: repo_head must be a full {repo_object_format} Git OID"
+                    )
                 if not is_valid_repo_branch(repo_branch):
                     errors.append(
                         f"{rel}: repo_branch must be a valid Git branch or detached"

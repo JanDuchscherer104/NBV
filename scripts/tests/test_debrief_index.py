@@ -67,10 +67,13 @@ def _record(
     )
 
 
-def _repo(tmp_path: Path) -> Path:
+def _repo(tmp_path: Path, *, object_format: str | None = None) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
-    _git(root, "init", "-q")
+    init_args = ("init", "-q")
+    if object_format is not None:
+        init_args += (f"--object-format={object_format}",)
+    _git(root, *init_args)
     _git(root, "config", "user.email", "test@example.invalid")
     _git(root, "config", "user.name", "Test")
     _git(root, "branch", "-M", "main")
@@ -98,6 +101,10 @@ def test_current_history_count_and_bytes_are_stable() -> None:
         and (row["codex_thread"] is None or isinstance(row["codex_thread"], str))
         for row in rows
     )
+    for row in rows:
+        provenance = row.get("checkout_provenance")
+        if provenance is not None:
+            assert provenance["repo_object_format"] in {"sha1", "sha256"}
     assert (ROOT / ".agents/memory/index/debriefs.jsonl").read_bytes() == first
 
 
@@ -174,6 +181,36 @@ def test_grandfathered_missing_thread_is_indexed_as_null(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
+    ("title", "expected_slug"),
+    [
+        ('Quoted "title"', "quoted_title"),
+        ("Line one\nline two", "line_one_line_two"),
+        ("Résumé #1: !important | result", "r_sum_1_important_result"),
+    ],
+)
+def test_title_round_trips_generator_and_canonical_parser(
+    tmp_path: Path, title: str, expected_slug: str
+) -> None:
+    path, body = new_debrief.render(
+        date(2026, 8, 22),
+        title,
+        THREAD_ID,
+        {
+            "repo_object_format": "sha1",
+            "repo_head": "a" * 40,
+            "repo_branch": "main",
+            "worktree_kind": "primary",
+        },
+    )
+    assert path.name == f"2026-08-22_{expected_slug}.md"
+    payload = body.split("\n---\n", 1)[0].removeprefix("---\n")
+    assert yaml.safe_load(payload)["title"] == title
+    source = tmp_path / "record.md"
+    source.write_text(body, encoding="utf-8")
+    assert validator.parse_frontmatter(source)["title"] == title
+
+
+@pytest.mark.parametrize(
     "branch",
     ["!feature", "#feature", "|feature", "feature@x", 'feature"x', "föö"],
 )
@@ -190,6 +227,7 @@ def test_branch_round_trips_generator_parser_validator_and_index(
         "Example",
         THREAD_ID,
         {
+            "repo_object_format": "sha1",
             "repo_head": "a" * 40,
             "repo_branch": branch,
             "worktree_kind": "linked",
@@ -212,6 +250,7 @@ def test_branch_round_trips_generator_parser_validator_and_index(
     ]
     generated = next(row for row in rows if row["id"] == "2026-08-22_example")
     assert generated["checkout_provenance"]["repo_branch"] == branch
+    assert generated["checkout_provenance"]["repo_object_format"] == "sha1"
 
 
 def test_backslash_branch_is_not_git_valid() -> None:
@@ -254,6 +293,49 @@ def test_index_parser_requires_explicit_thread_key() -> None:
         "touched_owner_paths": [],
     }
     with pytest.raises(KeyError, match="codex_thread"):
+        debrief_index._parse_index((json.dumps(row) + "\n").encode())
+
+
+@pytest.mark.parametrize(
+    "provenance",
+    [
+        {
+            "repo_object_format": "sha1",
+            "repo_head": "a" * 64,
+            "repo_branch": "main",
+            "worktree_kind": "primary",
+        },
+        {
+            "repo_object_format": "sha256",
+            "repo_head": "a" * 40,
+            "repo_branch": "main",
+            "worktree_kind": "primary",
+        },
+        {
+            "repo_object_format": "unknown",
+            "repo_head": "a" * 40,
+            "repo_branch": "main",
+            "worktree_kind": "primary",
+        },
+    ],
+)
+def test_index_parser_rejects_mismatched_provenance(
+    provenance: dict[str, str],
+) -> None:
+    row = {
+        "source_path": ".agents/memory/history/2026/08/record.md",
+        "source_sha256": "a" * 64,
+        "id": "record",
+        "date": "2026-08-22",
+        "status": "done",
+        "topics": [],
+        "confidence": "high",
+        "canonical_update_paths": [],
+        "touched_owner_paths": [],
+        "codex_thread": THREAD_URI,
+        "checkout_provenance": provenance,
+    }
+    with pytest.raises((TypeError, ValueError), match="checkout_provenance"):
         debrief_index._parse_index((json.dumps(row) + "\n").encode())
 
 
@@ -345,6 +427,7 @@ def test_provenance_is_full_and_linked(
     root = _repo(tmp_path)
     monkeypatch.setattr(new_debrief, "REPO_ROOT", root)
     provenance = new_debrief.git_provenance()
+    assert provenance["repo_object_format"] == "sha1"
     assert len(provenance["repo_head"]) == 40
     assert provenance["repo_branch"] == "main"
     _git(root, "branch", "-m", "feature@x")
@@ -355,6 +438,28 @@ def test_provenance_is_full_and_linked(
     _git(root, "worktree", "add", "-q", "-b", "linked-branch", str(linked))
     monkeypatch.setattr(new_debrief, "REPO_ROOT", linked)
     assert new_debrief.git_provenance()["worktree_kind"] == "linked"
+
+
+def test_sha256_provenance_round_trips_generator_validator_and_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path, object_format="sha256")
+    monkeypatch.setattr(new_debrief, "REPO_ROOT", root)
+    provenance = new_debrief.git_provenance()
+    assert provenance["repo_object_format"] == "sha256"
+    assert len(provenance["repo_head"]) == 64
+
+    _, body = new_debrief.render(
+        date(2026, 8, 22), "SHA-256 repository", THREAD_ID, provenance
+    )
+    source = root / ".agents/memory/history/2026/08/generated.md"
+    source.write_text(body, encoding="utf-8")
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    monkeypatch.setattr(validator, "HISTORY_ROOT", root / ".agents/memory/history")
+    assert validator.check_history_records() == []
+    row = debrief_index.row_for_path(source, root)
+    assert row["checkout_provenance"] == provenance
+    debrief_index._parse_index(debrief_index.render_index(root))
 
 
 def test_nudge_requires_matching_thread_and_ignores_runtime_only(
