@@ -814,12 +814,13 @@ def test_named_profile_admission_rejects_point_schema_mutations(mutation: tuple[
         "version": "vin_points_v1",
     }
     manifest = SimpleNamespace(
-        version=9,
+        version=10,
         vin={
             "include_obs_count": False,
             "point_feature_schema": schema,
             "point_feature_schema_hash": stable_msgspec_hash(schema),
             "backbone_block_signature": [],
+            "free_input_provenance": "native_evl_v1",
         },
         shards=[],
     )
@@ -829,7 +830,39 @@ def test_named_profile_admission_rejects_point_schema_mutations(mutation: tuple[
 
 def test_named_profile_rejects_v8_with_rebuild_guidance() -> None:
     manifest = SimpleNamespace(version=8, vin={}, shards=[])
-    with pytest.raises(ValueError, match="version 9|Rebuild"):
+    with pytest.raises(ValueError, match="version 10|Rebuild"):
+        _require_named_profile_store(SimpleNamespace(manifest=manifest))
+
+
+@pytest.mark.parametrize("provenance", ["native_evl_v1", "derived_observed_complement_occ_input_v1"])
+def test_named_profile_admission_returns_manifest_free_input_provenance(tmp_path: Path, provenance: str) -> None:
+    reader = VinOfflineStoreReader(_write_test_store(tmp_path / "vin", include_backbone=True))
+    schema = _point_feature_schema(include_obs_count=False)
+    reader.manifest.vin.update(
+        point_feature_schema=schema,
+        point_feature_schema_hash=stable_msgspec_hash(schema),
+        include_inv_dist_std=True,
+        include_obs_count=False,
+        backbone_block_signature=_compact_evl_block_signature(reader.manifest.shards),
+    )
+    reader.manifest.vin["free_input_provenance"] = provenance
+    assert _require_named_profile_store(reader) == provenance
+
+
+@pytest.mark.parametrize("provenance", [None, "unknown"])
+def test_named_profile_admission_rejects_missing_or_unknown_free_input_provenance(provenance: object) -> None:
+    manifest = SimpleNamespace(
+        version=10,
+        vin={
+            "include_obs_count": False,
+            "point_feature_schema": _point_feature_schema(include_obs_count=False),
+            "point_feature_schema_hash": stable_msgspec_hash(_point_feature_schema(include_obs_count=False)),
+            "backbone_block_signature": [],
+            "free_input_provenance": provenance,
+        },
+        shards=[],
+    )
+    with pytest.raises(ValueError, match="free-input provenance"):
         _require_named_profile_store(SimpleNamespace(manifest=manifest))
 
 
@@ -1034,7 +1067,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     source.source_shard_id = actor_record.shard_id
     source.source_shard_row = actor_record.row
     source.split = actor_record.split
-    source.source_cache_version = "9"
+    source.source_cache_version = "10"
     source.source_offline_store_manifest_hash = stable_msgspec_hash(actor_reader.manifest)
     target.target_protocol_version = "v1_observed"
     target.target_source = "detected_obbs"
@@ -1090,7 +1123,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     rollout_store = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         [rollout],
-        source_offline_store_version="9",
+        source_offline_store_version="10",
         split_manifest_hash=split_hash,
         target_protocol_version="v1_observed",
         selected_depth_enabled=True,
@@ -1106,6 +1139,8 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
         include_audit=True,
     )
     data = QhDataModule(train=dataset, seed=7, experiment_profile=profile)
+    assert dataset.actor_state_contract.free_input_provenance == "native_evl_v1"
+    assert data.actor_state_contract_hash == stable_msgspec_hash(dataset.actor_state_contract)
     batch = next(iter(data.train_dataloader()))
     monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
     batch = batch.pin_memory().to("cpu")
