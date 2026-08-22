@@ -122,7 +122,7 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(
     assert identities[2] != identities[0]
 
 
-def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat(
+def test_store_cache_identity_ignores_payload_mutation_until_replacement(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     result = write_rollout_zarr_store(
@@ -153,7 +153,22 @@ def test_store_cache_identity_changes_for_array_mutation_with_same_manifest_stat
         result.store_dir.as_posix(), store_identity=session._store_projection_identity(result.store_dir)
     )
 
-    assert identities[1] != identities[0]
+    assert identities[1] == identities[0]
+
+
+def test_store_cache_identity_does_not_enumerate_payload_chunks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    store = tmp_path / "marker-only.zarr"
+    store.mkdir()
+    (store / "manifest.json").write_text(json.dumps({"generation": {"generation_revision_hash": "rev"}}))
+    (store / "_SUCCESS.json").write_text(json.dumps({"rollout_store_content_sha256": "seal"}))
+
+    monkeypatch.setattr(Path, "rglob", lambda *_args, **_kwargs: pytest.fail("identity must not walk payload chunks"))
+    identity = session._store_projection_identity(store)
+
+    assert "seal" in identity
+    assert "rev" in identity
 
 
 def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path: Path) -> None:
@@ -198,9 +213,11 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
         os.utime(path, ns=(path.stat().st_atime_ns, mtime_ns))
 
     second_identity = session._store_projection_identity(store_path)
-    _, second_validation, _ = session._cached_store_bundle_cached(store_path, store_identity=second_identity)
+    _, second_validation, _ = session._cached_store_bundle_cached.__wrapped__(
+        store_path, store_identity=second_identity
+    )
 
-    assert second_identity != first_identity
+    assert second_identity == first_identity
     assert not second_validation.ok
     assert "canonical store content" in "; ".join(second_validation.errors)
     with pytest.raises(ValueError, match="promotion validation"):
@@ -398,7 +415,7 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert len(failure_calls) == 2
 
 
-def test_stored_rollout_session_topology_and_evidence_recompute_after_mid_handle_swap(
+def test_stored_rollout_session_rejects_mid_handle_swap(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Explicit report/topology requests refresh identity after a store swap."""
@@ -450,17 +467,14 @@ def test_stored_rollout_session_topology_and_evidence_recompute_after_mid_handle
     replacement.symlink_to(second, target_is_directory=True)
     replacement.replace(selected)
 
-    second_topology = handle.topology((), paths)
-    second_bundle = handle.evidence_bundle("pilot")
-    second_identity = topology_calls[-1]
-
     assert first_topology == {"identity": first_identity, "generation": "first"}
     assert first_bundle == f"{first_identity}:first".encode()
-    assert second_identity != first_identity
-    assert second_topology == {"identity": second_identity, "generation": "second"}
-    assert second_bundle == f"{second_identity}:second".encode()
-    assert topology_calls == [first_identity, second_identity]
-    assert bundle_calls == [first_identity, second_identity]
+    with pytest.raises(RuntimeError, match="store changed"):
+        handle.topology((), paths)
+    with pytest.raises(RuntimeError, match="store changed"):
+        handle.evidence_bundle("pilot")
+    assert topology_calls == [first_identity]
+    assert bundle_calls == [first_identity]
 
 
 def test_open_session_symlink_aliases_share_canonical_identity_and_cache_owner(

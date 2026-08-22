@@ -50,25 +50,27 @@ from ...rollouts.reporting import build_thesis_report_frames, serialize_thesis_r
 
 
 def _store_projection_identity(store_path: str | Path) -> str:
-    """Return a replacement-sensitive identity without reading Zarr payloads."""
+    """Return a constant-size replacement identity without reading payload chunks."""
 
     path = Path(store_path)
     try:
-        digest = hashlib.sha256()
-        for child in sorted(
-            (candidate for candidate in path.rglob("*") if candidate.is_file()), key=lambda p: p.as_posix()
-        ):
-            relative = child.relative_to(path).as_posix().encode()
-            stat = child.stat()
-            digest.update(len(relative).to_bytes(8, "big"))
-            digest.update(relative)
-            digest.update(stat.st_size.to_bytes(8, "big"))
-            digest.update(stat.st_mtime_ns.to_bytes(8, "big"))
-            digest.update(stat.st_ctime_ns.to_bytes(8, "big"))
-            digest.update(stat.st_ino.to_bytes(8, "big"))
         success = _read_json_mapping(path / "_SUCCESS.json")
-        seal = success.get("rollout_store_content_sha256") if success is not None else None
-        return f"store:{seal or 'unpromoted'}:{digest.hexdigest()}"
+        manifest = _read_json_mapping(path / "manifest.json")
+        success_seal = success.get("rollout_store_content_sha256") if success is not None else None
+        generation = manifest.get("generation") if manifest is not None else None
+        revision = generation.get("generation_revision_hash") if isinstance(generation, dict) else None
+        marker_parts = []
+        for name in ("manifest.json", "_SUCCESS.json", "_owner.json", "zarr.json"):
+            marker = path / name
+            try:
+                stat = marker.stat()
+            except OSError:
+                continue
+            marker_parts.append(f"{name}:{stat.st_size}:{stat.st_mtime_ns}:{stat.st_ino}")
+        root_stat = path.stat()
+        marker_parts.append(f".root:{root_stat.st_mtime_ns}:{root_stat.st_ino}")
+        digest = hashlib.sha256("|".join(marker_parts).encode()).hexdigest()[:24]
+        return f"store:{success_seal or 'unpromoted'}:{revision or 'unknown'}:{digest}"
     except OSError:
         try:
             stat = path.stat()
@@ -392,6 +394,16 @@ class StoredRolloutSession:
         self.manifest_payload = manifest_payload
         self.inventory_row = inventory_row
 
+    def _assert_current_identity(self) -> str:
+        """Reject projections after the selected path was atomically replaced."""
+
+        current = _store_projection_identity(self.canonical_path)
+        if current != self.store_identity:
+            raise RuntimeError(
+                "selected rollout store changed after this session opened; reopen the store before projecting evidence"
+            )
+        return self.store_identity
+
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
         return _cached_candidate_population_cached(self.canonical_path.as_posix(), self.store_identity, sample_size)
 
@@ -474,18 +486,22 @@ class StoredRolloutSession:
     def topology(
         self, vin_store_dirs: tuple[str, ...], paths: PathConfig, selected_source_row_id: int | None = None
     ) -> Any:
-        identity = _store_projection_identity(self.canonical_path.as_posix())
         return _cached_topology_cached(
             self.canonical_path.as_posix(),
             vin_store_dirs,
             paths,
             selected_source_row_id,
-            store_identity=identity,
+            store_identity=self._assert_current_identity(),
         )
 
     def evidence_bundle(self, evidence_status: str) -> bytes:
-        identity = _store_projection_identity(self.canonical_path.as_posix())
-        return _cached_evidence_bundle_cached(self.canonical_path.as_posix(), evidence_status, store_identity=identity)
+        identity = self._assert_current_identity()
+        bundle = _cached_evidence_bundle_cached(
+            self.canonical_path.as_posix(), evidence_status, store_identity=identity
+        )
+        if _store_projection_identity(self.canonical_path) != identity:
+            raise RuntimeError("selected rollout store changed while serializing evidence; reopen the store")
+        return bundle
 
 
 def open_stored_rollout_session(
