@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
+import tempfile
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -22,6 +24,7 @@ import zarr
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
+from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetInputProtocol
 from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
@@ -545,9 +548,11 @@ def candidate_audit_rows(
     candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
     branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
+    protocol = str(reader.root.attrs.get("target_protocol_version", "")).replace("-", "_")
+    target_records = {target.target_row_id: target for target in target_rows(reader)}
     target_centers = {
-        target.target_row_id: np.asarray(target.center_world, dtype=np.float64).reshape(3)
-        for target in target_rows(reader)
+        target_row_id: np.asarray(target.center_world, dtype=np.float64).reshape(3)
+        for target_row_id, target in target_records.items()
     }
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
@@ -569,8 +574,21 @@ def candidate_audit_rows(
         generation_cohort_id = hashlib.sha256(cohort_json.encode()).hexdigest()[:16]
         root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
         target_delta = target_centers.get(rollout.target_row_id)
+        target_record = target_records.get(rollout.target_row_id)
+        target_source = None if target_record is None else target_record.source
+        target_valid = None if target_record is None else target_record.target_valid
+        target_gt_label_valid = None if target_record is None else target_record.gt_label_valid
+        target_match_status = None if target_record is None else target_record.gt_match_status
+        target_evidence_role = (
+            "oracle/evaluation"
+            if protocol == TargetInputProtocol.V0_GT_INPUT.value or target_source == ORACLE_GT_TARGET_SOURCE
+            else "actor-visible"
+            if target_source
+            else "unknown"
+        )
         if target_delta is not None:
             target_delta = target_delta - root_center
+        reference_pose = np.asarray(rollout.root_pose_world, dtype=np.float64).reshape(12)
         for step in rollout_steps(reader, rollout):
             if step_row_id is not None and step.step_row_id != int(step_row_id):
                 continue
@@ -580,6 +598,11 @@ def candidate_audit_rows(
                 strategy_id = int(strategy_ids[row])
                 pose = step.pose_world_cam[local]
                 relative = np.asarray(pose[9:12], dtype=np.float64) - root_center
+                reference_rotation = reference_pose[:9].reshape(3, 3)
+                reference_center = reference_pose[9:12]
+                proposal_relative = reference_rotation.T @ (
+                    np.asarray(pose[9:12], dtype=np.float64) - reference_center
+                )
                 candidate_row = {
                     "candidate_row_id": int(step.candidate_row_ids[local]),
                     "rollout_row_id": rollout.rollout_row_id,
@@ -600,6 +623,12 @@ def candidate_audit_rows(
                     "generation_cohort_id": generation_cohort_id,
                     "generation_cohort": cohort_json,
                     "target_row_id": rollout.target_row_id,
+                    "target_source": target_source,
+                    "target_protocol": protocol,
+                    "target_valid": target_valid,
+                    "target_gt_label_valid": target_gt_label_valid,
+                    "target_match_status": target_match_status,
+                    "target_evidence_role": target_evidence_role,
                     "selected": bool(step.selected_mask[local]),
                     "actor_action": bool(step.actor_action_mask[local]),
                     "oracle_label": bool(oracle_label_mask[row]),
@@ -626,6 +655,12 @@ def candidate_audit_rows(
                     "root_relative_x_m": float(relative[0]),
                     "root_relative_y_m": float(relative[1]),
                     "root_relative_z_m": float(relative[2]),
+                    "decision_relative_x_m": float(proposal_relative[0]),
+                    "decision_relative_y_m": float(proposal_relative[1]),
+                    "decision_relative_z_m": float(proposal_relative[2]),
+                    "decision_reference_frame": (
+                        "root pose world frame for step 0; previous selected camera frame thereafter"
+                    ),
                     "root_distance_m": float(np.linalg.norm(relative)),
                     "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
                     "units": "m",
@@ -650,6 +685,8 @@ def candidate_audit_rows(
                 else:
                     rows.append(candidate_row)
                 emitted += 1
+            if step.selected_local_index >= 0:
+                reference_pose = np.asarray(step.pose_world_cam[step.selected_local_index], dtype=np.float64).reshape(12)
     return rows
 
 
@@ -672,11 +709,15 @@ def candidate_population_evidence(
     if sample_size < 0:
         raise ValueError("sample_size must be non-negative")
     accumulator = _CandidatePopulationAccumulator(max_sample_rows=sample_size)
-    scientific_rows: list[dict[str, object]] = []
+    # Scientific reducers replay a bounded spooled stream instead of retaining
+    # a second in-memory copy of every candidate row.  The spool stays in RAM
+    # for small stores and transparently moves to a temporary file for large
+    # stores; the display sample remains the only retained candidate subset.
+    spooled_rows = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024, mode="w+b")
 
     def consume(row: Mapping[str, object]) -> None:
         accumulator.consume(row)
-        scientific_rows.append(dict(row))
+        pickle.dump(dict(row), spooled_rows, protocol=pickle.HIGHEST_PROTOCOL)
 
     try:
         audit_reader(reader, row_callback=consume)
@@ -685,25 +726,38 @@ def candidate_population_evidence(
             raise
         for row in audit_reader(reader):  # type: ignore[operator]
             consume(row)
-    sample = accumulator.sample()
-    compositions = accumulator.compositions()
-    calibrations = accumulator.calibrations()
-    groups = accumulator.groups()
-    collision = accumulator.collision()
-    sample_rows = list(sample["rows"])
-    return {
-        "composition": compositions,
-        "calibration": calibrations,
-        "collision": collision,
-        "groups": groups,
-        "sample": sample,
-        "population_count": accumulator.population_count,
-        "geometry": candidate_geometry_evidence_rows(sample_rows),
-        "direction": candidate_direction_evidence(scientific_rows),
-        "spatial": candidate_spatial_support_evidence(scientific_rows),
-        "target_view": candidate_target_view_evidence(scientific_rows),
-        "motion": candidate_motion_support_evidence(scientific_rows),
-    }
+    spooled_rows.seek(0)
+
+    def replay_rows() -> Iterable[dict[str, object]]:
+        spooled_rows.seek(0)
+        while True:
+            try:
+                yield pickle.load(spooled_rows)
+            except EOFError:
+                return
+
+    try:
+        sample = accumulator.sample()
+        compositions = accumulator.compositions()
+        calibrations = accumulator.calibrations()
+        groups = accumulator.groups()
+        collision = accumulator.collision()
+        sample_rows = list(sample["rows"])
+        return {
+            "composition": compositions,
+            "calibration": calibrations,
+            "collision": collision,
+            "groups": groups,
+            "sample": sample,
+            "population_count": accumulator.population_count,
+            "geometry": candidate_geometry_evidence_rows(sample_rows),
+            "direction": candidate_direction_evidence(replay_rows()),
+            "spatial": candidate_spatial_support_evidence(replay_rows()),
+            "target_view": candidate_target_view_evidence(replay_rows()),
+            "motion": candidate_motion_support_evidence(replay_rows()),
+        }
+    finally:
+        spooled_rows.close()
 
 
 def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -758,15 +812,19 @@ def _population_state_groups(
     shell silently dominate the scientific summary.
     """
     grouped: dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]] = {}
+    state_keys: set[tuple[str, str, str, str, *tuple[str, ...]]] = set()
     for raw in rows:
         row = dict(raw)
         cohort = str(row.get("generation_cohort_id", "unknown"))
         scene, rollout_id, step_id = _candidate_state_key(row)
         extra = tuple(str(row.get(field, "unknown")) for field in extra_fields)
+        state_keys.add((cohort, scene, rollout_id, step_id, *extra))
         for population in ("all", "actor_valid"):
             if population == "actor_valid" and not bool(row.get("actor_action")):
                 continue
             grouped.setdefault((cohort, scene, rollout_id, step_id, *extra, population), []).append(row)
+    for state_key in state_keys:
+        grouped.setdefault((*state_key, "actor_valid"), [])
     return grouped
 
 
@@ -794,7 +852,11 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
         for row in state_rows:
             try:
                 vector = np.asarray(
-                    [row.get("root_relative_x_m"), row.get("root_relative_y_m"), row.get("root_relative_z_m")],
+                    [
+                        row.get("decision_relative_x_m", row.get("root_relative_x_m")),
+                        row.get("decision_relative_y_m", row.get("root_relative_y_m")),
+                        row.get("decision_relative_z_m", row.get("root_relative_z_m")),
+                    ],
                     dtype=np.float64,
                 )
                 radius = float(np.linalg.norm(vector))
@@ -856,6 +918,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 cap_rows.append(
                     {
                         "evidence": "spherical_cap_discrepancy",
+                        "metric_name": "distance_from_isotropy",
                         "aggregation_level": "state",
                         "generation_cohort_id": cohort,
                         "scene": scene,
@@ -873,7 +936,13 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                         "defined_state_count": 1,
                         "available": True,
                         "units": "fraction",
-                        "protocol": {"reference": "fixed Fibonacci sphere", "cap_centers": 128, "reference_count": 128},
+                        "protocol": {
+                            "reference": "fixed Fibonacci sphere",
+                            "null_model": "uniform S2",
+                            "cap_centers": 128,
+                            "reference_count": 128,
+                            "interpretation": "distance from isotropy only; not a generator-defect test",
+                        },
                     }
                 )
             cosine = np.clip(points @ points.T, -1.0, 1.0)
@@ -924,12 +993,19 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     {
                         **base,
                         "evidence": "spherical_cap_discrepancy",
+                        "metric_name": "distance_from_isotropy",
                         "radius_deg": radius,
                         "value": None,
                         "discrepancy": None,
                         "available": False,
                         "units": "fraction",
-                        "protocol": {"reference": "fixed Fibonacci sphere", "cap_centers": 128, "reference_count": 128},
+                        "protocol": {
+                            "reference": "fixed Fibonacci sphere",
+                            "null_model": "uniform S2",
+                            "cap_centers": 128,
+                            "reference_count": 128,
+                            "interpretation": "distance from isotropy only; not a generator-defect test",
+                        },
                     }
                 )
             angular_rows.append(
@@ -1080,23 +1156,40 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
         cohort, scene, rollout_id, step_id, shell, population = key
         values = {
             "root_xy_radius": [
-                float(np.hypot(r["root_relative_x_m"], r["root_relative_y_m"]))
+                float(
+                    np.hypot(
+                        r.get("decision_relative_x_m", r.get("root_relative_x_m")),
+                        r.get("decision_relative_y_m", r.get("root_relative_y_m")),
+                    )
+                )
                 for r in grouped
-                if _finite_or_none(r.get("root_relative_x_m")) is not None
-                and _finite_or_none(r.get("root_relative_y_m")) is not None
+                if _finite_or_none(r.get("decision_relative_x_m", r.get("root_relative_x_m"))) is not None
+                and _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m"))) is not None
             ],
             "root_3d_distance": [
-                float(np.linalg.norm([r["root_relative_x_m"], r["root_relative_y_m"], r["root_relative_z_m"]]))
+                float(
+                    np.linalg.norm(
+                        [
+                            r.get("decision_relative_x_m", r.get("root_relative_x_m")),
+                            r.get("decision_relative_y_m", r.get("root_relative_y_m")),
+                            r.get("decision_relative_z_m", r.get("root_relative_z_m")),
+                        ]
+                    )
+                )
                 for r in grouped
                 if all(
-                    _finite_or_none(r.get(name)) is not None
-                    for name in ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m")
+                    _finite_or_none(r.get(decision, r.get(root))) is not None
+                    for decision, root in zip(
+                        ("decision_relative_x_m", "decision_relative_y_m", "decision_relative_z_m"),
+                        ("root_relative_x_m", "root_relative_y_m", "root_relative_z_m"),
+                        strict=True,
+                    )
                 )
             ],
             "root_height": [
-                float(r["root_relative_z_m"])
+                float(r.get("decision_relative_z_m", r.get("root_relative_z_m")))
                 for r in grouped
-                if _finite_or_none(r.get("root_relative_z_m")) is not None
+                if _finite_or_none(r.get("decision_relative_z_m", r.get("root_relative_z_m"))) is not None
             ],
         }
         for metric, vals in values.items():
