@@ -249,7 +249,15 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
         "forbidden_outcome",
     }
     assert evaluation_item["properties"]["evidence_event_indices"]["maxItems"] == trials.VERDICT_MAX_ITEMS
-    assert evaluation_item["properties"]["evidence_event_indices"]["uniqueItems"] is True
+
+    pending: list[object] = [verdict_schema]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            assert "uniqueItems" not in node
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
 
 
 def test_generic_rubric_constraints_cover_every_supported_fixture_field() -> None:
@@ -778,6 +786,11 @@ def test_rubric_evaluations_fail_closed_for_omitted_and_observed_constraints() -
         ],
         lambda evaluations: [
             {**evaluations[0], "evidence_event_indices": [1]},
+            evaluations[1],
+            evaluations[2],
+        ],
+        lambda evaluations: [
+            {**evaluations[0], "evidence_event_indices": [0, 0]},
             evaluations[1],
             evaluations[2],
         ],

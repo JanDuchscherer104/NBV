@@ -65,7 +65,6 @@
           "evidence_event_indices": {
             "type": "array",
             "maxItems": 64,
-            "uniqueItems": true,
             "items": {"type": "integer", "minimum": 0}
           }
         }
