@@ -28,8 +28,12 @@ when owners conflict.
 ## Procedure And Proof
 
 - Use the outline helpers or direct source search to locate one relevant page or
-  Typst include. `typst-authoring` owns full authoring and citation procedure;
-  `aria-nbv-mermaid` owns Mermaid procedure and local rendering.
+  Typst include. `academic-writing` owns source-grounded argument construction
+  and literature synthesis; `typst-authoring` owns accepted-content Typst
+  realization and release mechanics; `scientific-review` is an independent,
+  non-mutating, advisory red-team. Exact sources remain authoritative, and
+  skills hand off at their boundary rather than copying source inventories.
+- `aria-nbv-mermaid` owns Mermaid procedure and local rendering.
 - Role-disjoint setup and documentation verification commands route through
   [`docs/README.md`](README.md); executable behavior remains owned by the
   Makefile, CI workflow, and exact source/test owners.

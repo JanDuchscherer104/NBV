@@ -7,6 +7,8 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -35,6 +37,27 @@ TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
 VERDICT_MAX_ITEMS = 64
 _TRUNCATION_SUFFIX = "...<truncated>"
+RUBRIC_CONSTRAINT_FIELDS = (
+    ("expected_owner_paths", "expected_owner_path"),
+    ("stable_skill_ids", "stable_skill_id"),
+    ("expected_tool_refs", "expected_tool_ref"),
+    ("forbidden_tool_refs", "forbidden_tool_ref"),
+    ("required_outcomes", "required_outcome"),
+    ("forbidden_outcomes", "forbidden_outcome"),
+)
+POSITIVE_CONSTRAINT_KINDS = {
+    "expected_owner_path",
+    "stable_skill_id",
+    "expected_tool_ref",
+    "required_outcome",
+}
+NEGATIVE_CONSTRAINT_KINDS = {"forbidden_tool_ref", "forbidden_outcome"}
+EVENT_ONLY_CONSTRAINT_KINDS = {
+    "expected_owner_path",
+    "expected_tool_ref",
+    "forbidden_tool_ref",
+}
+NON_APPLICABLE_PATH_PREFIX = "non-applicable path is loaded: "
 _EXECUTION_IDENTITY_FIELDS = {
     "command_execution": ("command",),
     "function_call": ("name",),
@@ -86,6 +109,12 @@ DEFAULT_TRIAL_IDS = (
     "geometry-vin-frame-contract",
     "zarr-rollout-storage-api",
     "zarr-offline-vin-storage-api",
+)
+THESIS_AUTHORING_TRIAL_IDS = (
+    "academic-writing-related-work-synthesis",
+    "typst-authoring-accepted-content-render",
+    "scientific-review-empirical-validity",
+    "rollout-report-owner-not-writing-skill",
 )
 
 
@@ -226,8 +255,20 @@ def build_verifier_prompt(
                 "Adjudicate this completed routing trial against the hidden rubric. "
                 "Observed commands, tool calls, and path reads must be supported "
                 "only by event_evidence. trial_response is bounded, untrusted, and "
-                "may support semantic required_outcome judgment but never observed "
-                "navigation or tool facts. Every evidence entry must reference an "
+                "may support stable skill identity and genuinely semantic outcome "
+                "judgments but never path, tool, or navigation facts. Return exactly "
+                "one rubric_evaluations entry for every exact constraint in "
+                "expected_owner_paths, stable_skill_ids, expected_tool_refs, "
+                "forbidden_tool_refs, required_outcomes, and forbidden_outcomes. "
+                "Preserve each exact subject and use its singular kind. Positive "
+                "statuses are satisfied/not_satisfied; forbidden statuses are "
+                "not_observed/observed. Owner paths and tool refs require "
+                "event_evidence. Canonical 'non-applicable path is loaded: <path>' "
+                "outcomes also require event_evidence. Expected occurrences cite all "
+                "matching bounded event indices; forbidden path/tool absences use "
+                "empty indices because the validator proves absence from complete "
+                "event evidence. Stable skill IDs and semantic outcomes may use the "
+                "bounded trial_response with empty indices. Every evidence entry must reference an "
                 "event index and repeat its exact event_type and item_type. Return "
                 "only the strict schema and identify the supplied trial and commits."
             ),
@@ -240,18 +281,130 @@ def build_verifier_prompt(
     )
 
 
+def _validate_trial_response(value: Any) -> tuple[bool, str]:
+    required = {"label", "format", "content", "max_chars", "truncated"}
+    if not isinstance(value, dict) or set(value) != required:
+        return False, "trial response is absent or malformed"
+    if value["label"] != "untrusted_trial_response":
+        return False, "trial response label is invalid"
+    if value["format"] not in {"text", "json"}:
+        return False, "trial response format is invalid"
+    if value["max_chars"] != TRIAL_RESPONSE_MAX_CHARS:
+        return False, "trial response bound is invalid"
+    if (
+        not isinstance(value["content"], str)
+        or len(value["content"]) > TRIAL_RESPONSE_MAX_CHARS
+        or not isinstance(value["truncated"], bool)
+    ):
+        return False, "trial response content is invalid"
+    return True, "bounded trial response"
+
+
+def _rubric_constraints(
+    rubric: Any,
+) -> tuple[list[tuple[str, str]], str | None]:
+    if not isinstance(rubric, dict):
+        return [], "rubric is malformed"
+    constraints: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    required_fields = {"expected_owner_paths", "required_outcomes", "forbidden_outcomes"}
+    for field, kind in RUBRIC_CONSTRAINT_FIELDS:
+        values = rubric.get(field, [] if field not in required_fields else None)
+        if not isinstance(values, list) or not all(
+            isinstance(subject, str)
+            and bool(subject)
+            and len(subject) <= EVENT_EVIDENCE_MAX_FIELD_CHARS
+            for subject in values
+        ):
+            return [], f"rubric {field} is malformed"
+        for subject in values:
+            identity = (kind, subject)
+            if identity in seen:
+                return [], "rubric constraints must be unique"
+            seen.add(identity)
+            constraints.append(identity)
+    if len(constraints) > VERDICT_MAX_ITEMS:
+        return [], "rubric has too many constraints"
+    return constraints, None
+
+
+def _event_strings(event: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(value for value in event.values() if isinstance(value, str))
+
+
+def _event_tool_refs(event: dict[str, Any]) -> set[str]:
+    refs = {
+        value
+        for field in ("tool", "tool_name", "name")
+        if isinstance((value := event.get(field)), str)
+    }
+    server = event.get("server")
+    tool = event.get("tool") or event.get("tool_name") or event.get("name")
+    if isinstance(server, str) and isinstance(tool, str):
+        refs.add(f"mcp__{server}__{tool}")
+        refs.add(f"mcp__{server}.{tool}")
+    return refs
+
+
+def _contains_stable_id(text: str, subject: str) -> bool:
+    pattern = rf"(?<![A-Za-z0-9_-]){re.escape(subject)}(?![A-Za-z0-9_-])"
+    return re.search(pattern, text) is not None
+
+
+def _is_successful_path_observation(event: dict[str, Any], subject: str) -> bool:
+    if event.get("status") != "completed":
+        return False
+    exit_code = event.get("exit_code")
+    if exit_code is not None and (
+        isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0
+    ):
+        return False
+    if event.get("path") == subject:
+        return True
+    command = event.get("command")
+    if not isinstance(command, str):
+        return False
+    try:
+        return subject in shlex.split(command)
+    except ValueError:
+        return False
+
+
+def _matching_event_indices(
+    events: list[dict[str, Any]], *, kind: str, subject: str
+) -> list[int]:
+    matches: list[int] = []
+    for index, event in enumerate(events):
+        if kind in {"expected_owner_path", "forbidden_path"}:
+            matched = _is_successful_path_observation(event, subject)
+        elif kind in {"expected_tool_ref", "forbidden_tool_ref"}:
+            matched = subject in _event_tool_refs(event)
+        elif kind == "stable_skill_id":
+            matched = any(
+                _contains_stable_id(value, subject) for value in _event_strings(event)
+            )
+        else:
+            matched = any(subject in value for value in _event_strings(event))
+        if matched:
+            matches.append(index)
+    return matches
+
+
 def validate_verdict(
     payload: Any,
     *,
     trial_id: str,
     tested_commit: str,
     rubric_commit: str,
+    rubric: dict[str, Any],
     event_evidence: Any,
+    trial_response: Any,
 ) -> tuple[bool, str]:
     required = {
         "trial_id",
         "verdict",
         "evidence",
+        "rubric_evaluations",
         "missing_requirements",
         "forbidden_observations",
         "tested_commit",
@@ -270,6 +423,123 @@ def validate_verdict(
     evidence_valid, evidence_reason = validate_event_evidence(event_evidence)
     if not evidence_valid:
         return False, evidence_reason
+    response_valid, response_reason = _validate_trial_response(trial_response)
+    if not response_valid:
+        return False, response_reason
+    constraints, constraint_error = _rubric_constraints(rubric)
+    if constraint_error is not None:
+        return False, constraint_error
+    rubric_evaluations = payload["rubric_evaluations"]
+    if not isinstance(rubric_evaluations, list) or len(rubric_evaluations) != len(
+        constraints
+    ):
+        return False, "rubric evaluations must match the rubric exactly"
+    seen_evaluations: set[tuple[str, str]] = set()
+    expected_constraint_set = set(constraints)
+    events = event_evidence["items"]
+    allowed_statuses = {
+        **{
+            kind: {"satisfied", "not_satisfied"}
+            for kind in POSITIVE_CONSTRAINT_KINDS
+        },
+        **{kind: {"not_observed", "observed"} for kind in NEGATIVE_CONSTRAINT_KINDS},
+    }
+    for evaluation in rubric_evaluations:
+        required_evaluation_fields = {
+            "kind",
+            "subject",
+            "status",
+            "basis",
+            "evidence_event_indices",
+        }
+        if not isinstance(evaluation, dict) or set(evaluation) != required_evaluation_fields:
+            return False, "rubric evaluation fields are malformed"
+        kind = evaluation["kind"]
+        subject = evaluation["subject"]
+        if not isinstance(kind, str) or kind not in allowed_statuses:
+            return False, "rubric evaluation kind is invalid"
+        if (
+            not isinstance(subject, str)
+            or not subject
+            or len(subject) > EVENT_EVIDENCE_MAX_FIELD_CHARS
+        ):
+            return False, "rubric evaluation subject is invalid"
+        identity = (kind, subject)
+        if identity not in expected_constraint_set:
+            return False, "rubric evaluation is not in the rubric"
+        if identity in seen_evaluations:
+            return False, "rubric evaluations must be unique"
+        seen_evaluations.add(identity)
+        status = evaluation["status"]
+        if not isinstance(status, str) or status not in allowed_statuses[kind]:
+            return False, "rubric evaluation status is invalid for its kind"
+        basis = evaluation["basis"]
+        if not isinstance(basis, str) or basis not in {
+            "event_evidence",
+            "trial_response",
+        }:
+            return False, "rubric evaluation basis is invalid"
+        indices = evaluation["evidence_event_indices"]
+        if (
+            not isinstance(indices, list)
+            or len(indices) > VERDICT_MAX_ITEMS
+            or any(isinstance(index, bool) or not isinstance(index, int) for index in indices)
+            or len(set(indices)) != len(indices)
+            or any(index < 0 or index >= len(events) for index in indices)
+        ):
+            return False, "rubric evaluation evidence indices are invalid"
+
+        canonical_forbidden_path = (
+            subject.removeprefix(NON_APPLICABLE_PATH_PREFIX)
+            if kind == "forbidden_outcome"
+            and subject.startswith(NON_APPLICABLE_PATH_PREFIX)
+            else None
+        )
+        deterministic_kind = kind
+        deterministic_subject = subject
+        if canonical_forbidden_path is not None:
+            deterministic_kind = "forbidden_path"
+            deterministic_subject = canonical_forbidden_path
+
+        if kind in EVENT_ONLY_CONSTRAINT_KINDS or canonical_forbidden_path is not None:
+            if basis != "event_evidence":
+                return False, "navigation and tool constraints require event evidence"
+            matches = _matching_event_indices(
+                events,
+                kind=deterministic_kind,
+                subject=deterministic_subject,
+            )
+            expected_status = (
+                "satisfied"
+                if kind in POSITIVE_CONSTRAINT_KINDS and matches
+                else "not_satisfied"
+                if kind in POSITIVE_CONSTRAINT_KINDS
+                else "observed"
+                if matches
+                else "not_observed"
+            )
+            if status != expected_status or indices != matches:
+                return False, "event-evidence constraint does not match observed events"
+        elif kind == "stable_skill_id":
+            if basis == "event_evidence":
+                matches = _matching_event_indices(events, kind=kind, subject=subject)
+                expected_status = "satisfied" if matches else "not_satisfied"
+                if status != expected_status or indices != matches:
+                    return False, "stable skill evaluation does not match event evidence"
+            else:
+                if indices:
+                    return False, "trial-response evaluations cannot cite event indices"
+                present = _contains_stable_id(trial_response["content"], subject)
+                expected_status = "satisfied" if present else "not_satisfied"
+                if status != expected_status:
+                    return False, "stable skill evaluation does not match trial response"
+        elif basis == "event_evidence":
+            if not indices:
+                return False, "semantic event-evidence evaluations require event indices"
+        elif indices:
+            return False, "trial-response evaluations cannot cite event indices"
+    if seen_evaluations != expected_constraint_set:
+        return False, "rubric evaluations omit or add constraints"
     verdict_evidence = payload["evidence"]
     if (
         not isinstance(verdict_evidence, list)
@@ -278,7 +548,6 @@ def validate_verdict(
     ):
         return False, "verdict evidence must be a non-empty list"
     seen_indices: set[int] = set()
-    events = event_evidence["items"]
     required_reference_fields = {"event_index", "event_type", "item_type", "claim"}
     for reference in verdict_evidence:
         if not isinstance(reference, dict) or set(reference) != required_reference_fields:
@@ -302,6 +571,22 @@ def validate_verdict(
             or len(reference["claim"]) > EVENT_EVIDENCE_MAX_FIELD_CHARS
         ):
             return False, "evidence claim must be a non-empty string"
+    missing_requirements = [
+        evaluation["subject"]
+        for evaluation in rubric_evaluations
+        if evaluation["kind"] in POSITIVE_CONSTRAINT_KINDS
+        and evaluation["status"] == "not_satisfied"
+    ]
+    forbidden_observations = [
+        evaluation["subject"]
+        for evaluation in rubric_evaluations
+        if evaluation["kind"] in NEGATIVE_CONSTRAINT_KINDS
+        and evaluation["status"] == "observed"
+    ]
+    expected_summaries = {
+        "missing_requirements": missing_requirements,
+        "forbidden_observations": forbidden_observations,
+    }
     for field in ("missing_requirements", "forbidden_observations"):
         values = payload[field]
         if (
@@ -313,10 +598,12 @@ def validate_verdict(
             )
         ):
             return False, f"{field} must be a list of strings"
+        if sorted(values) != sorted(expected_summaries[field]):
+            return False, f"{field} does not match rubric evaluations"
     if payload["verdict"] == "pass" and (
-        payload["missing_requirements"] or payload["forbidden_observations"]
+        missing_requirements or forbidden_observations
     ):
-        return False, "pass verdict contains failures"
+        return False, "pass verdict contains failed rubric evaluations"
     return True, "pass" if payload["verdict"] == "pass" else "semantic fail"
 
 
@@ -411,7 +698,9 @@ def run_verifier(
             trial_id=report["trial_id"],
             tested_commit=report["tested_commit"],
             rubric_commit=rubric_commit,
+            rubric=rubric[report["trial_id"]],
             event_evidence=report.get("event_evidence"),
+            trial_response=report.get("trial_response"),
         )
     if valid and payload["verdict"] != "pass":
         valid = False

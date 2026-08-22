@@ -3,6 +3,13 @@
 Skills are compact agent procedures. Native frontmatter selects the skill;
 the body keeps universal invariants and chooses conditional references.
 
+The authoring seam is intentionally three-part: `academic-writing` constructs
+source-grounded arguments, `typst-authoring` realizes accepted content and
+handles Typst release mechanics, and `scientific-review` independently
+red-teams a candidate. Their descriptions are the routing contract; only the
+leading owner acts by default. A handoff passes an accepted artifact or review
+finding, never ownership of an exact source.
+
 ## Frontmatter
 
 Every ARIA-owned `SKILL.md` starts with exactly these two fields:
@@ -45,12 +52,9 @@ Do not create a registry that mirrors the skill set or source ownership.
 
 Use the repository's current owner paths for implementation and scientific
 claims. A pointer identifies where to look; it does not make the pointer's
-target authoritative over the source owner. In scientific documentation,
-`docs/typst/shared/glossary.typ` owns durable terms; `docs/typst/glossary/` is
-rendered/modular output; `docs/references.bib` and `docs/references-qh.bib` own
-citation identities; `docs/literature/sources.jsonl` owns acquisition and
-relevance metadata; `docs/contents/literature/` owns review synthesis; and
-`docs/typst/thesis/sections/` owns active claim placement.
+target authoritative over the source owner. Open the nearest exact owner and
+its guide at the decision point; do not copy an inventory of those owners into
+each skill.
 
 ## Ownership and handoffs
 

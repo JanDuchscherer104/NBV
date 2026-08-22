@@ -7,6 +7,7 @@
     "trial_id",
     "verdict",
     "evidence",
+    "rubric_evaluations",
     "missing_requirements",
     "forbidden_observations",
     "tested_commit",
@@ -28,6 +29,45 @@
           "event_type": {"type": "string", "minLength": 1, "maxLength": 2048},
           "item_type": {"type": "string", "minLength": 1, "maxLength": 2048},
           "claim": {"type": "string", "minLength": 1, "maxLength": 2048}
+        }
+      }
+    },
+    "rubric_evaluations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "subject",
+          "status",
+          "basis",
+          "evidence_event_indices"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "expected_owner_path",
+              "stable_skill_id",
+              "expected_tool_ref",
+              "forbidden_tool_ref",
+              "required_outcome",
+              "forbidden_outcome"
+            ]
+          },
+          "subject": {"type": "string", "minLength": 1, "maxLength": 2048},
+          "status": {
+            "enum": ["satisfied", "not_satisfied", "not_observed", "observed"]
+          },
+          "basis": {"enum": ["event_evidence", "trial_response"]},
+          "evidence_event_indices": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 0}
+          }
         }
       }
     },

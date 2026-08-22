@@ -48,3 +48,7 @@
 {"id":"typst-prose-matt-writing-modes","task":"Draft or polish ARIA thesis prose with writing mechanics."}
 {"id":"scaffold-cleanup","task":"Prune or simplify scaffold skills, metadata, or references while preserving behavior."}
 {"id":"lrz-failed-job-container-start","task":"Route a failed LRZ job or container-start failure to the exact troubleshooting owner."}
+{"id":"academic-writing-related-work-synthesis","task":"Synthesize the thesis Related Work by conceptual tensions, using the existing literature and adjacent source locators, then return bounded accepted content with a Typst handoff."}
+{"id":"typst-authoring-accepted-content-render","task":"Add already accepted scientific content—a shared equation and a table—to the thesis, then compile and render the affected pages with the existing Typst contract."}
+{"id":"scientific-review-empirical-validity","task":"Red-team an exact thesis candidate for leakage, confounding, split integrity, uncertainty, and claims that exceed the empirical evidence; report findings without editing the candidate."}
+{"id":"rollout-report-owner-not-writing-skill","task":"Change the rollout report schema and its producer/consumer contract to add an experimental-unit field while preserving serialized identity and focused tests."}

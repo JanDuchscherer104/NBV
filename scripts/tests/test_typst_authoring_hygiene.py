@@ -18,6 +18,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SKILLS_ROOT = ROOT / ".agents" / "skills"
+DEPRECATED_CONTEXT7 = ("mcp__MCP_DOCKER.resolve_library_id", "mcp__MCP_DOCKER.get_library_docs")
 THESIS_ROOT = ROOT / "docs" / "typst" / "thesis"
 LABEL_SCOPE = {
     Path("docs/typst/thesis/sections/01-introduction.typ"): "submission",
@@ -204,6 +206,113 @@ def scan_paths(paths: list[Path]) -> list[Violation]:
 
 
 class HygieneTests(unittest.TestCase):
+    def test_skill_frontmatter_has_only_name_and_description(self) -> None:
+        for path in sorted(SKILLS_ROOT.rglob("SKILL.md")):
+            text = path.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\n"), path)
+            _, frontmatter, _ = text.split("---", 2)
+            keys = {
+                line.split(":", 1)[0].strip()
+                for line in frontmatter.splitlines()
+                if line.strip() and not line.startswith((" ", "\t"))
+            }
+            self.assertEqual(keys, {"name", "description"}, path)
+
+    def test_no_skill_uses_deprecated_docker_context7_tools(self) -> None:
+        for path in sorted(SKILLS_ROOT.rglob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            self.assertFalse(any(token in text for token in DEPRECATED_CONTEXT7), path)
+
+    def test_typst_context7_route_has_one_registry_owner_and_skill_pointer(self) -> None:
+        registry = (
+            SKILLS_ROOT
+            / "aria-nbv-context"
+            / "references"
+            / "context7_library_ids.md"
+        ).read_text(encoding="utf-8")
+        typst_skill = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(registry.count("/websites/typst_app"), 1)
+        self.assertIn("references/external-research.md", typst_skill)
+        registry_name = "context7_library_ids.md"
+        for path in sorted(SKILLS_ROOT.rglob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            if path != SKILLS_ROOT / "aria-nbv-context" / "references" / registry_name:
+                self.assertNotIn("/websites/typst_app", text, path)
+            if "Context7 registry" in text:
+                self.assertIn(
+                    "aria-nbv-context/references/context7_library_ids.md", text, path
+                )
+
+    def test_thesis_authoring_descriptions_distinguish_the_three_routes(self) -> None:
+        expected = {
+            "academic-writing": ("argument", "Related Work"),
+            "typst-authoring": ("Typst", "render"),
+            "scientific-review": ("red-teaming", "leakage"),
+        }
+        for skill, terms in expected.items():
+            path = SKILLS_ROOT / skill / "SKILL.md"
+            self.assertTrue(path.is_file(), path)
+            text = path.read_text(encoding="utf-8")
+            description = text.split("description:", 1)[1].split("\n", 1)[0].lower()
+            for term in terms:
+                self.assertIn(term.lower(), description, path)
+
+    def test_routing_make_targets_and_runner_flags_exist(self) -> None:
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("thesis-authoring-routing-self-test:", makefile)
+        self.assertIn("thesis-authoring-routing-trials:", makefile)
+        runner = (ROOT / "scripts/scaffold/run_routing_trials.py").read_text(encoding="utf-8")
+        for trial_id in (
+            "academic-writing-related-work-synthesis",
+            "typst-authoring-accepted-content-render",
+            "scientific-review-empirical-validity",
+            "rollout-report-owner-not-writing-skill",
+        ):
+            self.assertIn(f'"{trial_id}"', runner + makefile)
+        self.assertIn("--head", makefile)
+        self.assertIn("--jobs 4", makefile)
+        self.assertIn("--timeout 600", makefile)
+
+    def test_typst_skill_keeps_conditioned_reference_family_pointers(self) -> None:
+        text = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        branches = {
+            ("notation", "equation"): (
+                "aria-nbv-notation.md",
+                "math-attachments.md",
+            ),
+            ("figures", "visual"): (
+                "figures-tables.md",
+                "scientific-visualizations.md",
+            ),
+            ("data", "scripting", "layout"): (
+                "data-loading.md",
+                "scripting.md",
+                "layout.md",
+            ),
+            ("slides", "package"): ("slides.md", "packages/index.md"),
+        }
+        for branch_terms, references in branches.items():
+            self.assertTrue(all(term in text.lower() for term in branch_terms))
+            for reference in references:
+                self.assertIn(f"references/{reference}", text)
+
+    def test_academic_writing_preserves_adjacent_evidence_locator_form(self) -> None:
+        text = (
+            SKILLS_ROOT
+            / "academic-writing"
+            / "references"
+            / "source-grounded-workflow.md"
+        ).read_text(encoding="utf-8")
+        self.assertRegex(text, r"adjacent\s+non-rendered comment block")
+        self.assertRegex(
+            text,
+            r"// evidence:\n// - @[^ ]+ -> [^\n:]+:[0-9]+-[0-9]+ \([^\n]+\)",
+        )
+
     def test_raw_display_is_blocking(self) -> None:
         path = ROOT / "docs/typst/thesis/sections/fixture.typ"
         self.assertTrue(scan_text(path, "$$\nx = 1\n$$"))

@@ -15,17 +15,53 @@ sys.path.insert(0, str(ROOT / "scripts" / "scaffold"))
 
 import run_routing_trials as trials  # noqa: E402
 
+TEST_RUBRIC = {
+    "id": "trial",
+    "expected_owner_paths": ["AGENTS.md"],
+    "required_outcomes": ["owner path"],
+    "forbidden_outcomes": ["loaded path"],
+}
 
-def _complete_event_evidence() -> dict[str, object]:
-    items = [
-        {
-            "event_type": "item.completed",
-            "item_type": "command_execution",
-            "command": "rg -n owner AGENTS.md",
-            "status": "completed",
-            "exit_code": 0,
-        }
+
+def _evaluation(
+    kind: str,
+    subject: str,
+    status: str,
+    basis: str,
+    indices: list[int],
+) -> dict[str, object]:
+    return {
+        "kind": kind,
+        "subject": subject,
+        "status": status,
+        "basis": basis,
+        "evidence_event_indices": indices,
+    }
+
+
+def _rubric_evaluations(
+    *, required_status: str = "satisfied", forbidden_status: str = "not_observed"
+) -> list[dict[str, object]]:
+    return [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("required_outcome", "owner path", required_status, "trial_response", []),
+        _evaluation("forbidden_outcome", "loaded path", forbidden_status, "trial_response", []),
     ]
+
+
+def _complete_event_evidence(
+    items: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    if items is None:
+        items = [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "rg -n owner AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            }
+        ]
     payload = json.dumps(items, sort_keys=True, separators=(",", ":"))
     return {
         "bounds": {
@@ -60,6 +96,7 @@ def _verdict(**overrides: object) -> dict[str, object]:
         "trial_id": "trial",
         "verdict": "pass",
         "evidence": [_event_reference()],
+        "rubric_evaluations": _rubric_evaluations(),
         "missing_requirements": [],
         "forbidden_observations": [],
         "tested_commit": "tested",
@@ -70,14 +107,23 @@ def _verdict(**overrides: object) -> dict[str, object]:
 
 
 def _validate_verdict(
-    payload: object, event_evidence: object
+    payload: object,
+    event_evidence: object,
+    rubric: dict[str, Any] = TEST_RUBRIC,
+    trial_response: object | None = None,
 ) -> tuple[bool, str]:
     return trials.validate_verdict(
         payload,
         trial_id="trial",
         tested_commit="tested",
         rubric_commit="rubric",
+        rubric=rubric,
         event_evidence=event_evidence,
+        trial_response=(
+            trial_response
+            if trial_response is not None
+            else trials.bound_trial_response({"outcome": "bounded"})
+        ),
     )
 
 
@@ -86,7 +132,7 @@ def _run_verifier(
 ) -> dict[str, Any]:
     return trials.run_verifier(
         report=report,
-        rubric={"trial": {"id": "trial"}},
+        rubric={"trial": TEST_RUBRIC},
         rubric_commit="rubric",
         checkout=checkout,
         trial_dir=trial_dir,
@@ -122,6 +168,28 @@ def test_prompt_and_rubric_ids_match_without_prompt_leakage() -> None:
         assert "mcp__" not in task
 
 
+def test_thesis_authoring_fixtures_are_exclusive_and_bound_unloaded_paths() -> None:
+    expected = {
+        "academic-writing-related-work-synthesis": "academic-writing",
+        "typst-authoring-accepted-content-render": "typst-authoring",
+        "scientific-review-empirical-validity": "scientific-review",
+        "rollout-report-owner-not-writing-skill": "nearest code/report owner",
+    }
+    rubric = trials.load_rubric()
+    assert set(trials.THESIS_AUTHORING_TRIAL_IDS) == set(expected)
+    for trial_id, owner in expected.items():
+        fixture = rubric[trial_id]
+        required = fixture["required_outcomes"]
+        forbidden = fixture["forbidden_outcomes"]
+        assert f"exactly one exclusive leading owner: {owner}" in required
+        assert any(" leads " in outcome for outcome in forbidden)
+        assert any("non-applicable path is loaded: " in outcome for outcome in forbidden)
+        assert all(
+            key not in fixture
+            for key in ("exclusive_leading_owner", "required_unloaded_paths")
+        )
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,
@@ -146,6 +214,7 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
     assert "forbidden_outcomes" not in serialized_trial
 
     verdict_schema = json.loads(trials.VERIFIER_SCHEMA.read_text(encoding="utf-8"))
+    assert set(verdict_schema["required"]) == set(verdict_schema["properties"])
     evidence_item = verdict_schema["properties"]["evidence"]["items"]
     assert verdict_schema["properties"]["evidence"]["maxItems"] == trials.VERDICT_MAX_ITEMS
     assert evidence_item["additionalProperties"] is False
@@ -159,6 +228,49 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
         items = verdict_schema["properties"][field]["items"]
         assert verdict_schema["properties"][field]["maxItems"] == trials.VERDICT_MAX_ITEMS
         assert items["maxLength"] == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
+    evaluations = verdict_schema["properties"]["rubric_evaluations"]
+    assert evaluations["minItems"] == 1
+    assert evaluations["maxItems"] == trials.VERDICT_MAX_ITEMS
+    evaluation_item = evaluations["items"]
+    assert evaluation_item["additionalProperties"] is False
+    assert set(evaluation_item["required"]) == {
+        "kind",
+        "subject",
+        "status",
+        "basis",
+        "evidence_event_indices",
+    }
+    assert set(evaluation_item["properties"]["kind"]["enum"]) == {
+        "expected_owner_path",
+        "stable_skill_id",
+        "expected_tool_ref",
+        "forbidden_tool_ref",
+        "required_outcome",
+        "forbidden_outcome",
+    }
+    assert evaluation_item["properties"]["evidence_event_indices"]["maxItems"] == trials.VERDICT_MAX_ITEMS
+    assert evaluation_item["properties"]["evidence_event_indices"]["uniqueItems"] is True
+
+
+def test_generic_rubric_constraints_cover_every_supported_fixture_field() -> None:
+    rubric = {
+        "expected_owner_paths": ["owner.py"],
+        "stable_skill_ids": ["stable-skill"],
+        "expected_tool_refs": ["mcp__server__expected"],
+        "forbidden_tool_refs": ["mcp__server__forbidden"],
+        "required_outcomes": ["required semantic result"],
+        "forbidden_outcomes": ["forbidden semantic result"],
+    }
+    constraints, error = trials._rubric_constraints(rubric)
+    assert error is None
+    assert constraints == [
+        ("expected_owner_path", "owner.py"),
+        ("stable_skill_id", "stable-skill"),
+        ("expected_tool_ref", "mcp__server__expected"),
+        ("forbidden_tool_ref", "mcp__server__forbidden"),
+        ("required_outcome", "required semantic result"),
+        ("forbidden_outcome", "forbidden semantic result"),
+    ]
 
 
 def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
@@ -396,6 +508,18 @@ def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
     assert bounded["tested_commit"] == "tested"
     assert bounded["rubric_commit"] == "rubric"
     assert payload["rubric_commit"] == "rubric"
+    assert "exclusive_leading_owner" not in payload["instruction"]
+    assert "required_unloaded_paths" not in payload["instruction"]
+    assert "rubric_evaluations" in payload["instruction"]
+    for field in (
+        "expected_owner_paths",
+        "stable_skill_ids",
+        "expected_tool_refs",
+        "forbidden_tool_refs",
+        "required_outcomes",
+        "forbidden_outcomes",
+    ):
+        assert field in payload["instruction"]
 
 
 def test_read_trial_response_reads_bounded_stream_once(tmp_path: Path) -> None:
@@ -420,8 +544,14 @@ def test_read_trial_response_reads_bounded_stream_once(tmp_path: Path) -> None:
 def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
     evidence = _complete_event_evidence()
     assert _validate_verdict(_verdict(), evidence) == (True, "pass")
+    failed_evaluations = _rubric_evaluations(required_status="not_satisfied")
     assert _validate_verdict(
-        _verdict(verdict="fail", missing_requirements=["owner"]), evidence
+        _verdict(
+            verdict="fail",
+            rubric_evaluations=failed_evaluations,
+            missing_requirements=["owner path"],
+        ),
+        evidence,
     ) == (True, "semantic fail")
     for mismatch in (
         {"tested_commit": "other"},
@@ -492,6 +622,276 @@ def test_verdict_validation_rejects_malformed_payload() -> None:
     assert not _validate_verdict(_verdict(evidence=[]), evidence)[0]
 
 
+def test_rubric_evaluations_fail_closed_for_omitted_and_observed_constraints() -> None:
+    evidence = _complete_event_evidence()
+    omitted_required = _verdict(
+        rubric_evaluations=_rubric_evaluations()[1:],
+    )
+    assert not _validate_verdict(omitted_required, evidence)[0]
+
+    observed_forbidden = _verdict(
+        rubric_evaluations=_rubric_evaluations(forbidden_status="observed"),
+        forbidden_observations=["loaded path"],
+    )
+    assert not _validate_verdict(observed_forbidden, evidence)[0]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda evaluations: evaluations[:1]
+        + [{**evaluations[1], "subject": "other path"}, evaluations[2]],
+        lambda evaluations: [evaluations[0], evaluations[0], evaluations[2]],
+        lambda evaluations: [
+            {**evaluations[0], "evidence_event_indices": []},
+            evaluations[1],
+            evaluations[2],
+        ],
+        lambda evaluations: [
+            {**evaluations[0], "evidence_event_indices": [1]},
+            evaluations[1],
+            evaluations[2],
+        ],
+        lambda evaluations: [
+            {**evaluations[0], "status": "observed"},
+            evaluations[1],
+            evaluations[2],
+        ],
+    ],
+)
+def test_rubric_evaluations_reject_bad_identity_status_or_bounds(
+    mutation: object,
+) -> None:
+    evaluations = mutation(_rubric_evaluations())  # type: ignore[operator]
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), _complete_event_evidence()
+    )[0]
+
+
+def test_forbidden_tool_ref_cannot_be_ignored() -> None:
+    tool_ref = "mcp__codex_apps__context7_query_docs"
+    rubric = {
+        **TEST_RUBRIC,
+        "forbidden_tool_refs": [tool_ref],
+    }
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "context7_query_docs",
+                "arguments": "AGENTS.md",
+                "status": "completed",
+            }
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("forbidden_tool_ref", tool_ref, "not_observed", "event_evidence", []),
+        *_rubric_evaluations()[1:],
+    ]
+    verdict = _verdict(rubric_evaluations=evaluations)
+    assert not _validate_verdict(verdict, events, rubric)[0]
+
+
+@pytest.mark.parametrize("omitted_kind", ["expected_owner_path", "expected_tool_ref"])
+def test_expected_owner_and_tool_constraints_cannot_be_omitted(
+    omitted_kind: str,
+) -> None:
+    tool_ref = "mcp__codex_apps__context7_query_docs"
+    rubric = {
+        **TEST_RUBRIC,
+        "expected_tool_refs": [tool_ref],
+    }
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "mcp_tool_call",
+                "server": "codex_apps",
+                "tool": "context7_query_docs",
+                "status": "completed",
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("expected_tool_ref", tool_ref, "satisfied", "event_evidence", [1]),
+        *_rubric_evaluations()[1:],
+    ]
+    evaluations = [item for item in evaluations if item["kind"] != omitted_kind]
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    )[0]
+
+
+def test_expected_owner_path_rejects_suffix_collision() -> None:
+    owner_path = "owner/AGENTS.md"
+    rubric = {**TEST_RUBRIC, "expected_owner_paths": [owner_path]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p owner/AGENTS.md.bak",
+                "status": "completed",
+                "exit_code": 0,
+            }
+        ]
+    )
+    evaluations = [
+        _evaluation(
+            "expected_owner_path",
+            owner_path,
+            "not_satisfied",
+            "event_evidence",
+            [],
+        ),
+        *_rubric_evaluations()[1:],
+    ]
+    verdict = _verdict(
+        verdict="fail",
+        rubric_evaluations=evaluations,
+        missing_requirements=[owner_path],
+    )
+    assert _validate_verdict(verdict, events, rubric) == (True, "semantic fail")
+
+
+def test_expected_owner_path_rejects_failed_read() -> None:
+    owner_path = "owner/AGENTS.md"
+    rubric = {**TEST_RUBRIC, "expected_owner_paths": [owner_path]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {owner_path}",
+                "path": owner_path,
+                "status": "failed",
+                "exit_code": 1,
+            }
+        ]
+    )
+    evaluations = [
+        _evaluation(
+            "expected_owner_path",
+            owner_path,
+            "not_satisfied",
+            "event_evidence",
+            [],
+        ),
+        *_rubric_evaluations()[1:],
+    ]
+    verdict = _verdict(
+        verdict="fail",
+        rubric_evaluations=evaluations,
+        missing_requirements=[owner_path],
+    )
+    assert _validate_verdict(verdict, events, rubric) == (True, "semantic fail")
+
+
+def test_loaded_forbidden_path_cannot_use_trial_response_basis() -> None:
+    path = ".agents/skills/typst-authoring/SKILL.md"
+    subject = f"{trials.NON_APPLICABLE_PATH_PREFIX}{path}"
+    rubric = {
+        **TEST_RUBRIC,
+        "forbidden_outcomes": [subject],
+    }
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p AGENTS.md {path}",
+                "status": "completed",
+                "exit_code": 0,
+            }
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation("forbidden_outcome", subject, "not_observed", "trial_response", []),
+    ]
+    verdict = _verdict(rubric_evaluations=evaluations)
+    assert not _validate_verdict(verdict, events, rubric)[0]
+
+
+def test_forbidden_path_rejects_suffix_collision() -> None:
+    path = ".agents/skills/typst-authoring/SKILL.md"
+    subject = f"{trials.NON_APPLICABLE_PATH_PREFIX}{path}"
+    rubric = {**TEST_RUBRIC, "forbidden_outcomes": [subject]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p AGENTS.md {path}.bak",
+                "status": "completed",
+                "exit_code": 0,
+            }
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation("forbidden_outcome", subject, "not_observed", "event_evidence", []),
+    ]
+    assert _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    ) == (True, "pass")
+
+
+def test_forbidden_path_rejects_failed_exact_read() -> None:
+    path = ".agents/skills/typst-authoring/SKILL.md"
+    subject = f"{trials.NON_APPLICABLE_PATH_PREFIX}{path}"
+    rubric = {**TEST_RUBRIC, "forbidden_outcomes": [subject]}
+    events = _complete_event_evidence(
+        [
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": "sed -n 1,80p AGENTS.md",
+                "status": "completed",
+                "exit_code": 0,
+            },
+            {
+                "event_type": "item.completed",
+                "item_type": "command_execution",
+                "command": f"sed -n 1,80p {path}",
+                "path": path,
+                "status": "failed",
+                "exit_code": 1,
+            },
+        ]
+    )
+    evaluations = [
+        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation("forbidden_outcome", subject, "not_observed", "event_evidence", []),
+    ]
+    assert _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    ) == (True, "pass")
+
+
+def test_exact_semantic_outcomes_allow_bounded_trial_response_without_indices() -> None:
+    assert _validate_verdict(
+        _verdict(),
+        _complete_event_evidence(),
+        TEST_RUBRIC,
+        trial_response=trials.bound_trial_response({"result": "semantic assessment"}),
+    ) == (True, "pass")
+
+
 def test_aggregate_rejects_clean_trial_with_failing_adjudication() -> None:
     report = {
         "returncode": 0,
@@ -522,7 +922,11 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
         passed = _run_verifier(report, checkout, trial_dir)
     assert passed["passed"] is True
 
-    failing_verdict = _verdict(verdict="fail", missing_requirements=["owner"])
+    failing_verdict = _verdict(
+        verdict="fail",
+        rubric_evaluations=_rubric_evaluations(required_status="not_satisfied"),
+        missing_requirements=["owner path"],
+    )
     with patch.object(
         trials.subprocess,
         "run",
