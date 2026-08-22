@@ -34,7 +34,10 @@ _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"
 _QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
 _QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
+_QH_BATCH_SIZE_KEY = "training_dataset_qh_batch_size"
+_QH_SEED_KEY = "training_dataset_qh_seed"
 
+QhReadinessIdentity = tuple[tuple[Any, ...], int, int]
 QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int]
 
 
@@ -90,6 +93,26 @@ def _qh_preview_identity(
     """Return the exact selection and controls that produced one preview."""
 
     return (selection_identity, stage, chain_index, batch_size, seed)
+
+
+def _qh_readiness_identity(
+    selection_identity: tuple[Any, ...],
+    *,
+    batch_size: int,
+    seed: int,
+) -> QhReadinessIdentity:
+    """Return the exact selection and loader controls that produced readiness."""
+
+    return (selection_identity, batch_size, seed)
+
+
+def _qh_readiness_for_identity(
+    readiness_state: tuple[QhReadinessIdentity, QhCorpusReadiness] | None,
+    identity: QhReadinessIdentity,
+) -> QhCorpusReadiness | None:
+    """Return readiness evidence only when its selection and loader controls match."""
+
+    return readiness_state[1] if readiness_state is not None and readiness_state[0] == identity else None
 
 
 def _qh_preview_for_identity(
@@ -416,12 +439,10 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     evidence = validated_state[1] if validated_state and validated_state[0] == identity else light
     deep_state = st.session_state.get(_DEEP_STATE_KEY)
     deep = deep_state[1] if deep_state and deep_state[0] == identity else None
-    qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
-    qh_readiness = qh_state[1] if qh_state and qh_state[0] == identity else None
+    qh_readiness: QhCorpusReadiness | None = None
     qh_preview: QhBatchPreview | None = None
 
     _render_verdict(evidence)
-    _render_summary_metrics(qh_readiness)
 
     readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
     with readiness_tab:
@@ -452,8 +473,27 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         )
         render_scientific_notation("q_h", "return_h", "horizon")
         controls = st.columns(3)
-        batch_size = int(controls[0].number_input("Q_H batch size", min_value=1, value=1, step=1))
-        seed = int(controls[1].number_input("Q_H loader seed", min_value=0, value=0, step=1))
+        batch_size = int(
+            controls[0].number_input(
+                "Q_H batch size",
+                min_value=1,
+                value=1,
+                step=1,
+                key=_QH_BATCH_SIZE_KEY,
+            )
+        )
+        seed = int(
+            controls[1].number_input(
+                "Q_H loader seed",
+                min_value=0,
+                value=0,
+                step=1,
+                key=_QH_SEED_KEY,
+            )
+        )
+        readiness_identity = _qh_readiness_identity(identity, batch_size=batch_size, seed=seed)
+        qh_state = st.session_state.get(_QH_READINESS_STATE_KEY)
+        qh_readiness = _qh_readiness_for_identity(qh_state, readiness_identity)
         if controls[2].button("Preflight Q_H corpus", type="primary", width="stretch"):
             qh_readiness = _cached_qh_readiness(
                 root_text,
@@ -462,7 +502,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 batch_size,
                 seed,
             )
-            st.session_state[_QH_READINESS_STATE_KEY] = (identity, qh_readiness)
+            st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
             st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
             qh_preview = None
         if qh_readiness is None:
@@ -545,6 +585,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     hide_index=True,
                     width="stretch",
                 )
+    _render_summary_metrics(qh_readiness)
     with details_tab:
         with st.expander("Deep target and candidate evidence"):
             if st.button("Run deep target and candidate scan", width="stretch"):

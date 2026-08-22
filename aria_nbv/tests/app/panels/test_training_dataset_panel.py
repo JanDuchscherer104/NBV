@@ -19,6 +19,8 @@ from aria_nbv.app.panels.training_dataset import (
     _download_payload,
     _qh_preview_for_identity,
     _qh_preview_identity,
+    _qh_readiness_for_identity,
+    _qh_readiness_identity,
 )
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
@@ -124,6 +126,24 @@ def test_qh_preview_reuses_evidence_when_selection_and_controls_are_unchanged() 
     evidence = SimpleNamespace(to_jsonable=lambda: {})
     payload = json.loads(_download_payload(evidence, None, qh_preview=preview))
     assert payload["q_h_batch_preview"] == {"status": "previewed"}
+
+
+def test_qh_readiness_reuses_only_exact_loader_controls() -> None:
+    """Readiness evidence is hidden when batch size or seed changes."""
+
+    selection_identity = ("/root", ("/rollout",), ("metadata",))
+    identity = _qh_readiness_identity(selection_identity, batch_size=1, seed=7)
+    readiness = object()
+
+    assert _qh_readiness_for_identity((identity, readiness), identity) is readiness
+    assert _qh_readiness_for_identity(
+        (identity, readiness),
+        _qh_readiness_identity(selection_identity, batch_size=2, seed=7),
+    ) is None
+    assert _qh_readiness_for_identity(
+        (identity, readiness),
+        _qh_readiness_identity(selection_identity, batch_size=1, seed=8),
+    ) is None
 
 
 def test_refresh_rollout_caches_clears_each_page_family(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -331,6 +351,42 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     assert "Root target opportunities" not in _metrics(app)
     assert "Unique persisted target tasks" not in _metrics(app)
     assert root.as_posix() in str(app.session_state)
+
+
+def test_qh_preflight_hides_readiness_after_batch_change_until_rerun(
+    monkeypatch: pytest.MonkeyPatch,
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    """Changing a loader control hides preflight evidence and its export."""
+
+    root, source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    rollout = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash)
+    readiness = QhCorpusReadiness(
+        selection=DatasetBundleSelection(root, (rollout,)),
+        verdict="Ready",
+        blockers=(),
+        stages=(QhStageReadiness(Stage.TRAIN, True, 1, 1, 1, ("scene-a",), 1, {}),),
+        contract={},
+        loader_settings={"batch_size": 1, "seed": 7},
+        scene_disjoint=True,
+        storage=(),
+    )
+    monkeypatch.setattr(panel, "_cached_qh_readiness", lambda *args: readiness)
+
+    app = _app(tmp_path).run()
+    app.multiselect[0].set_value([rollout.as_posix()])
+    app = app.run()
+    next(button for button in app.button if button.label == "Preflight Q_H corpus").click()
+    app = app.run()
+    assert _metrics(app)["Train scenes"] == "1"
+    assert app.session_state["training_dataset_qh_readiness"][1] is readiness
+
+    next(number_input for number_input in app.number_input if number_input.label == "Q_H batch size").set_value(2)
+    app = app.run()
+    assert _metrics(app)["Train scenes"] == "Preflight required"
+    assert "Q_H corpus: Ready" not in {message.value for message in app.success}
+    assert app.session_state["training_dataset_qh_readiness"][1] is readiness
 
 
 def test_blocked_store_remains_selected_but_is_excluded_from_totals(
