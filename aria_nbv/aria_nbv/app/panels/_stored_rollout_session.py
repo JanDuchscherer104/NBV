@@ -495,18 +495,18 @@ class StoredRolloutSession:
     def topology(
         self, vin_store_dirs: tuple[str, ...], paths: PathConfig, selected_source_row_id: int | None = None
     ) -> Any:
+        identity = _store_projection_identity(self.canonical_path.as_posix())
         return _cached_topology_cached(
             self.canonical_path.as_posix(),
             vin_store_dirs,
             paths,
             selected_source_row_id,
-            store_identity=self.store_identity,
+            store_identity=identity,
         )
 
     def evidence_bundle(self, evidence_status: str) -> bytes:
-        return _cached_evidence_bundle_cached(
-            self.canonical_path.as_posix(), evidence_status, store_identity=self.store_identity
-        )
+        identity = _store_projection_identity(self.canonical_path.as_posix())
+        return _cached_evidence_bundle_cached(self.canonical_path.as_posix(), evidence_status, store_identity=identity)
 
 
 def open_stored_rollout_session(
@@ -514,7 +514,7 @@ def open_stored_rollout_session(
 ) -> StoredRolloutSession:
     """Open one fixed-identity selected-store session without deep reads."""
 
-    canonical_path = Path(path).absolute()
+    canonical_path = Path(path).expanduser().resolve()
     identity = _store_projection_identity(canonical_path.as_posix())
     reader, validation, manifest_payload = _cached_store_bundle_cached(
         canonical_path.as_posix(), store_identity=identity

@@ -425,6 +425,104 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert len(failure_calls) == 2
 
 
+def test_stored_rollout_session_topology_and_evidence_recompute_after_mid_handle_swap(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Explicit report/topology requests refresh identity after a store swap."""
+
+    first = tmp_path / "topology-session-first.zarr"
+    second = tmp_path / "topology-session-second.zarr"
+    first.mkdir()
+    second.mkdir()
+    (first / "generation.txt").write_text("first", encoding="utf-8")
+    (second / "generation.txt").write_text("second", encoding="utf-8")
+    selected = tmp_path / "topology-session-selected.zarr"
+    selected.symlink_to(first, target_is_directory=True)
+
+    topology_calls: list[str] = []
+    bundle_calls: list[str] = []
+
+    def topology(
+        path: str,
+        _vin_store_dirs: tuple[str, ...],
+        _paths: PathConfig,
+        _selected_source_row_id: int | None = None,
+        *,
+        store_identity: str,
+    ) -> dict[str, str]:
+        topology_calls.append(store_identity)
+        return {"identity": store_identity, "generation": Path(path, "generation.txt").read_text()}
+
+    def evidence(path: str, _status: str, *, store_identity: str) -> bytes:
+        bundle_calls.append(store_identity)
+        return f"{store_identity}:{Path(path, 'generation.txt').read_text()}".encode()
+
+    monkeypatch.setattr(session, "_cached_topology_cached", topology)
+    monkeypatch.setattr(session, "_cached_evidence_bundle_cached", evidence)
+    handle = session.StoredRolloutSession(
+        selected,
+        session._store_projection_identity(selected),
+        object(),
+        object(),
+        {},
+        None,
+    )
+    paths = PathConfig(root=tmp_path)
+
+    first_topology = handle.topology((), paths)
+    first_bundle = handle.evidence_bundle("pilot")
+    first_identity = handle.store_identity
+
+    replacement = tmp_path / "topology-session-replacement-link.zarr"
+    replacement.symlink_to(second, target_is_directory=True)
+    replacement.replace(selected)
+
+    second_topology = handle.topology((), paths)
+    second_bundle = handle.evidence_bundle("pilot")
+    second_identity = topology_calls[-1]
+
+    assert first_topology == {"identity": first_identity, "generation": "first"}
+    assert first_bundle == f"{first_identity}:first".encode()
+    assert second_identity != first_identity
+    assert second_topology == {"identity": second_identity, "generation": "second"}
+    assert second_bundle == f"{second_identity}:second".encode()
+    assert topology_calls == [first_identity, second_identity]
+    assert bundle_calls == [first_identity, second_identity]
+
+
+def test_open_session_symlink_aliases_share_canonical_identity_and_cache_owner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Different aliases to one store open through one canonical cache key."""
+
+    target = tmp_path / "canonical-store.zarr"
+    target.mkdir()
+    (target / "generation.txt").write_text("canonical", encoding="utf-8")
+    alias_a = tmp_path / "alias-a.zarr"
+    alias_b = tmp_path / "alias-b.zarr"
+    alias_a.symlink_to(target, target_is_directory=True)
+    alias_b.symlink_to(target, target_is_directory=True)
+    bundle_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        session,
+        "_cached_store_bundle_cached",
+        lambda path, *, store_identity: (
+            bundle_calls.append((path, store_identity)) or (object(), object(), {"generation": "canonical"})
+        ),
+    )
+
+    first = session.open_stored_rollout_session(alias_a)
+    second = session.open_stored_rollout_session(alias_b)
+
+    assert first.canonical_path == second.canonical_path == target.resolve()
+    assert first.store_identity == second.store_identity
+    assert bundle_calls == [
+        (target.resolve().as_posix(), first.store_identity),
+        (target.resolve().as_posix(), first.store_identity),
+    ]
+
+
 def test_stored_rollout_session_open_computes_identity_once_and_binds_core_key(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
