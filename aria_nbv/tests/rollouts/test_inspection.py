@@ -198,6 +198,9 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert "motion_step_length_m" in first
     assert first["coordinate_frame"] == "root-centered ARIA world (RIGHT_HAND_Z_UP)"
     assert first["units"] == "m"
+    assert first["target_protocol"] == "v0_gt_input"
+    assert first["target_evidence_role"] == "oracle/evaluation"
+    assert "decision_relative_x_m" in first
 
     target_rows = target_audit_rows(reader)
     assert len(target_rows) == 1
@@ -549,6 +552,25 @@ def test_candidate_direction_evidence_preserves_cohorts_and_all_actor_valid_popu
     )
 
 
+def test_candidate_direction_evidence_retains_zero_actor_valid_states() -> None:
+    """A factual state with no valid actions remains in actor-valid denominators."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    rows = [{**_direction_fixture_rows()[0], "actor_action": False, "candidate_row_id": index} for index in range(3)]
+    density = candidate_direction_evidence(rows)["density_rows"]
+    actor_state = next(
+        row for row in density if row["aggregation_level"] == "state" and row["population"] == "actor_valid"
+    )
+    actor_macro = next(
+        row for row in density if row["aggregation_level"] == "cohort_macro" and row["population"] == "actor_valid"
+    )
+    assert actor_state["state_count"] == 1
+    assert actor_state["candidate_total_count"] == 0
+    assert actor_macro["state_count"] == 1
+    assert actor_macro["defined_state_count"] == 0
+
+
 def test_candidate_direction_evidence_reports_numeric_cap_and_nearest_neighbor_metrics() -> None:
     """Angular support rows contain deterministic discrepancy and separation values."""
 
@@ -564,6 +586,8 @@ def test_candidate_direction_evidence_reports_numeric_cap_and_nearest_neighbor_m
     assert any("discrepancy" in row or "value" in row for row in cap)
     assert any("nearest" in str(row).lower() or "separation" in str(row).lower() for row in angular)
     assert any("covering" in str(row).lower() for row in angular)
+    assert all(row.get("metric_name") == "distance_from_isotropy" for row in cap)
+    assert all(row["protocol"]["null_model"] == "uniform S2" for row in cap)
 
 
 def test_candidate_spatial_support_reports_3d_distance_shell_and_macro_levels() -> None:
