@@ -23,6 +23,7 @@ FULL_PATHS = {
 SCAFFOLD_PATHS = {
     "AGENTS.md",
     "scripts/agents_db.py",
+    "scripts/agent_status.py",
     "scripts/check_graphify_freshness.py",
     "scripts/graphify_worktree_seed.py",
     "scripts/scaffold_audit.py",
@@ -40,6 +41,7 @@ SCAFFOLD_PATHS = {
     "scripts/tests/test_debrief_index.py",
     "scripts/tests/test_validate_agent_memory_threads.py",
     "scripts/tests/test_routing_trials.py",
+    "scripts/tests/test_agent_status.py",
     "scripts/tests/test_graphify_freshness.py",
     "scripts/tests/test_graphify_upstream_skill.py",
     "scripts/tests/test_graphify_worktree_seed.py",

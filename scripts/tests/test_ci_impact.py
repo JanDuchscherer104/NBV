@@ -30,6 +30,14 @@ class SelectionTests(unittest.TestCase):
             {"scaffold"},
         )
 
+    def test_g002_agent_status_inputs_select_scaffold_validation(self) -> None:
+        self.assertEqual(
+            select_families(
+                ["scripts/agent_status.py", "scripts/tests/test_agent_status.py"]
+            ),
+            {"scaffold"},
+        )
+
     def test_workflow_keeps_stable_unfiltered_ci_identity(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         pull_request_block = workflow.split("  pull_request:\n", 1)[1].split(
@@ -130,6 +138,10 @@ class SelectionTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertIn(f'"{path}"', workflow)
+        self.assertIn('"scripts/agent_status.py"', workflow)
+        self.assertIn('"scripts/tests/test_agent_status.py"', workflow)
+        self.assertIn("python3 scripts/tests/test_agent_status.py", workflow)
+        self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
         self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
