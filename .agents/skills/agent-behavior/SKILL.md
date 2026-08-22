@@ -1,6 +1,6 @@
 ---
 name: agent-behavior
-description: Use before non-trivial ARIA-NBV work to locate the authoritative owner, scope one traceable lane, preserve concurrent work, and verify the result.
+description: Use before non-trivial ARIA-NBV work to locate the authoritative owner, consult reviewed intent when a material choice is unsettled, scope one traceable lane, preserve concurrent work, and verify the result.
 ---
 
 # Agent Behavior
@@ -16,6 +16,11 @@ explicit.
    implementation in sync. When a change affects an implemented scientific or
    behavioral claim, update and verify both owning surfaces together; do not let
    thesis prose describe behavior unsupported by current code and tests.
+
+- **Lowest shared owner.** Place behavior used by demonstrated consumers at
+  their lowest shared domain owner. Use Graphify for non-obvious consumer
+  discovery and exact sources for proof; do not create a generic utility owner
+  without demonstrated variation.
 
 ## Owner-first loop
 
@@ -43,6 +48,10 @@ explicit.
 6. **Persist once.** Route each durable delta to its smallest authoritative
    owner and use stable owner-defined pointers elsewhere. Do not introduce a
    second source of truth.
+
+When a material choice is not settled by current exact owners, or scaffold/tool
+policy is changing, read [`references/intent-and-follow-up.md`](references/intent-and-follow-up.md)
+before choosing. Do not load reviewed intent for a settled exact-owner task.
 
 ## Conditional branches
 

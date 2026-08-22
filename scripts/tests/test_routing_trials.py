@@ -122,6 +122,21 @@ def test_prompt_and_rubric_ids_match_without_prompt_leakage() -> None:
         assert "mcp__" not in task
 
 
+def test_pr1_routing_trials_are_frozen_and_non_proposal() -> None:
+    ids = {
+        "reviewed-intent-underdetermined-choice",
+        "reviewed-intent-known-owner-near-miss",
+        "thesis-code-shared-contract",
+        "helper-lowest-shared-domain-owner",
+    }
+    assert ids <= set(trials.load_prompts())
+    rubric = trials.load_rubric()
+    assert ids <= set(rubric)
+    for trial_id in ids:
+        serialized = json.dumps(rubric[trial_id], sort_keys=True)
+        assert "proposal routing" in serialized.lower()
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,

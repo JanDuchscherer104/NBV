@@ -725,6 +725,8 @@ def test_capture_and_routing_contracts() -> None:
         "Surface conflicting interpretations, terminology, and",
         "current owner's smallest interface",
         "demonstrated variation",
+        "Lowest shared owner.",
+        "consult reviewed intent when a material choice is unsettled",
         "remove only debris created by this change",
         "report pre-existing cleanup separately",
         "second source of truth",
@@ -743,9 +745,19 @@ def test_capture_and_routing_contracts() -> None:
         "references/durable-capture.md",
         "references/execution-branches.md",
         "references/external-actions.md",
+        "references/intent-and-follow-up.md",
     }
     for reference_path in reference_paths:
         assert (agent_behavior_path.parent / reference_path).is_file()
+
+    intent_reference = _read(
+        agent_behavior_path.parent / "references" / "intent-and-follow-up.md"
+    )
+    assert "material choice is not settled" in intent_reference
+    assert ".agents/references/human_owner_intent.md" in intent_reference
+    assert "Open Choices" in intent_reference
+    assert "durable-capture.md" in intent_reference
+    assert "agents-db" not in intent_reference.lower()
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
@@ -808,6 +820,26 @@ def test_capture_and_routing_contracts() -> None:
     assert "Deliberate user-authored `<...>` prose" in root_guidance
     assert "including a read-only capture request" in root_guidance
     assert "markup tags" in agent_behavior
+
+
+def test_pr1_reviewed_intent_fixture_contracts() -> None:
+    routing = json.loads(
+        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
+    )
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    expected = {
+        "reviewed-intent-underdetermined-choice",
+        "reviewed-intent-known-owner-near-miss",
+        "thesis-code-shared-contract",
+        "helper-lowest-shared-domain-owner",
+    }
+    assert expected <= fixtures.keys()
+    for fixture_id in expected:
+        fixture = fixtures[fixture_id]
+        assert fixture["expected_owner_paths"]
+        assert fixture["required_outcomes"]
+        assert fixture["forbidden_outcomes"]
+        assert any("Open Choices" in value for value in fixture["forbidden_outcomes"])
 
 
 def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
