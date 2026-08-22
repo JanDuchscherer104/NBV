@@ -120,16 +120,12 @@ def _validate_verdict(
         rubric=rubric,
         event_evidence=event_evidence,
         trial_response=(
-            trial_response
-            if trial_response is not None
-            else trials.bound_trial_response({"outcome": "bounded"})
+            trial_response if trial_response is not None else trials.bound_trial_response({"outcome": "bounded"})
         ),
     )
 
 
-def _run_verifier(
-    report: dict[str, object], checkout: Path, trial_dir: Path
-) -> dict[str, Any]:
+def _run_verifier(report: dict[str, object], checkout: Path, trial_dir: Path) -> dict[str, Any]:
     return trials.run_verifier(
         report=report,
         rubric={"trial": TEST_RUBRIC},
@@ -184,10 +180,7 @@ def test_thesis_authoring_fixtures_are_exclusive_and_bound_unloaded_paths() -> N
         assert f"exactly one exclusive leading owner: {owner}" in required
         assert any(" leads " in outcome for outcome in forbidden)
         assert any("non-applicable path is loaded: " in outcome for outcome in forbidden)
-        assert all(
-            key not in fixture
-            for key in ("exclusive_leading_owner", "required_unloaded_paths")
-        )
+        assert all(key not in fixture for key in ("exclusive_leading_owner", "required_unloaded_paths"))
 
 
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
@@ -292,9 +285,7 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
         cwd=repo,
         check=True,
     )
-    subprocess.run(
-        ["git", "config", "user.name", "Routing Test"], cwd=repo, check=True
-    )
+    subprocess.run(["git", "config", "user.name", "Routing Test"], cwd=repo, check=True)
     prompts = repo / trials.PROMPTS_RELATIVE
     rubric = repo / trials.RUBRIC_RELATIVE
     prompts.parent.mkdir(parents=True)
@@ -303,14 +294,22 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "rubric"], cwd=repo, check=True)
     rubric_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
     (repo / "candidate.py").write_text("VALUE = 1\n", encoding="utf-8")
     subprocess.run(["git", "add", "candidate.py"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "candidate"], cwd=repo, check=True)
     matching_tested_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     fixture_bytes = trials.attest_evaluator_fixtures(
         tested_commit=matching_tested_commit,
@@ -323,7 +322,11 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     subprocess.run(["git", "add", str(trials.PROMPTS_RELATIVE)], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "fixture drift"], cwd=repo, check=True)
     tested_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
     with pytest.raises(ValueError, match="differs from rubric commit"):
@@ -479,9 +482,7 @@ def test_event_evidence_retains_started_execution_and_ignores_chatter(
     assert forbidden_path in evidence["items"][0]["arguments"]
     assert evidence["items"][1]["path"] == forbidden_path
     assert trials.validate_event_evidence(evidence)[0] is True
-    assert trials._matching_event_indices(
-        evidence["items"], kind="expected_owner_path", subject=forbidden_path
-    ) == []
+    assert trials._matching_event_indices(evidence["items"], kind="expected_owner_path", subject=forbidden_path) == []
 
 
 def test_empty_started_web_search_placeholder_is_ignorable(tmp_path: Path) -> None:
@@ -508,9 +509,7 @@ def test_empty_started_web_search_placeholder_is_ignorable(tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize("item_type", ["function_call", "tool_call"])
-def test_identityless_started_executable_call_remains_invalid(
-    tmp_path: Path, item_type: str
-) -> None:
+def test_identityless_started_executable_call_remains_invalid(tmp_path: Path, item_type: str) -> None:
     events = tmp_path / f"{item_type}.jsonl"
     events.write_text(
         json.dumps(
@@ -788,9 +787,7 @@ def test_pass_rejects_incomplete_raw_evidence(mutation: object, reason: str) -> 
     ],
 )
 def test_verdict_rejects_invalid_event_references(reference: object) -> None:
-    assert not _validate_verdict(
-        _verdict(evidence=[reference]), _complete_event_evidence()
-    )[0]
+    assert not _validate_verdict(_verdict(evidence=[reference]), _complete_event_evidence())[0]
 
 
 def test_verdict_accepts_repeated_event_index_for_distinct_grounded_claims() -> None:
@@ -798,9 +795,7 @@ def test_verdict_accepts_repeated_event_index_for_distinct_grounded_claims() -> 
         _event_reference(claim="The trial read the owner guidance."),
         _event_reference(claim="The same command established the owner path."),
     ]
-    assert _validate_verdict(
-        _verdict(evidence=evidence), _complete_event_evidence()
-    ) == (True, "pass")
+    assert _validate_verdict(_verdict(evidence=evidence), _complete_event_evidence()) == (True, "pass")
 
 
 def test_verdict_validation_rejects_malformed_payload() -> None:
@@ -826,8 +821,7 @@ def test_rubric_evaluations_fail_closed_for_omitted_and_observed_constraints() -
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda evaluations: evaluations[:1]
-        + [{**evaluations[1], "subject": "other path"}, evaluations[2]],
+        lambda evaluations: evaluations[:1] + [{**evaluations[1], "subject": "other path"}, evaluations[2]],
         lambda evaluations: [evaluations[0], evaluations[0], evaluations[2]],
         lambda evaluations: [
             {**evaluations[0], "evidence_event_indices": []},
@@ -855,9 +849,7 @@ def test_rubric_evaluations_reject_bad_identity_status_or_bounds(
     mutation: object,
 ) -> None:
     evaluations = mutation(_rubric_evaluations())  # type: ignore[operator]
-    assert not _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), _complete_event_evidence()
-    )[0]
+    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), _complete_event_evidence())[0]
 
 
 def test_forbidden_tool_ref_cannot_be_ignored() -> None:
@@ -921,9 +913,7 @@ def test_tool_constraint_accepts_representative_matching_citation() -> None:
         *_rubric_evaluations()[1:],
     ]
 
-    assert _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), events, rubric
-    ) == (True, "pass")
+    assert _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric) == (True, "pass")
 
 
 @pytest.mark.parametrize("indices", [[], [0, 2]])
@@ -956,9 +946,7 @@ def test_tool_constraint_rejects_empty_or_unrelated_observed_citation(
         *_rubric_evaluations()[1:],
     ]
 
-    assert not _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), events, rubric
-    )[0]
+    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric)[0]
 
 
 def test_absent_tool_constraint_requires_empty_citation() -> None:
@@ -975,9 +963,10 @@ def test_absent_tool_constraint_requires_empty_citation() -> None:
         missing_requirements=[tool_ref],
     )
 
-    assert _validate_verdict(
-        verdict, _complete_event_evidence(), rubric
-    ) == (True, "semantic fail")
+    assert _validate_verdict(verdict, _complete_event_evidence(), rubric) == (
+        True,
+        "semantic fail",
+    )
 
 
 def test_started_path_bearing_forbidden_tool_cannot_be_adjudicated_absent() -> None:
@@ -1009,9 +998,7 @@ def test_started_path_bearing_forbidden_tool_cannot_be_adjudicated_absent() -> N
         *_rubric_evaluations()[1:],
     ]
 
-    assert not _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), events, rubric
-    )[0]
+    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric)[0]
 
 
 @pytest.mark.parametrize("omitted_kind", ["expected_owner_path", "expected_tool_ref"])
@@ -1047,9 +1034,7 @@ def test_expected_owner_and_tool_constraints_cannot_be_omitted(
         *_rubric_evaluations()[1:],
     ]
     evaluations = [item for item in evaluations if item["kind"] != omitted_kind]
-    assert not _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), events, rubric
-    )[0]
+    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric)[0]
 
 
 def test_expected_owner_path_rejects_suffix_collision() -> None:
@@ -1120,7 +1105,7 @@ def test_expected_owner_path_rejects_failed_read() -> None:
 def test_nested_shell_success_observes_exact_path() -> None:
     owner_path = "owner/AGENTS.md"
     event = {
-        "command": f'/usr/bin/zsh -lc "sed -n \'1,80p\' {owner_path}"',
+        "command": f"/usr/bin/zsh -lc \"sed -n '1,80p' {owner_path}\"",
         "status": "completed",
         "exit_code": 0,
     }
@@ -1131,7 +1116,7 @@ def test_nested_shell_success_observes_exact_path() -> None:
 def test_nested_shell_rejects_path_suffix_collision() -> None:
     owner_path = "owner/AGENTS.md"
     event = {
-        "command": f'/bin/bash -lc "sed -n \'1,80p\' {owner_path}.bak"',
+        "command": f"/bin/bash -lc \"sed -n '1,80p' {owner_path}.bak\"",
         "status": "completed",
         "exit_code": 0,
     }
@@ -1171,9 +1156,7 @@ def test_path_evidence_accepts_started_and_completed_exact_mentions() -> None:
         ]
     )
     evaluations = [
-        _evaluation(
-            "expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]
-        ),
+        _evaluation("expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]),
         *_rubric_evaluations()[1:],
     ]
 
@@ -1215,9 +1198,7 @@ def test_path_evidence_accepts_omitted_duplicate_success() -> None:
         ]
     )
     evaluations = [
-        _evaluation(
-            "expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]
-        ),
+        _evaluation("expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]),
         *_rubric_evaluations()[1:],
     ]
 
@@ -1262,9 +1243,7 @@ def test_path_evidence_rejects_unrelated_extra_or_omitted_success(
         ]
     )
     evaluations = [
-        _evaluation(
-            "expected_owner_path", owner_path, "satisfied", "event_evidence", indices
-        ),
+        _evaluation("expected_owner_path", owner_path, "satisfied", "event_evidence", indices),
         *_rubric_evaluations()[1:],
     ]
 
@@ -1370,9 +1349,7 @@ def test_forbidden_path_rejects_suffix_collision() -> None:
         _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
         _evaluation("forbidden_outcome", subject, "not_observed", "event_evidence", []),
     ]
-    assert _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), events, rubric
-    ) == (True, "pass")
+    assert _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric) == (True, "pass")
 
 
 def test_forbidden_path_rejects_failed_exact_read() -> None:
@@ -1403,9 +1380,7 @@ def test_forbidden_path_rejects_failed_exact_read() -> None:
         _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
         _evaluation("forbidden_outcome", subject, "not_observed", "event_evidence", []),
     ]
-    assert _validate_verdict(
-        _verdict(rubric_evaluations=evaluations), events, rubric
-    ) == (True, "pass")
+    assert _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric) == (True, "pass")
 
 
 def test_exact_semantic_outcomes_allow_bounded_trial_response_without_indices() -> None:
@@ -1436,13 +1411,13 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     trial_dir.mkdir()
 
     def write_verdict(verdict: dict[str, object]) -> object:
-        (trial_dir / "verifier-report.json").write_text(
-            json.dumps(verdict), encoding="utf-8"
-        )
+        (trial_dir / "verifier-report.json").write_text(json.dumps(verdict), encoding="utf-8")
         return type("Result", (), {"returncode": 0})()
 
     with patch.object(
-        trials.subprocess, "run", side_effect=lambda *args, **kwargs: write_verdict(_verdict())
+        trials.subprocess,
+        "run",
+        side_effect=lambda *args, **kwargs: write_verdict(_verdict()),
     ):
         passed = _run_verifier(report, checkout, trial_dir)
     assert passed["passed"] is True
@@ -1462,7 +1437,9 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     assert failed["reason"] == "semantic fail"
 
 
-def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(tmp_path: Path) -> None:
+def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
+    tmp_path: Path,
+) -> None:
     report = _trial_report()
     checkout = tmp_path / "checkout"
     trial_dir = tmp_path / "trial"
@@ -1479,9 +1456,7 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(tmp_path: Path)
     assert "unreadable" in invalid_utf8["reason"]
 
     def write_oversized(*args: object, **kwargs: object) -> object:
-        (trial_dir / "verifier-report.json").write_bytes(
-            b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1)
-        )
+        (trial_dir / "verifier-report.json").write_bytes(b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1))
         return type("Result", (), {"returncode": 0})()
 
     with patch.object(trials.subprocess, "run", side_effect=write_oversized):

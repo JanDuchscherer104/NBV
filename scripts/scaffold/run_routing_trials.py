@@ -20,9 +20,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_RELATIVE = Path("scripts/scaffold/fixtures/routing_prompts.jsonl")
 RUBRIC_RELATIVE = Path("scripts/scaffold/fixtures/routing.json")
-REPORT_SCHEMA_RELATIVE = Path(
-    "scripts/scaffold/fixtures/routing_trial_report.schema.json"
-)
+REPORT_SCHEMA_RELATIVE = Path("scripts/scaffold/fixtures/routing_trial_report.schema.json")
 VERIFIER_SCHEMA_RELATIVE = Path("scripts/scaffold/fixtures/routing_verdict.schema.json")
 PROMPTS_PATH = ROOT / PROMPTS_RELATIVE
 RUBRIC_PATH = ROOT / RUBRIC_RELATIVE
@@ -181,17 +179,14 @@ def read_git_blob(commit: str, path: Path, *, root: Path = ROOT) -> bytes:
     return result.stdout
 
 
-def attest_evaluator_fixtures(
-    *, tested_commit: str, rubric_commit: str, root: Path = ROOT
-) -> dict[Path, bytes]:
+def attest_evaluator_fixtures(*, tested_commit: str, rubric_commit: str, root: Path = ROOT) -> dict[Path, bytes]:
     fixtures: dict[Path, bytes] = {}
     for path in EVALUATOR_FIXTURE_PATHS:
         rubric_bytes = read_git_blob(rubric_commit, path, root=root)
         tested_bytes = read_git_blob(tested_commit, path, root=root)
         if tested_bytes != rubric_bytes:
             raise ValueError(
-                f"tested commit {tested_commit} differs from rubric commit "
-                f"{rubric_commit} at {path.as_posix()}"
+                f"tested commit {tested_commit} differs from rubric commit {rubric_commit} at {path.as_posix()}"
             )
         fixtures[path] = rubric_bytes
     return fixtures
@@ -229,9 +224,7 @@ def _build_codex_command(
     return command
 
 
-def build_verifier_prompt(
-    *, rubric: dict[str, Any], report: dict[str, Any], rubric_commit: str
-) -> str:
+def build_verifier_prompt(*, rubric: dict[str, Any], report: dict[str, Any], rubric_commit: str) -> str:
     runtime = report["runtime"]
     evidence = {
         "trial_id": report["trial_id"],
@@ -312,13 +305,15 @@ def _rubric_constraints(
         return [], "rubric is malformed"
     constraints: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    required_fields = {"expected_owner_paths", "required_outcomes", "forbidden_outcomes"}
+    required_fields = {
+        "expected_owner_paths",
+        "required_outcomes",
+        "forbidden_outcomes",
+    }
     for field, kind in RUBRIC_CONSTRAINT_FIELDS:
         values = rubric.get(field, [] if field not in required_fields else None)
         if not isinstance(values, list) or not all(
-            isinstance(subject, str)
-            and bool(subject)
-            and len(subject) <= EVENT_EVIDENCE_MAX_FIELD_CHARS
+            isinstance(subject, str) and bool(subject) and len(subject) <= EVENT_EVIDENCE_MAX_FIELD_CHARS
             for subject in values
         ):
             return [], f"rubric {field} is malformed"
@@ -338,11 +333,7 @@ def _event_strings(event: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _event_tool_refs(event: dict[str, Any]) -> set[str]:
-    refs = {
-        value
-        for field in ("tool", "tool_name", "name")
-        if isinstance((value := event.get(field)), str)
-    }
+    refs = {value for field in ("tool", "tool_name", "name") if isinstance((value := event.get(field)), str)}
     server = event.get("server")
     tool = event.get("tool") or event.get("tool_name") or event.get("name")
     if isinstance(server, str) and isinstance(tool, str):
@@ -386,26 +377,16 @@ def _is_successful_path_observation(event: dict[str, Any], subject: str) -> bool
     if event.get("status") != "completed":
         return False
     exit_code = event.get("exit_code")
-    if exit_code is not None and (
-        isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0
-    ):
+    if exit_code is not None and (isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0):
         return False
     return _is_exact_path_mention(event, subject)
 
 
-def _matching_path_mention_indices(
-    events: list[dict[str, Any]], subject: str
-) -> list[int]:
-    return [
-        index
-        for index, event in enumerate(events)
-        if _is_exact_path_mention(event, subject)
-    ]
+def _matching_path_mention_indices(events: list[dict[str, Any]], subject: str) -> list[int]:
+    return [index for index, event in enumerate(events) if _is_exact_path_mention(event, subject)]
 
 
-def _matching_event_indices(
-    events: list[dict[str, Any]], *, kind: str, subject: str
-) -> list[int]:
+def _matching_event_indices(events: list[dict[str, Any]], *, kind: str, subject: str) -> list[int]:
     matches: list[int] = []
     for index, event in enumerate(events):
         if kind in {"expected_owner_path", "forbidden_path"}:
@@ -413,9 +394,7 @@ def _matching_event_indices(
         elif kind in {"expected_tool_ref", "forbidden_tool_ref"}:
             matched = subject in _event_tool_refs(event)
         elif kind == "stable_skill_id":
-            matched = any(
-                _contains_stable_id(value, subject) for value in _event_strings(event)
-            )
+            matched = any(_contains_stable_id(value, subject) for value in _event_strings(event))
         else:
             matched = any(subject in value for value in _event_strings(event))
         if matched:
@@ -463,18 +442,13 @@ def validate_verdict(
     if constraint_error is not None:
         return False, constraint_error
     rubric_evaluations = payload["rubric_evaluations"]
-    if not isinstance(rubric_evaluations, list) or len(rubric_evaluations) != len(
-        constraints
-    ):
+    if not isinstance(rubric_evaluations, list) or len(rubric_evaluations) != len(constraints):
         return False, "rubric evaluations must match the rubric exactly"
     seen_evaluations: set[tuple[str, str]] = set()
     expected_constraint_set = set(constraints)
     events = event_evidence["items"]
     allowed_statuses = {
-        **{
-            kind: {"satisfied", "not_satisfied"}
-            for kind in POSITIVE_CONSTRAINT_KINDS
-        },
+        **{kind: {"satisfied", "not_satisfied"} for kind in POSITIVE_CONSTRAINT_KINDS},
         **{kind: {"not_observed", "observed"} for kind in NEGATIVE_CONSTRAINT_KINDS},
     }
     for evaluation in rubric_evaluations:
@@ -491,11 +465,7 @@ def validate_verdict(
         subject = evaluation["subject"]
         if not isinstance(kind, str) or kind not in allowed_statuses:
             return False, "rubric evaluation kind is invalid"
-        if (
-            not isinstance(subject, str)
-            or not subject
-            or len(subject) > EVENT_EVIDENCE_MAX_FIELD_CHARS
-        ):
+        if not isinstance(subject, str) or not subject or len(subject) > EVENT_EVIDENCE_MAX_FIELD_CHARS:
             return False, "rubric evaluation subject is invalid"
         identity = (kind, subject)
         if identity not in expected_constraint_set:
@@ -524,8 +494,7 @@ def validate_verdict(
 
         canonical_forbidden_path = (
             subject.removeprefix(NON_APPLICABLE_PATH_PREFIX)
-            if kind == "forbidden_outcome"
-            and subject.startswith(NON_APPLICABLE_PATH_PREFIX)
+            if kind == "forbidden_outcome" and subject.startswith(NON_APPLICABLE_PATH_PREFIX)
             else None
         )
         deterministic_kind = kind
@@ -556,9 +525,7 @@ def validate_verdict(
                 else "not_observed"
             )
             if path_constraint and matches:
-                mentions = _matching_path_mention_indices(
-                    events, deterministic_subject
-                )
+                mentions = _matching_path_mention_indices(events, deterministic_subject)
                 indices_valid = (
                     bool(indices)
                     and any(index in matches for index in indices)
@@ -567,9 +534,7 @@ def validate_verdict(
             elif path_constraint:
                 indices_valid = not indices
             elif matches:
-                indices_valid = bool(indices) and all(
-                    index in matches for index in indices
-                )
+                indices_valid = bool(indices) and all(index in matches for index in indices)
             else:
                 indices_valid = not indices
             if status != expected_status or not indices_valid:
@@ -579,27 +544,32 @@ def validate_verdict(
                 matches = _matching_event_indices(events, kind=kind, subject=subject)
                 expected_status = "satisfied" if matches else "not_satisfied"
                 if status != expected_status or indices != matches:
-                    return False, "stable skill evaluation does not match event evidence"
+                    return (
+                        False,
+                        "stable skill evaluation does not match event evidence",
+                    )
             else:
                 if indices:
                     return False, "trial-response evaluations cannot cite event indices"
                 present = _contains_stable_id(trial_response["content"], subject)
                 expected_status = "satisfied" if present else "not_satisfied"
                 if status != expected_status:
-                    return False, "stable skill evaluation does not match trial response"
+                    return (
+                        False,
+                        "stable skill evaluation does not match trial response",
+                    )
         elif basis == "event_evidence":
             if not indices:
-                return False, "semantic event-evidence evaluations require event indices"
+                return (
+                    False,
+                    "semantic event-evidence evaluations require event indices",
+                )
         elif indices:
             return False, "trial-response evaluations cannot cite event indices"
     if seen_evaluations != expected_constraint_set:
         return False, "rubric evaluations omit or add constraints"
     verdict_evidence = payload["evidence"]
-    if (
-        not isinstance(verdict_evidence, list)
-        or not verdict_evidence
-        or len(verdict_evidence) > VERDICT_MAX_ITEMS
-    ):
+    if not isinstance(verdict_evidence, list) or not verdict_evidence or len(verdict_evidence) > VERDICT_MAX_ITEMS:
         return False, "verdict evidence must be a non-empty list"
     required_reference_fields = {"event_index", "event_type", "item_type", "claim"}
     for reference in verdict_evidence:
@@ -624,14 +594,12 @@ def validate_verdict(
     missing_requirements = [
         evaluation["subject"]
         for evaluation in rubric_evaluations
-        if evaluation["kind"] in POSITIVE_CONSTRAINT_KINDS
-        and evaluation["status"] == "not_satisfied"
+        if evaluation["kind"] in POSITIVE_CONSTRAINT_KINDS and evaluation["status"] == "not_satisfied"
     ]
     forbidden_observations = [
         evaluation["subject"]
         for evaluation in rubric_evaluations
-        if evaluation["kind"] in NEGATIVE_CONSTRAINT_KINDS
-        and evaluation["status"] == "observed"
+        if evaluation["kind"] in NEGATIVE_CONSTRAINT_KINDS and evaluation["status"] == "observed"
     ]
     expected_summaries = {
         "missing_requirements": missing_requirements,
@@ -642,17 +610,12 @@ def validate_verdict(
         if (
             not isinstance(values, list)
             or len(values) > VERDICT_MAX_ITEMS
-            or not all(
-                isinstance(item, str) and len(item) <= EVENT_EVIDENCE_MAX_FIELD_CHARS
-                for item in values
-            )
+            or not all(isinstance(item, str) and len(item) <= EVENT_EVIDENCE_MAX_FIELD_CHARS for item in values)
         ):
             return False, f"{field} must be a list of strings"
         if sorted(values) != sorted(expected_summaries[field]):
             return False, f"{field} does not match rubric evaluations"
-    if payload["verdict"] == "pass" and (
-        missing_requirements or forbidden_observations
-    ):
+    if payload["verdict"] == "pass" and (missing_requirements or forbidden_observations):
         return False, "pass verdict contains failed rubric evaluations"
     return True, "pass" if payload["verdict"] == "pass" else "semantic fail"
 
@@ -680,9 +643,7 @@ def run_verifier(
     if report.get("rubric_commit") != rubric_commit:
         failure_reason = "trial report rubric commit mismatch"
     else:
-        evidence_valid, evidence_reason = validate_event_evidence(
-            report.get("event_evidence")
-        )
+        evidence_valid, evidence_reason = validate_event_evidence(report.get("event_evidence"))
         if not evidence_valid:
             failure_reason = evidence_reason
     if failure_reason is not None:
@@ -775,7 +736,9 @@ def trial_passed(report: dict[str, Any]) -> bool:
     )
 
 
-def _truncate_evidence_field(value: Any) -> tuple[str | int | float | bool | None, bool]:
+def _truncate_evidence_field(
+    value: Any,
+) -> tuple[str | int | float | bool | None, bool]:
     if value is None or isinstance(value, (int, float, bool)):
         return value, False
     if isinstance(value, str):
@@ -791,12 +754,9 @@ def _truncate_evidence_field(value: Any) -> tuple[str | int | float | bool | Non
 def _has_observed_identity(item_type: Any, source: dict[str, Any]) -> bool:
     if not isinstance(item_type, str):
         return False
-    identity_fields = _EXECUTION_IDENTITY_FIELDS.get(
-        item_type, _GENERIC_EXECUTION_IDENTITY_FIELDS
-    )
+    identity_fields = _EXECUTION_IDENTITY_FIELDS.get(item_type, _GENERIC_EXECUTION_IDENTITY_FIELDS)
     return any(
-        isinstance(value, str) and bool(value.strip())
-        for value in (source.get(field) for field in identity_fields)
+        isinstance(value, str) and bool(value.strip()) for value in (source.get(field) for field in identity_fields)
     )
 
 
@@ -906,9 +866,7 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
             "truncated": bool(dropped_items or field_truncations),
             "read_error": read_error,
         }
-        serialized_result = json.dumps(
-            result, sort_keys=True, separators=(",", ":")
-        )
+        serialized_result = json.dumps(result, sort_keys=True, separators=(",", ":"))
         if len(serialized_result) <= EVENT_EVIDENCE_MAX_TOTAL_CHARS or not items:
             return result
         items.pop()
@@ -945,15 +903,11 @@ def validate_event_evidence(evidence: Any) -> tuple[bool, str]:
         "field_truncations",
     )
     if any(
-        isinstance(evidence[field], bool)
-        or not isinstance(evidence[field], int)
-        or evidence[field] < 0
+        isinstance(evidence[field], bool) or not isinstance(evidence[field], int) or evidence[field] < 0
         for field in counters
     ):
         return False, "raw event evidence counters are invalid"
-    if not isinstance(evidence["read_error"], bool) or not isinstance(
-        evidence["truncated"], bool
-    ):
+    if not isinstance(evidence["read_error"], bool) or not isinstance(evidence["truncated"], bool):
         return False, "raw event evidence flags are invalid"
     items = evidence["items"]
     if not isinstance(items, list) or not items:
@@ -1119,20 +1073,12 @@ def run_trial(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--head", default="HEAD", help="Exact commit-ish to test.")
-    parser.add_argument(
-        "--id", action="append", dest="ids", help="Trial ID; repeat to select several."
-    )
+    parser.add_argument("--id", action="append", dest="ids", help="Trial ID; repeat to select several.")
     parser.add_argument("--all", action="store_true", help="Run every frozen prompt.")
     parser.add_argument("--list", action="store_true", help="List default trial IDs.")
-    parser.add_argument(
-        "--model", help="Explicit Codex model; otherwise inherit config."
-    )
-    parser.add_argument(
-        "--effort", help="Explicit reasoning effort; otherwise inherit config."
-    )
-    parser.add_argument(
-        "--jobs", type=int, default=1, help="Concurrent read-only trials."
-    )
+    parser.add_argument("--model", help="Explicit Codex model; otherwise inherit config.")
+    parser.add_argument("--effort", help="Explicit reasoning effort; otherwise inherit config.")
+    parser.add_argument("--jobs", type=int, default=1, help="Concurrent read-only trials.")
     parser.add_argument("--timeout", type=int, default=600, help="Seconds per trial.")
     return parser.parse_args()
 
@@ -1166,13 +1112,7 @@ def main() -> int:
 
     short_head = tested_commit[:12]
     short_rubric = rubric_commit[:12]
-    output_dir = (
-        ROOT
-        / ".agents"
-        / "work"
-        / "routing-trials"
-        / f"{short_head}-{short_rubric}"
-    )
+    output_dir = ROOT / ".agents" / "work" / "routing-trials" / f"{short_head}-{short_rubric}"
     if output_dir.exists():
         raise SystemExit(f"trial output already exists: {output_dir}")
     output_dir.mkdir(parents=True)
@@ -1209,10 +1149,7 @@ def main() -> int:
                     trial_id = futures[future]
                     report = future.result()
                     reports.append(report)
-                    print(
-                        f"{trial_id}: returncode={report['returncode']} "
-                        f"clean={report['checkout_clean_after']}"
-                    )
+                    print(f"{trial_id}: returncode={report['returncode']} clean={report['checkout_clean_after']}")
             for report in reports:
                 adjudication = run_verifier(
                     report=report,
@@ -1229,9 +1166,7 @@ def main() -> int:
                     json.dumps(report, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8",
                 )
-                print(
-                    f"{report['trial_id']}: verdict={adjudication['reason']}"
-                )
+                print(f"{report['trial_id']}: verdict={adjudication['reason']}")
         finally:
             run_git("worktree", "remove", "--force", str(checkout))
 
@@ -1257,11 +1192,7 @@ def main() -> int:
         json.dumps(index, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    return (
-        0
-        if all(trial_passed(report) for report in reports)
-        else 1
-    )
+    return 0 if all(trial_passed(report) for report in reports) else 1
 
 
 if __name__ == "__main__":

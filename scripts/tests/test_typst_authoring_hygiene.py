@@ -10,16 +10,18 @@ executable documentation for future rule changes.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from pathlib import Path
 import re
 import sys
 import unittest
-
+from dataclasses import dataclass
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT = ROOT / ".agents" / "skills"
-DEPRECATED_CONTEXT7 = ("mcp__MCP_DOCKER.resolve_library_id", "mcp__MCP_DOCKER.get_library_docs")
+DEPRECATED_CONTEXT7 = (
+    "mcp__MCP_DOCKER.resolve_library_id",
+    "mcp__MCP_DOCKER.get_library_docs",
+)
 THESIS_ROOT = ROOT / "docs" / "typst" / "thesis"
 LABEL_SCOPE = {
     Path("docs/typst/thesis/sections/01-introduction.typ"): "submission",
@@ -81,8 +83,7 @@ def _file_is_code_context(relative: Path) -> bool:
     return (
         "typst/thesis/development/" in relative.as_posix()
         or "typst/thesis/figures/" in relative.as_posix()
-        or relative.name
-        in {"draft_markers.typ", "experiment_data.typ", "glossary-overrides.typ"}
+        or relative.name in {"draft_markers.typ", "experiment_data.typ", "glossary-overrides.typ"}
     )
 
 
@@ -129,13 +130,23 @@ def _raw_display_violations(path: Path, lines: list[str]) -> list[Violation]:
             elif line.count("$$") >= 2:
                 if "#eqs." not in line:
                     violations.append(
-                        Violation(path, number, "raw-display", "use a shared #eqs.* equation consumer")
+                        Violation(
+                            path,
+                            number,
+                            "raw-display",
+                            "use a shared #eqs.* equation consumer",
+                        )
                     )
             continue
         if stripped == delimiter:
             if not any("#eqs." in item for item in body):
                 violations.append(
-                    Violation(path, start, "raw-display", "use a shared #eqs.* equation consumer")
+                    Violation(
+                        path,
+                        start,
+                        "raw-display",
+                        "use a shared #eqs.* equation consumer",
+                    )
                 )
             in_display = False
             delimiter = ""
@@ -143,9 +154,7 @@ def _raw_display_violations(path: Path, lines: list[str]) -> list[Violation]:
         else:
             body.append(line)
     if in_display:
-        violations.append(
-            Violation(path, start, "raw-display", "unterminated raw display block")
-        )
+        violations.append(Violation(path, start, "raw-display", "unterminated raw display block"))
     return violations
 
 
@@ -170,7 +179,12 @@ def scan_text(path: Path, text: str) -> list[Violation]:
                 if label in METADATA_LABELS or label.startswith(LABEL_PREFIXES):
                     continue
                 violations.append(
-                    Violation(path, number, "label-prefix", f"{scope} label <{label}> lacks an approved prefix")
+                    Violation(
+                        path,
+                        number,
+                        "label-prefix",
+                        f"{scope} label <{label}> lacks an approved prefix",
+                    )
                 )
 
     if _file_is_code_context(relative):
@@ -181,13 +195,23 @@ def scan_text(path: Path, text: str) -> list[Violation]:
                 match = pattern.search(line)
                 if match and not _token_is_explicit_code(line, match):
                     violations.append(
-                        Violation(path, number, "shared-notation", f"use a shared facade for {match.group(0)}")
+                        Violation(
+                            path,
+                            number,
+                            "shared-notation",
+                            f"use a shared facade for {match.group(0)}",
+                        )
                     )
         for pattern in RAW_PROSE_PATTERNS:
             match = pattern.search(line)
             if match and not _token_is_explicit_code(line, match):
                 violations.append(
-                    Violation(path, number, "scientific-prose", f"implementation/status token {match.group(0)!r} needs an explicit code or development context")
+                    Violation(
+                        path,
+                        number,
+                        "scientific-prose",
+                        f"implementation/status token {match.group(0)!r} needs an explicit code or development context",
+                    )
                 )
     return violations
 
@@ -223,16 +247,13 @@ class HygieneTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertFalse(any(token in text for token in DEPRECATED_CONTEXT7), path)
 
-    def test_typst_context7_route_has_one_registry_owner_and_skill_pointer(self) -> None:
-        registry = (
-            SKILLS_ROOT
-            / "aria-nbv-context"
-            / "references"
-            / "context7_library_ids.md"
-        ).read_text(encoding="utf-8")
-        typst_skill = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(
+    def test_typst_context7_route_has_one_registry_owner_and_skill_pointer(
+        self,
+    ) -> None:
+        registry = (SKILLS_ROOT / "aria-nbv-context" / "references" / "context7_library_ids.md").read_text(
             encoding="utf-8"
         )
+        typst_skill = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(encoding="utf-8")
         self.assertEqual(registry.count("/websites/typst_app"), 1)
         self.assertIn("references/external-research.md", typst_skill)
         registry_name = "context7_library_ids.md"
@@ -241,9 +262,7 @@ class HygieneTests(unittest.TestCase):
             if path != SKILLS_ROOT / "aria-nbv-context" / "references" / registry_name:
                 self.assertNotIn("/websites/typst_app", text, path)
             if "Context7 registry" in text:
-                self.assertIn(
-                    "aria-nbv-context/references/context7_library_ids.md", text, path
-                )
+                self.assertIn("aria-nbv-context/references/context7_library_ids.md", text, path)
 
     def test_thesis_authoring_descriptions_distinguish_the_three_routes(self) -> None:
         expected = {
@@ -260,9 +279,7 @@ class HygieneTests(unittest.TestCase):
                 self.assertIn(term.lower(), description, path)
 
     def test_typst_description_excludes_handoffs_and_schema_inspection(self) -> None:
-        text = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
+        text = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(encoding="utf-8")
         description = text.split("description:", 1)[1].split("\n", 1)[0].lower()
         for term in (
             "use only when",
@@ -289,9 +306,7 @@ class HygieneTests(unittest.TestCase):
         self.assertIn("--timeout 600", makefile)
 
     def test_typst_skill_keeps_conditioned_reference_family_pointers(self) -> None:
-        text = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
+        text = (SKILLS_ROOT / "typst-authoring" / "SKILL.md").read_text(encoding="utf-8")
         branches = {
             ("notation", "equation"): (
                 "aria-nbv-notation.md",
@@ -314,12 +329,9 @@ class HygieneTests(unittest.TestCase):
                 self.assertIn(f"references/{reference}", text)
 
     def test_academic_writing_preserves_adjacent_evidence_locator_form(self) -> None:
-        text = (
-            SKILLS_ROOT
-            / "academic-writing"
-            / "references"
-            / "source-grounded-workflow.md"
-        ).read_text(encoding="utf-8")
+        text = (SKILLS_ROOT / "academic-writing" / "references" / "source-grounded-workflow.md").read_text(
+            encoding="utf-8"
+        )
         self.assertRegex(text, r"adjacent\s+non-rendered comment block")
         self.assertRegex(
             text,
@@ -327,9 +339,7 @@ class HygieneTests(unittest.TestCase):
         )
 
     def test_handoffs_and_typst_consumer_inspection_stay_progressive(self) -> None:
-        academic = (SKILLS_ROOT / "academic-writing" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
+        academic = (SKILLS_ROOT / "academic-writing" / "SKILL.md").read_text(encoding="utf-8")
         docs_guide = (ROOT / "docs" / "AGENTS.md").read_text(encoding="utf-8")
         for term in ("destination", "bounded payload", "unloaded", "executing"):
             self.assertIn(term, academic)
@@ -364,7 +374,7 @@ class HygieneTests(unittest.TestCase):
         self.assertTrue(scan_text(path, "#strong[V1] remains planned."))
         self.assertEqual(scan_text(path, "#raw[V1]"), [])
         self.assertEqual(scan_text(path, '#fact-value(store, "candidate_validity.valid")'), [])
-        self.assertEqual(scan_text(path, "#import \"draft_markers.typ\": thesis_status"), [])
+        self.assertEqual(scan_text(path, '#import "draft_markers.typ": thesis_status'), [])
         development = ROOT / "docs/typst/thesis/development/fixture.typ"
         self.assertEqual(scan_text(development, "V0 is a development baseline."), [])
 
@@ -373,7 +383,7 @@ class HygieneTests(unittest.TestCase):
         self.assertTrue(scan_text(path, "= Heading <rq1>"))
         self.assertEqual(scan_text(path, "= Heading <sec:rq1>"), [])
         roadmap = ROOT / "docs/typst/thesis/development/roadmap.typ"
-        self.assertEqual(scan_text(roadmap, "#metadata(\"roadmap-outcome\") <outcome>"), [])
+        self.assertEqual(scan_text(roadmap, '#metadata("roadmap-outcome") <outcome>'), [])
 
     def test_live_label_inventory_is_stable(self) -> None:
         totals = {"submission": 0, "development": 0}
@@ -400,9 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         for violation in violations:
             print(violation, file=sys.stderr)
         return 1 if violations else 0
-    result = unittest.main(
-        module=__name__, argv=[sys.argv[0]], exit=False, verbosity=2
-    )
+    result = unittest.main(module=__name__, argv=[sys.argv[0]], exit=False, verbosity=2)
     return 0 if result.result.wasSuccessful() else 1
 
 
