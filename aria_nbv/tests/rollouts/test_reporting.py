@@ -33,6 +33,7 @@ from aria_nbv.rollouts.reporting import (
     ANALYSIS_FACT_SIDECAR_VERSION,
     THESIS_REPORT_TABLE_COLUMNS,
     _candidate_corpus_support,
+    _contract_additive_totals,
     _corpus_failure_counts,
     _corpus_feasibility,
     _corpus_target_admission,
@@ -155,6 +156,31 @@ def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
     assert set(summary["contract_id"]) == {"contract-a", "contract-b"}
     assert set(summary["profile"]) == {"profile-a", "profile-b"}
     assert set(summary["store_count"]) == {1}
+
+
+def test_contract_additive_totals_match_single_store_baselines() -> None:
+    def bundle(rollouts: int, steps: int, candidates: int, bytes_: int) -> dict[str, pd.DataFrame]:
+        return {
+            "stores": pd.DataFrame(
+                [{"rollouts": rollouts, "steps": steps, "candidates": candidates, "targets": 1, "sources": 1}]
+            ),
+            "runtime_storage": pd.DataFrame([{"total_bytes": bytes_}]),
+        }
+
+    included = [
+        {"store_id": "a", "contract_id": "contract-a", "contract": "A", "profile": "p-a"},
+        {"store_id": "b", "contract_id": "contract-b", "contract": "B", "profile": "p-b"},
+    ]
+    q_h = [
+        {"store_id": "a", "state_count": 2, "trainable_count": 3, "padding_count": 1},
+        {"store_id": "b", "state_count": 5, "trainable_count": 7, "padding_count": 2},
+    ]
+    totals = _contract_additive_totals([bundle(1, 2, 60, 100), bundle(3, 4, 180, 200)], included, q_h)
+
+    assert list(totals["contract_id"]) == ["contract-a", "contract-b"]
+    assert list(totals["candidate_count"]) == [60, 180]
+    assert list(totals["storage_bytes"]) == [100, 200]
+    assert list(totals["q_h_trainable_count"]) == [3, 7]
 
 
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:

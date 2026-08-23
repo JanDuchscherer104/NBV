@@ -534,6 +534,9 @@ class RolloutCorpusSummary:
     feasibility: pd.DataFrame = field(default_factory=pd.DataFrame)
     """Additive collision and clearance availability evidence by exact cohort."""
 
+    contract_totals: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Deterministic additive totals faceted by persisted compatibility contract."""
+
 
 def build_thesis_report_frames(
     store_paths: Iterable[Path | str],
@@ -602,6 +605,7 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
             store_row = frames["stores"].iloc[0]
             store_id = str(store_row["store_id"])
             profile = _report_profile(frames, store_id)
+            contract = _persisted_rollout_contract(frames, store_id, profile)
             reader = RolloutZarrStoreReader(path)
             validation = reader.validate()
             q_h_row = q_h_evidence_rows(reader, deep_count=True, validation_result=validation)[0]
@@ -614,10 +618,21 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
                 "store_id": store_id,
                 "name": str(store_row["name"]),
                 "profile": profile,
+                "contract_id": contract["id"],
+                "contract": contract["label"],
             }
         )
         valid_frames.append(frames)
-        q_h_rows.append({"path": path.as_posix(), "store_id": store_id, **q_h_row})
+        q_h_rows.append(
+            {
+                "path": path.as_posix(),
+                "store_id": store_id,
+                "contract_id": contract["id"],
+                "contract": contract["label"],
+                "profile": contract["profile"],
+                **q_h_row,
+            }
+        )
 
     stores = _concat_report_frames(valid_frames, "stores")
     runtime = _concat_report_frames(valid_frames, "runtime_storage")
@@ -627,6 +642,7 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
     temporal = _corpus_temporal_summary(valid_frames, included)
     target_admission = _corpus_target_admission(_contract_frames(valid_frames, included, "targets"))
     feasibility = _corpus_feasibility(_contract_frames(valid_frames, included, "candidate_collision_support"))
+    contract_totals = _contract_additive_totals(valid_frames, included, q_h_rows)
     q_h_stores = (
         pd.DataFrame(q_h_rows).sort_values(["store_id"], kind="stable").reset_index(drop=True)
         if q_h_rows
@@ -634,6 +650,9 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
             columns=(
                 "path",
                 "store_id",
+                "contract_id",
+                "contract",
+                "profile",
                 "available",
                 "blocking_reason",
                 "deep_count",
@@ -686,6 +705,7 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
         temporal_summary=temporal,
         target_admission=target_admission,
         feasibility=feasibility,
+        contract_totals=contract_totals,
     )
 
 
@@ -890,6 +910,79 @@ def _contract_frames(
     if not annotated:
         return pd.DataFrame()
     return pd.concat(annotated, ignore_index=True)
+
+
+def _contract_additive_totals(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+    q_h_rows: list[dict[str, object]],
+) -> pd.DataFrame:
+    """Return additive physical totals without pooling incompatible contracts."""
+
+    columns = (
+        "contract_id",
+        "contract",
+        "profile",
+        "store_count",
+        "rollout_count",
+        "step_count",
+        "candidate_count",
+        "target_row_count",
+        "source_row_count",
+        "storage_bytes",
+        "q_h_chain_count",
+        "q_h_state_count",
+        "q_h_trainable_count",
+        "q_h_padding_count",
+    )
+    if not frames:
+        return pd.DataFrame(columns=columns)
+    rows: list[dict[str, object]] = []
+    for bundle, store in zip(frames, included, strict=True):
+        stores = bundle["stores"]
+        runtime = bundle["runtime_storage"]
+        store_row = stores.iloc[0] if not stores.empty else {}
+        runtime_row = runtime.iloc[0] if not runtime.empty else {}
+        q_h = next((row for row in q_h_rows if row["store_id"] == store["store_id"]), {})
+        rows.append(
+            {
+                "contract_id": store["contract_id"],
+                "contract": store["contract"],
+                "profile": store["profile"],
+                "store_count": 1,
+                "rollout_count": int(store_row.get("rollouts", 0)),
+                "step_count": int(store_row.get("steps", 0)),
+                "candidate_count": int(store_row.get("candidates", 0)),
+                "target_row_count": int(store_row.get("targets", 0)),
+                "source_row_count": int(store_row.get("sources", 0)),
+                "storage_bytes": int(runtime_row.get("total_bytes", 0)),
+                "q_h_chain_count": int(store_row.get("rollouts", 0)),
+                "q_h_state_count": _optional_qh_count(q_h, "state_count"),
+                "q_h_trainable_count": _optional_qh_count(q_h, "trainable_count"),
+                "q_h_padding_count": _optional_qh_count(q_h, "padding_count"),
+            }
+        )
+    source = pd.DataFrame(rows)
+    additive = {
+        field: (field, "sum")
+        for field in columns[3:]
+        if field not in {"store_count", "q_h_state_count", "q_h_trainable_count", "q_h_padding_count"}
+    }
+    for field_name in ("q_h_state_count", "q_h_trainable_count", "q_h_padding_count"):
+        additive[field_name] = (field_name, lambda values: values.sum(min_count=1))
+    grouped = (
+        source.groupby(["contract_id", "contract", "profile"], dropna=False, sort=True)
+        .agg(store_count=("store_count", "sum"), **additive)
+        .reset_index()
+    )
+    return grouped.loc[:, columns].sort_values("contract_id", kind="stable").reset_index(drop=True)
+
+
+def _optional_qh_count(row: Mapping[str, object], field: str) -> int | None:
+    """Keep unavailable deep counts distinct from an observed zero."""
+
+    value = row.get(field)
+    return int(value) if _is_nonnegative_int(value) else None
 
 
 def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
