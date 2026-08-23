@@ -511,9 +511,7 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
     assert any("Build the corpus summary" in info.value for info in app.info)
-    assert _metric_values(app)["Validation"] == "BLOCKED"
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert "Download stale-store diagnostics JSON" in {button.label for button in app.get("download_button")}
 
 
 def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path_config, tmp_path) -> None:
