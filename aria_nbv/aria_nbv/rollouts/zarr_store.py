@@ -1011,11 +1011,11 @@ class _RolloutZarrValidator:
         expected_max_candidates = (
             int(derived["candidate_row_id"].shape[1]) if derived["candidate_row_id"].ndim == 2 else 0
         )
-        if int(group.attrs.get("state_count", -1)) != expected_state_count:
+        if _exact_integer(group.attrs.get("state_count")) != expected_state_count:
             self.errors.append("q_h/state_count attr does not match the derived state count.")
-        if int(group.attrs.get("max_candidates", -1)) != expected_max_candidates:
+        if _exact_integer(group.attrs.get("max_candidates")) != expected_max_candidates:
             self.errors.append("q_h/max_candidates attr does not match the derived candidate width.")
-        if int(group.attrs.get("horizon", -1)) != _stored_horizon(self.root):
+        if _exact_integer(group.attrs.get("horizon")) != _stored_horizon(self.root):
             self.errors.append("q_h/horizon attr does not match rollouts/horizon.")
         if float(group.attrs.get("discount_gamma", float("nan"))) != float(self.root.attrs.get("discount_gamma", 1.0)):
             self.errors.append("q_h/discount_gamma attr does not match root discount_gamma.")
@@ -3361,6 +3361,14 @@ def _q_h_arrays_for_validation(root: Any) -> dict[str, np.ndarray]:
 def _stored_horizon(root: Any) -> int:
     values = np.asarray(root["rollouts/horizon"])
     return int(values.max()) if values.size else 1
+
+
+def _exact_integer(value: object) -> int | None:
+    """Return persisted integer metadata without accepting lossy coercions."""
+
+    if isinstance(value, bool) or not isinstance(value, int | np.integer):
+        return None
+    return int(value)
 
 
 def _max_candidates_per_step(steps: dict[str, np.ndarray], candidates: dict[str, np.ndarray]) -> int:

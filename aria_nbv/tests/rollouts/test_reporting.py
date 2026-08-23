@@ -350,6 +350,25 @@ def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_suppor
     assert set(summary.endpoints["store_id"]) == {summary.included_stores[0]["store_id"]}
 
 
+def test_corpus_summary_rejects_fractional_persisted_qh_counts(tmp_path) -> None:
+    """Malformed persisted Q_H counts cannot be truncated into Ready evidence."""
+
+    store = write_rollout_zarr_store(
+        tmp_path / "fractional-qh-count.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=114)[:1],
+    ).store_dir
+    root = zarr.open_group(store, mode="r+")
+    root["q_h"].attrs["state_count"] = 1.5
+
+    summary = reporting.build_rollout_corpus_summary([store])
+
+    assert summary.verdict != "Ready"
+    assert summary.totals["included_store_count"] == 0
+    assert summary.totals["excluded_store_count"] == 1
+    assert "q_h/state_count attr does not match the derived state count" in summary.excluded_stores[0]["reason"]
+    assert summary.contract_totals.empty
+
+
 def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(tmp_path) -> None:
     """Matching generated shards pool factual depths; profile changes stay faceted."""
 

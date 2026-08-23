@@ -1306,6 +1306,10 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
         "selected_rate",
         "aggregation",
     )
+    if composition.empty:
+        return pd.DataFrame(columns=columns)
+    if "group_by" not in composition:
+        raise ValueError("Candidate composition rows require group_by.")
     source = composition[composition["group_by"] == "mixture"].copy()
     if source.empty:
         return pd.DataFrame(columns=columns)
