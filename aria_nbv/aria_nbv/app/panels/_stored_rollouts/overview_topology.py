@@ -16,6 +16,7 @@ from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import TheoryReferences
+from ..common import current_scientific_label, render_scientific_notation
 from .session import _clear_stored_rollout_caches
 from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
@@ -156,16 +157,13 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
             st.selectbox(
                 "Endpoint metric",
                 options=metric_options,
-                format_func={
-                    "endpoint_gain": "Endpoint reconstruction gain",
-                    "target_rri": "Target RRI",
-                    "cumulative_target_root_gain": "Cumulative target-root gain",
-                }.get,
+                format_func=current_scientific_label,
             )
             if metric_options
             else None
         )
         if metric is not None:
+            render_scientific_notation(metric)
             endpoint_theory = {
                 "endpoint_gain": TheoryReferences(equation_ids=("entity.endpoint_gain",)),
                 "target_rri": TheoryReferences(
@@ -191,7 +189,8 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
                 color="policy",
                 facet_col="horizon",
                 hover_data=[name for name in ("store_id", "profile", "contract_id") if name in endpoint_rows],
-                title=f"Store-qualified factual {metric} distributions",
+                labels={metric: current_scientific_label(metric), "contract_facet": "Persisted rollout contract"},
+                title=f"Store-qualified factual {current_scientific_label(metric)} distributions",
             )
             _render_plot(
                 fig,
