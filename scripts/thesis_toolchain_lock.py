@@ -18,12 +18,18 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "scripts/scaffold/schemas/thesis-toolchain-lock.schema.json"
 DEFAULT_OUTPUT = ROOT / "docs/typst/thesis/toolchain-lock.json"
-LOCK_NAME = "toolchain-lock.json"
-RELEASE_LEDGER = "docs/typst/thesis/release-requirements.toml"
-NONMATERIAL_SUFFIXES = (".pdf", ".png", ".jpg", ".jpeg", ".svg")
+EXCLUDED_PATHS = {
+    "docs/typst/thesis/main.pdf",
+    "docs/typst/thesis/toolchain-lock.json",
+    "docs/typst/thesis/release-requirements.toml",
+}
 REPORT_SCHEMA_RE = re.compile(r"report-schema-version\s*=\s*\"([^\"]+)\"")
 IMPORT_RE = re.compile(r"#import\s+\"(@preview/[^\"]+)\"")
 FONT_RE = re.compile(r"(?:font\s*:\s*|body:\s*|sans:\s*)\"([^\"]+)\"")
+FONT_VARIANT_RE = re.compile(
+    r"^- Style: (?P<style>[^,]+), Weight: (?P<weight>\d+), "
+    r"Stretch: FontStretch\((?P<stretch>\d+)\)$"
+)
 
 
 class LockError(RuntimeError):
@@ -50,11 +56,7 @@ def _sha256(path: Path) -> str:
 
 
 def _material_path(path: str) -> bool:
-    if (
-        Path(path).name == LOCK_NAME
-        or path == RELEASE_LEDGER
-        or path.endswith(NONMATERIAL_SUFFIXES)
-    ):
+    if path in EXCLUDED_PATHS:
         return False
     if path.startswith(("docs/typst/thesis/", "docs/typst/shared/")):
         return True
@@ -126,6 +128,49 @@ def _thesis_sources(root: Path) -> list[Path]:
     return sorted(paths)
 
 
+def _typst_font_variants(output: str, family: str) -> list[dict[str, Any]]:
+    current: str | None = None
+    variants: list[dict[str, Any]] = []
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not raw_line.startswith("-"):
+            current = line
+            continue
+        match = FONT_VARIANT_RE.fullmatch(line)
+        if current == family and match is not None:
+            variants.append(
+                {
+                    "style": match.group("style"),
+                    "weight": int(match.group("weight")),
+                    "stretch": int(match.group("stretch")),
+                }
+            )
+    unique = {json.dumps(item, sort_keys=True): item for item in variants}
+    return sorted(
+        unique.values(),
+        key=lambda item: (item["style"], item["weight"], item["stretch"]),
+    )
+
+
+def _system_font_files(
+    family: str, *, fc_list: str, root: Path
+) -> list[dict[str, str]]:
+    rows = _run([fc_list, "-f", "%{family}|%{file}\n"], cwd=root).splitlines()
+    files: dict[str, str] = {}
+    for row in rows:
+        names, separator, filename = row.partition("|")
+        exact_names = {name.strip() for name in names.split(",")}
+        if not separator or family not in exact_names:
+            continue
+        path = Path(filename)
+        if path.is_file():
+            files[path.name] = _sha256(path)
+    return [
+        {"basename": basename, "sha256": digest}
+        for basename, digest in sorted(files.items())
+    ]
+
+
 def _identities(
     root: Path, *, typst_bin: str, render_script: Path, ppi: int
 ) -> dict[str, Any]:
@@ -146,38 +191,49 @@ def _identities(
             f"selected CSL is not a tracked repository path: {csl_paths[0]}"
         )
     families = sorted(set(FONT_RE.findall(text)))
+    executable = shutil.which(typst_bin) or typst_bin
+    executable_path = Path(executable).resolve()
+    if not executable_path.is_file():
+        raise LockError(f"compiler executable is not a file: {typst_bin}")
+    version = _run([typst_bin, "--version"], cwd=root)
+    binary_sha256 = _sha256(executable_path)
     fonts: list[dict[str, Any]] = []
     for family in families:
-        fc_match = shutil.which("fc-match")
         fc_list = shutil.which("fc-list")
-        if not fc_match or not fc_list:
-            raise LockError("font identity requires fc-match and fc-list")
-        selected = _run(
-            [fc_match, "-f", "%{family}|%{style}|%{file}", family], cwd=root
+        if not fc_list:
+            raise LockError("font identity requires fc-list")
+        variants = _typst_font_variants(
+            _run([typst_bin, "fonts", "--variants"], cwd=root), family
         )
-        variants = _run(
-            [fc_list, ":family=" + family, "-f", "%{family}|%{style}|%{file}\n"],
-            cwd=root,
-        )
-        fonts.append(
-            {
-                "family": family,
-                "selected": selected,
-                "installed_variants": sorted(set(variants.splitlines())),
+        if not variants:
+            raise LockError(
+                f"requested font family is absent from Typst resolver: {family}"
+            )
+        system_files = _system_font_files(family, fc_list=fc_list, root=root)
+        font: dict[str, Any] = {
+            "family": family,
+            "source": "system" if system_files else "embedded_in_compiler",
+            "variants": variants,
+            "system_files": system_files,
+        }
+        if not system_files:
+            font["compiler_binding"] = {
+                "version": version,
+                "binary_sha256": binary_sha256,
             }
-        )
-    executable = shutil.which(typst_bin) or typst_bin
+        fonts.append(font)
     return {
         "compiler": {
-            "executable": str(Path(executable).resolve()),
-            "version": _run([typst_bin, "--version"], cwd=root),
+            "command": Path(typst_bin).name,
+            "version": version,
+            "binary_sha256": binary_sha256,
         },
         "packages": [{"identity": package} for package in packages],
         "fonts": fonts,
         "csl": {"path": csl_relative, "sha256": _sha256(csl)},
         "rasterizer": {
             "backend": "typst png",
-            "version": _run([typst_bin, "--version"], cwd=root),
+            "version": version,
             "render_script": render_script.relative_to(root).as_posix(),
             "render_script_sha256": _sha256(render_script),
             "ppi": ppi,
@@ -188,6 +244,8 @@ def _identities(
 def _schema_validate(value: Any, schema: dict[str, Any], path: str = "$") -> None:
     if "const" in schema and value != schema["const"]:
         raise LockError(f"{path}: expected {schema['const']!r}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise LockError(f"{path}: expected one of {schema['enum']!r}")
     if schema.get("type") == "object":
         if not isinstance(value, dict):
             raise LockError(f"{path}: expected object")

@@ -11,13 +11,13 @@ import re
 import subprocess
 import sys
 import tomllib
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_PATH = ROOT / "docs/typst/thesis/release-requirements.toml"
 LOCK_RELATIVE_PATH = Path("docs/typst/thesis/toolchain-lock.json")
-CHECKED_DATE = "2026-08-23"
 LOCK_PLACEHOLDER = "PENDING_GENERATED_AFTER_IMPLEMENTATION_COMMIT"
 COMMIT_OID = re.compile(r"^[0-9a-f]{40}$")
 CONFIRMATORY_BLOCKER = (
@@ -135,8 +135,17 @@ def _validate_ledger(
 ) -> dict[str, Any] | None:
     if data.get("schema_version") != "aria-nbv-thesis-release-requirements-v1":
         raise ReleaseRequirementsError("unsupported release requirements schema")
-    if data.get("date_checked") != CHECKED_DATE:
-        raise ReleaseRequirementsError("release ledger date_checked must be 2026-08-23")
+    checked_date = data.get("date_checked")
+    if not isinstance(checked_date, str):
+        raise ReleaseRequirementsError(
+            "release ledger date_checked must be an ISO date"
+        )
+    try:
+        date.fromisoformat(checked_date)
+    except ValueError as exc:
+        raise ReleaseRequirementsError(
+            "release ledger date_checked must be an ISO date"
+        ) from exc
     requirements = data.get("requirements")
     if (
         not isinstance(requirements, list)
@@ -176,7 +185,7 @@ def _validate_ledger(
             raise ReleaseRequirementsError(
                 f"{context} has invalid classification or proof_kind"
             )
-        if row.get("date_checked") != CHECKED_DATE:
+        if row.get("date_checked") != checked_date:
             raise ReleaseRequirementsError(f"{context} has stale date_checked")
         if row["id"].startswith("ml.") and row["classification"] == "binding_hm":
             raise ReleaseRequirementsError(
@@ -213,16 +222,10 @@ def _validate_ledger(
         "blocker_rationale",
     ):
         _string(submission, key, "submission")
-    if submission["assigned_spo_state"] in {
-        "complete",
-        "approved",
-        "submitted",
-    } or submission["primuss_state"] in {
-        "complete",
-        "approved",
-        "submitted",
-        "receipt_verified",
-    }:
+    if (
+        submission["assigned_spo_state"] != "manual_pending"
+        or submission["primuss_state"] != "manual_pending"
+    ):
         raise ReleaseRequirementsError(
             "external submission state must remain human-pending"
         )
@@ -253,6 +256,13 @@ def _validate_ledger(
             or section["proof_kind"] not in PROOF_KINDS
         ):
             raise ReleaseRequirementsError(f"{section_name} has invalid owner or state")
+        if (
+            section_name == "declaration"
+            and section.get("wording_approval") != "manual_pending"
+        ):
+            raise ReleaseRequirementsError(
+                "declaration wording_approval must remain manual_pending"
+            )
     if (
         "Ich versichere, dass ich diese #thesisKindGerman selbststaendig verfasst"
         not in (root / "docs/typst/thesis/template/layout/disclaimer.typ").read_text(
@@ -344,7 +354,9 @@ def validate_confirmatory_claims(model: Any) -> None:
         )
 
 
-def load_report(path: Path, source_revision: str) -> dict[str, Any]:
+def load_report(
+    path: Path, source_revision: str, *, root: Path | None = None
+) -> dict[str, Any]:
     try:
         report = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -385,18 +397,76 @@ def load_report(path: Path, source_revision: str) -> dict[str, Any]:
         raise ReleaseRequirementsError(
             "report must contain confirmatory empirical results with matching provenance"
         )
-    try:
-        sys.path.insert(0, str(ROOT / "aria_nbv"))
-        from aria_nbv.rollouts.reporting import deserialize_thesis_report_bundle
-
-        deserialize_thesis_report_bundle(
-            {key: value for key, value in report.items() if key != "source_revision"}
+    if root is not None:
+        _validate_report_provenance_exact_root(
+            root=root, report=path, source_revision=source_revision
         )
-    except (ImportError, TypeError, ValueError) as exc:
-        raise ReleaseRequirementsError(
-            f"report is not a valid serialized evidence bundle: {exc}"
-        ) from exc
     return report
+
+
+def _validate_report_provenance_exact_root(
+    *, root: Path, report: Path, source_revision: str
+) -> None:
+    """Run the canonical report validator from the supplied checkout."""
+
+    bridge = (
+        "import json, sys; "
+        "from pathlib import Path; "
+        "from aria_nbv.rollouts.reporting import validate_thesis_report_provenance; "
+        "payload = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8')); "
+        "validate_thesis_report_provenance(payload, "
+        "evidence_root=Path(sys.argv[1]).parent, expected_source_revision=sys.argv[2])"
+    )
+    environment = os.environ.copy()
+    package_root = str((root / "aria_nbv").resolve())
+    existing_pythonpath = environment.get("PYTHONPATH")
+    environment["PYTHONPATH"] = (
+        package_root
+        if not existing_pythonpath
+        else os.pathsep.join((package_root, existing_pythonpath))
+    )
+    try:
+        subprocess.run(
+            [sys.executable, "-c", bridge, str(report), source_revision],
+            cwd=root,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", "") or str(exc)
+        raise ReleaseRequirementsError(
+            f"serialized evidence bundle provenance validation failed: {detail.strip()}"
+        ) from exc
+
+
+def _check_toolchain_lock(*, root: Path, typst_bin: str) -> None:
+    lock_path = root / LOCK_RELATIVE_PATH
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(root / "scripts/thesis_toolchain_lock.py"),
+                "check",
+                "--root",
+                str(root),
+                "--output",
+                str(lock_path),
+                "--typst-bin",
+                typst_bin,
+            ],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", "") or str(exc)
+        raise ReleaseRequirementsError(
+            "toolchain lock check failed; Typst submission compile was not started: "
+            + detail.strip()
+        ) from exc
 
 
 def typst_report_path(root: Path, report: Path) -> str:
@@ -424,30 +494,8 @@ def build_submission(
     lock = validate_release_requirements(ledger, root, final=True)
     assert lock is not None
     virtual_report = typst_report_path(root, report)
-    load_report(report, lock["source_revision"])
-    lock_path = root / LOCK_RELATIVE_PATH
-    try:
-        subprocess.run(
-            [
-                sys.executable,
-                str(root / "scripts/thesis_toolchain_lock.py"),
-                "check",
-                "--root",
-                str(root),
-                "--output",
-                str(lock_path),
-                "--typst-bin",
-                typst_bin,
-            ],
-            cwd=root,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise ReleaseRequirementsError(
-            "toolchain lock check failed; Typst submission compile was not started"
-        ) from exc
+    load_report(report, lock["source_revision"], root=root)
+    _check_toolchain_lock(root=root, typst_bin=typst_bin)
     command = [
         typst_bin,
         "compile",
@@ -477,6 +525,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="require and verify the generated final lock",
     )
+    audit.add_argument("--typst-bin", default=os.environ.get("TYPST", "typst"))
     build = sub.add_parser("submission-build")
     build.add_argument("--root", type=Path, default=ROOT)
     build.add_argument("--report", type=Path, required=True)
@@ -486,6 +535,7 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve()
     try:
         if args.command == "audit":
+            _check_toolchain_lock(root=root, typst_bin=args.typst_bin)
             validate_release_requirements(
                 load_release_requirements(root / LEDGER_PATH.relative_to(ROOT)),
                 root,

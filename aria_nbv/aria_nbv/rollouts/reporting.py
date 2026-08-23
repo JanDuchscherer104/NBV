@@ -14,7 +14,7 @@ import math
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -603,6 +603,7 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     _validate_frame_schema(frames)
     _validate_bundle_statuses(frames)
     _validate_empirical_bundle(frames)
+    source_revision = _bundle_source_revision(frames)
     tables: dict[str, dict[str, object]] = {}
     for name, columns in THESIS_REPORT_TABLE_COLUMNS.items():
         frame = frames[name]
@@ -617,6 +618,7 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     payload = {
         "bundle_role": THESIS_REPORT_BUNDLE_ROLE,
         "schema_version": THESIS_REPORT_BUNDLE_VERSION,
+        "source_revision": source_revision,
         "tables": tables,
     }
     return (
@@ -653,13 +655,18 @@ def deserialize_thesis_report_bundle(
     schema_version = payload.get("schema_version")
     if schema_version != THESIS_REPORT_BUNDLE_VERSION:
         raise ValueError(f"Unsupported thesis report schema_version: {schema_version!r}.")
-    expected_keys = {"bundle_role", "schema_version", "tables"}
+    expected_keys = {"bundle_role", "schema_version", "source_revision", "tables"}
     if set(payload) != expected_keys:
         raise ValueError(
             f"Thesis report top-level fields must be exactly {sorted(expected_keys)}; received {sorted(payload)}."
         )
     if payload.get("bundle_role") != THESIS_REPORT_BUNDLE_ROLE:
         raise ValueError("Thesis report bundle_role must be 'evidence'.")
+    source_revision = payload["source_revision"]
+    if source_revision is not None and (
+        not isinstance(source_revision, str) or not _GIT_OID.fullmatch(source_revision) or source_revision == "0" * 40
+    ):
+        raise ValueError("Thesis report source_revision must be null or a full nonzero Git OID.")
 
     tables = payload.get("tables")
     if not isinstance(tables, Mapping) or set(tables) != set(THESIS_REPORT_TABLE_COLUMNS):
@@ -692,10 +699,73 @@ def deserialize_thesis_report_bundle(
     _validate_frame_schema(frames)
     _validate_bundle_statuses(frames)
     _validate_empirical_bundle(frames)
+    if _bundle_source_revision(frames) != source_revision:
+        raise ValueError("Thesis report source_revision does not match empirical results.")
     return frames
 
 
 validate_thesis_report_bundle = deserialize_thesis_report_bundle
+
+
+def validate_thesis_report_provenance(
+    payload: bytes | str | Mapping[str, object] | Mapping[str, pd.DataFrame],
+    *,
+    evidence_root: Path | str,
+    expected_source_revision: str | None = None,
+) -> dict[str, pd.DataFrame]:
+    """Validate a report bundle and revalidate its immutable evidence files.
+
+    ``evidence_root`` contains the portable logical paths serialized for
+    sidecars.  Empirical artifacts are resolved relative to each sidecar's
+    parent directory.  The returned frames are the validated report owner
+    representation suitable for release or thesis consumption.
+    """
+
+    if isinstance(payload, Mapping) and all(isinstance(value, pd.DataFrame) for value in payload.values()):
+        frames = cast(dict[str, pd.DataFrame], dict(payload))
+        _validate_frame_schema(frames)
+        _validate_bundle_statuses(frames)
+        _validate_empirical_bundle(frames)
+        source_revision = _bundle_source_revision(frames)
+    else:
+        frames = deserialize_thesis_report_bundle(payload)
+        source_revision = _bundle_source_revision(frames)
+    if expected_source_revision is not None:
+        if (
+            not _GIT_OID.fullmatch(expected_source_revision)
+            or expected_source_revision == "0" * 40
+            or source_revision != expected_source_revision
+        ):
+            raise ValueError("Thesis report source_revision does not match expected_source_revision.")
+
+    root = Path(evidence_root).expanduser().resolve()
+    sidecar_files: dict[str, Path] = {}
+    for index, row in frames["sidecars"].iterrows():
+        logical_path = _portable_relative_path(row["path"], field=f"sidecars row {index} path")
+        if row["name"] != row["path"]:
+            raise ValueError(f"sidecars row {index} path and name must match.")
+        sidecar_file = (root / logical_path).resolve()
+        if not sidecar_file.is_relative_to(root) or not sidecar_file.is_file():
+            raise ValueError(f"sidecar evidence does not exist under evidence_root: {row['path']!r}.")
+        digest = hashlib.sha256(sidecar_file.read_bytes()).hexdigest()
+        if digest != row["sha256"]:
+            raise ValueError(f"sidecar row {index} sha256 does not match immutable evidence.")
+        expected_id = hashlib.sha256(f"{row['path']}\0{row['sha256']}".encode()).hexdigest()
+        if row["sidecar_id"] != expected_id or row["sidecar_id"] in sidecar_files:
+            raise ValueError(f"sidecar row {index} sidecar_id relationship is invalid.")
+        sidecar_files[str(row["sidecar_id"])] = sidecar_file
+
+    for index, row in frames["empirical_results"].iterrows():
+        artifact_parent = sidecar_files.get(str(row["sidecar_id"]))
+        if artifact_parent is None:
+            raise ValueError(f"empirical result row {index} references an unknown sidecar_id.")
+        artifact_path = _portable_relative_path(row["artifact_path"], field=f"empirical row {index} artifact_path")
+        artifact_file = (artifact_parent.parent / artifact_path).resolve()
+        if not artifact_file.is_relative_to(artifact_parent.parent) or not artifact_file.is_file():
+            raise ValueError(f"empirical result row {index} artifact does not exist.")
+        if hashlib.sha256(artifact_file.read_bytes()).hexdigest() != row["artifact_sha256"]:
+            raise ValueError(f"empirical result row {index} artifact_sha256 does not match immutable evidence.")
+    return frames
 
 
 def write_thesis_report_bundle(path: Path | str, frames: Mapping[str, pd.DataFrame]) -> str:
@@ -1361,10 +1431,13 @@ def _validate_bundle_statuses(frames: Mapping[str, pd.DataFrame]) -> None:
             raise ValueError("Confirmatory report export cannot contain exploratory or pilot result rows.")
     store_ids = {str(value) for value in frames["stores"]["store_id"].dropna()}
     empirical = frames["empirical_results"]
+    sidecar_ids = {str(value) for value in frames["sidecars"]["sidecar_id"].dropna()}
+    sidecar_value_ids = {str(value) for value in frames["sidecar_values"]["sidecar_id"].dropna()}
+    if not sidecar_value_ids <= sidecar_ids:
+        raise ValueError("Sidecar value sidecar_id must identify a sidecar in the same bundle.")
     if not empirical.empty:
         if not {str(value) for value in empirical["store_id"]} <= store_ids:
             raise ValueError("Empirical result store_id must identify a store in the same bundle.")
-        sidecar_ids = {str(value) for value in frames["sidecars"]["sidecar_id"].dropna()}
         if not {str(value) for value in empirical["sidecar_id"]} <= sidecar_ids:
             raise ValueError("Empirical result sidecar_id must identify a sidecar in the same bundle.")
 
@@ -1392,6 +1465,33 @@ def _validate_empirical_bundle(frames: Mapping[str, pd.DataFrame]) -> None:
             raise ValueError(f"empirical_results row {index} data_identity does not match its store.")
         if row["split_identity"] != expected[1]:
             raise ValueError(f"empirical_results row {index} split_identity does not match its store.")
+
+
+def _bundle_source_revision(frames: Mapping[str, pd.DataFrame]) -> str | None:
+    empirical = frames["empirical_results"]
+    revisions = list(empirical["source_revision"].dropna())
+    if empirical.empty:
+        return None
+    if len(revisions) != len(empirical):
+        raise ValueError("Every empirical result must provide source_revision.")
+    if any(
+        not isinstance(revision, str) or not _GIT_OID.fullmatch(revision) or revision == "0" * 40
+        for revision in revisions
+    ):
+        raise ValueError("Empirical result source_revision must be a full nonzero Git OID.")
+    unique = set(revisions)
+    if len(unique) != 1:
+        raise ValueError("All empirical results must match one source_revision.")
+    return cast(str, revisions[0])
+
+
+def _portable_relative_path(value: object, *, field: str) -> Path:
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ValueError(f"{field} must be a portable relative path.")
+    path = Path(value)
+    if path.is_absolute() or path == Path(".") or ".." in path.parts:
+        raise ValueError(f"{field} must be a portable relative path.")
+    return path
 
 
 def _canonical_store_identity(value: object, field: str) -> str:
@@ -1426,6 +1526,7 @@ __all__ = [
     "build_thesis_report_frames",
     "deserialize_thesis_report_bundle",
     "serialize_thesis_report_bundle",
+    "validate_thesis_report_provenance",
     "validate_thesis_report_bundle",
     "write_thesis_report_bundle",
 ]

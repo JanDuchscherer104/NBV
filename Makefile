@@ -755,8 +755,8 @@ thesis-toolchain-lock: ## Refresh the generated thesis toolchain lock
 thesis-toolchain-lock-check: ## Check thesis toolchain lock schema and material-input drift
 	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py check --typst-bin "$(TYPST)"
 
-thesis-release-audit: thesis-toolchain-lock-check ## Run the final thesis release audit after verifying the toolchain lock
-	@$(PYTHON_INTERPRETER) scripts/thesis_release.py audit --final
+thesis-release-audit: _check_python ## Run the final thesis release audit after verifying the toolchain lock
+	@$(PYTHON_INTERPRETER) scripts/thesis_release.py audit --final --typst-bin "$(TYPST)"
 
 thesis-submission-build: _check_python ## Strictly build a submission from an explicit evidence report and output
 	@test -n "$(strip $(THESIS_REPORT))" || { echo "THESIS_REPORT is required" >&2; exit 2; }

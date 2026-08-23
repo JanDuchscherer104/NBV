@@ -27,6 +27,63 @@ def test_audit_accepts_documented_pending_lock_without_submission_claim() -> Non
     RELEASE.validate_release_requirements(data)
 
 
+def test_audit_routes_exact_root_and_typst_binary_through_lock_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[Path, str]] = []
+    monkeypatch.setattr(
+        RELEASE,
+        "_check_toolchain_lock",
+        lambda *, root, typst_bin: calls.append((root, typst_bin)),
+    )
+    monkeypatch.setattr(RELEASE, "validate_release_requirements", lambda *a, **k: None)
+    assert (
+        RELEASE.main(
+            ["audit", "--root", str(ROOT), "--final", "--typst-bin", "alt-typst"]
+        )
+        == 0
+    )
+    assert calls == [(ROOT, "alt-typst")]
+
+
+def test_hm_submission_is_institutional_guidance_not_binding_aspo() -> None:
+    requirements = {
+        row["id"]: row["classification"]
+        for row in RELEASE.load_release_requirements()["requirements"]
+    }
+    assert requirements["hm.submission"] == "institutional_guidance"
+    assert requirements["hm.independent-work"] == "binding_hm"
+    assert requirements["hm.citations"] == "binding_hm"
+    assert all(
+        requirements[identifier] == "nonbinding_ml_overlay"
+        for identifier in requirements
+        if identifier.startswith("ml.")
+    )
+
+
+@pytest.mark.parametrize(
+    "drift", ["stale material-input inventory", "compiler identity drift"]
+)
+def test_audit_lock_drift_is_fail_closed_before_typst(
+    monkeypatch: pytest.MonkeyPatch, drift: str
+) -> None:
+    def fail(**_kwargs):
+        raise RELEASE.ReleaseRequirementsError(f"toolchain lock check failed: {drift}")
+
+    monkeypatch.setattr(RELEASE, "_check_toolchain_lock", fail)
+    monkeypatch.setattr(
+        RELEASE,
+        "validate_release_requirements",
+        lambda *a, **k: pytest.fail("ledger ran"),
+    )
+    assert (
+        RELEASE.main(
+            ["audit", "--root", str(ROOT), "--final", "--typst-bin", "alt-typst"]
+        )
+        == 1
+    )
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -134,7 +191,7 @@ def test_report_rejects_fixture_notice_and_provenance_mismatch(tmp_path: Path) -
     report = tmp_path / "report.json"
     report.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(RELEASE.ReleaseRequirementsError, match="fixture_notice"):
-        RELEASE.load_report(report, "a" * 40)
+        RELEASE.load_report(report, "a" * 40, root=ROOT)
     payload.pop("fixture_notice")
     report.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(RELEASE.ReleaseRequirementsError, match="matching provenance"):
@@ -163,7 +220,7 @@ def test_report_rejects_relabelled_canonical_fixture_with_matching_revision(
     with pytest.raises(
         RELEASE.ReleaseRequirementsError, match="serialized evidence bundle"
     ):
-        RELEASE.load_report(report, "a" * 40)
+        RELEASE.load_report(report, "a" * 40, root=ROOT)
 
 
 def test_report_rejects_nonhex_or_mismatched_source_revision(tmp_path: Path) -> None:
@@ -209,7 +266,7 @@ def test_submission_checks_full_toolchain_lock_before_typst(
     )
     monkeypatch.setattr(RELEASE, "validate_confirmatory_claims", lambda _model: None)
     monkeypatch.setattr(RELEASE, "_claims_model", lambda _root: object())
-    monkeypatch.setattr(RELEASE, "load_report", lambda _path, _revision: {})
+    monkeypatch.setattr(RELEASE, "load_report", lambda _path, _revision, **_: {})
 
     def fake_run(command, **kwargs):
         calls.append(command)

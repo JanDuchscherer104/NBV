@@ -2,8 +2,7 @@
 #
 # This ledger records release evidence and human handoffs. It is not a
 # submission receipt and must not be used to infer an authenticated PRIMUSS
-# state. The generated toolchain lock is intentionally pending in this slice;
-# the lock-producing work replaces the placeholder before final verification.
+# state.
 
 schema_version = "aria-nbv-thesis-release-requirements-v1"
 date_checked = "2026-08-23"
@@ -73,7 +72,7 @@ blocker_rationale = "The bibliography is tracked and the Typst citation path is 
 
 [[requirements]]
 id = "hm.submission"
-classification = "binding_hm"
+classification = "institutional_guidance"
 source_urls = [
   "https://cs.hm.edu/studierende/abschlussarbeiten.de.html",
   "https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Anmeldung_Abschlussarbeit_Stand_29.09.2025.pdf",

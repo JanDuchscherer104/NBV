@@ -39,6 +39,7 @@ from aria_nbv.rollouts.reporting import (
     build_thesis_report_frames,
     deserialize_thesis_report_bundle,
     serialize_thesis_report_bundle,
+    validate_thesis_report_provenance,
     write_thesis_report_bundle,
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, RolloutZarrWriteResult, write_rollout_zarr_store
@@ -139,6 +140,7 @@ def test_serialized_report_deserializes_through_domain_owner(tmp_path) -> None:
     )
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
     payload = serialize_thesis_report_bundle(frames)
+    assert json.loads(payload)["source_revision"] is None
     rebuilt = deserialize_thesis_report_bundle(payload)
     for name in THESIS_REPORT_TABLE_COLUMNS:
         assert tuple(rebuilt[name].columns) == THESIS_REPORT_TABLE_COLUMNS[name]
@@ -149,6 +151,7 @@ def test_serialized_report_deserializes_through_domain_owner(tmp_path) -> None:
     "mutation",
     [
         lambda payload: payload.update(fixture_notice="synthetic"),
+        lambda payload: payload.pop("source_revision"),
         lambda payload: payload["tables"]["facts"]["rows"][0].update(extra=True),
         lambda payload: payload["tables"]["stores"]["rows"][0].update(store_id=["wrong-type"]),
     ],
@@ -601,12 +604,68 @@ def test_empirical_result_round_trips_strict_identity_and_missingness(tmp_path: 
     )
     frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
     bundle = json.loads(serialize_thesis_report_bundle(frames))
+    assert bundle["source_revision"] == "1" * 40
     row = bundle["tables"]["empirical_results"]["rows"][0]
     assert row["result_id"] == fields["result_id"]
     assert row["estimate"] is None and row["reason"]
     assert json.loads(row["actor_visible_inputs_json"]) == ["actor-policy-v1"]
     assert json.loads(row["oracle_only_inputs_json"]) == []
     assert row["sidecar_id"] == bundle["tables"]["sidecars"]["rows"][0]["sidecar_id"]
+
+    validated = validate_thesis_report_provenance(
+        bundle,
+        evidence_root=sidecar.parent,
+        expected_source_revision="1" * 40,
+    )
+    assert_frame_equal(validated["empirical_results"], frames["empirical_results"], check_dtype=False)
+
+
+def test_empirical_results_require_one_canonical_source_revision(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=861)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    mixed = {name: frame.copy() for name, frame in frames.items()}
+    mixed["empirical_results"] = pd.concat(
+        [
+            mixed["empirical_results"],
+            mixed["empirical_results"].assign(result_id="pilot-result-2", source_revision="2" * 40),
+        ],
+        ignore_index=True,
+    )
+    with pytest.raises(ValueError, match="one source_revision"):
+        serialize_thesis_report_bundle(mixed)
+
+
+def test_report_provenance_rejects_changed_evidence_and_relabelled_paths(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=862)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    payload = json.loads(serialize_thesis_report_bundle(frames))
+    with pytest.raises(ValueError, match="sidecar.*sha256"):
+        sidecar.write_text(sidecar.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
+    sidecar.unlink()
+    with pytest.raises(ValueError, match="does not exist"):
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
+
+    relabelled_root = tmp_path / "relabelled"
+    relabelled_root.mkdir()
+    sidecar = _empirical_sidecar(relabelled_root, result)
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    payload = json.loads(serialize_thesis_report_bundle(frames))
+    payload["tables"]["sidecars"]["rows"][0]["path"] = "../artifact.txt"
+    with pytest.raises(ValueError, match="portable relative path"):
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
+
+    artifact = sidecar.parent / "artifact.txt"
+    artifact.write_text("changed artifact", encoding="utf-8")
+    payload["tables"]["sidecars"]["rows"][0]["path"] = sidecar.name
+    with pytest.raises(ValueError, match="artifact_sha256"):
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
 
 
 def _empirical_sidecar(tmp_path: Path, result: RolloutZarrWriteResult, **patch: object) -> Path:

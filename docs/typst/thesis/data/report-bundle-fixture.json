@@ -2,6 +2,7 @@
   "schema_version": "aria-nbv-thesis-report-v2",
   "bundle_role": "fixture",
   "fixture_notice": "Synthetic non-scientific fixture for Typst contract tests only.",
+  "source_revision": "1111111111111111111111111111111111111111",
   "tables": {
     "stores": {"columns": ["store_id", "name", "manifest_sha256", "schema_version", "schema_id", "manifest_version", "created_at_utc", "validation_ok", "rollouts", "steps", "candidates", "targets", "sources", "split_manifest_hash", "source_offline_store_version"], "rows": [{"store_id": "synthetic-nonscientific-fixture", "name": "synthetic-rollouts.zarr", "manifest_sha256": "not-a-real-manifest", "schema_version": "aria-nbv-rollouts-v1", "schema_id": "rollouts", "manifest_version": "1", "created_at_utc": null, "validation_ok": true, "rollouts": 2, "steps": 4, "candidates": 12, "targets": 2, "sources": 2, "split_manifest_hash": "not-a-real-split", "source_offline_store_version": "synthetic-fixture"}]},
     "parameters": {"columns": ["store_id", "key", "value_type", "value_bool", "value_int", "value_float", "value_text", "is_missing"], "rows": [
