@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import tomllib
 from datetime import date
@@ -25,6 +26,8 @@ ACTIVE_FILES = {
     "refactor": AGENTS_ROOT / "refactors.toml",
 }
 RESOLVED_FILE = AGENTS_ROOT / "resolved.toml"
+PROPOSALS_FILE = AGENTS_ROOT / "proposals.toml"
+RESOLVED_PROPOSALS_FILE = AGENTS_ROOT / "proposals_resolved.toml"
 
 TITLES = {
     "issue": "# ARIA-NBV Issues",
@@ -104,6 +107,19 @@ REFERENCE_PREFIXES = (
     "context7:",
 )
 RESOLUTION_FIELDS = ["resolved_at", "resolution_note", "resolved_from"]
+PROPOSAL_REQUIRED_FIELDS = {
+    "id",
+    "source_debrief",
+    "target_owner",
+    "proposed_statement",
+    "evidence",
+    "current_conflict",
+    "scope",
+    "status",
+    "opened_at",
+}
+PROPOSAL_ACTIVE_STATUSES = {"proposed", "deferred", "reviewed"}
+PROPOSAL_DISPOSITIONS = {"accept", "reject", "narrow", "defer"}
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -125,6 +141,79 @@ def _load_resolved() -> dict[str, list[dict[str, Any]]]:
         "todo": list(data.get("todo", [])),
         "refactor": list(data.get("refactor", [])),
     }
+
+
+def _load_proposals(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return list(_load_toml(path).get("proposal", []))
+
+
+def _write_proposals(path: Path, records: list[dict[str, Any]]) -> None:
+    lines = ["# ARIA-NBV Human Intent Proposals", ""]
+    for record in records:
+        lines.append("[[proposal]]")
+        for key in (
+            "id",
+            "source_debrief",
+            "target_owner",
+            "proposed_statement",
+            "evidence",
+            "current_conflict",
+            "scope",
+            "status",
+            "opened_at",
+            "disposition",
+            "reviewed_by",
+            "review_receipt",
+            "reviewed_at",
+            "owner_edit_commit",
+            "proof",
+            "resolution_reason",
+            "resolved_at",
+        ):
+            if key in record:
+                lines.append(f"{key} = {_format_value(record[key])}")
+        lines.append("")
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+
+def _validate_proposal(record: dict[str, Any], seen_ids: set[str]) -> list[str]:
+    errors: list[str] = []
+    proposal_id = str(record.get("id", "<missing-id>"))
+    if not proposal_id.startswith("proposal-"):
+        errors.append(f"{proposal_id}: proposal id must start with `proposal-`")
+    if proposal_id in seen_ids:
+        errors.append(f"{proposal_id}: duplicate proposal id")
+    seen_ids.add(proposal_id)
+    missing = sorted(PROPOSAL_REQUIRED_FIELDS - record.keys())
+    if missing:
+        errors.append(f"{proposal_id}: missing proposal fields: {', '.join(missing)}")
+    if record.get("status") not in PROPOSAL_ACTIVE_STATUSES:
+        errors.append(
+            f"{proposal_id}: active proposal status must be proposed, deferred, or reviewed"
+        )
+    for field in PROPOSAL_REQUIRED_FIELDS - {"status"}:
+        value = record.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{proposal_id}: `{field}` must be a non-empty string")
+    for field in ("source_debrief", "target_owner"):
+        value = record.get(field)
+        if isinstance(value, str) and value and not (REPO_ROOT / value).is_file():
+            errors.append(f"{proposal_id}: `{field}` does not exist: {value}")
+    if record.get("status") == "deferred":
+        if record.get("disposition") != "defer":
+            errors.append(f"{proposal_id}: deferred proposal requires disposition=defer")
+        for field in ("reviewed_by", "review_receipt", "reviewed_at"):
+            if not str(record.get(field, "")).strip():
+                errors.append(f"{proposal_id}: deferred proposal requires `{field}`")
+    if record.get("status") == "reviewed":
+        if record.get("disposition") not in {"accept", "reject", "narrow"}:
+            errors.append(f"{proposal_id}: reviewed proposal has invalid disposition")
+        for field in ("reviewed_by", "review_receipt", "reviewed_at"):
+            if not str(record.get(field, "")).strip():
+                errors.append(f"{proposal_id}: reviewed proposal requires `{field}`")
+    return errors
 
 
 def _quote(value: str) -> str:
@@ -281,6 +370,32 @@ def validate(*, quiet: bool = False) -> int:
     for record_id in sorted(active_ids & resolved_ids):
         errors.append(f"{record_id}: active id reuses a resolved record id")
 
+    proposal_ids: set[str] = set()
+    active_proposals = _load_proposals(PROPOSALS_FILE)
+    resolved_proposals = _load_proposals(RESOLVED_PROPOSALS_FILE)
+    for proposal in active_proposals:
+        errors.extend(_validate_proposal(proposal, proposal_ids))
+    for proposal in resolved_proposals:
+        proposal_id = str(proposal.get("id", "<missing-id>"))
+        if proposal_id in proposal_ids:
+            errors.append(f"{proposal_id}: active proposal reuses a resolved id")
+        proposal_ids.add(proposal_id)
+        if proposal.get("status") != "resolved":
+            errors.append(f"{proposal_id}: resolved proposal status must be resolved")
+        if proposal.get("disposition") not in {"accept", "reject", "narrow"}:
+            errors.append(f"{proposal_id}: invalid resolved disposition")
+        for field in ("reviewed_by", "review_receipt", "reviewed_at", "resolved_at"):
+            if not str(proposal.get(field, "")).strip():
+                errors.append(f"{proposal_id}: resolved proposal requires `{field}`")
+        if proposal.get("disposition") in {"accept", "narrow"}:
+            for field in ("owner_edit_commit", "proof"):
+                if not str(proposal.get(field, "")).strip():
+                    errors.append(f"{proposal_id}: installed proposal requires `{field}`")
+        if proposal.get("disposition") == "reject" and not str(
+            proposal.get("resolution_reason", "")
+        ).strip():
+            errors.append(f"{proposal_id}: rejected proposal requires a reason")
+
     if errors:
         print("agents DB validation failed", file=sys.stderr)
         for error in errors:
@@ -388,6 +503,132 @@ def search(query: str, *, scope: str = "all") -> int:
     return 0
 
 
+def proposal_open(
+    proposal_id: str,
+    *,
+    source_debrief: str,
+    target_owner: str,
+    statement: str,
+    evidence: str,
+    conflict: str,
+    scope: str,
+) -> int:
+    if validate(quiet=True) != 0:
+        return 1
+    records = _load_proposals(PROPOSALS_FILE)
+    if any(record.get("id") == proposal_id for record in records) or any(
+        record.get("id") == proposal_id
+        for record in _load_proposals(RESOLVED_PROPOSALS_FILE)
+    ):
+        print(f"proposal id already exists: {proposal_id}", file=sys.stderr)
+        return 1
+    record = {
+        "id": proposal_id,
+        "source_debrief": source_debrief,
+        "target_owner": target_owner,
+        "proposed_statement": statement,
+        "evidence": evidence,
+        "current_conflict": conflict,
+        "scope": scope,
+        "status": "proposed",
+        "opened_at": date.today().isoformat(),
+    }
+    errors = _validate_proposal(record, set())
+    if errors:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+    records.append(record)
+    _write_proposals(PROPOSALS_FILE, records)
+    print(f"opened proposal {proposal_id}")
+    return 0
+
+
+def _commit_touches_target(commit: str, target_owner: str) -> bool:
+    result = subprocess.run(
+        ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", commit],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and target_owner in result.stdout.splitlines()
+
+
+def proposal_review(
+    proposal_id: str,
+    *,
+    disposition: str,
+    reviewer: str,
+    receipt: str,
+    owner_edit_commit: str | None,
+    proof: str | None,
+    reason: str | None,
+) -> int:
+    if reviewer != "current-user":
+        print("proposal review requires reviewer=current-user", file=sys.stderr)
+        return 1
+    records = _load_proposals(PROPOSALS_FILE)
+    record = next((item for item in records if item.get("id") == proposal_id), None)
+    if record is None:
+        print(f"active proposal not found: {proposal_id}", file=sys.stderr)
+        return 1
+    reviewed = dict(record)
+    reviewed.update(
+        disposition=disposition,
+        reviewed_by=reviewer,
+        review_receipt=receipt,
+        reviewed_at=date.today().isoformat(),
+    )
+    if disposition == "defer":
+        reviewed["status"] = "deferred"
+        records[records.index(record)] = reviewed
+        _write_proposals(PROPOSALS_FILE, records)
+        print(f"deferred proposal {proposal_id}")
+        return 0
+    if disposition in {"accept", "narrow"}:
+        if not owner_edit_commit or not proof:
+            print("accept/narrow requires --owner-edit-commit and --proof", file=sys.stderr)
+            return 1
+        if not _commit_touches_target(owner_edit_commit, str(record["target_owner"])):
+            print("owner edit commit does not touch target owner", file=sys.stderr)
+            return 1
+        reviewed["owner_edit_commit"] = owner_edit_commit
+        reviewed["proof"] = proof
+    elif disposition == "reject":
+        if not reason:
+            print("reject requires --reason", file=sys.stderr)
+            return 1
+        reviewed["resolution_reason"] = reason
+    else:
+        print(f"unsupported disposition: {disposition}", file=sys.stderr)
+        return 2
+    reviewed["status"] = "reviewed"
+    records[records.index(record)] = reviewed
+    _write_proposals(PROPOSALS_FILE, records)
+    print(f"reviewed proposal {proposal_id}: {disposition}")
+    return 0
+
+
+def proposal_resolve(proposal_id: str) -> int:
+    records = _load_proposals(PROPOSALS_FILE)
+    record = next((item for item in records if item.get("id") == proposal_id), None)
+    if record is None or record.get("status") != "reviewed":
+        print("proposal must have a completed non-defer review before resolution", file=sys.stderr)
+        return 1
+    resolved = dict(record)
+    resolved["status"] = "resolved"
+    resolved["resolved_at"] = date.today().isoformat()
+    _write_proposals(
+        PROPOSALS_FILE, [item for item in records if item.get("id") != proposal_id]
+    )
+    history = _load_proposals(RESOLVED_PROPOSALS_FILE)
+    history.append(resolved)
+    _write_proposals(RESOLVED_PROPOSALS_FILE, history)
+    print(f"resolved proposal {proposal_id}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
@@ -410,6 +651,24 @@ def build_parser() -> argparse.ArgumentParser:
     resolve_parser.add_argument("kind", choices=sorted(ACTIVE_FILES))
     resolve_parser.add_argument("record_id")
     resolve_parser.add_argument("--note", required=True)
+    open_parser = subparsers.add_parser("proposal-open", help="Open a typed proposal record.")
+    open_parser.add_argument("proposal_id")
+    open_parser.add_argument("--source-debrief", required=True)
+    open_parser.add_argument("--target-owner", required=True)
+    open_parser.add_argument("--statement", required=True)
+    open_parser.add_argument("--evidence", required=True)
+    open_parser.add_argument("--conflict", required=True)
+    open_parser.add_argument("--scope", required=True)
+    review_parser = subparsers.add_parser("proposal-review", help="Record current-user review.")
+    review_parser.add_argument("proposal_id")
+    review_parser.add_argument("--disposition", choices=sorted(PROPOSAL_DISPOSITIONS), required=True)
+    review_parser.add_argument("--reviewer", choices=["current-user"], required=True)
+    review_parser.add_argument("--receipt", required=True)
+    review_parser.add_argument("--owner-edit-commit")
+    review_parser.add_argument("--proof")
+    review_parser.add_argument("--reason")
+    resolve_proposal = subparsers.add_parser("proposal-resolve", help="Archive a reviewed proposal.")
+    resolve_proposal.add_argument("proposal_id")
     return parser
 
 
@@ -424,6 +683,28 @@ def main(argv: list[str] | None = None) -> int:
         return search(args.query, scope=args.scope)
     if command == "resolve":
         return resolve(args.kind, args.record_id, args.note)
+    if command == "proposal-open":
+        return proposal_open(
+            args.proposal_id,
+            source_debrief=args.source_debrief,
+            target_owner=args.target_owner,
+            statement=args.statement,
+            evidence=args.evidence,
+            conflict=args.conflict,
+            scope=args.scope,
+        )
+    if command == "proposal-review":
+        return proposal_review(
+            args.proposal_id,
+            disposition=args.disposition,
+            reviewer=args.reviewer,
+            receipt=args.receipt,
+            owner_edit_commit=args.owner_edit_commit,
+            proof=args.proof,
+            reason=args.reason,
+        )
+    if command == "proposal-resolve":
+        return proposal_resolve(args.proposal_id)
     raise AssertionError(f"unhandled command: {command}")
 
 

@@ -86,13 +86,30 @@ def git_provenance() -> dict[str, str]:
 
 
 def render(
-    today: date, title: str, codex_thread_id: str, provenance: dict[str, str]
+    today: date,
+    title: str,
+    codex_thread_id: str,
+    provenance: dict[str, str],
+    intent_proposal_target: str | None = None,
 ) -> tuple[Path, str]:
     slug = slugify(title)
     target_dir = HISTORY_ROOT / f"{today.year:04d}" / f"{today.month:02d}"
     target_dir.mkdir(parents=True, exist_ok=True)
     file_path = target_dir / f"{today.isoformat()}_{slug}.md"
     record_id = f"{today.isoformat()}_{slug}"
+    canonical_updates = (
+        f"\n  - {intent_proposal_target}" if intent_proposal_target else " []"
+    )
+    proposal_section = ""
+    if intent_proposal_target:
+        proposal_section = f"""
+
+## Human Intent Proposal
+- Proposed statement: <precise reusable policy change>
+- Evidence: <exact user statement or bounded cross-task evidence>
+- Current owner or conflict: <specific current owner or unresolved conflict>
+- Scope and target owner: <scope>; {intent_proposal_target}
+- Disposition: proposed"""
     body = f"""---
 id: {record_id}
 date: {today.isoformat()}
@@ -100,7 +117,7 @@ title: {json.dumps(title, ensure_ascii=False)}
 status: done
 topics: []
 confidence: high
-canonical_updates_needed: []
+canonical_updates_needed:{canonical_updates}
 touched_owner_paths: []
 codex_thread: codex://threads/{codex_thread_id}
 repo_object_format: {provenance["repo_object_format"]}
@@ -126,13 +143,7 @@ worktree_kind: {provenance["worktree_kind"]}
 
 ## Commits
 - none — no repository commit (not yet recorded)
-
-## Human Intent Proposal
-- Proposed statement: <reusable statement, or none>
-- Evidence: <exact user statement or bounded evidence, or none>
-- Current owner or conflict: <reviewed policy or unresolved conflict, or none>
-- Scope and target owner: <scope and exact owner path, or none>
-- Disposition: proposed
+{proposal_section}
 """
     return file_path, body
 
@@ -150,12 +161,29 @@ def main() -> int:
         action="store_true",
         help="Overwrite an existing debrief at the same path.",
     )
+    parser.add_argument(
+        "--intent-proposal",
+        metavar="TARGET_OWNER",
+        help="Add the proposal branch for one exact existing repository owner.",
+    )
     args = parser.parse_args()
 
     if not CODEX_THREAD_ID_PATTERN.fullmatch(args.thread_id):
         parser.error("--thread-id must be a Codex thread ID")
 
-    file_path, body = render(date.today(), args.title, args.thread_id, git_provenance())
+    if args.intent_proposal:
+        target = REPO_ROOT / args.intent_proposal
+        if target.is_absolute() and not target.is_relative_to(REPO_ROOT):
+            parser.error("--intent-proposal must name a repository-relative owner")
+        if not target.exists():
+            parser.error("--intent-proposal must name an existing repository owner")
+    file_path, body = render(
+        date.today(),
+        args.title,
+        args.thread_id,
+        git_provenance(),
+        args.intent_proposal,
+    )
     if file_path.exists() and not args.force:
         print(
             f"debrief already exists: {file_path.relative_to(REPO_ROOT)}",

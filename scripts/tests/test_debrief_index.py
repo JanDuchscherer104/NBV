@@ -197,25 +197,34 @@ def _proposal_body(disposition: str = "proposed") -> str:
         "- Proposed statement: Keep one owner per durable policy.\n"
         "- Evidence: exact bounded task evidence.\n"
         "- Current owner or conflict: current policy is unsettled.\n"
-        "- Scope and target owner: scaffold guidance; exact owner path.\n"
+        "- Scope and target owner: scaffold guidance; .agents/references/human_owner_intent.md\n"
         f"- Disposition: {disposition}\n"
     )
 
 
-@pytest.mark.parametrize(
-    "disposition", ["proposed", "accept", "reject", "narrow", "defer"]
-)
-def test_human_intent_proposal_body_uses_existing_target_and_review_dispositions(
-    tmp_path: Path, disposition: str
+def test_human_intent_proposal_body_is_immutable_proposed_evidence(
+    tmp_path: Path,
 ) -> None:
     source = tmp_path / "proposal.md"
-    source.write_text(_proposal_body(disposition), encoding="utf-8")
+    source.write_text(_proposal_body(), encoding="utf-8")
     assert (
         validator.check_proposal_body(
             source, [".agents/references/human_owner_intent.md"]
         )
         == []
     )
+
+
+@pytest.mark.parametrize("disposition", ["accept", "reject", "narrow", "defer"])
+def test_human_intent_proposal_rejects_lifecycle_disposition(
+    tmp_path: Path, disposition: str
+) -> None:
+    source = tmp_path / "proposal.md"
+    source.write_text(_proposal_body(disposition), encoding="utf-8")
+    errors = validator.check_proposal_body(
+        source, [".agents/references/human_owner_intent.md"]
+    )
+    assert any("must remain `Disposition: proposed`" in error for error in errors)
 
 
 def test_proposal_target_requires_exact_five_field_body(tmp_path: Path) -> None:
@@ -645,9 +654,30 @@ def test_title_round_trips_generator_and_canonical_parser(
     payload = body.split("\n---\n", 1)[0].removeprefix("---\n")
     assert yaml.safe_load(payload)["title"] == title
     assert "## Commits\n- none — no repository commit (not yet recorded)" in body
+    assert "## Human Intent Proposal" not in body
     source = tmp_path / "record.md"
     source.write_text(body, encoding="utf-8")
     assert validator.parse_frontmatter(source)["title"] == title
+
+
+def test_intent_proposal_is_opt_in_and_names_exact_target_owner(tmp_path: Path) -> None:
+    target = ".agents/references/human_owner_intent.md"
+    path, body = new_debrief.render(
+        date(2026, 8, 23),
+        "Intent proposal",
+        THREAD_ID,
+        {
+            "repo_object_format": "sha1",
+            "repo_head": "a" * 40,
+            "repo_branch": "main",
+            "worktree_kind": "primary",
+        },
+        target,
+    )
+    assert path.name == "2026-08-23_intent_proposal.md"
+    assert f"canonical_updates_needed:\n  - {target}" in body
+    assert f"Scope and target owner: <scope>; {target}" in body
+    assert "Disposition: proposed" in body
 
 
 def test_fresh_native_debrief_is_validator_valid_before_manual_filling(

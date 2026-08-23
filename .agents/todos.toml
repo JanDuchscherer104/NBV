@@ -1,6 +1,23 @@
 # ARIA-NBV TODOs
 
 [[todo]]
+id = "todo-044"
+title = "Define a source-backed memory consolidation proposal workflow"
+description = "Provide a bounded proposal-only route from debrief evidence to reviewed exact-owner updates without reviving LitKG."
+priority = "medium"
+status = "in_progress"
+labels = ["memory", "consolidation", "agents-db", "scaffold"]
+issue_ids = ["issue-025"]
+loc_min = 20
+loc_expected = 80
+loc_max = 180
+context = ["PR #107 now introduces typed proposal lifecycle commands, but the record remains active until a real proposal and published matched routing evidence prove the complete path.", "Debrief proposals remain immutable evidence; current-user review and branch-specific proof belong to the typed Agents-DB lifecycle."]
+references = ["repo:.agents/memory/README.md", "repo:.agents/proposals.toml", "repo:.agents/skills/agents-db/references/modes.md#proposal-review"]
+implementation_notes = ["Exercise open, defer, accept or narrow, proof, and resolution against fixed repository-realistic fixtures.", "Publish bounded immutable baseline and candidate trace evidence before resolving this record."]
+acceptance = ["A maintainer can identify, disposition, install, prove, and close a pending exact-owner update through one auditable path.", "Matched pre-feature and candidate routing evidence is reviewable outside ignored operator-local paths."]
+verification = ["make check-agent-memory", "make agents-db AGENTS_ARGS='validate'", "pytest -q scripts/tests/test_agents_db_proposals.py scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py"]
+
+[[todo]]
 id = "todo-001"
 title = "Classify and prune docs/"
 description = "Inventory docs/ and triage pages into public thesis narrative, paper/slides source, generated context, internal agent material, or archive."

@@ -5,17 +5,14 @@ description: Use before non-trivial ARIA-NBV work to locate the authoritative ow
 
 # Agent Behavior
 
-Use the owner-first loop before a non-trivial edit, review, diagnosis, or
-handoff. Obvious one-line answers and read-only command output do not need the
-full preflight. The loop ends when the exact owner, scoped result, and proof are
-explicit.
+Use this loop before non-trivial work; skip it for one-line answers and raw
+read-only output. Stop when the exact owner, scoped result, and proof are explicit.
 
 ## Invariant
 
-- **Thesis-code synchronization.** Keep the active thesis sources and executable
-   implementation in sync. When a change affects an implemented scientific or
-   behavioral claim, update and verify both owning surfaces together; do not let
-   thesis prose describe behavior unsupported by current code and tests.
+- **Thesis-code synchronization.** Keep active thesis sources and executable
+  implementation in sync; update and verify both owners for any implemented
+  scientific or behavioral claim.
 
 - **Lowest shared owner.** Place behavior used by demonstrated consumers at
   their lowest shared domain owner. Use Graphify for non-obvious consumer
@@ -24,13 +21,10 @@ explicit.
 
 ## Owner-first loop
 
-For scaffold or tool policy, the routing branch is part of locating the owner:
-open [`references/reviewed-intent.md`](references/reviewed-intent.md) before a
-specialist skill, broad navigation source, or general intent source. When the
-task is inside the accepted scaffold rework, that branch requires opening the
-accepted scoped specification and using it as the requirements owner. Lower-
-level boundary references may prove current implementation, but they do not
-replace the accepted specification for the policy decision.
+For scaffold or tool policy, open
+[`references/reviewed-intent.md`](references/reviewed-intent.md) before a
+specialist, navigation, or general-intent source. Its accepted specification
+owns requirements; lower-level references prove implementation only.
 
 1. **Locate the owner.** Read the root `AGENTS.md`, then the nearest guide or
    active skill for the touched surface. Stop when the exact owner is named or
@@ -64,10 +58,6 @@ scoped-specification precedence and stop before general reviewed intent when
 that specification settles the choice. Do not load reviewed intent for a
 settled exact-owner task outside such a scoped policy decision.
 
-For proposal eligibility classification, including a negative or already-owned
-candidate, open that reference and `.agents/memory/README.md` before deciding
-proposal, debrief, or none; this is the lifecycle exception to the fast path.
-
 ## Conditional branches
 
 - **Durable capture:** When the user directly requests persistence in deliberate
@@ -92,11 +82,11 @@ proposal, debrief, or none; this is the lifecycle exception to the fast path.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
 - **Proposal or verified residual work:** Classify through
-  [`intent-and-follow-up.md`](references/intent-and-follow-up.md) and
+  [`reviewed-intent.md`](references/reviewed-intent.md) and
   `.agents/memory/README.md`. Before amendment or resolution, open
   `scripts/agents_db.py`, the record lifecycle owner. For residual work,
-  execute and retain the exact current-owner proof; search existing records and amend
-  an independently actionable one before creating a follow-up.
+  execute and retain the exact current-owner proof, then use `agents-db` triage
+  for all-scope record selection and deduplication.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
   durable interface, architecture, or research-facing direction.
 - **Concrete failure owner:** Hand the reproducer and exact evidence to the

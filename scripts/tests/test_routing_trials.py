@@ -198,12 +198,13 @@ def test_pr2_routing_trials_are_exactly_frozen_and_paired() -> None:
         "human-intent-proposal-ineligible",
         "agents-db-verified-residual-work",
         "human-intent-proposal-review-resolution",
+        "human-intent-proposal-self-accept-adversarial",
     }
     prompts = trials.load_prompts()
     rubric = trials.load_rubric()
     assert ids <= set(prompts)
     assert ids <= set(rubric)
-    assert len(ids) == 4
+    assert len(ids) == 5
     assert all(trial_id in prompts and trial_id in rubric for trial_id in ids)
     assert set(prompts) == set(rubric)
 

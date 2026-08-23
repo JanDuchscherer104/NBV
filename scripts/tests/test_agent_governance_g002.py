@@ -763,10 +763,10 @@ def test_capture_and_routing_contracts() -> None:
     assert "durable-capture.md" in intent_reference
     assert "accepted plan only for sequencing" in intent_reference
     assert "Route\nverified actionable residual work" in intent_reference
-    assert "does not\nmutate policy or records" in intent_reference
+    assert "does not mutate policy or records" in intent_reference
     assert "../../../memory/README.md" in intent_reference
     assert "../../agents-db/SKILL.md" in intent_reference
-    assert "A described future proof is not verified" in intent_reference
+    assert "A described future proof is\nnot verified" in intent_reference
     assert intent_reference.count("future lifecycle workflows") == 0
 
     execution_branches = _read(
@@ -833,15 +833,15 @@ def test_capture_and_routing_contracts() -> None:
 
     memory_readme = _read(ROOT / ".agents" / "memory" / "README.md")
     assert "Current Policy" in memory_readme
-    assert "The proposal is only evidence until" in memory_readme
+    assert "debrief remains immutable episodic evidence" in memory_readme
     modes = _read(ROOT / ".agents" / "skills" / "agents-db" / "references" / "modes.md")
     agents_db_skill = _read(ROOT / ".agents" / "skills" / "agents-db" / "SKILL.md")
     lifecycle_terms = ("accept", "reject", "narrow", "defer")
     proposal_review = modes.split("## proposal-review", 1)[1]
     assert all(term in proposal_review for term in lifecycle_terms)
-    assert "exact current-user instruction" in proposal_review
-    assert "abstract simulation" in proposal_review
-    assert "never mutate policy or" in proposal_review
+    assert "exact current-task instruction" in proposal_review
+    assert "fixed fixture records" in proposal_review
+    assert "never edit\nthe target owner automatically" in proposal_review
     assert "the exact lifecycle contract" in agents_db_skill
     assert all(
         f"{term} require" not in memory_readme and f"{term} leaves" not in memory_readme
@@ -852,38 +852,29 @@ def test_capture_and_routing_contracts() -> None:
         and f"{term} leaves" not in agents_db_skill
         for term in lifecycle_terms
     )
-    assert "proposal, debrief, or none" in agent_behavior
-    assert "negative or already-owned" in agent_behavior
+    assert "Proposal or verified residual work" in agent_behavior
+    assert "reviewed-intent.md" in agent_behavior
     assert ".agents/memory/README.md" in agent_behavior
     assert "execute and retain the exact current-owner proof" in agent_behavior
-    assert "search existing records and amend" in agent_behavior
+    assert "current-owner proof" in agent_behavior
     assert "proposal review or resolution" not in agent_behavior.lower()
-    assert "explicit current-user authority" in external_actions
-    assert "already-reviewed" in external_actions
-    assert "not a simulation" in external_actions
-    assert "cannot self-accept" in external_actions
+    assert "external/current-user authority boundary" in external_actions
     assert ".agents/skills/agents-db/references/modes.md#proposal-review" in external_actions
     proposal_lifecycle = fixtures["human-intent-proposal-review-resolution"]
     assert proposal_lifecycle["expected_owner_paths"] == [
-        ".agents/skills/agents-db/SKILL.md",
-        ".agents/skills/agents-db/references/modes.md",
+        ".agents/skills/agents-db/references/proposal-routing-fixtures.md",
         ".agents/skills/agent-behavior/references/external-actions.md",
-        ".agents/memory/README.md",
+        ".agents/skills/agents-db/references/modes.md",
         "scripts/agents_db.py",
     ]
     assert proposal_lifecycle["required_outcomes"] == [
-        "human review chooses exactly accept, reject, narrow, or defer",
-        "accept or narrow installs and proves the smallest policy-owner edit before resolution",
-        "reject resolves with a reason while policy bytes stay unchanged",
-        "defer leaves policy unchanged and keeps the record active",
-        "deferred and resolved history is retained",
+        "the explicit defer command authorizes one typed defer receipt",
+        "policy bytes remain unchanged",
+        "the proposal remains active in deferred state",
     ]
     assert proposal_lifecycle["forbidden_outcomes"] == [
-        "an agent self-accepts a proposal as human review",
-        "accept or narrow resolves before the owner-edit proof exists",
-        "reject changes policy bytes or resolves without a reason",
-        "defer changes policy bytes or resolves the active record",
-        "deferred history is deleted",
+        "the proposal is resolved",
+        "an abstract lifecycle is substituted for the fixed record",
     ]
 
     routing_fixture = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"

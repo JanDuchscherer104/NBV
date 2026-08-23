@@ -57,6 +57,7 @@ REQUIRED_NATIVE_KEYS = {
 NATIVE_THREAD_CUTOFF = date(2026, 8, 21)
 NATIVE_PROVENANCE_CUTOFF = date(2026, 8, 22)
 NATIVE_LIVE_PROVENANCE_CUTOFF = date(2026, 8, 23)
+NATIVE_VALIDATION_CUTOVER_COMMIT = "a121cd821f7748f979c2cddf0f7c3af0e0b6a5a7"
 CODEX_THREAD_URI_PATTERN = re.compile(
     r"^codex://threads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
@@ -69,6 +70,7 @@ PROPOSAL_FIELDS = (
     "Scope and target owner",
     "Disposition",
 )
+PROPOSAL_PATH_PATTERN = re.compile(r"(?:^|;\s*)(\.?[A-Za-z0-9_./-]+)$")
 COMMIT_LINK_PATTERN = re.compile(
     r"^- \[([0-9a-f]+)\]"
     r"\(https://github\.com/JanDuchscherer104/ARIA-NBV/commit/([0-9a-f]+)\)"
@@ -114,6 +116,25 @@ AGENTS_DB_PATHS = (
     REPO_ROOT / ".agents" / "todos.toml",
     REPO_ROOT / ".agents" / "refactors.toml",
 )
+
+
+def is_grandfathered_native_path(relative_path: str) -> tuple[bool, bool]:
+    """Return cutover availability and whether one path existed at that commit."""
+    cutover_exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{NATIVE_VALIDATION_CUTOVER_COMMIT}^{{commit}}"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    ).returncode == 0
+    if not cutover_exists:
+        return False, False
+    grandfathered = subprocess.run(
+        ["git", "cat-file", "-e", f"{NATIVE_VALIDATION_CUTOVER_COMMIT}:{relative_path}"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    ).returncode == 0
+    return True, grandfathered
 
 
 def parse_inline_list(value: str) -> list[str]:
@@ -370,6 +391,23 @@ def check_history_records() -> list[str]:
         except ValueError:
             errors.append(f"{rel}: `date` must be an absolute ISO date")
             continue
+        cutover_exists, grandfathered = is_grandfathered_native_path(rel)
+        enforce_path_identity = record_date >= NATIVE_LIVE_PROVENANCE_CUTOFF or (
+            cutover_exists and not grandfathered
+        )
+        if enforce_path_identity:
+            expected_date = path.name[:10]
+            expected_id_prefix = f"{record_date_text}_"
+            expected_directory = f"{record_date.year:04d}/{record_date.month:02d}"
+            relative_parent = path.parent.relative_to(HISTORY_ROOT).as_posix()
+            if (
+                expected_date != record_date_text
+                or not str(frontmatter.get("id", "")).startswith(expected_id_prefix)
+                or relative_parent != expected_directory
+            ):
+                errors.append(
+                    f"{rel}: date must match the YYYY/MM path, filename, and id prefix"
+                )
         if record_date >= NATIVE_THREAD_CUTOFF:
             codex_thread = str(frontmatter.get("codex_thread", "")).strip()
             if not CODEX_THREAD_URI_PATTERN.fullmatch(codex_thread):
@@ -466,7 +504,7 @@ def check_history_records() -> list[str]:
                     f"{rel}: canonical update path does not exist: {update_text}"
                 )
 
-        if record_date >= date(2026, 8, 23):
+        if not grandfathered:
             errors.extend(check_proposal_body(path, canonical_updates))
         errors.extend(check_commit_links(path, frontmatter, record_date))
 
@@ -524,9 +562,16 @@ def check_proposal_body(path: Path, canonical_updates: object) -> list[str]:
         value = fields[field]
         if value.lower() == "none" or re.search(r"<[^>\n]*>", value):
             return [f"{rel}: proposal field must contain concrete evidence: {field}"]
-    disposition = fields["Disposition"]
-    if disposition not in {"proposed", "accept", "reject", "narrow", "defer"}:
-        return [f"{rel}: unsupported proposal disposition: {disposition}"]
+    if fields["Disposition"] != "proposed":
+        return [f"{rel}: episodic proposals must remain `Disposition: proposed`"]
+    target_match = PROPOSAL_PATH_PATTERN.search(fields["Scope and target owner"])
+    if target_match is None:
+        return [f"{rel}: proposal target must end with one exact repository path"]
+    target_owner = target_match.group(1)
+    if target_owner not in canonical_updates:
+        return [f"{rel}: proposal target must match `canonical_updates_needed`"]
+    if not (REPO_ROOT / target_owner).exists():
+        return [f"{rel}: proposal target owner does not exist: {target_owner}"]
     return []
 
 
@@ -588,6 +633,7 @@ def check_commit_links(
         return [f"{rel}: commit links require valid checkout provenance"]
     seen: set[str] = set()
     errors: list[str] = []
+    linked_changed_paths: set[str] = set()
     for line in lines:
         match = COMMIT_LINK_PATTERN.fullmatch(line)
         if not match:
@@ -637,9 +683,6 @@ def check_commit_links(
                 "-m",
                 "--find-renames",
                 label_oid,
-                "--",
-                source_path,
-                DEBRIEF_INDEX_PATH,
             ],
             cwd=REPO_ROOT,
             check=False,
@@ -652,6 +695,7 @@ def check_commit_links(
             )
         else:
             changed = set(changed_paths.stdout.splitlines())
+            linked_changed_paths.update(changed)
             if source_path in changed:
                 errors.append(
                     f"{rel}: linked commit creates or modifies the debrief source: {label_oid}"
@@ -660,6 +704,16 @@ def check_commit_links(
                 errors.append(
                     f"{rel}: linked commit creates or modifies the debrief index: {label_oid}"
                 )
+    touched_owner_paths = frontmatter.get("touched_owner_paths", [])
+    if isinstance(touched_owner_paths, list):
+        missing_touched = sorted(
+            str(owner) for owner in touched_owner_paths if str(owner) not in linked_changed_paths
+        )
+        if missing_touched:
+            errors.append(
+                f"{rel}: linked commits do not cover touched owner paths: "
+                + ", ".join(missing_touched)
+            )
     return errors
 
 

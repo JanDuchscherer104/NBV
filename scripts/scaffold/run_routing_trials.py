@@ -31,6 +31,7 @@ PRODUCTION_CORPUS_PATHS = (
     Path("Makefile"),
     Path(".agents/references/human_owner_intent.md"),
     Path(".agents/skills"),
+    Path(".agents/todos.toml"),
     Path(".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md"),
     Path("aria_nbv/AGENTS.md"),
     Path("aria_nbv/aria_nbv"),
@@ -38,6 +39,7 @@ PRODUCTION_CORPUS_PATHS = (
     Path("docs/AGENTS.md"),
     Path("docs/typst/shared"),
     Path("docs/typst/thesis/sections"),
+    Path("scripts/agents_db.py"),
 )
 EVALUATOR_DERIVED_PREFIXES = (
     "scripts/scaffold/",
@@ -1190,6 +1192,21 @@ def main() -> int:
         "production_corpus_paths": [
             path.as_posix() for path in PRODUCTION_CORPUS_PATHS
         ],
+        "execution": {
+            "ephemeral": True,
+            "sandbox": "read-only",
+            "approval_policy": "never",
+            "input": "stdin",
+            "working_directory": "isolated-tested-snapshot",
+        },
+        "graph": {
+            "provisioned": False,
+            "reason": "source-order suite uses exact production sources only",
+        },
+        "environment": {
+            "codex_home_configured": bool(os.environ.get("CODEX_HOME")),
+            "python_hash_seed": os.environ.get("PYTHONHASHSEED", "inherited"),
+        },
     }
     reports: list[dict[str, Any]] = []
     corpus_manifest: dict[str, str] | None = None
@@ -1304,6 +1321,8 @@ def main() -> int:
             "changed_paths": changed_paths,
             "baseline_corpus_manifest_sha256": baseline.get("corpus_manifest_sha256"),
             "candidate_corpus_manifest_sha256": index["corpus_manifest_sha256"],
+            "baseline_evaluation_config": baseline.get("evaluation_config"),
+            "candidate_evaluation_config": evaluation_config,
         }
     (output_dir / "index.json").write_text(
         json.dumps(index, indent=2, sort_keys=True) + "\n",

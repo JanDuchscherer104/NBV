@@ -39,16 +39,21 @@ than public docs.
 
 ## proposal-review
 
-Review an evidence-backed Human Intent Proposal with exactly one disposition:
-`accept`, `reject`, `narrow`, or `defer`. Accept or narrow only through an
-ordinary edit to the smallest policy owner. Reject resolves the existing
-record with a reason while policy bytes stay unchanged. Defer leaves policy
-unchanged and keeps the record active. TOML records the lifecycle but never
-installs policy automatically.
+`.agents/proposals.toml` owns active typed lifecycle records;
+`.agents/proposals_resolved.toml` retains closed receipts. Open a record with
+`scripts/agents_db.py proposal-open`, including its source debrief, exact target
+owner, statement, evidence, conflict, and scope. The debrief remains immutable
+at `Disposition: proposed`.
 
-A real disposition requires an exact current-user instruction selecting that
-branch in the current task. Existing review, policy, or conversation evidence
-does not supply authority; without it, record no disposition and leave the
-proposal active and unresolved. An abstract simulation may model one branch
-for analysis, but it is non-authoritative and must never mutate policy or
-TOML.
+Review with exactly one disposition through `proposal-review`. `accept` and
+`narrow` require a commit that changes the exact target owner plus a proof
+receipt; `reject` requires a reason and no owner-edit commit; `defer` keeps the
+record active. After a non-defer review, `proposal-resolve` moves the typed
+receipt to resolved history. The commands record lifecycle state but never edit
+the target owner automatically.
+
+A real disposition requires `--reviewer current-user` and a receipt naming the
+exact current-task instruction selecting that branch. Existing policy or old
+conversation evidence is insufficient; without current authority, leave the
+proposal active and unresolved. Routing tests exercise fixed fixture records,
+not simulated repository mutations.

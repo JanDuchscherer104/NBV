@@ -32,6 +32,9 @@ scientific truth stays with its smallest source owner.
   pointers plus the installed owner and focused proof when applicable.
 - **Triage, issue conversion, or PRD synthesis:** Read the matching mode in
   [workflow modes](references/modes.md).
+- **Proposal routing evaluation:** Use the fixed read-only
+  [proposal fixtures](references/proposal-routing-fixtures.md); production
+  lifecycle state remains in `.agents/proposals*.toml`.
 - **Public docs, thesis narrative, or ordinary retrieval:** Hand off to the
   nearest docs or scientific owner instead of changing the database.
 - **Tiny cleanup with no active-debt change:** Keep the database unchanged.
