@@ -11,7 +11,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from ....rollouts.inspection import CANDIDATE_GROUP_FIELDS
+from ....rollouts.inspection import (
+    CANDIDATE_GROUP_FIELDS,
+    candidate_selection_pooled_summary_rows,
+    candidate_selection_transition_rows,
+)
 from .session import (
     _cached_candidate_flow,
     _cached_candidate_group,
@@ -161,6 +165,51 @@ def _render_candidate_population_evidence(store_path: str) -> None:
             "or unclassified. The bounded display sample is never used to infer provenance."
         )
     _render_complete_candidate_support(population, evidence_role=evidence_role or "provenance")
+
+    selection_dynamics = population.get("selection_dynamics", {})
+    if isinstance(selection_dynamics, dict):
+        dynamics = next(
+            (pd.DataFrame(value) for value in selection_dynamics.values() if isinstance(value, list) and value),
+            pd.DataFrame(),
+        )
+        if not dynamics.empty:
+            pooled = pd.DataFrame(
+                candidate_selection_pooled_summary_rows(dynamics.to_dict("records"), metric="policy_mass")
+            )
+            if not pooled.empty:
+                _render_plot(
+                    _pooled_candidate_selection_figure(pooled),
+                    _candidate_population_explanation(
+                        "How does candidate-family choice evolve across factual acquisition?",
+                        "Complete candidate-choice dynamics from compatible factual states.",
+                        "Policy mass per family and acquisition; dimensionless fraction.",
+                        "Persisted selection probabilities over finite candidate rows; observed states remain explicit.",
+                        "Choice mass changes smoothly without unexplained family monopolies or missing depths.",
+                        "Abrupt changes or absent families can indicate generator, policy, or state-frame issues.",
+                        "inspection.candidate_population_evidence.selection_dynamics",
+                        evidence_role or "provenance",
+                    ),
+                )
+                transitions = pd.DataFrame(
+                    candidate_selection_transition_rows(dynamics.to_dict("records"), pool_temperatures=True)
+                )
+                if not transitions.empty:
+                    _render_plot(
+                        _candidate_transition_figure(transitions),
+                        _candidate_population_explanation(
+                            "How does the previously selected family relate to the next family?",
+                            "Complete adjacent-step candidate-choice transitions in the selected compatible cohort.",
+                            "Expected policy mass and realized transition frequency; dimensionless fractions.",
+                            "Only factual adjacent-step contexts with persisted selection evidence contribute.",
+                            "Expected and realized transitions broadly agree where context support is substantial.",
+                            "Sparse or divergent cells are diagnostics of support and policy/state effects, not causal proof.",
+                            "inspection.candidate_population_evidence.selection_transitions",
+                            evidence_role or "provenance",
+                        ),
+                    )
+                with st.expander("Candidate-choice rows and CSV"):
+                    st.dataframe(pooled, hide_index=True, width="stretch")
+                    _download_frame("Download candidate-choice CSV", "candidate-choice-dynamics.csv", pooled)
 
     st.markdown("#### Candidate composition")
     st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
