@@ -569,23 +569,25 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
                 {"code": finding.code, "message": finding.message, "severity": finding.severity}
             )
     binding_rows: list[dict[str, Any]] = []
+    status_rows: list[dict[str, str]] = []
     for row in evidence.rollouts:
         path = str(row["path"])
         included = bool(row.get("included_in_training_totals"))
         status = "Compatible" if included else "Excluded"
-        status_renderer = st.success if included else st.error
         store_findings = findings_by_store.get(path, [])
         blocking = [finding for finding in store_findings if finding["severity"] == "blocking"]
         reasons = blocking or store_findings
         reason = "; ".join(f"{finding['code']}: {finding['message']}" for finding in reasons)
-        status_renderer(f"**{status}: {Path(path).name}**")
         validation = row.get("validation_status") or "unavailable"
-        st.caption(f"Full path: `{path}` · validation: **{validation}**")
-        if not included:
-            if reasons:
-                st.caption(f"**Exclusion reason:** {reason}")
-            else:
-                st.caption("**Exclusion reason:** compatibility check failed without a store-specific message.")
+        status_rows.append(
+            {
+                "store": Path(path).name,
+                "status": status,
+                "validation": validation,
+                "reason": reason or ("included in totals" if included else "compatibility check failed"),
+                "full path": path,
+            }
+        )
         binding_rows.append(
             {
                 "store": Path(path).name,
@@ -599,6 +601,17 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
                 "source_splits": row.get("source_splits", {}),
                 "findings": store_findings,
             }
+        )
+    st.dataframe(pd.DataFrame(status_rows), hide_index=True, width="stretch")
+    st.caption(
+        "Store compatibility matrix (full paths are included above): "
+        + "; ".join(f"{row['status']} {row['full path']}" for row in status_rows)
+    )
+    excluded = [row for row in status_rows if row["status"] == "Excluded"]
+    if excluded:
+        st.error(
+            "Excluded stores remain selected but contribute no totals: "
+            + "; ".join(f"{row['store']} — {row['reason']}" for row in excluded)
         )
     with st.expander("Root/source binding hashes and raw findings", expanded=False):
         st.caption("VIN root manifest, source manifest, split manifest, source splits, and raw finding details.")

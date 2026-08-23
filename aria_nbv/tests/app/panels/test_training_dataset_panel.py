@@ -206,9 +206,11 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert _metrics(app)["Rollouts"] == "0"
     assert any("Blocked" in error.value for error in app.error)
     visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
-    assert f"Excluded: {blocked.name}" in visible
+    assert f"{blocked.name}" in visible
     assert blocked.as_posix() in visible
     assert "source_manifest_hash_mismatch" in visible
+    assert "Store compatibility matrix" in visible
+    assert "Excluded" in visible
     assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
     assert "Root/source binding identifiers are available" in visible
 
@@ -225,7 +227,8 @@ def test_compatible_store_attribution_shows_root_and_source_bindings(
 
     assert not app.exception
     visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
-    assert f"Compatible: {compatible.name}" in visible
+    assert "Store compatibility matrix" in visible
+    assert "Compatible" in visible
     assert compatible.as_posix() in visible
     assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
     assert "Root/source binding identifiers are available" in visible
