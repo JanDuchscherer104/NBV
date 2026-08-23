@@ -323,11 +323,10 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
     if isinstance(direction, dict):
         density = pd.DataFrame(direction.get("density_rows", []))
         if not density.empty:
-            level = "cohort_macro" if "cohort_macro" in set(density.get("aggregation_level", ())) else "state"
-            selected = density[density["aggregation_level"].eq(level)] if "aggregation_level" in density else density
+            selected = _select_support_facet(density, "Direction support")
             if not selected.empty:
-                pivot = selected.pivot_table(
-                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
+                pivot = selected.pivot(
+                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction"
                 ).sort_index()
                 fig = px.imshow(
                     pivot,
@@ -384,8 +383,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
         value = "mean" if "mean" in frame else "count"
         if "metric" not in frame or value not in frame:
             continue
-        level = "cohort_macro" if "cohort_macro" in set(frame.get("aggregation_level", ())) else "state"
-        selected = frame[frame["aggregation_level"].eq(level)] if "aggregation_level" in frame else frame
+        selected = _select_support_facet(frame, title)
         fig = px.bar(
             selected,
             x="metric",
@@ -416,7 +414,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
         value = "mean" if "mean" in target_view else "count"
         if "metric" in target_view and value in target_view:
             fig = px.bar(
-                target_view,
+                _select_support_facet(target_view, "Target-view support"),
                 x="metric",
                 y=value,
                 color="population" if "population" in target_view else None,
@@ -435,6 +433,22 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     evidence_role,
                 ),
             )
+
+
+def _select_support_facet(frame: pd.DataFrame, label: str) -> pd.DataFrame:
+    """Select one exact persisted support facet before rendering a plot."""
+
+    selected = frame.copy()
+    for field in ("contract_id", "generation_cohort_id", "population", "aggregation_level", "scene_id", "step_index"):
+        if field not in selected.columns:
+            continue
+        values = sorted(selected[field].dropna().astype(str).unique())
+        if len(values) <= 1:
+            continue
+        default = "cohort_macro" if field == "aggregation_level" and "cohort_macro" in values else values[0]
+        choice = st.selectbox(f"{label}: {field}", values, index=values.index(default), key=f"support-{label}-{field}")
+        selected = selected[selected[field].astype(str).eq(str(choice))]
+    return selected
 
 
 def _render_candidate_provenance_flow(store_path: str) -> None:
