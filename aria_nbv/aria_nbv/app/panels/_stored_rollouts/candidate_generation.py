@@ -472,6 +472,7 @@ def _candidate_population_explanation(
     warning_text: str,
     source: str,
     role: str,
+    theory: TheoryReferences | None = None,
 ) -> ScientificExplanation:
     """Build consistent scientific context for complete candidate-support plots."""
 
@@ -490,7 +491,27 @@ def _candidate_population_explanation(
         ),
         evidence_role=role,
         source_fields=(source,),
+        theory=theory,
     )
+
+
+def _support_count_caption(frame: pd.DataFrame) -> None:
+    """Show additive support denominators for the currently selected facet."""
+
+    labels = {
+        "candidate_total_count": "candidates",
+        "candidate_count": "candidates",
+        "state_count": "states",
+        "defined_state_count": "defined states",
+        "scene_count": "scenes",
+    }
+    values: list[str] = []
+    for field, label in labels.items():
+        if field in frame and not frame[field].dropna().empty:
+            value = frame[field].max()
+            values.append(f"{label}={int(value):,}")
+    if values:
+        st.caption("Selected support facet: " + ", ".join(values) + ".")
 
 
 def _render_complete_candidate_support(population: dict[str, object], *, evidence_role: str) -> None:
@@ -502,6 +523,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
         if not density.empty:
             selected = _select_support_facet(density, "Direction support")
             if not selected.empty:
+                _support_count_caption(selected)
                 pivot = selected.pivot(
                     index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction"
                 ).sort_index()
@@ -523,6 +545,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                         "Spikes or missing direction rows indicate support or pose-frame issues.",
                         "inspection.candidate_direction_evidence",
                         evidence_role,
+                        TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
                     ),
                 )
                 with st.expander("Direction support rows and CSV"):
@@ -596,6 +619,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
         selected = _select_metric_unit(selected, title)
         if selected.empty:
             continue
+        _support_count_caption(selected)
         fig = px.bar(
             selected,
             x="metric",
@@ -624,6 +648,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
     collision = pd.DataFrame(population.get("collision", []))
     if not collision.empty:
         collision = _select_support_facet(collision, "Collision support")
+        _support_count_caption(collision)
         collision_fields = [name for name in collision.columns if name.endswith("_count")]
         if collision_fields:
             collision_plot = collision[collision_fields].sum(numeric_only=True).rename("count").reset_index()
@@ -647,6 +672,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
     target_view = pd.DataFrame(population.get("target_view", []))
     if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty and "evidence" in target_view:
         target_view = _select_support_facet(target_view, "Target-view support")
+        _support_count_caption(target_view)
         distance = target_view.loc[target_view["evidence"].eq("target_distance")].copy()
         if not distance.empty and "mean" in distance:
             fig = px.bar(
@@ -668,6 +694,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "Large missingness or absent optical evidence indicates evaluator coverage gaps.",
                     "inspection.candidate_target_view_evidence",
                     evidence_role,
+                    TheoryReferences(term_ids=("target-of-interest",)),
                 ),
             )
         availability = target_view.loc[target_view["evidence"].ne("target_distance")].copy()
@@ -1078,22 +1105,25 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
     composition_by_group = population.get("composition", {})
     families = pd.DataFrame(composition_by_group.get("position", []))
     if not families.empty:
+        family_field = "family" if "family" in families else "position"
+        cohort_field = "generation_cohort_id" if "generation_cohort_id" in families else None
         families["selection_rate_given_available"] = np.where(
             families["actor_valid_count"] > 0,
             families["selected_count"] / families["actor_valid_count"],
             np.nan,
         )
         long = families.melt(
-            id_vars="position",
+            id_vars=[field for field in (family_field, cohort_field) if field is not None],
             value_vars=["macro_actor_valid_rate", "selection_rate_given_available"],
             var_name="metric",
             value_name="fraction",
         )
         fig = px.bar(
             long,
-            x="position",
+            x=family_field,
             y="fraction",
             color="metric",
+            facet_col=cohort_field,
             barmode="group",
             title="Candidate-family availability and normalized selection",
         )
@@ -1126,6 +1156,7 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
                 ),
                 evidence_role="actor-visible",
                 source_fields=("candidate position_id", "actor_action_mask", "selected_mask"),
+                theory=TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
             ),
         )
         _download_frame("Download family support CSV", "candidate-family-support.csv", families)
@@ -1138,17 +1169,20 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
     breakdown = pd.DataFrame(composition_by_group.get(breakdown_by, []))
     count_fields = [name for name in ("actor_valid_count", "trainable_count", "selected_count") if name in breakdown]
     if not breakdown.empty and count_fields:
+        family_field = "family" if "family" in breakdown else breakdown_by
+        cohort_field = "generation_cohort_id" if "generation_cohort_id" in breakdown else None
         long = breakdown.melt(
-            id_vars=breakdown_by,
+            id_vars=[field for field in (family_field, cohort_field) if field is not None],
             value_vars=count_fields,
             var_name="mask_population",
             value_name="count",
         )
         fig = px.bar(
             long,
-            x=breakdown_by,
+            x=family_field,
             y="count",
             color="mask_population",
+            facet_col=cohort_field,
             barmode="group",
             title=f"Candidate support by {breakdown_by}",
         )

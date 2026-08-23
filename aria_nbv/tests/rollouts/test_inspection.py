@@ -168,71 +168,219 @@ def test_candidate_population_owner_census_keeps_selection_domain_surface() -> N
     assert set(bundle["selection_dynamics"]) == {"position", "strategy", "mixture", "position_strategy"}
 
 
-def _candidate_choice_rows_for_parity() -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for step_index, family, selected, gain in (
-        (0, "forward", 1, 0.2),
-        (1, "side", 1, 0.4),
-    ):
-        rows.append(
-            {
-                "group_by": "position_strategy",
-                "generation_cohort_id": "cohort-a",
-                "generation_cohort": "temperature",
-                "scene": "scene-a",
-                "rollout_row_id": 7,
-                "step_row_id": 10 + step_index,
-                "step_index": step_index,
-                "family": family,
-                "family_selected_count": selected,
-                "family_candidate_count": 3,
-                "candidate_count": 6,
-                "family_actor_valid_count": 2,
-                "actor_valid_count": 4,
-                "policy_mass": None if step_index == 1 else 0.6,
-                "policy": "temperature_softmax",
-                "temperature": 2.0,
-                "horizon": 2,
-                "branch_factor": 1,
-                "beam_width": 1,
-                "cumulative_target_root_gain": gain,
-            }
-        )
-    return rows
-
-
 def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_sequences() -> None:
-    rows = _candidate_choice_rows_for_parity()
-
-    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
-    sequences = candidate_selection_sequence_rows(rows)
-    returns = candidate_sequence_return_summary_rows(sequences)
-
-    transition = next(row for row in transitions if row["next_family"] == "side")
-    assert transition["previous_family"] == "forward"
-    assert sequences[0]["sequence"] == "forward → side"
-    assert returns[0]["sequence"] == "forward → side"
+    selected = {
+        (0, 0): "forward",
+        (0, 1): "side",
+        (0, 2): "forward",
+        (1, 0): "forward",
+        (1, 1): "forward",
+        (1, 2): "side",
+    }
+    forward_mass = {(0, 0): 0.8, (0, 1): 0.3, (0, 2): 0.6, (1, 0): 0.6, (1, 1): 0.6, (1, 2): 0.3}
+    terminal_gain = {0: 0.5, 1: 0.1}
+    rows: list[dict[str, object]] = []
+    candidate_row_id = 0
+    for rollout_row_id in range(2):
+        for step_index in range(3):
+            for family in ("forward", "side"):
+                probability = forward_mass[(rollout_row_id, step_index)]
+                if family == "side":
+                    probability = 1.0 - probability
+                rows.append(
+                    {
+                        "candidate_row_id": candidate_row_id,
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "{}",
+                        "scene": f"scene-{rollout_row_id}",
+                        "rollout_row_id": rollout_row_id,
+                        "step_row_id": 10 * rollout_row_id + step_index,
+                        "step_index": step_index,
+                        "policy": "temperature_softmax",
+                        "temperature": 2.0,
+                        "horizon": 3,
+                        "branch_factor": 1,
+                        "beam_width": 1,
+                        "mixture": family,
+                        "position": family,
+                        "strategy": "target_point" if family == "forward" else "forward_rig",
+                        "invalid_reason": "none",
+                        "actor_action": True,
+                        "oracle_label": True,
+                        "q_train": True,
+                        "selected": selected[(rollout_row_id, step_index)] == family,
+                        "sampler_probability": 0.5,
+                        "selection_probability": probability,
+                        "target_root_gain": 0.1,
+                        "cumulative_target_root_gain": terminal_gain[rollout_row_id]
+                        if step_index == 2
+                        else 0.05 * (step_index + 1),
+                        "path_collision": False,
+                        "path_collision_applicable": True,
+                        "path_collision_evaluated": True,
+                        "path_min_clearance_m": 1.0,
+                    }
+                )
+                candidate_row_id += 1
+    evidence = candidate_population_evidence(
+        object(), audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows]
+    )
+    dynamics = evidence["selection_dynamics"]["position"]
+    assert len(dynamics) == 12
+    one = next(
+        row for row in dynamics if row["rollout_row_id"] == 0 and row["step_index"] == 1 and row["family"] == "side"
+    )
+    assert one["policy_mass"] == pytest.approx(0.7)
+    assert one["selected_share"] == pytest.approx(1.0)
+    temporal = candidate_selection_temporal_summary_rows(dynamics, metric="policy_mass")
+    forward_step_one = next(row for row in temporal if row["step_index"] == 1 and row["family"] == "forward")
+    assert forward_step_one["finite_count"] == 2
+    assert forward_step_one["median"] == pytest.approx(0.45)
+    transitions = candidate_selection_transition_rows(dynamics)
+    transition = next(
+        row
+        for row in transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "forward"
+    )
+    assert transition["context_count"] == 2
+    assert transition["expected_policy_mass_mean"] == pytest.approx(0.45)
+    assert transition["realized_rate"] == pytest.approx(0.5)
+    pooled_rows = [
+        {
+            **row,
+            "generation_cohort_id": f"cohort-{row['rollout_row_id']}",
+            "temperature": 0.5 if row["rollout_row_id"] == 0 else 2.0,
+        }
+        for row in dynamics
+    ]
+    pooled = candidate_selection_pooled_summary_rows(pooled_rows, metric="policy_mass")
+    pooled_forward = next(row for row in pooled if row["step_index"] == 1 and row["family"] == "forward")
+    assert pooled_forward["state_count"] == 2
+    assert pooled_forward["fraction"] == pytest.approx(0.45)
+    pooled_transitions = candidate_selection_transition_rows(pooled_rows, pool_temperatures=True)
+    pooled_transition = next(
+        row
+        for row in pooled_transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "forward"
+    )
+    assert pooled_transition["context_count"] == 2
+    assert pooled_transition["expected_policy_mass_mean"] == pytest.approx(0.45)
+    assert pooled_transition["temperature"] is None
+    assert pooled_transition["pooled_temperatures"] is True
+    sequences = candidate_selection_sequence_rows(dynamics)
+    summaries = candidate_sequence_return_summary_rows(sequences)
+    assert [row["sequence"] for row in sequences] == ["forward → side → forward", "forward → forward → side"]
+    assert {row["sequence"]: row["terminal_return_median"] for row in summaries} == {
+        "forward → forward → side": pytest.approx(0.1),
+        "forward → side → forward": pytest.approx(0.5),
+    }
+    assert evidence["selection_sequences"]["position"] == sequences
+    assert evidence["sequence_returns"]["position"] == summaries
 
 
 def test_pooled_selection_materializes_families_absent_from_a_temperature_cohort() -> None:
-    rows = _candidate_choice_rows_for_parity()
-    rows[0] = {**rows[0], "family": "forward"}
-    rows[1] = {**rows[1], "family": "side"}
+    rows: list[dict[str, object]] = []
 
+    def add_state(cohort: str, temperature: float, step_index: int, families: tuple[str, ...], selected: str) -> None:
+        for family in families:
+            rows.append(
+                {
+                    "group_by": "position",
+                    "family": family,
+                    "generation_cohort_id": cohort,
+                    "generation_cohort": cohort,
+                    "scene": cohort,
+                    "rollout_row_id": 0,
+                    "step_row_id": 10 + step_index,
+                    "step_index": step_index,
+                    "policy": "temperature_softmax",
+                    "temperature": temperature,
+                    "horizon": 2,
+                    "branch_factor": 1,
+                    "beam_width": 1,
+                    "candidate_count": len(families),
+                    "actor_valid_count": len(families),
+                    "family_candidate_count": 1,
+                    "family_actor_valid_count": 1,
+                    "family_selected_count": int(family == selected),
+                    "allocation_share": 1.0 / len(families),
+                    "valid_share": 1.0 / len(families),
+                    "selected_share": float(family == selected),
+                    "policy_mass": 0.25 if family == "side" else 0.75 if len(families) == 2 else 1.0,
+                    "probability_available": True,
+                    "probability_unavailable_reason": None,
+                }
+            )
+
+    add_state("hot", 2.0, 0, ("forward", "side"), "forward")
+    add_state("hot", 2.0, 1, ("forward", "side"), "side")
+    add_state("cold", 0.5, 0, ("forward",), "forward")
+    add_state("cold", 0.5, 1, ("forward",), "forward")
     pooled = candidate_selection_pooled_summary_rows(rows, metric="allocation_share")
-
-    assert {row["family"] for row in pooled} == {"forward", "side"}
-    assert all(row["state_count"] == 1 for row in pooled)
+    side = next(row for row in pooled if row["step_index"] == 1 and row["family"] == "side")
+    assert side["state_count"] == 2 and side["numerator"] == 1 and side["denominator"] == 3
+    assert side["fraction"] == pytest.approx(1 / 3)
+    pooled_policy = candidate_selection_pooled_summary_rows(rows, metric="policy_mass")
+    side_policy = next(row for row in pooled_policy if row["step_index"] == 1 and row["family"] == "side")
+    assert side_policy["state_count"] == 2 and side_policy["finite_state_count"] == 2
+    assert side_policy["fraction"] == pytest.approx(0.125)
+    pooled_selected = candidate_selection_pooled_summary_rows(rows, metric="selected_share")
+    side_selected = next(row for row in pooled_selected if row["step_index"] == 1 and row["family"] == "side")
+    assert side_selected["state_count"] == 2 and side_selected["numerator"] == 1
+    assert side_selected["denominator"] == 2 and side_selected["fraction"] == pytest.approx(0.5)
+    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
+    transition = next(
+        row
+        for row in transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "side"
+    )
+    assert transition["context_count"] == 2 and transition["realized_count"] == 1
+    assert transition["realized_rate"] == pytest.approx(0.5)
 
 
 def test_candidate_selection_probability_failure_closes_policy_mass_only() -> None:
-    rows = _candidate_choice_rows_for_parity()
-
-    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
-
-    transition = next(row for row in transitions if row["next_family"] == "side")
-    assert transition["expected_missing_count"] == 1
-    assert transition["realized_rate"] == pytest.approx(1.0)
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "step_index": 0,
+            "policy": "temperature_softmax",
+            "temperature": 2.0,
+            "horizon": 1,
+            "branch_factor": 1,
+            "beam_width": 1,
+            "mixture": family,
+            "position": family,
+            "strategy": "target_point",
+            "invalid_reason": "none",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": 0.5,
+            "selection_probability": probability,
+            "target_root_gain": 0.1,
+            "cumulative_target_root_gain": 0.1,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, (family, probability) in enumerate((("forward", 0.8), ("side", None)))
+    ]
+    evidence = candidate_population_evidence(
+        object(), audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows]
+    )
+    dynamics = evidence["selection_dynamics"]["position"]
+    assert all(row["policy_mass"] is None for row in dynamics)
+    assert all(row["probability_unavailable_reason"] == "incomplete_probability_vector" for row in dynamics)
+    assert evidence["calibration"]["position"][0]["proposal_available"] is True
+    with pytest.raises(ValueError, match="Unsupported candidate selection metric"):
+        candidate_selection_temporal_summary_rows(dynamics, metric="unsupported")
 
 
 def test_candidate_group_summary_rejects_unsupported_field() -> None:
