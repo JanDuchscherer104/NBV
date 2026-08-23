@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import inspect
+from contextlib import nullcontext
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return
-from aria_nbv.rollouts.inspection import _materialize_selection_family_union
+from aria_nbv.rollouts.inspection import _materialize_selection_family_union, candidate_target_view_evidence
 
 
 def _pooled_row(*, family: str, step_index: int, fraction: float) -> dict[str, object]:
@@ -250,6 +251,54 @@ def test_candidate_support_explanation_keeps_theory_and_inspection_owner() -> No
     assert explanation.theory.equation_ids == ("action.angle_cap_transform",)
     assert explanation.theory.term_ids == ("finite-candidate-action-set",)
     assert explanation.external_references[0][1].endswith("aria_nbv/aria_nbv/rollouts/inspection.py")
+
+
+def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypatch) -> None:
+    """The target-view reducer's persisted ``count`` must not break availability plots."""
+
+    rows = candidate_target_view_evidence(
+        [
+            {
+                "generation_cohort_id": "cohort-a",
+                "scene": "scene-a",
+                "rollout_row_id": "rollout-a",
+                "step_row_id": "step-a",
+                "target_distance_m": 1.0,
+                "actor_action": True,
+            },
+            {
+                "generation_cohort_id": "cohort-a",
+                "scene": "scene-a",
+                "rollout_row_id": "rollout-a",
+                "step_row_id": "step-a",
+                "target_distance_m": None,
+                "actor_action": True,
+            },
+        ]
+    )
+    assert rows and "count" in rows[0]
+
+    plots = []
+    monkeypatch.setattr(candidate_generation, "_render_plot", lambda figure, *_args, **_kwargs: plots.append(figure))
+    monkeypatch.setattr(candidate_generation, "_download_frame", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(candidate_generation.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(
+        candidate_generation.st,
+        "selectbox",
+        lambda _label, options, **_kwargs: list(options)[0],
+    )
+
+    candidate_generation._render_complete_candidate_support({"target_view": rows}, evidence_role="actor-visible")
+
+    availability = next(
+        figure for figure in plots if figure.layout.title.text == "Target-view availability and missingness"
+    )
+    assert availability.data
+    assert availability.layout.yaxis.title.text == "candidate evidence rows [count]"
+    assert {trace.name for trace in availability.data} == {"finite_count", "missing_count"}
+    assert sum(sum(float(value) for value in trace.y) for trace in availability.data) > 0
 
 
 def test_rollout_scientific_reference_owners_and_count_units_are_current() -> None:

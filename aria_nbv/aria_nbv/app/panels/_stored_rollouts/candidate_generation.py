@@ -871,18 +871,21 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                 id_vars=[field for field in ("evidence", "population") if field in availability],
                 value_vars=[field for field in ("finite_count", "missing_count") if field in availability],
                 var_name="availability_count",
-                value_name="count",
+                # The reducer also persists the total candidate ``count``.
+                # Keep the melted value distinct from that source column;
+                # pandas rejects a melt whose value_name already exists.
+                value_name="availability_value",
             )
             if not availability_rows.empty:
                 _render_plot(
                     px.bar(
                         availability_rows,
                         x="evidence",
-                        y="count",
+                        y="availability_value",
                         color="availability_count",
                         barmode="group",
                         title="Target-view availability and missingness",
-                        labels={"count": "candidate evidence rows [count]"},
+                        labels={"availability_value": "candidate evidence rows [count]"},
                     ),
                     _candidate_population_explanation(
                         "Which optical and visibility measurements are actually persisted?",
