@@ -1,0 +1,174 @@
+# Maintained release requirements for the ARIA-NBV thesis.
+#
+# This ledger records release evidence and human handoffs. It is not a
+# submission receipt and must not be used to infer an authenticated PRIMUSS
+# state. The generated toolchain lock is intentionally pending in this slice;
+# the lock-producing work replaces the placeholder before final verification.
+
+schema_version = "aria-nbv-thesis-release-requirements-v1"
+date_checked = "2026-08-23"
+
+[toolchain_lock]
+path = "docs/typst/thesis/toolchain-lock.json"
+sha256 = "PENDING_GENERATED_AFTER_IMPLEMENTATION_COMMIT"
+sha256_state = "pending"
+required_state = "replace_pending_placeholder_before_final_release_verification"
+current_state = "pending_generation"
+blocker_rationale = "The final lock is generated after this implementation slice; final release verification must replace this placeholder with the generated lock SHA-256."
+
+[submission]
+required_state = "human_and_confirmatory_evidence_required"
+current_state = "blocked_missing_confirmatory_evidence"
+assigned_spo_state = "manual_pending"
+primuss_state = "manual_pending"
+local_submission_claim = false
+blocker_rationale = "Confirmatory held-out policy outcomes are absent: no validated population-level rollout bundle with paired endpoint estimates and uncertainty exists. The current report remains pilot/fixture evidence, so submission acceptance and PRIMUSS completion are not claimed locally."
+
+[declaration]
+source_path = "docs/typst/thesis/template/layout/disclaimer.typ"
+presence = "present"
+required_state = "present_with_approved_wording"
+current_state = "present_manual_wording_approval_pending"
+responsible_owner = "author and assigned supervisor"
+proof_kind = "manual"
+wording_approval = "manual_pending"
+blocker_rationale = "The declaration is rendered and its wording is preserved, but repository evidence does not prove that the exact current wording has been approved by the assigned supervisor."
+
+[ai_disclosure]
+source_path = "docs/typst/thesis/main.typ"
+presence = "present"
+required_state = "present_or_explicit_not_applicable"
+current_state = "present"
+responsible_owner = "author and thesis release owner"
+proof_kind = "deterministic"
+blocker_rationale = "The main thesis contains the current AI-use disclosure; human review remains responsible for deciding whether its scope is complete."
+
+[[requirements]]
+id = "hm.independent-work"
+classification = "binding_hm"
+source_urls = [
+  "https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/aspo_2/aspo.pdf",
+]
+source_date_or_version = "HM ASPO, 15 February 2023; fifth amendment 25 June 2026, §§20 and 26"
+date_checked = "2026-08-23"
+responsible_owner = "thesis release owner; assigned supervisor for exact wording"
+proof_kind = "manual"
+required_state = "independent_work_and_declared_sources_aids_confirmed"
+current_state = "present_manual_wording_approval_pending"
+blocker_rationale = "The declaration and source/aids statement are present, but exact wording approval remains a human check."
+
+[[requirements]]
+id = "hm.citations"
+classification = "binding_hm"
+source_urls = [
+  "https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/aspo_2/aspo.pdf",
+]
+source_date_or_version = "HM ASPO, 15 February 2023; fifth amendment 25 June 2026, §26(7)"
+date_checked = "2026-08-23"
+responsible_owner = "thesis authoring owner; bibliography and claim-source owners"
+proof_kind = "manual"
+required_state = "literal_and_paraphrased_citations_identified"
+current_state = "tracked_bibliography_and_citation_review_pending"
+blocker_rationale = "The bibliography is tracked and the Typst citation path is deterministic; semantic citation adequacy and declared-source review remain manual."
+
+[[requirements]]
+id = "hm.submission"
+classification = "binding_hm"
+source_urls = [
+  "https://cs.hm.edu/studierende/abschlussarbeiten.de.html",
+  "https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Anmeldung_Abschlussarbeit_Stand_29.09.2025.pdf",
+  "https://mediapool.hm.edu/media/fk07/fk07_lokal/fk07_dokumentenpool/studium_8/abschlussarbeiten_21/Anleitung_Abgabe_Abschlussarbeit_Stand_29.09.2025.pdf",
+]
+source_date_or_version = "FK07 public thesis page current 23 August 2026; public PRIMUSS registration and submission guides, 29 September 2025"
+date_checked = "2026-08-23"
+responsible_owner = "author, assigned SPO, and authenticated PRIMUSS process"
+proof_kind = "manual"
+required_state = "assigned_spo_and_authenticated_primuss_receipt_confirmed"
+current_state = "manual_pending_no_local_submission_claim"
+blocker_rationale = "The assigned SPO and authenticated PRIMUSS instructions/receipt are unavailable to repository checks. Upload or local compilation cannot establish submission."
+
+[[requirements]]
+id = "hm.gwp-documentation"
+classification = "institutional_guidance"
+source_urls = [
+  "https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/aml/AMl_2023_32.pdf",
+  "https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/aspo_2/aspo.pdf",
+]
+source_date_or_version = "HM good-scientific-practice statute, 2023, §§11-12; HM ASPO fifth amendment 25 June 2026, §20"
+date_checked = "2026-08-23"
+responsible_owner = "experiment, data, code, configuration, artifact, and thesis report owners"
+proof_kind = "deterministic"
+required_state = "methods_provenance_quality_assurance_and_supporting_results_traceable"
+current_state = "blocked_missing_confirmatory_evidence"
+blocker_rationale = "The report contract records provenance fields, but the current tree has no validated population-level confirmatory rollout bundle with paired endpoints and uncertainty."
+
+[[requirements]]
+id = "hm.ai-disclosure"
+classification = "institutional_guidance"
+source_urls = [
+  "https://mediapool.hm.edu/media/dachmarke/dm_transfer/download_13/aml/AMl_2023_32.pdf",
+]
+source_date_or_version = "HM good-scientific-practice statute, 2023, §§12 and 16"
+date_checked = "2026-08-23"
+responsible_owner = "thesis methods/declaration owner and human reviewer"
+proof_kind = "deterministic"
+required_state = "ai_method_use_disclosed_or_explicitly_not_applicable"
+current_state = "present"
+blocker_rationale = "The AI-use disclosure is present in main.typ; borderline language-tool scope remains a human review question."
+
+[[requirements]]
+id = "ml.claim-scope"
+classification = "nonbinding_ml_overlay"
+source_urls = [
+  "https://neurips.cc/public/guides/PaperChecklist",
+]
+source_date_or_version = "NeurIPS 2026 Paper Checklist, public guidance"
+date_checked = "2026-08-23"
+responsible_owner = "academic argument owner and independent scientific reviewer"
+proof_kind = "manual"
+required_state = "claims_match_evidence_scope_assumptions_and_limitations"
+current_state = "bounded_no_superiority_claim_pending_confirmatory_evidence"
+blocker_rationale = "The abstract explicitly withholds a learned-policy superiority claim, but confirmatory held-out policy evidence is still absent."
+
+[[requirements]]
+id = "ml.reproducibility"
+classification = "nonbinding_ml_overlay"
+source_urls = [
+  "https://neurips.cc/public/guides/PaperChecklist",
+  "https://www.jmlr.org/author-info.html",
+]
+source_date_or_version = "NeurIPS 2026 Paper Checklist; JMLR author information, current 23 August 2026"
+date_checked = "2026-08-23"
+responsible_owner = "experiment/config/artifact owners and thesis reproducibility owner"
+proof_kind = "deterministic"
+required_state = "source_data_split_config_command_environment_and_artifact_route_reproducible"
+current_state = "partial_report_contract_only_missing_confirmatory_bundle"
+blocker_rationale = "The report schema carries reproducibility identities, but no accepted confirmatory report bundle and immutable endpoint artifact are available."
+
+[[requirements]]
+id = "ml.uncertainty"
+classification = "nonbinding_ml_overlay"
+source_urls = [
+  "https://neurips.cc/public/guides/PaperChecklist",
+]
+source_date_or_version = "NeurIPS 2026 Paper Checklist, item 7"
+date_checked = "2026-08-23"
+responsible_owner = "result/report schema owner and scientific-review owner"
+proof_kind = "deterministic"
+required_state = "central_quantitative_results_state_variability_and_uncertainty_or_inapplicability"
+current_state = "blocked_missing_paired_endpoint_uncertainty"
+blocker_rationale = "No validated confirmatory paired endpoint estimates or uncertainty summary exists for the missing population-level rollout bundle."
+
+[[requirements]]
+id = "ml.compute"
+classification = "nonbinding_ml_overlay"
+source_urls = [
+  "https://neurips.cc/public/guides/PaperChecklist",
+]
+source_date_or_version = "NeurIPS 2026 Paper Checklist, item 8"
+date_checked = "2026-08-23"
+responsible_owner = "run-manifest and empirical-report owners"
+proof_kind = "deterministic"
+required_state = "worker_memory_runtime_storage_and_total_compute_recorded"
+current_state = "partial_report_contract_only_missing_confirmatory_bundle"
+blocker_rationale = "The report contract has compute fields, but confirmatory run manifests and their immutable endpoint artifacts are not present."

@@ -37,6 +37,7 @@ from aria_nbv.rollouts.reporting import (
     ANALYSIS_FACT_SIDECAR_VERSION,
     THESIS_REPORT_TABLE_COLUMNS,
     build_thesis_report_frames,
+    deserialize_thesis_report_bundle,
     serialize_thesis_report_bundle,
     write_thesis_report_bundle,
 )
@@ -130,6 +131,38 @@ def test_serialized_facts_and_storage_match_cli_payload(tmp_path, capsys) -> Non
         "status": "pilot",
         "source": "inspection.runtime_storage_statistics",
     }
+
+
+def test_serialized_report_deserializes_through_domain_owner(tmp_path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=77)[:1]
+    )
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+    payload = serialize_thesis_report_bundle(frames)
+    rebuilt = deserialize_thesis_report_bundle(payload)
+    for name in THESIS_REPORT_TABLE_COLUMNS:
+        assert tuple(rebuilt[name].columns) == THESIS_REPORT_TABLE_COLUMNS[name]
+    assert serialize_thesis_report_bundle(rebuilt) == payload
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda payload: payload.update(fixture_notice="synthetic"),
+        lambda payload: payload["tables"]["facts"]["rows"][0].update(extra=True),
+        lambda payload: payload["tables"]["stores"]["rows"][0].update(store_id=["wrong-type"]),
+    ],
+)
+def test_serialized_report_rejects_envelope_row_and_scalar_drift(tmp_path, mutation) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=78)[:1]
+    )
+    payload = json.loads(
+        serialize_thesis_report_bundle(build_thesis_report_frames([result.store_dir], evidence_status="pilot"))
+    )
+    mutation(payload)
+    with pytest.raises(ValueError):
+        deserialize_thesis_report_bundle(payload)
 
 
 def test_report_bundle_round_trips_unavailable_discounted_return(tmp_path) -> None:

@@ -5,6 +5,9 @@ usage() {
   cat <<'EOF'
 Usage: render_png.sh -i <input.typ> [-o <out_dir>] [-p <ppi>] [--pages <ranges>] [--root <dir>]
 
+Environment:
+  TYPST_BIN     Typst executable override (default: typst)
+
 Options:
   -i, --input     Path to .typ file (required)
   -o, --out       Output directory (default: ./out)
@@ -66,8 +69,9 @@ if [[ -z "$input" ]]; then
   exit 1
 fi
 
-if ! command -v typst >/dev/null 2>&1; then
-  echo "typst CLI not found on PATH" >&2
+typst_bin="${TYPST_BIN:-typst}"
+if ! command -v "$typst_bin" >/dev/null 2>&1 && [[ ! -x "$typst_bin" ]]; then
+  echo "Typst CLI not found: $typst_bin" >&2
   exit 127
 fi
 
@@ -84,7 +88,7 @@ if [[ -n "$root" ]]; then
 fi
 
 printf 'Running:' >&2
-printf ' %q' typst "${args[@]}" >&2
+printf ' %q' "$typst_bin" "${args[@]}" >&2
 printf '\n' >&2
 
-typst "${args[@]}"
+"$typst_bin" "${args[@]}"

@@ -20,7 +20,7 @@
   align(left, text(font: fonts.sans, 20pt, weight: 700, fill: hm-colors.blue, "Ehrenwoertliche Erklaerung"))
   v(14mm)
 
-  [Ich versichere, dass ich diese #thesisKindGerman selbststaendig verfasst und keine anderen als die angegebenen Quellen und Hilfsmittel benutzt habe.]
+  [#metadata("declaration-present") <thesis-declaration> Ich versichere, dass ich diese #thesisKindGerman selbststaendig verfasst und keine anderen als die angegebenen Quellen und Hilfsmittel benutzt habe.]
 
   v(18mm)
   if submissionDateText != "" or submissionDate != none {

@@ -58,7 +58,7 @@
     Acknowledgements are omitted from this version.
   ],
   transparency_ai_tools: [
-    Generative-AI tools supported literature-note organization, consistency checks, and language revision. The author selected the research questions, verified sources and technical claims, implemented and evaluated the system, and remains responsible for the submitted work.
+    #metadata("ai-disclosure-present") <thesis-ai-disclosure> Generative-AI tools supported literature-note organization, consistency checks, and language revision. The author selected the research questions, verified sources and technical claims, implemented and evaluated the system, and remains responsible for the submitted work.
   ],
   front_matter_after_contents: [
     #heading(numbering: none, outlined: false)[Glossary and Abbreviations]

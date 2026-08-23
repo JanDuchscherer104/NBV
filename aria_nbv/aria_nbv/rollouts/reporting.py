@@ -631,6 +631,73 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     )
 
 
+def deserialize_thesis_report_bundle(
+    payload: bytes | str | Mapping[str, object],
+) -> dict[str, pd.DataFrame]:
+    """Deserialize and validate a serialized thesis report bundle.
+
+    The inverse boundary accepts only the producer's exact envelope and table
+    contracts.  It reconstructs object-typed frames so JSON nulls and scalar
+    types remain distinguishable, then applies the same status, store-identity,
+    and empirical-bundle validators used by serialization.
+    """
+
+    if isinstance(payload, bytes | str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise ValueError("Serialized thesis report bundle must be valid JSON.") from error
+    if not isinstance(payload, Mapping):
+        raise ValueError("Serialized thesis report bundle must be a JSON object.")
+
+    schema_version = payload.get("schema_version")
+    if schema_version != THESIS_REPORT_BUNDLE_VERSION:
+        raise ValueError(f"Unsupported thesis report schema_version: {schema_version!r}.")
+    expected_keys = {"bundle_role", "schema_version", "tables"}
+    if set(payload) != expected_keys:
+        raise ValueError(
+            f"Thesis report top-level fields must be exactly {sorted(expected_keys)}; received {sorted(payload)}."
+        )
+    if payload.get("bundle_role") != THESIS_REPORT_BUNDLE_ROLE:
+        raise ValueError("Thesis report bundle_role must be 'evidence'.")
+
+    tables = payload.get("tables")
+    if not isinstance(tables, Mapping) or set(tables) != set(THESIS_REPORT_TABLE_COLUMNS):
+        raise ValueError("Thesis report tables must contain exactly the producer table names.")
+    frames: dict[str, pd.DataFrame] = {}
+    for name, columns in THESIS_REPORT_TABLE_COLUMNS.items():
+        table = tables[name]
+        if not isinstance(table, Mapping) or set(table) != {"columns", "rows"}:
+            raise ValueError(f"Thesis report table {name!r} must contain only columns and rows.")
+        if table["columns"] != list(columns):
+            raise ValueError(f"Thesis report table {name!r} columns do not match the producer schema.")
+        rows = table["rows"]
+        if not isinstance(rows, list):
+            raise ValueError(f"Thesis report table {name!r} rows must be a list.")
+        normalized: list[dict[str, object]] = []
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping) or set(row) != set(columns):
+                raise ValueError(f"Thesis report table {name!r} row {index} keys do not match its columns.")
+            for column in columns:
+                value = row[column]
+                if value is not None and not isinstance(value, bool | int | float | str):
+                    raise ValueError(
+                        f"Thesis report table {name!r} row {index} column {column!r} must be a JSON scalar."
+                    )
+                if isinstance(value, float) and not math.isfinite(value):
+                    raise ValueError(f"Thesis report table {name!r} row {index} column {column!r} must be finite.")
+            normalized.append(dict(row))
+        frames[name] = pd.DataFrame(normalized, columns=columns, dtype=object)
+
+    _validate_frame_schema(frames)
+    _validate_bundle_statuses(frames)
+    _validate_empirical_bundle(frames)
+    return frames
+
+
+validate_thesis_report_bundle = deserialize_thesis_report_bundle
+
+
 def write_thesis_report_bundle(path: Path | str, frames: Mapping[str, pd.DataFrame]) -> str:
     """Atomically write a thesis-report bundle and return its SHA-256 digest."""
 
@@ -1357,6 +1424,8 @@ __all__ = [
     "THESIS_REPORT_BUNDLE_VERSION",
     "THESIS_REPORT_TABLE_COLUMNS",
     "build_thesis_report_frames",
+    "deserialize_thesis_report_bundle",
     "serialize_thesis_report_bundle",
+    "validate_thesis_report_bundle",
     "write_thesis_report_bundle",
 ]

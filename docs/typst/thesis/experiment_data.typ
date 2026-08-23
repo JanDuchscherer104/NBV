@@ -45,12 +45,16 @@
   let explicit-path = sys.inputs.at("aria-thesis-data", default: none)
   let evidence-status = sys.inputs.at("aria-thesis-evidence-status", default: "pilot")
   if mode == "submission" {
-    assert(explicit-path != none, message: "submission mode requires explicit aria-thesis-data")
+    assert(type(explicit-path) == str and explicit-path.trim().len() > 0, message: "submission mode requires explicit aria-thesis-data")
     assert(
       evidence-status == "confirmatory",
       message: "submission mode requires aria-thesis-evidence-status=confirmatory",
     )
-    assert(sys.inputs.at("aria-code-ref", default: none) != none, message: "submission mode requires explicit aria-code-ref")
+    let code-ref = sys.inputs.at("aria-code-ref", default: none)
+    assert(
+      type(code-ref) == str and code-ref.matches(regex("^[0-9a-f]{40}$")).len() == 1,
+      message: "submission mode requires a lower-hex 40-character aria-code-ref",
+    )
   }
 
   (
@@ -69,6 +73,7 @@
   assert(bundle-role in ("fixture", "evidence"), message: "invalid or missing thesis report bundle_role")
   if required-role != none {
     assert(bundle-role == required-role, message: "thesis report bundle_role does not satisfy publication gate")
+    assert(report.at("fixture_notice", default: none) == none, message: "submission evidence bundle must not carry fixture_notice")
   }
   let tables = report.at("tables", default: none)
   assert(type(tables) == dictionary, message: "thesis report tables must be a dictionary")
@@ -101,6 +106,7 @@
     assert(empirical.len() > 0, message: "submission evidence bundle requires nonempty empirical_results")
     assert(empirical.all(row => row.status == "confirmatory"), message: "submission evidence results must be confirmatory")
     let code-ref = sys.inputs.at("aria-code-ref", default: none)
+    assert(report.at("source_revision", default: none) == code-ref, message: "report source_revision does not match aria-code-ref")
     assert(empirical.all(row => row.source_revision == code-ref), message: "empirical result source_revision does not match aria-code-ref")
   }
   report
