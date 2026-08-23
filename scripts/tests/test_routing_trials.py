@@ -766,6 +766,57 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     assert trials.validate_event_evidence(evidence)[0] is False
 
 
+def test_event_evidence_total_bound_drops_valid_records_without_field_truncation(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    records = [
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": "x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS - 1),
+                "status": "completed",
+                "exit_code": 0,
+            },
+        }
+        for _ in range(8)
+    ]
+    events.write_text("\n".join(json.dumps(record) for record in records))
+
+    retained_payload = [
+        {
+            "event_index": index,
+            "event_type": "item.completed",
+            "item_type": "command_execution",
+            "command": record["item"]["command"],
+            "status": "completed",
+            "exit_code": 0,
+        }
+        for index, record in enumerate(records)
+    ]
+    serialized_retained_payload = json.dumps(
+        retained_payload, sort_keys=True, separators=(",", ":")
+    )
+
+    assert len(records) < trials.EVENT_EVIDENCE_MAX_ITEMS
+    assert all(
+        len(value) < trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
+        for record in records
+        for value in record["item"].values()
+        if isinstance(value, str)
+    )
+    assert len(serialized_retained_payload) > trials.EVENT_EVIDENCE_MAX_TOTAL_CHARS
+    assert events.stat().st_size < trials.EVENT_EVIDENCE_MAX_RAW_BYTES
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert evidence["field_truncations"] == 0
+    assert evidence["dropped_items"] > 0
+    assert evidence["truncated"] is True
+    assert trials.validate_event_evidence(evidence)[0] is False
+
+
 def test_event_evidence_accepts_complete_2424_character_command(
     tmp_path: Path,
 ) -> None:
