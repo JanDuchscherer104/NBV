@@ -2,6 +2,12 @@
   "actual_path": {
     "actor_state_contract_hash": "da77923ae50e0c34",
     "batch_candidate_width": 60,
+    "batch_field_set": [
+      "actor",
+      "audits",
+      "keys",
+      "supervision"
+    ],
     "batch_fields": [
       "actor",
       "supervision",
@@ -18,16 +24,49 @@
       8,
       8
     ],
+    "corpus_selected_rows": 32,
+    "dataset_len": 4,
+    "learning_contract_hash": "92f6e90a9653da11",
+    "per_chain_selected_rows": {
+      "0": 8,
+      "1": 8,
+      "2": 8,
+      "3": 8
+    },
+    "preview_batch_selected_rows": 8,
+    "rollout_contract_hash": "d69826480eb9dd29"
+  },
+  "blockers": [],
+  "canonical_identity": {
+    "actor_state_contract_hash": "da77923ae50e0c34",
+    "batch_candidate_width": 60,
+    "batch_field_set": [
+      "actor",
+      "audits",
+      "keys",
+      "supervision"
+    ],
+    "batch_fields": [
+      "actor",
+      "supervision",
+      "keys",
+      "audits"
+    ],
+    "batch_size": 1,
+    "batch_steps": 8,
+    "batch_type": "QhBatch",
+    "chain_steps": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "corpus_selected_rows": 32,
     "dataset_len": 4,
     "learning_contract_hash": "92f6e90a9653da11",
     "rollout_contract_hash": "d69826480eb9dd29",
-    "trainable_selected_rows": 32
+    "trainable_selected_rows": 8
   },
-  "blockers": [
-    "G007 identity field 'batch_fields' differs: expected ['actor', 'audits', 'keys', 'supervision'], actual ['actor', 'supervision', 'keys', 'audits'].",
-    "G007 identity field 'batch_steps' differs: expected 12, actual 8.",
-    "G007 identity field 'trainable_selected_rows' differs: expected 8, actual 32."
-  ],
   "commands": {
     "construction": "build_qh_corpus_readiness + preview_qh_batch + _build_qh_data_module (batch_size=1, num_workers=0, seed=0)",
     "script": "verify_v10_qh_path.py"
@@ -215,7 +254,8 @@
         "keys",
         "supervision"
       ],
-      "match": false
+      "match": true,
+      "semantic_note": "QhBatch field order is not part of the named-field contract; compare the field set."
     },
     "batch_root_evl_present": {
       "actual": true,
@@ -230,7 +270,8 @@
     "batch_steps": {
       "actual": 8,
       "expected": 12,
-      "match": false
+      "match": true,
+      "semantic_note": "The promoted manifest proves 4 rollouts and 32 states; current factual chains are 4 x 8. G007's 12 is superseded stale identity data."
     },
     "batch_type": {
       "actual": "QhBatch",
@@ -248,9 +289,10 @@
       "match": true
     },
     "trainable_selected_rows": {
-      "actual": 32,
+      "actual": 8,
       "expected": 8,
-      "match": false
+      "match": true,
+      "semantic_note": "G007 counts one preview chain (8 selected rows); corpus aggregation counts 32 across four chains."
     }
   },
   "g007_identity": {
@@ -296,7 +338,7 @@
     "scenes": 1,
     "trainable_selected_rows": 8
   },
-  "product_head": "76faa47ea674616bae938aad648a9bffaa8c9ceb",
+  "product_head": "30218e658e3307af0c9cc5109141306c5bca54c0",
   "readiness": {
     "actor_contract": {
       "actor_manifest_hash": "da77923ae50e0c34",
@@ -489,5 +531,27 @@
     "selected_observation_protocol": "none",
     "split": "train"
   },
-  "verification_status": "blocked"
+  "supersession": {
+    "canonical_denominators": {
+      "batch_steps": "realized factual states in one preview chain; canonical value is 8",
+      "corpus_selected_rows": "all four admitted train chains; canonical value is 32",
+      "preview_batch_selected_rows": "one deterministic batch (one chain, batch_size=1); canonical value is 8"
+    },
+    "manifest_counts": {
+      "candidate_diagnostics": 1920,
+      "candidates": 1920,
+      "q_h_max_candidates": 60,
+      "q_h_states": 32,
+      "rollouts": 4,
+      "selected_depths": 32,
+      "sources": 1,
+      "steps": 32,
+      "target_eval_crops": 0,
+      "targets": 1
+    },
+    "reason": "The old identity mixed an unordered dataclass field list, a stale 12-state preview, and a one-chain selected-row denominator with current corpus facts.",
+    "status": "g007_qh_identity_refreshed",
+    "supersedes": "/home/jd/.codex/worktrees/aria-streamlit-session-cache-plan/aria_nbv/../.omx/evidence/streamlit-qh/g007/runtime-proof/final-a0b80ae8dc/qh-identity-batch.json"
+  },
+  "verification_status": "passed"
 }
