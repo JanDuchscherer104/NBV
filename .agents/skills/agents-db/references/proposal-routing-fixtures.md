@@ -3,6 +3,11 @@
 These fixed read-only records exercise lifecycle routing without creating
 policy or TOML mutations during evaluation.
 
+Before evaluating a review command, read
+[`external-actions.md`](../../agent-behavior/references/external-actions.md) for
+the current-user authority boundary, then apply the lifecycle in
+[`modes.md`](modes.md#proposal-review).
+
 ## Eligible proposal
 
 - ID: `proposal-fixture-config-factory`
