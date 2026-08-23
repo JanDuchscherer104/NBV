@@ -211,8 +211,9 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert f"{blocked.name}" in visible
     assert "Store compatibility matrix" in visible
     assert "Excluded" in visible
-    assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
+    assert "Root/source binding hashes, paths, and raw findings" in "\n".join(item.label for item in app.expander)
     assert "Root/source binding identifiers are available" in visible
+    assert "source_manifest_hash_mismatch" in visible
 
 
 def test_compatible_store_attribution_shows_root_and_source_bindings(
@@ -229,8 +230,30 @@ def test_compatible_store_attribution_shows_root_and_source_bindings(
     visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
     assert "Store compatibility matrix" in visible
     assert "Store compatibility matrix" in visible
-    assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
+    assert "Root/source binding hashes, paths, and raw findings" in "\n".join(item.label for item in app.expander)
     assert "Root/source binding identifiers are available" in visible
+
+
+def test_mixed_store_selection_keeps_compatible_and_excluded_attribution(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    compatible = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash, compatible=True)
+    blocked = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash, compatible=False)
+    app = _app(tmp_path).run()
+    app.multiselect[0].set_value([compatible.as_posix(), blocked.as_posix()])
+    app = app.run()
+
+    assert not app.exception
+    assert _metrics(app)["Compatible rollout stores"] == "1 / 2"
+    assert _metrics(app)["Rollouts"] == "3"
+    visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
+    assert "Store compatibility matrix: 2 selected, 1 excluded" in visible
+    assert "source_manifest_hash_mismatch" in visible
+    assert "Rollout lineage does not resolve uniquely" in visible
+    assert root.as_posix() in str(app.session_state)
+    assert "Root/source binding hashes, paths, and raw findings" in "\n".join(item.label for item in app.expander)
 
 
 def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:

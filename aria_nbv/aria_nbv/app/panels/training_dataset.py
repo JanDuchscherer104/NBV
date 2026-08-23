@@ -563,11 +563,14 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
         "the identifiers below show exactly which VIN root and manifests were compared."
     )
     findings_by_store: dict[str, list[dict[str, str]]] = {}
+    root_findings: list[dict[str, str]] = []
     for finding in evidence.findings:
         if finding.store_path is not None:
             findings_by_store.setdefault(finding.store_path, []).append(
                 {"code": finding.code, "message": finding.message, "severity": finding.severity}
             )
+        else:
+            root_findings.append({"code": finding.code, "message": finding.message, "severity": finding.severity})
     binding_rows: list[dict[str, Any]] = []
     status_rows: list[dict[str, str]] = []
     for row in evidence.rollouts:
@@ -609,9 +612,15 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
     )
     if excluded:
         st.error(
-            "Excluded stores remain selected but contribute no totals: " + ", ".join(row["store"] for row in excluded)
+            "Excluded stores remain selected but contribute no totals:\n"
+            + "\n".join(f"- {row['store']} — {row['reason']}" for row in excluded)
         )
-    with st.expander("Root/source binding hashes and raw findings", expanded=False):
+    if root_findings:
+        st.error(
+            "Selected VIN root blocker(s) (not attributable to one rollout store):\n"
+            + "\n".join(f"- {finding['code']} — {finding['message']}" for finding in root_findings)
+        )
+    with st.expander("Root/source binding hashes, paths, and raw findings", expanded=False):
         st.caption("VIN root manifest, source manifest, split manifest, source splits, and raw finding details.")
         st.dataframe(
             pd.DataFrame(
