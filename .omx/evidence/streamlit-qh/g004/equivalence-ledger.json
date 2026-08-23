@@ -13,7 +13,7 @@
       "review_thread": "PR95#discussion_r3836670981",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_pooled_selection_materializes_families_absent_from_a_temperature_cohort",
       "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_pooled_selection_materializes_families_absent_from_a_temperature_cohort",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "5bad8d0d08af3597d1f09e28f1454368a087eeb2",
@@ -27,7 +27,7 @@
         "aria_nbv/tests/app/panels/test_training_dataset_panel.py::test_qh_preview_reuses_only_exact_selection_and_controls",
         "aria_nbv/tests/app/panels/test_training_dataset_panel.py::test_qh_readiness_hides_stale_preflight_after_loader_control_changes"
       ],
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "547d138dee3bcbf59cc74c5615d45e18e9c36d89",
@@ -37,7 +37,7 @@
       "review_thread": "PR101#discussion_r3836490020",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_direction_evidence_retains_zero_actor_valid_states",
       "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_direction_evidence_retains_zero_actor_valid_states",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "547d138dee3bcbf59cc74c5615d45e18e9c36d89",
@@ -47,7 +47,7 @@
       "review_thread": "PR101#discussion_r3836490021",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_scientific_state_chunks_bound_raw_retention_and_reject_interleave",
       "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_scientific_state_chunks_bound_raw_retention_and_reject_interleave",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "7c45be2657",
@@ -57,7 +57,7 @@
       "review_thread": "PR101#discussion_r3836728980",
       "source_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_store_cache_identity_does_not_enumerate_payload_chunks",
       "same_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_store_cache_identity_does_not_enumerate_payload_chunks",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "34ea70836d",
@@ -75,7 +75,7 @@
         "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_stored_rollout_session_rejects_mid_handle_swap",
         "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_open_session_rejects_mid_open_generation_swap"
       ],
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "cddf35affd",
@@ -85,7 +85,7 @@
       "review_thread": "PR101#discussion_r3836728989",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_rollout_inspection_helpers_join_candidates_targets_and_groups",
       "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_rollout_inspection_helpers_join_candidates_targets_and_groups",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "547d138dee",
@@ -95,7 +95,7 @@
       "review_thread": "PR101#discussion_r3836728994",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_decision_relative_vector_uses_previous_selected_pose_and_is_global_invariant",
       "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_decision_relative_vector_uses_previous_selected_pose_and_is_global_invariant",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "f6ce789198",
@@ -105,7 +105,7 @@
       "review_thread": "PR101#discussion_r3836728996",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_direction_evidence_reports_numeric_cap_and_nearest_neighbor_metrics",
       "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_direction_evidence_reports_numeric_cap_and_nearest_neighbor_metrics",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "dd8ca5624e",
@@ -119,7 +119,7 @@
         "aria_nbv/tests/oracle/test_admission_evidence.py::test_zero_observation_sample_sentinel_is_not_an_observed_target",
         "aria_nbv/tests/oracle/test_admission_evidence.py::test_zero_observation_sentinel_rejects_contradictory_gt_evidence"
       ],
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "a6fbfb1fe7",
@@ -129,7 +129,7 @@
       "review_thread": "PR101#discussion_r3836728998",
       "source_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_lightweight_dispatch_does_not_materialize_candidate_audit",
       "same_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_lightweight_dispatch_does_not_materialize_candidate_audit",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     },
     {
       "integration_commit": "213f3a27fb",
@@ -138,9 +138,9 @@
       "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
       "review_thread": "PR101#discussion_r3836729001",
       "source_regression_fixture_test": "scope-only source proof: no product test; inspect PR101 review finding against plan/debrief inventory",
-      "same_regression_fixture_test": "git diff --name-only origin/main...f24d9baded0e74f78a06ba8d05354cc3900cdf9e -- .omx/plans .agents/memory",
-      "scope_proof_command": "git diff --name-only origin/main...f24d9baded0e74f78a06ba8d05354cc3900cdf9e -- .omx/plans .agents/memory",
-      "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
+      "same_regression_fixture_test": "git diff --name-only origin/main...3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e -- .omx/plans .agents/memory",
+      "scope_proof_command": "git diff --name-only origin/main...3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e -- .omx/plans .agents/memory",
+      "semantic_parity_result": "exact-head 3b768d0fa2fdd3fc1c9509d8636bf8085aeb274e: combined product suite passed 394 tests in 139.46s; static gates pass"
     }
   ],
   "status": "local_integration_parity_verified_at_exact_product_head; final_remote_oid_pending_g006"
