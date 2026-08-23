@@ -49,6 +49,39 @@
     =
     bold(R)_(r_t)^top bold(R)_(t,i)
   $,
+  candidate_proposal_support_normalization: $
+    d_(t,e)^"current"
+    =
+    norm(#symb.entity.center - #(symb.oracle.center)_(r_t)^w)_2,
+    quad
+    tilde(bold(c))_(t,i)^"support"
+    =
+    (bold(B)_(r,t)^"Z-up")^top
+    (#(symb.oracle.center)_(t,i)^w - #(symb.oracle.center)_(r_t)^w)
+    /
+    d_(t,e)^"current",
+    quad
+    tilde(bold(p))_(t,e)^"support"
+    =
+    (bold(B)_(r,t)^"Z-up")^top
+    (#symb.entity.center - #(symb.oracle.center)_(r_t)^w)
+    /
+    d_(t,e)^"current",
+    quad
+    norm(tilde(bold(p))_(t,e)^"support")_2 = 1
+  $,
+  rollout_trajectory_normalization: $
+    d_(0,e)^"initial"
+    =
+    norm(#symb.entity.center - #(symb.oracle.center)_(r_0)^w)_2,
+    quad
+    tilde(bold(x))_(r,t)^"trajectory"
+    =
+    (bold(B)_(r,0)^"target-Z-up")^top
+    (bold(x)_(r,t)^w - #(symb.oracle.center)_(r_0)^w)
+    /
+    d_(0,e)^"initial"
+  $,
   candidate_pose_features: $
     #symb.spatial.candidate_pose_feat (q_(t,i); r_t)
     =

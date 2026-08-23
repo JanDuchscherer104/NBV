@@ -163,3 +163,37 @@ def test_geometry_renderer_keeps_proposal_and_trajectory_frames_projection_local
 
     assert [frame["frame_id"].tolist() for frame in captured_axis_frames] == [["proposal-frame"]]
     assert [frame["frame_id"].tolist() for frame in captured_trajectory_frames] == [["trajectory-frame"]]
+
+
+def test_geometry_explanations_use_distinct_canonical_normalization_equations(monkeypatch) -> None:
+    explanations = []
+    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        candidate_generation, "_render_plot", lambda _figure, explanation: explanations.append(explanation)
+    )
+    monkeypatch.setattr(candidate_generation, "_add_geometry_anchors", lambda *_args, **_kwargs: None)
+
+    candidate_generation._render_candidate_geometry_diagnostics(
+        pd.DataFrame([{"candidate_row_id": 1}]),
+        {"points": [{"x": 1.0, "y": 2.0, "z": 3.0}]},
+        {"points": [{"x": 0.0, "y": 0.0, "z": 0.0, "path_order": 0, "rollout_row_id": 1}]},
+        total_candidates=1,
+    )
+
+    theory_by_question = {ex.question: ex.theory for ex in explanations}
+    assert theory_by_question[
+        "Do candidate families cover the intended local motion support around each proposal expansion pose?"
+    ].equation_ids == ("spatial.candidate_proposal_support_normalization",)
+    assert theory_by_question[
+        "Do candidate families cover the intended local motion support around each proposal expansion pose?"
+    ].symbol_ids == ("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose")
+    assert theory_by_question["How did the factual selected pose move from the rollout root?"].equation_ids == (
+        "spatial.rollout_trajectory_normalization",
+    )
+    assert theory_by_question["How did the factual selected pose move from the rollout root?"].symbol_ids == (
+        "oracle.candidate_qti",
+        "oracle.center",
+        "entity.center",
+        "spatial.ref_pose",
+    )

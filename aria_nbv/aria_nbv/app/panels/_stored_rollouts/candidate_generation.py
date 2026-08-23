@@ -1730,6 +1730,10 @@ def _render_candidate_geometry_diagnostics(
                         "proposal expansion pose",
                         "current target-distance scale",
                     ),
+                    theory=TheoryReferences(
+                        equation_ids=("spatial.candidate_proposal_support_normalization",),
+                        symbol_ids=("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose"),
+                    ),
                 ),
             )
 
@@ -1822,6 +1826,10 @@ def _render_candidate_geometry_diagnostics(
                         ),
                         evidence_role="actor-visible",
                         source_fields=("inspection.rollout_trajectory_geometry",),
+                        theory=TheoryReferences(
+                            equation_ids=("spatial.rollout_trajectory_normalization",),
+                            symbol_ids=("oracle.candidate_qti", "oracle.center", "entity.center", "spatial.ref_pose"),
+                        ),
                     ),
                 )
 
