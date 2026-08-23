@@ -977,8 +977,52 @@ def test_corpus_reward_figure_uses_one_based_acquisitions_and_exact_context() ->
     median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
     assert len(median_traces) == 1
     assert list(median_traces[0].x) == [1, 8]
-    assert "contract-a" in median_traces[0].name
-    assert "temperature_softmax" in median_traces[0].name
+    assert median_traces[0].name == "rich-60 · softmax · T=0.5 · H=8 · B=1 · beam=1"
+    assert "temperature_softmax" not in median_traces[0].name
+    assert median_traces[0].customdata[0, 4] == "contract-a"
+    assert "contract_id=%{customdata[4]}" in median_traces[0].hovertemplate
+
+
+def test_corpus_reward_figure_disambiguates_compact_labels_for_contract_facets() -> None:
+    """Contract facets stay distinct without putting full hashes in every legend entry."""
+
+    rows = pd.DataFrame(
+        [
+            {
+                "metric": "cumulative_target_root_gain",
+                "contract_id": contract,
+                "contract": f"candidate contract {contract}",
+                "profile": "rich-60",
+                "policy": "temperature_softmax",
+                "temperature": 0.5,
+                "horizon": 8,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "step_index": 0,
+                "store_count": 1,
+                "total_count": 1,
+                "finite_count": 1,
+                "iqr_width": 0.0,
+                "median": 0.1,
+                "q25": 0.1,
+                "q75": 0.1,
+            }
+            for contract in ("contract-alpha", "contract-beta")
+        ]
+    )
+
+    figure = reconstruction_return._corpus_temporal_figure(rows, metric_label="Cumulative target root gain")
+
+    names = [trace.name for trace in figure.data if trace.mode == "lines+markers"]
+    assert names == [
+        "rich-60 · softmax · T=0.5 · H=8 · B=1 · beam=1 · contract=contract-alp",
+        "rich-60 · softmax · T=0.5 · H=8 · B=1 · beam=1 · contract=contract-bet",
+    ]
+    assert all(len(name) < 100 for name in names)
+    assert {trace.customdata[0, 4] for trace in figure.data if trace.mode == "lines+markers"} == {
+        "contract-alpha",
+        "contract-beta",
+    }
     assert "acquisition number" in figure.layout.xaxis.title.text
     assert "factual step_index + 1" in figure.layout.xaxis.title.text
 

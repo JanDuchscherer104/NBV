@@ -247,9 +247,10 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
     group_fields = _corpus_temporal_group_fields(rows)
     working = rows.copy()
     working["acquisition_number"] = pd.to_numeric(working["step_index"], errors="coerce") + 1
-    working["series"] = working[group_fields].astype(str).agg(" · ".join, axis=1) if group_fields else "corpus"
+    grouped = list(working.groupby(group_fields, sort=True, dropna=False)) if group_fields else [((), working)]
+    display_labels = _temporal_series_display_labels(grouped, group_fields)
     palette = px.colors.qualitative.Plotly
-    for index, (series, group) in enumerate(working.groupby("series", sort=True)):
+    for index, ((_, group), series) in enumerate(zip(grouped, display_labels, strict=True)):
         ordered = group.sort_values("acquisition_number")
         color = palette[index % len(palette)]
         figure.add_trace(
@@ -276,20 +277,36 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
                 hoverinfo="skip",
             )
         )
-        custom = ordered[["finite_count", "total_count", "store_count", "iqr_width"]].to_numpy()
+        custom_frame = ordered[["finite_count", "total_count", "store_count", "iqr_width"]].copy()
+        for field in (
+            "contract_id",
+            "contract",
+            "profile",
+            "policy",
+            "temperature",
+            "horizon",
+            "branch_factor",
+            "beam_width",
+        ):
+            custom_frame[field] = ordered[field] if field in ordered else "unknown"
+        custom = custom_frame.to_numpy()
         figure.add_trace(
             go.Scatter(
                 x=ordered["acquisition_number"],
                 y=ordered["median"],
                 mode="lines+markers",
                 line={"color": color},
-                name=str(series),
-                legendgroup=str(series),
+                name=series,
+                legendgroup=series,
                 customdata=custom,
                 hovertemplate=(
                     "acquisition=%{x}<br>median=%{y:.4g}<br>"
                     "n=%{customdata[0]:.0f} / %{customdata[1]:.0f}<br>"
-                    "stores=%{customdata[2]:.0f}<br>IQR width=%{customdata[3]:.4g}<extra></extra>"
+                    "stores=%{customdata[2]:.0f}<br>IQR width=%{customdata[3]:.4g}<br>"
+                    "contract_id=%{customdata[4]}<br>contract=%{customdata[5]}<br>"
+                    "profile=%{customdata[6]}<br>policy=%{customdata[7]}<br>"
+                    "temperature=%{customdata[8]}<br>horizon=%{customdata[9]}<br>"
+                    "branch=%{customdata[10]}<br>beam=%{customdata[11]}<extra></extra>"
                 ),
             )
         )
@@ -300,6 +317,40 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
         hovermode="x unified",
     )
     return figure
+
+
+def _temporal_series_display_labels(grouped: list[tuple[object, pd.DataFrame]], group_fields: list[str]) -> list[str]:
+    """Build compact legend labels while retaining exact identity in hover data."""
+
+    labels: list[str] = []
+    for key, _ in grouped:
+        values = dict(zip(group_fields, key if isinstance(key, tuple) else (key,), strict=True))
+        profile = str(values.get("profile", "unknown"))
+        policy = str(values.get("policy", "unknown")).replace("temperature_", "")
+        parts = [profile, policy]
+        if values.get("temperature") is not None:
+            parts.append(f"T={values['temperature']}")
+        if values.get("horizon") is not None:
+            parts.append(f"H={values['horizon']}")
+        if values.get("branch_factor") is not None:
+            parts.append(f"B={values['branch_factor']}")
+        if values.get("beam_width") is not None:
+            parts.append(f"beam={values['beam_width']}")
+        labels.append(" · ".join(part for part in parts if part not in {"unknown", "nan"}))
+
+    counts = pd.Series(labels).value_counts()
+    unique: list[str] = []
+    for label, (key, _) in zip(labels, grouped, strict=True):
+        if counts[label] == 1:
+            unique.append(label)
+            continue
+        values = dict(zip(group_fields, key if isinstance(key, tuple) else (key,), strict=True))
+        contract_id = str(values.get("contract_id", "unknown"))
+        suffix = (
+            contract_id[:12] if contract_id not in {"unknown", "nan"} else str(values.get("contract", "unknown"))[:12]
+        )
+        unique.append(f"{label} · contract={suffix}")
+    return unique
 
 
 def _corpus_temporal_explanation(metric: str) -> ScientificExplanation:
