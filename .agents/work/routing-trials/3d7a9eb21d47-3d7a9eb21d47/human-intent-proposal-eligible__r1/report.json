@@ -1,0 +1,259 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Loaded the agents-db routing-fixture and proposal-review lifecycle references.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected proposal lifecycle/disposition guidance and the human-owner intent reference.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Assertions classified proposal-fixture-config-factory as eligible evidence, identified .agents/references/human_owner_intent.md as the target owner, and verified no disposition or active lifecycle record.",
+          "event_index": 11,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Re-ran fixture assertions and verified the checkout remained clean.",
+          "event_index": 16,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "trial_id": "human-intent-proposal-eligible",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 131.2746992111206,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' /home/jd/.codex/memories/MEMORY.md | rg -n -C 2 'proposal|fixture|routing|owner|ARIA-NBV' | head -80\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agent-behavior/SKILL.md\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git status --short && rg -n --hidden -S 'proposal-fixture-config-factory|proposal fixture|routing fixtures|fixture-config' --glob '\"'!graphify-out/**'\"' --glob '\"'!.git/**'\"' .\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agents-db/SKILL.md && sed -n '1,180p' .agents/skills/agents-db/references/proposal-routing-fixtures.md && rg --files -g 'AGENTS.md' -g '\"'!graphify-out/**'\"' | sort\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agents-db/references/modes.md && sed -n '1,220p' .agents/skills/agent-behavior/references/external-actions.md && sed -n '1,220p' .agents/references/human_owner_intent.md && printf '\\\\n-- proposal surfaces --\\\\n' && rg -n --hidden -S 'proposal-fixture-config-factory|proposal|lifecycle|disposition' .agents/proposals.toml .agents/proposals*.toml .agents 2>/dev/null | head -160\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"ls -la .agents | sed -n '1,160p'; rg -n --hidden -S 'proposal-fixture-config-factory|source_debrief|target_owner|expected|lifecycle' .agents --glob '*.toml' --glob '*.md' | head -220; rg -n --hidden -S 'proposal-open|proposal-review|proposal-resolve|proposals.toml' scripts Makefile .agents --glob '\"'!memory/history/**'\"' | head -180\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,120p' .agents/todos.toml; sed -n '620,730p' scripts/agents_db.py; sed -n '1,160p' .agents/memory/README.md 2>/dev/null || true; test -f .agents/memory/history/2026/08/2026-08-23_g002_pr2_proposal_review_lifecycle.md && sed -n '1,220p' .agents/memory/history/2026/08/2026-08-23_g002_pr2_proposal_review_lifecycle.md || true; git status --porcelain=v1\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -C 5 'routing trial|proposal-fixture|eligib|undisposition|fixture' scripts/tests .agents .omx --glob '*.py' --glob '*.md' --glob '*.toml' | head -260; find . -path '*/test_routing_trials.py' -o -path '*/proposals*.toml' -o -path '*/2026-08-23_g002_pr2_proposal_review_lifecycle.md' | sort\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' .agents/skills/agent-behavior/references/reviewed-intent.md; printf '\\\\n-- memory owner --\\\\n'; sed -n '1,220p' .agents/memory/README.md; printf '\\\\n-- files --\\\\n'; rg --files | sed -n '1,180p'\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' scripts/agents_db.py; sed -n '180,360p' scripts/agents_db.py; rg -n 'def validate|PROPOSALS_FILE|RESOLVED' scripts/agents_db.py\"",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'python3 scripts/agents_db.py validate; rc=$?; printf '\"'validate_rc=%s\\\\n' \\\"\"'$rc\"; git status --porcelain=v1; git diff --quiet; diff_rc=$?; printf '\"'diff_rc=%s\\\\n' \\\"\"'$diff_rc\"; exit 0'",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); target=Path(\\\".agents/references/human_owner_intent.md\\\"); assert \\\"ID: \"'`proposal-fixture-config-factory`\" in f; assert \"Target owner: `.agents/references/human_owner_intent.md`\" in f; assert \"Expected state: eligible proposal evidence; no disposition.\" in f; assert \"accept and narrow` require a commit\" in m; assert \"defer keeps the record active\" in m; assert target.is_file(); assert not Path(\".agents/proposals.toml\").exists(); print(\"fixture_contract=eligible\"); print(\"target_owner=.agents/references/human_owner_intent.md\"); print(\"lifecycle_owner=.agents/proposals.toml (active records), scripts/agents_db.py (commands)\"); print(\"fixture_disposition=none\"); print(\"active_lifecycle_file=absent\");'\"' ; git status --porcelain=v1; git diff --exit-code --quiet; printf 'checkout_clean=yes\\\\n'\"",
+        "event_index": 11,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"nl -ba .agents/skills/agents-db/references/proposal-routing-fixtures.md | sed -n '8,48p'; nl -ba .agents/skills/agents-db/references/modes.md | sed -n '40,58p'; nl -ba .agents/skills/agents-db/SKILL.md | sed -n '32,64p'; git status --porcelain=v1\"",
+        "event_index": 12,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); target=Path(\\\".agents/references/human_owner_intent.md\\\"); assert \\\"ID: \"'`proposal-fixture-config-factory`\" in f; assert \"Target owner: `.agents/references/human_owner_intent.md`\" in f; assert \"Expected state: eligible proposal evidence; no disposition.\" in f; assert \".agents/proposals.toml` owns active typed lifecycle records\" in m; assert \"defer` keeps the record active\" in m; assert target.is_file(); assert not Path(\".agents/proposals.toml\").exists(); print(\"fixture_contract=eligible\"); print(\"target_owner=.agents/references/human_owner_intent.md\"); print(\"lifecycle_owner=.agents/proposals.toml + scripts/agents_db.py\"); print(\"fixture_disposition=none\"); print(\"active_lifecycle_file=absent\");'\"'; git status --porcelain=v1; git diff --exit-code --quiet; printf 'checkout_clean=yes\\\\n'\"",
+        "event_index": 13,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); print(\\\"id\\\", \\\"ID: \"'`proposal-fixture-config-factory`\" in f); print(\"target\", \"Target owner: `.agents/references/human_owner_intent.md`\" in f); print(\"state\", \"Expected state: eligible proposal evidence; no disposition.\" in f); print(\"lifecycle\", \".agents/proposals.toml` owns active typed lifecycle records\" in m); print(\"defer\", \"`defer` keeps the record active\" in m); print(\"target_exists\", Path(\".agents/references/human_owner_intent.md\").is_file()); print(\"active_exists\", Path(\".agents/proposals.toml\").exists())'\"'\"",
+        "event_index": 14,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); print(repr([x for x in m.splitlines() if \\\"keeps the record\\\" in x][0]))'\"",
+        "event_index": 15,
+        "event_type": "item.completed",
+        "exit_code": 1,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); target=Path(\\\".agents/references/human_owner_intent.md\\\"); assert \\\"ID: \"'`proposal-fixture-config-factory`\" in f; assert \"Target owner: `.agents/references/human_owner_intent.md`\" in f; assert \"Expected state: eligible proposal evidence; no disposition.\" in f; assert \".agents/proposals.toml` owns active typed lifecycle records\" in m; assert \"`defer` keeps the\" in m and \"record active.\" in m; assert target.is_file(); assert not Path(\".agents/proposals.toml\").exists(); print(\"fixture_contract=eligible\"); print(\"target_owner=.agents/references/human_owner_intent.md\"); print(\"lifecycle_owner=.agents/proposals.toml + scripts/agents_db.py\"); print(\"fixture_disposition=none\"); print(\"active_lifecycle_file=absent\");'\"'; git status --porcelain=v1; git diff --exit-code --quiet; printf 'checkout_clean=yes\\\\n'\"",
+        "event_index": 16,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 17,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 17,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 9364,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "58fcf0d63ab58e9fcd5beff414ea74b6563b674114758df878e66520c139840c",
+  "returncode": 0,
+  "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/.agents/work/routing-trials/3d7a9eb21d47-3d7a9eb21d47/human-intent-proposal-eligible__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-3d7a9eb21d47-y7hz0445/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787512736.0176098,
+  "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "timed_out": false,
+  "trial_id": "human-intent-proposal-eligible",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".agents/references/human_owner_intent.md (target); .agents/proposals.toml and scripts/agents_db.py (lifecycle)\",\"handoff\":null,\"loaded_guides\":[\"agent-behavior\",\"agents-db\"],\"opened_references\":[\".agents/skills/agents-db/references/proposal-routing-fixtures.md\",\".agents/skills/agents-db/references/modes.md#proposal-review\",\".agents/references/human_owner_intent.md\"],\"outcome\":\"Eligible as proposal evidence: the fixture has a precise statement, reusable evidence, explicit unresolved conflict, and named target owner. It must remain undispositioned because no current-user disposition instruction was provided. No files were edited; the checkout is clean.\",\"selected_skill\":\"agents-db\",\"selected_verification\":\"Fixture assertions passed; checkout_clean=yes. Repository-wide validation was blocked by missing .agents/issues.toml.\",\"tool_calls\":[\"python3 scripts/agents_db.py validate\",\"bounded fixture/lifecycle assertion\",\"git status --porcelain=v1\",\"git diff --exit-code --quiet\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

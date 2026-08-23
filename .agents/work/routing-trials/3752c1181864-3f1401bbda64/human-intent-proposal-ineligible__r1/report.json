@@ -1,0 +1,276 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": false,
+    "reason": "semantic fail",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The trial loaded the agent-behavior and aria-nbv-context skill guides.",
+          "event_index": 1,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The trial read reviewed intent, the accepted scoped target-state specification, and relevant owner-routing material.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The trial inspected docs/AGENTS.md, the Typst style owner, and the related specification for thesis-code link ownership.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The trial verified the representative Typst contract by compiling docs/typst/thesis/sections/01-introduction.typ with draft links disabled and a code reference input, and checked checkout state.",
+          "event_index": 9,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The trial checked git status and reported a clean checkout.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [
+        "The expected proposal-routing owner/reference .agents/skills/agents-db/references/proposal-routing-fixtures.md was not read or otherwise evidenced.",
+        "The route therefore did not fully demonstrate the required agents-db proposal-ineligibility decision against the canonical routing fixture."
+      ],
+      "rubric_commit": "3f1401bbda64680cdd7a0e0503e4f96e7eea7cb7",
+      "tested_commit": "3752c1181864aecf57a9b925fded5564249bc5e8",
+      "trial_id": "human-intent-proposal-ineligible",
+      "verdict": "fail"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "96f2a095420d77bc1da95cc239bf5c55813d6a8b62a1db5789f23de6d35762fe",
+  "checkout_digest_before": "96f2a095420d77bc1da95cc239bf5c55813d6a8b62a1db5789f23de6d35762fe",
+  "checkout_digest_expected": "96f2a095420d77bc1da95cc239bf5c55813d6a8b62a1db5789f23de6d35762fe",
+  "elapsed_seconds": 118.47419118881226,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' /home/jd/.codex/memories/MEMORY.md | rg -n -C 3 'thesis|synchron|near miss|proposal|scoped requirement|source-order'\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,300p' .agents/skills/aria-nbv-context/SKILL.md\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i --hidden --glob '\"'!graphify-out/**'\"' --glob '\"'!.git/**'\"' 'fixed thesis|thesis.code|synchronization|near miss|accepted scoped|proposal|general intent|scoped requirement|source-order' .\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' .agents/skills/agent-behavior/references/reviewed-intent.md; sed -n '180,245p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md; sed -n '410,455p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md; sed -n '515,545p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md; sed -n '790,830p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i --hidden --glob '\"'!graphify-out/**'\"' --glob '\"'!.git/**'\"' 'near.?miss|synchron|thesis.*code|code.*thesis|must not.*proposal|proposal.*must not|accepted.*requirement' .omx .agents docs aria_nbv tests 2>/dev/null\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,120p' docs/AGENTS.md; sed -n '1,130p' docs/typst/shared/style.typ; rg -n -C 5 'code-link|code reference|thesis.*code|Typst owns|source anchors|synchron' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md docs/AGENTS.md docs/typst/shared/style.typ .agents/skills/typst-authoring/SKILL.md\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n 'gh-wip|gh-symbol|#gh\\\\(' docs/typst | head -80; rg -n 'aria-wip-links|aria-code-ref|style.typ|code-link' docs aria_nbv .github Makefile | head -120; git status --short --branch\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git log --oneline --all -- docs/typst/shared/style.typ | head -20; git log -S'gh-wip' --oneline --all -- docs/typst/shared/style.typ; rg -n -C 4 'cross-modal|source-link|code-reference|code-link' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | head -100; find . -maxdepth 3 -type f | rg 'scaffold|routing|fixture|near' | head -100\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git show --stat --oneline HEAD; git show --format=fuller --no-ext-diff -- docs/typst/shared/style.typ docs/AGENTS.md .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | sed -n '1,260p'; git show HEAD\"'^:docs/typst/shared/style.typ 2>/dev/null | sed -n '\"'1,130p'\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -o pipefail\nprintf '%s\\\\n' '--- owner markers ---'\nnl -ba .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | sed -n '429,433p;460,469p;682,687p;692,696p'\nprintf '%s\\\\n' '--- docs route ---'\nnl -ba docs/AGENTS.md | sed -n '10,19p;34,40p'\nprintf '%s\\\\n' '--- implementation contract ---'\nnl -ba docs/typst/shared/style.typ | sed -n '37,118p'\nprintf '%s\\\\n' '--- bounded Typst proof ---'\nif command -v typst >/dev/null 2>&1; then\n  typst compile --root . --input aria-wip-links=false --input aria-code-ref=HEAD docs/typst/thesis/main.typ /dev/null\nelse\n  echo 'typst unavailable'\n  exit 127\nfi\nprintf '%s\\\\n' '--- checkout state ---'\ngit status --short --branch\"",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'typst compile --format pdf --root . --input aria-wip-links=false --input aria-code-ref=HEAD docs/typst/thesis/main.typ /dev/null; git status --short --branch'",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'pwd; ls -l docs/typst/thesis/main.typ; typst compile --format pdf --input aria-wip-links=false --input aria-code-ref=HEAD docs/typst/thesis/main.typ /dev/null; git status --short --branch'",
+        "event_index": 11,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg --files docs | head -40; find docs -maxdepth 3 -type f | head -40; git ls-tree -r --name-only HEAD | rg '\"'^docs/typst/thesis/main.typ$|''^docs/typst/shared/style.typ$'\"'\"",
+        "event_index": 12,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,80p' docs/typst/thesis/sections/01-introduction.typ; sed -n '1,80p' docs/typst/shared/macros.typ; rg -n 'import.*style|import.*macros|#include' docs/typst/thesis/sections docs/typst/shared | head -40; find docs/typst -maxdepth 2 -type f -name '*.typ' | sort | head -20\"",
+        "event_index": 13,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'typst compile --format pdf --input aria-wip-links=false --input aria-code-ref=HEAD docs/typst/thesis/sections/01-introduction.typ /dev/null; git status --short --branch'",
+        "event_index": 14,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'typst compile --format pdf --root docs/typst --input aria-wip-links=false --input aria-code-ref=HEAD thesis/sections/01-introduction.typ /dev/null; git status --short --branch'",
+        "event_index": 15,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'typst compile --format pdf --root docs/typst --input aria-wip-links=false --input aria-code-ref=HEAD \"$PWD/docs/typst/thesis/sections/01-introduction.typ\" /dev/null; git status --short --branch'",
+        "event_index": 16,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'typst compile --format pdf docs/typst/shared/style.typ /dev/null; git status --short --branch'",
+        "event_index": 17,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 18,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 18,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 7021,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "7b3e2af7c554d3d2e092f3180c6b4dde47b0618938cd381ae373db18c8f38250",
+  "returncode": 0,
+  "rubric_commit": "3f1401bbda64680cdd7a0e0503e4f96e7eea7cb7",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/.agents/work/routing-trials/3752c1181864-3f1401bbda64/human-intent-proposal-ineligible__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-3752c1181864-cup42maw/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787511546.7456748,
+  "tested_commit": "3752c1181864aecf57a9b925fded5564249bc5e8",
+  "timed_out": false,
+  "trial_id": "human-intent-proposal-ineligible",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md owns the accepted scoped requirement; docs/typst/shared/style.typ owns the thesis-to-code link contract and implementation; docs/AGENTS.md provides the route\",\"handoff\":null,\"loaded_guides\":[\"agent-behavior\",\"aria-nbv-context\"],\"opened_references\":[\".agents/skills/agent-behavior/references/reviewed-intent.md\",\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\",\"docs/AGENTS.md\",\"docs/typst/shared/style.typ\",\".agents/skills/typst-authoring/SKILL.md\"],\"outcome\":\"The near miss must stop without a proposal: the accepted specification already fixes the decision\\u2014final links use gh, draft links use gh-wip/gh-symbol, submission disables draft links, and source-link changes belong in a separate thesis PR rather than scaffold work. The exact owner and implementation agree. General human intent was not loaded as a deciding source. No files were mutated.\",\"selected_skill\":\"agent-behavior \\u2192 aria-nbv-context\",\"selected_verification\":\"typst compile --format pdf docs/typst/shared/style.typ /dev/null; checkout remained clean (master). Full thesis compile was not admissible because this snapshot lacks docs/typst/thesis/main.typ and draft_markers.typ.\",\"tool_calls\":[\"bounded rg owner search\",\"exact source inspection\",\"git status\",\"Typst compile of docs/typst/shared/style.typ\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

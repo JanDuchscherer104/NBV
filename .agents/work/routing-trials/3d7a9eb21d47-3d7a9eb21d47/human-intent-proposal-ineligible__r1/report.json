@@ -1,0 +1,189 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Inspected the proposal-routing fixtures, agents-db skill, and reviewed-intent routing guidance.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected the accepted scaffold specification and searched for bounded verification candidates concerning agent behavior, thesis-code synchronization, and proposal routing.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Verified the checkout was clean before completion.",
+          "event_index": 8,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "trial_id": "human-intent-proposal-ineligible",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 87.71268510818481,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && printf '\\\\n--- relevant memory hits ---\\\\n' && rg -n -i 'thesis|synchron|near miss|proposal|scoped requirement|general intent' /home/jd/.codex/memories/MEMORY.md | head -80\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i --hidden --glob '\"'!/.git/**'\"' 'fixed thesis|thesis.?code|synchronization|near.?miss|must not create|create a proposal|accepted scoped|scoped requirement|general intent' . | head -240\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' .agents/skills/agents-db/references/proposal-routing-fixtures.md && printf '\\\\n--- agents-db skill ---\\\\n' && sed -n '1,220p' .agents/skills/agents-db/SKILL.md && printf '\\\\n--- reviewed-intent routing text ---\\\\n' && sed -n '1,180p' .agents/skills/agent-behavior/references/reviewed-intent.md\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- accepted specification matches ---' && rg -n -C 5 -i 'thesis|code|synchron|proposal|owner|scoped|general intent|near miss' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | head -260 && printf '%s\\\\n' '--- memory owner ---' && sed -n '1,240p' .agents/memory/README.md && printf '%s\\\\n' '--- exact owner with line numbers ---' && nl -ba .agents/skills/agent-behavior/SKILL.md | sed -n '1,150p' && printf '%s\\\\n' '--- fixture with line numbers ---' && nl -ba .agents/skills/agents-db/references/proposal-routing-fixtures.md | sed -n '1,100p'\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg --files -g 'README.md' -g '*memory*' .agents | head -80 && printf '\\\\n--- spec targeted section headings ---\\\\n' && rg -n '\"'^#{1,4} '\"' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | head -100 && printf '\\\\n--- exact owner references in spec ---\\\\n' && rg -n -C 4 'agent-behavior|thesis-code|synchron' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '316,362p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md && sed -n '453,487p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md && sed -n '667,697p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md && sed -n '915,946p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md && printf '\\\\n--- worktree status ---\\\\n' && git status --short --branch && printf '\\\\n--- bounded proof candidates ---\\\\n' && rg -n 'check-agent-memory|proposal-routing|agent-behavior|thesis.*code|code.*thesis' Makefile scripts .agents tests 2>/dev/null | head -180\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' scripts/tests/test_routing_trials.py && printf '\\\\n--- proposal fixture references ---\\\\n' && rg -n -C 3 'proposal-fixture-config-factory|Already-owned near miss|thesis and executable code synchronized|no proposal' scripts .agents | head -220 && printf '\\\\n--- nested guides relevant to agent/scaffold ---\\\\n' && find .agents -name AGENTS.md -print\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg --files | rg 'routing|proposal|agents_db|debrief' | head -160 && printf '\\\\n--- fixture references ---\\\\n' && rg -n -C 3 'proposal-fixture-config-factory|Already-owned near miss|thesis and executable code synchronized|no proposal' scripts .agents 2>/dev/null | head -220 && printf '\\\\n--- nested guides ---\\\\n' && find .agents -name AGENTS.md -print\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git diff --quiet && git diff --cached --quiet && test -z \"$(git status --porcelain)\" && git status --short --branch'",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 9,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 9,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 4535,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "7b3e2af7c554d3d2e092f3180c6b4dde47b0618938cd381ae373db18c8f38250",
+  "returncode": 0,
+  "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/.agents/work/routing-trials/3d7a9eb21d47-3d7a9eb21d47/human-intent-proposal-ineligible__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-3d7a9eb21d47-jhz7148t/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787512882.3603063,
+  "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "timed_out": false,
+  "trial_id": "human-intent-proposal-ineligible",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".agents/skills/agent-behavior/SKILL.md\",\"handoff\":null,\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\",\".agents/skills/agents-db/SKILL.md\"],\"opened_references\":[\".agents/skills/agents-db/references/proposal-routing-fixtures.md\",\".agents/skills/agent-behavior/references/reviewed-intent.md\",\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"],\"outcome\":\"Decision: do not create a proposal. The fixed candidate is already an owned invariant in `.agents/skills/agent-behavior/SKILL.md` (thesis-code synchronization), and the accepted scoped requirement `.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md` settles it for this scaffold rework. A new proposal would duplicate settled policy. I stopped before loading `.agents/references/human_owner_intent.md` as a deciding source. No files were mutated.\\n\",\"selected_skill\":\"agent-behavior\",\"selected_verification\":\"Read-only proof: exact fixture/spec/owner inspection plus git diff/status check; checkout remains clean on master.\",\"tool_calls\":[\"rg exact contract and owners\",\"inspected accepted specification ownership sections\",\"git diff/status clean proof\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

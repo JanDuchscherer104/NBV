@@ -1,0 +1,297 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Read .agents/todos.toml, establishing todo-044 as the existing actionable record.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Read exact source lines for todo-044 and scripts/agents_db.py lifecycle ownership, providing current-owner proof before any proposed amendment or resolution.",
+          "event_index": 14,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Checked issue/todo linkage and duplicate-record indicators; the route selected the existing todo rather than creating another record.",
+          "event_index": 13,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Ran make check-agent-memory as verification evidence; it failed because the required interpreter was absent, so the limitation was reported rather than misrepresented.",
+          "event_index": 16,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Verified the checkout remained clean.",
+          "event_index": 15,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "trial_id": "agents-db-verified-residual-work",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 99.3801200389862,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc 'rg -n -i \"todo-044|todo 044|044\" /home/jd/.codex/memories/MEMORY.md || true'",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' '/tmp/aria-routing-3d7a9eb21d47-vv9g75w3/checkout/.agents/skills/agents-db/SKILL.md'\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' '/tmp/aria-routing-3d7a9eb21d47-vv9g75w3/checkout/.agents/skills/agent-behavior/SKILL.md'\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' '/tmp/aria-routing-3d7a9eb21d47-vv9g75w3/checkout/.agents/skills/aria-nbv-context/SKILL.md'\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- candidate files ---'; rg --files -g 'AGENTS*.md' -g '*.toml' -g 'agents_db.py' -g 'README.md' | sed -n '1,240p'; printf '%s\\\\n' '--- todo-044 matches ---'; rg -n -i --hidden --glob '\"'!graphify-out/**'\"' --glob '\"'!.git/**'\"' 'todo-044|todo_044|todo 044' . || true\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agents-db/references/schema.md\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' AGENTS_INTERNAL_DB.md\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' .agents/todos.toml\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,280p' scripts/agents_db.py\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git status --short --branch'",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg --files -g 'AGENTS_INTERNAL_DB.md' -g '*agents_db*' -g 'proposals.toml' -g 'issues.toml' -g 'resolved.toml' | sort; printf '%s\\\\n' '--- todo-044 exact block ---'; awk 'BEGIN{p=0} /\"'^id = \"todo-044\"/{p=1} p{print} p && /''^'\"\\\\[\\\\[todo\\\\]\\\\]/{exit}' .agents/todos.toml; printf '%s\\\\n' '--- linked issue-025 ---'; rg -n -A35 -B3 '\"'^id = \"issue-025\"'\"' .agents/issues.toml; printf '%s\\\\n' '--- proposals status ---'; sed -n '1,220p' .agents/proposals.toml\"",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find .agents -maxdepth 3 -type f -print | sort | sed -n '1,260p'; printf '%s\\\\n' '--- issue references ---'; rg -n -i --hidden --glob '\"'!skills/**'\"' --glob '\"'!memory/**'\"' 'issue-025|todo-044|proposal lifecycle|source-backed memory consolidation' .agents scripts aria_nbv/tests Makefile pyproject.toml 2>/dev/null | sed -n '1,260p'\"",
+        "event_index": 11,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' .agents/skills/agents-db/references/provenance.md; printf '%s\\\\n' '--- modes proposal section ---'; rg -n -A120 -B10 'proposal-review|Triage' .agents/skills/agents-db/references/modes.md; printf '%s\\\\n' '--- issue-025 references in todo DB ---'; sed -n '730,790p' .agents/todos.toml; printf '%s\\\\n' '--- relevant make/test surfaces ---'; rg -n 'check-agent-memory|agents-db|routing-trials|debrief-index' Makefile makefile scripts aria_nbv/tests 2>/dev/null | sed -n '1,260p'; printf '%s\\\\n' '--- tracked files around agent DB ---'; git ls-files '.agents/*' 'scripts/*agents*' 'scripts/tests/*' | sort | sed -n '1,260p'\"",
+        "event_index": 12,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- lifecycle implementation symbols ---'; rg -n -A18 -B8 'proposal-open|proposal-review|proposal-resolve|proposal|check-agent-memory|agents-db-validate' scripts/agents_db.py Makefile | sed -n '1,360p'; printf '%s\\\\n' '--- DB files and directories ---'; find .agents -maxdepth 2 -type d -print | sort; find scripts -maxdepth 2 -type f -print | sort | sed -n '1,220p'; printf '%s\\\\n' '--- issue/todo counts and duplicate linkage ---'; rg -n '\"'^id = \"issue-025\"|''^id = \"todo-044\"|issue_ids = .*issue-025'\"' .agents/todos.toml .agents/*.toml 2>/dev/null\"",
+        "event_index": 13,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '330,620p' scripts/agents_db.py; printf '%s\\\\n' '--- line-numbered exact sources ---'; nl -ba .agents/todos.toml | sed -n '1,34p'; nl -ba scripts/agents_db.py | sed -n '20,42p;181,216p;350,407p;506,570p'; nl -ba .agents/skills/agents-db/references/modes.md | sed -n '40,60p'; nl -ba .agents/skills/agents-db/SKILL.md | sed -n '1,90p'\"",
+        "event_index": 14,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git status --short --branch'",
+        "event_index": 15,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'make check-agent-memory'",
+        "event_index": 16,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"make agents-db AGENTS_ARGS='validate'\"",
+        "event_index": 17,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'python3 scripts/agents_db.py validate'",
+        "event_index": 18,
+        "event_type": "item.completed",
+        "exit_code": 1,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'python3 scripts/agents_db.py search todo-044'",
+        "event_index": 19,
+        "event_type": "item.completed",
+        "exit_code": 1,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"nl -ba scripts/agents_db.py | sed -n '558,730p'; printf '%s\\\\n' '--- referenced-path existence ---'; for p in .agents/memory/README.md .agents/proposals.toml .agents/proposals_resolved.toml .agents/issues.toml scripts/tests/test_agents_db_proposals.py scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py scripts/validate_agent_memory.py; do if test -e \\\"\"'$p\"; then printf '\"'present  %s\\\\n' \\\"\"'$p\"; else printf '\"'missing  %s\\\\n' \\\"\"'$p\"; fi; done; printf '\"'%s\\\\n' '--- exact owner candidates ---'; rg -n 'PROPOSALS_FILE|proposal_open|proposal_review|proposal_resolve|def main|target_owner|owner edit commit|proof' scripts/agents_db.py .agents/skills/agents-db/references/modes.md .agents/todos.toml | sed -n '1,260p'\"",
+        "event_index": 20,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 21,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 21,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 7302,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "5b75de1f01cc95738495d8d51d4c4456fbdd52d43c3ce6ecf20fa3d6dcccce11",
+  "returncode": 0,
+  "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/.agents/work/routing-trials/3d7a9eb21d47-3d7a9eb21d47/agents-db-verified-residual-work__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-3d7a9eb21d47-vv9g75w3/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787512982.5206497,
+  "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "timed_out": false,
+  "trial_id": "agents-db-verified-residual-work",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".agents/todos.toml owns the actionable record; scripts/agents_db.py owns the typed proposal lifecycle. The referenced proposal/debrief owners are absent: .agents/proposals.toml and .agents/memory/README.md. The linked issue-025 owner is also absent because .agents/issues.toml is missing.\",\"handoff\":\"Amend existing todo-044; do not create another record. Record the missing-owner/evidence blocker and keep it in progress. A duplicate would violate the existing-record rule and the todo already covers this exact proposal-workflow scope.\",\"loaded_guides\":[\"agent-behavior\",\"agents-db\",\"aria-nbv-context\"],\"opened_references\":[\".agents/todos.toml:4-18\",\".agents/skills/agents-db/SKILL.md:13-48\",\".agents/skills/agents-db/references/schema.md\",\".agents/skills/agents-db/references/provenance.md\",\".agents/skills/agents-db/references/modes.md:40-59\",\"scripts/agents_db.py:506-629\"],\"outcome\":\"Routing trial complete. todo-044 is the precise matching active record and should be amended, not duplicated. Resolution is not currently supportable: production lifecycle files, linked issue DB, validation interpreter, and named routing tests are absent. Checkout remained unmodified and clean.\",\"selected_skill\":\"agents-db read-only triage\",\"selected_verification\":\"Before resolution, run: make check-agent-memory; make agents-db AGENTS_ARGS='validate'; pytest -q scripts/tests/test_agents_db_proposals.py scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py. Resolution additionally requires a real proposal, matched published baseline/candidate routing evidence, current-user disposition, an exact target-owner edit commit for accept/narrow, and its proof receipt.\",\"tool_calls\":[\"python3 scripts/agents_db.py validate \\u2014 failed: missing .agents/issues.toml\",\"make check-agent-memory \\u2014 blocked: missing aria_nbv/.venv/bin/python\",\"make agents-db AGENTS_ARGS='validate' \\u2014 blocked: missing aria_nbv/.venv/bin/python\",\"git status --short --branch \\u2014 clean, master\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

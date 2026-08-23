@@ -1,0 +1,202 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": false,
+    "reason": "semantic fail",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The trial read the human-owner intent reference and related routing/spec files, but its reported exact owner was instead production code.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Read-only verification confirmed the candidate-generation config factory and shared setup_target lifecycle owners, plus a clean checkout.",
+          "event_index": 10,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [
+        "The exact target owner should have been .agents/references/human_owner_intent.md, not aria_nbv/aria_nbv/pose_generation/candidate_generation.py.",
+        "The proposal should have remained explicitly proposed without assigning the production implementation owner as the routing decision."
+      ],
+      "rubric_commit": "3f1401bbda64680cdd7a0e0503e4f96e7eea7cb7",
+      "tested_commit": "3752c1181864aecf57a9b925fded5564249bc5e8",
+      "trial_id": "human-intent-proposal-eligible",
+      "verdict": "fail"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "96f2a095420d77bc1da95cc239bf5c55813d6a8b62a1db5789f23de6d35762fe",
+  "checkout_digest_before": "96f2a095420d77bc1da95cc239bf5c55813d6a8b62a1db5789f23de6d35762fe",
+  "checkout_digest_expected": "96f2a095420d77bc1da95cc239bf5c55813d6a8b62a1db5789f23de6d35762fe",
+  "elapsed_seconds": 90.83726024627686,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && printf '\\\\n--- MEMORY MATCHES ---\\\\n' && rg -n -i 'proposal-fixture-config-factory|fixed proposal routing fixtures|routing trial|eligib' /home/jd/.codex/memories/MEMORY.md | head -80\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- STATUS ---' && git status --short && printf '%s\\\\n' '--- MATCHES ---' && rg -n -i --hidden --glob '\"'!*.pyc'\"' 'proposal-fixture-config-factory|fixed proposal routing|proposal routing fixtures' . && printf '%s\\\\n' '--- AGENT GUIDES ---' && rg --files -g 'AGENTS.md' -g '\"'!**/.git/**'\"' | sort\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 1,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find . -maxdepth 4 -type f | sort | sed -n '1,240p' && printf '\\\\n--- ALL AGENTS ---\\\\n' && find . -name AGENTS.md -print -exec sed -n '1,220p' {} \\\\;\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- TRACKED PATHS ---' && git ls-files | sed -n '1,260p' && printf '%s\\\\n' '--- NAME FILTERS ---' && git ls-files | rg -i 'proposal|fixture|routing|config|factory|owner|eligib' | sed -n '1,240p' && printf '%s\\\\n' '--- ALL TEXT MATCHES (tracked blobs) ---' && git grep -n -i -E 'proposal|fixture|routing|config.factory|eligible' -- ':\"'!*.lock'\"' | head -240\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- ROUTING/SCaffold PATHS ---' && git ls-files | rg -i 'scaffold|routing|fixture' | tail -160 && printf '%s\\\\n' '--- SPEC FIXTURE REFERENCES ---' && rg -n -C 5 -i 'scaffold_routing_fixtures|proposal.fixture|config.factory|fixed proposal|fixture.*factory' .omx/specs .agents Makefile | head -260 && printf '%s\\\\n' '--- CONFIG FACTORY OWNERS ---' && sed -n '1,180p' aria_nbv/aria_nbv/pose_generation/candidate_generation.py && rg -n -C 4 'config.*factory|factory.*config|Proposal' aria_nbv/aria_nbv/pose_generation aria_nbv/tests | head -260\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- ALL RELEVANT NAMES ---' && find . -type f -not -path './.git/*' | rg -i 'proposal|scaffold|route|fixture|config' | sort && printf '%s\\\\n' '--- GIT HISTORY NAME/STRING ---' && git log --all --oneline --decorate -S'proposal-fixture-config-factory' -- . | head -40 && git log --all --oneline --decorate --name-only -- '*routing*' '*fixture*' | head -160 && printf '%s\\\\n' '--- AGENT CONTEXT SKILL ---' && sed -n '1,180p' .agents/skills/aria-nbv-context/SKILL.md\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git show --stat --oneline HEAD && printf '\\\\n--- HEAD ROOT ---\\\\n' && git ls-tree -r --name-only HEAD | rg -i 'proposal|routing|fixture|scaffold' | tail -240 && printf '\\\\n--- COMMIT METADATA ---\\\\n' && git show --format=fuller --no-patch HEAD && printf '\\\\n--- ALL REFS ---\\\\n' && git branch -a -vv && git tag --list | tail -40\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i -C 3 'proposal|fixture|config factory|factory|eligible|target owner|lifecycle owner' .agents/references/human_owner_intent.md .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md .agents/todos.toml | head -360 && printf '\\\\n--- SOURCE CONFIG FACTORY SYMBOLS ---\\\\n' && rg -n 'class .*Config|def setup_target|def target_type|factory' aria_nbv/aria_nbv/pose_generation/candidate_generation.py aria_nbv/aria_nbv/utils/base_config.py aria_nbv/tests/pose_generation aria_nbv/tests/test_base_config_toml.py | head -260\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git rev-list --parents -n 3 HEAD && printf '\\\\n--- CONFIG FACTORY SOURCE ---\\\\n' && sed -n '580,635p' aria_nbv/aria_nbv/utils/base_config.py && sed -n '80,118p' aria_nbv/aria_nbv/pose_generation/candidate_generation.py && printf '\\\\n--- CONFIG FACTORY TESTS ---\\\\n' && sed -n '1,115p' aria_nbv/tests/test_base_config_toml.py && rg -n -C 3 'CandidateViewGeneratorConfig|setup_target\\\\(' aria_nbv/tests/pose_generation aria_nbv/tests/test_pose_generation.py | head -220 && printf '\\\\n--- ROOT MAKE ROUTING TARGET ---\\\\n' && sed -n '220,275p' Makefile\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- EXACT OWNER LINES ---' && nl -ba aria_nbv/aria_nbv/pose_generation/candidate_generation.py | sed -n '1,125p;560,635p' && printf '%s\\\\n' '--- GENERIC LIFECYCLE LINES ---' && nl -ba aria_nbv/aria_nbv/utils/base_config.py | sed -n '35,115p;590,615p' && printf '%s\\\\n' '--- OWNER TEST LINES ---' && nl -ba aria_nbv/tests/test_base_config_toml.py | sed -n '20,85p' && printf '%s\\\\n' '--- READ-ONLY PROOF ---' && git grep -n -F 'This module owns the single-family generator, its config factory, sampling orchestration' -- aria_nbv/aria_nbv/pose_generation/candidate_generation.py && git grep -n -F 'def setup_target' -- aria_nbv/aria_nbv/utils/base_config.py aria_nbv/tests/test_base_config_toml.py && git diff --quiet -- && test -z \\\"\"'$(git status --porcelain)\" && echo '\"'PASS: exact owner/lifecycle symbols present; checkout clean'\"",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 1,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -e\ngit grep -n -F 'This module owns the single-family generator, its config factory' -- aria_nbv/aria_nbv/pose_generation/candidate_generation.py\ngit grep -n -F 'def setup_target' -- aria_nbv/aria_nbv/utils/base_config.py aria_nbv/tests/test_base_config_toml.py\ngit diff --quiet\ntest -z \\\"\"'$(git status --porcelain)\"\nprintf '\"'%s\\\\n' 'PASS: exact owner/lifecycle symbols present; checkout clean'\"",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 11,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 11,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 6499,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "58fcf0d63ab58e9fcd5beff414ea74b6563b674114758df878e66520c139840c",
+  "returncode": 0,
+  "rubric_commit": "3f1401bbda64680cdd7a0e0503e4f96e7eea7cb7",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/.agents/work/routing-trials/3752c1181864-3f1401bbda64/human-intent-proposal-eligible__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-3752c1181864-l88s3qkn/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787511440.951897,
+  "tested_commit": "3752c1181864aecf57a9b925fded5564249bc5e8",
+  "timed_out": false,
+  "trial_id": "human-intent-proposal-eligible",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"Target: aria_nbv/aria_nbv/pose_generation/candidate_generation.py \\u2014 CandidateViewGeneratorConfig and CandidateViewGenerator. Lifecycle: aria_nbv/aria_nbv/utils/base_config.py \\u2014 TargetConfig/BaseConfig.setup_target.\",\"handoff\":\"None; the exact production owner is local and no disposition or edit is required.\",\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\"],\"opened_references\":[\"AGENTS.md\",\".agents/skills/aria-nbv-context/SKILL.md\",\"aria_nbv/AGENTS.md\"],\"outcome\":\"Eligible. The real contract behind proposal-fixture-config-factory is the candidate-generation config factory. It is eligible for this bounded owner-first routing trial because its exact target and lifecycle owners are explicit in production sources. It remains undispositioned: no files changed, no optional navigation artifacts used, and the checkout is clean.\",\"selected_skill\":\"agent-behavior\",\"selected_verification\":\"Read-only grep confirmed the module's explicit config-factory ownership and shared setup_target lifecycle; checkout remained clean.\",\"tool_calls\":[\"git grep and numbered source inspection\",\"read-only owner/lifecycle symbol proof\",\"git diff --quiet and git status --porcelain\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

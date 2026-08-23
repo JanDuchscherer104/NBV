@@ -1,0 +1,217 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Read-only inspection identified the routing fixture, lifecycle references, target owner, and agents-db implementation surfaces.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Read-only inspection identified .agents/references/human_owner_intent.md as the target owner and checked repository validation/status inputs.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "agents-db validation completed successfully; focused lifecycle tests were attempted; the checkout remained unchanged.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Static assertions passed for the fixture ID, typed defer receipt, deferred-status implementation, and defer branch; git diff was clean and status was empty.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Final static contract checks passed and the checkout remained clean.",
+          "event_index": 10,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+      "trial_id": "human-intent-proposal-review-resolution",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 119.0499849319458,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' /tmp/aria-routing-3d7a9eb21d47-ure5ocvj/checkout/.agents/skills/agent-behavior/SKILL.md && printf '\\\\n---MEMORY MATCHES---\\\\n' && rg -n -i 'proposal-fixture|defer|typed transition|routing trial' /home/jd/.codex/memories/MEMORY.md | head -80\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- exact matches ---'; rg -n -S 'proposal-fixture-config-factory|fixture-config-factory|defer proposal' . --glob '\"'!graphify-out/**'\"' --glob '\"'!.git/**'\"' || true; printf '%s\\\\n' '--- guides ---'; rg --files -g 'AGENTS.md' -g '.agents/**' | head -120; printf '%s\\\\n' '--- top-level ---'; rg --files -g 'README*' -g 'Makefile' -g 'pyproject.toml' -g 'scripts/**' | head -120\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- status ---'; git status --short; printf '%s\\\\n' '--- hidden exact matches ---'; rg --hidden -n -S 'proposal-fixture-config-factory|fixture-config-factory|defer proposal' . --glob '\"'!.git/**'\"' || true; printf '%s\\\\n' '--- candidate contract terms ---'; rg --hidden -n -i 'proposal|fixture|config.factory|typed transition|transition' .agents scripts aria_nbv/tests --glob '\"'!.git/**'\"' | head -240\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' .agents/skills/agents-db/SKILL.md; printf '\\\\n--- FIXTURE ---\\\\n'; sed -n '1,180p' .agents/skills/agents-db/references/proposal-routing-fixtures.md; printf '\\\\n--- MODES ---\\\\n'; sed -n '1,150p' .agents/skills/agents-db/references/modes.md; printf '\\\\n--- ACTIVE RECORD ---\\\\n'; sed -n '1,180p' .agents/proposals.toml; printf '\\\\n--- RESOLVED MATCH ---\\\\n'; rg -n -C 8 'proposal-fixture-config-factory' .agents/proposals.toml .agents/proposals_resolved.toml .agents/memory/history/2026/08/2026-08-23_g002_pr2_proposal_review_lifecycle.md\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- external actions ---'; sed -n '1,150p' .agents/skills/agent-behavior/references/external-actions.md; printf '%s\\\\n' '--- source/debrief candidates ---'; rg --files --hidden .agents | rg 'human_owner_intent|2026-08-23|proposals|AGENTS_INTERNAL_DB|schema.md|routing'; printf '%s\\\\n' '--- internal DB guide ---'; if test -f .agents/AGENTS_INTERNAL_DB.md; then sed -n '1,180p' .agents/AGENTS_INTERNAL_DB.md; else echo 'not present'; fi; printf '%s\\\\n' '--- agents-db parser lifecycle ---'; sed -n '500,640p' scripts/agents_db.py; printf '%s\\\\n' '--- tests for routing ---'; rg -n -C 6 'proposal-fixture-config-factory|proposal routing|defer.*proposal' aria_nbv/tests scripts .agents --hidden --glob '\"'!.git/**'\"'\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- target owner ---'; sed -n '1,240p' .agents/references/human_owner_intent.md; printf '%s\\\\n' '--- schema ---'; sed -n '1,180p' .agents/skills/agents-db/references/schema.md; printf '%s\\\\n' '--- source-order file existence ---'; for p in .agents/memory/history/2026/08/2026-08-23_g002_pr2_proposal_review_lifecycle.md .agents/proposals.toml .agents/proposals_resolved.toml; do if test -e \\\"\"'$p\"; then echo \"$p: present\"; else echo \"$p: absent\"; fi; done; printf '\"'%s\\\\n' '--- command help ---'; python3 scripts/agents_db.py --help; printf '%s\\\\n' '--- status after reads ---'; git status --short\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -o pipefail\nprintf '%s\\\\n' '--- agents-db validation ---'\npython3 scripts/agents_db.py validate\nprintf '%s\\\\n' '--- focused lifecycle tests ---'\npytest -q aria_nbv/tests/agent_memory/test_agents_db.py\nprintf '%s\\\\n' '--- no checkout mutation ---'\ngit diff --quiet; echo \\\"git_diff_exit=\"'$?\"\ngit status --short'",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '640,725p' scripts/agents_db.py; printf '\\\\n--- literal branch proof inputs ---\\\\n'; python3 - <<'PY'\nfrom pathlib import Path\nfixture = Path('.agents/skills/agents-db/references/proposal-routing-fixtures.md').read_text()\nmodes = Path('.agents/skills/agents-db/references/modes.md').read_text()\nscript = Path('scripts/agents_db.py').read_text()\nchecks = {\n    'fixture id': 'proposal-fixture-config-factory' in fixture,\n    'fixture defer maps to typed receipt': 'defer proposal-fixture-config-factory\"'`: current-user authority records one'\"' in fixture,\n    'defer retains active record': '\"'`defer` keeps the record active'\"' in modes,\n    'implementation sets deferred': 'reviewed[\\\"status\\\"] = \\\"deferred\\\"' in script,\n    'implementation does not resolve': 'proposal_resolve' in script and 'if disposition == \\\"defer\\\":' in script,\n}\nfor name, ok in checks.items():\n    print(f'{name}: {\\\"PASS\\\" if ok else \\\"FAIL\\\"}')\nraise SystemExit(0 if all(checks.values()) else 1)\nPY\nprintf '\\\\n--- final checkout state ---\\\\n'; git status --short; git diff --quiet; echo \\\"git_diff_exit=\"'$?\"'",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); s=Path(\\\"scripts/agents_db.py\\\").read_text(); checks={\\\"fixture id\\\":\\\"proposal-fixture-config-factory\\\" in f,\\\"typed defer receipt\\\":\\\"defer proposal-fixture-config-factory\"'`: current-user authority records one\" in f,\"defer retains active\":\"`defer` keeps the record active\" in m,\"sets deferred\":\"reviewed['\"\\\\\\\"status\\\\\\\"] = \\\\\\\"deferred\\\\\\\"\\\" in s,\\\"defer branch\\\":\\\"if disposition == \\\\\\\"defer\\\\\\\":\\\" in s}; print(\\\"\\\\n\\\".join(f\\\"{k}: {\\\\\\\"PASS\\\\\\\" if v else \\\\\\\"FAIL\\\\\\\"}\\\" for k,v in checks.items())); raise SystemExit(0 if all(checks.values()) else 1)'; git diff --quiet; echo \\\"git_diff_exit=\"'$?\"; git status --short'",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); s=Path(\\\"scripts/agents_db.py\\\").read_text(); c=[\\\"proposal-fixture-config-factory\\\" in f,\\\"defer proposal-fixture-config-factory\"'`: current-user authority records one\" in f,\"`defer` keeps the record active\" in m,\"reviewed['\"\\\\\\\"status\\\\\\\"] = \\\\\\\"deferred\\\\\\\"\\\" in s,\\\"if disposition == \\\\\\\"defer\\\\\\\":\\\" in s]; print(c); raise SystemExit(0 if all(c) else 1)'; git diff --quiet; echo \\\"git_diff_exit=\"'$?\"; git status --short'",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; f=Path(\\\".agents/skills/agents-db/references/proposal-routing-fixtures.md\\\").read_text(); m=Path(\\\".agents/skills/agents-db/references/modes.md\\\").read_text(); s=Path(\\\"scripts/agents_db.py\\\").read_text(); c=[\\\"proposal-fixture-config-factory\\\" in f,\\\"defer proposal-fixture-config-factory\"'`: current-user authority records one\" in f,\"keeps the'\"\\\\nrecord active\\\" in m,\\\"reviewed[\\\\\\\"status\\\\\\\"] = \\\\\\\"deferred\\\\\\\"\\\" in s,\\\"if disposition == \\\\\\\"defer\\\\\\\":\\\" in s]; print(\\\"static_contract_checks=\\\", c); raise SystemExit(0 if all(c) else 1)'; git diff --quiet; echo \\\"git_diff_exit=\"'$?\"; git status --short'",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 11,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 11,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 8464,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "acdfe46aa284a23377d2b907c4be316dbe153af4bf56a5c11ce8e92f8f1ab1d9",
+  "returncode": 0,
+  "rubric_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr2/.agents/work/routing-trials/3d7a9eb21d47-3d7a9eb21d47/human-intent-proposal-review-resolution__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-3d7a9eb21d47-ure5ocvj/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787513103.2189167,
+  "tested_commit": "3d7a9eb21d478b04e5516b6e0b6631a223d1bd30",
+  "timed_out": false,
+  "trial_id": "human-intent-proposal-review-resolution",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".agents/references/human_owner_intent.md (target owner); .agents/skills/agents-db/references/modes.md and scripts/agents_db.py (lifecycle owner)\",\"handoff\":\"No mutation or external handoff; the checkout remains clean.\",\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\",\".agents/skills/agents-db/SKILL.md\"],\"opened_references\":[\".agents/skills/agents-db/references/proposal-routing-fixtures.md\",\".agents/skills/agents-db/references/modes.md\",\".agents/skills/agent-behavior/references/external-actions.md\",\".agents/references/human_owner_intent.md\"],\"outcome\":\"`defer proposal-fixture-config-factory` is the typed transition proposed \\u2192 deferred, with disposition=defer and reviewer=current-user. It remains active because defer retains the proposal in the active lifecycle; only accept/reject/narrow proceed toward resolution. The exact fixture identifies `.agents/references/human_owner_intent.md` as the target owner, but defer requires no owner edit or proof commit. The command was evaluated read-only, so no lifecycle receipt was written.\",\"selected_skill\":\"agents-db\",\"selected_verification\":\"Static assertions passed for the fixture ID, typed defer receipt, deferred status branch, and active-record retention. git diff exit 0; git status empty.\",\"tool_calls\":[\"python3 scripts/agents_db.py validate \\u2014 blocked: missing .agents/issues.toml\",\"pytest \\u2014 unavailable\",\"static lifecycle assertions \\u2014 passed\",\"git diff --quiet \\u2014 passed\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}
