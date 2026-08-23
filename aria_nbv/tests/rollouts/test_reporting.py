@@ -32,12 +32,53 @@ from aria_nbv.rollouts.manifest import RolloutStoreInvocation, RolloutStoreManif
 from aria_nbv.rollouts.reporting import (
     ANALYSIS_FACT_SIDECAR_VERSION,
     THESIS_REPORT_TABLE_COLUMNS,
+    _corpus_temporal_summary,
     build_thesis_report_frames,
     serialize_thesis_report_bundle,
     write_thesis_report_bundle,
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
+    """Outer compatibility fields stay separate from the inner temporal vocabulary."""
+
+    def contract(_frames, store_id, profile):
+        suffix = "a" if store_id == "store-a" else "b"
+        return {"id": f"contract-{suffix}", "label": f"contract-{suffix}", "profile": profile}
+
+    monkeypatch.setattr("aria_nbv.rollouts.reporting._persisted_rollout_contract", contract)
+    steps = pd.DataFrame(
+        [
+            {
+                "step_index": 0,
+                "policy": "temperature_softmax",
+                "temperature": 1.0,
+                "horizon": 1,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "cumulative_target_root_gain": 0.1,
+                "selected_target_root_gain": 0.1,
+                "selected_probability": 1.0,
+                "selected_entropy": 0.0,
+                "cumulative_target_rri": 0.1,
+                "num_valid_candidates": 10,
+                "invalid_fraction": 0.0,
+            }
+        ]
+    )
+    frames = [{"steps": steps.copy()}, {"steps": steps.copy()}]
+    included = [
+        {"path": "/a", "store_id": "store-a", "profile": "profile-a"},
+        {"path": "/b", "store_id": "store-b", "profile": "profile-b"},
+    ]
+
+    summary = _corpus_temporal_summary(frames, included)
+
+    assert set(summary["contract_id"]) == {"contract-a", "contract-b"}
+    assert set(summary["profile"]) == {"profile-a", "profile-b"}
+    assert set(summary["store_count"]) == {1}
 
 
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:

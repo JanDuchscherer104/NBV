@@ -766,30 +766,41 @@ def _corpus_temporal_summary(
     groups = ("contract_id", "contract", "profile", "policy", "temperature", "horizon", "branch_factor", "beam_width")
     for group_field in groups:
         source[group_field] = source[group_field].map(_temporal_group_scalar)
-    source_records = source.to_dict("records")
-    store_counts = (
-        source.groupby([*groups, "step_index"], dropna=False, sort=True)["corpus_store_path"]
-        .nunique()
-        .rename("store_count")
-        .reset_index()
-    )
+    outer_groups = ("contract_id", "contract", "profile")
+    inner_groups = ("policy", "temperature", "horizon", "branch_factor", "beam_width")
     summaries: list[pd.DataFrame] = []
-    for metric in (
-        "cumulative_target_root_gain",
-        "selected_target_root_gain",
-        "selected_probability",
-        "selected_entropy",
-        "cumulative_target_rri",
-        "valid_fanout",
-        "invalid_fraction",
-    ):
-        rows = temporal_metric_summary_rows(source_records, metric=metric, group_fields=groups)
-        if not rows:
-            continue
-        frame = pd.DataFrame(rows).merge(store_counts, on=[*groups, "step_index"], how="left", validate="one_to_one")
-        frame["store_count"] = frame["store_count"].astype(np.int64)
-        frame["iqr_width"] = frame["q75"] - frame["q25"]
-        summaries.append(frame.loc[:, columns])
+    for outer_key, partition in source.groupby(list(outer_groups), dropna=False, sort=True):
+        outer_values = dict(zip(outer_groups, outer_key if isinstance(outer_key, tuple) else (outer_key,), strict=True))
+        partition_records = partition.to_dict("records")
+        store_counts = (
+            partition.groupby([*inner_groups, "step_index"], dropna=False, sort=True)["corpus_store_path"]
+            .nunique()
+            .rename("store_count")
+            .reset_index()
+        )
+        for metric in (
+            "cumulative_target_root_gain",
+            "selected_target_root_gain",
+            "selected_probability",
+            "selected_entropy",
+            "cumulative_target_rri",
+            "valid_fanout",
+            "invalid_fraction",
+        ):
+            rows = temporal_metric_summary_rows(partition_records, metric=metric, group_fields=inner_groups)
+            if not rows:
+                continue
+            frame = pd.DataFrame(rows).merge(
+                store_counts,
+                on=[*inner_groups, "step_index"],
+                how="left",
+                validate="one_to_one",
+            )
+            for outer_field, value in outer_values.items():
+                frame[outer_field] = value
+            frame["store_count"] = frame["store_count"].astype(np.int64)
+            frame["iqr_width"] = frame["q75"] - frame["q25"]
+            summaries.append(frame.loc[:, columns])
     if not summaries:
         return pd.DataFrame(columns=columns)
     return (
