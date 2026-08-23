@@ -31,6 +31,9 @@ from ...dataset_bundle import (
 )
 from ...dataset_topology import discover_vin_store_dirs
 from ...rollouts.inspection import discover_rollout_store_paths
+from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
+from ._stored_rollouts.shared import plot_control_key as _plot_control_key
+from ._stored_rollouts.shared import render_plot as _render_plot
 
 _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"
@@ -271,7 +274,7 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
         if int(evidence.get(field, 0))
     ]
     if exclusion_rows:
-        st.plotly_chart(
+        _render_target_inventory_plot(
             px.bar(
                 pd.DataFrame(exclusion_rows),
                 x="reason",
@@ -280,10 +283,11 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
                 barmode="group",
                 title="Target rows excluded before statistical summaries",
             ),
-            width="stretch",
+            "exclusions",
+            _target_inventory_explanation("exclusions"),
         )
     if not samples.empty:
-        st.plotly_chart(
+        _render_target_inventory_plot(
             px.histogram(
                 samples,
                 x="count",
@@ -293,7 +297,8 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
                 title="Detected and GT targets per physical sample",
                 labels={"count": "finite valid OBB rows per sample"},
             ),
-            width="stretch",
+            "per-sample-counts",
+            _target_inventory_explanation("per-sample counts"),
         )
     if targets.empty:
         return
@@ -302,7 +307,7 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
         .agg(target_count=("source_row", "size"), scene_count=("scene_id", "nunique"))
         .reset_index()
     )
-    st.plotly_chart(
+    _render_target_inventory_plot(
         px.bar(
             class_rows,
             x="class_name",
@@ -312,13 +317,14 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
             hover_data=["scene_count"],
             title="Target support by semantic class",
         ),
-        width="stretch",
+        "class-support",
+        _target_inventory_explanation("class support"),
     )
     geometry = targets.loc[(targets["volume"] > 0) & targets["volume"].notna()].copy()
     if not geometry.empty:
         geometry["log10_volume"] = np.log10(geometry["volume"])
         geometry["log10_aspect_ratio"] = np.log10(geometry["aspect_ratio"])
-        st.plotly_chart(
+        _render_target_inventory_plot(
             px.histogram(
                 geometry,
                 x="log10_volume",
@@ -328,9 +334,10 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
                 title="Target OBB volume distribution",
                 labels={"log10_volume": "log10 oriented-box volume [m³]"},
             ),
-            width="stretch",
+            "obb-volume",
+            _target_inventory_explanation("OBB volume"),
         )
-        st.plotly_chart(
+        _render_target_inventory_plot(
             px.histogram(
                 geometry,
                 x="log10_aspect_ratio",
@@ -340,13 +347,15 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
                 title="Target OBB aspect-ratio distribution",
                 labels={"log10_aspect_ratio": "log10 largest / smallest extent"},
             ),
-            width="stretch",
+            "obb-aspect-ratio",
+            _target_inventory_explanation("OBB aspect ratio"),
         )
     confidence = targets.loc[(targets["population"] == "detected") & targets["confidence"].notna()]
     if not confidence.empty:
-        st.plotly_chart(
+        _render_target_inventory_plot(
             px.histogram(confidence, x="confidence", color="class_name", title="Actor-visible detection confidence"),
-            width="stretch",
+            "detection-confidence",
+            _target_inventory_explanation("detection confidence"),
         )
     with st.expander("Target inventory rows and export", expanded=False):
         st.dataframe(targets, hide_index=True, width="stretch")
@@ -357,6 +366,56 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
             mime="application/json",
             on_click="ignore",
         )
+
+
+def _render_target_inventory_plot(figure: Any, key: str, explanation: ScientificExplanation) -> None:
+    """Render one target-inventory figure through the shared scientific seam."""
+
+    _render_plot(figure, explanation, log_y_key=_plot_control_key("target-inventory", key))
+
+
+def _target_inventory_explanation(kind: str) -> ScientificExplanation:
+    """Describe target-inventory denominators without conflating detected and GT rows."""
+
+    common = (
+        ExplanationSection(
+            "population",
+            "Physical VIN samples retain zero-target rows; detected and GT populations are shown as separate evidence roles.",
+        ),
+        ExplanationSection(
+            "denominator / missingness",
+            "Counts use valid persisted rows after padding, non-finite, and invalid-geometry exclusions; missing values are not imputed.",
+        ),
+        ExplanationSection(
+            "metric / units",
+            "Counts are rows or samples; geometric volume is in cubic metres, aspect ratio is dimensionless, and confidence is a detector score.",
+        ),
+        ExplanationSection(
+            "interpretation",
+            "Detected rows describe actor-visible observations, while GT rows describe privileged evaluation geometry. They are not interchangeable training labels.",
+        ),
+        ExplanationSection(
+            "warning",
+            "Changes in valid-row coverage or class support can reflect source-store filtering rather than a change in scene content.",
+        ),
+    )
+    return ScientificExplanation(
+        question=f"What does the target-inventory {kind} distribution say about source coverage?",
+        answer="This view summarizes the selected persisted target inventory; it is a coverage diagnostic, not a model-performance estimate.",
+        sections=common,
+        evidence_role="provenance",
+        source_fields=(
+            "data_handling.vin_store.target_inventory.inspect_target_inventory",
+            "target inventory rows",
+            "VIN source-store metadata",
+        ),
+        external_references=(
+            (
+                "Target inventory implementation",
+                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/data_handling/vin_store/target_inventory.py",
+            ),
+        ),
+    )
 
 
 def _select_root_store(discovered: list[Path]) -> Path | None:

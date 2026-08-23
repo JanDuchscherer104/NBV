@@ -456,10 +456,9 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
     assert "Corpus reward and reconstruction" in [subheader.value for subheader in app.subheader]
-    # A one-step fixture contains only the persisted root baseline; corpus
-    # reward plots correctly omit it, leaving the endpoint distribution plot.
-    assert len(app.get("plotly_chart")) >= 1
-    assert any("No post-root factual rows" in info.value for info in app.info)
+    # Step 0 is the first factual selected action, so a one-step fixture still
+    # has both reward plots plus the endpoint distribution.
+    assert len(app.get("plotly_chart")) >= 2
     assert any("rows and CSV" in expander.label for expander in app.expander)
 
     app = _set_stored_rollout_workspace(app, "Admission & feasibility")
@@ -898,7 +897,7 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
 
 
 def test_corpus_reward_figure_uses_one_based_acquisitions_and_exact_context() -> None:
-    """Corpus reward plots omit the root baseline and retain comparable context."""
+    """Corpus reward plots shift factual steps to one-based acquisitions."""
 
     rows = pd.DataFrame(
         [
@@ -924,7 +923,7 @@ def test_corpus_reward_figure_uses_one_based_acquisitions_and_exact_context() ->
                 "iqr_width": 0.1 * step,
             }
             for temperature in (0.5,)
-            for step in (1, 2)
+            for step in (0, 7)
         ]
     )
 
@@ -932,11 +931,11 @@ def test_corpus_reward_figure_uses_one_based_acquisitions_and_exact_context() ->
 
     median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
     assert len(median_traces) == 1
-    assert list(median_traces[0].x) == [1, 2]
+    assert list(median_traces[0].x) == [1, 8]
     assert "contract-a" in median_traces[0].name
     assert "temperature_softmax" in median_traces[0].name
     assert "acquisition number" in figure.layout.xaxis.title.text
-    assert "root baseline omitted" in figure.layout.xaxis.title.text
+    assert "factual step_index + 1" in figure.layout.xaxis.title.text
 
 
 def test_log_y_axis_control_copies_figure_and_preserves_linear_default(monkeypatch: pytest.MonkeyPatch) -> None:

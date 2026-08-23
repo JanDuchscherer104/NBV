@@ -85,12 +85,10 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
         return
     for metric, metric_label in visible_metrics:
         rows = temporal.loc[temporal["metric"] == metric].copy()
-        # Corpus reward is expressed per selected acquisition.  Step 0 is the
-        # persisted root baseline, not an acquisition and must not be plotted.
-        rows = rows.loc[pd.to_numeric(rows["step_index"], errors="coerce") > 0].copy()
-        if rows.empty:
-            st.info(f"No post-root factual rows are available for {metric_label}.")
-            continue
+        # Factual rollout rows are selected actions: step 0 is acquisition 1,
+        # not a synthetic root-baseline row.  Keep early-terminated rows as
+        # observed and shift only the display axis to one-based numbering.
+        rows = rows.loc[pd.to_numeric(rows["step_index"], errors="coerce").notna()].copy()
         figure = _corpus_temporal_figure(rows, metric_label=metric_label)
         context_count = rows[_corpus_temporal_group_fields(rows)].drop_duplicates().shape[0]
         finite = int(rows["finite_count"].sum())
@@ -101,7 +99,7 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
         cols[1].metric("Compatible contexts", f"{context_count:,}")
         cols[2].metric("Max stores / context", f"{stores:,}")
         st.caption(
-            "Acquisition 1 is the first selected view; the root baseline (step 0) is omitted. "
+            "Acquisition 1 is the first persisted selected view; no synthetic root-baseline row is added. "
             "Ribbon = descriptive IQR, not a confidence interval. n is finite / observed at each depth."
         )
         _render_plot(
@@ -148,7 +146,7 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
     figure = go.Figure()
     group_fields = _corpus_temporal_group_fields(rows)
     working = rows.copy()
-    working["acquisition_number"] = pd.to_numeric(working["step_index"], errors="coerce")
+    working["acquisition_number"] = pd.to_numeric(working["step_index"], errors="coerce") + 1
     working["series"] = working[group_fields].astype(str).agg(" · ".join, axis=1) if group_fields else "corpus"
     palette = px.colors.qualitative.Plotly
     for index, (series, group) in enumerate(working.groupby("series", sort=True)):
@@ -197,7 +195,7 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
         )
     figure.update_layout(
         title=f"{metric_label}: median and interquartile range by acquisition number",
-        xaxis_title="acquisition number (1 = first selected view; root baseline omitted)",
+        xaxis_title="acquisition number (1 = first selected view; factual step_index + 1)",
         yaxis_title=current_scientific_label(str(rows["metric"].iloc[0]), surface="plain"),
         hovermode="x unified",
     )
