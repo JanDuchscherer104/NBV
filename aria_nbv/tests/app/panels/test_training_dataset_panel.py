@@ -205,6 +205,32 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert _metrics(app)["Compatible rollout stores"] == "0 / 1"
     assert _metrics(app)["Rollouts"] == "0"
     assert any("Blocked" in error.value for error in app.error)
+    visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
+    assert f"Excluded: {blocked.name}" in visible
+    assert blocked.as_posix() in visible
+    assert "source_manifest_hash_mismatch" in visible
+    assert "VIN root manifest" in visible
+    assert "source manifest" in visible
+    assert "split manifest" in visible
+
+
+def test_compatible_store_attribution_shows_root_and_source_bindings(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    compatible = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash)
+    app = _app(tmp_path).run()
+    app.multiselect[0].set_value([compatible.as_posix()])
+    app = app.run()
+
+    assert not app.exception
+    visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
+    assert f"Compatible: {compatible.name}" in visible
+    assert compatible.as_posix() in visible
+    assert source_hash in visible
+    assert "VIN root manifest" in visible
+    assert "split manifest" in visible
 
 
 def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:

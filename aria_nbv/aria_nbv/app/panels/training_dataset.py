@@ -538,6 +538,72 @@ def _render_verdict(evidence: DatasetBundleEvidence) -> None:
     renderer(f"**{evidence.verdict}** — {messages[evidence.verdict]}")
 
 
+def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
+    """Show selected-store compatibility and the exact root-binding evidence.
+
+    The bundle summary deliberately keeps excluded stores in ``rollouts``.
+    Render that selection immediately after the aggregate verdict so a blocked
+    bundle is attributable before the user opens any detailed tables.
+    """
+
+    if not evidence.rollouts:
+        st.info("No rollout supervision store is selected.")
+        return
+
+    root_manifest = evidence.root.get("manifest_hash") or "unavailable"
+    st.subheader("Selected rollout stores")
+    st.caption(
+        "Every selected store remains visible here. Excluded stores contribute no training totals; "
+        "the identifiers below show exactly which VIN root and manifests were compared."
+    )
+    findings_by_store: dict[str, list[dict[str, str]]] = {}
+    for finding in evidence.findings:
+        if finding.store_path is not None:
+            findings_by_store.setdefault(finding.store_path, []).append(
+                {"code": finding.code, "message": finding.message, "severity": finding.severity}
+            )
+    for row in evidence.rollouts:
+        path = str(row["path"])
+        included = bool(row.get("included_in_training_totals"))
+        status = "Compatible" if included else "Excluded"
+        status_renderer = st.success if included else st.error
+        status_renderer(f"**{status}: {Path(path).name}**")
+        st.caption(f"Full path: `{path}`")
+        source_manifest = row.get("source_manifest_hash") or "unavailable"
+        split_manifests = row.get("split_manifest_hashes") or []
+        split_binding = ", ".join(str(value) for value in split_manifests) or "unavailable"
+        validation = row.get("validation_status") or "unavailable"
+        st.caption(
+            f"Validation: **{validation}** · VIN root manifest: `{root_manifest}` · "
+            f"source manifest: `{source_manifest}` · split manifest: `{split_binding}`"
+        )
+        if not included:
+            store_findings = findings_by_store.get(path, [])
+            blocking = [finding for finding in store_findings if finding["severity"] == "blocking"]
+            reasons = blocking or store_findings
+            if reasons:
+                st.markdown("**Exclusion reason**")
+                for finding in reasons:
+                    st.markdown(f"- `{finding['code']}` — {finding['message']}")
+            else:
+                st.markdown(
+                    "**Exclusion reason** — bundle compatibility check failed without a store-specific message."
+                )
+        with st.expander(f"Detailed binding evidence · {Path(path).name}", expanded=False):
+            st.json(
+                {
+                    "store_path": path,
+                    "status": status,
+                    "validation_status": validation,
+                    "vin_root_manifest_hash": root_manifest,
+                    "source_manifest_hash": row.get("source_manifest_hash"),
+                    "split_manifest_hashes": split_manifests,
+                    "source_splits": row.get("source_splits", {}),
+                    "findings": findings_by_store.get(path, []),
+                }
+            )
+
+
 def _render_summary_metrics(
     readiness: QhCorpusReadiness | None,
 ) -> None:
@@ -685,6 +751,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     qh_preview: QhBatchPreview | None = None
 
     _render_verdict(evidence)
+    _render_store_attribution(evidence)
 
     readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
     with readiness_tab:
