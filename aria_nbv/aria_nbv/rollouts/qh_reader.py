@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import numpy as np
 import zarr
@@ -32,6 +32,12 @@ from .zarr_store import (
     SELECTED_DEPTH_INVALID_FILL_VALUE,
     RolloutZarrStoreReader,
 )
+
+QhOracleQueryMode = Literal["legacy_unspecified", "dense_valid"]
+QhLabelSupportSemantics = Literal[
+    "subset_of_action_v1",
+    "equals_action_on_realized_steps_v1",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +102,12 @@ class QhDataContract:
     selection_policies: tuple[str, ...] = ()
     """Referenced behavior-policy vocabulary admitted by the corpus."""
 
+    oracle_query_mode: QhOracleQueryMode = "legacy_unspecified"
+    """Oracle candidate-query support persisted by every admitted rollout store."""
+
+    label_support_semantics: QhLabelSupportSemantics = "subset_of_action_v1"
+    """Relationship between oracle labels and actor-valid rows on realized states."""
+
     selected_depth_enabled: bool = False
     """Whether each factual step has aligned selected-action depth evidence."""
 
@@ -140,6 +152,9 @@ class QhDataContract:
 
     selected_depth_geometry: QhGeometryContract | None = None
     """Complete validated geometry facts for selected depth, when enabled."""
+
+    action_mask_semantics: str = "oracle_action_mask_v1"
+    """Meaning of actor-valid support; current generated stores use Oracle hard-valid masks."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,6 +472,15 @@ def _read_contract(root: zarr.Group, *, include_selected_depth: bool) -> QhDataC
         discount_gamma=float(root.attrs["discount_gamma"]),
         reason_code_version=str(root.attrs["reason_code_version"]),
         actor_store_version=str(root.attrs["source_offline_store_version"]),
+        action_mask_semantics=_closed_contract_value(
+            root.attrs.get("action_mask_semantics", "oracle_action_mask_v1"),
+            allowed=(
+                "oracle_action_mask_v1",
+                "actor_observed_action_mask_v1",
+                "learned_feasibility_v1",
+            ),
+            name="action_mask_semantics",
+        ),
         candidate_config_hashes=_decode_referenced_dictionary_values(
             root, group_name="lineage", array_name="candidate_config_id", dictionary_name="config"
         ),
@@ -465,6 +489,22 @@ def _read_contract(root: zarr.Group, *, include_selected_depth: bool) -> QhDataC
         ),
         selection_policies=_decode_referenced_dictionary_values(
             root, group_name="rollouts", array_name="policy_id", dictionary_name="policy"
+        ),
+        oracle_query_mode=cast(
+            QhOracleQueryMode,
+            _closed_contract_value(
+                root.attrs.get("oracle_query_mode", "legacy_unspecified"),
+                allowed=("legacy_unspecified", "dense_valid"),
+                name="oracle_query_mode",
+            ),
+        ),
+        label_support_semantics=cast(
+            QhLabelSupportSemantics,
+            _closed_contract_value(
+                root.attrs.get("label_support_semantics", "subset_of_action_v1"),
+                allowed=("subset_of_action_v1", "equals_action_on_realized_steps_v1"),
+                name="label_support_semantics",
+            ),
         ),
         selected_depth_enabled=selected_depth_enabled,
         selected_depth_role=_optional_string(selected("selected_depth_role")),
@@ -867,6 +907,15 @@ def _optional_string(value: object | None) -> str | None:
     return normalized or None
 
 
+def _closed_contract_value(value: object, *, allowed: tuple[str, ...], name: str) -> str:
+    """Return one closed persisted contract value or fail before payload reads."""
+
+    normalized = str(value)
+    if normalized not in allowed:
+        raise ValueError(f"Q_H rollout store declares unsupported {name}={normalized!r}.")
+    return normalized
+
+
 def _optional_finite_float(value: object | None) -> float | None:
     """Normalize absent or non-finite numeric metadata to ``None``."""
 
@@ -1064,4 +1113,9 @@ def _readonly(values: Any) -> np.ndarray:
     return array
 
 
-__all__ = ["QhDataContract", "QhRolloutReader"]
+__all__ = [
+    "QhDataContract",
+    "QhLabelSupportSemantics",
+    "QhOracleQueryMode",
+    "QhRolloutReader",
+]

@@ -1,0 +1,1700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Pr104 Online Gradient Pipeline</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Pr104 Online Gradient Pipeline" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Pr104 Online Gradient Pipeline&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress {
+  display: flex;
+  height: 6px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 6px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;pr104-online-gradient-pipeline&quot; aria-label=&quot;Online Q H pipeline and gradient flow&quot;&gt;
+  &lt;style&gt;
+    #pr104-online-gradient-pipeline {
+      width: 100%;
+      color: var(--foreground);
+    }
+    #pr104-online-gradient-pipeline .ogp-header {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    #pr104-online-gradient-pipeline .ogp-mode-panel {
+      display: none;
+    }
+    #pr104-online-gradient-pipeline .ogp-mode-panel.is-active {
+      display: block;
+    }
+    #pr104-online-gradient-pipeline .ogp-detail {
+      margin-bottom: 14px;
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop text {
+      fill: var(--foreground);
+      font-size: 12px;
+      font-weight: 400;
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-muted {
+      fill: var(--muted-foreground);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-node rect {
+      fill: color-mix(in srgb, var(--muted) 72%, transparent);
+      stroke: var(--border);
+      stroke-width: 1.5;
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-node.data rect {
+      fill: color-mix(in srgb, var(--viz-series-2) 14%, transparent);
+      stroke: var(--viz-series-2);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-node.model rect {
+      fill: color-mix(in srgb, var(--viz-series-1) 14%, transparent);
+      stroke: var(--viz-series-1);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-node.oracle rect {
+      fill: color-mix(in srgb, var(--viz-series-4) 14%, transparent);
+      stroke: var(--viz-series-4);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-node.store rect {
+      fill: color-mix(in srgb, var(--viz-series-5) 14%, transparent);
+      stroke: var(--viz-series-5);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-node.control rect {
+      fill: color-mix(in srgb, var(--viz-series-3) 14%, transparent);
+      stroke: var(--viz-series-3);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-edge {
+      fill: none;
+      stroke: var(--muted-foreground);
+      stroke-width: 2;
+      marker-end: url(#ogp-arrow-neutral);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-edge.data-flow {
+      stroke: var(--viz-series-2);
+      marker-end: url(#ogp-arrow-data);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-edge.update-flow {
+      stroke: var(--viz-series-3);
+      marker-end: url(#ogp-arrow-update);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-edge.gradient-flow {
+      stroke: var(--viz-series-1);
+      stroke-width: 4;
+      marker-end: url(#ogp-arrow-gradient);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-edge.stop-flow {
+      stroke: var(--destructive);
+      stroke-width: 2.5;
+      stroke-dasharray: 7 6;
+      marker-end: url(#ogp-arrow-stop);
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-boundary {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 1.5;
+      stroke-dasharray: 5 5;
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-gradient-label {
+      fill: var(--viz-series-1);
+      font-weight: 500;
+    }
+    #pr104-online-gradient-pipeline .ogp-desktop .ogp-stop-label {
+      fill: var(--destructive);
+      font-weight: 500;
+    }
+    #pr104-online-gradient-pipeline .ogp-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 10px;
+      color: var(--muted-foreground);
+    }
+    #pr104-online-gradient-pipeline .ogp-key {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #pr104-online-gradient-pipeline .ogp-swatch {
+      width: 22px;
+      height: 3px;
+      background: var(--muted-foreground);
+    }
+    #pr104-online-gradient-pipeline .ogp-swatch.data {
+      background: var(--viz-series-2);
+    }
+    #pr104-online-gradient-pipeline .ogp-swatch.gradient {
+      height: 5px;
+      background: var(--viz-series-1);
+    }
+    #pr104-online-gradient-pipeline .ogp-swatch.stop {
+      background: repeating-linear-gradient(90deg, var(--destructive) 0 7px, transparent 7px 12px);
+    }
+    #pr104-online-gradient-pipeline .ogp-swatch.update {
+      background: var(--viz-series-3);
+    }
+    #pr104-online-gradient-pipeline .ogp-mobile {
+      display: none;
+    }
+    #pr104-online-gradient-pipeline .ogp-mobile ol {
+      display: grid;
+      gap: 10px;
+      padding-left: 22px;
+    }
+    #pr104-online-gradient-pipeline .ogp-mobile li::marker {
+      color: var(--viz-series-2);
+      font-weight: 500;
+    }
+    #pr104-online-gradient-pipeline .ogp-mobile .gradient-step::marker {
+      color: var(--viz-series-1);
+    }
+    #pr104-online-gradient-pipeline .ogp-mobile .stop-step::marker {
+      color: var(--destructive);
+    }
+    #pr104-online-gradient-pipeline .ogp-mobile .update-step::marker {
+      color: var(--viz-series-3);
+    }
+    @media (max-width: 700px) {
+      #pr104-online-gradient-pipeline .ogp-desktop {
+        display: none;
+      }
+      #pr104-online-gradient-pipeline .ogp-mobile {
+        display: block;
+      }
+    }
+  &lt;/style&gt;
+
+  &lt;div class=&quot;ogp-header&quot;&gt;
+    &lt;h2&gt;Online Q&lt;sub&gt;H&lt;/sub&gt;: execution and gradient boundaries&lt;/h2&gt;
+    &lt;div class=&quot;viz-controls&quot; role=&quot;group&quot; aria-label=&quot;Pipeline phase&quot;&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-mode=&quot;collection&quot; aria-pressed=&quot;false&quot;&gt;Collection&lt;/button&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; data-mode=&quot;training&quot; aria-pressed=&quot;true&quot;&gt;Training&lt;/button&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-mode=&quot;evaluation&quot; aria-pressed=&quot;false&quot;&gt;Evaluation&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;card ogp-detail&quot; aria-live=&quot;polite&quot;&gt;
+    Differentiable: online scorer parameters only—pose encoder, projections, attention, and value head. Everything across collection, rendering, selection, and storage is a stop-gradient boundary.
+  &lt;/div&gt;
+
+  &lt;section class=&quot;ogp-mode-panel&quot; data-panel=&quot;collection&quot; hidden aria-label=&quot;Online collection pipeline&quot;&gt;
+    &lt;svg class=&quot;ogp-desktop&quot; viewBox=&quot;0 0 1000 590&quot; role=&quot;img&quot; aria-labelledby=&quot;ogp-collection-title ogp-collection-desc&quot;&gt;
+      &lt;title id=&quot;ogp-collection-title&quot;&gt;Online collection pipeline&lt;/title&gt;
+      &lt;desc id=&quot;ogp-collection-desc&quot;&gt;Immutable source data and candidate generation feed a verified decision context. A frozen scorer runs in inference mode, a discrete policy selects an action, a renderer and hard oracle produce labels, and detached results are persisted.&lt;/desc&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;ogp-arrow-neutral&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--muted-foreground)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-arrow-data&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-2)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-arrow-update&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-3)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-arrow-gradient&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-1)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-arrow-stop&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--destructive)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;28&quot; y=&quot;34&quot;&gt;Actor-visible source&lt;/text&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;28&quot; y=&quot;54&quot; width=&quot;150&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;103&quot; y=&quot;82&quot; text-anchor=&quot;middle&quot;&gt;VIN offline store&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;103&quot; y=&quot;104&quot; text-anchor=&quot;middle&quot;&gt;root EVL · semidense&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M182 89H222&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node data&quot;&gt;
+        &lt;rect x=&quot;226&quot; y=&quot;54&quot; width=&quot;150&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;301&quot; y=&quot;82&quot; text-anchor=&quot;middle&quot;&gt;Candidate generation&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;301&quot; y=&quot;104&quot; text-anchor=&quot;middle&quot;&gt;poses · hard validity&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M380 89H420&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;424&quot; y=&quot;54&quot; width=&quot;158&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;503&quot; y=&quot;82&quot; text-anchor=&quot;middle&quot;&gt;Decision context&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;503&quot; y=&quot;104&quot; text-anchor=&quot;middle&quot;&gt;bound hashes · cohort&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M586 89H626&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;630&quot; y=&quot;54&quot; width=&quot;158&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;709&quot; y=&quot;82&quot; text-anchor=&quot;middle&quot;&gt;Verified runtime&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;709&quot; y=&quot;104&quot; text-anchor=&quot;middle&quot;&gt;bundle · scorer identity&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M503 128V196H430&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M709 128V196H570&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;366&quot; y=&quot;200&quot; width=&quot;268&quot; height=&quot;92&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;500&quot; y=&quot;228&quot; text-anchor=&quot;middle&quot;&gt;TargetFiniteHorizonScorer&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;500&quot; y=&quot;250&quot; text-anchor=&quot;middle&quot;&gt;eval mode · torch.inference_mode&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;500&quot; y=&quot;272&quot; text-anchor=&quot;middle&quot;&gt;all output scores detached&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M638 246H698&quot;&gt;&lt;/path&gt;
+      &lt;text class=&quot;ogp-stop-label&quot; x=&quot;668&quot; y=&quot;232&quot; text-anchor=&quot;middle&quot;&gt;detach&lt;/text&gt;
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;702&quot; y=&quot;200&quot; width=&quot;174&quot; height=&quot;92&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;789&quot; y=&quot;228&quot; text-anchor=&quot;middle&quot;&gt;Replay selection&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;789&quot; y=&quot;250&quot; text-anchor=&quot;middle&quot;&gt;mask · argmax/sample&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;789&quot; y=&quot;272&quot; text-anchor=&quot;middle&quot;&gt;discrete action&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M789 296V354H680&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node oracle&quot;&gt;
+        &lt;rect x=&quot;540&quot; y=&quot;358&quot; width=&quot;280&quot; height=&quot;96&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;680&quot; y=&quot;386&quot; text-anchor=&quot;middle&quot;&gt;Rendering + hard oracle&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;680&quot; y=&quot;408&quot; text-anchor=&quot;middle&quot;&gt;CandidateDepthRenderer · TargetRriScorer&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;680&quot; y=&quot;430&quot; text-anchor=&quot;middle&quot;&gt;metric labels · validity · endpoint facts&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M536 406H450&quot;&gt;&lt;/path&gt;
+      &lt;text class=&quot;ogp-stop-label&quot; x=&quot;493&quot; y=&quot;392&quot; text-anchor=&quot;middle&quot;&gt;no autograd bridge&lt;/text&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;188&quot; y=&quot;358&quot; width=&quot;258&quot; height=&quot;96&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;317&quot; y=&quot;386&quot; text-anchor=&quot;middle&quot;&gt;Rollout Zarr shard&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;317&quot; y=&quot;408&quot; text-anchor=&quot;middle&quot;&gt;actor tensors + supervision&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;317&quot; y=&quot;430&quot; text-anchor=&quot;middle&quot;&gt;detached scores · receipt · hashes&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M680 458V506H454&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M317 458V506H446&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;354&quot; y=&quot;510&quot; width=&quot;292&quot; height=&quot;56&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;500&quot; y=&quot;544&quot; text-anchor=&quot;middle&quot;&gt;Immutable training evidence for the next fit&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+    &lt;div class=&quot;ogp-mobile&quot;&gt;
+      &lt;ol&gt;
+        &lt;li&gt;VIN offline store supplies actor-visible root evidence.&lt;/li&gt;
+        &lt;li&gt;Candidate generation supplies poses and hard-valid support.&lt;/li&gt;
+        &lt;li&gt;OracleDecisionContext binds actor, target, candidate, mask, and cohort identities.&lt;/li&gt;
+        &lt;li&gt;Verified QhInferenceRuntime scores under &lt;code&gt;torch.inference_mode()&lt;/code&gt;.&lt;/li&gt;
+        &lt;li class=&quot;stop-step&quot;&gt;Scores detach before discrete replay selection.&lt;/li&gt;
+        &lt;li class=&quot;stop-step&quot;&gt;Rendering and the hard target-RRI oracle remain outside autograd.&lt;/li&gt;
+        &lt;li&gt;Rollout Zarr persists actor tensors, labels, transitions, and content-bound receipts.&lt;/li&gt;
+      &lt;/ol&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;ogp-legend text-small&quot; aria-label=&quot;Collection legend&quot;&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch data&quot;&gt;&lt;/span&gt;Forward data&lt;/span&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch stop&quot;&gt;&lt;/span&gt;Stop-gradient boundary&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class=&quot;ogp-mode-panel is-active&quot; data-panel=&quot;training&quot; aria-label=&quot;Q H training pipeline&quot;&gt;
+    &lt;svg class=&quot;ogp-desktop&quot; viewBox=&quot;0 0 1000 660&quot; role=&quot;img&quot; aria-labelledby=&quot;ogp-training-title ogp-training-desc&quot;&gt;
+      &lt;title id=&quot;ogp-training-title&quot;&gt;Q H training pipeline and optimal gradient flow&lt;/title&gt;
+      &lt;desc id=&quot;ogp-training-desc&quot;&gt;Immutable stores are materialized into Q H batches. The online scorer computes current and successor values, while a frozen target scorer evaluates the Double-Q bootstrap. The Bellman target is detached. Gradients flow only from Huber loss through the selected current online value and the scorer&#x27;s value head, attention, projections, and pose encoder.&lt;/desc&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;ogp-train-arrow-neutral&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--muted-foreground)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-train-arrow-data&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-2)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-train-arrow-update&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-3)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-train-arrow-gradient&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-1)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-train-arrow-stop&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--destructive)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;24&quot; y=&quot;30&quot;&gt;Immutable inputs&lt;/text&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;48&quot; width=&quot;134&quot; height=&quot;68&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;91&quot; y=&quot;76&quot; text-anchor=&quot;middle&quot;&gt;Rollout Zarr&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;91&quot; y=&quot;98&quot; text-anchor=&quot;middle&quot;&gt;transitions · labels&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;136&quot; width=&quot;134&quot; height=&quot;68&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;91&quot; y=&quot;164&quot; text-anchor=&quot;middle&quot;&gt;VIN store&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;91&quot; y=&quot;186&quot; text-anchor=&quot;middle&quot;&gt;root actor evidence&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M162 82H198&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M162 170H198&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node data&quot;&gt;
+        &lt;rect x=&quot;202&quot; y=&quot;72&quot; width=&quot;148&quot; height=&quot;112&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;276&quot; y=&quot;102&quot; text-anchor=&quot;middle&quot;&gt;QhRolloutReader&lt;/text&gt;
+        &lt;text x=&quot;276&quot; y=&quot;124&quot; text-anchor=&quot;middle&quot;&gt;QhDataset&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;276&quot; y=&quot;148&quot; text-anchor=&quot;middle&quot;&gt;materialize QhChain&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;276&quot; y=&quot;168&quot; text-anchor=&quot;middle&quot;&gt;actor / supervision split&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M354 128H390&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node data&quot;&gt;
+        &lt;rect x=&quot;394&quot; y=&quot;72&quot; width=&quot;150&quot; height=&quot;112&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;469&quot; y=&quot;102&quot; text-anchor=&quot;middle&quot;&gt;QhDataModule&lt;/text&gt;
+        &lt;text x=&quot;469&quot; y=&quot;124&quot; text-anchor=&quot;middle&quot;&gt;collate QhBatch&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;469&quot; y=&quot;148&quot; text-anchor=&quot;middle&quot;&gt;stage admission&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;469&quot; y=&quot;168&quot; text-anchor=&quot;middle&quot;&gt;device transfer&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M548 128H584&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;588&quot; y=&quot;72&quot; width=&quot;154&quot; height=&quot;112&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;665&quot; y=&quot;102&quot; text-anchor=&quot;middle&quot;&gt;QhLightningModule&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;665&quot; y=&quot;126&quot; text-anchor=&quot;middle&quot;&gt;manual optimization&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;665&quot; y=&quot;148&quot; text-anchor=&quot;middle&quot;&gt;admission mask&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;665&quot; y=&quot;168&quot; text-anchor=&quot;middle&quot;&gt;Double-Q semi-gradient&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;rect class=&quot;ogp-boundary&quot; x=&quot;36&quot; y=&quot;248&quot; width=&quot;628&quot; height=&quot;302&quot; rx=&quot;12&quot;&gt;&lt;/rect&gt;
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;54&quot; y=&quot;274&quot;&gt;Trainable online scorer&lt;/text&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;56&quot; y=&quot;298&quot; width=&quot;136&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;124&quot; y=&quot;326&quot; text-anchor=&quot;middle&quot;&gt;R6D + LFF&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;124&quot; y=&quot;348&quot; text-anchor=&quot;middle&quot;&gt;pose encoder&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M196 333H228&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;232&quot; y=&quot;290&quot; width=&quot;150&quot; height=&quot;86&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;307&quot; y=&quot;318&quot; text-anchor=&quot;middle&quot;&gt;Token projections&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;307&quot; y=&quot;340&quot; text-anchor=&quot;middle&quot;&gt;candidate · target · history&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;307&quot; y=&quot;360&quot; text-anchor=&quot;middle&quot;&gt;scene · budget&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M386 333H418&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;422&quot; y=&quot;298&quot; width=&quot;112&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;478&quot; y=&quot;326&quot; text-anchor=&quot;middle&quot;&gt;Multi-head&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;478&quot; y=&quot;348&quot; text-anchor=&quot;middle&quot;&gt;state attention&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M538 333H570&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;574&quot; y=&quot;298&quot; width=&quot;70&quot; height=&quot;70&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;609&quot; y=&quot;326&quot; text-anchor=&quot;middle&quot;&gt;Value&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;609&quot; y=&quot;348&quot; text-anchor=&quot;middle&quot;&gt;head&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M665 188V232H124V294&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M648 333H700&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;704&quot; y=&quot;290&quot; width=&quot;126&quot; height=&quot;86&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;767&quot; y=&quot;318&quot; text-anchor=&quot;middle&quot;&gt;Q&lt;tspan baseline-shift=&quot;sub&quot;&gt;online&lt;/tspan&gt; values&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;767&quot; y=&quot;340&quot; text-anchor=&quot;middle&quot;&gt;current + successor&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;767&quot; y=&quot;360&quot; text-anchor=&quot;middle&quot;&gt;same parameters&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;704&quot; y=&quot;410&quot; width=&quot;126&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;767&quot; y=&quot;438&quot; text-anchor=&quot;middle&quot;&gt;Successor argmax&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;767&quot; y=&quot;460&quot; text-anchor=&quot;middle&quot;&gt;index only&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M767 380V406&quot;&gt;&lt;/path&gt;
+      &lt;text class=&quot;ogp-stop-label&quot; x=&quot;790&quot; y=&quot;397&quot;&gt;stop&lt;/text&gt;
+
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;854&quot; y=&quot;290&quot; width=&quot;122&quot; height=&quot;86&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;915&quot; y=&quot;318&quot; text-anchor=&quot;middle&quot;&gt;Frozen target&lt;/text&gt;
+        &lt;text x=&quot;915&quot; y=&quot;340&quot; text-anchor=&quot;middle&quot;&gt;scorer&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;915&quot; y=&quot;360&quot; text-anchor=&quot;middle&quot;&gt;no_grad · eval&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M742 128H915V286&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M834 446H915V380&quot;&gt;&lt;/path&gt;
+
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;704&quot; y=&quot;512&quot; width=&quot;126&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;767&quot; y=&quot;540&quot; text-anchor=&quot;middle&quot;&gt;Detached TD target&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;767&quot; y=&quot;562&quot; text-anchor=&quot;middle&quot;&gt;reward + bootstrap&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M767 486V508&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M915 380V548H834&quot;&gt;&lt;/path&gt;
+
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;854&quot; y=&quot;512&quot; width=&quot;122&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;915&quot; y=&quot;540&quot; text-anchor=&quot;middle&quot;&gt;Huber loss&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;915&quot; y=&quot;562&quot; text-anchor=&quot;middle&quot;&gt;selected current row&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M834 333H846V530&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M834 548H850&quot;&gt;&lt;/path&gt;
+
+      &lt;path class=&quot;ogp-edge gradient-flow&quot; d=&quot;M850 568C800 626 650 626 609 374&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge gradient-flow&quot; d=&quot;M570 352H538&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge gradient-flow&quot; d=&quot;M418 352H386&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge gradient-flow&quot; d=&quot;M228 352H196&quot;&gt;&lt;/path&gt;
+      &lt;text class=&quot;ogp-gradient-label&quot; x=&quot;492&quot; y=&quot;632&quot; text-anchor=&quot;middle&quot;&gt;backpropagation updates only online scorer parameters&lt;/text&gt;
+
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;24&quot; y=&quot;582&quot; width=&quot;162&quot; height=&quot;58&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;105&quot; y=&quot;616&quot; text-anchor=&quot;middle&quot;&gt;AdamW + scheduler&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge update-flow&quot; d=&quot;M850 582C726 650 320 650 190 612&quot;&gt;&lt;/path&gt;
+      &lt;path class=&quot;ogp-edge update-flow&quot; d=&quot;M186 600C278 570 444 570 520 548&quot;&gt;&lt;/path&gt;
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;318&quot; y=&quot;590&quot;&gt;periodic hard sync → frozen target&lt;/text&gt;
+    &lt;/svg&gt;
+    &lt;div class=&quot;ogp-mobile&quot;&gt;
+      &lt;ol&gt;
+        &lt;li&gt;Rollout Zarr and VIN stores are immutable constants.&lt;/li&gt;
+        &lt;li&gt;QhRolloutReader and QhDataset materialize actor tensors separately from supervision.&lt;/li&gt;
+        &lt;li&gt;QhDataModule admits matching stages and collates QhBatch on the accelerator.&lt;/li&gt;
+        &lt;li class=&quot;gradient-step&quot;&gt;The online scorer is trainable: R6D/LFF pose encoder → token projections → multi-head attention → value head.&lt;/li&gt;
+        &lt;li class=&quot;stop-step&quot;&gt;Successor action selection uses argmax; no gradient passes through the index.&lt;/li&gt;
+        &lt;li class=&quot;stop-step&quot;&gt;The target scorer runs frozen under &lt;code&gt;no_grad&lt;/code&gt;; the TD target is detached.&lt;/li&gt;
+        &lt;li class=&quot;gradient-step&quot;&gt;Huber loss backpropagates only through the selected current Q&lt;sub&gt;online&lt;/sub&gt; prediction.&lt;/li&gt;
+        &lt;li class=&quot;update-step&quot;&gt;AdamW updates the online scorer; periodic hard sync refreshes the frozen target scorer.&lt;/li&gt;
+      &lt;/ol&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;ogp-legend text-small&quot; aria-label=&quot;Training legend&quot;&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch data&quot;&gt;&lt;/span&gt;Forward tensors&lt;/span&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch gradient&quot;&gt;&lt;/span&gt;Gradient flow&lt;/span&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch stop&quot;&gt;&lt;/span&gt;Detached or discrete&lt;/span&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch update&quot;&gt;&lt;/span&gt;Parameter update / target sync&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class=&quot;ogp-mode-panel&quot; data-panel=&quot;evaluation&quot; hidden aria-label=&quot;Q H evaluation pipeline&quot;&gt;
+    &lt;svg class=&quot;ogp-desktop&quot; viewBox=&quot;0 0 1000 580&quot; role=&quot;img&quot; aria-labelledby=&quot;ogp-eval-title ogp-eval-desc&quot;&gt;
+      &lt;title id=&quot;ogp-eval-title&quot;&gt;Separated validation, held-out diagnostics, and endpoint evaluation&lt;/title&gt;
+      &lt;desc id=&quot;ogp-eval-desc&quot;&gt;Validation selects a checkpoint without parameter updates. Explicit held-out fitted-Q diagnostics produce an immutable receipt. Endpoint-policy evaluation uses the frozen bundle in the collection loop on held-out scenes and remains separate scientific evidence.&lt;/desc&gt;
+      &lt;defs&gt;
+        &lt;marker id=&quot;ogp-eval-arrow-data&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--viz-series-2)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+        &lt;marker id=&quot;ogp-eval-arrow-stop&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto&quot;&gt;&lt;path d=&quot;M0 0L10 5L0 10Z&quot; fill=&quot;var(--destructive)&quot;&gt;&lt;/path&gt;&lt;/marker&gt;
+      &lt;/defs&gt;
+
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;30&quot; y=&quot;38&quot;&gt;Checkpoint selection evidence&lt;/text&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;30&quot; y=&quot;58&quot; width=&quot;158&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;109&quot; y=&quot;86&quot; text-anchor=&quot;middle&quot;&gt;Validation stores&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;109&quot; y=&quot;108&quot; text-anchor=&quot;middle&quot;&gt;scene-disjoint&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M192 94H238&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node data&quot;&gt;
+        &lt;rect x=&quot;242&quot; y=&quot;58&quot; width=&quot;174&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;329&quot; y=&quot;86&quot; text-anchor=&quot;middle&quot;&gt;Same data pipeline&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;329&quot; y=&quot;108&quot; text-anchor=&quot;middle&quot;&gt;reader · dataset · batch&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M420 94H466&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;470&quot; y=&quot;58&quot; width=&quot;186&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;563&quot; y=&quot;86&quot; text-anchor=&quot;middle&quot;&gt;Lightning validation&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;563&quot; y=&quot;108&quot; text-anchor=&quot;middle&quot;&gt;eval · no optimizer step&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M660 94H706&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;710&quot; y=&quot;58&quot; width=&quot;256&quot; height=&quot;72&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;838&quot; y=&quot;86&quot; text-anchor=&quot;middle&quot;&gt;Selected-checkpoint receipt&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;838&quot; y=&quot;108&quot; text-anchor=&quot;middle&quot;&gt;checkpoint-owned aggregates&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;30&quot; y=&quot;210&quot;&gt;Fitted-Q diagnostic evidence&lt;/text&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;30&quot; y=&quot;230&quot; width=&quot;158&quot; height=&quot;80&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;109&quot; y=&quot;258&quot; text-anchor=&quot;middle&quot;&gt;Frozen test stores&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;109&quot; y=&quot;280&quot; text-anchor=&quot;middle&quot;&gt;bundle-bound identity&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M192 270H238&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node model&quot;&gt;
+        &lt;rect x=&quot;242&quot; y=&quot;230&quot; width=&quot;174&quot; height=&quot;80&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;329&quot; y=&quot;258&quot; text-anchor=&quot;middle&quot;&gt;Frozen bundle scorer&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;329&quot; y=&quot;280&quot; text-anchor=&quot;middle&quot;&gt;Lightning test loop&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M420 270H466&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;470&quot; y=&quot;230&quot; width=&quot;206&quot; height=&quot;80&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;573&quot; y=&quot;258&quot; text-anchor=&quot;middle&quot;&gt;Held-out diagnostic receipt&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;573&quot; y=&quot;280&quot; text-anchor=&quot;middle&quot;&gt;loss only · diagnostic_only&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge stop-flow&quot; d=&quot;M680 270H746&quot;&gt;&lt;/path&gt;
+      &lt;text class=&quot;ogp-stop-label&quot; x=&quot;713&quot; y=&quot;254&quot; text-anchor=&quot;middle&quot;&gt;not&lt;/text&gt;
+      &lt;g class=&quot;ogp-node oracle&quot;&gt;
+        &lt;rect x=&quot;750&quot; y=&quot;230&quot; width=&quot;216&quot; height=&quot;80&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;858&quot; y=&quot;258&quot; text-anchor=&quot;middle&quot;&gt;Endpoint-policy evidence&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;858&quot; y=&quot;280&quot; text-anchor=&quot;middle&quot;&gt;kept separate&lt;/text&gt;
+      &lt;/g&gt;
+
+      &lt;text class=&quot;ogp-muted&quot; x=&quot;30&quot; y=&quot;394&quot;&gt;Confirmatory endpoint evidence&lt;/text&gt;
+      &lt;g class=&quot;ogp-node control&quot;&gt;
+        &lt;rect x=&quot;30&quot; y=&quot;414&quot; width=&quot;198&quot; height=&quot;92&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;129&quot; y=&quot;442&quot; text-anchor=&quot;middle&quot;&gt;Frozen verified bundle&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;129&quot; y=&quot;464&quot; text-anchor=&quot;middle&quot;&gt;held-out scenes&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;129&quot; y=&quot;484&quot; text-anchor=&quot;middle&quot;&gt;fixed candidate / oracle budget&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M232 460H290&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node oracle&quot;&gt;
+        &lt;rect x=&quot;294&quot; y=&quot;414&quot; width=&quot;252&quot; height=&quot;92&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;420&quot; y=&quot;442&quot; text-anchor=&quot;middle&quot;&gt;Online collection loop&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;420&quot; y=&quot;464&quot; text-anchor=&quot;middle&quot;&gt;selection · rendering · hard oracle&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;420&quot; y=&quot;484&quot; text-anchor=&quot;middle&quot;&gt;no gradients&lt;/text&gt;
+      &lt;/g&gt;
+      &lt;path class=&quot;ogp-edge data-flow&quot; d=&quot;M550 460H608&quot;&gt;&lt;/path&gt;
+      &lt;g class=&quot;ogp-node store&quot;&gt;
+        &lt;rect x=&quot;612&quot; y=&quot;414&quot; width=&quot;354&quot; height=&quot;92&quot; rx=&quot;9&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;789&quot; y=&quot;442&quot; text-anchor=&quot;middle&quot;&gt;Paired endpoint report&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;789&quot; y=&quot;464&quot; text-anchor=&quot;middle&quot;&gt;oracle-evaluated selected rollouts&lt;/text&gt;
+        &lt;text class=&quot;ogp-muted&quot; x=&quot;789&quot; y=&quot;484&quot; text-anchor=&quot;middle&quot;&gt;ranking · target return · failure analysis&lt;/text&gt;
+      &lt;/g&gt;
+    &lt;/svg&gt;
+    &lt;div class=&quot;ogp-mobile&quot;&gt;
+      &lt;ol&gt;
+        &lt;li&gt;Validation uses scene-disjoint stores and the same reader/materialization path.&lt;/li&gt;
+        &lt;li class=&quot;stop-step&quot;&gt;Lightning validation performs no optimizer update.&lt;/li&gt;
+        &lt;li&gt;Checkpoint receipts use aggregates stored by the selected checkpoint.&lt;/li&gt;
+        &lt;li&gt;Explicit held-out fitted-Q testing uses the frozen bundle and writes a diagnostic-only receipt.&lt;/li&gt;
+        &lt;li class=&quot;stop-step&quot;&gt;Held-out loss is not endpoint-policy evidence.&lt;/li&gt;
+        &lt;li&gt;Endpoint evaluation runs the frozen policy through selection, rendering, and the hard oracle on held-out scenes.&lt;/li&gt;
+        &lt;li&gt;Paired endpoint reports remain gradient-free confirmatory evidence.&lt;/li&gt;
+      &lt;/ol&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;ogp-legend text-small&quot; aria-label=&quot;Evaluation legend&quot;&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch data&quot;&gt;&lt;/span&gt;Evaluation data&lt;/span&gt;
+      &lt;span class=&quot;ogp-key&quot;&gt;&lt;span class=&quot;ogp-swatch stop&quot;&gt;&lt;/span&gt;No parameter update / evidence boundary&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&#x27;pr104-online-gradient-pipeline&#x27;);
+      const buttons = Array.from(root.querySelectorAll(&#x27;[data-mode]&#x27;));
+      const panels = Array.from(root.querySelectorAll(&#x27;[data-panel]&#x27;));
+      const detail = root.querySelector(&#x27;.ogp-detail&#x27;);
+      const details = {
+        collection: &#x27;Differentiable: nothing. The verified scorer runs under inference mode; selection, rendering, oracle labels, and persistence are discrete or detached.&#x27;,
+        training: &#x27;Differentiable: online scorer parameters only—pose encoder, projections, attention, and value head. Everything across collection, rendering, selection, and storage is a stop-gradient boundary.&#x27;,
+        evaluation: &#x27;Differentiable: nothing is updated. Validation selects a checkpoint, held-out fitted-Q testing is diagnostic, and endpoint evaluation is a separate gradient-free experiment.&#x27;
+      };
+
+      const selectMode = (mode) =&gt; {
+        buttons.forEach((button) =&gt; {
+          const active = button.dataset.mode === mode;
+          button.setAttribute(&#x27;aria-pressed&#x27;, String(active));
+          button.classList.toggle(&#x27;btn-primary&#x27;, active);
+        });
+        panels.forEach((panel) =&gt; {
+          const active = panel.dataset.panel === mode;
+          panel.classList.toggle(&#x27;is-active&#x27;, active);
+          panel.hidden = !active;
+        });
+        detail.textContent = details[mode];
+      };
+
+      buttons.forEach((button) =&gt; {
+        button.addEventListener(&#x27;click&#x27;, () =&gt; selectMode(button.dataset.mode));
+      });
+      selectMode(&#x27;training&#x27;);
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handleLeave = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

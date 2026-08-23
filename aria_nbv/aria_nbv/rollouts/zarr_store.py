@@ -588,6 +588,8 @@ def write_rollout_zarr_store(
     q_h_chunk_states: int = 64,
     target_eval_crop_max_points: int = DEFAULT_TARGET_EVAL_CROP_MAX_POINTS,
     target_eval_crops_enabled: bool = False,
+    oracle_query_mode: str = "legacy_unspecified",
+    label_support_semantics: str = "subset_of_action_v1",
 ) -> RolloutZarrWriteResult:
     """Replace a standalone destination with normalized rollout replay tables.
 
@@ -620,6 +622,8 @@ def write_rollout_zarr_store(
         q_h_chunk_states: State rows per derived-view chunk.
         target_eval_crop_max_points: Fixed point width ``P_max`` for audit crops.
         target_eval_crops_enabled: Whether optional oracle target crops persist.
+        oracle_query_mode: Closed oracle-query support identity for Q_H labels.
+        label_support_semantics: Closed relationship between labels and actor-valid rows.
 
     Returns:
         Row counts, resolved destination, and sidecar manifest digest.
@@ -652,6 +656,8 @@ def write_rollout_zarr_store(
         q_h_chunk_states=q_h_chunk_states,
         target_eval_crop_max_points=target_eval_crop_max_points,
         target_eval_crops_enabled=target_eval_crops_enabled,
+        oracle_query_mode=oracle_query_mode,
+        label_support_semantics=label_support_semantics,
     ).write()
 
 
@@ -682,6 +688,8 @@ class _RolloutZarrWriteSession:
         q_h_chunk_states: int,
         target_eval_crop_max_points: int,
         target_eval_crops_enabled: bool,
+        oracle_query_mode: str,
+        label_support_semantics: str,
     ) -> None:
         self.output_dir = Path(store_dir).expanduser().resolve()
         self.records = list(records)
@@ -704,6 +712,15 @@ class _RolloutZarrWriteSession:
         self.q_h_chunk_states = int(q_h_chunk_states)
         self.target_eval_crop_max_points = int(target_eval_crop_max_points)
         self.target_eval_crops_enabled = bool(target_eval_crops_enabled)
+        if oracle_query_mode not in {"legacy_unspecified", "dense_valid"}:
+            raise ValueError(f"Unsupported oracle_query_mode={oracle_query_mode!r}.")
+        if label_support_semantics not in {
+            "subset_of_action_v1",
+            "equals_action_on_realized_steps_v1",
+        }:
+            raise ValueError(f"Unsupported label_support_semantics={label_support_semantics!r}.")
+        self.oracle_query_mode = oracle_query_mode
+        self.label_support_semantics = label_support_semantics
         if self.selected_depth_width_px < 1 or self.selected_depth_height_px < 1:
             raise ValueError("selected_depth_width_px and selected_depth_height_px must be positive.")
         if self.selected_depth_chunk_steps < 1:
@@ -772,6 +789,8 @@ class _RolloutZarrWriteSession:
             selected_depth_source_resolution=self.selected_depth_source_resolution,
             target_eval_crop_max_points=self.target_eval_crop_max_points,
             target_eval_crops_enabled=self.target_eval_crops_enabled,
+            oracle_query_mode=self.oracle_query_mode,
+            label_support_semantics=self.label_support_semantics,
             created_at_utc=created_at_utc,
             manifest_sha256="",
         )
@@ -1634,6 +1653,8 @@ def _root_metadata_payload(
     selected_depth_source_resolution: str,
     target_eval_crop_max_points: int,
     target_eval_crops_enabled: bool,
+    oracle_query_mode: str,
+    label_support_semantics: str,
     created_at_utc: str,
     manifest_sha256: str,
 ) -> dict[str, Any]:
@@ -1666,6 +1687,8 @@ def _root_metadata_payload(
         "return_semantics": return_semantics,
         "discount_gamma": float(discount_gamma),
         "field_retention_policy": field_retention_policy,
+        "oracle_query_mode": oracle_query_mode,
+        "label_support_semantics": label_support_semantics,
         "selected_depth_enabled": bool(selected_depth_enabled),
         "selected_depth_width_px": int(selected_depth_width_px),
         "selected_depth_height_px": int(selected_depth_height_px),

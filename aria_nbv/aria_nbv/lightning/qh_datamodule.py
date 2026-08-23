@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, fields
+from functools import partial
 from typing import Protocol, cast
 
 import numpy as np
@@ -20,6 +21,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
+from ..data_handling.qh_data.batching import QhObjectiveProfile
 from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProfile, validate_experiment_profile
 from ..rollouts.qh_reader import QhDataContract
 from ..utils.fingerprints import stable_msgspec_hash
@@ -32,8 +34,16 @@ class QhLearningContract:
     """Complete identity of replay semantics used to optimize and evaluate ``Q_H``."""
 
     data_contract: QhDataContract
+    """Exact persisted rollout semantics and replay-support identity."""
+
     max_horizon: int
+    """Largest acquisition horizon shared by the admitted stages."""
+
     horizon_weighting: str = QH_HORIZON_WEIGHTING
+    """Selected-row loss aggregation identity."""
+
+    objective_profile: QhObjectiveProfile = "legacy_selected_rows_v1"
+    """Closed fitted-Q support and padding semantics."""
 
 
 class _QhDataset(Protocol):
@@ -72,6 +82,7 @@ class QhDataModule(pl.LightningDataModule):
         persistent_workers: bool = False,
         seed: int,
         experiment_profile: QhExperimentProfile | None = None,
+        objective_profile: QhObjectiveProfile = "legacy_selected_rows_v1",
     ) -> None:
         super().__init__()
         self.train_dataset = train
@@ -83,6 +94,7 @@ class QhDataModule(pl.LightningDataModule):
         self.persistent_workers = persistent_workers and num_workers > 0
         self.seed = seed
         self.experiment_profile = experiment_profile
+        self.objective_profile = objective_profile
 
         stages = {
             name: dataset for name, dataset in (("train", train), ("val", val), ("test", test)) if dataset is not None
@@ -100,7 +112,19 @@ class QhDataModule(pl.LightningDataModule):
                 "Q_H corpus stages must share one maximum horizon; "
                 f"train={train.max_horizon}, mismatches={horizon_mismatches}."
             )
-        self.learning_contract = QhLearningContract(data_contract=train.contract, max_horizon=train.max_horizon)
+        if objective_profile == "qh_dense_valid_fitted_q_v1" and (
+            train.contract.oracle_query_mode != "dense_valid"
+            or train.contract.label_support_semantics != "equals_action_on_realized_steps_v1"
+        ):
+            raise ValueError(
+                "The dense-valid Q_H objective requires oracle_query_mode='dense_valid' and "
+                "label_support_semantics='equals_action_on_realized_steps_v1'."
+            )
+        self.learning_contract = QhLearningContract(
+            data_contract=train.contract,
+            max_horizon=train.max_horizon,
+            objective_profile=objective_profile,
+        )
         self.learning_contract_hash = stable_msgspec_hash(self.learning_contract)
         self.actor_state_contract_hash = stable_msgspec_hash(train.actor_state_contract)
         self.geometry_contract_hash = train.actor_state_contract.geometry_contract_hash
@@ -154,7 +178,7 @@ class QhDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.persistent_workers,
-            collate_fn=collate_qh_chains,
+            collate_fn=partial(collate_qh_chains, objective_profile=self.objective_profile),
             worker_init_fn=_seed_worker,
             generator=torch.Generator().manual_seed(self.seed),
         )

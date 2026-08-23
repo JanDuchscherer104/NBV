@@ -1,0 +1,1721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Pr104 Feature Value Deck</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Pr104 Feature Value Deck" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Pr104 Feature Value Deck&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress {
+  display: flex;
+  height: 6px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 6px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;pr104-feature-value-deck&quot; aria-label=&quot;PR 104 feature value slide deck&quot;&gt;
+  &lt;style&gt;
+    #pr104-feature-value-deck {
+      width: 100%;
+      color: var(--foreground);
+    }
+    #pr104-feature-value-deck .pr104-stage {
+      min-height: 540px;
+    }
+    #pr104-feature-value-deck .pr104-slide {
+      display: none;
+    }
+    #pr104-feature-value-deck .pr104-slide.is-active {
+      display: block;
+    }
+    #pr104-feature-value-deck .pr104-slide-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 24px;
+      align-items: center;
+    }
+    #pr104-feature-value-deck .pr104-slide-grid-wide {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 24px;
+      align-items: center;
+    }
+    #pr104-feature-value-deck .pr104-eyebrow {
+      color: var(--muted-foreground);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    #pr104-feature-value-deck .pr104-lead {
+      max-width: 62ch;
+    }
+    #pr104-feature-value-deck .pr104-list {
+      display: grid;
+      gap: 12px;
+      padding-left: 20px;
+    }
+    #pr104-feature-value-deck .pr104-list-compact {
+      display: grid;
+      gap: 8px;
+      padding-left: 20px;
+    }
+    #pr104-feature-value-deck .pr104-flow {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    #pr104-feature-value-deck .pr104-flow text {
+      fill: var(--foreground);
+      font-size: 12px;
+      font-weight: 400;
+    }
+    #pr104-feature-value-deck .pr104-flow .muted-label {
+      fill: var(--muted-foreground);
+    }
+    #pr104-feature-value-deck .pr104-flow .structure {
+      stroke: var(--border);
+      stroke-width: 2;
+      fill: none;
+    }
+    #pr104-feature-value-deck .pr104-flow .series-1 {
+      fill: color-mix(in srgb, var(--viz-series-1) 18%, transparent);
+      stroke: var(--viz-series-1);
+      stroke-width: 2;
+    }
+    #pr104-feature-value-deck .pr104-flow .series-2 {
+      fill: color-mix(in srgb, var(--viz-series-2) 18%, transparent);
+      stroke: var(--viz-series-2);
+      stroke-width: 2;
+    }
+    #pr104-feature-value-deck .pr104-flow .series-3 {
+      fill: color-mix(in srgb, var(--viz-series-3) 18%, transparent);
+      stroke: var(--viz-series-3);
+      stroke-width: 2;
+    }
+    #pr104-feature-value-deck .pr104-flow .series-4 {
+      fill: color-mix(in srgb, var(--viz-series-4) 18%, transparent);
+      stroke: var(--viz-series-4);
+      stroke-width: 2;
+    }
+    #pr104-feature-value-deck .pr104-flow .series-5 {
+      fill: color-mix(in srgb, var(--viz-series-5) 18%, transparent);
+      stroke: var(--viz-series-5);
+      stroke-width: 2;
+    }
+    #pr104-feature-value-deck .pr104-flow .series-6 {
+      fill: color-mix(in srgb, var(--viz-series-6) 18%, transparent);
+      stroke: var(--viz-series-6);
+      stroke-width: 2;
+    }
+    #pr104-feature-value-deck .pr104-flow .arrow {
+      stroke: var(--muted-foreground);
+      stroke-width: 2;
+      fill: none;
+      marker-end: url(#pr104-arrowhead);
+    }
+    #pr104-feature-value-deck .pr104-flow .guard {
+      stroke: var(--destructive);
+      stroke-width: 3;
+      fill: none;
+    }
+    #pr104-feature-value-deck .pr104-flow .accepted {
+      stroke: var(--green);
+      stroke-width: 3;
+      fill: none;
+    }
+    #pr104-feature-value-deck .pr104-tradeoff {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 20px;
+    }
+    #pr104-feature-value-deck .pr104-decision {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+    #pr104-feature-value-deck .pr104-decision-mark {
+      color: var(--viz-series-1);
+      font-weight: 500;
+    }
+    #pr104-feature-value-deck .pr104-decision-mark.defer {
+      color: var(--muted-foreground);
+    }
+    #pr104-feature-value-deck .pr104-footer {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    #pr104-feature-value-deck .pr104-nav {
+      justify-content: space-between;
+    }
+    #pr104-feature-value-deck .pr104-counter {
+      color: var(--muted-foreground);
+    }
+    @media (max-width: 660px) {
+      #pr104-feature-value-deck .pr104-stage {
+        min-height: 0;
+      }
+      #pr104-feature-value-deck .pr104-slide-grid,
+      #pr104-feature-value-deck .pr104-slide-grid-wide,
+      #pr104-feature-value-deck .pr104-tradeoff {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    @media print {
+      #pr104-feature-value-deck .pr104-slide {
+        display: block;
+        break-after: page;
+        margin-bottom: 24px;
+      }
+      #pr104-feature-value-deck .pr104-footer {
+        display: none;
+      }
+    }
+  &lt;/style&gt;
+
+  &lt;div class=&quot;pr104-stage&quot;&gt;
+    &lt;section class=&quot;card pr104-slide is-active&quot; data-slide=&quot;0&quot; aria-labelledby=&quot;pr104-slide-1-title&quot;&gt;
+      &lt;div class=&quot;pr104-slide-grid-wide&quot;&gt;
+        &lt;div&gt;
+          &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;PR #104 · Online-oracle MVP&lt;/div&gt;
+          &lt;h1 id=&quot;pr104-slide-1-title&quot;&gt;From a useful scorer to an auditable control primitive&lt;/h1&gt;
+          &lt;p class=&quot;pr104-lead&quot;&gt;The PR does more than add Q&lt;sub&gt;H&lt;/sub&gt; inference. It makes the score causally admissible, frame-consistent, content-bound, and scientifically honest about what it proves.&lt;/p&gt;
+        &lt;/div&gt;
+        &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 330&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-cover-title pr104-cover-desc&quot;&gt;
+          &lt;title id=&quot;pr104-cover-title&quot;&gt;Value stack introduced by PR 104&lt;/title&gt;
+          &lt;desc id=&quot;pr104-cover-desc&quot;&gt;A finite-horizon score passes through causal, geometric, provenance, lifecycle, and replay guards before becoming trustworthy evidence.&lt;/desc&gt;
+          &lt;defs&gt;
+            &lt;marker id=&quot;pr104-arrowhead&quot; viewBox=&quot;0 0 10 10&quot; refX=&quot;9&quot; refY=&quot;5&quot; markerWidth=&quot;6&quot; markerHeight=&quot;6&quot; orient=&quot;auto-start-reverse&quot;&gt;
+              &lt;path d=&quot;M 0 0 L 10 5 L 0 10 z&quot; fill=&quot;var(--muted-foreground)&quot;&gt;&lt;/path&gt;
+            &lt;/marker&gt;
+          &lt;/defs&gt;
+          &lt;rect class=&quot;series-1&quot; x=&quot;40&quot; y=&quot;115&quot; width=&quot;120&quot; height=&quot;78&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;100&quot; y=&quot;146&quot; text-anchor=&quot;middle&quot;&gt;Finite-horizon&lt;/text&gt;
+          &lt;text x=&quot;100&quot; y=&quot;166&quot; text-anchor=&quot;middle&quot;&gt;Q&lt;tspan baseline-shift=&quot;sub&quot;&gt;H&lt;/tspan&gt; score&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 164 154 H 220&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-2&quot; x=&quot;224&quot; y=&quot;44&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;299&quot; y=&quot;76&quot; text-anchor=&quot;middle&quot;&gt;Causal masking&lt;/text&gt;
+          &lt;rect class=&quot;series-3&quot; x=&quot;224&quot; y=&quot;116&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;299&quot; y=&quot;148&quot; text-anchor=&quot;middle&quot;&gt;Root-frame gauge&lt;/text&gt;
+          &lt;rect class=&quot;series-4&quot; x=&quot;224&quot; y=&quot;188&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;299&quot; y=&quot;220&quot; text-anchor=&quot;middle&quot;&gt;Verified identity&lt;/text&gt;
+          &lt;rect class=&quot;series-5&quot; x=&quot;224&quot; y=&quot;260&quot; width=&quot;150&quot; height=&quot;54&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;299&quot; y=&quot;292&quot; text-anchor=&quot;middle&quot;&gt;Honest evaluation&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 378 71 C 430 71 424 134 476 134&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 378 143 H 476&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 378 215 C 430 215 424 154 476 154&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 378 287 C 448 287 430 174 476 174&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-6&quot; x=&quot;480&quot; y=&quot;105&quot; width=&quot;195&quot; height=&quot;98&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;577&quot; y=&quot;140&quot; text-anchor=&quot;middle&quot;&gt;Auditable decision&lt;/text&gt;
+          &lt;text x=&quot;577&quot; y=&quot;162&quot; text-anchor=&quot;middle&quot;&gt;and reproducible&lt;/text&gt;
+          &lt;text x=&quot;577&quot; y=&quot;184&quot; text-anchor=&quot;middle&quot;&gt;scientific evidence&lt;/text&gt;
+        &lt;/svg&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;1&quot; aria-labelledby=&quot;pr104-slide-2-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-slide-grid&quot;&gt;
+        &lt;div&gt;
+          &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Theory object&lt;/div&gt;
+          &lt;h2 id=&quot;pr104-slide-2-title&quot;&gt;Q&lt;sub&gt;H&lt;/sub&gt; ranks actions by finite-horizon target return&lt;/h2&gt;
+          &lt;ul class=&quot;pr104-list&quot;&gt;
+            &lt;li&gt;&lt;strong&gt;State:&lt;/strong&gt; root evidence, target descriptor, realized history, and remaining budget.&lt;/li&gt;
+            &lt;li&gt;&lt;strong&gt;Action:&lt;/strong&gt; one currently admissible camera candidate.&lt;/li&gt;
+            &lt;li&gt;&lt;strong&gt;Value:&lt;/strong&gt; expected discounted target reward over the next H decisions.&lt;/li&gt;
+            &lt;li&gt;&lt;strong&gt;Control role:&lt;/strong&gt; rank a finite candidate table; do not claim a universal continuous policy.&lt;/li&gt;
+          &lt;/ul&gt;
+        &lt;/div&gt;
+        &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 360&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-theory-title pr104-theory-desc&quot;&gt;
+          &lt;title id=&quot;pr104-theory-title&quot;&gt;Finite-horizon Q H decision model&lt;/title&gt;
+          &lt;desc id=&quot;pr104-theory-desc&quot;&gt;State evidence and a candidate action produce a ranked value over a bounded horizon, with no access to future or privileged deployment information.&lt;/desc&gt;
+          &lt;rect class=&quot;series-2&quot; x=&quot;34&quot; y=&quot;48&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;109&quot; y=&quot;76&quot; text-anchor=&quot;middle&quot;&gt;Root evidence&lt;/text&gt;
+          &lt;text x=&quot;109&quot; y=&quot;96&quot; text-anchor=&quot;middle&quot;&gt;S&lt;tspan baseline-shift=&quot;sub&quot;&gt;0&lt;/tspan&gt; moments&lt;/text&gt;
+          &lt;rect class=&quot;series-3&quot; x=&quot;34&quot; y=&quot;128&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;109&quot; y=&quot;156&quot; text-anchor=&quot;middle&quot;&gt;Target + history&lt;/text&gt;
+          &lt;text x=&quot;109&quot; y=&quot;176&quot; text-anchor=&quot;middle&quot;&gt;+ budget&lt;/text&gt;
+          &lt;rect class=&quot;series-1&quot; x=&quot;34&quot; y=&quot;208&quot; width=&quot;150&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;109&quot; y=&quot;236&quot; text-anchor=&quot;middle&quot;&gt;Candidate action&lt;/text&gt;
+          &lt;text x=&quot;109&quot; y=&quot;256&quot; text-anchor=&quot;middle&quot;&gt;a&lt;tspan baseline-shift=&quot;sub&quot;&gt;t&lt;/tspan&gt;&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 188 79 C 250 79 240 158 294 158&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 188 159 H 294&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 188 239 C 250 239 240 178 294 178&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-4&quot; x=&quot;298&quot; y=&quot;124&quot; width=&quot;170&quot; height=&quot;94&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;383&quot; y=&quot;154&quot; text-anchor=&quot;middle&quot;&gt;Target finite-horizon&lt;/text&gt;
+          &lt;text x=&quot;383&quot; y=&quot;176&quot; text-anchor=&quot;middle&quot;&gt;scorer&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;383&quot; y=&quot;199&quot; text-anchor=&quot;middle&quot;&gt;bounded H · discounted&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 472 171 H 526&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-5&quot; x=&quot;530&quot; y=&quot;124&quot; width=&quot;156&quot; height=&quot;94&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;608&quot; y=&quot;154&quot; text-anchor=&quot;middle&quot;&gt;Q&lt;tspan baseline-shift=&quot;sub&quot;&gt;H&lt;/tspan&gt;(state, action)&lt;/text&gt;
+          &lt;text x=&quot;608&quot; y=&quot;178&quot; text-anchor=&quot;middle&quot;&gt;finite candidate&lt;/text&gt;
+          &lt;text x=&quot;608&quot; y=&quot;198&quot; text-anchor=&quot;middle&quot;&gt;ranking&lt;/text&gt;
+          &lt;path class=&quot;guard&quot; d=&quot;M 286 294 H 500&quot;&gt;&lt;/path&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;393&quot; y=&quot;320&quot; text-anchor=&quot;middle&quot;&gt;No future padding · no hidden GT at deployment&lt;/text&gt;
+        &lt;/svg&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;2&quot; aria-labelledby=&quot;pr104-slide-3-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Why the review mattered&lt;/div&gt;
+      &lt;h2 id=&quot;pr104-slide-3-title&quot;&gt;Four shortcuts could make a plausible score scientifically wrong&lt;/h2&gt;
+      &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 400&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-failures-title pr104-failures-desc&quot;&gt;
+        &lt;title id=&quot;pr104-failures-title&quot;&gt;Failure modes repaired in PR 104&lt;/title&gt;
+        &lt;desc id=&quot;pr104-failures-desc&quot;&gt;Masked nonfinite values, world-frame leakage, mismatched model provenance, and test-set consumption each create a different form of invalid evidence.&lt;/desc&gt;
+        &lt;rect class=&quot;series-1&quot; x=&quot;28&quot; y=&quot;48&quot; width=&quot;300&quot; height=&quot;120&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;52&quot; y=&quot;78&quot;&gt;Masked numerical contamination&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;104&quot;&gt;Inactive NaN × zero can remain NaN&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;128&quot;&gt;Effect: corrupted forward values or gradients&lt;/text&gt;
+        &lt;rect class=&quot;series-2&quot; x=&quot;392&quot; y=&quot;48&quot; width=&quot;300&quot; height=&quot;120&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;416&quot; y=&quot;78&quot;&gt;World-frame shortcut&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;416&quot; y=&quot;104&quot;&gt;A common translation changes the scene token&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;416&quot; y=&quot;128&quot;&gt;Effect: gauge-dependent ranking&lt;/text&gt;
+        &lt;rect class=&quot;series-3&quot; x=&quot;28&quot; y=&quot;224&quot; width=&quot;300&quot; height=&quot;120&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;52&quot; y=&quot;254&quot;&gt;Unverified pairing&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;280&quot;&gt;Any scorer can be paired with arbitrary strings&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;304&quot;&gt;Effect: actor, mask, or target contract drift&lt;/text&gt;
+        &lt;rect class=&quot;series-4&quot; x=&quot;392&quot; y=&quot;224&quot; width=&quot;300&quot; height=&quot;120&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;416&quot; y=&quot;254&quot;&gt;Evaluation leakage&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;416&quot; y=&quot;280&quot;&gt;Fit consumes held-out test feedback&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;416&quot; y=&quot;304&quot;&gt;Effect: unauditable model-selection evidence&lt;/text&gt;
+      &lt;/svg&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;3&quot; aria-labelledby=&quot;pr104-slide-4-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-slide-grid&quot;&gt;
+        &lt;div&gt;
+          &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Feature 1 · causal numerics and geometry&lt;/div&gt;
+          &lt;h2 id=&quot;pr104-slide-4-title&quot;&gt;Mask before nonlinear computation; express geometry in the root gauge&lt;/h2&gt;
+          &lt;ul class=&quot;pr104-list&quot;&gt;
+            &lt;li&gt;Inactive pose rows become finite identities before encoding.&lt;/li&gt;
+            &lt;li&gt;Active non-finite pose and target rows fail closed.&lt;/li&gt;
+            &lt;li&gt;Semidense points move from world coordinates into the root frame.&lt;/li&gt;
+            &lt;li&gt;Presence and normalized support count separate “no evidence” from “evidence at zero.”&lt;/li&gt;
+          &lt;/ul&gt;
+        &lt;/div&gt;
+        &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 390&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-mask-title pr104-mask-desc&quot;&gt;
+          &lt;title id=&quot;pr104-mask-title&quot;&gt;Safe masked representation pipeline&lt;/title&gt;
+          &lt;desc id=&quot;pr104-mask-desc&quot;&gt;Inactive rows are sanitized before encoding, active rows are validated, and world points are transformed to a root-relative summary with explicit support.&lt;/desc&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;32&quot; y=&quot;42&quot;&gt;Pose branch&lt;/text&gt;
+          &lt;rect class=&quot;series-1&quot; x=&quot;30&quot; y=&quot;62&quot; width=&quot;142&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;101&quot; y=&quot;98&quot; text-anchor=&quot;middle&quot;&gt;Raw pose rows&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 176 93 H 226&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-2&quot; x=&quot;230&quot; y=&quot;62&quot; width=&quot;156&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;308&quot; y=&quot;88&quot; text-anchor=&quot;middle&quot;&gt;Validate active&lt;/text&gt;
+          &lt;text x=&quot;308&quot; y=&quot;108&quot; text-anchor=&quot;middle&quot;&gt;sanitize inactive&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 390 93 H 440&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-3&quot; x=&quot;444&quot; y=&quot;62&quot; width=&quot;128&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;508&quot; y=&quot;98&quot; text-anchor=&quot;middle&quot;&gt;Encode&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 576 93 H 626&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-4&quot; x=&quot;630&quot; y=&quot;62&quot; width=&quot;62&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;661&quot; y=&quot;98&quot; text-anchor=&quot;middle&quot;&gt;Mask&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;32&quot; y=&quot;194&quot;&gt;Scene branch&lt;/text&gt;
+          &lt;rect class=&quot;series-1&quot; x=&quot;30&quot; y=&quot;214&quot; width=&quot;142&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;101&quot; y=&quot;250&quot; text-anchor=&quot;middle&quot;&gt;World points&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 176 245 H 226&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-2&quot; x=&quot;230&quot; y=&quot;214&quot; width=&quot;156&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;308&quot; y=&quot;240&quot; text-anchor=&quot;middle&quot;&gt;Inverse root pose&lt;/text&gt;
+          &lt;text x=&quot;308&quot; y=&quot;260&quot; text-anchor=&quot;middle&quot;&gt;world → root&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 390 245 H 440&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-3&quot; x=&quot;444&quot; y=&quot;200&quot; width=&quot;162&quot; height=&quot;90&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;525&quot; y=&quot;228&quot; text-anchor=&quot;middle&quot;&gt;Root moments&lt;/text&gt;
+          &lt;text x=&quot;525&quot; y=&quot;250&quot; text-anchor=&quot;middle&quot;&gt;mean · spread&lt;/text&gt;
+          &lt;text x=&quot;525&quot; y=&quot;272&quot; text-anchor=&quot;middle&quot;&gt;presence · count&lt;/text&gt;
+          &lt;path class=&quot;accepted&quot; d=&quot;M 38 336 H 682&quot;&gt;&lt;/path&gt;
+          &lt;text x=&quot;360&quot; y=&quot;366&quot; text-anchor=&quot;middle&quot;&gt;Invariant evidence under a common world/root translation&lt;/text&gt;
+        &lt;/svg&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;4&quot; aria-labelledby=&quot;pr104-slide-5-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Feature 2 · verified inference&lt;/div&gt;
+      &lt;h2 id=&quot;pr104-slide-5-title&quot;&gt;A score is admitted only when model and decision contracts agree&lt;/h2&gt;
+      &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 420&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-contract-title pr104-contract-desc&quot;&gt;
+        &lt;title id=&quot;pr104-contract-title&quot;&gt;Verified runtime and decision contract gate&lt;/title&gt;
+        &lt;desc id=&quot;pr104-contract-desc&quot;&gt;A content-verified bundle runtime and a bound decision input contract are compared before device transfer and model execution.&lt;/desc&gt;
+        &lt;rect class=&quot;series-1&quot; x=&quot;28&quot; y=&quot;46&quot; width=&quot;282&quot; height=&quot;150&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;52&quot; y=&quot;78&quot;&gt;Verified QhInferenceRuntime&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;104&quot;&gt;scorer state + configuration&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;126&quot;&gt;implementation package digest&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;148&quot;&gt;actor + learning contracts&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;52&quot; y=&quot;170&quot;&gt;target · candidate · mask · representation&lt;/text&gt;
+        &lt;rect class=&quot;series-2&quot; x=&quot;410&quot; y=&quot;46&quot; width=&quot;282&quot; height=&quot;150&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;434&quot; y=&quot;78&quot;&gt;Bound decision input contract&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;434&quot; y=&quot;104&quot;&gt;actor + learning identities&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;434&quot; y=&quot;126&quot;&gt;target descriptor provenance&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;434&quot; y=&quot;148&quot;&gt;candidate + mask semantics&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;434&quot; y=&quot;170&quot;&gt;oracle-upper-bound or deployment cohort&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 169 200 C 169 250 290 260 324 292&quot;&gt;&lt;/path&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 551 200 C 551 250 430 260 396 292&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-4&quot; x=&quot;274&quot; y=&quot;286&quot; width=&quot;172&quot; height=&quot;74&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;360&quot; y=&quot;316&quot; text-anchor=&quot;middle&quot;&gt;Contract equality gate&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;360&quot; y=&quot;338&quot; text-anchor=&quot;middle&quot;&gt;before transfer and forward&lt;/text&gt;
+        &lt;path class=&quot;accepted&quot; d=&quot;M 450 322 H 544&quot;&gt;&lt;/path&gt;
+        &lt;text x=&quot;618&quot; y=&quot;312&quot; text-anchor=&quot;middle&quot;&gt;admit&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;618&quot; y=&quot;336&quot; text-anchor=&quot;middle&quot;&gt;score on scorer device&lt;/text&gt;
+        &lt;path class=&quot;guard&quot; d=&quot;M 270 322 H 176&quot;&gt;&lt;/path&gt;
+        &lt;text x=&quot;102&quot; y=&quot;312&quot; text-anchor=&quot;middle&quot;&gt;reject&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;102&quot; y=&quot;336&quot; text-anchor=&quot;middle&quot;&gt;before model execution&lt;/text&gt;
+      &lt;/svg&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;5&quot; aria-labelledby=&quot;pr104-slide-6-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-slide-grid&quot;&gt;
+        &lt;div&gt;
+          &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Feature 3 · immutable online collection&lt;/div&gt;
+          &lt;h2 id=&quot;pr104-slide-6-title&quot;&gt;Content identities turn a mutable run into an auditable experiment&lt;/h2&gt;
+          &lt;ul class=&quot;pr104-list&quot;&gt;
+            &lt;li&gt;Population identity binds absolute path, schema, and exact byte SHA-256.&lt;/li&gt;
+            &lt;li&gt;Verification occurs immediately before collection.&lt;/li&gt;
+            &lt;li&gt;Round receipts preserve population, bundle, policy, shard, and cohort identities.&lt;/li&gt;
+            &lt;li&gt;Count inequalities reject impossible provenance.&lt;/li&gt;
+            &lt;li&gt;Post-bind mutation raises a dedicated stale-context error.&lt;/li&gt;
+          &lt;/ul&gt;
+        &lt;/div&gt;
+        &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 420&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-provenance-title pr104-provenance-desc&quot;&gt;
+          &lt;title id=&quot;pr104-provenance-title&quot;&gt;Content-addressed online collection chain&lt;/title&gt;
+          &lt;desc id=&quot;pr104-provenance-desc&quot;&gt;Verified population, model bundle, and policy identities flow into collection, a promoted shard, and an immutable receipt with constrained counts.&lt;/desc&gt;
+          &lt;rect class=&quot;series-1&quot; x=&quot;42&quot; y=&quot;40&quot; width=&quot;186&quot; height=&quot;70&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;135&quot; y=&quot;70&quot; text-anchor=&quot;middle&quot;&gt;Population manifest&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;135&quot; y=&quot;92&quot; text-anchor=&quot;middle&quot;&gt;path · schema · SHA-256&lt;/text&gt;
+          &lt;rect class=&quot;series-2&quot; x=&quot;42&quot; y=&quot;136&quot; width=&quot;186&quot; height=&quot;70&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;135&quot; y=&quot;166&quot; text-anchor=&quot;middle&quot;&gt;Behavior bundle&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;135&quot; y=&quot;188&quot; text-anchor=&quot;middle&quot;&gt;verified runtime identity&lt;/text&gt;
+          &lt;rect class=&quot;series-3&quot; x=&quot;42&quot; y=&quot;232&quot; width=&quot;186&quot; height=&quot;70&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;135&quot; y=&quot;262&quot; text-anchor=&quot;middle&quot;&gt;Proposal + selection&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;135&quot; y=&quot;284&quot; text-anchor=&quot;middle&quot;&gt;policy identities&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 232 75 C 296 75 286 170 334 170&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 232 171 H 334&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 232 267 C 296 267 286 190 334 190&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-4&quot; x=&quot;338&quot; y=&quot;128&quot; width=&quot;160&quot; height=&quot;104&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;418&quot; y=&quot;160&quot; text-anchor=&quot;middle&quot;&gt;Dense-valid&lt;/text&gt;
+          &lt;text x=&quot;418&quot; y=&quot;182&quot; text-anchor=&quot;middle&quot;&gt;online round&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;418&quot; y=&quot;206&quot; text-anchor=&quot;middle&quot;&gt;verify · collect · promote&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 502 180 H 548&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-5&quot; x=&quot;552&quot; y=&quot;116&quot; width=&quot;138&quot; height=&quot;128&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;621&quot; y=&quot;148&quot; text-anchor=&quot;middle&quot;&gt;Immutable receipt&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;621&quot; y=&quot;174&quot; text-anchor=&quot;middle&quot;&gt;all identities&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;621&quot; y=&quot;196&quot; text-anchor=&quot;middle&quot;&gt;explicit cohort&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;621&quot; y=&quot;218&quot; text-anchor=&quot;middle&quot;&gt;consistent counts&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;360&quot; y=&quot;330&quot; text-anchor=&quot;middle&quot;&gt;valid ≤ proposed · queried ≤ valid · labeled ≤ queried · persisted ≤ selected&lt;/text&gt;
+          &lt;path class=&quot;accepted&quot; d=&quot;M 106 358 H 614&quot;&gt;&lt;/path&gt;
+          &lt;text x=&quot;360&quot; y=&quot;388&quot; text-anchor=&quot;middle&quot;&gt;Reproducible: the receipt names the bytes actually consumed&lt;/text&gt;
+        &lt;/svg&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;6&quot; aria-labelledby=&quot;pr104-slide-7-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Feature 4 · honest learning lifecycle&lt;/div&gt;
+      &lt;h2 id=&quot;pr104-slide-7-title&quot;&gt;Training, checkpoint selection, diagnostics, and endpoint evidence are separate acts&lt;/h2&gt;
+      &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 390&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-lifecycle-title pr104-lifecycle-desc&quot;&gt;
+        &lt;title id=&quot;pr104-lifecycle-title&quot;&gt;Separated Q H learning and evaluation lifecycle&lt;/title&gt;
+        &lt;desc id=&quot;pr104-lifecycle-desc&quot;&gt;Fit consumes train and validation only, selects a checkpoint from its own stored aggregates, publishes an immutable bundle, and exposes held-out diagnostics separately from endpoint-policy evidence.&lt;/desc&gt;
+        &lt;rect class=&quot;series-1&quot; x=&quot;28&quot; y=&quot;80&quot; width=&quot;122&quot; height=&quot;72&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;89&quot; y=&quot;110&quot; text-anchor=&quot;middle&quot;&gt;Train&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;89&quot; y=&quot;132&quot; text-anchor=&quot;middle&quot;&gt;fresh optimizer&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 154 116 H 198&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-2&quot; x=&quot;202&quot; y=&quot;80&quot; width=&quot;142&quot; height=&quot;72&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;273&quot; y=&quot;110&quot; text-anchor=&quot;middle&quot;&gt;Select checkpoint&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;273&quot; y=&quot;132&quot; text-anchor=&quot;middle&quot;&gt;its own aggregates&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 348 116 H 392&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-3&quot; x=&quot;396&quot; y=&quot;80&quot; width=&quot;126&quot; height=&quot;72&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;459&quot; y=&quot;110&quot; text-anchor=&quot;middle&quot;&gt;Publish bundle&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;459&quot; y=&quot;132&quot; text-anchor=&quot;middle&quot;&gt;content-bound&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 526 116 H 570&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-4&quot; x=&quot;574&quot; y=&quot;80&quot; width=&quot;118&quot; height=&quot;72&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;633&quot; y=&quot;110&quot; text-anchor=&quot;middle&quot;&gt;Deploy scorer&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;633&quot; y=&quot;132&quot; text-anchor=&quot;middle&quot;&gt;eval mode&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 459 156 V 222&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-5&quot; x=&quot;352&quot; y=&quot;226&quot; width=&quot;214&quot; height=&quot;84&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;459&quot; y=&quot;256&quot; text-anchor=&quot;middle&quot;&gt;Explicit held-out diagnostic&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;459&quot; y=&quot;280&quot; text-anchor=&quot;middle&quot;&gt;immutable receipt · diagnostic only&lt;/text&gt;
+        &lt;path class=&quot;guard&quot; d=&quot;M 570 268 H 662&quot;&gt;&lt;/path&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;616&quot; y=&quot;294&quot; text-anchor=&quot;middle&quot;&gt;not endpoint evidence&lt;/text&gt;
+        &lt;path class=&quot;accepted&quot; d=&quot;M 32 350 H 688&quot;&gt;&lt;/path&gt;
+        &lt;text x=&quot;360&quot; y=&quot;378&quot; text-anchor=&quot;middle&quot;&gt;Scientific value: model selection cannot silently learn from the confirmatory test population&lt;/text&gt;
+      &lt;/svg&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;7&quot; aria-labelledby=&quot;pr104-slide-8-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-slide-grid&quot;&gt;
+        &lt;div&gt;
+          &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Feature 5 · replay evidence&lt;/div&gt;
+          &lt;h2 id=&quot;pr104-slide-8-title&quot;&gt;Discrete facts are exact; continuous measurements use declared tolerance&lt;/h2&gt;
+          &lt;ul class=&quot;pr104-list&quot;&gt;
+            &lt;li&gt;Counts, booleans, IDs, indices, masks, strings, and digests compare exactly.&lt;/li&gt;
+            &lt;li&gt;Only float-to-float comparisons use relative and absolute tolerance.&lt;/li&gt;
+            &lt;li&gt;Scientifically important scores and rewards remain numeric.&lt;/li&gt;
+            &lt;li&gt;Discrete arrays remain compact exact hashes.&lt;/li&gt;
+          &lt;/ul&gt;
+        &lt;/div&gt;
+        &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 390&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-golden-title pr104-golden-desc&quot;&gt;
+          &lt;title id=&quot;pr104-golden-title&quot;&gt;Golden comparator type semantics&lt;/title&gt;
+          &lt;desc id=&quot;pr104-golden-desc&quot;&gt;Discrete facts take the exact comparison path, floating measurements take the tolerance path, and cross-type numeric drift is rejected.&lt;/desc&gt;
+          &lt;rect class=&quot;series-1&quot; x=&quot;248&quot; y=&quot;30&quot; width=&quot;224&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;360&quot; y=&quot;66&quot; text-anchor=&quot;middle&quot;&gt;Golden field + actual field&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 360 96 V 134&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-2&quot; x=&quot;270&quot; y=&quot;138&quot; width=&quot;180&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;360&quot; y=&quot;174&quot; text-anchor=&quot;middle&quot;&gt;Same semantic type?&lt;/text&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 266 169 H 166&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;arrow&quot; d=&quot;M 454 169 H 554&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-3&quot; x=&quot;24&quot; y=&quot;132&quot; width=&quot;138&quot; height=&quot;74&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;93&quot; y=&quot;162&quot; text-anchor=&quot;middle&quot;&gt;Discrete&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;93&quot; y=&quot;184&quot; text-anchor=&quot;middle&quot;&gt;exact equality&lt;/text&gt;
+          &lt;rect class=&quot;series-4&quot; x=&quot;558&quot; y=&quot;132&quot; width=&quot;138&quot; height=&quot;74&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;627&quot; y=&quot;162&quot; text-anchor=&quot;middle&quot;&gt;Float&lt;/text&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;627&quot; y=&quot;184&quot; text-anchor=&quot;middle&quot;&gt;declared tolerance&lt;/text&gt;
+          &lt;path class=&quot;accepted&quot; d=&quot;M 93 210 V 276&quot;&gt;&lt;/path&gt;
+          &lt;path class=&quot;accepted&quot; d=&quot;M 627 210 V 276&quot;&gt;&lt;/path&gt;
+          &lt;rect class=&quot;series-5&quot; x=&quot;32&quot; y=&quot;280&quot; width=&quot;122&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;93&quot; y=&quot;316&quot; text-anchor=&quot;middle&quot;&gt;Reproducible&lt;/text&gt;
+          &lt;rect class=&quot;series-5&quot; x=&quot;566&quot; y=&quot;280&quot; width=&quot;122&quot; height=&quot;62&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+          &lt;text x=&quot;627&quot; y=&quot;316&quot; text-anchor=&quot;middle&quot;&gt;Numerically stable&lt;/text&gt;
+          &lt;path class=&quot;guard&quot; d=&quot;M 270 218 L 186 306&quot;&gt;&lt;/path&gt;
+          &lt;text class=&quot;muted-label&quot; x=&quot;300&quot; y=&quot;248&quot;&gt;int ↔ float drift rejected&lt;/text&gt;
+        &lt;/svg&gt;
+      &lt;/div&gt;
+    &lt;/section&gt;
+
+    &lt;section class=&quot;card pr104-slide&quot; data-slide=&quot;8&quot; aria-labelledby=&quot;pr104-slide-9-title&quot; hidden&gt;
+      &lt;div class=&quot;pr104-eyebrow text-small&quot;&gt;Minimal closeout&lt;/div&gt;
+      &lt;h2 id=&quot;pr104-slide-9-title&quot;&gt;Add two tiny proofs; defer everything that widens the scientific carrier&lt;/h2&gt;
+      &lt;div class=&quot;pr104-tradeoff&quot;&gt;
+        &lt;div&gt;
+          &lt;h3&gt;Do now&lt;/h3&gt;
+          &lt;div class=&quot;pr104-decision&quot;&gt;
+            &lt;span class=&quot;pr104-decision-mark&quot;&gt;1&lt;/span&gt;
+            &lt;div&gt;&lt;strong&gt;Finite-gradient regression&lt;/strong&gt;&lt;br&gt;&lt;span class=&quot;text-muted&quot;&gt;Run backward after masked NaN/Inf padding and assert every present parameter gradient is finite.&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;pr104-decision&quot;&gt;
+            &lt;span class=&quot;pr104-decision-mark&quot;&gt;2&lt;/span&gt;
+            &lt;div&gt;&lt;strong&gt;Transitive-digest regression&lt;/strong&gt;&lt;br&gt;&lt;span class=&quot;text-muted&quot;&gt;Hash a temporary package tree, change one nested source byte, and assert the digest changes.&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div&gt;
+          &lt;h3&gt;Defer deliberately&lt;/h3&gt;
+          &lt;div class=&quot;pr104-decision&quot;&gt;
+            &lt;span class=&quot;pr104-decision-mark defer&quot;&gt;—&lt;/span&gt;
+            &lt;div&gt;&lt;strong&gt;Hashing optimization&lt;/strong&gt;&lt;br&gt;&lt;span class=&quot;text-muted&quot;&gt;Benchmark only when latency matters; keep integrity checks intact until measured.&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;pr104-decision&quot;&gt;
+            &lt;span class=&quot;pr104-decision-mark defer&quot;&gt;—&lt;/span&gt;
+            &lt;div&gt;&lt;strong&gt;Candidate-local spatial carrier&lt;/strong&gt;&lt;br&gt;&lt;span class=&quot;text-muted&quot;&gt;Treat as a separate research patch with calibration, storage, provenance, and ablation ownership.&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;svg class=&quot;pr104-flow&quot; viewBox=&quot;0 0 720 180&quot; role=&quot;img&quot; aria-labelledby=&quot;pr104-close-title pr104-close-desc&quot;&gt;
+        &lt;title id=&quot;pr104-close-title&quot;&gt;Recommended closeout path&lt;/title&gt;
+        &lt;desc id=&quot;pr104-close-desc&quot;&gt;Two narrow regression tests complete literal review evidence without expanding architecture or research scope.&lt;/desc&gt;
+        &lt;rect class=&quot;series-1&quot; x=&quot;42&quot; y=&quot;54&quot; width=&quot;164&quot; height=&quot;70&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;124&quot; y=&quot;84&quot; text-anchor=&quot;middle&quot;&gt;Current PR value&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;124&quot; y=&quot;106&quot; text-anchor=&quot;middle&quot;&gt;all blockers fixed&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 210 89 H 272&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-3&quot; x=&quot;276&quot; y=&quot;54&quot; width=&quot;168&quot; height=&quot;70&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;360&quot; y=&quot;84&quot; text-anchor=&quot;middle&quot;&gt;Two narrow tests&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;360&quot; y=&quot;106&quot; text-anchor=&quot;middle&quot;&gt;no new behavior&lt;/text&gt;
+        &lt;path class=&quot;arrow&quot; d=&quot;M 448 89 H 510&quot;&gt;&lt;/path&gt;
+        &lt;rect class=&quot;series-5&quot; x=&quot;514&quot; y=&quot;54&quot; width=&quot;164&quot; height=&quot;70&quot; rx=&quot;10&quot;&gt;&lt;/rect&gt;
+        &lt;text x=&quot;596&quot; y=&quot;84&quot; text-anchor=&quot;middle&quot;&gt;Literal closure&lt;/text&gt;
+        &lt;text class=&quot;muted-label&quot; x=&quot;596&quot; y=&quot;106&quot; text-anchor=&quot;middle&quot;&gt;minimal complexity&lt;/text&gt;
+      &lt;/svg&gt;
+    &lt;/section&gt;
+  &lt;/div&gt;
+
+  &lt;div class=&quot;pr104-footer&quot;&gt;
+    &lt;div class=&quot;progress&quot; role=&quot;progressbar&quot; aria-label=&quot;Slide progress&quot; aria-valuemin=&quot;1&quot; aria-valuemax=&quot;9&quot; aria-valuenow=&quot;1&quot;&gt;
+      &lt;div class=&quot;progress-bar&quot; style=&quot;width: 11.111%;&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;viz-row pr104-nav&quot;&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn&quot; data-action=&quot;previous&quot; disabled&gt;Previous&lt;/button&gt;
+      &lt;span class=&quot;pr104-counter&quot; aria-live=&quot;polite&quot;&gt;1 / 9&lt;/span&gt;
+      &lt;button type=&quot;button&quot; class=&quot;btn btn-primary&quot; data-action=&quot;next&quot;&gt;Next&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&#x27;pr104-feature-value-deck&#x27;);
+      const slides = Array.from(root.querySelectorAll(&#x27;.pr104-slide&#x27;));
+      const previous = root.querySelector(&#x27;[data-action=&quot;previous&quot;]&#x27;);
+      const next = root.querySelector(&#x27;[data-action=&quot;next&quot;]&#x27;);
+      const counter = root.querySelector(&#x27;.pr104-counter&#x27;);
+      const progress = root.querySelector(&#x27;.progress&#x27;);
+      const progressBar = root.querySelector(&#x27;.progress-bar&#x27;);
+      let index = 0;
+
+      const render = () =&gt; {
+        slides.forEach((slide, slideIndex) =&gt; {
+          const active = slideIndex === index;
+          slide.classList.toggle(&#x27;is-active&#x27;, active);
+          slide.hidden = !active;
+        });
+        previous.disabled = index === 0;
+        next.disabled = index === slides.length - 1;
+        next.textContent = index === slides.length - 1 ? &#x27;Complete&#x27; : &#x27;Next&#x27;;
+        counter.textContent = `${index + 1} / ${slides.length}`;
+        progress.setAttribute(&#x27;aria-valuenow&#x27;, String(index + 1));
+        progressBar.style.width = `${((index + 1) / slides.length) * 100}%`;
+      };
+
+      previous.addEventListener(&#x27;click&#x27;, () =&gt; {
+        if (index &gt; 0) {
+          index -= 1;
+          render();
+        }
+      });
+      next.addEventListener(&#x27;click&#x27;, () =&gt; {
+        if (index &lt; slides.length - 1) {
+          index += 1;
+          render();
+        }
+      });
+      root.addEventListener(&#x27;keydown&#x27;, (event) =&gt; {
+        if (event.key === &#x27;ArrowLeft&#x27; &amp;&amp; index &gt; 0) {
+          index -= 1;
+          render();
+        }
+        if (event.key === &#x27;ArrowRight&#x27; &amp;&amp; index &lt; slides.length - 1) {
+          index += 1;
+          render();
+        }
+      });
+      render();
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handleLeave = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

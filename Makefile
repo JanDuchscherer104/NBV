@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -99,9 +99,15 @@ QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/__init__.py \
 	aria_nbv/data_handling/qh_data \
 	aria_nbv/lightning/qh_datamodule.py \
+	aria_nbv/lightning/qh_experiment.py \
 	aria_nbv/lightning/qh_module.py \
+	aria_nbv/oracle/environment.py \
+	aria_nbv/oracle/pipelines/online_qh.py \
 	aria_nbv/rollouts/qh_reader.py \
+	aria_nbv/rollouts/zarr_store.py \
 	aria_nbv/vin/models/__init__.py \
+	aria_nbv/vin/models/target_finite_horizon.py \
+	aria_nbv/vin/qh_bundle.py \
 	tests/data_handling/test_qh.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/data_handling/test_vin_offline_store.py \
@@ -112,28 +118,41 @@ QH_CI_RUFF_PATHS := \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/lightning/test_qh_datamodule.py \
+	tests/lightning/test_qh_dense_valid.py \
+	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_module.py \
 	tests/lightning/test_qh_fast_dev_run.py \
 	tests/lightning/test_qh_torchrun_smoke.py \
 	tests/lightning/qh_torchrun_worker.py \
+	tests/oracle/test_online_qh.py \
+	tests/rollouts/test_replay_oracle_golden_parity.py \
 	tests/targets/test_protocol.py \
+	tests/vin/test_target_finite_horizon.py \
 	tests/test_config_field_constraints.py \
+	../scripts/check_replay_oracle_golden.py \
+	../scripts/tests/test_check_replay_oracle_golden.py \
 	../scripts/tests/test_quartodoc_expand_config.py
 QH_CI_TESTS := \
 	tests/rollouts/test_qh_reader.py \
 	tests/data_handling/test_qh.py \
 	tests/lightning/test_qh_datamodule.py \
+	tests/lightning/test_qh_dense_valid.py \
+	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_module.py \
 	tests/lightning/test_qh_fast_dev_run.py \
 	tests/lightning/test_qh_torchrun_smoke.py \
+	tests/oracle/test_online_qh.py \
 	tests/targets/test_protocol.py \
 	tests/rollouts/test_zarr_store.py \
+	tests/rollouts/test_replay_oracle_golden_parity.py \
 	tests/rollouts/test_public_rollouts_api.py \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/vin/test_models_namespace.py \
+	../scripts/tests/test_check_replay_oracle_golden.py \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
+	tests/vin/test_target_finite_horizon.py \
 	tests/test_config_field_constraints.py \
 	../scripts/tests/test_quartodoc_expand_config.py
 QH_CI_PYTHON ?= uv run --extra dev python
@@ -746,6 +765,9 @@ qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff check $(QH_CI_RUFF_PATHS)
 	@cd $(PKG_DIR) && PYTHONPATH=.. $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(QH_CI_TESTS)
+
+replay-oracle-golden: ## Verify the frozen deterministic CPU replay/oracle/store fixture
+	@cd $(PKG_DIR) && uv run python ../scripts/check_replay_oracle_golden.py
 
 package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
