@@ -27,7 +27,7 @@ touched_owner_paths:
   - scripts/validate_agent_memory.py
 codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
 repo_object_format: sha1
-repo_head: 96b01d7679b33a668a3f37827f533585afa9338d
+repo_head: a285097dfe5ed30fe02fd30563cee7b7bccfd2e9
 repo_branch: "codex/scaffold-intent-pr2"
 worktree_kind: linked
 ---
@@ -47,20 +47,37 @@ implementation owners.
 - Preserved the current bytes of `issue-025` and `refactor-016`; neither record
   had a missing planned disposition requiring an edit.
 - Recorded the native debrief against the intentional pre-debrief
-  workpackage/evidence anchor `96b01d7679b33a668a3f37827f533585afa9338d` and
-  regenerated the derived debrief index. The later debrief/index correction
-  commit is intentionally excluded from the evidence links below.
+  implementation anchor `a285097dfe5ed30fe02fd30563cee7b7bccfd2e9` and
+  regenerated the derived debrief index after this source edit. The debrief and
+  index-only commits `46cae9f2f81b41fe63b13dad357d748405abb3f8` and
+  `2b35f323d46f20d96f43c7a8db782141bb56d45c` remain excluded from the evidence
+  links below.
 
 ## Findings
 
-- The controlled baseline routing snapshot
-  `.agents/work/routing-trials/dae2171918b9-96b01d7679b3/index.json` exited
-  one with `1/4` passes.
-- The controlled candidate snapshot
-  `.agents/work/routing-trials/96b01d7679b3-96b01d7679b3/index.json` exited
-  zero with `4/4` passes. Its comparison has `matched=true`, runner revision
-  `76d14c60b57a7e0757e7b99aeadd8a5104fe03e1`, identical per-ID prompt hashes,
-  no caps or timeouts, and clean trial checkouts.
+- Review fixes corrected proposal-disposition routing in `6a3cdab`, required
+  debrief commit provenance and a refactor receipt in `b8dcd7c`, hardened the
+  initial runner evidence path in `a3cd5e7`, authenticated artifacts and
+  canonical checkout/serialization receipts in `bd50eba`, and retained
+  bounded complete evidence in `a285097`.
+- The initial new-run snapshot
+  `.agents/work/routing-trials/6a3cdab23aba-bd50eba153b9/index.json` recorded
+  `3/4`: the 64-item event-evidence bound truncated a required trace. This
+  snapshot is preserved as defect evidence. The corrected baseline
+  `.agents/work/routing-trials/6a3cdab23aba-a285097dfe5e/index.json` records
+  `4/4`, and the candidate
+  `.agents/work/routing-trials/a285097dfe5e-a285097dfe5e/index.json` records
+  `4/4` with `comparison.matched=true`.
+- The candidate comparison uses runner revision
+  `abe5a1c9e9e4abde9712a07cd31f5dc5914c62a7`, Codex CLI `0.147.0`, identical
+  per-ID prompt hashes, no caps or timeouts, and clean canonical trial
+  checkouts. Both the corrected baseline and candidate use the same four trial
+  IDs; the candidate tests `a285097dfe5ed30fe02fd30563cee7b7bccfd2e9`.
+- Historical under the prior rubric, the original controlled snapshots remain
+  recorded as `.agents/work/routing-trials/dae2171918b9-96b01d7679b3/index.json`
+  with `1/4` and `.agents/work/routing-trials/96b01d7679b3-96b01d7679b3/index.json`
+  with `4/4`; that historical `1/4→4/4` evidence is not replaced by the
+  corrected rerun.
 - `todo-044` is resolved with the proof note below; `issue-025` remains open;
   `refactor-016` remains `in_progress`.
 - The proposal route is evidence-backed and proposal-only: helpers identify
@@ -70,14 +87,25 @@ implementation owners.
 
 ## Verification
 
+- The final focused routing suite passed `84` tests with
+  `aria_nbv/.venv/bin/python -m pytest scripts/tests/test_routing_trials.py -q`.
 - `make check-agent-memory` passed after index regeneration.
 - `make agents-db AGENTS_ARGS='validate'` passed.
-- `aria_nbv/.venv/bin/python -m pytest scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py scripts/tests/test_agent_governance_g002.py -q` passed.
+- Fresh live baseline and candidate routing trials ran immediately before this
+  debrief update. Their authenticated snapshots are
+  `.agents/work/routing-trials/6a3cdab23aba-a285097dfe5e/index.json` and
+  `.agents/work/routing-trials/a285097dfe5e-a285097dfe5e/index.json`; both
+  recorded `4/4`.
+- The fresh broader gate passed `175` tests with
+  `aria_nbv/.venv/bin/python -m pytest scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py scripts/tests/test_agent_governance_g002.py -q`.
+- `make scaffold-audit` reported `skills=12 errors=0 warnings=0`;
+  `make scaffold-audit-self-test` passed `33` self-tests and `27` migration
+  tests; Agents DB validation passed.
 - The full G002 work changed Python, guidance, memory, tests, and Agents DB
   owners; only the earlier closeout commit had no Python changes.
-- Final diff inspection showed only the requested todo/resolved lifecycle,
-  native debrief, and derived index paths; the implementation records remained
-  unchanged.
+- The pre-debrief implementation was committed at
+  `a285097dfe5ed30fe02fd30563cee7b7bccfd2e9`; after that commit, only this
+  debrief source and its derived index remain modified.
 
 ## Canonical-State Impact
 
@@ -105,3 +133,8 @@ completed lifecycle history.
 - [8acb111155c7632f2314ae0050cf13e1e2fc24f9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8acb111155c7632f2314ae0050cf13e1e2fc24f9) — WP14: repair debrief template and proposal-review SSOT
 - [86ef395e0a56a52278a2f3493b9a005f92830fae](https://github.com/JanDuchscherer104/ARIA-NBV/commit/86ef395e0a56a52278a2f3493b9a005f92830fae) — WP15: freeze/compare prompts and bound subprocess output
 - [96b01d7679b33a668a3f37827f533585afa9338d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/96b01d7679b33a668a3f37827f533585afa9338d) — WP16: strengthen residual triage
+- [6a3cdab23aba1c40aa888930797085fdd3fb7907](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6a3cdab23aba1c40aa888930797085fdd3fb7907) — review fix: correct proposal disposition routing
+- [b8dcd7cee4e42ab278a2b2d181d0bd6606d7cdd5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b8dcd7cee4e42ab278a2b2d181d0bd6606d7cdd5) — review fix: require debrief commit provenance
+- [a3cd5e7b0987a0c14d5174cd00ca680ab15e9a5c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a3cd5e7b0987a0c14d5174cd00ca680ab15e9a5c) — review fix: harden routing trial evidence
+- [bd50eba153b91ba2d371cc5691baa0184f3090cc](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bd50eba153b91ba2d371cc5691baa0184f3090cc) — review fix: authenticate routing trial receipts
+- [a285097dfe5ed30fe02fd30563cee7b7bccfd2e9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a285097dfe5ed30fe02fd30563cee7b7bccfd2e9) — review fix: retain complete routing evidence
