@@ -440,6 +440,81 @@ def test_linked_commit_cannot_modify_debrief_source(
     )
 
 
+def test_linked_commit_cannot_modify_debrief_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    index = root / ".agents/memory/index/debriefs.jsonl"
+    index.parent.mkdir(parents=True)
+    index.write_bytes(debrief_index.render_index(root))
+    _git(root, "add", str(index.relative_to(root)))
+    _git(root, "commit", "-qm", "modify debrief index")
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    source = root / ".agents/memory/history/2026/08/record.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "---\n\nBody\n",
+            f"---\n\n## Commits\n- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: index\n\nBody\n",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    assert any(
+        "creates or modifies the debrief index" in error
+        for error in validator.check_commit_links(
+            source, {"repo_object_format": "sha1", "repo_head": head}, date(2026, 8, 23)
+        )
+    )
+
+
+def test_merge_commit_cannot_modify_debrief_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    index = root / ".agents/memory/index/debriefs.jsonl"
+    index.parent.mkdir(parents=True)
+    index.write_bytes(debrief_index.render_index(root))
+    _git(root, "add", str(index.relative_to(root)))
+    _git(root, "commit", "-qm", "add debrief index")
+    _git(root, "checkout", "-qb", "side")
+    index.write_text(index.read_text(encoding="utf-8") + "side\n", encoding="utf-8")
+    _git(root, "add", str(index.relative_to(root)))
+    _git(root, "commit", "-qm", "side index change")
+    _git(root, "checkout", "-q", "main")
+    (root / "file").write_text("main\n", encoding="utf-8")
+    _git(root, "add", "file")
+    _git(root, "commit", "-qm", "main change")
+    _git(root, "merge", "--no-ff", "-m", "merge index change", "side")
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    source = root / ".agents/memory/history/2026/08/record.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "---\n\nBody\n",
+            f"---\n\n## Commits\n- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: merge\n\nBody\n",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    assert any(
+        "creates or modifies the debrief index" in error
+        for error in validator.check_commit_links(
+            source, {"repo_object_format": "sha1", "repo_head": head}, date(2026, 8, 23)
+        )
+    )
+
+
 def test_check_history_records_rejects_stale_post_rebase_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

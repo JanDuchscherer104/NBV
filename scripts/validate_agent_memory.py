@@ -97,6 +97,7 @@ RECEIPT_DISPOSITIONS = {
     "test-owned",
 }
 NONCANONICAL_RECEIPT_DESTINATIONS = {".agents/references/source_order.md"}
+DEBRIEF_INDEX_PATH = ".agents/memory/index/debriefs.jsonl"
 RECEIPT_SOURCE_COUNTS = {
     "docs/contents/thesis/roadmap.qmd": 10,
     "docs/contents/thesis/questions.qmd": 13,
@@ -599,31 +600,40 @@ def check_commit_links(
             source_path = path.resolve().relative_to(REPO_ROOT).as_posix()
         except ValueError:
             continue
-        source_changed = subprocess.run(
+        changed_paths = subprocess.run(
             [
                 "git",
-                "show",
-                "--format=",
+                "diff-tree",
+                "--root",
+                "--no-commit-id",
                 "--name-only",
                 "-r",
+                "-m",
                 "--find-renames",
                 label_oid,
                 "--",
                 source_path,
+                DEBRIEF_INDEX_PATH,
             ],
             cwd=REPO_ROOT,
             check=False,
             capture_output=True,
             text=True,
         )
-        if source_changed.returncode != 0:
+        if changed_paths.returncode != 0:
             errors.append(
                 f"{rel}: unable to inspect linked commit changes: {label_oid}"
             )
-        elif source_path in source_changed.stdout.splitlines():
-            errors.append(
-                f"{rel}: linked commit creates or modifies the debrief source: {label_oid}"
-            )
+        else:
+            changed = set(changed_paths.stdout.splitlines())
+            if source_path in changed:
+                errors.append(
+                    f"{rel}: linked commit creates or modifies the debrief source: {label_oid}"
+                )
+            if DEBRIEF_INDEX_PATH in changed:
+                errors.append(
+                    f"{rel}: linked commit creates or modifies the debrief index: {label_oid}"
+                )
     return errors
 
 
