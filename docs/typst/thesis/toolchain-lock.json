@@ -5,6 +5,10 @@
   },
   "material_sources": [
     {
+      "path": "docs/figures/branding/hm-logo.svg",
+      "sha256": "4627c36c077bfcda48b3351b2739fd0ad7f28315d6a48f5a4f64c77b1bbd3f7d"
+    },
+    {
       "path": "docs/ieee.csl",
       "sha256": "842a7b3f0266f92e28199104fc72fec64336564373c3a318260a43dbe2eb2a19"
     },
@@ -121,34 +125,6 @@
       "sha256": "813490008843162a5961b397ba5e4586e7e8796cb7fb7cc5a968e70ebb0751ca"
     },
     {
-      "path": "docs/typst/shared/data-layout-trees.typ",
-      "sha256": "8522f811a442f2f1d40176ced08315ea5dec0692a882b9f332aef2fcd2bb0598"
-    },
-    {
-      "path": "docs/typst/shared/data/paper_figures_oracle_labeler.toml",
-      "sha256": "e12db444bdb790c0bbeab3c3a1dc4a24ae02c511a8dcb33d1463a3fb29ef57b4"
-    },
-    {
-      "path": "docs/typst/shared/data/vin_offline_store_stats.json",
-      "sha256": "fb57d90603512e74a123c192b5c691c9da2af5bb8cca0938ff5419422f04ee92"
-    },
-    {
-      "path": "docs/typst/shared/data/vin_v3_01_vs_t41_summary.json",
-      "sha256": "ceab6ebdfb61bd23b8a310c990d3813542df2079cd68ca1eba8462f258b6d78a"
-    },
-    {
-      "path": "docs/typst/shared/data/wandb_rtjvfyyp_dynamics.json",
-      "sha256": "75a29e8ef9f26dc26e870b9aefc82a77615721e6a28db57ccdcd2c98c5e4987d"
-    },
-    {
-      "path": "docs/typst/shared/data/wandb_rtjvfyyp_summary.json",
-      "sha256": "f812499a8c3669bf4a17b114368b5f799af1eaee071c13f6afe20525dd87313f"
-    },
-    {
-      "path": "docs/typst/shared/data/wandb_top2_improvements.json",
-      "sha256": "c3dcc82dd4248c529ca12c3add2b3e975079442ba17d55b3de2e75c723f93df6"
-    },
-    {
       "path": "docs/typst/shared/equations.typ",
       "sha256": "5b113bbb74b014e0a7ba9cf614146294976b9333f06a5ae29ad2ac7f1b409147"
     },
@@ -229,10 +205,6 @@
       "sha256": "24b2d4b033ecbb38dd775c6502bd6e53185d87ed6238867c03e2fa452d8481c7"
     },
     {
-      "path": "docs/typst/shared/slide-template.typ",
-      "sha256": "0cb570d98c78a27948bdd784648b91eff0770234d483b8561b5abded1182576b"
-    },
-    {
       "path": "docs/typst/shared/style.typ",
       "sha256": "b713b9447d83bc6e2479c97ab2fe21d9d64d7bcc3602e18c8927f6b94dc44ff1"
     },
@@ -293,18 +265,6 @@
       "sha256": "f05f58d7a3705650c2ef5d82ef9033fc41a60818ed44830de0596e084e7622ba"
     },
     {
-      "path": "docs/typst/thesis/data/principal-claims.toml",
-      "sha256": "b0a6f15c0d7dd9f710a2df676af81f0fe2628ab728cf991a7c2567805b180dde"
-    },
-    {
-      "path": "docs/typst/thesis/data/report-bundle-fixture.json",
-      "sha256": "bab1bcd3ec2cc7700aa9b6e2e506cf5a3bfe5146974264057ef18b0fd13594bd"
-    },
-    {
-      "path": "docs/typst/thesis/data/report-bundle-invalid-missing-facts.json",
-      "sha256": "c26f3401482a3b509d48265b16b3b09853862c05b0d0a199c607675e7bd82a64"
-    },
-    {
       "path": "docs/typst/thesis/development/m1-contract-report.typ",
       "sha256": "8b0e9d6077cc8f9779d9cc4ff67ef9910f5596d4ad36a60c3942802d7c399bd7"
     },
@@ -325,236 +285,28 @@
       "sha256": "38ff11167158e85aa0ced7bf31960b437a4874b874a07679f6137a9256f839da"
     },
     {
-      "path": "docs/typst/thesis/figures/actor_oracle_boundary.typ",
-      "sha256": "de18fc434797437af85dc6eee07ed01221e9e64f17bc5e76215053e5125fcf08"
-    },
-    {
       "path": "docs/typst/thesis/figures/candidate_generation_geometry.pdf",
       "sha256": "3d5d19b638bda84a770e1d633914393070d2b4eea6641ef42e190b88384c1e2c"
-    },
-    {
-      "path": "docs/typst/thesis/figures/candidate_generation_geometry.typ",
-      "sha256": "79062f53b70bb5f107cf810baf9d8f2dbceff79b51291fbfbff3c35462629033"
-    },
-    {
-      "path": "docs/typst/thesis/figures/candidate_scene_primitives.typ",
-      "sha256": "244a1213d28b0f32148b6bffda9d71294ea20e3b0158b8947c02400e48cf7598"
-    },
-    {
-      "path": "docs/typst/thesis/figures/data/candidate_scene_81286_000035.json",
-      "sha256": "bd1fb9c4792f25f0efbc385a7c3297953d0bdf146027c663f23af0b56a8b57ff"
-    },
-    {
-      "path": "docs/typst/thesis/figures/data/candidate_scene_81286_000035_oblique.png",
-      "sha256": "142c3f5c4b305e548dc0846430808bccc9220384d04ebb6c6b0c99e257289c86"
-    },
-    {
-      "path": "docs/typst/thesis/figures/data/candidate_scene_81286_000035_top.png",
-      "sha256": "55e14ca34f337bc08bc5bcb2a4dfe26b4d6199e26b534aa337caa30d25c2149c"
-    },
-    {
-      "path": "docs/typst/thesis/figures/data/directional_memory_81286_000024_inst128.json",
-      "sha256": "42fecb6486ce41620f423e4a52a436f32333377a052fe8f316c9e4d641bb06b1"
-    },
-    {
-      "path": "docs/typst/thesis/figures/data/point_mesh_metric_fixture.json",
-      "sha256": "e03ec47f48931a07448dac67df4407450c3aa508cecebc34f0f577bbc7f03021"
     },
     {
       "path": "docs/typst/thesis/figures/directional_memory_view_novelty.pdf",
       "sha256": "37ca931d1f63285238366b32010db57dd91b15ff3cedde9a2acc2ab210a9b230"
     },
     {
-      "path": "docs/typst/thesis/figures/directional_memory_view_novelty.typ",
-      "sha256": "988649487161599ff171fabf3a969b29ae5cd485dd5b84ee661a9c9cba5a6719"
-    },
-    {
-      "path": "docs/typst/thesis/figures/feature_bank_query_pools.pdf",
-      "sha256": "ae08eb65e4ae6d93f55835092ad72e647260e032ef84f5ad32b7989a393e0ff0"
-    },
-    {
-      "path": "docs/typst/thesis/figures/feature_bank_query_pools.typ",
-      "sha256": "16bca2a4ab299673facb67b880bd5e8adfd5eceffe1fbd1a6d8128d7c979092a"
-    },
-    {
       "path": "docs/typst/thesis/figures/oracle_lookahead_tree.pdf",
       "sha256": "3948b512bf710b9a178fb438a2515cf659b85a78e8c0f44310a7e1ef30a06471"
-    },
-    {
-      "path": "docs/typst/thesis/figures/oracle_lookahead_tree.typ",
-      "sha256": "ef148096a3c6689acc6d4ce746a08f6c537b98a181ae57441b0ba8fb89d053ec"
-    },
-    {
-      "path": "docs/typst/thesis/figures/oracle_target_task_sampler_contract.mmd",
-      "sha256": "d5c469a59be5aa8695315941f81cf38d86c2db37e60b88eebe7c91a4496d7c78"
-    },
-    {
-      "path": "docs/typst/thesis/figures/oracle_target_task_sampler_contract.pdf",
-      "sha256": "e63b7ee5412c446eb192aa0df3560d19d215045f7c72e3522a426c9a05bf8daa"
-    },
-    {
-      "path": "docs/typst/thesis/figures/oracle_target_task_sampler_contract.svg",
-      "sha256": "396218665059d5c3a2c10d7a82b368947a2db40e444eda05f92bcc2e21c23f19"
-    },
-    {
-      "path": "docs/typst/thesis/figures/proposal_system_flow.mmd",
-      "sha256": "bb9531d5150e31650bb85c5ab531532324c0c218a3617543a79b5fedb6ebca1c"
-    },
-    {
-      "path": "docs/typst/thesis/figures/proposal_system_flow.pdf",
-      "sha256": "dc5496c70909c1538a7b445ccd59eab8c3f6de97d30562ef3fd5bafd4da5b6d5"
-    },
-    {
-      "path": "docs/typst/thesis/figures/proposal_system_flow.png",
-      "sha256": "68a9a7a2a9173786811a1979634b27dd4a3998a372b153715ddc9754b30093b3"
-    },
-    {
-      "path": "docs/typst/thesis/figures/proposal_system_flow.svg",
-      "sha256": "922f0d12ed119f78420c867c72f5ef5b03843fe588b66c875b5b68ef2252ec42"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.mmd",
-      "sha256": "189b527e09afa6c25c9b19ce2a1f6dd8ab45d53a0d65af822a949e6b156aa762"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.pdf",
-      "sha256": "c77078128e3d60a31cdbfa964f91bc9a12cdb3755903369eeccadb5cdc48cdc8"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.svg",
-      "sha256": "bb951460058b60287c90453c04f28f08f2e8e115e9a4c1d77c90954fe5e4c5d3"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_candidate_query_architecture.pdf",
-      "sha256": "d73e978df84c81e57b8ebd83b7f528738eed2c47e97315a216c4d8cc8e171008"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_candidate_query_architecture.typ",
-      "sha256": "a87d0660767ecad282f5264090813c1f7b53ef9a5afadce3aa166a1de5d136d8"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_directional_memory.mmd",
-      "sha256": "838babe6210babf9d3d2c52ddfe7223c8eef1975014841344db14877fb337ff2"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_directional_memory.pdf",
-      "sha256": "c10a98756f4a8706e690fa52117401aaf7a28ae689b0f0e10158640c8d93c74b"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_directional_memory.svg",
-      "sha256": "307b28b21507b769b543dc30a8c61712e6df65be6f7ce1a4a616e91836307ba9"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_learning_evidence_loop.pdf",
-      "sha256": "58c57c27c4dbd7b22c8f4542a9a47ae580f0fa56b3453b88243a881c7183d675"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_learning_evidence_loop.typ",
-      "sha256": "136a74196de30b98dc63710c31fa17b2a55ef09e495f1567b50d393d004996b7"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.mmd",
-      "sha256": "4a0ebec8c6c442596c83d165525f379c17f8fdb56e8cbe192ddb519b91c5cc49"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.pdf",
-      "sha256": "7d90589a2dd3b8b7cd73151cfbe892b7600437bf70be4ad88ac3445dcdd32c4e"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.svg",
-      "sha256": "681cb17a48bd1108aec1022b094e0c1c6f1f071bd3a75236cbc18120105b15a5"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_symmetry_acceptance_contract.pdf",
-      "sha256": "6fd1a97608d4d34fd185233b568cab4595791732f337284848e77bf985d197b4"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_symmetry_acceptance_contract.typ",
-      "sha256": "e7d1359ae4186ff17e60c7259a474f0850e84c969d50ded8bdf60c4aee257bc9"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_symmetry_contract.mmd",
-      "sha256": "99a3dac381b73cff61bb544f63ee2f70994ddb1df4523f3536d69d25be7e886c"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_symmetry_contract.pdf",
-      "sha256": "d88fbe092b06abb227d1d8b9d2e40e814b1156ae0a749c412d257df28794e591"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_symmetry_contract.png",
-      "sha256": "9f6b06764de0095ae0031af3402ad8908844dc421584d2aad7904fc904fb750e"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_symmetry_contract.svg",
-      "sha256": "77ffce9ac5cd0b5fe1e9127f2ccd80d2df96b6dc66f0a86087681e2ba1f99024"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.mmd",
-      "sha256": "4481cfe7b4518eb3ad5226303e3de64e5b7809685f2334728c87a56c66018a66"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.pdf",
-      "sha256": "f40b6cc2bdfcfc4cdd195b7ddf7e729802b6e4cff6270b8c47417ffad58405db"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.svg",
-      "sha256": "69e6f9915f1409ab102324007bc238964eadb20e48a09c56687d41ffec730252"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd",
-      "sha256": "2faebb760c476bae2233c89a8571dc6d0bb3a5178cd3dad81fac18e5267ffe43"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.pdf",
-      "sha256": "253c709459f2514eb3c332f34776220bf912160e8778d6ed7bf7fdf8df45158c"
-    },
-    {
-      "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.svg",
-      "sha256": "d386eae85a35b329007c8e928ae2e46be9db64289c8154b58dadbaf67ac46f7a"
     },
     {
       "path": "docs/typst/thesis/figures/replay_lineage_relations.pdf",
       "sha256": "bab8b7c51fcec4e004f20e3fc8278c790af2f8d98f2238ce7f62dcaa88a29629"
     },
     {
-      "path": "docs/typst/thesis/figures/replay_lineage_relations.typ",
-      "sha256": "b295742ce7439155ffa07503912b5cb23fba813dce443f1802c03177a1cc8c60"
-    },
-    {
-      "path": "docs/typst/thesis/figures/rollout_replay_doubleq_process.pdf",
-      "sha256": "85d4ed10de14e2bf3e1413c328c38721a5b63d0f3070a9aa3c05a89e3e660a20"
-    },
-    {
-      "path": "docs/typst/thesis/figures/rollout_replay_doubleq_process.typ",
-      "sha256": "03ce299372268e1d22f8ececa789f0cd30d2c277e74828640e5dbd72f1610dff"
-    },
-    {
-      "path": "docs/typst/thesis/figures/scripts/export_candidate_scene_geometry.py",
-      "sha256": "2126c592bedc1957b52a089c5f2400196d051ea90c5320ed769ea9f39299f020"
-    },
-    {
-      "path": "docs/typst/thesis/figures/scripts/export_directional_memory_geometry.py",
-      "sha256": "91de7ac4965ba9a6801a013b556bcf9287a83e96661fdac328bde2d521303d60"
-    },
-    {
-      "path": "docs/typst/thesis/figures/scripts/export_point_mesh_metric_fixture.py",
-      "sha256": "7eb9adf02a8568849ad35090e7fd1c9305316f6694e057715abb9fa7e3e5a79d"
-    },
-    {
       "path": "docs/typst/thesis/figures/target_rri_point_mesh_geometry.pdf",
       "sha256": "4396055a68f1bf4a3825ea7bbf50dacc2c8973c26dd312ff339ea846d334d6a7"
     },
     {
-      "path": "docs/typst/thesis/figures/target_rri_point_mesh_geometry.typ",
-      "sha256": "f47e5392e5f50e850a1ed0b78aa5ea0859808ba603717a2c264c15fcfab5b426"
-    },
-    {
       "path": "docs/typst/thesis/figures/target_task_sampler_contract.pdf",
       "sha256": "9d8962304776f7269913765ffa8fdedeb9f355796d4561678d27cfaad8886b36"
-    },
-    {
-      "path": "docs/typst/thesis/figures/target_task_sampler_contract.typ",
-      "sha256": "a5c5a4c4fb8c353a4790afb529625cf7bb3211fdc27371be07de3e21dfc162b4"
     },
     {
       "path": "docs/typst/thesis/glossary-overrides.typ",
@@ -661,18 +413,6 @@
       "sha256": "9d8bd8ecbbbfd737eb5b50a3febd39772f163a835be895378306beca7b220305"
     },
     {
-      "path": "docs/typst/thesis/sections/thesis-questions.md",
-      "sha256": "330448f037bcd3b989faa5186f8685809b51c3a4f6b65a8d84668888bc8019f1"
-    },
-    {
-      "path": "docs/typst/thesis/template/LICENSE",
-      "sha256": "902bddf79bcde1dbfcb52516744ccaf29cd5296e7fda0805cd049372d3e6eb23"
-    },
-    {
-      "path": "docs/typst/thesis/template/UPSTREAM.md",
-      "sha256": "32d169ccbbf006cc21fc6015ddd123c553d72158fd80504ee3f877f6d1c21c8b"
-    },
-    {
       "path": "docs/typst/thesis/template/layout/abstract.typ",
       "sha256": "9dc6f735b543432e9bfbfa479b77b8d70a5729b79a52107236581065d67c8564"
     },
@@ -681,16 +421,8 @@
       "sha256": "4f99a50818d68f3dfee0128e030ac3d282f8873e1d4bd3329bcf6fdf67824109"
     },
     {
-      "path": "docs/typst/thesis/template/layout/appendix.typ",
-      "sha256": "fd7c316685b3f6630a42e3b7598c462547404bf743649325c3f8816be235b54a"
-    },
-    {
       "path": "docs/typst/thesis/template/layout/branding.typ",
       "sha256": "7a9e267bc57fceb98f22f9bf40afc4e26ecd8cfea528a94d65edc86dc69bf5af"
-    },
-    {
-      "path": "docs/typst/thesis/template/layout/cover.typ",
-      "sha256": "95f39df5f23ef1a44f2a7de45bfef9494d74840c10383831bc8c55d4ef789f06"
     },
     {
       "path": "docs/typst/thesis/template/layout/disclaimer.typ",
@@ -701,20 +433,12 @@
       "sha256": "a6e4514da63f3f167293006881c506e51f44a533951a59ad4c335d688afcb39d"
     },
     {
-      "path": "docs/typst/thesis/template/layout/proposal_template.typ",
-      "sha256": "5ffd5b078e00a89c5a467fe7c361611558e25467baec794f699d287d5b76450a"
-    },
-    {
       "path": "docs/typst/thesis/template/layout/thesis_template.typ",
       "sha256": "4cd4b8ef627f3d74e5f8da2a39c62ea7da5eb0489c2fcb92467a2378cef41874"
     },
     {
       "path": "docs/typst/thesis/template/layout/titlepage.typ",
       "sha256": "eb8a58f1d73d132faf7412edc2c13c29ff8c5c10b036c4abbf04c2288b2eb9dd"
-    },
-    {
-      "path": "docs/typst/thesis/template/layout/titlepage_table.typ",
-      "sha256": "1c758a53f4bf715e2028e2fd6bba34598876f9cee6f2f508c694b321f24bd311"
     },
     {
       "path": "docs/typst/thesis/template/layout/transparency_ai_tools.typ",
@@ -731,67 +455,11 @@
     {
       "path": "docs/typst/thesis/template/utils/print_page_break.typ",
       "sha256": "ec509934a5e1b73c419b5fb30d42dd92f7da60d773c198749fc151ac4f08aa0f"
-    },
-    {
-      "path": "docs/typst/thesis/tests/marker-development.typ",
-      "sha256": "98b5c469cf5465417768c428d721839e5465edeb712e9ffaac0a812022509eff"
-    },
-    {
-      "path": "docs/typst/thesis/tests/marker-submission.typ",
-      "sha256": "1dbf2ad0f1a970db00104881c87093e1ffd32bb1522162879ced3a9bf0c4500b"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-empty-disposition.typ",
-      "sha256": "58958bbf253241465eb73181406d448c17345a08252244c72c4e6945b259b523"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-empty-gate.typ",
-      "sha256": "2da46bb7c52bc69cb45ef83bb42ff2d9d6128f5c6765e3a0e39c1baf691dbb46"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-empty-summary.typ",
-      "sha256": "a8d800c703315c6caa5385ff184e032015a1fda61223b9819c4175153aa6b448"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-empty-target.typ",
-      "sha256": "3934eb0035510c436980344fe0e7c8b8b687129c3e35edf5d8d7bc941ec522e7"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-empty.typ",
-      "sha256": "0bfd9f8a4781b1791a9c3c947b8bcffecf894fb07b4c5baa7608887357a4547d"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-missing.typ",
-      "sha256": "e66dcf8b5f994062acbc0cb446bbba41bda0444c76eddcd708112c17e64de0d8"
-    },
-    {
-      "path": "docs/typst/thesis/tests/promotion-invalid-unknown.typ",
-      "sha256": "e5b8cbb0c7f2aeff281264e2e44facbf8bbe7d3bbda4006a9d9d3e711177e80d"
-    },
-    {
-      "path": "docs/typst/thesis/tests/release-development.typ",
-      "sha256": "fc20a8d3e1b064d778ed56e37b4e8ce4c97f86f5d0de4b291645fa8838420446"
-    },
-    {
-      "path": "docs/typst/thesis/tests/report_data_smoke.typ",
-      "sha256": "a0f8fe74dc871507b3acd423842246debc968809b9d2440f44d755e187340e3a"
-    },
-    {
-      "path": "docs/typst/thesis/tests/status-marker-submission.typ",
-      "sha256": "15afb0d6cddb5974546a2badb21e725979c8205ec36febbdaaba33707d911936"
-    },
-    {
-      "path": "docs/typst/thesis/tests/todo-marker-development.typ",
-      "sha256": "11126953f00714211e743b946835859682acd6e2c962abd1656ce74e345e18b8"
-    },
-    {
-      "path": "docs/typst/thesis/tests/todo-marker-submission.typ",
-      "sha256": "8becb87189708955c223629f1c76b0a3b26d246c5dee40807e9a88d6f3ac9588"
     }
   ],
   "report_schema_version": "aria-nbv-thesis-report-v2",
   "schema_version": "thesis-toolchain-lock-v1",
-  "source_revision": "d52e9532eab4c6e077ecd95afeb4af72829b8ec1",
+  "source_revision": "91f99779111dfd930af713b76dff16f35a46b51b",
   "toolchain": {
     "compiler": {
       "binary_sha256": "3ac6b84150c50a694d44134dc201624fbdc44f705b9992124a13474ddf8c6413",

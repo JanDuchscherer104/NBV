@@ -9,11 +9,11 @@ date_checked = "2026-08-23"
 
 [toolchain_lock]
 path = "docs/typst/thesis/toolchain-lock.json"
-sha256 = "10f8ed7c6e9b63914dbfdd4f0810e70616cdb36e85a1b3c42601b944aa17358e"
+sha256 = "67cc90adfe3b06acd72c0c3224f076a52692ad3c8fdddb2bc1bbfda8680f1f0d"
 sha256_state = "verified"
 required_state = "generated_lock_sha256_and_compiler_identity_verified"
-current_state = "verified_against_G007_release_provenance_source_commit"
-blocker_rationale = "No blocker: the generated lock records source_revision d52e9532eab4c6e077ecd95afeb4af72829b8ec1 exactly, and its SHA-256 and compiler identity were verified against the G007 release-provenance source commit."
+current_state = "verified_against_G008_release_provenance_source_commit"
+blocker_rationale = "No blocker: the generated lock records source_revision 91f99779111dfd930af713b76dff16f35a46b51b exactly, and its SHA-256 and compiler identity were verified against the G008 release-provenance source commit."
 
 [submission]
 required_state = "human_and_confirmatory_evidence_required"
