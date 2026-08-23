@@ -1,0 +1,185 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Opened the app ownership guide, scientific-interpretation reference, and stored-rollouts implementation.",
+          "event_index": 1,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected the stored-rollouts rendering code, canonical metric names, relevant tests, and equations references.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Opened inspection aggregation code, the shared equations owner, and targeted projection-laziness tests.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Located the temporal explorer and ScientificExplanation implementation points.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Verified the checkout was clean and git diff --exit-code succeeded.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "ec23d98b42c804dcc95fd0399964a6e3a9e6b525",
+      "tested_commit": "ec23d98b42c804dcc95fd0399964a6e3a9e6b525",
+      "trial_id": "app-scientific-metric-interpretation",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "9ebe3eeb834685a0f29794b3d7c15c867040057f8c7b2f872bfb72ac7e00571e",
+  "checkout_digest_before": "9ebe3eeb834685a0f29794b3d7c15c867040057f8c7b2f872bfb72ac7e00571e",
+  "checkout_digest_expected": "9ebe3eeb834685a0f29794b3d7c15c867040057f8c7b2f872bfb72ac7e00571e",
+  "elapsed_seconds": 65.39127802848816,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,220p' /home/jd/.agents/skills/developing-with-streamlit/SKILL.md && rg -n \\\"scientific|explanation|RRI|relative\\\" . --glob '\"'!graphify-out/**'\"' --glob '\"'!*.lock'\"' | head -160\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n \\\"stored_rollout|scientific explanation|RRI|Streamlit\\\" /home/jd/.codex/memories/MEMORY.md | head -40; python /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-ec23d98b42c8-8riqt7z5/checkout; sed -n '1,220p' aria_nbv/aria_nbv/app/AGENTS.md; sed -n '1,220p' aria_nbv/aria_nbv/app/references/scientific-interpretation.md; sed -n '1,230p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '760,880p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; sed -n '1380,1475p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; rg -n \\\"one_step_target_rri|cumulative_target_rri|selected_target_rri|target_root_gain|temporal_metric\\\" aria_nbv/aria_nbv/rollouts aria_nbv/tests docs/typst/shared/equations.typ | head -180; git status --porcelain=v1\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1020,1125p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; sed -n '1,125p' aria_nbv/aria_nbv/rollouts/inspection.py; sed -n '55,78p' docs/typst/shared/equations.typ; sed -n '240,330p' aria_nbv/tests/rollouts/test_inspection.py; sed -n '1,80p' aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n \\\"def _render_temporal_explorer|ScientificExplanation\\\\(\\\" aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py | head -30; sed -n '900,1045p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; ls -d .venv aria_nbv/.venv 2>/dev/null || true; git diff --stat; git status --short\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"uv run pytest -q aria_nbv/tests/rollouts/test_inspection.py -k 'temporal_metric_summary_rows or rollout_step_objective_rows' aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py -k 'temporal'\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '395,418p' aria_nbv/aria_nbv/rollouts/zarr_contract.md; sed -n '1018,1075p' aria_nbv/aria_nbv/rollouts/inspection.py; git status --porcelain=v1; git diff --exit-code\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 7,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 7,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 3117,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "4704df6584961ba5af20879a617666d06958f36cb12c8fa5cc7789205c7ac75e",
+  "returncode": 0,
+  "rubric_commit": "ec23d98b42c804dcc95fd0399964a6e3a9e6b525",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/ec23d98b42c8-ec23d98b42c8/app-scientific-metric-interpretation__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-ec23d98b42c8-8riqt7z5/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787519487.9831915,
+  "tested_commit": "ec23d98b42c804dcc95fd0399964a6e3a9e6b525",
+  "timed_out": false,
+  "trial_id": "app-scientific-metric-interpretation",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"_stored_rollouts_page.py owns the Streamlit explanation; inspection.py owns metric decoding and aggregation; zarr_contract.md and equations.typ own persisted fields and notation.\",\"handoff\":null,\"loaded_guides\":[\"agent-behavior\",\"developing-with-streamlit\",\"aria_nbv/aria_nbv/app/AGENTS.md\",\"aria_nbv/aria_nbv/app/references/scientific-interpretation.md\"],\"opened_references\":[\"aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py::_render_temporal_explorer\",\"aria_nbv/aria_nbv/rollouts/inspection.py::temporal_metric_summary_rows\",\"aria_nbv/aria_nbv/rollouts/zarr_contract.md\",\"docs/typst/shared/equations.typ\"],\"outcome\":\"Scoped decision: explain the selected rollout\\u2019s finite state-relative RRI as a factual, depth-indexed diagnostic\\u2014not as a causal policy effect or verdict. The app\\u2019s explanation states: median and linearly interpolated IQR by rollout depth; finite_count/total_count and missing fraction are exposed; cumulative_target_rri is the running sum of selected state-relative RRI, while marginal/one-step target RRI is the candidate-or-selected state-relative improvement. Valid comparisons require matching upstream policy/recipe/cohort conditions; selected-action provenance remains descriptive. Failure signals are wide IQR, small finite counts, abrupt missingness, or divergent strata, which require row-level inspection and do not by themselves establish a policy win. No invented fields or formulas were used, and no checkout mutation occurred.\\n\\n\",\"selected_skill\":\"Streamlit scientific-explanation branch\",\"selected_verification\":\"The branch admits only supported fields present in the selected step table with at least one non-null value, then aggregates finite values via temporal_metric_summary_rows. The canonical RRI fields are selected_target_rri, marginal_target_rri, cumulative_target_rri, and one_step_target_rri. RRI is dimensionless; missing/non-finite values are counted and excluded, never zero-filled or interpolated. The bounded pytest proof was attempted but could not run because pytest is not installed; git diff --exit-code passed and the checkout remained clean.\",\"tool_calls\":[\"rg/sed exact-owner inspection\",\"git diff --exit-code\",\"uv run pytest -q ... (blocked: pytest executable unavailable)\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

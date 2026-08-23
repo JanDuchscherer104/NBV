@@ -1,0 +1,209 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": false,
+    "reason": "semantic fail",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The route inspected Streamlit, scientific explanation, RRI, and rollout-store surfaces.",
+          "event_index": 1,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The route opened the app and rollout ownership guides and inspected the stored-rollouts page and inspection implementation.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The route opened the RRI returns implementation, Zarr store, and Zarr contract.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The targeted pytest validation was attempted but failed because pytest was unavailable.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The checkout remained clean after the trial.",
+          "event_index": 8,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [
+        "No forbidden invented units or links were observed.",
+        "No raw tables preceding interpretation were observed."
+      ],
+      "missing_requirements": [
+        "The passed-validation readiness verdict and one-sentence interpretation did not lead the response.",
+        "The required representative contract owner aria_nbv/aria_nbv/app/references/scientific-interpretation.md was not opened or identified.",
+        "The required equation owner docs/typst/shared/equations.typ was not opened or identified.",
+        "Runtime validation did not pass; the attempted pytest command failed because pytest was unavailable."
+      ],
+      "rubric_commit": "ec23d98b42c804dcc95fd0399964a6e3a9e6b525",
+      "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+      "trial_id": "app-scientific-metric-interpretation",
+      "verdict": "fail"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 69.4893479347229,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n \\\"Streamlit|scientific.explanation|explanation|RRI|rollout store\\\" /home/jd/.codex/memories/MEMORY.md | head -80 && sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,220p' /home/jd/.agents/skills/developing-with-streamlit/SKILL.md\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-fa8c87bc4d7e-rf0sjfp2/checkout; git status --short; find aria_nbv -name AGENTS.md -o -path '*stored_rollouts*' | sort | head -80; rg -n \\\"scientific|explain|verdict|RRI|finite|state.relative|state-relative\\\" aria_nbv/aria_nbv/app aria_nbv/aria_nbv/rollouts aria_nbv/tests | head -240\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-fa8c87bc4d7e-rf0sjfp2/checkout; sed -n '1,130p' aria_nbv/aria_nbv/app/AGENTS.md; sed -n '1,140p' aria_nbv/aria_nbv/rollouts/AGENTS.md; sed -n '740,930p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; sed -n '1,125p' aria_nbv/aria_nbv/rollouts/inspection.py\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '2800,2915p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; rg -n \\\"ScientificExplanation|verdict|state-relative|state relative|relative\\\" aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py aria_nbv/aria_nbv/rollouts/inspection.py aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py | head -160; git status --porcelain=v1\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '120,170p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; sed -n '930,1085p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; rg -n \\\"state-relative|state_relative|relative RRI|RRI.*state|cumulative_target_rri|selected_target_rri\\\" aria_nbv/aria_nbv/rollouts aria_nbv/aria_nbv/app/panels aria_nbv/tests | head -180; rg -n \\\"def temporal|temporal_.*rows|summarize.*metric|metric.*rows\\\" aria_nbv/aria_nbv/rollouts/inspection.py | head -80\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '400,445p' aria_nbv/aria_nbv/rollouts/zarr_contract.md; sed -n '1010,1160p' aria_nbv/aria_nbv/rollouts/inspection.py; sed -n '200,245p' aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py; sed -n '1,110p' aria_nbv/aria_nbv/rri_metrics/__init__.py 2>/dev/null || true; rg -n \\\"def selected_target_rri|state-relative\\\" aria_nbv/aria_nbv/rri_metrics aria_nbv/aria_nbv | head -80\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,125p' aria_nbv/aria_nbv/rri_metrics/returns.py; sed -n '1,90p' aria_nbv/aria_nbv/rollouts/zarr_store.py; sed -n '220,270p' aria_nbv/aria_nbv/rollouts/zarr_contract.md; sed -n '230,260p' aria_nbv/tests/rollouts/test_inspection.py; git diff --stat; git status --short\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"uv run pytest tests/rollouts/test_inspection.py -k 'objective_and_sampling_fields' -q\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git status --porcelain=v1; git diff --exit-code -- .'",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 9,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 9,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 3994,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "4704df6584961ba5af20879a617666d06958f36cb12c8fa5cc7789205c7ac75e",
+  "returncode": 0,
+  "rubric_commit": "ec23d98b42c804dcc95fd0399964a6e3a9e6b525",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/fa8c87bc4d7e-ec23d98b42c8/app-scientific-metric-interpretation__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-fa8c87bc4d7e-rf0sjfp2/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787519295.4170437,
+  "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+  "timed_out": false,
+  "trial_id": "app-scientific-metric-interpretation",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"Streamlit presentation: aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; canonical persisted semantics and aggregation: aria_nbv/aria_nbv/rollouts/inspection.py and aria_nbv/aria_nbv/rollouts/zarr_store.py; schema semantics: aria_nbv/aria_nbv/rollouts/zarr_contract.md\",\"handoff\":null,\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\",\"aria_nbv/aria_nbv/app/AGENTS.md\",\"aria_nbv/aria_nbv/rollouts/AGENTS.md\",\"/home/jd/.agents/skills/developing-with-streamlit/SKILL.md\"],\"opened_references\":[\"aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py\",\"aria_nbv/aria_nbv/rollouts/inspection.py\",\"aria_nbv/aria_nbv/rollouts/zarr_store.py\",\"aria_nbv/aria_nbv/rollouts/zarr_contract.md\",\"aria_nbv/aria_nbv/rri_metrics/returns.py\"],\"outcome\":\"The scientific-explanation branch uses canonical finite fields: selected_target_rri is the selected one-step target RRI, marginal_target_rri is the step increment of cumulative_target_rri, and cumulative_target_rri is the persisted cumulative state-relative target-RRI diagnostic. State-relative RRI is (\\u0394_t\\u2212\\u0394_{t+1})/(\\u0394_t+\\u03b5); it is diagnostic and dimensionless, distinct from target_root_gain, the rollout/Q_H reward. The Streamlit explanation reports finite_count/total_count, missing_count, median and IQR, uses finite values only, performs no zero-fill or depth interpolation, and treats policy/provenance groupings as descriptive unless exact cohort keys match. The checkout is clean.\",\"selected_skill\":\"agent-behavior + developing-with-streamlit\",\"selected_verification\":\"Static owner trace plus clean-checkout proof; runtime pytest was unavailable because the environment lacks pytest\",\"tool_calls\":[\"rg and exact-source inspection\",\"Streamlit discovery (blocked: Streamlit unavailable in detected Python)\",\"bounded pytest attempt (blocked: pytest unavailable)\",\"git diff/status clean verification\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

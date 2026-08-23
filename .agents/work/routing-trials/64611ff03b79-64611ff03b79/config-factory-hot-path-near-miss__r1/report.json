@@ -1,0 +1,157 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Inspected the owning ARIA-NBV and VIN guidance files and searched the VIN model for constructors, forward methods, and setup_target usage.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected VinModelV3 construction and forward implementation, including setup_target-related code and existing model configuration/call sites.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Verified statically that setup_target calls are in VinModelV3.__init__, while forward delegates to _forward_impl without constructing dependencies; attempted the focused VIN test and checked checkout status.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "trial_id": "config-factory-hot-path-near-miss",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "checkout_digest_before": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "checkout_digest_expected": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "elapsed_seconds": 53.024890661239624,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' /home/jd/.codex/memories/MEMORY.md | rg -n -C 2 'VIN|construction|setup_target|runtime dependency|forward' || true\nsed -n '1,240p' .agents/skills/agent-behavior/SKILL.md\nsed -n '1,220p' .agents/skills/aria-nbv-context/SKILL.md\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n --hidden -g '\"'!*.pyc'\"' -g '\"'!graphify-out/**'\"' 'setup_target|class .*VIN|VIN|def forward\\\\(' . | head -240\nrg --files | rg 'AGENTS\\\\.md\"'$|vin|VIN|config|target'\"' | head -160\ngit status --short\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' aria_nbv/AGENTS.md\nsed -n '1,220p' aria_nbv/aria_nbv/vin/AGENTS.md\nrg -n 'class .*Vin|def forward|setup_target|__init__' aria_nbv/aria_nbv/vin | head -220\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,130p' .agents/skills/python-standards/references/general_conventions.md\nsed -n '280,390p' aria_nbv/aria_nbv/vin/models/scene_myopic.py\nsed -n '930,1025p' aria_nbv/aria_nbv/vin/models/scene_myopic.py\nrg -n 'VinModelV3\\\\(|setup_target\\\\(\\\\).*Vin|model_config|VinModelV3Config' aria_nbv/tests aria_nbv/aria_nbv | head -180\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -o pipefail\nprintf '%s\\\\n' '--- setup_target calls in VIN model owner ---'\nrg -n 'setup_target\\\\(' aria_nbv/aria_nbv/vin/models/scene_myopic.py\nprintf '%s\\\\n' '--- forward definitions and nearby dependency signature ---'\nnl -ba aria_nbv/aria_nbv/vin/models/scene_myopic.py | sed -n '300,375p;948,1015p'\nprintf '%s\\\\n' '--- focused construction/forward proof ---'\ncd aria_nbv && uv run pytest tests/vin/test_vin_model_v3_core.py -q\nprintf '%s\\\\n' '--- checkout status ---'\ngit status --short\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 5,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 5,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 2228,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "3be65b7bacd4198508e46d1ef8dc3929d9229d15083d5fbe5d761df1676c638a",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/64611ff03b79-64611ff03b79/config-factory-hot-path-near-miss__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-64611ff03b79-71ksfk8c/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787517213.7949667,
+  "tested_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "timed_out": false,
+  "trial_id": "config-factory-hot-path-near-miss",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"aria_nbv/aria_nbv/vin/models/scene_myopic.py: VinModelV3.__init__ owns runtime construction; forward and forward_with_debug are hot-path consumers. Higher-level composition boundaries include Lightning/config callers.\",\"handoff\":\"Implement the dependency at the owning construction boundary and inject the constructed object into VinModelV3/forward as a typed dependency. Do not call config.setup_target from forward.\",\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\",\".agents/skills/aria-nbv-context/SKILL.md\",\"aria_nbv/AGENTS.md\",\"aria_nbv/aria_nbv/vin/AGENTS.md\",\".agents/skills/python-standards/references/general_conventions.md\"],\"opened_references\":[\"aria_nbv/AGENTS.md\",\"aria_nbv/aria_nbv/vin/AGENTS.md\",\".agents/skills/python-standards/references/general_conventions.md\",\"aria_nbv/aria_nbv/vin/models/scene_myopic.py\"],\"outcome\":\"Decision: forward should receive/use the dependency from its owning construction boundary, not call config.setup_target. This preserves construction-time lifecycle/reuse and keeps the forward path free of runtime construction. Checkout remained clean.\",\"selected_skill\":\"agent-behavior + aria-nbv-context\",\"selected_verification\":\"Static proof: VinModelV3.__init__ contains the setup_target calls at lines 316, 320, 327, 352, and 368; forward begins at line 951 and delegates to _forward_impl without constructing dependencies. Focused pytest was attempted but blocked by the read-only filesystem preventing uv cache creation.\",\"tool_calls\":[\"rg setup_target and VIN owners\",\"inspected VinModelV3.__init__ and forward\",\"attempted focused pytest; blocked because uv could not create cache temp file on read-only filesystem\",\"git status --short\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

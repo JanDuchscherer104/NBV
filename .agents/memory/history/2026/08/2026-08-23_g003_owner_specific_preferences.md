@@ -3,63 +3,86 @@ id: 2026-08-23_g003_owner_specific_preferences
 date: 2026-08-23
 title: "G003 Owner-Specific Preferences"
 status: done
-topics: [scaffold, guidance, ownership, memory]
+topics: [scaffold, guidance, ownership, routing]
 confidence: high
 canonical_updates_needed: []
 touched_owner_paths:
   - .agents/skills/README.md
+  - .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md
+  - .agents/skills/python-standards/SKILL.md
   - .agents/skills/python-standards/references/general_conventions.md
+  - aria_nbv/AGENTS.md
   - aria_nbv/aria_nbv/app/AGENTS.md
+  - aria_nbv/aria_nbv/app/references/scientific-interpretation.md
+  - scripts/scaffold/fixtures/routing.json
+  - scripts/scaffold/fixtures/routing_prompts.jsonl
   - scripts/tests/test_agent_governance_g003.py
+  - scripts/tests/test_graphify_upstream_skill.py
+  - scripts/tests/test_routing_trials.py
 codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
 repo_object_format: sha1
-repo_head: f4ff24c9901d16250ef11f423e8b8c4e3e44ac86
+repo_head: ec23d98b42c804dcc95fd0399964a6e3a9e6b525
 repo_branch: "codex/scaffold-intent-pr3"
 worktree_kind: linked
 ---
 
 ## Task
 
-Record the completed G003 owner-specific guidance workpackage at its exact
-clean implementation head, with its scoped owners, verification evidence, and
-known Graphify limitation.
+Resolve PR #108 review findings with single-owner guidance and behavior-level
+routing evidence rather than historical lexical comparisons.
 
 ## Method
 
-- Used the exact owner files and the focused G003 governance test; no Graphify
-  query or generated bundle was used.
-- Recorded the stacked base as
-  `61a93f19792433f6d94f265e5e43d5f08d80fccc`.
-- Excluded the root `AGENTS.md`, `.agents/references/human_owner_intent.md`, the Graphify
-  bundle/generated graph, and package code from this owner-specific work.
+- Replaced the permanent stacked-base test with current-source structural and
+  AST checks.
+- Made pointer preservation mechanical and added concrete positive, near-miss,
+  and forbidden-outcome routing cases.
+- Used the pinned upstream commit and installed Graphify sources to record one
+  accepted bundle manifest; the unusable local graph was not queried.
 
 ## Findings
 
-G003 restored scoped contracts and focused proof across the four listed owner
-paths. Graphify after commit was `state=unusable` at
-`graph_revision=a121cd821f7748f979c2cddf0f7c3af0e0b6a5a7` and
-`head=f4ff24c9901d16250ef11f423e8b8c4e3e44ac86`, because “Graphify detector
-reported an unbounded stale-source set”; `stale_sources=[]` and
-  `next_action=bash scripts/setup_worktree_env.sh`. Rerunning setup completed, but Graphify
-remained unusable and `graphify-usable-check` failed. No Graphify bundle or
-generated artifact changed. G005 owns setup reproducibility as a later accepted
-story, not a canonical update here.
+- Config targets are constructed once per owning lifecycle at composition roots;
+  hot paths receive dependencies. Framework lifecycle exceptions and teardown
+  stay with the Python conventions owner.
+- One-consumer helpers remain local; demonstrated app consumers share behavior
+  at the lowest app owner.
+- Scientific app explanations activate a focused rubric after a verdict-first
+  sentence. Operational counts remain on the lightweight path.
+- Graphify pinning applies only to its accepted bundle and does not establish a
+  policy for other upstream skills.
 
 ## Verification
 
-- G003 direct: 4 passed; G002: 27 passed.
-- Scaffold audit: `skills=12 errors=0 warnings=0`.
-- Scaffold self-test: `passed=33 failures=0`; upstream self-test: 4 OK.
-- Ruff format/check, `compileall`, and `git diff --check`: passed.
-- Independent review: APPROVE/CLEAR after frontmatter, body, all-byte, and
-  collapsed/subordinate preservation checks.
+- Current-owner, AST, Graphify-integrity, evaluator, and governance tests passed;
+  scaffold audit reported `skills=12 errors=0 warnings=0`.
+- The seven-case owner suite used Codex CLI 0.147.0, `gpt-5.6-luna`, low effort,
+  and one isolated unseeded trajectory per case. At rubric
+  `64611ff03b7930fcb36c62dbef6209ca96ab0fda`, the pre-feature PR #107 head
+  passed 5/7 and the candidate passed 6/7; the five non-interpretation cases and
+  operational near-miss passed.
+- The final interpretation pair at
+  `ec23d98b42c804dcc95fd0399964a6e3a9e6b525` passed 2/2 versus 1/2 on the same
+  pre-feature head. The positive loaded the scientific rubric; the operational
+  near-miss stopped before it. One repetition supports only these observations,
+  not a stability claim.
+- Full-suite manifests: baseline
+  `1cceb5e474493f081ff815f01acafcbb9e518b69721b5a4c8d3a1e6477ba9b2f`,
+  candidate `eadb071d22804507df3fa1a5af7556b3450fe0499910cfed522bf84bbae7b446`.
+- Final-pair manifests: baseline
+  `ace117b06286634a6dc6da785335a68d3f67035edf1e415eec0505de5264858a`
+  and candidate
+  `be764b0c28eedda407ac47216b521091e9ac598887c3d0b1678442812e6f7b40`.
 
 ## Canonical-State Impact
 
-`canonical_updates_needed` is empty. The workpackage's canonical owner paths
-are recorded for provenance; this debrief and the regenerated index are
-episodic/derived navigation surfaces. No Graphify query or generated artifact
-was added, and setup reproducibility remains assigned to G005.
+The listed guidance and reference files own the active contracts. This debrief
+and retained routing traces are evidence, not policy or implementation owners.
 
 ## Commits
-- [f4ff24c9901d16250ef11f423e8b8c4e3e44ac86](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f4ff24c9901d16250ef11f423e8b8c4e3e44ac86) — G003 owner-specific guidance workpackage: restored scoped contracts and focused proof
+
+- [7d17e32b76577ce51ea55c802934d061616d82dd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/7d17e32b76577ce51ea55c802934d061616d82dd) — WP1: establish current-owner guidance and behavior tests
+- [92db7ea233901da14e69f2f04cb1df6fadf3e345](https://github.com/JanDuchscherer104/ARIA-NBV/commit/92db7ea233901da14e69f2f04cb1df6fadf3e345) — WP2: activate Python lifecycle and helper ownership routing
+- [64611ff03b7930fcb36c62dbef6209ca96ab0fda](https://github.com/JanDuchscherer104/ARIA-NBV/commit/64611ff03b7930fcb36c62dbef6209ca96ab0fda) — WP3: align routing cases with exact owners
+- [1b81a03474d82aefd7e8557aa54b580eb00851c8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1b81a03474d82aefd7e8557aa54b580eb00851c8) — WP4: make the scientific explanation branch explicit
+- [ec23d98b42c804dcc95fd0399964a6e3a9e6b525](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ec23d98b42c804dcc95fd0399964a6e3a9e6b525) — WP5: freeze the final positive and near-miss interpretation cases

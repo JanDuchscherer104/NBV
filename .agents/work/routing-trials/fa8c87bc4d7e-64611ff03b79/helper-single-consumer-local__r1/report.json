@@ -1,0 +1,165 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The exact owner and applicable guidance were inspected, including aria_nbv/aria_nbv/app/AGENTS.md, aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py, and the focused panel test path; the checkout was clean.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Existing local formatter definitions and the focused test contract were inspected, supporting a private helper beside the existing panel-only formatters rather than moving it to panels/common.py.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The focused panel test command was attempted but failed with exit code 2; the trial response records that pytest was unavailable, so verification is limited to static inspection and clean-worktree evidence.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+      "trial_id": "helper-single-consumer-local",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 61.32824492454529,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n \\\"counterfactual|rollout|format\\\" /home/jd/.codex/memories/MEMORY.md | head -40 && sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' /home/jd/.agents/skills/developing-with-streamlit/SKILL.md && rg --files | rg '(\"'^|/)(AGENTS'\"\\\\.md|.*streamlit.*|.*rollout.*|app\\\\.py)' | head -120 && rg -n -i \\\"counterfactual[ _-]*rollouts|counterfactual|rollouts panel|rollout panel\\\" --glob '\"'!graphify-out/**'\"' --glob '\"'!*.lock'\"' . | head -120\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-fa8c87bc4d7e-tqo9_f1y/checkout; sed -n '1,220p' aria_nbv/aria_nbv/AGENTS.md; sed -n '1,220p' aria_nbv/aria_nbv/app/AGENTS.md; rg -n \\\"\"'^def _pretty_label|_pretty_label'\"\\\\(\\\" aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py aria_nbv/aria_nbv/app/panels aria_nbv/tests/app/panels/test_counterfactual_rollouts_panel.py; git status --short\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-fa8c87bc4d7e-tqo9_f1y/checkout; sed -n '1,180p' aria_nbv/AGENTS.md; sed -n '1,130p' aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py; rg -n \\\"pretty_label|def .*format|format.*label\\\" aria_nbv/aria_nbv | head -100; git status --porcelain=v1\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"nl -ba aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py | sed -n '740,790p;1055,1085p;1855,1895p;2000,2035p'; nl -ba aria_nbv/aria_nbv/app/panels/common.py | sed -n '1,65p'; nl -ba aria_nbv/tests/app/panels/test_counterfactual_rollouts_panel.py | sed -n '1188,1235p'; rg -n \\\"_format_optional_metric|_format_target_option|_format_live_selected_depth_option\\\" aria_nbv/tests aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py; command -v uv || true; git diff --quiet; printf 'diff_exit=%s\\\\n' \\\"\"'$?\"; git status --porcelain=v1'",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'uv run pytest -q tests/app/panels/test_counterfactual_rollouts_panel.py'",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 6,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 6,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 2810,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "016ef498bb50974f15aed83127297606e64677413692c29203448ad4c5745fe8",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/fa8c87bc4d7e-64611ff03b79/helper-single-consumer-local__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-fa8c87bc4d7e-tqo9_f1y/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787516716.5800443,
+  "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+  "timed_out": false,
+  "trial_id": "helper-single-consumer-local",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py\",\"handoff\":null,\"loaded_guides\":[\"agent-behavior\",\"aria_nbv/AGENTS.md\",\"aria_nbv/aria_nbv/app/AGENTS.md\",\"developing-with-streamlit\"],\"opened_references\":[\"aria_nbv/aria_nbv/app/panels/counterfactual_rollouts.py:754-764,1071-1075,1873-1878\",\"aria_nbv/aria_nbv/app/panels/common.py:12,46-52\",\"aria_nbv/tests/app/panels/test_counterfactual_rollouts_panel.py:1194-1207\"],\"outcome\":\"Scoped decision: place the helper privately in counterfactual_rollouts.py, beside its existing panel-only formatters. Do not place it in panels/common.py: _pretty_label has demonstrated cross-panel consumers, while the requested helper has only one consumer. No checkout mutation occurred; git status is clean. \",\"selected_skill\":\"agent-behavior\",\"selected_verification\":\"Existing focused panel tests are the bounded proof; execution was blocked because the environment lacks pytest. Static consumer search and clean-worktree checks passed.\",\"tool_calls\":[\"rg exact definitions and consumers\",\"git diff --quiet\",\"git status --porcelain=v1\",\"uv run pytest -q tests/app/panels/test_counterfactual_rollouts_panel.py\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

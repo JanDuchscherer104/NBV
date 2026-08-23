@@ -1,0 +1,187 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Loaded the agent-behavior, aria-nbv-context, and graphify skill guidance.",
+          "event_index": 0,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected the Graphify boundary reference, skills README, and repository references for Graphify provenance and refresh ownership.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected the Makefile and Graphify skill files, verified clean status, and checked the pinned Graphify version and upstream identifiers.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Selected and executed the exact integrity proof command make graphify-skill-upstream-self-test; execution was blocked by the missing verifier/project Python environment.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+      "trial_id": "graphify-accepted-bundle-refresh",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 66.93845820426941,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,260p' .agents/skills/aria-nbv-context/SKILL.md && sed -n '1,260p' .agents/skills/graphify/SKILL.md\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i --hidden --glob '\"'!/.git/**'\"' --glob '\"'!graphify-out/**'\"' 'byte-identical|byte identical|provenance manifest|manifest|refresh.*graphify|graphify.*bundle|upstream bytes|integrity' . | head -240\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,150p' .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md; sed -n '50,90p' .agents/skills/README.md; rg -n -i --hidden --glob '\"'!/.git/**'\"' 'graphify.*(sha|hash|pin|bundle)|skill.*manifest|provenance.*graphify|upstream.*graphify|refresh' .agents scripts Makefile pyproject.toml 2>/dev/null | head -220\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '235,270p' Makefile; find .agents/skills -maxdepth 3 -type f | sort | rg 'graphify|manifest|upstream|bundle'; git status --porcelain=v1; git ls-files -s .agents/skills/graphify/SKILL.md .agents/skills/graphify/references | head -30; sha256sum .agents/skills/graphify/SKILL.md; rg -n 'b2cd36267456c166788c95be6e68574064a92a42|0\\\\.9\\\\.48|graphify.*upstream' . --hidden --glob '\"'!/.git/**'\"' --glob '\"'!graphify-out/**'\"' | head -120\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' scripts/tests/test_graphify_upstream_skill.py; find . -maxdepth 3 -type f \\\\( -iname '*graphify*manifest*' -o -iname '*provenance*' \\\\) -print; rg -n 'manifest|sha256|commit|upstream' scripts/tests/test_graphify_upstream_skill.py .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | head -180\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg --files -g '*graphify*' -g '*.json' -g '*.toml' | head -120; git log --all --oneline -- scripts/tests/test_graphify_upstream_skill.py | head; git status --porcelain=v1; git diff --stat; git ls-tree -r HEAD | rg 'graphify|upstream_skill|manifest' | head -120\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find scripts -maxdepth 3 -type f | sort | head -120; rg -n -i 'byte|upstream|graphify' scripts .agents/skills/README.md .agents/references/human_owner_intent.md | head -200; git branch --show-current; git rev-parse HEAD\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git log --all --oneline --decorate -15 -- .agents/skills/graphify scripts/tests/test_graphify_upstream_skill.py; git log --all --name-status --format='%h %s' -- .agents/skills/graphify | head -120; make graphify-skill-upstream-self-test\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 8,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 8,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 3385,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "dd18f625309c50bfe51959489d7498ddf87293f6b5b04f92ae03ffa93558e545",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/fa8c87bc4d7e-64611ff03b79/graphify-accepted-bundle-refresh__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-fa8c87bc4d7e-fujm8_nm/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787516869.225636,
+  "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+  "timed_out": false,
+  "trial_id": "graphify-accepted-bundle-refresh",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md; .agents/skills/graphify/; Makefile\",\"handoff\":\"No mutation performed. Fresh byte-identity proof is blocked because the verifier script and project Python environment are absent.\",\"loaded_guides\":[\"agent-behavior\",\"aria-nbv-context\",\"graphify\"],\"opened_references\":[\".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md\",\"Makefile\",\".agents/skills/graphify/.graphify_version\",\".agents/skills/graphify/SKILL.md\"],\"outcome\":\"Accepted pin: Graphify 0.9.48, upstream commit b2cd36267456c166788c95be6e68574064a92a42. The single present provenance marker is .agents/skills/graphify/.graphify_version, containing 0.9.48; no separate provenance manifest exists. The exact proof command is make graphify-skill-upstream-self-test. Checkout remained clean and unchanged.\",\"selected_skill\":\"graphify\",\"selected_verification\":\"make graphify-skill-upstream-self-test \\u2014 blocked at _check_python; scripts/tests/test_graphify_upstream_skill.py is also absent.\",\"tool_calls\":[\"rg repository ownership/provenance terms\",\"git status\",\"git ls-files/tree\",\"make graphify-skill-upstream-self-test\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

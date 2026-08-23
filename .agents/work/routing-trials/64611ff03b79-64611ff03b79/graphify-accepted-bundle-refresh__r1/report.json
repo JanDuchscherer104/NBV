@@ -1,0 +1,195 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Inspected the relevant Makefile and .agents skill files for the Graphify maintenance route.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Opened the canonical graphify-aria-boundary reference and the Graphify upstream-skill test, identifying the accepted bundle manifest owner and its exact verification contract.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected .agents/skills/README.md and the vendored Graphify bundle metadata.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Verified the pinned local Graphify tree/blob provenance, tracked-file count, clean worktree, and clean bundle diff.",
+          "event_index": 8,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "trial_id": "graphify-accepted-bundle-refresh",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "checkout_digest_before": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "checkout_digest_expected": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "elapsed_seconds": 66.8414659500122,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc 'rg -n -i \"Graphify|byte-identical|provenance manifest|integrity|refresh\" /home/jd/.codex/memories/MEMORY.md | head -80'",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,240p' .agents/skills/graphify/SKILL.md\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git status --short && printf '%s\\\\n' '--- candidates ---' && rg --files -g '*graphify*' -g '*manifest*' -g '*provenance*' -g '*bundle*' -g 'AGENTS.md' | head -120 && printf '%s\\\\n' '--- references ---' && rg -n -i \\\"byte.?identical|provenance|manifest|upstream bytes|refresh.*Graphify|Graphify.*refresh|integrity\\\" . --glob '\"'!graphify-out/**'\"' --glob '\"'!*.lock'\"' | head -160\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '220,270p' Makefile; rg --files .agents | sort | head -120; rg -n -i \\\"graphify-skill|upstream.*skill|skill.*upstream|manifest\\\" .agents scripts Makefile pyproject.toml | head -200\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,125p' .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md; sed -n '1,260p' scripts/tests/test_graphify_upstream_skill.py; rg --files | rg 'skill-codex|graphify.*manifest|upstream' | head -80\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find . -path '*test_graphify_upstream_skill.py' -o -path '*skill-codex.md' -o -path '*graphify*manifest*'; git status --porcelain=v1; git ls-files .agents/skills/graphify | wc -l; git ls-files .agents/skills/graphify | head -20\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find . -type f | rg 'test_graphify|upstream_skill|graphify.*skill' | head -50; find . -maxdepth 3 -type f -name 'Makefile' -print; sed -n '65,90p' .agents/skills/README.md; cat .agents/skills/graphify/.graphify_version; git log -1 --oneline -- .agents/skills/graphify .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git rev-parse HEAD:.agents/skills/graphify; git ls-tree -r --full-tree HEAD -- .agents/skills/graphify | sed 's#\"'^[''^ ]* [''^ ]* [''^ ]*'\"\\\\t##' | wc -l; git status --porcelain=v1; git diff --quiet -- .agents/skills/graphify && echo graphify_bundle_clean; git diff --quiet -- .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md && echo manifest_owner_clean; git ls-tree HEAD:.agents/skills/graphify\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -eu\nprintf 'local_tree='; git rev-parse HEAD:.agents/skills/graphify\nprintf 'local_skill_blob='; git rev-parse HEAD:.agents/skills/graphify/SKILL.md\nprintf 'reference_tree='; git rev-parse HEAD:.agents/skills/graphify/references\nprintf 'tracked_files='; git ls-tree -r --name-only HEAD -- .agents/skills/graphify | wc -l\nprintf 'worktree='; if test -z \\\"\"'$(git status --porcelain=v1)\"; then echo clean; else git status --short; fi\nprintf '\"'bundle_diff='; if git diff --quiet -- .agents/skills/graphify; then echo clean; else echo changed; fi\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 9,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 9,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 3907,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "dd18f625309c50bfe51959489d7498ddf87293f6b5b04f92ae03ffa93558e545",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/64611ff03b79-64611ff03b79/graphify-accepted-bundle-refresh__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-64611ff03b79-o6rr5fl9/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787517436.5382066,
+  "tested_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "timed_out": false,
+  "trial_id": "graphify-accepted-bundle-refresh",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md#accepted-bundle-manifest\",\"handoff\":\"Refresh command: graphifyy==0.9.48, then graphify install --project --platform agents from the repository root. Not executed because it mutates the vendored bundle.\",\"loaded_guides\":[\"agent-behavior\",\"graphify\",\"aria-nbv-context/graphify-aria-boundary.md\"],\"opened_references\":[\".agents/skills/README.md\",\"Makefile:250-251\",\".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md#accepted-bundle-manifest\"],\"outcome\":\"The single provenance manifest is .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md#accepted-bundle-manifest. It pins Graphify ref b2cd36267456c166788c95be6e68574064a92a42, the local bundle .agents/skills/graphify/, and the exact refresh and integrity commands above. No checkout bytes were changed.\",\"selected_skill\":\"graphify\",\"selected_verification\":\"Bounded Git proof: local tree 6943c772de908bdac1dc0d1b7f73fa7ed285433a; SKILL.md blob af3f723c7878b8ca9252af511270511002086ed4; 10 tracked files; worktree and bundle diff clean. Canonical full proof: make graphify-skill-upstream-self-test.\",\"tool_calls\":[\"Read-only repository search and Git tree/blob verification\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Inspected the exact owners: streamlit_app.py, app/config.py, app/app.py, and the relevant tests.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Static inspection identified streamlit_app.py as dispatching NbvStreamlitAppConfig().setup_target().run(), with app.py owning the render/session lifetime boundary.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Python AST validation passed for the inspected entrypoint, config, and application files, and the checkout remained clean.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "trial_id": "config-factory-composition-root",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "checkout_digest_before": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "checkout_digest_expected": "79a4361fe22768746191cc1a0dd157eec2d4079ba12a2905236e6afb3171bd51",
+  "elapsed_seconds": 63.193626403808594,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n \\\"Streamlit|streamlit|CLI entry|entrypoint|construct|lifetime\\\" /home/jd/.codex/memories/MEMORY.md | head -80 && sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,220p' /home/jd/.agents/skills/developing-with-streamlit/SKILL.md\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-64611ff03b79-jsi_1k3r/checkout; printf '\\\\n-- files --\\\\n'; rg --files -g 'AGENTS.md' -g '*streamlit*' -g '*.py' | head -120; printf '\\\\n-- entry refs --\\\\n'; rg -n \\\"def main|streamlit run|st\\\\.\\\" aria_nbv scripts pyproject.toml README.md 2>/dev/null | head -180\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 /home/jd/.agents/skills/developing-with-streamlit/scripts/discover.py --project-dir /tmp/aria-routing-64611ff03b79-jsi_1k3r/checkout; sed -n '1,180p' aria_nbv/aria_nbv/app/AGENTS.md; printf '\\\\n-- streamlit_app.py --\\\\n'; nl -ba aria_nbv/aria_nbv/streamlit_app.py; printf '\\\\n-- app.py relevant --\\\\n'; nl -ba aria_nbv/aria_nbv/app/app.py | sed -n '1,40p;285,340p'; printf '\\\\n-- tests --\\\\n'; rg -n \\\"streamlit_app|build_app|Application|lifetime|App\\\\(\\\" aria_nbv/tests/app aria_nbv/tests | head -120; git status --porcelain=v1\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"nl -ba aria_nbv/aria_nbv/app/config.py | sed -n '1,240p'; printf '\\\\n-- entry tests --\\\\n'; nl -ba aria_nbv/tests/test_streamlit_entry.py | sed -n '1,150p'; printf '\\\\n-- app test --\\\\n'; nl -ba aria_nbv/tests/app/test_app_router.py | sed -n '1,125p'; printf '\\\\n-- package metadata --\\\\n'; rg -n \\\"nbv-st|streamlit_app|aria_nbv.streamlit_app\\\" pyproject.toml aria_nbv/pyproject.toml 2>/dev/null\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"nl -ba aria_nbv/aria_nbv/utils/base_config.py | sed -n '580,625p'; command -v pytest || true; command -v uv || true; git status --porcelain=v1; git diff --stat\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"nl -ba aria_nbv/aria_nbv/app/app.py | sed -n '36,65p'; python3 - <<'PY'\nimport ast\nfrom pathlib import Path\nfor p in [Path('aria_nbv/aria_nbv/streamlit_app.py'), Path('aria_nbv/aria_nbv/app/config.py'), Path('aria_nbv/aria_nbv/app/app.py')]:\n    ast.parse(p.read_text())\n    print(f'AST OK {p}')\nPY\ngit status --porcelain=v1\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'import ast; from pathlib import Path; ps=[Path(\\\"aria_nbv/aria_nbv/streamlit_app.py\\\"),Path(\\\"aria_nbv/aria_nbv/app/config.py\\\"),Path(\\\"aria_nbv/aria_nbv/app/app.py\\\")]; [ast.parse(p.read_text()) or print(f\\\"AST OK {p}\\\") for p in ps]' && git status --porcelain=v1\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 7,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 7,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 3429,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "e5cc0a10d037fa0d08a5019d0dd6497cfdef32a735a140c8f793962b9dfb3c4f",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/64611ff03b79-64611ff03b79/config-factory-composition-root__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-64611ff03b79-jsi_1k3r/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787517135.5606232,
+  "tested_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "timed_out": false,
+  "trial_id": "config-factory-composition-root",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"streamlit_app.py owns CLI dispatch and watcher defaults; NbvStreamlitAppConfig in app/config.py owns configured target construction; NbvStreamlitApp.run() in app/app.py owns the Streamlit session/render lifetime.\",\"handoff\":null,\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\",\"aria_nbv/aria_nbv/app/AGENTS.md\",\"developing-with-streamlit/SKILL.md\"],\"opened_references\":[\"aria_nbv/aria_nbv/streamlit_app.py\",\"aria_nbv/aria_nbv/app/config.py\",\"aria_nbv/aria_nbv/app/app.py\",\"aria_nbv/aria_nbv/utils/base_config.py\",\"aria_nbv/tests/test_streamlit_entry.py\",\"aria_nbv/tests/app/test_app_router.py\"],\"outcome\":\"The configured application is constructed by NbvStreamlitAppConfig().setup_target(), then its lifetime is owned by NbvStreamlitApp.run(), which invokes the app frame's _render() boundary. The CLI entrypoint itself only dispatches; it does not own application state or page lifetime. Checkout remained clean.\",\"selected_skill\":\"agent-behavior + developing-with-streamlit\",\"selected_verification\":\"Static proof: streamlit_app.py:28-33 executes NbvStreamlitAppConfig().setup_target().run(); TargetConfig.setup_target() instantiates the typed target; app.py:36-54 wraps _render() for one session and keeps the session alive on UI errors. Existing bounded tests are tests/test_streamlit_entry.py and tests/app/test_app_router.py. Pytest could not start because uv could not create its cache temp file on the read-only filesystem.\",\"tool_calls\":[\"rg repository and memory ownership references\",\"read exact entrypoint/config/app owners\",\"attempted bounded pytest proof; uv was blocked by read-only filesystem\",\"checked git status\",\"inspected Python AST syntax\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

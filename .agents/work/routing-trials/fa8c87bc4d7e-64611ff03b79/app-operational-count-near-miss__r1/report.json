@@ -1,0 +1,179 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The app ownership guide and stored-rollout presentation/inspection surfaces were read, establishing the lightweight app route.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The Streamlit guidance, inventory implementation, app inventory usage, and focused tests were inspected.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "A concrete existing contract and exact owners were identified: rollout inventory rows in inspection.py and the cached inventory/store selector in _stored_rollouts_page.py.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The checkout remained clean and no local rollout stores were discovered, supporting the reported operational count of zero and absence of provenance.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+      "trial_id": "app-operational-count-near-miss",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 62.539791107177734,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && printf '\\\\n--- memory hits ---\\\\n' && rg -n -i 'routing trial|invalid rollout|Streamlit|provenance' /home/jd/.codex/memories/MEMORY.md | head -40\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git status --short --branch && printf '\\\\n--- guides/files ---\\\\n' && find aria_nbv -name AGENTS.md -o -path '*stored*rollout*' -o -path '*rollout*read*model*' | sort | head -80 && printf '\\\\n--- symbols ---\\\\n' && rg -n -i 'invalid|provenance|rollout store|stored rollout|store' aria_nbv/aria_nbv/app aria_nbv/aria_nbv/rollouts aria_nbv/tests 2>/dev/null | head -240\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' aria_nbv/aria_nbv/app/AGENTS.md; printf '\\\\n--- rollouts guide ---\\\\n'; sed -n '1,140p' aria_nbv/aria_nbv/rollouts/AGENTS.md; printf '\\\\n--- app panel ---\\\\n'; rg -n -C 4 'invalid|provenance|inventory|store' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py aria_nbv/aria_nbv/app/panels/stored_rollouts.py; printf '\\\\n--- inspection/read model APIs ---\\\\n'; rg -n '\"'^class |''^def |invalid|provenance|inventory'\"' aria_nbv/aria_nbv/rollouts/inspection.py aria_nbv/aria_nbv/rollouts/read_model.py aria_nbv/aria_nbv/rollouts/audits.py 2>/dev/null | head -220\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' /home/jd/.agents/skills/developing-with-streamlit/SKILL.md; printf '\\\\n--- inventory implementation ---\\\\n'; sed -n '160,230p' aria_nbv/aria_nbv/rollouts/inspection.py; printf '\\\\n--- page inventory use ---\\\\n'; rg -n -C 8 '_cached_inventory|inventory_rows|invalid|provenance' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py | head -220; printf '\\\\n--- tests ---\\\\n'; rg -n -C 5 'inventory|invalid|provenance' aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py aria_nbv/tests/rollouts/test_read_model.py | head -220\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -A90 '\"'^def _rollout_store_inventory_row'\"' aria_nbv/aria_nbv/rollouts/inspection.py; sed -n '482,560p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; sed -n '108,145p' aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py; printf '\\\\n--- current stores ---\\\\n'; find . -type d -name '*.zarr' -print | head -50\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '560,640p' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py; sed -n '230,270p' aria_nbv/aria_nbv/rollouts/inspection.py; rg -n 'validation_error_count|manifest_profile|created_at|first_error|schema_status' aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py | head -80; cd aria_nbv && uv run pytest -q tests/app/panels/test_stored_rollouts_projection_laziness.py tests/rollouts/test_read_model.py\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -A35 'class PathConfig|offline_cache_dir' aria_nbv/aria_nbv/configs.py aria_nbv/aria_nbv/configs 2>/dev/null | head -100; python - <<'PY'\nfrom pathlib import Path\nroot=Path('aria_nbv/aria_nbv')\nfor p in [root/'rollouts/inspection.py', root/'app/panels/_stored_rollouts_page.py']:\n    compile(p.read_text(), str(p), 'exec')\nprint('AST compile: PASS (inspection.py, _stored_rollouts_page.py)')\nPY\nprintf '\\\\n--- no discovered stores under checkout ---\\\\n'; find . -type d -name '*.zarr' -print; printf '\\\\n--- final status ---\\\\n'; git status --short --branch\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 7,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 7,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 4117,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "f17651f914f88521244e58892debddf3f427adc58fd1bb4e056a9b5ab3ef6d92",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/fa8c87bc4d7e-64611ff03b79/app-operational-count-near-miss__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-fa8c87bc4d7e-3ablaset/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787517037.6294332,
+  "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+  "timed_out": false,
+  "trial_id": "app-operational-count-near-miss",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"Semantic owner: aria_nbv/aria_nbv/rollouts/inspection.py::_rollout_store_inventory_row and rollout_store_inventory_rows. Streamlit presentation owner: aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py::_cached_inventory and _render_store_selector.\",\"handoff\":\"The scoped decision is operational: count stores whose inventory row has validation_ok is False; expose their artifact provenance from the same inventory rows. Do not route this through rollouts/audits.py scientific metrics or candidate invalid-fraction projections.\",\"loaded_guides\":[\".agents/skills/agent-behavior/SKILL.md\",\"aria_nbv/aria_nbv/app/AGENTS.md\",\"aria_nbv/aria_nbv/rollouts/AGENTS.md\",\"/home/jd/.agents/skills/developing-with-streamlit/SKILL.md\"],\"opened_references\":[\"aria_nbv/aria_nbv/rollouts/inspection.py\",\"aria_nbv/aria_nbv/app/panels/_stored_rollouts_page.py\",\"aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py\",\"aria_nbv/aria_nbv/configs/path_config.py\"],\"outcome\":\"Route demonstrated and bounded. Current checkout-local report: 0 invalid rollout stores; provenance: none discovered. The exact app contract supports an operational invalid-store count plus provenance, while keeping it explicitly separate from scientific metrics. No files were modified.\",\"selected_skill\":\"agent-behavior + developing-with-streamlit\",\"selected_verification\":\"Bounded repository scan found 0 discovered *.zarr stores under the checkout, so the current checkout-local invalid-store count is 0 and there is no store provenance to report. The app\\u2019s production scan is metadata-first and calls rollout_store_inventory_rows(..., validate=False); selected-store validation supplies validation_ok, validation_error_count, first_error, path, schema, manifest, and timestamps. The focused pytest command was blocked because uv could not create its cache temporary file on the read-only filesystem. Checkout remained clean: git status --short --branch reported only ## master.\",\"tool_calls\":[\"git status --short --branch\",\"rg repository ownership and invalid/provenance symbols\",\"sed exact inventory and Streamlit selector implementations\",\"find . -type d -name '*.zarr'\",\"uv run pytest -q tests/app/panels/test_stored_rollouts_projection_laziness.py tests/rollouts/test_read_model.py\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

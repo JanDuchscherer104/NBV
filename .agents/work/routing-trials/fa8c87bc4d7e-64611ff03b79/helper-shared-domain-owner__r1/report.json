@@ -1,0 +1,165 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The exact app owner and demonstrated consumers were inspected: state_types.py, controller.py, and panels/vin_diagnostics.py.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Static verification passed for config_signature ownership in state_types.py and direct imports/calls in both demonstrated consumers.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "A final git status check was executed successfully after verification.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+      "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+      "trial_id": "helper-shared-domain-owner",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_before": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "checkout_digest_expected": "8d1a0335c0286d53e7cec1aca8a034bcdd8febf060e55f4b435d9d85947a8a14",
+  "elapsed_seconds": 61.628989696502686,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && printf '\\\\n--- context ---\\\\n' && sed -n '1,220p' .agents/skills/aria-nbv-context/SKILL.md && printf '\\\\n--- memory hits ---\\\\n' && rg -n -i 'config_signature|VIN diagnostics|app controller' /home/jd/.codex/memories/MEMORY.md || true\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- matches ---'; rg -n --hidden -g '\"'!graphify-out/**'\"' -g '\"'!*.pyc'\"' 'config_signature|VIN diagnostics|diagnostics panel|app controller' . | head -240; printf '%s\\\\n' '--- guides ---'; rg --files -g 'AGENTS.md' -g '\"'!graphify-out/**'\"' | sort\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- status ---'; git status --short; printf '%s\\\\n' '--- app guide ---'; sed -n '1,260p' aria_nbv/aria_nbv/app/AGENTS.md; printf '%s\\\\n' '--- state_types ---'; sed -n '1,285p' aria_nbv/aria_nbv/app/state_types.py; printf '%s\\\\n' '--- state ---'; sed -n '1,150p' aria_nbv/aria_nbv/app/state.py; printf '%s\\\\n' '--- controller imports/use ---'; sed -n '1,245p' aria_nbv/aria_nbv/app/controller.py; printf '%s\\\\n' '--- vin panel ---'; sed -n '1,135p' aria_nbv/aria_nbv/app/panels/vin_diagnostics.py; printf '%s\\\\n' '--- tests ---'; sed -n '1,120p' aria_nbv/tests/test_app_state_signature.py\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'uv run pytest -q aria_nbv/tests/test_app_state_signature.py'",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python - <<'PY'\nimport ast\nfrom pathlib import Path\n\nroot = Path('aria_nbv/aria_nbv/app')\nowner = root / 'state_types.py'\nsource = owner.read_text()\ntree = ast.parse(source)\nfn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'config_signature')\nassert fn.lineno == 57\nfor rel, expected in [('controller.py', 'config_signature'), ('panels/vin_diagnostics.py', 'config_signature')]:\n    path = root / rel\n    text = path.read_text()\n    parsed = ast.parse(text)\n    imports = [n for n in ast.walk(parsed) if isinstance(n, ast.ImportFrom)]\n    assert any(n.module == '.state_types' and any(a.name == expected for a in n.names) for n in imports), rel\n    assert sum(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == expected for n in ast.walk(parsed)) >= 1\nprint('PASS: owner definition and direct consumer imports/calls verified')\nPY\nprintf '%s\\\\n' '--- exact lines ---'\nnl -ba aria_nbv/aria_nbv/app/state_types.py | sed -n '45,72p'\nnl -ba aria_nbv/aria_nbv/app/controller.py | sed -n '12,28p'\nnl -ba aria_nbv/aria_nbv/app/panels/vin_diagnostics.py | sed -n '15,27p'\nprintf '%s\\\\n' '--- final status ---'\ngit status --short\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python -c 'import ast; from pathlib import Path; root=Path(\\\"aria_nbv/aria_nbv/app\\\"); tree=ast.parse((root/\\\"state_types.py\\\").read_text()); fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name==\\\"config_signature\\\"); assert fn.lineno==57; [(lambda p: (lambda t: (assertion(t,p)))(p.read_text()))(root/rel) for rel in [\\\"controller.py\\\",\\\"panels/vin_diagnostics.py\\\"]]; print(\\\"PASS: owner definition and direct consumer imports/calls verified\\\")' 2>&1 || true\npython -c 'import ast; from pathlib import Path; root=Path(\\\"aria_nbv/aria_nbv/app\\\");\nfor rel in [\\\"controller.py\\\",\\\"panels/vin_diagnostics.py\\\"]:\n t=ast.parse((root/rel).read_text()); imports=[n for n in ast.walk(t) if isinstance(n,ast.ImportFrom)]; assert any(n.module==\\\".state_types\\\" and any(a.name==\\\"config_signature\\\" for a in n.names) for n in imports); assert any(isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id==\\\"config_signature\\\" for n in ast.walk(t))\nprint(\\\"PASS: direct consumer imports and calls verified\\\")' \ngit status --short\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 6,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 6,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 4448,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "4849616cb05db39575ef5bd38088dc25104ef934d86ebf28c7e166acc4eb209d",
+  "returncode": 0,
+  "rubric_commit": "64611ff03b7930fcb36c62dbef6209ca96ab0fda",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr3/.agents/work/routing-trials/fa8c87bc4d7e-64611ff03b79/helper-shared-domain-owner__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-fa8c87bc4d7e-x6p6u052/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"low\""
+    ],
+    "requested_effort": "low",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787516791.8732452,
+  "tested_commit": "fa8c87bc4d7ef4689c31ef13e85fd0ee00aad802",
+  "timed_out": false,
+  "trial_id": "helper-shared-domain-owner",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"aria_nbv/aria_nbv/app/state_types.py:57-64 (`config_signature`)\",\"handoff\":\"No implementation handoff: the requested placement is already present. `app/state.py` is only the Streamlit adapter/re-export and is not the shared behavioral owner.\",\"loaded_guides\":[\"agent-behavior\",\"aria-nbv-context\"],\"opened_references\":[\"aria_nbv/aria_nbv/app/AGENTS.md\",\"aria_nbv/aria_nbv/app/state_types.py\",\"aria_nbv/aria_nbv/app/state.py\",\"aria_nbv/aria_nbv/app/controller.py\",\"aria_nbv/aria_nbv/app/panels/vin_diagnostics.py\",\"aria_nbv/tests/test_app_state_signature.py\"],\"outcome\":\"Decision: keep `config_signature` at `aria_nbv/aria_nbv/app/state_types.py`, the lowest shared Streamlit-free app owner for the app controller and VIN diagnostics panel. No checkout mutation occurred.\",\"selected_skill\":\"agent-behavior\",\"selected_verification\":\"Bounded static proof passed by exact-source inspection: `controller.py:18-25` and `panels/vin_diagnostics.py:20-21` import `config_signature` directly from `.state_types`; both contain call sites. Targeted pytest could not run because `pytest` is unavailable, and the checkout has no Python executable. `git status --short` remained clean.\",\"tool_calls\":[\"rg -n config_signature consumers/guides\",\"git status --short\",\"uv run pytest -q aria_nbv/tests/test_app_state_signature.py\",\"nl -ba exact owner/consumer lines\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

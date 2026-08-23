@@ -1,0 +1,19 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "app-operational-count-near-miss__r1/events.jsonl": "8ce85ceb3c63dbd3b1bf316cd9b2133cddc979095e077b3feac04ca3f912cd84",
+    "app-operational-count-near-miss__r1/report.json": "92540843891b8087790db5cc7a9e6f6c09966b0fbb4e90358ed9e5f73e6709f7",
+    "app-operational-count-near-miss__r1/stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app-operational-count-near-miss__r1/trial-response.json": "134a414822776e1a1a658b8e59cfc9c6f8c00372f74169590f81beffbe5edf9b",
+    "app-operational-count-near-miss__r1/verifier-events.jsonl": "c5b877d7f324af1e42f1823b367fe878e5b43f836afe3ccf38a6b00706da08e0",
+    "app-operational-count-near-miss__r1/verifier-report.json": "49eaafa72152685b6667ea0f44b45e8b70222f8ff5af7b3c7a4c293e4ad959c5",
+    "app-operational-count-near-miss__r1/verifier-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app-scientific-metric-interpretation__r1/events.jsonl": "2f45df46be1ef538150afee24ba74bf9a5a74e17ef1928d7b36a16ca90869bc7",
+    "app-scientific-metric-interpretation__r1/report.json": "936754eb50d2ed7399da2e86376c6acbd9f912076b3fe8d3412ebf2c55386b20",
+    "app-scientific-metric-interpretation__r1/stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app-scientific-metric-interpretation__r1/trial-response.json": "9819ab4bb8aa3420c3e75e0a10e0047b2e7fb9917288cd427359da455dd528e5",
+    "app-scientific-metric-interpretation__r1/verifier-events.jsonl": "11c7b28e764d9e7b38176b28b9fa5472c5a8d876a956ecbfdbc7b6c328abc3eb",
+    "app-scientific-metric-interpretation__r1/verifier-report.json": "d47a1854f1baa5b9bf56f6891a38b594a35f9acbb186bd01b3f109401d612dca",
+    "app-scientific-metric-interpretation__r1/verifier-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
