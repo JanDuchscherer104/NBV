@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from aria_nbv.app.panels._stored_rollouts import candidate_generation
 from aria_nbv.rollouts.inspection import _materialize_selection_family_union
@@ -54,6 +55,40 @@ def test_pooled_candidate_selection_figure_shows_one_fraction_per_family_and_ste
     assert list(forward.y) == [0.6, 0.4]
 
 
+@pytest.mark.parametrize(
+    ("metric", "label"),
+    [
+        ("allocation_share", "candidate availability"),
+        ("valid_share", "actor-valid support"),
+        ("policy_mass", "policy mass"),
+        ("selected_share", "realized selection"),
+    ],
+)
+def test_pooled_candidate_selection_figure_labels_metric_and_support(metric: str, label: str) -> None:
+    rows = pd.DataFrame(
+        [
+            {
+                "family": "forward",
+                "step_index": 0,
+                "fraction": 0.5,
+                "metric": metric,
+                "state_count": 4,
+                "finite_state_count": 3,
+                "missing_state_count": 1,
+                "numerator": 2,
+                "denominator": 4,
+            }
+        ]
+    )
+
+    figure = candidate_generation._pooled_candidate_selection_figure(rows)
+
+    assert figure.layout.yaxis.title.text == label
+    assert all(
+        field in figure.data[0].hovertemplate for field in ("state_count", "finite_state_count", "missing_state_count")
+    )
+
+
 def test_candidate_transition_figure_pairs_expected_and_realized_conditionals() -> None:
     rows = pd.DataFrame(
         [
@@ -77,9 +112,31 @@ def test_candidate_transition_figure_pairs_expected_and_realized_conditionals() 
     figure = candidate_generation._candidate_transition_figure(rows)
 
     assert len(figure.data) == 2
+    assert all(trace.visible is None or trace.visible is True for trace in figure.data)
+    assert all(trace.zmin == 0 and trace.zmax == 1 for trace in figure.data)
+    assert all("context_count" in trace.hovertemplate for trace in figure.data)
     assert np.asarray(figure.data[0].z).tolist() == [[0.7, 0.3], [0.4, 0.6]]
     assert np.asarray(figure.data[1].z).tolist() == [[0.625, 0.375], [0.5, 0.5]]
     assert "acquisition 1" in str(figure.layout.title.text)
+
+
+def test_pairwise_correlation_accepts_two_components_and_reports_degenerate_support() -> None:
+    frame = pd.DataFrame({"left": [1.0, 2.0, np.inf], "right": [2.0, 4.0, 8.0]})
+
+    prepared = candidate_generation._prepare_pairwise_correlation(frame, ["left", "right"])
+
+    assert prepared["has_finite_off_diagonal"] is True
+    assert prepared["counts"].loc["left", "right"] == 2
+    assert "n=2" in prepared["reasons"][("left", "right")]
+
+
+def test_pairwise_correlation_fails_closed_without_two_finite_components() -> None:
+    frame = pd.DataFrame({"left": [1.0, np.inf], "right": [np.nan, 2.0]})
+
+    prepared = candidate_generation._prepare_pairwise_correlation(frame, ["left", "right"])
+
+    assert prepared["has_finite_off_diagonal"] is False
+    assert "need n>=2" in prepared["reasons"][("left", "right")]
 
 
 def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch) -> None:

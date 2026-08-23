@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from ....rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
@@ -23,22 +24,45 @@ from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
+_CORRELATION_REFERENCE = (
+    "SciPy Pearson correlation documentation",
+    "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html",
+)
 
 
 def _pooled_candidate_selection_figure(summary: pd.DataFrame) -> go.Figure:
-    """Plot pooled policy mass by candidate family and factual acquisition."""
+    """Plot the selected pooled quantity with auditable support context."""
 
     figure = go.Figure()
+    metric = str(summary["metric"].iloc[0]) if "metric" in summary and not summary.empty else "fraction"
+    metric_labels = {
+        "allocation_share": "candidate availability",
+        "valid_share": "actor-valid support",
+        "policy_mass": "policy mass",
+        "selected_share": "realized selection",
+    }
+    metric_label = metric_labels.get(metric, metric)
+    context_fields = [
+        field
+        for field in ("state_count", "finite_state_count", "missing_state_count", "numerator", "denominator")
+        if field in summary
+    ]
     for family, rows in summary.sort_values("step_index").groupby("family", sort=True):
+        customdata = rows[context_fields].to_numpy() if context_fields else None
+        hover_lines = ["family=%{fullData.name}", "acquisition=%{x}", f"{metric_label}=%{{y:.3f}}"]
+        if context_fields:
+            hover_lines.extend(f"{field}=%{{customdata[{index}]}}" for index, field in enumerate(context_fields))
         figure.add_trace(
             go.Scatter(
                 x=rows["step_index"].astype(int) + 1,
                 y=rows["fraction"],
                 mode="lines+markers",
                 name=str(family),
+                customdata=customdata,
+                hovertemplate="<br>".join(hover_lines) + "<extra></extra>",
             )
         )
-    figure.update_layout(xaxis_title="acquisition number", yaxis_title="policy mass")
+    figure.update_layout(xaxis_title="acquisition number", yaxis_title=metric_label)
     return figure
 
 
@@ -52,9 +76,30 @@ def _candidate_transition_figure(rows: pd.DataFrame) -> go.Figure:
     realized = rows.pivot(index="previous_family", columns="next_family", values="realized_rate").reindex(
         index=families, columns=families
     )
-    figure = go.Figure()
-    figure.add_trace(go.Heatmap(z=expected.to_numpy(), x=families, y=families, name="expected"))
-    figure.add_trace(go.Heatmap(z=realized.to_numpy(), x=families, y=families, name="realized", visible=False))
+    context = (
+        rows.pivot(index="previous_family", columns="next_family", values="context_count").reindex(
+            index=families, columns=families
+        )
+        if "context_count" in rows
+        else pd.DataFrame(0, index=families, columns=families)
+    )
+    customdata = context.fillna(0).to_numpy()
+    figure = make_subplots(rows=1, cols=2, subplot_titles=("Expected policy mass", "Realized transition rate"))
+    for column, values, name in ((1, expected, "expected"), (2, realized, "realized")):
+        figure.add_trace(
+            go.Heatmap(
+                z=values.to_numpy(),
+                x=families,
+                y=families,
+                zmin=0,
+                zmax=1,
+                name=name,
+                customdata=customdata,
+                hovertemplate="previous=%{y}<br>next=%{x}<br>fraction=%{z:.3f}<br>context_count=%{customdata}<extra></extra>",
+            ),
+            row=1,
+            col=column,
+        )
     step = int(rows["step_index"].iloc[0])
     figure.update_layout(title=f"Candidate-family transitions at acquisition {step}")
     return figure
@@ -1508,10 +1553,21 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
             )
             if name in targets and targets[name].notna().any()
         ]
-        if len(component_cols) >= 3:
+        if len(component_cols) >= 2:
             prepared = _prepare_pairwise_correlation(targets, component_cols)
             corr = prepared["correlation"]
+            counts = prepared["counts"]
+            reasons = prepared["reasons"]
             if prepared["has_finite_off_diagonal"]:
+                labels = [
+                    [
+                        "n/a"
+                        if pd.isna(corr.iloc[row, col])
+                        else f"r={corr.iloc[row, col]:.2f}, n={int(counts.iloc[row, col])}"
+                        for col in range(len(component_cols))
+                    ]
+                    for row in range(len(component_cols))
+                ]
                 counts = prepared["counts"]
                 fig = go.Figure(
                     go.Heatmap(
@@ -1522,13 +1578,19 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                         zmax=1,
                         colorscale="RdBu",
                         reversescale=True,
-                        text=np.round(corr.to_numpy(), 2),
+                        text=labels,
                         texttemplate="%{text}",
-                        customdata=counts.to_numpy(),
-                        hovertemplate="x=%{x}<br>y=%{y}<br>r=%{z:.3f}<br>pair n=%{customdata}<extra></extra>",
+                        customdata=np.stack([counts.to_numpy(), np.array(labels, dtype=object)], axis=-1),
+                        hovertemplate="%{y} × %{x}<br>%{customdata[1]}<extra></extra>",
                     )
                 )
-                fig.update_layout(title="Target score-component correlation", height=440)
+                fig.update_layout(
+                    title="Target score-component correlation (descriptive; pairwise n shown)", height=440
+                )
+                if any("n=2" in reason for reason in reasons.values()):
+                    st.warning(
+                        "Some correlation cells have n=2; Pearson |r| is algebraically forced to 1 and is not substantive evidence."
+                    )
                 _render_plot(
                     fig,
                     ScientificExplanation(
@@ -1562,12 +1624,18 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                         ),
                         evidence_role="oracle/evaluation",
                         source_fields=tuple(f"targets/{name}" for name in component_cols),
+                        external_references=(_CORRELATION_REFERENCE,),
                     ),
                 )
             else:
-                st.info(
-                    "Correlation heatmap unavailable: no component pair has at least two finite, non-constant rows."
-                )
+                reason_text = "; ".join(f"{pair}: {reason}" for pair, reason in reasons.items() if pair[0] != pair[1])
+                st.info("Correlation heatmap unavailable: no estimable finite off-diagonal pair. " + reason_text)
+        elif len(component_cols) == 1:
+            st.info(
+                "Correlation heatmap unavailable: one target-score component has finite observations; at least two components are required."
+            )
+        else:
+            st.info("Correlation heatmap unavailable: no target-score components have finite observations.")
 
 
 def _render_candidate_geometry_diagnostics(
