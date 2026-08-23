@@ -1131,6 +1131,7 @@ def _contract_frames(
             continue
         store_id = str(store["store_id"])
         contract = _persisted_rollout_contract(bundle, store_id, str(store["profile"]))
+        frame["corpus_store_path"] = str(store["path"])
         frame.insert(1, "contract_id", contract["id"])
         frame.insert(2, "contract", contract["label"])
         frame.insert(3, "profile", contract["profile"])
@@ -1175,7 +1176,15 @@ def _contract_additive_totals(
         runtime = bundle["runtime_storage"]
         store_row = stores.iloc[0] if not stores.empty else {}
         runtime_row = runtime.iloc[0] if not runtime.empty else {}
-        q_h = next((row for row in q_h_rows if row["store_id"] == store["store_id"]), {})
+        store_path = store.get("path")
+        q_h = next(
+            (
+                row
+                for row in q_h_rows
+                if store_path is not None and row.get("path") is not None and str(row["path"]) == str(store_path)
+            ),
+            next((row for row in q_h_rows if row["store_id"] == store["store_id"]), {}),
+        )
         q_h_chain_available = (
             bool(q_h.get("available")) and bool(q_h.get("deep_count")) and not bool(q_h.get("truncated"))
         )
@@ -1197,9 +1206,9 @@ def _contract_additive_totals(
                 "q_h_chain_unavailable_reason": None
                 if q_h_chain_available
                 else q_h.get("blocking_reason", "Q_H evidence unavailable or incomplete"),
-                "q_h_state_count": _optional_qh_count(q_h, "state_count"),
-                "q_h_trainable_count": _optional_qh_count(q_h, "trainable_count"),
-                "q_h_padding_count": _optional_qh_count(q_h, "padding_count"),
+                "q_h_state_count": _optional_qh_count(q_h, "state_count") if q_h_chain_available else None,
+                "q_h_trainable_count": _optional_qh_count(q_h, "trainable_count") if q_h_chain_available else None,
+                "q_h_padding_count": _optional_qh_count(q_h, "padding_count") if q_h_chain_available else None,
             }
         )
     source = pd.DataFrame(rows)
@@ -1224,8 +1233,15 @@ def _contract_additive_totals(
         .agg(store_count=("store_count", "sum"), **additive)
         .reset_index()
     )
-    grouped["q_h_chain_available"] = grouped["q_h_chain_count"].notna()
     contract_keys = ["contract_id", "contract", "contract_payload_json", "profile"]
+    availability = (
+        source.groupby(contract_keys, dropna=False, sort=True)["q_h_chain_available"]
+        .all()
+        .reset_index(name="q_h_chain_available")
+    )
+    grouped = grouped.drop(columns="q_h_chain_available", errors="ignore").merge(
+        availability, on=contract_keys, how="left", validate="one_to_one"
+    )
     reasons = (
         source.groupby(contract_keys, dropna=False, sort=True)["q_h_chain_unavailable_reason"]
         .agg(lambda values: tuple(sorted({str(value) for value in values if pd.notna(value) and str(value)})))
@@ -1240,6 +1256,16 @@ def _contract_additive_totals(
         ),
         axis=1,
     )
+    unavailable = ~grouped["q_h_chain_available"].astype(bool)
+    grouped.loc[
+        unavailable,
+        [
+            "q_h_chain_count",
+            "q_h_state_count",
+            "q_h_trainable_count",
+            "q_h_padding_count",
+        ],
+    ] = None
     grouped = grouped.drop(columns="_q_h_reasons")
     return grouped.loc[:, columns].sort_values("contract_id", kind="stable").reset_index(drop=True)
 
@@ -1277,6 +1303,8 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
     source = composition[composition["group_by"] == "mixture"].copy()
     if source.empty:
         return pd.DataFrame(columns=columns)
+    if "corpus_store_path" not in source:
+        source["corpus_store_path"] = source["store_id"]
     count_columns = (
         "allocated_count",
         "actor_valid_count",
@@ -1294,7 +1322,7 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
         )
         .agg(
             generation_cohort=("generation_cohort", "first"),
-            store_count=("store_id", "nunique"),
+            store_count=("corpus_store_path", "nunique"),
             **{column: (column, "sum") for column in count_columns},
         )
         .reset_index()
@@ -1328,6 +1356,9 @@ def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
     )
     if targets.empty:
         return pd.DataFrame(columns=columns)
+    targets = targets.copy()
+    if "corpus_store_path" not in targets:
+        targets["corpus_store_path"] = targets["store_id"]
     return (
         targets.groupby(
             [
@@ -1342,7 +1373,7 @@ def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
             dropna=False,
             sort=True,
         )
-        .agg(count=("target_row_id", "size"), store_count=("store_id", "nunique"))
+        .agg(count=("target_row_id", "size"), store_count=("corpus_store_path", "nunique"))
         .reset_index()
         .loc[:, columns]
     )
@@ -1377,6 +1408,8 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
         "clearance_denominator",
     )
     source = collision.copy()
+    if "corpus_store_path" not in source:
+        source["corpus_store_path"] = source["store_id"]
     for column in count_columns:
         source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
     grouped = (
@@ -1392,7 +1425,7 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
             dropna=False,
             sort=True,
         )
-        .agg(store_count=("store_id", "nunique"), **{column: (column, "sum") for column in count_columns})
+        .agg(store_count=("corpus_store_path", "nunique"), **{column: (column, "sum") for column in count_columns})
         .reset_index()
     )
     grouped["collision_rate"] = grouped["collision_count"] / grouped["collision_evaluated_count"].replace(0, np.nan)
@@ -1460,13 +1493,16 @@ def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
     )
     if failures.empty:
         return pd.DataFrame(columns=columns)
+    failures = failures.copy()
+    if "corpus_store_path" not in failures:
+        failures["corpus_store_path"] = failures["store_id"]
     return (
         failures.groupby(
             ["contract_id", "contract", "contract_payload_json", "profile", "kind", "severity"],
             dropna=False,
             sort=True,
         )
-        .agg(count=("message", "size"), store_count=("store_id", "nunique"))
+        .agg(count=("message", "size"), store_count=("corpus_store_path", "nunique"))
         .reset_index()
         .loc[:, columns]
     )

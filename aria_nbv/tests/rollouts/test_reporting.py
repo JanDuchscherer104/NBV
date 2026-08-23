@@ -37,6 +37,7 @@ from aria_nbv.rollouts.reporting import (
     THESIS_REPORT_TABLE_COLUMNS,
     _candidate_corpus_support,
     _contract_additive_totals,
+    _contract_frames,
     _corpus_failure_counts,
     _corpus_feasibility,
     _corpus_target_admission,
@@ -230,6 +231,94 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
     assert list(admission["count"]) == [1, 1]
     assert list(safe["collision_count"]) == [1, 1]
     assert list(failure_counts["count"]) == [1, 1]
+
+
+def test_corpus_reducers_count_distinct_physical_paths_with_shared_store_id(monkeypatch) -> None:
+    """Copied shards retain two physical contributors despite one content digest."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {
+            "id": "contract",
+            "label": "contract",
+            "profile": profile,
+            "payload": {"profile": profile},
+        },
+    )
+
+    def bundle() -> dict[str, pd.DataFrame]:
+        return {
+            "candidate_composition": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "group_by": "mixture",
+                        "family": "family-a",
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "cohort",
+                        "allocated_count": 2,
+                        "actor_valid_count": 2,
+                        "oracle_valid_count": 2,
+                        "trainable_count": 2,
+                        "selected_count": 1,
+                    }
+                ]
+            ),
+            "targets": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "target_valid": True,
+                        "gt_label_valid": True,
+                        "gt_match_status": "matched",
+                        "target_row_id": "target",
+                    }
+                ]
+            ),
+            "candidate_collision_support": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "cohort",
+                        "candidate_count": 2,
+                        "collision_evaluated_count": 2,
+                        "collision_count": 1,
+                        "clearance_finite_count": 2,
+                        "clearance_denominator": 2,
+                    }
+                ]
+            ),
+            "failures": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "kind": "timeout",
+                        "severity": "error",
+                        "message": "failed",
+                    }
+                ]
+            ),
+        }
+
+    included = [
+        {"path": "/shard-a", "store_id": "shared-content-id", "profile": "profile"},
+        {"path": "/shard-b", "store_id": "shared-content-id", "profile": "profile"},
+    ]
+    frames = [bundle(), bundle()]
+    support = _candidate_corpus_support(_contract_frames(frames, included, "candidate_composition"))
+    admission = _corpus_target_admission(_contract_frames(frames, included, "targets"))
+    feasibility = _corpus_feasibility(_contract_frames(frames, included, "candidate_collision_support"))
+    failures = _corpus_failure_counts(_contract_frames(frames, included, "failures"))
+
+    assert support.iloc[0]["store_count"] == 2
+    assert support.iloc[0]["allocated_count"] == 4
+    assert admission.iloc[0]["store_count"] == 2
+    assert admission.iloc[0]["count"] == 2
+    assert feasibility.iloc[0]["store_count"] == 2
+    assert feasibility.iloc[0]["candidate_count"] == 4
+    assert failures.iloc[0]["store_count"] == 2
+    assert failures.iloc[0]["count"] == 2
 
 
 def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_support(tmp_path) -> None:
@@ -625,8 +714,24 @@ def test_contract_additive_totals_match_single_store_baselines() -> None:
         {"store_id": "b", "contract_id": "contract-b", "contract": "B", "profile": "p-b"},
     ]
     q_h = [
-        {"store_id": "a", "state_count": 2, "trainable_count": 3, "padding_count": 1},
-        {"store_id": "b", "state_count": 5, "trainable_count": 7, "padding_count": 2},
+        {
+            "store_id": "a",
+            "available": True,
+            "deep_count": True,
+            "truncated": False,
+            "state_count": 2,
+            "trainable_count": 3,
+            "padding_count": 1,
+        },
+        {
+            "store_id": "b",
+            "available": True,
+            "deep_count": True,
+            "truncated": False,
+            "state_count": 5,
+            "trainable_count": 7,
+            "padding_count": 2,
+        },
     ]
     totals = _contract_additive_totals([bundle(1, 2, 60, 100), bundle(3, 4, 180, 200)], included, q_h)
 
@@ -663,6 +768,51 @@ def test_contract_additive_totals_do_not_fabricate_qh_chains_without_evidence() 
     assert pd.isna(row["q_h_chain_count"])
     assert bool(row["q_h_chain_available"]) is False
     assert row["q_h_chain_unavailable_reason"] == "no_q_h"
+
+
+def test_contract_additive_totals_fail_closed_for_mixed_qh_completeness() -> None:
+    """One incomplete shard makes every same-contract Q_H total unavailable."""
+
+    def bundle(rollouts: int) -> dict[str, pd.DataFrame]:
+        return {
+            "stores": pd.DataFrame([{"rollouts": rollouts, "steps": 2, "candidates": 10, "targets": 1, "sources": 1}]),
+            "runtime_storage": pd.DataFrame([{"total_bytes": 100}]),
+        }
+
+    included = [
+        {"path": "/complete", "store_id": "same", "contract_id": "contract", "contract": "C", "profile": "p"},
+        {"path": "/incomplete", "store_id": "same", "contract_id": "contract", "contract": "C", "profile": "p"},
+    ]
+    q_h = [
+        {
+            "path": "/complete",
+            "store_id": "same",
+            "available": True,
+            "deep_count": True,
+            "truncated": False,
+            "state_count": 2,
+            "trainable_count": 1,
+            "padding_count": 0,
+        },
+        {
+            "path": "/incomplete",
+            "store_id": "same",
+            "available": False,
+            "deep_count": False,
+            "truncated": True,
+            "blocking_reason": "truncated_q_h",
+        },
+    ]
+
+    totals = _contract_additive_totals([bundle(1), bundle(1)], included, q_h)
+
+    row = totals.iloc[0]
+    assert bool(row["q_h_chain_available"]) is False
+    assert pd.isna(row["q_h_chain_count"])
+    assert pd.isna(row["q_h_state_count"])
+    assert pd.isna(row["q_h_trainable_count"])
+    assert pd.isna(row["q_h_padding_count"])
+    assert row["q_h_chain_unavailable_reason"] == "truncated_q_h"
 
 
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
