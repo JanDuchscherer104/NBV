@@ -52,6 +52,23 @@ def test_generation_plot_labels_are_readable_and_schema_is_unchanged(
     ]
 
 
+def test_generation_fanout_label_matches_populated_metric(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(common, "get_label_display_mode", lambda: "Text")
+    rows = pd.DataFrame(
+        {
+            "trajectory": [0],
+            "step": [1],
+            "fanout_q025": [0.1],
+            "fanout_q975": [0.2],
+            "selected_target_rri": [0.15],
+        },
+    )
+    figure = counterfactual_rollouts._build_fanout_band_figure(rows)
+    selected_name = str(figure.data[-1].name)
+    assert "Selected target RRI" in selected_name
+    assert "Selected one-step target root gain" not in selected_name
+
+
 def test_offline_stats_use_four_progressive_workspaces() -> None:
     assert offline_dataset._SECTIONS == ("Overview", "Content", "Runtime", "Details")
     source = inspect.getsource(offline_dataset._render_stats)
