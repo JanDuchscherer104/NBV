@@ -453,7 +453,7 @@ def _render_scientific_evidence(session_handle: object) -> None:
                 fig,
                 ScientificExplanation(
                     question="Within exactly matched cohorts, how do policies differ at the rollout endpoint?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The bars summarize endpoint differences only after source, target, recipe, budget, and rollout controls have been exactly matched across policies.",
                     sections=(
                         ExplanationSection(
                             "population",
@@ -613,7 +613,7 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
         _temporal_summary_figure(summary, group_field=group_field, metric_label=metric_label),
         ScientificExplanation(
             question=f"How does {metric_label.lower()} change over persisted rollout depth?",
-            answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+            answer=f"The trace summarizes how {metric_label.lower()} is observed to change with acquisition number for the selected descriptive grouping.",
             sections=(
                 ExplanationSection(
                     "population",
@@ -674,7 +674,7 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
                 fig,
                 ScientificExplanation(
                     question=f"What exact {metric_label.lower()} trajectory produced rollout {selected_rollout}?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The line exposes the exact stored trajectory for one chosen rollout so the aggregate view can be traced back to factual step identifiers.",
                     sections=(
                         ExplanationSection(
                             "population",
@@ -817,7 +817,7 @@ def _render_selected_rank_and_geometry(session_handle: object) -> None:
                 fig,
                 ScientificExplanation(
                     question="How far is each selected action from the best valid persisted alternative?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The scatter shows the opportunity cost of each selected action relative to the best valid oracle-scored option in its own candidate shell.",
                     sections=(
                         ExplanationSection(
                             "population",
@@ -898,7 +898,7 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                 fig,
                 ScientificExplanation(
                     question="Does action selection become prematurely deterministic or remain indecisive with depth?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The faceted traces reveal whether the persisted selection distribution is becoming concentrated or remains broad as rollout depth increases.",
                     sections=(
                         ExplanationSection(
                             "population",
@@ -957,7 +957,7 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                 fig,
                 ScientificExplanation(
                     question="Where does the usable action set narrow along the selected chain?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The facets show whether the action set remains usable across factual rollout depth or is being eroded by invalid candidates.",
                     sections=(
                         ExplanationSection("population", "One candidate shell per factual rollout step."),
                         ExplanationSection(
@@ -1004,7 +1004,7 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                 fig,
                 ScientificExplanation(
                     question="Which candidate families actually supply the selected actions at each depth?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The bars identify which persisted candidate families supplied the actions actually selected at each factual rollout depth.",
                     sections=(
                         ExplanationSection(
                             "population",

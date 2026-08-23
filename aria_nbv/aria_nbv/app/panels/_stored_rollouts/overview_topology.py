@@ -207,7 +207,7 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
                 fig,
                 ScientificExplanation(
                     question=f"How is {metric} distributed across the selected compatible shards?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The endpoint distributions compare observed factual outcomes across stores while retaining exact contract, policy, and horizon facets.",
                     sections=(
                         ExplanationSection(
                             "population",
@@ -264,7 +264,7 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             figure,
             ScientificExplanation(
                 question="Which observed targets are actor-admissible and which also receive an unambiguous GT label?",
-                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                answer="The bars count every target outcome so actor admission and privileged GT-label admission remain auditable as separate decisions.",
                 sections=(
                     ExplanationSection("population", "One persisted target row across validated selected stores."),
                     ExplanationSection(
@@ -413,7 +413,7 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             figure,
             ScientificExplanation(
                 question="Are candidate collision and clearance checks sufficiently observed across generation cohorts?",
-                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                answer="The cohort bars show whether collision and clearance evidence is sufficiently observed for each frozen generation context.",
                 sections=(
                     ExplanationSection(
                         "population", "Additive candidate feasibility denominators grouped by exact generation cohort."
@@ -465,7 +465,7 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
         px.bar(failures, x="kind", y="count", color="severity", title="Failures across the selected contract facet"),
         ScientificExplanation(
             question="Which validation and data-quality failure classes dominate the selected corpus?",
-            answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+            answer="The bars prioritize failure predicates occurring most often among selected validated stores so the next evidence trail is explicit.",
             sections=(
                 ExplanationSection(
                     "population",
@@ -592,7 +592,7 @@ def _render_trust_and_topology(
                 fig,
                 ScientificExplanation(
                     question="Which persisted artifacts are embedded, resolved, inferred, or missing?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The Sankey maps which rollout payloads and external artifacts the selected store declares, resolves, infers, or fails to locate.",
                     sections=(
                         ExplanationSection(
                             "population",

@@ -511,9 +511,23 @@ def _candidate_population_explanation(
 ) -> ScientificExplanation:
     """Build consistent scientific context for complete candidate-support plots."""
 
+    answers = {
+        "How does candidate-family choice evolve across factual acquisition?": "The traces separate available family support, actor-valid support, policy probability mass, and realized selections by factual acquisition.",
+        "How does the previously selected family relate to the next family?": "The heatmaps compare expected policy mass with realized next-family frequency for the same adjacent factual contexts.",
+        "Which selected-family sequences produce the observed terminal return distribution?": "The grouped distributions connect complete selected-family sequences to their observed terminal target-root gains.",
+        "Does candidate direction support cover solid angle without coordinate-latitude bias?": "The equal-area direction bins show where the complete candidate shell supplies angular support without overweighting the poles.",
+        "How far does the observed direction distribution depart from an isotropic reference?": "The distance summarizes how far observed normalized directions depart from the uniform-sphere reference at each factual state.",
+        "Do sampled directions cover the sphere locally and globally?": "Nearest-neighbor separation and covering radius expose local gaps and the largest uncovered angular region in the sampled support.",
+        "How often do evaluated candidates collide, at population and state-macro levels?": "The paired summaries distinguish candidate-weighted collision frequency from the equal-weight state macro, preserving both denominators.",
+        "How much geometric clearance is observed for the candidate population?": "The summaries report finite path clearance for the full candidate population and separately for state-level macros.",
+        "How much of the candidate shell is represented by collision and clearance evidence?": "The additive counts show which portions of the candidate shell were evaluated, collision-labelled, and assigned finite clearance.",
+    }
     return ScientificExplanation(
         question=question,
-        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+        answer=answers.get(
+            question,
+            f"The plot reports {question[:-1].lower()} from complete persisted candidate evidence, with unavailable rows retained explicitly.",
+        ),
         sections=(
             ExplanationSection("Population / grain", population_text),
             ExplanationSection("Metric / units", metric_text),
@@ -971,7 +985,7 @@ def _render_candidate_provenance_flow(session_handle: object) -> None:
         _candidate_flow_figure(flow),
         ScientificExplanation(
             question="How does persisted candidate-generation provenance flow into actor-valid support and terminal outcomes?",
-            answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+            answer="The flow separates what the generator proposed, what the actor could execute, and what the rollout ultimately selected or rejected.",
             sections=(
                 ExplanationSection(
                     "population",
@@ -1054,7 +1068,7 @@ def _render_selected_action_policy_flow(ranks: pd.DataFrame) -> None:
             _selected_action_flow_figure(selection_flow),
             ScientificExplanation(
                 question="Which candidate/action policy selected each persisted action, and where did that action rank by target RRI?",
-                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                answer="The flow shows which policy produced each executed action and how that action ranked among the valid oracle-scored alternatives available at that same step.",
                 sections=(
                     ExplanationSection(
                         "population", "One persisted selected rollout step matching the active policy/depth filters."
@@ -1283,7 +1297,7 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
             fig,
             ScientificExplanation(
                 question="Is a candidate family selected because it is useful, or merely because it is frequently available?",
-                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                answer="The paired bars separate a family's opportunity to be chosen from the rate at which it is chosen when that opportunity exists.",
                 sections=(
                     ExplanationSection("population", "Candidate rows grouped by root-relative position family."),
                     ExplanationSection(
@@ -1350,7 +1364,7 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
             fig,
             ScientificExplanation(
                 question=f"How do actor-valid, trainable, and selected populations differ across {breakdown_by}?",
-                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                answer="The grouped counts reveal where candidates are executable, label-trainable, or actually selected without pretending those masks form a single pipeline.",
                 sections=(
                     ExplanationSection(
                         "population", f"Complete-store candidate rows grouped by persisted {breakdown_by} provenance."
@@ -1437,7 +1451,7 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                 fig,
                 ScientificExplanation(
                     question="Does persisted target rank agree with the score used to prioritize targets?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The scatter checks whether the persisted ordinal priority is consistent with the configured score while retaining each target's validity status.",
                     sections=(
                         ExplanationSection("population", "One target proposal with finite rank and selection score."),
                         ExplanationSection(
@@ -1490,7 +1504,7 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     fig,
                     ScientificExplanation(
                         question="How strongly does visible target support influence the persisted target score?",
-                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        answer="The scatter shows whether the selected support diagnostic contributes plausibly to the persisted target-selection score.",
                         sections=(
                             ExplanationSection(
                                 "population", f"One target proposal with finite selection score and {support_field}."
@@ -1579,7 +1593,7 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     fig,
                     ScientificExplanation(
                         question="Which target-score components are redundant, opposed, or unexpectedly disconnected?",
-                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        answer="The heatmap is descriptive evidence of linear association between persisted score components, with pair-local support shown for every cell.",
                         sections=(
                             ExplanationSection(
                                 "population",
@@ -1695,7 +1709,7 @@ def _render_candidate_geometry_diagnostics(
                 fig,
                 ScientificExplanation(
                     question=f"What is the support, tail behavior, and invalidity structure of {metric}?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer=f"The distribution shows the observed support and tails of {metric}, with invalidity retained as a diagnostic stratum.",
                     sections=(
                         ExplanationSection("population", "Bounded candidate audit rows with a finite selected metric."),
                         ExplanationSection(
@@ -1755,7 +1769,7 @@ def _render_candidate_geometry_diagnostics(
                 fig,
                 ScientificExplanation(
                     question="Do candidate families cover the intended local motion support around each proposal expansion pose?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The equal-area support map shows whether candidate families cover the local proposal shell around each expansion pose.",
                     sections=(
                         ExplanationSection(
                             "population",
@@ -1897,7 +1911,7 @@ def _render_candidate_geometry_diagnostics(
                 _normalized_radius_figure(radius),
                 ScientificExplanation(
                     question="Do candidate radii respect the target-normalized geometry envelope?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The radius distribution compares candidate displacement with the target distance remaining at each factual expansion pose.",
                     sections=(
                         ExplanationSection(
                             "population", "Bounded candidate rows with finite target-distance-normalized radius."
@@ -1957,7 +1971,7 @@ def _render_candidate_geometry_diagnostics(
                 _orientation_diagnostic_figure(orientation),
                 ScientificExplanation(
                     question="Are candidate and target-facing orientations consistent with the persisted frame?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The orientation diagnostics compare persisted candidate and target-facing frames in the store's declared coordinate convention.",
                     sections=(
                         ExplanationSection(
                             "population", "Bounded finite candidate orientation diagnostics by factual step."
@@ -2005,7 +2019,7 @@ def _render_candidate_geometry_diagnostics(
                 fig,
                 ScientificExplanation(
                     question="Do candidate motions cover the target-bearing angles that the store presents?",
-                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    answer="The overlaid angle distributions show whether proposed motion yaw reaches the target-relative bearings represented in the stored candidate audit.",
                     sections=(
                         ExplanationSection(
                             "population", "Bounded candidate rows with finite bearing or motion-yaw diagnostics."
@@ -2052,7 +2066,7 @@ def _render_candidate_geometry_diagnostics(
                     fig,
                     ScientificExplanation(
                         question="Are translation and rotation jointly plausible for sampled and selected actions?",
-                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        answer="The scatter checks whether sampled and selected actions jointly respect plausible translation and rotation support.",
                         sections=(
                             ExplanationSection("population", "Bounded candidate rows with finite motion diagnostics."),
                             ExplanationSection("metric", "Step length in metres and yaw change in degrees."),
@@ -2097,7 +2111,7 @@ def _render_candidate_geometry_diagnostics(
                     fig,
                     ScientificExplanation(
                         question="Which candidate families contain useful oracle reward support, and what does selection choose?",
-                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        answer="The boxes compare the oracle target-root-gain support offered by each family with the values on the actions actually selected.",
                         sections=(
                             ExplanationSection(
                                 "population",

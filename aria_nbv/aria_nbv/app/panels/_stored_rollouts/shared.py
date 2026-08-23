@@ -113,21 +113,23 @@ def render_explanation_popover(
 def _render_scientific_guide(explanation: ScientificExplanation, *, log_y_key: str | None) -> None:
     """Render the reusable interpretation guide inside a plot popover."""
 
-    explanation_item("Answer", explanation.answer)
-    for section in explanation.sections:
-        explanation_item(section.title, section.body)
+    st.markdown("### Core idea")
     explanation_item("Question", explanation.question)
+    explanation_item("Answer", explanation.answer)
+    _render_theory(explanation.theory)
+    for section in explanation.sections:
+        st.markdown(f"### {section.title}")
+        st.markdown(section.body)
     if log_y_key is not None:
         explanation_item(
             "Axis scale",
             "Linear by default. Logarithmic scale is independently selectable for this plot and hides zero or negative observations.",
         )
-    _render_theory(explanation.theory)
     if explanation.external_references:
-        explanation_item(
-            "External sources", "\n\n".join(f"[{label}]({url})" for label, url in explanation.external_references)
-        )
-    explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
+        st.markdown("### External sources")
+        for label, url in explanation.external_references:
+            st.markdown(f"- [{label}]({url})")
+    explanation_item("Provenance", ", ".join(explanation.source_fields), code=True)
 
 
 def _render_theory(theory: TheoryReferences | None) -> None:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from aria_nbv.app.panels._stored_rollouts import reconstruction_return, shared
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return, shared
 from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from aria_nbv.app.scientific_labels import TheoryReferences, TheoryResolutionError, resolve_theory
 
@@ -113,6 +113,21 @@ def test_render_plot_keeps_answer_visible_and_guide_reusable() -> None:
     assert "render_explanation_popover(" in source
     assert "_render_scientific_guide(explanation" in source
     assert "_render_theory(explanation.theory)" in source
+
+
+def test_stored_rollout_plot_answers_are_not_generic() -> None:
+    generic = "This plot answers the question using the persisted evidence rows"
+    for module in (candidate_generation, overview_topology, reconstruction_return, shared):
+        assert generic not in Path(module.__file__).read_text(encoding="utf-8")
+
+
+def test_scientific_guide_has_one_ordered_narrative_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    rendered: list[str] = []
+    monkeypatch.setattr(shared.st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
+    shared._render_scientific_guide(_explanation(), log_y_key=None)
+    text = "\n".join(rendered)
+    assert text.index("### Core idea") < text.index("**Question**") < text.index("**Answer**")
+    assert text.count("**Answer**") == 1
 
 
 def test_corpus_selection_diagnostics_are_probability_entropy_only_and_theory_backed() -> None:
