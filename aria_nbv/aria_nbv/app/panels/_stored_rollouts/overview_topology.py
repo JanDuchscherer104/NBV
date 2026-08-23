@@ -202,10 +202,19 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
     else:
         feasibility = summary.feasibility
         metrics = st.columns(4)
-        row = feasibility.iloc[0]
-        metrics[0].metric("Candidates", _format_count(row.get("candidate_count")))
-        metrics[1].metric("Collision rate", _format_fraction(row.get("collision_rate")))
-        metrics[2].metric("Clearance coverage", _format_fraction(row.get("clearance_coverage")))
+        # Cards summarize the selected corpus, not the first generation
+        # cohort. Rates are recomputed from additive denominators.
+        candidates = pd.to_numeric(feasibility.get("candidate_count"), errors="coerce").sum()
+        collision_evaluated = pd.to_numeric(feasibility.get("collision_evaluated_count"), errors="coerce").sum()
+        collisions = pd.to_numeric(feasibility.get("collision_count"), errors="coerce").sum()
+        clearance_finite = pd.to_numeric(feasibility.get("clearance_finite_count"), errors="coerce").sum()
+        clearance_denominator = pd.to_numeric(feasibility.get("clearance_denominator"), errors="coerce").sum()
+        metrics[0].metric("Candidates", _format_count(candidates))
+        metrics[1].metric("Collision rate", _format_fraction(collisions / collision_evaluated if collision_evaluated else None))
+        metrics[2].metric(
+            "Clearance coverage",
+            _format_fraction(clearance_finite / clearance_denominator if clearance_denominator else None),
+        )
         metrics[3].metric("Cohorts", _format_count(len(feasibility)))
         figure = px.bar(
             feasibility,

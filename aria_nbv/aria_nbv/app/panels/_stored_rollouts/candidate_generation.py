@@ -198,10 +198,34 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
 
     selection_dynamics = population.get("selection_dynamics", {})
     if isinstance(selection_dynamics, dict):
-        dynamics = next(
-            (pd.DataFrame(value) for value in selection_dynamics.values() if isinstance(value, list) and value),
-            pd.DataFrame(),
-        )
+        available_groups = [
+            str(group)
+            for group, value in selection_dynamics.items()
+            if isinstance(value, list) and value
+        ]
+        dynamics = pd.DataFrame()
+        if available_groups:
+            group_by = st.selectbox(
+                "Candidate-choice vocabulary",
+                options=available_groups,
+                index=available_groups.index("position_strategy") if "position_strategy" in available_groups else 0,
+                key="candidate-choice-group-vocabulary",
+                help="Select the exact persisted family vocabulary; policies, temperatures, and rollout contracts are not pooled.",
+            )
+            dynamics = pd.DataFrame(selection_dynamics[group_by])
+            control_fields = ("policy", "horizon", "branch_factor", "beam_width")
+            for field in control_fields:
+                if field not in dynamics:
+                    continue
+                values = sorted(dynamics[field].dropna().unique().tolist(), key=str)
+                if len(values) > 1:
+                    choice = st.selectbox(
+                        f"Candidate-choice {field}",
+                        options=values,
+                        format_func=str,
+                        key=f"candidate-choice-{group_by}-{field}",
+                    )
+                    dynamics = dynamics.loc[dynamics[field].eq(choice)]
         if not dynamics.empty:
             pooled = pd.DataFrame(
                 candidate_selection_pooled_summary_rows(dynamics.to_dict("records"), metric="policy_mass")
@@ -224,6 +248,14 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                     candidate_selection_transition_rows(dynamics.to_dict("records"), pool_temperatures=True)
                 )
                 if not transitions.empty:
+                    depths = sorted(transitions["step_index"].dropna().astype(int).unique().tolist())
+                    depth = st.selectbox(
+                        "Candidate-choice transition depth",
+                        options=depths,
+                        format_func=lambda value: f"{value} → {value + 1}",
+                        key=f"candidate-choice-transition-depth-{group_by}",
+                    )
+                    transitions = transitions.loc[transitions["step_index"].eq(depth)]
                     _render_plot(
                         _candidate_transition_figure(transitions),
                         _candidate_population_explanation(
@@ -237,7 +269,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                             evidence_role or "provenance",
                         ),
                     )
-                with st.expander("Candidate-choice rows and CSV"):
+                with st.expander("Candidate-choice rows and CSV", expanded=False):
                     st.dataframe(pooled, hide_index=True, width="stretch")
                     _download_frame("Download candidate-choice CSV", "candidate-choice-dynamics.csv", pooled)
 
@@ -497,7 +529,21 @@ def _select_support_facet(frame: pd.DataFrame, label: str) -> pd.DataFrame:
     """Select one exact persisted support facet before rendering a plot."""
 
     selected = frame.copy()
-    for field in ("contract_id", "generation_cohort_id", "population", "aggregation_level", "scene_id", "step_index"):
+    # These are factual support keys, not display conveniences.  A plot must
+    # never silently pool distinct scene/state populations or generation
+    # contracts before the user has selected the exact persisted facet.
+    for field in (
+        "contract_id",
+        "generation_cohort_id",
+        "population",
+        "aggregation_level",
+        "scene",
+        "scene_id",
+        "rollout_row_id",
+        "step_row_id",
+        "step_index",
+        "grain",
+    ):
         if field not in selected.columns:
             continue
         values = sorted(selected[field].dropna().astype(str).unique())
@@ -782,16 +828,18 @@ def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: s
 def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
     """Render restored complete-store candidate audit plots on demand."""
 
-    families = pd.DataFrame(session_handle.candidate_group("position"))
+    population = session_handle.candidate_population()
+    composition_by_group = population.get("composition", {})
+    families = pd.DataFrame(composition_by_group.get("position", []))
     if not families.empty:
         families["selection_rate_given_available"] = np.where(
-            families["actor_valid"] > 0,
-            families["selected"] / families["actor_valid"],
+            families["actor_valid_count"] > 0,
+            families["selected_count"] / families["actor_valid_count"],
             np.nan,
         )
         long = families.melt(
             id_vars="position",
-            value_vars=["actor_valid_fraction", "selection_rate_given_available"],
+            value_vars=["macro_actor_valid_rate", "selection_rate_given_available"],
             var_name="metric",
             value_name="fraction",
         )
@@ -824,8 +872,12 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
         options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
-    breakdown = pd.DataFrame(session_handle.candidate_group(breakdown_by))
-    count_fields = [name for name in ("actor_valid", "q_train", "selected") if name in breakdown]
+    breakdown = pd.DataFrame(composition_by_group.get(breakdown_by, []))
+    count_fields = [
+        name
+        for name in ("actor_valid_count", "trainable_count", "selected_count")
+        if name in breakdown
+    ]
     if not breakdown.empty and count_fields:
         long = breakdown.melt(
             id_vars=breakdown_by,
@@ -860,8 +912,8 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
             ),
         )
 
-    with st.expander("Invalid reasons and valid fanout"):
-        invalid = pd.DataFrame(session_handle.candidate_group("invalid_reason"))
+    with st.expander("Invalid reasons and valid fanout", expanded=False):
+        invalid = pd.DataFrame(composition_by_group.get("invalid_reason", []))
         fanout = pd.DataFrame(session_handle.steps())
         if not invalid.empty:
             st.dataframe(invalid, hide_index=True, width="stretch")

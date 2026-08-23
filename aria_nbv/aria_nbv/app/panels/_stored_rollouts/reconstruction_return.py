@@ -49,6 +49,18 @@ _TEMPORAL_EVIDENCE_ROLES: dict[
     "selected_entropy": "actor-visible",
 }
 
+# Reward/reconstruction is intentionally disjoint from actor-feasibility
+# diagnostics.  The latter belongs on Admission & feasibility, where its
+# denominators can be read without mixing units into a reward trajectory.
+_REWARD_TEMPORAL_METRICS = frozenset(
+    {
+        "cumulative_target_root_gain",
+        "selected_target_root_gain",
+        "selected_target_rri",
+        "marginal_target_rri",
+    }
+)
+
 
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
     """Render compatible-shard factual temporal reward/reconstruction evidence."""
@@ -60,7 +72,14 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
     if temporal.empty:
         st.info("No validated factual temporal rows are available.")
         return
-    metric_names = list(dict.fromkeys(str(value) for value in temporal["metric"].dropna()))
+    metric_names = [
+        str(value)
+        for value in dict.fromkeys(temporal["metric"].dropna())
+        if str(value) in _REWARD_TEMPORAL_METRICS
+    ]
+    if not metric_names:
+        st.info("No validated reward or reconstruction metrics are available in the selected corpus.")
+        return
     metric = st.selectbox("Corpus temporal metric", options=metric_names, key="corpus_temporal_metric")
     rows = temporal.loc[temporal["metric"] == metric].copy()
     group_fields = [field for field in ("contract", "policy", "temperature", "horizon") if field in rows]
