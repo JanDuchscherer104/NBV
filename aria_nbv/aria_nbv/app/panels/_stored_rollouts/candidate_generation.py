@@ -605,29 +605,64 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
             )
 
     target_view = pd.DataFrame(population.get("target_view", []))
-    if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty:
-        value = "mean" if "mean" in target_view else "count"
-        if "metric" in target_view and value in target_view:
+    if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty and "evidence" in target_view:
+        target_view = _select_support_facet(target_view, "Target-view support")
+        distance = target_view.loc[target_view["evidence"].eq("target_distance")].copy()
+        if not distance.empty and "mean" in distance:
             fig = px.bar(
-                _select_support_facet(target_view, "Target-view support"),
-                x="metric",
-                y=value,
-                color="population" if "population" in target_view else None,
-                title="Target-view support and availability",
+                distance.dropna(subset=["mean"]),
+                x="population" if "population" in distance else "aggregation_level",
+                y="mean",
+                color="aggregation_level" if "aggregation_level" in distance else None,
+                title="Finite target distance by target-view population",
+                labels={"mean": "target distance [m]"},
             )
             _render_plot(
                 fig,
                 _candidate_population_explanation(
-                    "How much target-view evidence is available for the selected candidate population?",
-                    "Complete target-view audit rows for one unambiguous target-evidence role.",
-                    "Metric values retain their persisted units; missingness is counted separately.",
-                    "Only finite target-view measurements enter metric summaries; missing rows remain unavailable.",
-                    "Optical and geometric target-view evidence is available for the declared protocol.",
-                    "Large missing counts indicate evaluator coverage gaps, not poor visibility.",
+                    "What finite target distance is represented in the selected target-view population?",
+                    "Only persisted finite target-distance measurements are plotted; optical and line-of-sight evidence remains a separate availability diagnostic.",
+                    "Mean target distance is measured in metres; missing target distances are not imputed.",
+                    "The denominator is the selected factual candidate state facet after exact contract/cohort filters.",
+                    "Target distance describes geometric scale, not visibility or admission quality.",
+                    "Large missingness or absent optical evidence indicates evaluator coverage gaps.",
                     "inspection.candidate_target_view_evidence",
                     evidence_role,
                 ),
             )
+        availability = target_view.loc[target_view["evidence"].ne("target_distance")].copy()
+        if not availability.empty:
+            availability_rows = availability.melt(
+                id_vars=[field for field in ("evidence", "population") if field in availability],
+                value_vars=[field for field in ("finite_count", "missing_count") if field in availability],
+                var_name="availability_count",
+                value_name="count",
+            )
+            if not availability_rows.empty:
+                _render_plot(
+                    px.bar(
+                        availability_rows,
+                        x="evidence",
+                        y="count",
+                        color="availability_count",
+                        barmode="group",
+                        title="Target-view availability and missingness",
+                        labels={"count": "candidate states [count]"},
+                    ),
+                    _candidate_population_explanation(
+                        "Which optical and visibility measurements are actually persisted?",
+                        "Availability counts are shown separately from metric-valued target distance.",
+                        "Counts of finite and missing candidate-state evidence rows; no boolean status is treated as a measurement.",
+                        "Each evidence category keeps its own candidate-state denominator.",
+                        "Unavailable FOV, pixel, or line-of-sight rows remain explicit rather than becoming zeros.",
+                        "Missing optical evidence limits interpretation of visibility, not geometric target distance.",
+                        "inspection.candidate_target_view_evidence",
+                        evidence_role,
+                    ),
+                )
+        with st.expander("Target-view evidence rows and CSV", expanded=False):
+            st.dataframe(target_view, hide_index=True, width="stretch")
+            _download_frame("Download target-view support CSV", "candidate-target-view-support.csv", target_view)
 
 
 def _select_support_facet(frame: pd.DataFrame, label: str) -> pd.DataFrame:
@@ -1341,7 +1376,7 @@ def _render_candidate_geometry_diagnostics(
     with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
         st.caption(
             f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
-            "Coordinates are root-relative ARIA world metres (RIGHT_HAND_Z_UP), never pooled absolute scene origins."
+            "Proposal coordinates are target-distance-normalized (RIGHT_HAND_Z_UP), never pooled absolute scene origins; factual trajectories remain a separate projection."
         )
         metric_options = [
             name
@@ -1420,6 +1455,7 @@ def _render_candidate_geometry_diagnostics(
                 ],
                 title="Candidate centers relative to each rollout root (ground plane)",
             )
+            fig.update_layout(xaxis_title="target-forward / d", yaxis_title="target-lateral / d")
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
             if {"target_x", "target_y"}.issubset(root_geometry.columns):
                 _add_geometry_anchors(
@@ -1439,7 +1475,8 @@ def _render_candidate_geometry_diagnostics(
                             "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed.",
                         ),
                         ExplanationSection(
-                            "metric", "Root-relative X/Y displacement in metres; Z-up height is available on hover."
+                            "metric",
+                            "Target-distance-normalized X/Y displacement (dimensionless); Z-up height is available on hover.",
                         ),
                         ExplanationSection(
                             "denominator masks",
@@ -1588,49 +1625,61 @@ def _render_candidate_geometry_diagnostics(
                 ),
             )
 
+        frame_orientation = (
+            _orientation_diagnostic_rows(root_geometry, proposal_frames)
+            if not proposal_frames.empty and {"rollout_row_id", "step_index"}.issubset(root_geometry.columns)
+            else pd.DataFrame()
+        )
         orientation_fields = {
             "rig_target_yaw_error_deg",
             "target_elevation_deg",
         }
-        if orientation_fields.intersection(candidates.columns):
+        if not frame_orientation.empty:
+            orientation = frame_orientation
+            orientation_sources = tuple(str(value) for value in orientation.get("diagnostic", pd.Series()).unique())
+        elif orientation_fields.intersection(candidates.columns):
             frame_fields = [name for name in orientation_fields if name in candidates]
+            orientation_sources = tuple(frame_fields)
             orientation = candidates[frame_fields].copy()
             orientation["step_index"] = candidates.get("step_index", pd.Series(index=candidates.index))
             orientation["diagnostic"] = "candidate orientation"
             orientation = orientation.melt(
                 id_vars=["step_index", "diagnostic"], var_name="source", value_name="angle_deg"
             ).dropna(subset=["angle_deg"])
-            if not orientation.empty:
-                _render_plot(
-                    _orientation_diagnostic_figure(orientation),
-                    ScientificExplanation(
-                        question="Are candidate and target-facing orientations consistent with the persisted frame?",
-                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
-                        sections=(
-                            ExplanationSection(
-                                "population", "Bounded finite candidate orientation diagnostics by factual step."
-                            ),
-                            ExplanationSection("metric", "Yaw/elevation diagnostic angles in degrees."),
-                            ExplanationSection(
-                                "denominator masks",
-                                "Finite persisted orientation fields; absent fields are not imputed.",
-                            ),
-                            ExplanationSection(
-                                "comparability",
-                                "Use the same pose convention and target-facing contract across stores.",
-                            ),
-                            ExplanationSection(
-                                "expected pattern", "Errors remain within configured orientation envelopes."
-                            ),
-                            ExplanationSection(
-                                "failure interpretation",
-                                "Systematic offsets indicate frame or target-pose inconsistencies.",
-                            ),
+        else:
+            orientation = pd.DataFrame()
+            orientation_sources = ()
+        if not orientation.empty:
+            _render_plot(
+                _orientation_diagnostic_figure(orientation),
+                ScientificExplanation(
+                    question="Are candidate and target-facing orientations consistent with the persisted frame?",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection(
+                            "population", "Bounded finite candidate orientation diagnostics by factual step."
                         ),
-                        evidence_role="actor-visible",
-                        source_fields=tuple(f"candidate_diagnostics/{name}" for name in frame_fields),
+                        ExplanationSection("metric", "Yaw/elevation diagnostic angles in degrees."),
+                        ExplanationSection(
+                            "denominator masks",
+                            "Finite persisted orientation fields; absent fields are not imputed.",
+                        ),
+                        ExplanationSection(
+                            "comparability",
+                            "Use the same pose convention and target-facing contract across stores.",
+                        ),
+                        ExplanationSection(
+                            "expected pattern", "Errors remain within configured orientation envelopes."
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Systematic offsets indicate frame or target-pose inconsistencies.",
+                        ),
                     ),
-                )
+                    evidence_role="actor-visible",
+                    source_fields=tuple(f"proposal_geometry/{name}" for name in orientation_sources),
+                ),
+            )
 
         angle_cols = [
             name

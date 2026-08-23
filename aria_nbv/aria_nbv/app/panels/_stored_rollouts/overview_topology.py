@@ -255,6 +255,88 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             _download_frame(
                 "Download target-admission rows CSV", "corpus-target-admission.csv", target_rows.drop(columns="outcome")
             )
+    if summary.candidate_support.empty:
+        st.info("No validated candidate-family support rows are available.")
+    else:
+        support = _select_contract_facet(summary.candidate_support, "Candidate support")
+        count_fields = (
+            "allocated_count",
+            "actor_valid_count",
+            "oracle_valid_count",
+            "trainable_count",
+            "selected_count",
+        )
+        count_totals = {
+            field: int(pd.to_numeric(support.get(field), errors="coerce").fillna(0).sum())
+            for field in count_fields
+            if field in support
+        }
+        cards = st.columns(5)
+        for card, (field, value) in zip(cards, count_totals.items(), strict=False):
+            card.metric(field.removesuffix("_count").replace("_", " ").title(), _format_count(value))
+        rate_fields = [
+            field
+            for field in ("actor_valid_rate", "oracle_valid_rate", "trainable_rate", "selected_rate")
+            if field in support
+        ]
+        if rate_fields:
+            rate_rows = support.melt(
+                id_vars=[field for field in ("family", "generation_cohort") if field in support],
+                value_vars=rate_fields,
+                var_name="support_rate",
+                value_name="rate",
+            )
+            figure = px.bar(
+                rate_rows,
+                x="family",
+                y="rate",
+                color="support_rate",
+                facet_col="generation_cohort" if "generation_cohort" in rate_rows else None,
+                barmode="group",
+                title="Candidate-family support within the selected contract facet",
+                labels={"rate": "fraction of allocated candidates"},
+            )
+            _render_plot(
+                figure,
+                ScientificExplanation(
+                    question="Are candidate families available, actor-valid, oracle-valid, trainable, and selected across the corpus?",
+                    answer="The plot preserves additive family support from the validated shards. Absent families remain visible as zero rows when the typed projection provides them.",
+                    sections=(
+                        ExplanationSection(
+                            "population", "One exact contract/profile facet, retaining generation cohort and family."
+                        ),
+                        ExplanationSection(
+                            "metric / units",
+                            "Bars are dimensionless rates; cards above show the corresponding additive candidate counts.",
+                        ),
+                        ExplanationSection(
+                            "denominator / masks",
+                            "Every rate uses allocated_count within its cohort/family; zero allocation is unavailable, not silently zero.",
+                        ),
+                        ExplanationSection(
+                            "evidence role",
+                            "Actor-valid support and privileged oracle/trainable masks are displayed separately.",
+                        ),
+                        ExplanationSection(
+                            "interpretation",
+                            "A family can be absent or available but non-trainable; these are distinct coverage outcomes.",
+                        ),
+                        ExplanationSection(
+                            "warning",
+                            "Different contract IDs are never pooled, even when their human-readable labels match.",
+                        ),
+                    ),
+                    evidence_role="provenance",
+                    source_fields=(
+                        "reporting.RolloutCorpusSummary.candidate_support",
+                        "candidate composition",
+                        "validated stores",
+                    ),
+                ),
+            )
+        with st.expander("Candidate-family support rows and CSV", expanded=False):
+            st.dataframe(support, hide_index=True, width="stretch")
+            _download_frame("Download candidate-family support CSV", "corpus-candidate-support.csv", support)
     if summary.feasibility.empty:
         st.info("No validated clearance/collision evidence is available.")
     else:
