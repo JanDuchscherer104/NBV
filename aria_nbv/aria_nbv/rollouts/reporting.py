@@ -511,7 +511,7 @@ class RolloutCorpusSummary:
     excluded_stores: tuple[dict[str, str], ...]
     """Selected stores excluded with exact validation or projection reasons."""
 
-    totals: dict[str, int | None]
+    totals: dict[str, object]
     """Additive store, rollout, storage, and complete deep-Q_H counts."""
 
     candidate_support: pd.DataFrame
@@ -684,7 +684,9 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
         "source_row_count": _frame_int_sum(stores, "sources"),
         "physical_sample_count": _frame_int_sum(stores, "sources"),
         "storage_bytes": _frame_int_sum(runtime, "total_bytes"),
-        "q_h_chain_count": _frame_int_sum(stores, "rollouts"),
+        "q_h_chain_count": _frame_int_sum(stores, "rollouts") if q_h_complete else None,
+        "q_h_chain_available": q_h_complete,
+        "q_h_chain_unavailable_reason": None if q_h_complete else "Q_H evidence unavailable or incomplete",
         "q_h_state_count": _row_int_sum(q_h_rows, "state_count") if q_h_complete else None,
         "q_h_trainable_count": _row_int_sum(q_h_rows, "trainable_count") if q_h_complete else None,
         "q_h_padding_count": _row_int_sum(q_h_rows, "padding_count") if q_h_complete else None,
@@ -748,6 +750,7 @@ def _corpus_temporal_summary(
         "contract",
         "contract_payload_json",
         "profile",
+        "generation_cohort_id",
         "policy",
         "temperature",
         "horizon",
@@ -780,6 +783,11 @@ def _corpus_temporal_summary(
         steps["contract"] = contract["label"]
         steps["contract_payload_json"] = json.dumps(contract.get("payload", {}), sort_keys=True, separators=(",", ":"))
         steps["profile"] = contract["profile"]
+        # Older report frames do not persist this optional cohort identity;
+        # fall back to the exact contract so current shards still pool while
+        # richer frames retain candidate/rollout lineage explicitly.
+        if "generation_cohort_id" not in steps:
+            steps["generation_cohort_id"] = contract["id"]
         annotated.append(steps)
     if not annotated:
         return pd.DataFrame(columns=columns)
@@ -792,6 +800,7 @@ def _corpus_temporal_summary(
         "contract",
         "contract_payload_json",
         "profile",
+        "generation_cohort_id",
         "policy",
         "temperature",
         "horizon",
@@ -800,8 +809,14 @@ def _corpus_temporal_summary(
     )
     for group_field in groups:
         source[group_field] = source[group_field].map(_temporal_group_scalar)
-    outer_groups = ("contract_id", "contract", "contract_payload_json", "profile")
-    inner_groups = ("policy", "temperature", "horizon", "branch_factor", "beam_width")
+    outer_groups = ("contract_id", "contract", "contract_payload_json", "profile", "generation_cohort_id")
+    inner_groups = (
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+    )
     summaries: list[pd.DataFrame] = []
     for outer_key, partition in source.groupby(list(outer_groups), dropna=False, sort=True):
         outer_values = dict(zip(outer_groups, outer_key if isinstance(outer_key, tuple) else (outer_key,), strict=True))
@@ -839,7 +854,10 @@ def _corpus_temporal_summary(
         return pd.DataFrame(columns=columns)
     return (
         pd.concat(summaries, ignore_index=True)
-        .sort_values(["metric", "contract_id", "policy", "temperature", "horizon", "step_index"], kind="stable")
+        .sort_values(
+            ["metric", "contract_id", "generation_cohort_id", "policy", "temperature", "horizon", "step_index"],
+            kind="stable",
+        )
         .reset_index(drop=True)
     )
 
@@ -1027,6 +1045,8 @@ def _contract_additive_totals(
         "source_row_count",
         "storage_bytes",
         "q_h_chain_count",
+        "q_h_chain_available",
+        "q_h_chain_unavailable_reason",
         "q_h_state_count",
         "q_h_trainable_count",
         "q_h_padding_count",
@@ -1040,6 +1060,9 @@ def _contract_additive_totals(
         store_row = stores.iloc[0] if not stores.empty else {}
         runtime_row = runtime.iloc[0] if not runtime.empty else {}
         q_h = next((row for row in q_h_rows if row["store_id"] == store["store_id"]), {})
+        q_h_chain_available = (
+            bool(q_h.get("available")) and bool(q_h.get("deep_count")) and not bool(q_h.get("truncated"))
+        )
         rows.append(
             {
                 "contract_id": store["contract_id"],
@@ -1053,7 +1076,11 @@ def _contract_additive_totals(
                 "target_row_count": int(store_row.get("targets", 0)),
                 "source_row_count": int(store_row.get("sources", 0)),
                 "storage_bytes": int(runtime_row.get("total_bytes", 0)),
-                "q_h_chain_count": int(store_row.get("rollouts", 0)),
+                "q_h_chain_count": int(store_row.get("rollouts", 0)) if q_h_chain_available else None,
+                "q_h_chain_available": q_h_chain_available,
+                "q_h_chain_unavailable_reason": None
+                if q_h_chain_available
+                else q_h.get("blocking_reason", "Q_H evidence unavailable or incomplete"),
                 "q_h_state_count": _optional_qh_count(q_h, "state_count"),
                 "q_h_trainable_count": _optional_qh_count(q_h, "trainable_count"),
                 "q_h_padding_count": _optional_qh_count(q_h, "padding_count"),
@@ -1063,15 +1090,41 @@ def _contract_additive_totals(
     additive = {
         field: (field, "sum")
         for field in columns[4:]
-        if field not in {"store_count", "q_h_state_count", "q_h_trainable_count", "q_h_padding_count"}
+        if field
+        not in {
+            "store_count",
+            "q_h_chain_available",
+            "q_h_chain_unavailable_reason",
+            "q_h_state_count",
+            "q_h_trainable_count",
+            "q_h_padding_count",
+        }
     }
     for field_name in ("q_h_state_count", "q_h_trainable_count", "q_h_padding_count"):
         additive[field_name] = (field_name, lambda values: values.sum(min_count=1))
+    additive["q_h_chain_count"] = ("q_h_chain_count", lambda values: values.sum(min_count=1))
     grouped = (
         source.groupby(["contract_id", "contract", "contract_payload_json", "profile"], dropna=False, sort=True)
         .agg(store_count=("store_count", "sum"), **additive)
         .reset_index()
     )
+    grouped["q_h_chain_available"] = grouped["q_h_chain_count"].notna()
+    contract_keys = ["contract_id", "contract", "contract_payload_json", "profile"]
+    reasons = (
+        source.groupby(contract_keys, dropna=False, sort=True)["q_h_chain_unavailable_reason"]
+        .agg(lambda values: tuple(sorted({str(value) for value in values if pd.notna(value) and str(value)})))
+        .reset_index(name="_q_h_reasons")
+    )
+    grouped = grouped.merge(reasons, on=contract_keys, how="left", validate="one_to_one")
+    grouped["q_h_chain_unavailable_reason"] = grouped.apply(
+        lambda row: (
+            None
+            if bool(row["q_h_chain_available"])
+            else "; ".join(row["_q_h_reasons"]) or "Q_H evidence unavailable or incomplete"
+        ),
+        axis=1,
+    )
+    grouped = grouped.drop(columns="_q_h_reasons")
     return grouped.loc[:, columns].sort_values("contract_id", kind="stable").reset_index(drop=True)
 
 

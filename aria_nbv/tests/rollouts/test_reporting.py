@@ -370,6 +370,48 @@ def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
     assert set(summary["store_count"]) == {1}
 
 
+def test_corpus_temporal_summary_preserves_generation_cohort_facets(monkeypatch) -> None:
+    """Distinct persisted rollout lineages remain separate temporal populations."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {
+            "id": "contract",
+            "label": "contract",
+            "profile": profile,
+            "payload": {"profile": profile},
+        },
+    )
+    base = {
+        "step_index": 0,
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "cumulative_target_root_gain": 0.1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+    }
+    steps = pd.DataFrame(
+        [
+            {**base, "generation_cohort_id": "cohort-a"},
+            {**base, "generation_cohort_id": "cohort-b"},
+        ]
+    )
+    summary = _corpus_temporal_summary(
+        [{"steps": steps}],
+        [{"path": "/store", "store_id": "store", "profile": "profile"}],
+    )
+
+    assert set(summary["generation_cohort_id"]) == {"cohort-a", "cohort-b"}
+    assert set(summary["store_count"]) == {1}
+
+
 def test_contract_additive_totals_match_single_store_baselines() -> None:
     def bundle(rollouts: int, steps: int, candidates: int, bytes_: int) -> dict[str, pd.DataFrame]:
         return {
@@ -393,6 +435,35 @@ def test_contract_additive_totals_match_single_store_baselines() -> None:
     assert list(totals["candidate_count"]) == [60, 180]
     assert list(totals["storage_bytes"]) == [100, 200]
     assert list(totals["q_h_trainable_count"]) == [3, 7]
+
+
+def test_contract_additive_totals_do_not_fabricate_qh_chains_without_evidence() -> None:
+    """V0/no-Q_H stores expose unavailable chain counts, never rollout totals."""
+
+    bundle = {
+        "stores": pd.DataFrame([{"rollouts": 4, "steps": 8, "candidates": 480, "targets": 1, "sources": 1}]),
+        "runtime_storage": pd.DataFrame([{"total_bytes": 1024}]),
+    }
+    included = [
+        {
+            "store_id": "v0-store",
+            "contract_id": "contract-v0",
+            "contract": "V0",
+            "contract_payload_json": '{"profile":"v0"}',
+            "profile": "v0",
+        }
+    ]
+
+    totals = _contract_additive_totals(
+        [bundle],
+        included,
+        [{"store_id": "v0-store", "available": False, "deep_count": False, "blocking_reason": "no_q_h"}],
+    )
+
+    row = totals.iloc[0]
+    assert pd.isna(row["q_h_chain_count"])
+    assert bool(row["q_h_chain_available"]) is False
+    assert row["q_h_chain_unavailable_reason"] == "no_q_h"
 
 
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
