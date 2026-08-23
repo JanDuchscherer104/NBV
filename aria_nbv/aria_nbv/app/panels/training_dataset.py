@@ -12,7 +12,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from ...configs import PathConfig
@@ -21,6 +23,7 @@ from ...dataset_bundle import (
     DatasetBundleSelection,
     QhBatchPreview,
     QhCorpusReadiness,
+    QhReadinessContract,
     build_dataset_bundle_summary,
     build_qh_corpus_readiness,
     compute_dataset_bundle_deep_statistics,
@@ -35,6 +38,7 @@ _QH_READINESS_STATE_KEY = "training_dataset_qh_readiness"
 _QH_PREVIEW_STATE_KEY = "training_dataset_qh_preview"
 _QH_BATCH_SIZE_KEY = "training_dataset_qh_batch_size"
 _QH_SEED_KEY = "training_dataset_qh_seed"
+_QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
 
 QhReadinessIdentity = tuple[tuple[Any, ...], int, int]
 QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int]
@@ -167,12 +171,14 @@ def _cached_qh_readiness(
     artifact_identity: tuple[Any, ...],
     batch_size: int,
     seed: int,
+    contract: QhReadinessContract,
 ) -> QhCorpusReadiness:
     """Cross the real Q_H dataset/DataModule seam after explicit request."""
 
     del artifact_identity
     return build_qh_corpus_readiness(
         DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        contract=contract,
         batch_size=batch_size,
         seed=seed,
     )
@@ -187,12 +193,14 @@ def _cached_qh_preview(
     chain_index: int,
     batch_size: int,
     seed: int,
+    contract: QhReadinessContract,
 ) -> QhBatchPreview:
     """Materialize one bounded chain and DataLoader batch after explicit request."""
 
     del artifact_identity
     return preview_qh_batch(
         DatasetBundleSelection(Path(root_store), tuple(Path(path) for path in rollout_stores)),
+        contract=contract,
         stage=stage,
         chain_index=chain_index,
         batch_size=batch_size,
@@ -220,6 +228,135 @@ def _manual_paths(value: str) -> tuple[Path, ...]:
     """Parse newline-separated manual paths without fabricating artifacts."""
 
     return tuple(Path(line.strip()).expanduser() for line in value.splitlines() if line.strip())
+
+
+def _target_inventory_frames(inventory: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Normalize typed detected/GT inventory rows for presentation plots."""
+
+    sample_rows: list[dict[str, Any]] = []
+    target_rows: list[dict[str, Any]] = []
+    for population in ("detected", "gt"):
+        evidence = inventory.get(population, {})
+        if not bool(evidence.get("available")):
+            continue
+        sample_rows.extend({**row, "population": population} for row in evidence.get("sample_rows", ()))
+        target_rows.extend({**row, "population": population} for row in evidence.get("rows", ()))
+    samples = pd.DataFrame(sample_rows)
+    targets = pd.DataFrame(target_rows)
+    return samples, targets
+
+
+def _render_target_inventory(inventory: dict[str, Any]) -> None:
+    """Show detector/GT availability and geometry distributions from deep evidence."""
+
+    samples, targets = _target_inventory_frames(inventory)
+    detected = inventory.get("detected", {})
+    gt = inventory.get("gt", {})
+    cols = st.columns(4)
+    cols[0].metric("Detected targets", _metric_value(detected.get("row_count")))
+    cols[1].metric("GT targets", _metric_value(gt.get("row_count")))
+    for index, (label, population) in enumerate((("Zero-detection samples", "detected"), ("Zero-GT samples", "gt")), 2):
+        rows = samples.loc[samples["population"] == population] if not samples.empty else samples
+        value = "Unavailable" if rows.empty else f"{int((rows['count'] == 0).sum()):,} / {len(rows):,}"
+        cols[index].metric(label, value)
+
+    exclusion_rows = [
+        {"population": population, "reason": reason, "count": int(evidence.get(field, 0))}
+        for population, evidence in (("detected", detected), ("gt", gt))
+        for reason, field in (
+            ("padding", "excluded_padding_count"),
+            ("non-finite", "excluded_nonfinite_count"),
+            ("invalid geometry", "excluded_invalid_geometry_count"),
+        )
+        if int(evidence.get(field, 0))
+    ]
+    if exclusion_rows:
+        st.plotly_chart(
+            px.bar(
+                pd.DataFrame(exclusion_rows),
+                x="reason",
+                y="count",
+                color="population",
+                barmode="group",
+                title="Target rows excluded before statistical summaries",
+            ),
+            width="stretch",
+        )
+    if not samples.empty:
+        st.plotly_chart(
+            px.histogram(
+                samples,
+                x="count",
+                color="population",
+                barmode="overlay",
+                marginal="box",
+                title="Detected and GT targets per physical sample",
+                labels={"count": "finite valid OBB rows per sample"},
+            ),
+            width="stretch",
+        )
+    if targets.empty:
+        return
+    class_rows = (
+        targets.groupby(["population", "class_name"], dropna=False)
+        .agg(target_count=("source_row", "size"), scene_count=("scene_id", "nunique"))
+        .reset_index()
+    )
+    st.plotly_chart(
+        px.bar(
+            class_rows,
+            x="class_name",
+            y="target_count",
+            color="population",
+            barmode="group",
+            hover_data=["scene_count"],
+            title="Target support by semantic class",
+        ),
+        width="stretch",
+    )
+    geometry = targets.loc[(targets["volume"] > 0) & targets["volume"].notna()].copy()
+    if not geometry.empty:
+        geometry["log10_volume"] = np.log10(geometry["volume"])
+        geometry["log10_aspect_ratio"] = np.log10(geometry["aspect_ratio"])
+        st.plotly_chart(
+            px.histogram(
+                geometry,
+                x="log10_volume",
+                color="population",
+                barmode="overlay",
+                histnorm="probability",
+                title="Target OBB volume distribution",
+                labels={"log10_volume": "log10 oriented-box volume [m³]"},
+            ),
+            width="stretch",
+        )
+        st.plotly_chart(
+            px.histogram(
+                geometry,
+                x="log10_aspect_ratio",
+                color="population",
+                barmode="overlay",
+                histnorm="probability",
+                title="Target OBB aspect-ratio distribution",
+                labels={"log10_aspect_ratio": "log10 largest / smallest extent"},
+            ),
+            width="stretch",
+        )
+    confidence = targets.loc[(targets["population"] == "detected") & targets["confidence"].notna()]
+    if not confidence.empty:
+        st.plotly_chart(
+            px.histogram(confidence, x="confidence", color="class_name", title="Actor-visible detection confidence"),
+            width="stretch",
+        )
+    with st.expander("Target inventory rows and export", expanded=False):
+        st.dataframe(targets, hide_index=True, width="stretch")
+        st.download_button(
+            "Download target inventory JSON",
+            data=json.dumps(inventory, indent=2, sort_keys=True),
+            file_name="target_inventory.json",
+            mime="application/json",
+            on_click="ignore",
+        )
 
 
 def _select_root_store(discovered: list[Path]) -> Path | None:
@@ -527,6 +664,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 identity,
                 batch_size,
                 seed,
+                _QH_READINESS_CONTRACT,
             )
             st.session_state[_QH_READINESS_STATE_KEY] = (readiness_identity, qh_readiness)
             st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
@@ -590,6 +728,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                             preview_index,
                             batch_size,
                             seed,
+                            _QH_READINESS_CONTRACT,
                         )
                     except Exception as exc:
                         st.error(f"Q_H preview failed: {type(exc).__name__}: {exc}")
@@ -651,20 +790,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     _metric_value(gt.get("row_count")) if gt.get("available") else "Unavailable",
                 )
                 if detected.get("available") or gt.get("available"):
-                    population_rows = []
-                    for label, payload in (("Detected", detected), ("GT", gt)):
-                        if not payload.get("available"):
-                            continue
-                        samples = payload.get("sample_rows", [])
-                        population_rows.append(
-                            {
-                                "population": label,
-                                "samples": len(samples),
-                                "zero-target samples": sum(int(row.get("count", 0)) == 0 for row in samples),
-                                "nonzero-target samples": sum(int(row.get("count", 0)) > 0 for row in samples),
-                            }
-                        )
-                    st.dataframe(pd.DataFrame(population_rows), hide_index=True, width="stretch")
+                    _render_target_inventory(inventory)
             if not bool(root_target_scan.get("available")):
                 reason = root_target_scan.get("reason", "deep scan not run")
                 st.warning(

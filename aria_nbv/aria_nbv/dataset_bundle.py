@@ -20,6 +20,12 @@ import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
+from .data_handling.qh_data.views import (
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,
+)
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
 from .data_handling.vin_store.target_inventory import TargetInventory, inspect_target_inventory
@@ -203,6 +209,9 @@ class QhCorpusReadiness:
     contract: dict[str, object] | None
     """Homogeneous horizon-independent Q_H data contract."""
 
+    actor_contract: dict[str, object] | None
+    """Exact named actor contract used to construct every stage."""
+
     loader_settings: dict[str, int | bool]
     """Deterministic DataLoader settings used for admission and preview."""
 
@@ -236,6 +245,7 @@ class QhCorpusReadiness:
                 for row in self.stages
             ],
             "contract": self.contract,
+            "actor_contract": self.actor_contract,
             "loader_settings": self.loader_settings,
             "scene_disjoint": self.scene_disjoint,
             "storage": [
@@ -250,6 +260,20 @@ class QhCorpusReadiness:
                 for metric in self.storage
             ],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class QhReadinessContract:
+    """Named Q_H actor/data contract required by readiness inspection."""
+
+    experiment_profile: QhExperimentProfile
+    """Closed experiment role, never inferred from a diagnostic default."""
+
+    root_evl_profile: QhRootEvlProfile
+    """Root EVL profile bound to the actor store."""
+
+    selected_observation_protocol: QhSelectedObservationProtocol
+    """Selected-observation source bound to the actor contract."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +338,7 @@ class QhBatchPreview:
 def build_qh_corpus_readiness(
     selection: DatasetBundleSelection,
     *,
+    contract: QhReadinessContract,
     batch_size: int = 1,
     seed: int = 0,
 ) -> QhCorpusReadiness:
@@ -343,12 +368,12 @@ def build_qh_corpus_readiness(
         return _blocked_qh_readiness(selection, loader_settings, "Select at least one rollout store.")
 
     try:
-        datasets, data_module = _build_qh_data_module(selection, batch_size=batch_size, seed=seed)
+        datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
         stage_rows = tuple(_qh_stage_readiness(stage, datasets.get(stage)) for stage in _QH_STAGES)
     except Exception as exc:
         return _blocked_qh_readiness(selection, loader_settings, f"{type(exc).__name__}: {exc}")
 
-    contract = {
+    data_contract = {
         field.name: getattr(data_module.train_dataset.contract, field.name)
         for field in fields(data_module.train_dataset.contract)
     }
@@ -358,7 +383,13 @@ def build_qh_corpus_readiness(
         verdict="Ready",
         blockers=(),
         stages=stage_rows,
-        contract=contract,
+        contract=data_contract,
+        actor_contract={
+            "experiment_profile": data_module.train_dataset.actor_state_contract.experiment_profile,
+            "root_evl_profile": data_module.train_dataset.actor_state_contract.root_evl_profile,
+            "selected_observation_protocol": data_module.train_dataset.actor_state_contract.selected_observation_protocol,
+            "actor_manifest_hash": data_module.actor_state_contract_hash,
+        },
         loader_settings=loader_settings,
         scene_disjoint=True,
         storage=storage,
@@ -368,6 +399,7 @@ def build_qh_corpus_readiness(
 def preview_qh_batch(
     selection: DatasetBundleSelection,
     *,
+    contract: QhReadinessContract,
     stage: Stage | str = Stage.TRAIN,
     chain_index: int = 0,
     batch_size: int = 1,
@@ -376,7 +408,7 @@ def preview_qh_batch(
     """Read one selected chain and collate one batch through the real loader."""
 
     normalized_stage = Stage.from_str(stage) if isinstance(stage, str) else stage
-    datasets, data_module = _build_qh_data_module(selection, batch_size=batch_size, seed=seed)
+    datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
     dataset = datasets.get(normalized_stage)
     if dataset is None:
         raise ValueError(f"Q_H stage {normalized_stage.value!r} contains no chains.")
@@ -420,6 +452,7 @@ _QH_STAGES = (Stage.TRAIN, Stage.VAL, Stage.TEST)
 def _build_qh_data_module(
     selection: DatasetBundleSelection,
     *,
+    contract: QhReadinessContract,
     batch_size: int,
     seed: int,
 ) -> tuple[dict[Stage, Any], Any]:
@@ -428,6 +461,12 @@ def _build_qh_data_module(
     from .data_handling.qh_data import QhDatasetConfig
     from .lightning.qh_datamodule import QhDataModule
 
+    validate_experiment_profile(
+        contract.experiment_profile,
+        root_evl_profile=contract.root_evl_profile,
+        selected_observation_protocol=contract.selected_observation_protocol,
+        privileged=contract.experiment_profile == "qh_cfplus_gt_depth_v1",
+    )
     datasets: dict[Stage, Any] = {}
     actor = VinOfflineStoreConfig(store_dir=selection.root_store)
     for stage in _QH_STAGES:
@@ -435,6 +474,9 @@ def _build_qh_data_module(
             rollout_store_dirs=selection.rollout_stores,
             actor=actor,
             split=stage,
+            root_evl_profile=contract.root_evl_profile,
+            selected_observation_protocol=contract.selected_observation_protocol,
+            experiment_profile=contract.experiment_profile,
         ).setup_target()
         if len(dataset):
             datasets[stage] = dataset
@@ -450,7 +492,15 @@ def _build_qh_data_module(
         pin_memory=False,
         persistent_workers=False,
         seed=seed,
+        experiment_profile=contract.experiment_profile,
     )
+    actor_contract = data_module.train_dataset.actor_state_contract
+    if (
+        actor_contract.experiment_profile != contract.experiment_profile
+        or actor_contract.root_evl_profile != contract.root_evl_profile
+        or actor_contract.selected_observation_protocol != contract.selected_observation_protocol
+    ):
+        raise ValueError("Q_H actor-state contract does not match the requested named readiness contract.")
     return datasets, data_module
 
 
@@ -551,6 +601,7 @@ def _blocked_qh_readiness(
         blockers=tuple(blockers),
         stages=(),
         contract=None,
+        actor_contract=None,
         loader_settings=loader_settings,
         scene_disjoint=None,
         storage=(),
@@ -1427,6 +1478,7 @@ __all__ = [
     "NormalizedStorageMetric",
     "QhBatchPreview",
     "QhCorpusReadiness",
+    "QhReadinessContract",
     "QhStageReadiness",
     "build_dataset_bundle_summary",
     "build_qh_corpus_readiness",
