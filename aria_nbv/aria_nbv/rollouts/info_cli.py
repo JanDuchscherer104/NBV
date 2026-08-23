@@ -13,7 +13,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import typer
@@ -86,10 +86,10 @@ def info_command(
         ),
     ] = None,
     thesis_evidence_status: Annotated[
-        str | None,
+        Literal["exploratory", "pilot", "confirmatory"] | None,
         typer.Option(
             "--thesis-evidence-status",
-            help="Required bundle evidence class: pilot or confirmatory.",
+            help="Required bundle evidence class: exploratory, pilot, or confirmatory.",
         ),
     ] = None,
     thesis_sidecar: Annotated[
@@ -141,7 +141,7 @@ def info_command(
             profile=profile,
         )
     if thesis_bundle_output is not None:
-        assert thesis_evidence_status in {"pilot", "confirmatory"}
+        assert thesis_evidence_status in {"exploratory", "pilot", "confirmatory"}
         try:
             frames = build_thesis_report_frames(
                 [store_dir],
@@ -177,8 +177,10 @@ def _validate_thesis_export_options(
 ) -> None:
     if output is None and (evidence_status is not None or sidecars):
         raise typer.BadParameter("--thesis-evidence-status and --thesis-sidecar require --thesis-bundle-output.")
-    if output is not None and evidence_status not in {"pilot", "confirmatory"}:
-        raise typer.BadParameter("--thesis-bundle-output requires --thesis-evidence-status pilot|confirmatory.")
+    if output is not None and evidence_status not in {"exploratory", "pilot", "confirmatory"}:
+        raise typer.BadParameter(
+            "--thesis-bundle-output requires --thesis-evidence-status exploratory|pilot|confirmatory."
+        )
     if random_index and output is not None:
         raise typer.BadParameter("--random-index cannot be combined with --thesis-bundle-output.")
 

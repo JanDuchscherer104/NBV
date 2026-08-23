@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Literal
@@ -41,17 +42,57 @@ from .inspection import (
 )
 from .zarr_store import RolloutZarrStoreReader
 
-THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v1"
+THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v2"
 """Schema version for compact thesis-report JSON bundles."""
 
 THESIS_REPORT_BUNDLE_ROLE = "evidence"
 """Semantic role required by submission-facing Typst report consumers."""
 
-ANALYSIS_FACT_SIDECAR_VERSION = "aria-nbv-analysis-facts-v1"
+ANALYSIS_FACT_SIDECAR_VERSION = "aria-nbv-analysis-facts-v2"
 """Schema version for sidecars that promote analysis outputs into facts."""
 
 _ANALYSIS_FACT_SIDECAR_ROLE = "analysis_facts"
 _ANALYSIS_FACT_FIELDS = frozenset({"store_id", "key", "value", "unit", "n", "aggregation", "provenance"})
+_EMPIRICAL_RESULT_FIELDS = frozenset(
+    {
+        "result_id",
+        "store_id",
+        "experimental_unit",
+        "denominator_name",
+        "denominator_value",
+        "data_identity",
+        "split_identity",
+        "estimand",
+        "estimate",
+        "unit",
+        "aggregation",
+        "uncertainty_type",
+        "uncertainty_lower",
+        "uncertainty_upper",
+        "uncertainty_inapplicable_reason",
+        "variability_source",
+        "comparison_family",
+        "outcome",
+        "status",
+        "actor_visible_inputs_json",
+        "oracle_only_inputs_json",
+        "source_revision",
+        "environment",
+        "command",
+        "artifact_path",
+        "artifact_sha256",
+        "wall_time_s",
+        "gpu_hours",
+        "peak_gpu_memory_bytes",
+        "storage_bytes",
+        "provenance",
+        "sidecar_id",
+        "reason",
+    }
+)
+_EVIDENCE_STATUSES = frozenset({"exploratory", "pilot", "confirmatory"})
+_OUTCOMES = frozenset({"supporting", "negative", "failed", "missing"})
+_GIT_OID = re.compile(r"^[0-9a-f]{40}$")
 _VALUE_COLUMNS = (
     "value_type",
     "value_bool",
@@ -456,6 +497,41 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
     "sidecars": ("sidecar_id", "path", "name", "sha256", "format", "status"),
     "sidecar_values": ("sidecar_id", "key", *_VALUE_COLUMNS),
+    "empirical_results": (
+        "result_id",
+        "store_id",
+        "experimental_unit",
+        "denominator_name",
+        "denominator_value",
+        "data_identity",
+        "split_identity",
+        "estimand",
+        "estimate",
+        "unit",
+        "aggregation",
+        "uncertainty_type",
+        "uncertainty_lower",
+        "uncertainty_upper",
+        "uncertainty_inapplicable_reason",
+        "variability_source",
+        "comparison_family",
+        "outcome",
+        "status",
+        "actor_visible_inputs_json",
+        "oracle_only_inputs_json",
+        "source_revision",
+        "environment",
+        "command",
+        "artifact_path",
+        "artifact_sha256",
+        "wall_time_s",
+        "gpu_hours",
+        "peak_gpu_memory_bytes",
+        "storage_bytes",
+        "provenance",
+        "sidecar_id",
+        "reason",
+    ),
 }
 """Stable table names and column order consumed by the thesis bundle."""
 
@@ -477,7 +553,7 @@ def build_thesis_report_frames(
     store_paths: Iterable[Path | str],
     *,
     sidecar_paths: Iterable[Path | str] = (),
-    evidence_status: Literal["pilot", "confirmatory"],
+    evidence_status: Literal["exploratory", "pilot", "confirmatory"],
 ) -> dict[str, pd.DataFrame]:
     """Build deterministic named DataFrames from rollout stores and sidecars.
 
@@ -488,7 +564,7 @@ def build_thesis_report_frames(
             Selected paths are required to exist; missing files never disappear
             silently from provenance.
         evidence_status: Explicit scientific status for all projected facts.
-            Callers must choose ``pilot`` or ``confirmatory``; file names and
+            Callers must choose ``exploratory``, ``pilot``, or ``confirmatory``; file names and
             paths never determine this status.
 
     Returns:
@@ -498,8 +574,8 @@ def build_thesis_report_frames(
         distinguishable from zero or an empty string.
     """
 
-    if evidence_status not in {"pilot", "confirmatory"}:
-        raise ValueError("evidence_status must be 'pilot' or 'confirmatory'.")
+    if evidence_status not in _EVIDENCE_STATUSES:
+        raise ValueError("evidence_status must be 'exploratory', 'pilot', or 'confirmatory'.")
     rows: dict[str, list[dict[str, object]]] = {name: [] for name in THESIS_REPORT_TABLE_COLUMNS}
     resolved_stores = sorted({Path(path).expanduser().resolve() for path in store_paths}, key=Path.as_posix)
     if not resolved_stores:
@@ -511,8 +587,9 @@ def build_thesis_report_frames(
         key=Path.as_posix,
     ):
         _append_sidecar_rows(rows, sidecar_path, evidence_status=evidence_status)
-
-    return {name: _frame(name, table_rows) for name, table_rows in rows.items()}
+    frames = {name: _frame(name, table_rows) for name, table_rows in rows.items()}
+    _validate_empirical_bundle(frames)
+    return frames
 
 
 def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
@@ -524,6 +601,8 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     """
 
     _validate_frame_schema(frames)
+    _validate_bundle_statuses(frames)
+    _validate_empirical_bundle(frames)
     tables: dict[str, dict[str, object]] = {}
     for name, columns in THESIS_REPORT_TABLE_COLUMNS.items():
         frame = frames[name]
@@ -568,7 +647,7 @@ def _append_store_rows(
     rows: dict[str, list[dict[str, object]]],
     store_path: Path,
     *,
-    evidence_status: Literal["pilot", "confirmatory"],
+    evidence_status: Literal["exploratory", "pilot", "confirmatory"],
 ) -> None:
     reader = RolloutZarrStoreReader(store_path)
     validation = reader.validate()
@@ -764,7 +843,7 @@ def _append_sidecar_rows(
     rows: dict[str, list[dict[str, object]]],
     sidecar_path: Path,
     *,
-    evidence_status: Literal["pilot", "confirmatory"],
+    evidence_status: Literal["exploratory", "pilot", "confirmatory"],
 ) -> None:
     if not sidecar_path.is_file():
         raise FileNotFoundError(sidecar_path)
@@ -783,11 +862,18 @@ def _append_sidecar_rows(
     sidecar_id = hashlib.sha256(f"{logical_name}\0{digest}".encode()).hexdigest()
     if any(row["sidecar_id"] == sidecar_id for row in rows["sidecars"]):
         return
-    promoted = _analysis_fact_rows(
+    promoted, empirical = _analysis_fact_rows(
         payload,
         sidecar_id=sidecar_id,
         evidence_status=evidence_status,
-        known_store_ids={str(row["store_id"]) for row in rows["stores"]},
+        store_identities={
+            str(row["store_id"]): (
+                _canonical_store_identity(row["source_offline_store_version"], "source_offline_store_version"),
+                _canonical_store_identity(row["split_manifest_hash"], "split_manifest_hash"),
+            )
+            for row in rows["stores"]
+        },
+        sidecar_path=sidecar_path,
     )
     existing_fact_sources = {(str(row["store_id"]), str(row["key"])): str(row["source"]) for row in rows["facts"]}
     for fact in promoted:
@@ -810,6 +896,7 @@ def _append_sidecar_rows(
     )
     rows["sidecar_values"].extend(_typed_leaf_rows("sidecar_id", sidecar_id, payload))
     rows["facts"].extend(promoted)
+    rows["empirical_results"].extend(empirical)
 
 
 def _sidecar_logical_name(payload: object, *, fallback: str) -> str:
@@ -827,23 +914,24 @@ def _analysis_fact_rows(
     payload: object,
     *,
     sidecar_id: str,
-    evidence_status: Literal["pilot", "confirmatory"],
-    known_store_ids: set[str],
-) -> list[dict[str, object]]:
+    evidence_status: Literal["exploratory", "pilot", "confirmatory"],
+    store_identities: Mapping[str, tuple[str, str]],
+    sidecar_path: Path,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     if not isinstance(payload, dict):
-        return []
+        return [], []
     role = payload.get("bundle_role")
     schema_version = payload.get("schema_version")
     if role != _ANALYSIS_FACT_SIDECAR_ROLE:
         if schema_version == ANALYSIS_FACT_SIDECAR_VERSION:
             raise ValueError(f"Analysis sidecar bundle_role must be {_ANALYSIS_FACT_SIDECAR_ROLE!r}.")
-        return []
+        return [], []
     if schema_version != ANALYSIS_FACT_SIDECAR_VERSION:
         raise ValueError(
             f"Analysis sidecar schema_version must be {ANALYSIS_FACT_SIDECAR_VERSION!r}; received {schema_version!r}."
         )
-    expected_fields = {"schema_version", "bundle_role", "logical_name", "status", "facts"}
-    required_fields = expected_fields - {"logical_name"}
+    expected_fields = {"schema_version", "bundle_role", "logical_name", "status", "facts", "empirical_results"}
+    required_fields = expected_fields - {"logical_name", "empirical_results"}
     actual_fields = set(payload)
     if not required_fields.issubset(actual_fields) or not actual_fields.issubset(expected_fields):
         raise ValueError(
@@ -855,8 +943,8 @@ def _analysis_fact_rows(
             f"Analysis sidecar status {payload['status']!r} does not match export status {evidence_status!r}."
         )
     facts = payload["facts"]
-    if not isinstance(facts, list) or not facts:
-        raise ValueError("Analysis sidecar facts must be a non-empty list.")
+    if not isinstance(facts, list):
+        raise ValueError("Analysis sidecar facts must be a list.")
 
     output: list[dict[str, object]] = []
     identities: set[tuple[str, str]] = set()
@@ -867,7 +955,7 @@ def _analysis_fact_rows(
                 f"Analysis sidecar fact {index} fields must be {sorted(_ANALYSIS_FACT_FIELDS)}; received {actual}."
             )
         store_id = _required_text(fact["store_id"], field="store_id", index=index)
-        if store_id not in known_store_ids:
+        if store_id not in store_identities:
             raise ValueError(f"Analysis sidecar fact {index} references unknown store_id {store_id!r}.")
         key = _required_text(fact["key"], field="key", index=index)
         identity = (store_id, key)
@@ -893,7 +981,158 @@ def _analysis_fact_rows(
                 "source": f"{provenance}|sidecar:{sidecar_id}",
             }
         )
-    return output
+    empirical_payload = payload.get("empirical_results", [])
+    if not isinstance(empirical_payload, list):
+        raise ValueError("Analysis sidecar empirical_results must be a list.")
+    if not facts and not empirical_payload:
+        raise ValueError("Analysis sidecar must contain facts or empirical_results.")
+    empirical = [
+        _empirical_result_row(
+            result,
+            index=index,
+            sidecar_id=sidecar_id,
+            sidecar_path=sidecar_path,
+            evidence_status=evidence_status,
+            store_identities=store_identities,
+        )
+        for index, result in enumerate(empirical_payload)
+    ]
+    return output, empirical
+
+
+def _empirical_result_row(
+    result: object,
+    *,
+    index: int,
+    sidecar_id: str,
+    sidecar_path: Path,
+    evidence_status: str,
+    store_identities: Mapping[str, tuple[str, str]],
+) -> dict[str, object]:
+    expected_result_fields = _EMPIRICAL_RESULT_FIELDS - {"sidecar_id"}
+    if not isinstance(result, dict) or set(result) != expected_result_fields:
+        actual = sorted(result) if isinstance(result, dict) else type(result).__name__
+        raise ValueError(
+            f"Analysis empirical result {index} fields must be {sorted(_EMPIRICAL_RESULT_FIELDS)}; received {actual}."
+        )
+    row = {**result, "sidecar_id": sidecar_id}
+    if row["status"] not in _EVIDENCE_STATUSES or row["status"] != evidence_status:
+        raise ValueError(f"Analysis empirical result {index} status must match export status {evidence_status!r}.")
+    if row["outcome"] not in _OUTCOMES:
+        raise ValueError(f"Analysis empirical result {index} outcome is invalid.")
+    for field in (
+        "result_id",
+        "store_id",
+        "experimental_unit",
+        "denominator_name",
+        "data_identity",
+        "split_identity",
+        "estimand",
+        "unit",
+        "aggregation",
+        "uncertainty_type",
+        "variability_source",
+        "comparison_family",
+        "environment",
+        "command",
+        "artifact_path",
+        "artifact_sha256",
+        "provenance",
+        "sidecar_id",
+    ):
+        _required_text(row[field], field=field, index=index)
+    store_id = row["store_id"]
+    if store_id not in store_identities:
+        raise ValueError(f"Analysis empirical result {index} references unknown store_id.")
+    expected_data_identity, expected_split_identity = store_identities[store_id]
+    if row["data_identity"] != expected_data_identity:
+        raise ValueError(
+            f"Analysis empirical result {index} data/split identity data_identity does not match its store."
+        )
+    if row["split_identity"] != expected_split_identity:
+        raise ValueError(
+            f"Analysis empirical result {index} data/split identity split_identity does not match its store."
+        )
+    denominator = _finite_number(row["denominator_value"], field="denominator_value", index=index)
+    if denominator <= 0:
+        raise ValueError(f"Analysis empirical result {index} denominator_value must be positive.")
+    if row["denominator_name"].lower() in {"unknown", "ambiguous", "none", "n/a", "na"}:
+        raise ValueError(
+            f"Analysis empirical result {index} denominator_name must identify one unambiguous population."
+        )
+    if row["sidecar_id"] != sidecar_id:
+        raise ValueError(f"Analysis empirical result {index} sidecar_id does not match its sidecar.")
+    if row["data_identity"].lower() in {"unknown", "none"} or row["split_identity"].lower() in {"unknown", "none"}:
+        raise ValueError(f"Analysis empirical result {index} data/split identity cannot be unknown.")
+    actor = _identity_array(row["actor_visible_inputs_json"], field="actor_visible_inputs_json", index=index)
+    oracle = _identity_array(row["oracle_only_inputs_json"], field="oracle_only_inputs_json", index=index)
+    if set(actor) & set(oracle):
+        raise ValueError(f"Analysis empirical result {index} actor-visible and oracle-only inputs must be disjoint.")
+    revision = row["source_revision"]
+    if not isinstance(revision, str) or not _GIT_OID.fullmatch(revision) or revision == "0" * 40:
+        raise ValueError(f"Analysis empirical result {index} source_revision must be a full Git OID.")
+    artifact = Path(row["artifact_path"])
+    if artifact.is_absolute() or "\\" in row["artifact_path"] or artifact == Path(".") or ".." in artifact.parts:
+        raise ValueError(f"Analysis empirical result {index} artifact_path must be a portable relative path.")
+    artifact_file = (sidecar_path.parent / artifact).resolve()
+    if not artifact_file.is_file():
+        raise ValueError(f"Analysis empirical result {index} artifact_path does not exist: {row['artifact_path']!r}.")
+    if hashlib.sha256(artifact_file.read_bytes()).hexdigest() != row["artifact_sha256"]:
+        raise ValueError(f"Analysis empirical result {index} artifact_sha256 does not match artifact_path.")
+    outcome = row["outcome"]
+    estimate = row["estimate"]
+    if outcome in {"missing", "failed"}:
+        if estimate is not None or not isinstance(row["reason"], str) or not row["reason"].strip():
+            raise ValueError(
+                f"Analysis empirical result {index} missing/failed results require null estimate and reason."
+            )
+    else:
+        _finite_number(estimate, field="estimate", index=index)
+        lower, upper = row["uncertainty_lower"], row["uncertainty_upper"]
+        if (lower is None) != (upper is None):
+            raise ValueError(f"Analysis empirical result {index} uncertainty interval must provide both bounds.")
+        interval = False
+        if lower is not None and upper is not None:
+            lower_value = _finite_number(lower, field="uncertainty_lower", index=index)
+            upper_value = _finite_number(upper, field="uncertainty_upper", index=index)
+            if lower_value > upper_value:
+                raise ValueError(f"Analysis empirical result {index} uncertainty interval has invalid order.")
+            interval = True
+        rationale = row["uncertainty_inapplicable_reason"]
+        if not (interval and row["variability_source"].strip()) and (
+            not isinstance(rationale, str) or not rationale.strip()
+        ):
+            raise ValueError(
+                f"Analysis empirical result {index} quantitative result requires uncertainty and variability or rationale."
+            )
+        if evidence_status == "confirmatory" and not any(
+            row[field] is not None for field in ("wall_time_s", "gpu_hours", "peak_gpu_memory_bytes", "storage_bytes")
+        ):
+            raise ValueError(f"Analysis empirical result {index} confirmatory result requires material compute.")
+    for field in ("wall_time_s", "gpu_hours", "peak_gpu_memory_bytes", "storage_bytes"):
+        if row[field] is not None and _finite_number(row[field], field=field, index=index) < 0:
+            raise ValueError(f"Analysis empirical result {index} {field} must be non-negative.")
+    row["actor_visible_inputs_json"] = json.dumps(actor, separators=(",", ":"))
+    row["oracle_only_inputs_json"] = json.dumps(oracle, separators=(",", ":"))
+    return row
+
+
+def _finite_number(value: object, *, field: str, index: int) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        raise ValueError(f"Analysis empirical result {index} {field} must be finite.")
+    return float(value)
+
+
+def _identity_array(value: object, *, field: str, index: int) -> list[str]:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"Analysis empirical result {index} {field} must be a JSON array.") from error
+    if not isinstance(value, list):
+        raise ValueError(f"Analysis empirical result {index} {field} must be a JSON array.")
+    values = sorted({_required_text(item, field=field, index=index) for item in value})
+    return values
 
 
 def _required_text(value: object, *, field: str, index: int) -> str:
@@ -923,7 +1162,7 @@ def _fact_rows(
     store_id: str,
     statistics: dict[str, object],
     *,
-    evidence_status: Literal["pilot", "confirmatory"],
+    evidence_status: Literal["exploratory", "pilot", "confirmatory"],
 ) -> list[dict[str, object]]:
     return [
         {
@@ -1036,6 +1275,62 @@ def _validate_frame_schema(frames: Mapping[str, pd.DataFrame]) -> None:
         actual_columns = tuple(frames[name].columns)
         if actual_columns != columns:
             raise ValueError(f"Report table {name!r} columns must be {columns}; received {actual_columns}.")
+
+
+def _validate_bundle_statuses(frames: Mapping[str, pd.DataFrame]) -> None:
+    status_values: set[str] = set()
+    for name in ("facts", "runtime_storage", "failures", "sidecars", "empirical_results"):
+        if "status" in frames[name]:
+            status_values.update(str(value) for value in frames[name]["status"].dropna())
+    if not status_values.issubset(_EVIDENCE_STATUSES):
+        raise ValueError("Report contains an invalid evidence status.")
+    if "empirical_results" not in frames or frames["empirical_results"].empty:
+        if "confirmatory" in status_values:
+            raise ValueError("Confirmatory report export requires at least one empirical result.")
+    elif "confirmatory" in status_values:
+        if status_values != {"confirmatory"}:
+            raise ValueError("Confirmatory report export cannot contain exploratory or pilot rows.")
+        if not set(frames["empirical_results"]["status"]) == {"confirmatory"}:
+            raise ValueError("Confirmatory report export cannot contain exploratory or pilot result rows.")
+    store_ids = {str(value) for value in frames["stores"]["store_id"].dropna()}
+    empirical = frames["empirical_results"]
+    if not empirical.empty:
+        if not {str(value) for value in empirical["store_id"]} <= store_ids:
+            raise ValueError("Empirical result store_id must identify a store in the same bundle.")
+        sidecar_ids = {str(value) for value in frames["sidecars"]["sidecar_id"].dropna()}
+        if not {str(value) for value in empirical["sidecar_id"]} <= sidecar_ids:
+            raise ValueError("Empirical result sidecar_id must identify a sidecar in the same bundle.")
+
+
+def _validate_empirical_bundle(frames: Mapping[str, pd.DataFrame]) -> None:
+    """Validate empirical identities and uniqueness against serialized store rows."""
+
+    store_identities = {
+        str(row.store_id): (
+            _canonical_store_identity(row.source_offline_store_version, "source_offline_store_version"),
+            _canonical_store_identity(row.split_manifest_hash, "split_manifest_hash"),
+        )
+        for row in frames["stores"].itertuples(index=False)
+    }
+    empirical = frames["empirical_results"]
+    result_ids = empirical["result_id"].astype(str)
+    if result_ids.duplicated(keep=False).any():
+        duplicate_ids = sorted(set(result_ids[result_ids.duplicated(keep=False)]))
+        raise ValueError(f"empirical_results contains duplicate result_id values: {duplicate_ids!r}.")
+    for index, row in empirical.iterrows():
+        expected = store_identities.get(str(row["store_id"]))
+        if expected is None:
+            continue
+        if row["data_identity"] != expected[0]:
+            raise ValueError(f"empirical_results row {index} data_identity does not match its store.")
+        if row["split_identity"] != expected[1]:
+            raise ValueError(f"empirical_results row {index} split_identity does not match its store.")
+
+
+def _canonical_store_identity(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        raise ValueError(f"Store identity {field} must be a non-empty trimmed string.")
+    return value
 
 
 def _json_scalar(value: object, *, table: str, column: str) -> object:

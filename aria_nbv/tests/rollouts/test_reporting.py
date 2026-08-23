@@ -6,6 +6,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -36,7 +40,7 @@ from aria_nbv.rollouts.reporting import (
     serialize_thesis_report_bundle,
     write_thesis_report_bundle,
 )
-from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, RolloutZarrWriteResult, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
 
@@ -172,7 +176,7 @@ def test_report_headroom_summary_preserves_proxy_provenance(tmp_path) -> None:
         build_rollout_records(horizon=1, num_samples=6, seed=903)[:1],
     )
 
-    frames = build_thesis_report_frames([result.store_dir], evidence_status="confirmatory")
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
 
     summary = frames["oracle_headroom_summary"]
     assert set(summary["evidence_class"]) == {"diagnostic_proxy"}
@@ -275,12 +279,12 @@ def test_permuted_inputs_and_independent_rebuilds_are_byte_stable(tmp_path) -> N
     first_frames = build_thesis_report_frames(
         [first_store, second_store],
         sidecar_paths=[first_sidecar, second_sidecar],
-        evidence_status="confirmatory",
+        evidence_status="pilot",
     )
     rebuilt_frames = build_thesis_report_frames(
         [second_store, first_store],
         sidecar_paths=[second_sidecar, first_sidecar],
-        evidence_status="confirmatory",
+        evidence_status="pilot",
     )
 
     assert serialize_thesis_report_bundle(first_frames) == serialize_thesis_report_bundle(rebuilt_frames)
@@ -466,7 +470,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
                 "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
                 "bundle_role": "analysis_facts",
                 "logical_name": "paired-policy-analysis",
-                "status": "confirmatory",
+                "status": "pilot",
                 "facts": [
                     {
                         "store_id": result.manifest_sha256,
@@ -488,7 +492,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
     frames = build_thesis_report_frames(
         [result.store_dir],
         sidecar_paths=[sidecar],
-        evidence_status="confirmatory",
+        evidence_status="pilot",
     )
 
     promoted = frames["facts"].set_index("key")
@@ -499,19 +503,346 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
         assert row["unit"] == unit
         assert row["n"] == n
         assert row["aggregation"] == aggregation
-        assert row["status"] == "confirmatory"
+        assert row["status"] == "pilot"
         assert row["source"].startswith("analysis/paired_policy.json|sidecar:")
     assert frames["sidecars"].iloc[0]["name"] == "paired-policy-analysis"
     assert frames["sidecars"].iloc[0]["path"] == "paired-policy-analysis"
     assert set(frames["sidecar_values"]["sidecar_id"]) == {frames["sidecars"].iloc[0]["sidecar_id"]}
 
 
+def test_empirical_result_round_trips_strict_identity_and_missingness(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=86)[:1]
+    )
+    sidecar = tmp_path / "analysis" / "results.json"
+    artifact = sidecar.parent / "artifact.txt"
+    artifact.parent.mkdir()
+    artifact.write_text("synthetic artifact", encoding="utf-8")
+    artifact_sha256 = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    fields = {
+        "result_id": "pilot-missing-1",
+        "store_id": result.manifest_sha256,
+        "experimental_unit": "scene",
+        "denominator_name": "eligible_scenes",
+        "denominator_value": 2,
+        "data_identity": "unknown-source-version",
+        "split_identity": "unknown-split-manifest",
+        "estimand": "difference",
+        "estimate": None,
+        "unit": "fraction",
+        "aggregation": "scene_mean",
+        "uncertainty_type": "none",
+        "uncertainty_lower": None,
+        "uncertainty_upper": None,
+        "uncertainty_inapplicable_reason": "pilot result is missing",
+        "variability_source": "pilot runs",
+        "comparison_family": "paired",
+        "outcome": "missing",
+        "status": "pilot",
+        "actor_visible_inputs_json": ["actor-policy-v1"],
+        "oracle_only_inputs_json": [],
+        "source_revision": "1" * 40,
+        "environment": "synthetic",
+        "command": "pytest synthetic",
+        "artifact_path": "artifact.txt",
+        "artifact_sha256": artifact_sha256,
+        "wall_time_s": 1.0,
+        "gpu_hours": None,
+        "peak_gpu_memory_bytes": None,
+        "storage_bytes": 12,
+        "provenance": "synthetic fixture",
+        "reason": "pilot output was not produced",
+    }
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
+                "bundle_role": "analysis_facts",
+                "status": "pilot",
+                "facts": [],
+                "empirical_results": [fields],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    bundle = json.loads(serialize_thesis_report_bundle(frames))
+    row = bundle["tables"]["empirical_results"]["rows"][0]
+    assert row["result_id"] == fields["result_id"]
+    assert row["estimate"] is None and row["reason"]
+    assert json.loads(row["actor_visible_inputs_json"]) == ["actor-policy-v1"]
+    assert json.loads(row["oracle_only_inputs_json"]) == []
+    assert row["sidecar_id"] == bundle["tables"]["sidecars"]["rows"][0]["sidecar_id"]
+
+
+def _empirical_sidecar(tmp_path: Path, result: RolloutZarrWriteResult, **patch: object) -> Path:
+    sidecar = tmp_path / "analysis" / f"result-{len(patch)}.json"
+    artifact = sidecar.parent / "artifact.txt"
+    artifact.parent.mkdir(exist_ok=True)
+    artifact.write_text("synthetic artifact", encoding="utf-8")
+    fields = {
+        "result_id": "pilot-result",
+        "store_id": result.manifest_sha256,
+        "experimental_unit": "scene",
+        "denominator_name": "eligible_scenes",
+        "denominator_value": 2,
+        "data_identity": "unknown-source-version",
+        "split_identity": "unknown-split-manifest",
+        "estimand": "difference",
+        "estimate": 0.25,
+        "unit": "fraction",
+        "aggregation": "scene_mean",
+        "uncertainty_type": "95% CI",
+        "uncertainty_lower": 0.1,
+        "uncertainty_upper": 0.4,
+        "uncertainty_inapplicable_reason": None,
+        "variability_source": "independent pilot runs",
+        "comparison_family": "paired",
+        "outcome": "supporting",
+        "status": "pilot",
+        "actor_visible_inputs_json": ["actor-policy-v1"],
+        "oracle_only_inputs_json": [],
+        "source_revision": "1" * 40,
+        "environment": "synthetic",
+        "command": "pytest synthetic",
+        "artifact_path": "artifact.txt",
+        "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "wall_time_s": 1.0,
+        "gpu_hours": None,
+        "peak_gpu_memory_bytes": None,
+        "storage_bytes": 12,
+        "provenance": "synthetic fixture",
+        "reason": None,
+    }
+    fields.update(patch)
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
+                "bundle_role": "analysis_facts",
+                "status": fields["status"],
+                "facts": [],
+                "empirical_results": [fields],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return sidecar
+
+
+def test_empirical_result_rejects_plausible_but_wrong_store_identity(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=95)[:1]
+    )
+    for field, value in (("data_identity", "dataset-v2"), ("split_identity", "held-out-pilot")):
+        sidecar = _empirical_sidecar(tmp_path, result, **{field: value})
+        with pytest.raises(ValueError, match=field):
+            build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+
+
+def test_empirical_result_rejects_caller_sidecar_id(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=93)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload["empirical_results"][0]["sidecar_id"] = "caller-supplied"
+    sidecar.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    with pytest.raises(ValueError, match="fields must be"):
+        build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+
+
+def test_all_empirical_outcomes_survive_serialized_bundle(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=94)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    base = payload["empirical_results"][0]
+    results = []
+    for outcome in ("supporting", "negative", "failed", "missing"):
+        row = {**base, "result_id": f"pilot-{outcome}", "outcome": outcome}
+        if outcome in {"failed", "missing"}:
+            row.update(
+                estimate=None,
+                uncertainty_lower=None,
+                uncertainty_upper=None,
+                reason=f"synthetic {outcome} result",
+            )
+        results.append(row)
+    payload["empirical_results"] = results
+    sidecar.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    bundle = json.loads(serialize_thesis_report_bundle(frames))
+    rows = bundle["tables"]["empirical_results"]["rows"]
+    assert {row["outcome"] for row in rows} == {"supporting", "negative", "failed", "missing"}
+    assert {row["result_id"] for row in rows} == {
+        f"pilot-{outcome}" for outcome in ("supporting", "negative", "failed", "missing")
+    }
+    if shutil.which("typst") is None:
+        pytest.skip("Typst is required for the producer-to-loader integration proof")
+    bundle_path = tmp_path / "generated-report-bundle.json"
+    bundle_path.write_bytes(serialize_thesis_report_bundle(frames))
+    output_path = tmp_path / "report-data-smoke.pdf"
+    subprocess.run(
+        [
+            "typst",
+            "compile",
+            "--root",
+            "/",
+            "--input",
+            f"aria-thesis-data={bundle_path}",
+            str(Path(__file__).parents[3] / "docs/typst/thesis/tests/report_data_smoke.typ"),
+            str(output_path),
+        ],
+        check=True,
+    )
+    assert output_path.is_file()
+
+
+@pytest.mark.parametrize(
+    ("patch", "message"),
+    [
+        ({"denominator_name": "ambiguous"}, "denominator_name"),
+        ({"denominator_value": 0}, "positive"),
+        ({"denominator_value": float("nan")}, "finite"),
+        ({"data_identity": ""}, "data_identity"),
+        ({"data_identity": "unknown"}, "data/split identity"),
+        ({"split_identity": ""}, "split_identity"),
+        ({"split_identity": "none"}, "data/split identity"),
+        ({"source_revision": ""}, "source_revision"),
+        ({"source_revision": "not-a-revision"}, "source_revision"),
+        ({"source_revision": "0" * 40}, "source_revision"),
+        ({"artifact_path": "../artifact.txt"}, "portable relative"),
+        ({"artifact_path": "/tmp/artifact.txt"}, "portable relative"),
+        ({"artifact_sha256": "0" * 64}, "artifact_sha256"),
+        ({"actor_visible_inputs_json": ["shared-input"], "oracle_only_inputs_json": ["shared-input"]}, "disjoint"),
+        ({"uncertainty_lower": 0.5, "uncertainty_upper": 0.1}, "invalid order"),
+        ({"uncertainty_lower": float("nan")}, "finite"),
+        ({"uncertainty_lower": None}, "both bounds"),
+    ],
+)
+def test_empirical_result_rejects_high_risk_provenance_and_statistics(
+    tmp_path: Path, patch: dict[str, Any], message: str
+) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=87)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result, **patch)
+    with pytest.raises(ValueError, match=message):
+        build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+
+
+@pytest.mark.parametrize("outcome", ["failed", "missing"])
+def test_empirical_failed_or_missing_requires_null_estimate_and_reason(tmp_path: Path, outcome: str) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=88)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result, outcome=outcome, estimate=None, reason="not produced")
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    assert frames["empirical_results"].iloc[0]["outcome"] == outcome
+    assert frames["empirical_results"].iloc[0]["estimate"] is None
+
+    invalid = _empirical_sidecar(tmp_path, result, outcome=outcome, estimate=0.1, reason=None)
+    with pytest.raises(ValueError, match="null estimate and reason"):
+        build_thesis_report_frames([result.store_dir], sidecar_paths=[invalid], evidence_status="pilot")
+
+
+def test_empirical_supporting_and_negative_results_require_uncertainty_or_rationale(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=89)[:1]
+    )
+    for outcome in ("supporting", "negative"):
+        sidecar = _empirical_sidecar(
+            tmp_path,
+            result,
+            outcome=outcome,
+            uncertainty_lower=None,
+            uncertainty_upper=None,
+            variability_source="not available for this run",
+            uncertainty_inapplicable_reason="single deterministic run",
+        )
+        frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+        assert frames["empirical_results"].iloc[0]["outcome"] == outcome
+
+
+def test_empirical_store_and_sidecar_joins_and_confirmatory_status_are_closed(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=90)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    with pytest.raises(ValueError, match="store_id"):
+        broken = {name: frame.copy() for name, frame in frames.items()}
+        broken["empirical_results"].loc[0, "store_id"] = "unknown-store"
+        serialize_thesis_report_bundle(broken)
+    with pytest.raises(ValueError, match="sidecar_id"):
+        broken = {name: frame.copy() for name, frame in frames.items()}
+        broken["empirical_results"].loc[0, "sidecar_id"] = "unknown-sidecar"
+        serialize_thesis_report_bundle(broken)
+    with pytest.raises(ValueError, match="pilot rows"):
+        broken = {name: frame.copy() for name, frame in frames.items()}
+        broken["facts"].loc[0, "status"] = "pilot"
+        broken["empirical_results"].loc[0, "status"] = "confirmatory"
+        serialize_thesis_report_bundle(broken)
+
+
+def test_empirical_result_ids_must_be_unique_across_bundle(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=96)[:1]
+    )
+    first = _empirical_sidecar(tmp_path, result)
+    (tmp_path / "second").mkdir()
+    second = _empirical_sidecar(tmp_path / "second", result, provenance="second sidecar")
+    with pytest.raises(ValueError, match="duplicate result_id"):
+        build_thesis_report_frames([result.store_dir], sidecar_paths=[first, second], evidence_status="pilot")
+
+
+def test_report_bytes_change_for_denominator_source_and_artifact_identity(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=91)[:1]
+    )
+    base = _empirical_sidecar(tmp_path, result)
+    base_frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[base], evidence_status="pilot")
+    base_bytes = serialize_thesis_report_bundle(base_frames)
+    for patch in (
+        {"denominator_value": 3},
+        {"artifact_sha256": "1" * 64},
+    ):
+        sidecar = _empirical_sidecar(tmp_path, result, **patch)
+        if "artifact_sha256" in patch:
+            with pytest.raises(ValueError, match="artifact_sha256"):
+                build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+            continue
+        changed = serialize_thesis_report_bundle(
+            build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+        )
+        assert changed != base_bytes
+
+    revision_frames = {name: frame.copy() for name, frame in base_frames.items()}
+    revision_frames["empirical_results"].loc[0, "source_revision"] = "2" * 40
+    revision_bytes = serialize_thesis_report_bundle(revision_frames)
+    revision_row = json.loads(revision_bytes)["tables"]["empirical_results"]["rows"][0]
+    assert revision_row["source_revision"] == "2" * 40
+    assert revision_bytes != base_bytes
+
+    second = write_rollout_zarr_store(
+        tmp_path / "second.zarr", build_rollout_records(horizon=1, num_samples=6, seed=92)[:1]
+    )
+    assert serialize_thesis_report_bundle(
+        build_thesis_report_frames([second.store_dir], evidence_status="pilot")
+    ) != serialize_thesis_report_bundle(build_thesis_report_frames([result.store_dir], evidence_status="pilot"))
+
+
 @pytest.mark.parametrize(
     ("payload_patch", "message"),
     [
         ({"schema_version": "wrong-version"}, "schema_version"),
-        ({"status": "pilot"}, "status"),
-        ({"facts": []}, "non-empty"),
+        ({"status": "exploratory"}, "status"),
+        ({"facts": []}, "facts or empirical_results"),
     ],
 )
 def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, message) -> None:
@@ -524,7 +855,7 @@ def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, m
     payload = {
         "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
         "bundle_role": "analysis_facts",
-        "status": "confirmatory",
+        "status": "pilot",
         "facts": [
             {
                 "store_id": result.manifest_sha256,
@@ -545,7 +876,7 @@ def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, m
         build_thesis_report_frames(
             [result.store_dir],
             sidecar_paths=[sidecar],
-            evidence_status="confirmatory",
+            evidence_status="pilot",
         )
 
 
@@ -581,7 +912,7 @@ def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path, fact_patch, mes
             {
                 "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
                 "bundle_role": "analysis_facts",
-                "status": "confirmatory",
+                "status": "pilot",
                 "facts": [fact],
             }
         ),
@@ -592,7 +923,7 @@ def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path, fact_patch, mes
         build_thesis_report_frames(
             [result.store_dir],
             sidecar_paths=[sidecar],
-            evidence_status="confirmatory",
+            evidence_status="pilot",
         )
 
 
@@ -623,7 +954,7 @@ def test_analysis_fact_sidecar_rejects_duplicate_and_store_fact_conflicts(tmp_pa
                 {
                     "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
                     "bundle_role": "analysis_facts",
-                    "status": "confirmatory",
+                    "status": "pilot",
                     "facts": facts,
                 }
             ),
@@ -633,7 +964,7 @@ def test_analysis_fact_sidecar_rejects_duplicate_and_store_fact_conflicts(tmp_pa
             build_thesis_report_frames(
                 [result.store_dir],
                 sidecar_paths=[sidecar],
-                evidence_status="confirmatory",
+                evidence_status="pilot",
             )
 
 

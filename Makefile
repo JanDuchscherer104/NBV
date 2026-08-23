@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-authoring-routing-self-test thesis-authoring-routing-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-authoring-routing-self-test thesis-authoring-routing-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -758,6 +758,25 @@ package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests 
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
 	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)
+
+thesis-report-contract: ## Verify the producer, CLI, and Typst report-bundle contract
+	@cd $(PKG_DIR) && PYTHONPATH=.. uv run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) tests/rollouts/test_reporting.py tests/rollouts/test_info_cli.py
+	@mkdir -p "$(CI_RENDER_DIR)"
+	@$(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/report_data_smoke.typ "$(CI_RENDER_DIR)/report_data_smoke.pdf"
+	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) "$(CI_RENDER_DIR)/thesis-development.pdf"
+	@confirmatory_bundle="$$(mktemp "$(TYPST_ROOT)/typst/thesis/data/report-bundle-confirmatory.XXXXXX.json")"; \
+	output="$$(mktemp "$(abspath $(CI_RENDER_DIR))/report-data-submission-mismatch.XXXXXX.log")"; \
+	trap 'rm -f "$$confirmatory_bundle" "$$output"' EXIT; \
+	sed -e 's/"bundle_role": "fixture"/"bundle_role": "evidence"/' -e 's/"status"[[:space:]]*:[[:space:]]*"pilot"/"status": "confirmatory"/g' docs/typst/thesis/data/report-bundle-fixture.json > "$$confirmatory_bundle"; \
+	if $(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/report_data_smoke.typ "$(CI_RENDER_DIR)/report_data_submission-mismatch.pdf" \
+		--input aria-thesis-mode=submission --input aria-thesis-data="/typst/thesis/data/$$(basename "$$confirmatory_bundle")" \
+		--input aria-thesis-evidence-status=confirmatory --input aria-code-ref=2222222222222222222222222222222222222222 >"$$output" 2>&1; then \
+		echo "Expected submission source_revision mismatch did not fail" >&2; exit 1; \
+	elif ! grep -Fq "empirical result source_revision does not match aria-code-ref" "$$output"; then \
+		cat "$$output" >&2; echo "Submission did not fail with the source_revision mismatch contract" >&2; exit 1; \
+	else \
+		echo "Verified submission source_revision mismatch fails specifically"; \
+	fi
 
 ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
 	@cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet aria_nbv tests

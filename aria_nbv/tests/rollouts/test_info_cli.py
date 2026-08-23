@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 import zarr
@@ -223,7 +224,7 @@ def test_rollouts_info_text_reports_thesis_bundle_metadata(tmp_path, capsys) -> 
             "--thesis-bundle-output",
             str(output),
             "--thesis-evidence-status",
-            "confirmatory",
+            "pilot",
         ],
     )
 
@@ -231,6 +232,43 @@ def test_rollouts_info_text_reports_thesis_bundle_metadata(tmp_path, capsys) -> 
     assert "Thesis Evidence Bundle" in cli_result.output
     assert THESIS_REPORT_BUNDLE_VERSION in cli_result.output
     assert hashlib.sha256(output.read_bytes()).hexdigest() in cli_result.output
+
+
+def test_rollouts_info_accepts_exploratory_thesis_export(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=4, seed=24)[:1]
+    )
+    capsys.readouterr()
+    cli_result = runner.invoke(
+        rollouts_info_app,
+        [
+            "--store",
+            str(result.store_dir),
+            "--thesis-bundle-output",
+            str(tmp_path / "exploratory.json"),
+            "--thesis-evidence-status",
+            "exploratory",
+        ],
+    )
+    assert cli_result.exit_code == 0
+
+
+def test_rollouts_info_rejects_invalid_thesis_status(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=4, seed=25)[:1]
+    )
+    cli_result = runner.invoke(
+        rollouts_info_app,
+        [
+            "--store",
+            str(result.store_dir),
+            "--thesis-bundle-output",
+            str(tmp_path / "invalid.json"),
+            "--thesis-evidence-status",
+            "draft",
+        ],
+    )
+    assert cli_result.exit_code == 2
 
 
 @pytest.mark.parametrize(

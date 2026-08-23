@@ -1,4 +1,4 @@
-#let report-schema-version = "aria-nbv-thesis-report-v1"
+#let report-schema-version = "aria-nbv-thesis-report-v2"
 
 #let required-report-columns = (
   stores: ("store_id", "name", "manifest_sha256", "validation_ok"),
@@ -16,7 +16,10 @@
   failures: ("store_id", "kind", "severity", "status", "source"),
   sidecars: ("sidecar_id", "path", "sha256", "status"),
   sidecar_values: ("sidecar_id", "key", "value_type", "is_missing"),
+  empirical_results: ("result_id", "store_id", "experimental_unit", "denominator_name", "denominator_value", "data_identity", "split_identity", "estimand", "estimate", "unit", "aggregation", "uncertainty_type", "uncertainty_lower", "uncertainty_upper", "uncertainty_inapplicable_reason", "variability_source", "comparison_family", "outcome", "status", "actor_visible_inputs_json", "oracle_only_inputs_json", "source_revision", "environment", "command", "artifact_path", "artifact_sha256", "wall_time_s", "gpu_hours", "peak_gpu_memory_bytes", "storage_bytes", "provenance", "sidecar_id", "reason"),
 )
+
+#let empirical-result-columns = ("result_id", "store_id", "experimental_unit", "denominator_name", "denominator_value", "data_identity", "split_identity", "estimand", "estimate", "unit", "aggregation", "uncertainty_type", "uncertainty_lower", "uncertainty_upper", "uncertainty_inapplicable_reason", "variability_source", "comparison_family", "outcome", "status", "actor_visible_inputs_json", "oracle_only_inputs_json", "source_revision", "environment", "command", "artifact_path", "artifact_sha256", "wall_time_s", "gpu_hours", "peak_gpu_memory_bytes", "storage_bytes", "provenance", "sidecar_id", "reason")
 
 #let required-report-facts = (
   "candidate_validity.valid",
@@ -31,7 +34,7 @@
   "selected.path_length_m.p95",
 )
 
-#let status-report-tables = ("facts", "runtime_storage", "failures", "sidecars")
+#let status-report-tables = ("facts", "runtime_storage", "failures", "sidecars", "empirical_results")
 
 #let default-thesis-report-path = "/typst/thesis/data/report-bundle-fixture.json"
 
@@ -47,6 +50,7 @@
       evidence-status == "confirmatory",
       message: "submission mode requires aria-thesis-evidence-status=confirmatory",
     )
+    assert(sys.inputs.at("aria-code-ref", default: none) != none, message: "submission mode requires explicit aria-code-ref")
   }
 
   (
@@ -58,7 +62,7 @@
 }
 
 #let load-thesis-report(path, evidence-status: "pilot", required-role: none) = {
-  assert(evidence-status in ("pilot", "confirmatory"), message: "invalid thesis evidence status")
+  assert(evidence-status in ("exploratory", "pilot", "confirmatory"), message: "invalid thesis evidence status")
   let report = json(path)
   assert(report.at("schema_version", default: none) == report-schema-version, message: "unsupported thesis report schema")
   let bundle-role = report.at("bundle_role", default: none)
@@ -77,6 +81,10 @@
     assert(required-columns.all(column => column in columns), message: "missing required columns in thesis report table: " + name)
     assert(type(table-data.at("rows", default: none)) == array, message: "invalid rows for thesis report table: " + name)
   }
+  assert(
+    tables.empirical_results.columns == empirical-result-columns,
+    message: "empirical_results columns must match the exact report contract",
+  )
 
   let fact-rows = tables.facts.rows
   for key in required-report-facts {
@@ -87,6 +95,13 @@
       tables.at(name).rows.all(row => row.at("status", default: none) == evidence-status),
       message: "thesis report status does not match aria-thesis-evidence-status: " + name,
     )
+  }
+  let empirical = tables.empirical_results.rows
+  if required-role == "evidence" {
+    assert(empirical.len() > 0, message: "submission evidence bundle requires nonempty empirical_results")
+    assert(empirical.all(row => row.status == "confirmatory"), message: "submission evidence results must be confirmatory")
+    let code-ref = sys.inputs.at("aria-code-ref", default: none)
+    assert(empirical.all(row => row.source_revision == code-ref), message: "empirical result source_revision does not match aria-code-ref")
   }
   report
 }
