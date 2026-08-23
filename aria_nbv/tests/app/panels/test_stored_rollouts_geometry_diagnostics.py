@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import inspect
 from contextlib import nullcontext
 from dataclasses import asdict, replace
 
@@ -13,7 +14,7 @@ import pytest
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, validity_support
 from aria_nbv.rollouts.inspection import GeometryFrame
 
 
@@ -98,6 +99,14 @@ def test_normalized_radius_figure_exposes_unit_target_range_threshold() -> None:
 
     assert sorted(float(value) for trace in figure.data for value in trace.y) == [0.2, 0.4, 0.8, 1.2]
     assert any(shape.y0 == 1.0 and shape.y1 == 1.0 for shape in figure.layout.shapes)
+
+
+def test_bounded_geometry_is_default_visible_in_admission_surface() -> None:
+    """The bounded geometry plots are immediately discoverable without a hidden extra disclosure."""
+
+    source = inspect.getsource(validity_support._render_targets_and_support)
+    assert '"Bounded candidate geometry and reward plots"' in source
+    assert "expanded=True" in source
 
 
 def test_orientation_diagnostics_keep_frame_and_selected_populations_explicit() -> None:

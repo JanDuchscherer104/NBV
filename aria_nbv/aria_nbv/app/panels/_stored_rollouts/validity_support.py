@@ -156,15 +156,19 @@ def _render_targets_and_support(session_handle: object) -> None:
         _render_candidate_aggregate_breakdowns(session_handle)
 
     if st.toggle(
-        "Load cohort composition, proposal calibration, and collision support",
+        "Load complete candidate-family lineage and choice evidence",
         value=False,
-        help="Materializes the complete candidate audit only after this explicit request and reuses its cached rows.",
+        help=(
+            "Materializes the complete candidate audit only after this explicit request. "
+            "The resulting surface exposes allocation share, valid share, policy mass, realized selection, "
+            "and expected-versus-realized family transitions with exact contract controls and pooled temperatures."
+        ),
     ):
         _render_candidate_population_evidence(session_handle)
 
     with st.expander(
         "Bounded candidate geometry and reward plots",
-        expanded=False,
+        expanded=True,
     ):
         st.caption(
             "Bounded preview is loaded automatically from the validated candidate shell; "

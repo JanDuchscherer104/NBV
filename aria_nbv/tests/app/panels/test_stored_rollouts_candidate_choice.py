@@ -167,6 +167,17 @@ def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch
     assert selected["generation_cohort_id"].tolist() == ["cohort-0.5"]
 
 
+def test_complete_candidate_choice_surface_is_explicit_and_names_all_quantities() -> None:
+    """The heavy action is named for lineage/choice and advertises its complete metric surface."""
+
+    source = inspect.getsource(candidate_generation._render_candidate_population_evidence)
+    assert "Complete candidate-family lineage and choice" in source
+    for quantity in ("allocation_share", "valid_share", "policy_mass", "selected_share"):
+        assert quantity in source
+    assert "expected_policy_mass_mean" in inspect.getsource(candidate_generation._candidate_transition_figure)
+    assert "realized_rate" in inspect.getsource(candidate_generation._candidate_transition_figure)
+
+
 def test_pooled_candidate_choice_keeps_absent_family_as_zero_across_temperatures() -> None:
     rows = []
     for temperature, family in ((0.5, "forward"), (2.0, "side")):

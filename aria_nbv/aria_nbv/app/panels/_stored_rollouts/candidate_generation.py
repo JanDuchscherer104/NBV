@@ -308,6 +308,11 @@ def _select_candidate_choice_controls(
 def _render_candidate_population_evidence(session_handle: object) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
+    st.markdown("#### Complete candidate-family lineage and choice")
+    st.caption(
+        "This explicit complete-store action keeps exact persisted contract controls fixed, pools compatible "
+        "temperatures, and compares allocation, valid support, policy mass, realized selection, and adjacent-family transitions."
+    )
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
     population = session_handle.candidate_population()
     composition = pd.DataFrame(population["composition"][group_by])
