@@ -72,7 +72,7 @@ from ...rri_metrics.returns import summarize_target_rollout_metrics
 from ...utils import Console, Verbosity
 from ..scene_view import ROLLOUT_SCENE_DEFAULTS, apply_scene_plot_options, scene_plot_options_ui
 from ..state_types import config_signature
-from .common import _info_popover, _pretty_label, _report_exception, _strip_ansi
+from .common import _info_popover, _plot_with_y_axis_control, _pretty_label, _report_exception, _strip_ansi
 from .target_audit import render_target_selection_audit, target_selection_audit_rows
 
 _SOURCE_TARGET_INFO = """
@@ -2006,6 +2006,24 @@ def _render_live_rollout_metric_dashboard(
         st.caption(
             "Endpoint `J_e^(H)` and log-gain are unavailable for this run because selected target point-mesh before/after fields were not emitted."
         )
+
+
+def _render_live_quality_plot(
+    fig: go.Figure,
+    *,
+    label: str,
+    context: str,
+    log_y_key: str,
+) -> None:
+    """Render one live trajectory with context and an independent axis control."""
+
+    _info_popover(
+        label,
+        context + "\n\n**Axis scale:** Linear by default. Logarithmic scale is independently selectable for this plot; "
+        "zero and negative observations are not visible on a logarithmic axis.",
+    )
+    rendered, _ = _plot_with_y_axis_control(fig, key=log_y_key)
+    st.plotly_chart(rendered, width="stretch")
 
 
 def render_counterfactual_rollouts_page() -> None:
