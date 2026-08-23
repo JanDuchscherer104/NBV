@@ -459,7 +459,7 @@
   ],
   "report_schema_version": "aria-nbv-thesis-report-v2",
   "schema_version": "thesis-toolchain-lock-v1",
-  "source_revision": "91f99779111dfd930af713b76dff16f35a46b51b",
+  "source_revision": "91dc6c328779a7ce4a6f3b5902a6643423761ea0",
   "toolchain": {
     "compiler": {
       "binary_sha256": "3ac6b84150c50a694d44134dc201624fbdc44f705b9992124a13474ddf8c6413",
@@ -552,39 +552,18 @@
         "identity": "@preview/booktabs:0.0.4"
       },
       {
-        "identity": "@preview/cetz:0.5.2"
-      },
-      {
-        "identity": "@preview/codly:1.3.0"
-      },
-      {
         "identity": "@preview/dashy-todo:0.1.3"
       },
       {
-        "identity": "@preview/definitely-not-isec-slides:1.0.1"
-      },
-      {
-        "identity": "@preview/fletcher:0.5.8"
-      },
-      {
         "identity": "@preview/glossarium:0.5.10"
-      },
-      {
-        "identity": "@preview/muchpdf:0.1.1"
-      },
-      {
-        "identity": "@preview/scenery:0.1.0"
-      },
-      {
-        "identity": "@preview/tableau-icons:0.331.0"
-      },
-      {
-        "identity": "@preview/tdtr:0.5.0"
-      },
-      {
-        "identity": "@preview/tdtr:0.5.5"
       }
     ],
+    "pdf_comparator": {
+      "binary_sha256": "ad3659e9229f0609640db64611023130222f892a00706ea318af04a07326014a",
+      "command": "pdftoppm",
+      "ppi": 72,
+      "version": "pdftoppm version 26.01.0\nCopyright 2005-2026 The Poppler Developers - http://poppler.freedesktop.org\nCopyright 1996-2011, 2022 Glyph & Cog, LLC"
+    },
     "rasterizer": {
       "backend": "typst png",
       "ppi": 300,
