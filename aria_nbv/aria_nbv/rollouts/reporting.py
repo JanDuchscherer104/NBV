@@ -621,12 +621,12 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
 
     stores = _concat_report_frames(valid_frames, "stores")
     runtime = _concat_report_frames(valid_frames, "runtime_storage")
-    candidate = _candidate_corpus_support(_concat_report_frames(valid_frames, "candidate_composition"))
+    candidate = _candidate_corpus_support(_contract_frames(valid_frames, included, "candidate_composition"))
     endpoints = _corpus_endpoints(valid_frames, included)
-    failures = _corpus_failure_counts(_concat_report_frames(valid_frames, "failures"))
+    failures = _corpus_failure_counts(_contract_frames(valid_frames, included, "failures"))
     temporal = _corpus_temporal_summary(valid_frames, included)
-    target_admission = _corpus_target_admission(_concat_report_frames(valid_frames, "targets"))
-    feasibility = _corpus_feasibility(_concat_report_frames(valid_frames, "candidate_collision_support"))
+    target_admission = _corpus_target_admission(_contract_frames(valid_frames, included, "targets"))
+    feasibility = _corpus_feasibility(_contract_frames(valid_frames, included, "candidate_collision_support"))
     q_h_stores = (
         pd.DataFrame(q_h_rows).sort_values(["store_id"], kind="stable").reset_index(drop=True)
         if q_h_rows
@@ -869,10 +869,36 @@ def _concat_report_frames(frames: list[dict[str, pd.DataFrame]], name: str) -> p
     )
 
 
+def _contract_frames(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+    name: str,
+) -> pd.DataFrame:
+    """Attach persisted contract identity before any corpus grouping."""
+
+    annotated: list[pd.DataFrame] = []
+    for bundle, store in zip(frames, included, strict=True):
+        frame = bundle[name].copy()
+        if frame.empty:
+            continue
+        store_id = str(store["store_id"])
+        contract = _persisted_rollout_contract(bundle, store_id, str(store["profile"]))
+        frame.insert(1, "contract_id", contract["id"])
+        frame.insert(2, "contract", contract["label"])
+        frame.insert(3, "profile", contract["profile"])
+        annotated.append(frame)
+    if not annotated:
+        return pd.DataFrame()
+    return pd.concat(annotated, ignore_index=True)
+
+
 def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
     """Recompute additive family support from exact generation cohorts."""
 
     columns = (
+        "contract_id",
+        "contract",
+        "profile",
         "generation_cohort_id",
         "generation_cohort",
         "family",
@@ -901,7 +927,9 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
     for column in count_columns:
         source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
     grouped = (
-        source.groupby(["generation_cohort_id", "family"], dropna=False, sort=True)
+        source.groupby(
+            ["contract_id", "contract", "profile", "generation_cohort_id", "family"], dropna=False, sort=True
+        )
         .agg(
             generation_cohort=("generation_cohort", "first"),
             store_count=("store_id", "nunique"),
@@ -917,7 +945,7 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
     grouped["aggregation"] = "additive counts within exact generation cohort and family"
     return (
         grouped.loc[:, columns]
-        .sort_values(["generation_cohort_id", "family"], kind="stable", na_position="last")
+        .sort_values(["contract_id", "generation_cohort_id", "family"], kind="stable", na_position="last")
         .reset_index(drop=True)
     )
 
@@ -925,11 +953,24 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
 def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
     """Count target-admission outcomes without translating invalidity into RRI."""
 
-    columns = ("target_valid", "gt_label_valid", "gt_match_status", "count", "store_count")
+    columns = (
+        "contract_id",
+        "contract",
+        "profile",
+        "target_valid",
+        "gt_label_valid",
+        "gt_match_status",
+        "count",
+        "store_count",
+    )
     if targets.empty:
         return pd.DataFrame(columns=columns)
     return (
-        targets.groupby(["target_valid", "gt_label_valid", "gt_match_status"], dropna=False, sort=True)
+        targets.groupby(
+            ["contract_id", "contract", "profile", "target_valid", "gt_label_valid", "gt_match_status"],
+            dropna=False,
+            sort=True,
+        )
         .agg(count=("target_row_id", "size"), store_count=("store_id", "nunique"))
         .reset_index()
         .loc[:, columns]
@@ -940,6 +981,9 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
     """Recompute only additive collision and clearance denominators by cohort."""
 
     columns = (
+        "contract_id",
+        "contract",
+        "profile",
         "generation_cohort_id",
         "generation_cohort",
         "store_count",
@@ -964,7 +1008,9 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
     for column in count_columns:
         source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
     grouped = (
-        source.groupby(["generation_cohort_id", "generation_cohort"], dropna=False, sort=True)
+        source.groupby(
+            ["contract_id", "contract", "profile", "generation_cohort_id", "generation_cohort"], dropna=False, sort=True
+        )
         .agg(store_count=("store_id", "nunique"), **{column: (column, "sum") for column in count_columns})
         .reset_index()
     )
@@ -1015,11 +1061,11 @@ def _corpus_endpoints(
 def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
     """Count suspicious rows by kind and severity without pooling causes."""
 
-    columns = ("kind", "severity", "count", "store_count")
+    columns = ("contract_id", "contract", "profile", "kind", "severity", "count", "store_count")
     if failures.empty:
         return pd.DataFrame(columns=columns)
     return (
-        failures.groupby(["kind", "severity"], dropna=False, sort=True)
+        failures.groupby(["contract_id", "contract", "profile", "kind", "severity"], dropna=False, sort=True)
         .agg(count=("message", "size"), store_count=("store_id", "nunique"))
         .reset_index()
         .loc[:, columns]

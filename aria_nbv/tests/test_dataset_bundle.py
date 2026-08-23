@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineBlockSpec,
@@ -17,11 +18,20 @@ from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
 from aria_nbv.dataset_bundle import (
     DatasetBundleSelection,
     build_dataset_bundle_summary,
+    build_qh_corpus_readiness,
     compute_dataset_bundle_deep_statistics,
     scan_root_gt_obb_target_opportunities,
 )
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
+
+
+def test_qh_readiness_requires_an_explicit_named_contract(tmp_path: Path) -> None:
+    """Diagnostic defaults cannot silently become Q_H readiness evidence."""
+
+    selection = DatasetBundleSelection(tmp_path / "missing-root", (tmp_path / "rollouts",))
+    with pytest.raises(TypeError, match="contract"):
+        build_qh_corpus_readiness(selection)  # type: ignore[call-arg]
 
 
 def _write_root_store(root: Path) -> tuple[Path, str]:

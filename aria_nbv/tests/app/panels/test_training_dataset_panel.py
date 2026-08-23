@@ -19,6 +19,7 @@ from aria_nbv.app.panels.training_dataset import (
     _qh_preview_identity,
     _qh_readiness_for_identity,
     _qh_readiness_identity,
+    _target_inventory_frames,
 )
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
@@ -307,3 +308,24 @@ def test_deep_metric_value_marks_partial_counts_and_unavailable_failures() -> No
 
     assert _deep_metric_value(partial, "q_h_trainable_candidates", deep_available=True) == "17 (partial)"
     assert _deep_metric_value(unavailable, "q_h_trainable_candidates", deep_available=True) == "Unavailable"
+
+
+def test_target_inventory_frames_preserve_zero_samples_and_class_scene_support() -> None:
+    inventory = {
+        "detected": {
+            "available": True,
+            "sample_rows": [{"sample_index": 0, "count": 0}, {"sample_index": 1, "count": 2}],
+            "rows": [
+                {"source_row": 0, "class_name": "chair", "scene_id": "scene-a"},
+                {"source_row": 1, "class_name": "chair", "scene_id": "scene-b"},
+            ],
+        },
+        "gt": {"available": True, "sample_rows": [{"sample_index": 0, "count": 1}], "rows": []},
+    }
+
+    samples, targets = _target_inventory_frames(inventory)
+
+    assert len(samples) == 3
+    assert int((samples["count"] == 0).sum()) == 1
+    assert targets["class_name"].value_counts().to_dict() == {"chair": 2}
+    assert targets["scene_id"].nunique() == 2
