@@ -49,14 +49,15 @@ intent-promotion review, activate this skill as the leaf maintenance owner.
 Use the existing triage, to-issues, proposal-review, and resolution modes.
 Before proposal review or resolution, read
 [`agent-behavior` external-actions](../agent-behavior/references/external-actions.md):
-an agent must not select a disposition without explicit current-user authority
-or already-reviewed policy; route the choice to a human reviewer and keep the
-proposal active/deferred when that authority is absent. The `proposal-review`
-mode owns dispositions: accept/narrow require an
-ordinary edit to the smallest policy owner; reject resolves the existing
-record with a reason while policy bytes stay unchanged; defer leaves policy
-unchanged and keeps the record active. TOML records the lifecycle but never
-installs policy automatically.
+human review selects exactly one disposition. Explicit current-user authority
+means direction selecting it in the current task; already-reviewed policy is
+evidence only and cannot substitute for that choice. Without that authority,
+select and record no disposition: route to a human reviewer and leave the
+proposal active and unresolved. Once selected,
+the `proposal-review` mode owns lifecycle: accept/narrow require an ordinary
+edit to the smallest policy owner; reject resolves the existing record with a
+reason while policy bytes stay unchanged; defer leaves policy unchanged and
+keeps the record active. TOML records the lifecycle but never installs policy.
 
 ## Completion
 

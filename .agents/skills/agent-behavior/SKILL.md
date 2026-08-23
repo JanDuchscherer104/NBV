@@ -91,12 +91,12 @@ proposal, debrief, or none; this is the lifecycle exception to the fast path.
   open status.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
-- **Proposal or verified residual work:** After the leaf proposal, retrieval,
-  validation, and tests are present, classify the completion as owner update
-  now, debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or
-  none; for residual work, execute and retain the exact current-owner proof,
-  then search existing records and amend an independently actionable one before
-  creating a new Agents-DB follow-up.
+- **Proposal or verified residual work:** Classify through
+  [`intent-and-follow-up.md`](references/intent-and-follow-up.md) and
+  `.agents/memory/README.md`. Before amendment or resolution, open
+  `scripts/agents_db.py`, the record lifecycle owner. For residual work,
+  execute and retain the exact current-owner proof; search existing records and amend
+  an independently actionable one before creating a follow-up.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
   durable interface, architecture, or research-facing direction.
 - **Concrete failure owner:** Hand the reproducer and exact evidence to the
