@@ -29,7 +29,8 @@ blueprints, camera/depth evidence, and viewer behavior.
 
 - Lead with the answer or readiness verdict and one sentence interpreting the
   decisive evidence, then show essential metrics and the primary plot.
-- When a scientific metric needs more than that sentence, apply the conditional
+- Before explaining a scientific metric beyond that sentence, read and apply
+  the conditional
   [scientific interpretation rubric](references/scientific-interpretation.md).
 - Keep raw/exact tables and exports subordinate to the interpretation and
   collapsed directly beneath it.
