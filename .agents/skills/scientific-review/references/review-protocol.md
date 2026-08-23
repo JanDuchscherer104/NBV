@@ -8,7 +8,8 @@ Read this reference for a scientific red-team. Keep the candidate unchanged.
 3. Record each finding as a closed `category`, `severity`, exact candidate-relative
    `evidence` span, `reason`, `impact`, and `action`. Preserve the exact
    candidate SHA-256 and host-generated reviewer provenance; author and reviewer
-   identities must remain distinct.
+   identities must remain distinct. Judge severity within the evaluator's
+   attested closed lower and upper bounds.
    Distinguish a confirmed defect, evidence gap, and question for the author.
    Do not convert an advisory finding into a release state.
 4. Return findings with reviewer provenance and candidate identity. The owning

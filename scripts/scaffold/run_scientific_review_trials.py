@@ -69,6 +69,10 @@ CATEGORIES = {
     "implementation_status",
 }
 SEVERITIES = {"low", "medium", "high", "critical"}
+SEVERITY_RANK = {
+    severity: rank
+    for rank, severity in enumerate(("low", "medium", "high", "critical"))
+}
 
 
 def _source_bytes(source: bytes | Path) -> bytes:
@@ -121,7 +125,8 @@ def load_rubric(source: bytes | Path = RUBRIC_PATH) -> dict[str, dict[str, Any]]
             "case_kind",
             "source_id",
             "expected_category",
-            "expected_severity",
+            "severity_min",
+            "severity_max",
             "wording_variant_of",
             "resolution_of",
             "related_ids",
@@ -131,13 +136,22 @@ def load_rubric(source: bytes | Path = RUBRIC_PATH) -> dict[str, dict[str, Any]]
         if not isinstance(trial_id, str) or not trial_id or trial_id in rubric:
             raise ValueError("rubric fixture IDs must be unique non-empty strings")
         category = fixture["expected_category"]
-        severity = fixture["expected_severity"]
+        severity_min = fixture["severity_min"]
+        severity_max = fixture["severity_max"]
         if category is not None and category not in CATEGORIES:
             raise ValueError(f"rubric {trial_id}: category is not closed")
-        if severity is not None and severity not in SEVERITIES:
-            raise ValueError(f"rubric {trial_id}: severity is not closed")
         if fixture["case_kind"] not in {"original", "variant", "corrected", "positive"}:
             raise ValueError(f"rubric {trial_id}: case kind is closed")
+        expects_finding = fixture["case_kind"] in {"original", "variant"}
+        if expects_finding != (category is not None):
+            raise ValueError(f"rubric {trial_id}: category does not match case kind")
+        if expects_finding:
+            if severity_min not in SEVERITIES or severity_max not in SEVERITIES:
+                raise ValueError(f"rubric {trial_id}: severity bounds are not closed")
+            if SEVERITY_RANK[severity_min] > SEVERITY_RANK[severity_max]:
+                raise ValueError(f"rubric {trial_id}: severity bounds are reversed")
+        elif severity_min is not None or severity_max is not None:
+            raise ValueError(f"rubric {trial_id}: clear case has severity bounds")
         if not isinstance(fixture["source_id"], str) or not fixture["source_id"]:
             raise ValueError(f"rubric {trial_id}: source ID is required")
         if not isinstance(fixture["related_ids"], list) or not all(
@@ -236,7 +250,8 @@ def _trial_case(
 def build_trial_prompt(case: TrialCase) -> str:
     prompt, _ = _context(case)
     return (
-        f"{prompt['task']}\n\nThe exact candidate SHA-256 is "
+        f"{prompt['task']}\n\nThe schema trial_id must be exactly {case.trial_id!r}. "
+        "The exact candidate SHA-256 is "
         f"{candidate_sha256(prompt['candidate'])}. Return only the strict schema."
     )
 
@@ -285,8 +300,20 @@ def validate_verdict(
     if expected_category is not None:
         if len(findings) != 1 or findings[0].get("category") != expected_category:
             return False, "finding misses the intended semantic category"
-        if findings[0].get("severity") != rubric["expected_severity"]:
-            return False, "finding severity is unstable"
+        severity = findings[0].get("severity")
+        severity_min = rubric["severity_min"]
+        severity_max = rubric["severity_max"]
+        if (
+            severity not in SEVERITY_RANK
+            or severity_min not in SEVERITY_RANK
+            or severity_max not in SEVERITY_RANK
+            or not (
+                SEVERITY_RANK[severity_min]
+                <= SEVERITY_RANK[severity]
+                <= SEVERITY_RANK[severity_max]
+            )
+        ):
+            return False, "finding severity is outside the attested bounds"
     categories = [finding.get("category") for finding in findings]
     if len(categories) != len(set(categories)):
         return False, "finding categories must be unique"
@@ -466,6 +493,16 @@ class ScientificReviewAdapter:
                     )
                 if trial_id not in rubric[source_id]["related_ids"]:
                     raise ValueError(f"rubric {trial_id}: original lacks variant link")
+                if (
+                    fixture["severity_min"],
+                    fixture["severity_max"],
+                ) != (
+                    rubric[source_id]["severity_min"],
+                    rubric[source_id]["severity_max"],
+                ):
+                    raise ValueError(
+                        f"rubric {trial_id}: variant severity bounds differ"
+                    )
             elif fixture["case_kind"] == "corrected":
                 if fixture["resolution_of"] != source_id:
                     raise ValueError(f"rubric {trial_id}: correction link is malformed")

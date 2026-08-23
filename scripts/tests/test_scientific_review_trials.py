@@ -95,7 +95,7 @@ def _finding(case: TrialCase) -> dict[str, Any]:
     start = candidate.index(needle)
     return {
         "category": rubric["expected_category"],
-        "severity": rubric["expected_severity"],
+        "severity": rubric["severity_min"],
         "evidence": {"start": start, "end": start + len(needle), "text": needle},
         "reason": "The candidate crosses the stated evidence boundary.",
         "impact": "The conclusion is not supported by the described design.",
@@ -129,16 +129,44 @@ def test_fixture_sets_cover_controls_and_corrections() -> None:
         "implementation_status",
         None,
     }
+    assert {
+        trial_id: (rubric[trial_id]["severity_min"], rubric[trial_id]["severity_max"])
+        for trial_id in trials.DEFAULT_TRIAL_IDS[:7]
+    } == {
+        "seminar-uncontrolled-ablation": ("high", "critical"),
+        "actor-oracle-leakage": ("critical", "critical"),
+        "invalidity-as-utility": ("high", "critical"),
+        "pilot-escalation": ("high", "critical"),
+        "pseudoreplication": ("high", "critical"),
+        "missing-uncertainty": ("medium", "high"),
+        "planned-tense-drift": ("medium", "high"),
+    }
     for trial_id, fixture in rubric.items():
         assert fixture["source_id"] in prompts
         if fixture["case_kind"] == "variant":
             assert fixture["wording_variant_of"] == fixture["source_id"]
+            source = rubric[fixture["source_id"]]
+            assert (fixture["severity_min"], fixture["severity_max"]) == (
+                source["severity_min"],
+                source["severity_max"],
+            )
         if fixture["case_kind"] == "corrected":
             assert fixture["resolution_of"] == fixture["source_id"]
             assert (
                 prompts[trial_id]["candidate"]
                 != prompts[fixture["source_id"]]["candidate"]
             )
+
+
+def test_trial_prompt_attests_exact_trial_and_candidate_identity() -> None:
+    case = _case("missing-uncertainty")
+    prompt, _ = cast(tuple[dict[str, str], dict[str, Any]], case.context)
+    rendered = trials.build_trial_prompt(case)
+    assert f"trial_id must be exactly {case.trial_id!r}" in rendered
+    assert (
+        f"exact candidate SHA-256 is {trials.candidate_sha256(prompt['candidate'])}"
+        in rendered
+    )
 
 
 def test_prompt_loader_fails_closed_for_malformed_and_duplicate_ids() -> None:
@@ -149,11 +177,19 @@ def test_prompt_loader_fails_closed_for_malformed_and_duplicate_ids() -> None:
         trials.load_prompts(b'{"id":"x","task":"x"}\n')
 
 
-def test_rubric_loader_fails_closed_for_unknown_category_and_shape() -> None:
+def test_rubric_loader_fails_closed_for_category_bound_and_shape_errors() -> None:
     base = trials.load_rubric()["restrained-abstract"]
     bad = {"fixtures": [{**base, "expected_category": "novelty"}]}
     with pytest.raises(ValueError):
         trials.load_rubric(json.dumps(bad).encode())
+    original = trials.load_rubric()["missing-uncertainty"]
+    for malformed in (
+        {**original, "severity_min": "high", "severity_max": "medium"},
+        {**original, "severity_min": "informational"},
+        {**base, "severity_min": "low", "severity_max": "high"},
+    ):
+        with pytest.raises(ValueError, match="severity"):
+            trials.load_rubric(json.dumps({"fixtures": [malformed]}).encode())
     with pytest.raises(ValueError):
         trials.load_rubric(b'{"fixtures":[{"id":"x"}]}')
 
@@ -162,6 +198,20 @@ def test_fixture_links_fail_closed_for_dangling_or_nonreciprocal_records() -> No
     rubric = trials.load_rubric()
     rubric["seminar-uncontrolled-ablation"]["related_ids"] = ["dangling"]
     with pytest.raises(ValueError, match="dangles|link"):
+        trials.ScientificReviewAdapter().load_fixtures(
+            {
+                trials.PROMPTS_RELATIVE: trials.PROMPTS_PATH.read_bytes(),
+                trials.RUBRIC_RELATIVE: json.dumps(
+                    {"fixtures": list(rubric.values())}
+                ).encode(),
+            }
+        )
+
+
+def test_variant_fixture_must_preserve_original_severity_bounds() -> None:
+    rubric = trials.load_rubric()
+    rubric["missing-uncertainty-variant"]["severity_min"] = "low"
+    with pytest.raises(ValueError, match="severity bounds differ"):
         trials.ScientificReviewAdapter().load_fixtures(
             {
                 trials.PROMPTS_RELATIVE: trials.PROMPTS_PATH.read_bytes(),
@@ -250,6 +300,27 @@ def test_verdict_fails_closed_for_hash_category_and_span_errors() -> None:
         case=case,
         report=_report(case),
     )[0]
+
+
+@pytest.mark.parametrize("severity", ["low", "critical"])
+def test_verdict_rejects_severity_outside_attested_bounds(severity: str) -> None:
+    case = _case("missing-uncertainty")
+    finding = {**_finding(case), "severity": severity}
+    valid, reason = trials.validate_verdict(
+        _verdict(case, findings=[finding]), case=case, report=_report(case)
+    )
+    assert not valid
+    assert "attested bounds" in reason
+
+
+@pytest.mark.parametrize("severity", ["medium", "high"])
+def test_verdict_accepts_severity_within_attested_bounds(severity: str) -> None:
+    case = _case("missing-uncertainty")
+    finding = {**_finding(case), "severity": severity}
+    valid, reason = trials.validate_verdict(
+        _verdict(case, findings=[finding]), case=case, report=_report(case)
+    )
+    assert valid, reason
 
 
 def test_verdict_requires_clear_equivalence_unique_findings_and_provenance() -> None:
