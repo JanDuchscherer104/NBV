@@ -596,6 +596,30 @@ def promoted_store_validation_error(
     return None if evidence is not None else "promoted rollout evidence does not match the canonical store content"
 
 
+def _generation_cohort_identity(
+    rollout: StoredRollout,
+    *,
+    candidate_config: str,
+    rollout_config: str,
+    branch_schedule: str,
+) -> tuple[str, str]:
+    """Return the canonical cohort identity shared by candidate and step views."""
+
+    cohort_fields = {
+        "policy": rollout.policy,
+        "horizon": rollout.horizon,
+        "acquisition_budget_steps": rollout.horizon,
+        "branch_factor": rollout.branch_factor,
+        "beam_width": rollout.beam_width,
+        "temperature": _finite_or_none(rollout.temperature),
+        "candidate_config": candidate_config,
+        "rollout_config": rollout_config,
+        "branch_schedule": branch_schedule,
+    }
+    cohort_json = json.dumps(cohort_fields, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(cohort_json.encode()).hexdigest()[:16], cohort_json
+
+
 def candidate_audit_rows(
     reader: RolloutZarrStoreReader,
     *,
@@ -635,19 +659,12 @@ def candidate_audit_rows(
         rollout = rollout_at(reader, rollout_position)
         if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
-        cohort_fields = {
-            "policy": rollout.policy,
-            "horizon": rollout.horizon,
-            "acquisition_budget_steps": rollout.horizon,
-            "branch_factor": rollout.branch_factor,
-            "beam_width": rollout.beam_width,
-            "temperature": _finite_or_none(rollout.temperature),
-            "candidate_config": candidate_configs[rollout_position],
-            "rollout_config": rollout_configs[rollout_position],
-            "branch_schedule": branch_schedules[rollout_position],
-        }
-        cohort_json = json.dumps(cohort_fields, sort_keys=True, separators=(",", ":"))
-        generation_cohort_id = hashlib.sha256(cohort_json.encode()).hexdigest()[:16]
+        generation_cohort_id, cohort_json = _generation_cohort_identity(
+            rollout,
+            candidate_config=candidate_configs[rollout_position],
+            rollout_config=rollout_configs[rollout_position],
+            branch_schedule=branch_schedules[rollout_position],
+        )
         root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
         target_delta = target_centers.get(rollout.target_row_id)
         target_record = target_records.get(rollout.target_row_id)
@@ -4741,10 +4758,19 @@ def rollout_step_objective_rows(
     """Return per-step objective, branching, and selected-action audit rows."""
     rows: list[dict[str, object]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
+    rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
+    branch_schedules = _decoded_array(reader, "lineage/branch_schedule_id", "config")
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
         if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
             continue
+        generation_cohort_id, cohort_json = _generation_cohort_identity(
+            rollout,
+            candidate_config=candidate_configs[rollout_position],
+            rollout_config=rollout_configs[rollout_position],
+            branch_schedule=branch_schedules[rollout_position],
+        )
         previous_target: float | None = None
         for step in rollout_steps(reader, rollout):
             selected = step.selected_local_index
@@ -4779,6 +4805,8 @@ def rollout_step_objective_rows(
                     "branch_factor": rollout.branch_factor,
                     "beam_width": rollout.beam_width,
                     "temperature": _finite_or_none(rollout.temperature),
+                    "generation_cohort_id": generation_cohort_id,
+                    "generation_cohort": cohort_json,
                     "cumulative_target_rri": cumulative_target,
                     "marginal_target_rri": marginal_target,
                     "cumulative_scene_rri": _finite_or_none(step.cumulative_scene_rri),

@@ -247,6 +247,8 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "branch_factor",
         "beam_width",
         "temperature",
+        "generation_cohort_id",
+        "generation_cohort",
         "cumulative_target_rri",
         "marginal_target_rri",
         "cumulative_scene_rri",

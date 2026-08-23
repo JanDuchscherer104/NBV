@@ -235,6 +235,7 @@ def _corpus_temporal_group_fields(rows: pd.DataFrame) -> list[str]:
             "horizon",
             "branch_factor",
             "beam_width",
+            "generation_cohort_id",
         )
         if field in rows
     ]
@@ -287,6 +288,7 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
             "horizon",
             "branch_factor",
             "beam_width",
+            "generation_cohort_id",
         ):
             custom_frame[field] = ordered[field] if field in ordered else "unknown"
         custom = custom_frame.to_numpy()
@@ -306,7 +308,8 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
                     "contract_id=%{customdata[4]}<br>contract=%{customdata[5]}<br>"
                     "profile=%{customdata[6]}<br>policy=%{customdata[7]}<br>"
                     "temperature=%{customdata[8]}<br>horizon=%{customdata[9]}<br>"
-                    "branch=%{customdata[10]}<br>beam=%{customdata[11]}<extra></extra>"
+                    "branch=%{customdata[10]}<br>beam=%{customdata[11]}<br>"
+                    "generation_cohort=%{customdata[12]}<extra></extra>"
                 ),
             )
         )
@@ -349,7 +352,9 @@ def _temporal_series_display_labels(grouped: list[tuple[object, pd.DataFrame]], 
         suffix = (
             contract_id[:12] if contract_id not in {"unknown", "nan"} else str(values.get("contract", "unknown"))[:12]
         )
-        unique.append(f"{label} · contract={suffix}")
+        cohort = str(values.get("generation_cohort_id", "unknown"))
+        cohort_suffix = f" · cohort={cohort[:12]}" if cohort not in {"unknown", "nan"} else ""
+        unique.append(f"{label} · contract={suffix}{cohort_suffix}")
     return unique
 
 

@@ -138,6 +138,8 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
 
     assert calls == {"manifest": 1, "validation": 1, "promotion": 1, "statistics": 1}
     assert len(frames["stores"]) == 1
+    assert frames["steps"]["generation_cohort_id"].notna().all()
+    assert frames["steps"]["generation_cohort"].notna().all()
 
 
 def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -> None:

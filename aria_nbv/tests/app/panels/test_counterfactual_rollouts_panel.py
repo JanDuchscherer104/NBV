@@ -1027,6 +1027,49 @@ def test_corpus_reward_figure_disambiguates_compact_labels_for_contract_facets()
     assert "factual step_index + 1" in figure.layout.xaxis.title.text
 
 
+def test_corpus_reward_figure_keeps_same_contract_cohorts_as_separate_traces() -> None:
+    """Candidate/rollout lineage cohorts must not be connected into one trace."""
+
+    rows = pd.DataFrame(
+        [
+            {
+                "metric": "cumulative_target_root_gain",
+                "contract_id": "contract-a",
+                "contract": "contract A",
+                "profile": "rich-60",
+                "policy": "temperature_softmax",
+                "temperature": 0.5,
+                "horizon": 8,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "generation_cohort_id": cohort,
+                "step_index": step,
+                "store_count": 1,
+                "total_count": 1,
+                "finite_count": 1,
+                "iqr_width": 0.0,
+                "median": 0.1 * step,
+                "q25": 0.1 * step,
+                "q75": 0.1 * step,
+            }
+            for cohort in ("cohort-alpha", "cohort-beta")
+            for step in (0, 1)
+        ]
+    )
+    rows["median"] = rows["median"] + rows["generation_cohort_id"].map({"cohort-alpha": 0.0, "cohort-beta": 0.2})
+    rows["q25"] = rows["median"]
+    rows["q75"] = rows["median"]
+
+    figure = reconstruction_return._corpus_temporal_figure(rows, metric_label="Cumulative target root gain")
+
+    median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
+    assert len(median_traces) == 2
+    names = {str(trace.name) for trace in median_traces}
+    assert any("cohort=cohort-alpha" in name for name in names)
+    assert any("cohort=cohort-beta" in name for name in names)
+    assert all("generation_cohort=%{customdata[12]}" in str(trace.hovertemplate) for trace in median_traces)
+
+
 def test_log_y_axis_control_copies_figure_and_preserves_linear_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every opted-in plot gets an independent, non-mutating axis control."""
 
