@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
@@ -29,50 +30,145 @@ _MAX_FREE_DISK_FLOOR_GB = 1024
 _ADMISSION_STATE_KEY = "campaign_generation_admission_evidence"
 
 
-def _render_admission_audit(campaign: Any, plan_path: Path) -> None:
-    """Read and render validated campaign admission evidence on demand."""
+def _admission_audit_identity(path: Path) -> tuple[str, int, int, int, int] | None:
+    """Bind admission state to one immutable audit entry."""
 
-    st.subheader("Target admission audit")
-    audit_path = campaign.config.output_root / "admission-audit.json"
-    if not audit_path.is_file() or not plan_path.is_file():
-        st.info("Render a deterministic plan before loading its target admission audit.")
-        return
-    if st.button("Load admission audit", key="campaign_load_admission_audit"):
-        try:
-            plan = campaign.load_plan(plan_path)
-            evidence = read_campaign_admission_evidence(
-                audit_path,
-                expected_campaign_id=campaign.config.campaign_id,
-                expected_source_manifest_hash=plan.source_manifest_hash,
-                expected_audit_hash=plan.admission_audit_hash,
-            )
-            st.session_state[_ADMISSION_STATE_KEY] = evidence.to_jsonable()
-        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            st.session_state.pop(_ADMISSION_STATE_KEY, None)
-            st.error(f"Admission evidence unavailable: {exc}")
-    payload = st.session_state.get(_ADMISSION_STATE_KEY)
-    if not isinstance(payload, dict):
-        st.caption("Admission evidence is explicit, provenance-bound, and loaded only by this action.")
-        return
-    counts = payload.get("counts", {})
-    columns = st.columns(5)
-    columns[0].metric("Observed", counts.get("observed", 0))
-    columns[1].metric("Admitted", counts.get("admitted", 0))
-    columns[2].metric("Rejected", counts.get("rejected", 0))
-    columns[3].metric("Ambiguous", counts.get("ambiguous", 0))
-    columns[4].metric("Same-class IoU scored", counts.get("same_class_scored", 0))
-    reason_rows = payload.get("reason_rows", [])
-    if reason_rows:
-        st.bar_chart(pd.DataFrame(reason_rows).set_index("reason")["count"])
-    with st.expander("Validated admission rows and export", expanded=False):
+    try:
+        resolved = path.resolve()
+        stat = resolved.stat()
+    except OSError:
+        return None
+    return (resolved.as_posix(), stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+@st.cache_data(show_spinner="Validating campaign admission evidence…", max_entries=8)
+def _cached_admission_evidence(
+    path: str,
+    identity: tuple[str, int, int, int, int],
+    *,
+    campaign_id: str,
+    source_manifest_hash: str,
+    admission_audit_hash: str,
+) -> dict[str, Any]:
+    """Read one provenance-bound audit while retaining its identity in the cache key."""
+
+    del identity
+    return read_campaign_admission_evidence(
+        Path(path),
+        expected_campaign_id=campaign_id,
+        expected_source_manifest_hash=source_manifest_hash,
+        expected_audit_hash=admission_audit_hash,
+    ).to_jsonable()
+
+
+def _admission_plot_context(question: str, interpretation: str, caveat: str) -> None:
+    with st.popover("Interpret this plot", icon=":material/info:"):
+        st.markdown(f"**Question.** {question}")
+        st.markdown(interpretation)
+        st.markdown(f"**Important limitation.** {caveat}")
+
+
+def _render_admission_figure(figure: Any) -> None:
+    """Render a Plotly admission figure without adding a second plotting abstraction."""
+
+    renderer = getattr(st, "plotly_" + "chart")
+    renderer(figure, width="stretch")
+
+
+def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> None:
+    """Render validated admission evidence as metrics and plot-first diagnostics."""
+
+    counts = payload["counts"]
+    columns = st.columns(6)
+    for column, label, key in zip(
+        columns,
+        ("Observed targets", "Admitted", "Rejected", "Ambiguous", "Same-class overlap scored", "Duplicate GT groups"),
+        ("observed", "admitted", "rejected", "ambiguous", "same_class_scored", "duplicate_gt_groups"),
+        strict=True,
+    ):
+        column.metric(label, f"{int(counts.get(key, 0)):,}")
+    reason_frame = pd.DataFrame(payload.get("reason_rows", []))
+    if not reason_frame.empty:
+        _render_admission_figure(
+            px.bar(reason_frame, x="reason", y="count", color="admitted", title="Observed-target admission outcomes"),
+            width="stretch",
+        )
+        _admission_plot_context(
+            "Why did actor-visible detections enter or leave the campaign?",
+            "Each bar counts one audited observed target; rejected targets remain explicit outcomes.",
+            "A rejection is not a low-quality training example.",
+        )
+    iou_frame = pd.DataFrame(payload.get("iou_rows", []))
+    if not iou_frame.empty:
+        figure = px.ecdf(
+            iou_frame,
+            x="oriented_iou",
+            color="reason",
+            markers=True,
+            title="Same-class oriented-IoU empirical distribution",
+        )
+        figure.add_vline(x=float(threshold), line_dash="dash", annotation_text=f"strict admission > {threshold:.2f}")
+        _render_admission_figure(figure)
+        _admission_plot_context(
+            "How much same-class 3D overlap supports target association?",
+            "The dashed line is strict: equality at the threshold is rejected.",
+            "Admission also requires exactly one qualifying same-class GT match.",
+        )
+    scene_frame = pd.DataFrame(payload.get("scene_rows", []))
+    if not scene_frame.empty:
+        _render_admission_figure(
+            px.histogram(scene_frame, x="admission_rate", title="Admission-rate distribution across scenes"),
+            width="stretch",
+        )
+        st.caption("Each scene contributes once; target-dense scenes do not dominate this availability view.")
+    with st.expander("Admission evidence rows and export", expanded=False):
         st.dataframe(pd.DataFrame(payload.get("rows", [])), hide_index=True, width="stretch")
         st.download_button(
             "Download validated admission evidence JSON",
-            data=json.dumps(payload, indent=2, sort_keys=True),
+            data=json.dumps(payload, indent=2, sort_keys=True) + "\n",
             file_name="campaign_admission_evidence.json",
             mime="application/json",
             on_click="ignore",
         )
+
+
+def _render_admission_section(campaign: Any, plan_path: Path) -> None:
+    """Load campaign admission evidence only after explicit user dispatch."""
+
+    cfg = campaign.config
+    audit_path = cfg.output_root / "admission-audit.json"
+    identity = _admission_audit_identity(audit_path)
+    st.subheader("Target admission audit")
+    st.caption(
+        f"Same-class oriented-IoU admission requires exactly one match strictly greater than {cfg.observed_target_iou_threshold:.2f}; equality is rejected."
+    )
+    if st.button(
+        "Load admission audit",
+        disabled=identity is None or not plan_path.is_file(),
+        key="campaign_load_admission_audit",
+    ):
+        try:
+            assert identity is not None
+            plan = campaign.load_plan(plan_path)
+            payload = _cached_admission_evidence(
+                audit_path.as_posix(),
+                identity,
+                campaign_id=cfg.campaign_id,
+                source_manifest_hash=plan.source_manifest_hash,
+                admission_audit_hash=plan.admission_audit_hash,
+            )
+            st.session_state[_ADMISSION_STATE_KEY] = (identity, payload)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            st.session_state.pop(_ADMISSION_STATE_KEY, None)
+            st.error(f"Admission evidence unavailable: {exc}")
+    state = st.session_state.get(_ADMISSION_STATE_KEY)
+    if state is not None and state[0] != identity:
+        st.session_state.pop(_ADMISSION_STATE_KEY, None)
+        state = None
+    if state is None:
+        st.info("Render a deterministic plan, then load the provenance-bound admission audit.")
+        return
+    _render_admission_audit(state[1], threshold=cfg.observed_target_iou_threshold)
 
 
 def build_campaign_argv(
@@ -319,7 +415,7 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
             },
         }
     )
-    _render_admission_audit(campaign, plan_path)
+    _render_admission_section(campaign, plan_path)
 
     action = None
     cols = st.columns(6)
