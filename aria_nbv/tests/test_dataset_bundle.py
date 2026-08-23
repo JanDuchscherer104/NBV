@@ -283,6 +283,8 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     manifest.write(root / "manifest.json")
 
     valid = np.zeros((34,), dtype=np.float32)
+    valid[:6] = [0, 2, 0, 1, 0, 3]
+    valid[18:30] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 20, 30]
     padded = np.full((34,), -1.0, dtype=np.float32)
     nonfinite = valid.copy()
     nonfinite[0] = np.nan
@@ -294,7 +296,10 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
         def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
             return np.stack([valid, padded if record.sample_index == 0 else nonfinite])
 
-    monkeypatch.setattr("aria_nbv.dataset_bundle.VinOfflineStoreReader", _Reader)
+        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> object | None:
+            return None
+
+    monkeypatch.setattr("aria_nbv.data_handling.vin_store.target_inventory.VinOfflineStoreReader", _Reader)
     scan = scan_root_gt_obb_target_opportunities(root)
 
     assert scan["available"] is True

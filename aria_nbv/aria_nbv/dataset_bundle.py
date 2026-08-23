@@ -22,6 +22,7 @@ import numpy as np
 from .data_handling.identifiers import compact_ase_atek_sample_id
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
+from .data_handling.vin_store.target_inventory import TargetInventory, inspect_target_inventory
 from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils import Stage
@@ -652,7 +653,8 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
     """
 
     light = build_dataset_bundle_summary(selection, validate_rollouts=False)
-    root_target_scan = scan_root_gt_obb_target_opportunities(selection.root_store)
+    root_target_inventory = inspect_target_inventory(selection.root_store)
+    root_target_scan = _legacy_gt_target_opportunities(root_target_inventory)
     stores: list[dict[str, Any]] = []
     unique_targets: set[tuple[str, int, str]] = set()
     q_train_total = 0
@@ -715,6 +717,7 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
             "rollout_stores": [path.as_posix() for path in selection.rollout_stores],
         },
         "stores": stores,
+        "root_target_inventory": root_target_inventory.to_jsonable(),
         "root_gt_obb_target_opportunities": root_target_scan,
         "aggregate": {
             "root_gt_obb_target_opportunities": root_target_scan["target_opportunity_count"],
@@ -751,7 +754,52 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
         An unavailable result includes an exact reason and no inferred count.
     """
 
-    store = Path(root_store).expanduser().resolve()
+    return _legacy_gt_target_opportunities(inspect_target_inventory(root_store))
+
+
+def _legacy_gt_target_opportunities(inventory: TargetInventory) -> dict[str, Any]:
+    """Project canonical target inventory into the historical GT-only shape."""
+
+    gt = inventory.gt
+    if not gt.available:
+        reason = gt.reason.replace("gt.obbs", "gt_obb") if gt.reason is not None else None
+        return {
+            "path": inventory.path,
+            "available": False,
+            "reason": reason,
+            "semantic_role": "gt_obb_label_evaluation_target_opportunities",
+            "target_opportunity_count": None,
+            "sample_count": None,
+            "scene_counts": {},
+            "split_counts": {},
+            "per_sample": [],
+        }
+    return {
+        "path": inventory.path,
+        "available": True,
+        "reason": None,
+        "semantic_role": "gt_obb_label_evaluation_target_opportunities",
+        "target_opportunity_count": gt.row_count,
+        "sample_count": len(gt.sample_counts),
+        "scene_counts": dict(gt.scene_counts),
+        "split_counts": dict(gt.split_counts),
+        "per_sample": [
+            {
+                "sample_index": sample.sample_index,
+                "sample_key": sample.sample_key,
+                "scene_id": sample.scene_id,
+                "snippet_id": sample.snippet_id,
+                "split": sample.split,
+                "gt_obb_target_opportunities": sample.count,
+            }
+            for sample in gt.sample_rows
+        ],
+    }
+
+    # Kept below as historical implementation reference; the canonical
+    # inventory above owns all persisted GT counting and fail-closed reasons.
+    root_store = Path(inventory.path)
+    store = root_store.expanduser().resolve()
     try:
         manifest = VinOfflineManifest.read(store / "manifest.json")
         records = tuple(VinOfflineIndexRecord.read_many(store / "sample_index.jsonl"))

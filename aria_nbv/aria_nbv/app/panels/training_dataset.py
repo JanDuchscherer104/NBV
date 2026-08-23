@@ -624,7 +624,10 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
             if deep is not None:
                 deep_aggregate = deep.get("aggregate", {})
-                deep_columns = st.columns(3)
+                inventory = deep.get("root_target_inventory", {})
+                detected = inventory.get("detected", {})
+                gt = inventory.get("gt", {})
+                deep_columns = st.columns(5)
                 deep_columns[0].metric(
                     "Root target opportunities",
                     "Unavailable"
@@ -639,6 +642,29 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     "Q_H trainable candidates",
                     _deep_metric_value(deep_aggregate, "q_h_trainable_candidates", deep_available=True),
                 )
+                deep_columns[3].metric(
+                    "Detected targets",
+                    _metric_value(detected.get("row_count")) if detected.get("available") else "Unavailable",
+                )
+                deep_columns[4].metric(
+                    "GT targets",
+                    _metric_value(gt.get("row_count")) if gt.get("available") else "Unavailable",
+                )
+                if detected.get("available") or gt.get("available"):
+                    population_rows = []
+                    for label, payload in (("Detected", detected), ("GT", gt)):
+                        if not payload.get("available"):
+                            continue
+                        samples = payload.get("sample_rows", [])
+                        population_rows.append(
+                            {
+                                "population": label,
+                                "samples": len(samples),
+                                "zero-target samples": sum(int(row.get("count", 0)) == 0 for row in samples),
+                                "nonzero-target samples": sum(int(row.get("count", 0)) > 0 for row in samples),
+                            }
+                        )
+                    st.dataframe(pd.DataFrame(population_rows), hide_index=True, width="stretch")
             if not bool(root_target_scan.get("available")):
                 reason = root_target_scan.get("reason", "deep scan not run")
                 st.warning(

@@ -14,8 +14,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import streamlit as st
 
+from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
 from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaignConfig
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 
@@ -24,6 +26,53 @@ _SAFE_SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _MAX_NEW_UNITS = 100
 _MAX_TIME_BUDGET_MINUTES = 24 * 60
 _MAX_FREE_DISK_FLOOR_GB = 1024
+_ADMISSION_STATE_KEY = "campaign_generation_admission_evidence"
+
+
+def _render_admission_audit(campaign: Any, plan_path: Path) -> None:
+    """Read and render validated campaign admission evidence on demand."""
+
+    st.subheader("Target admission audit")
+    audit_path = campaign.config.output_root / "admission-audit.json"
+    if not audit_path.is_file() or not plan_path.is_file():
+        st.info("Render a deterministic plan before loading its target admission audit.")
+        return
+    if st.button("Load admission audit", key="campaign_load_admission_audit"):
+        try:
+            plan = campaign.load_plan(plan_path)
+            evidence = read_campaign_admission_evidence(
+                audit_path,
+                expected_campaign_id=campaign.config.campaign_id,
+                expected_source_manifest_hash=plan.source_manifest_hash,
+                expected_audit_hash=plan.admission_audit_hash,
+            )
+            st.session_state[_ADMISSION_STATE_KEY] = evidence.to_jsonable()
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            st.session_state.pop(_ADMISSION_STATE_KEY, None)
+            st.error(f"Admission evidence unavailable: {exc}")
+    payload = st.session_state.get(_ADMISSION_STATE_KEY)
+    if not isinstance(payload, dict):
+        st.caption("Admission evidence is explicit, provenance-bound, and loaded only by this action.")
+        return
+    counts = payload.get("counts", {})
+    columns = st.columns(5)
+    columns[0].metric("Observed", counts.get("observed", 0))
+    columns[1].metric("Admitted", counts.get("admitted", 0))
+    columns[2].metric("Rejected", counts.get("rejected", 0))
+    columns[3].metric("Ambiguous", counts.get("ambiguous", 0))
+    columns[4].metric("Same-class IoU scored", counts.get("same_class_scored", 0))
+    reason_rows = payload.get("reason_rows", [])
+    if reason_rows:
+        st.bar_chart(pd.DataFrame(reason_rows).set_index("reason")["count"])
+    with st.expander("Validated admission rows and export", expanded=False):
+        st.dataframe(pd.DataFrame(payload.get("rows", [])), hide_index=True, width="stretch")
+        st.download_button(
+            "Download validated admission evidence JSON",
+            data=json.dumps(payload, indent=2, sort_keys=True),
+            file_name="campaign_admission_evidence.json",
+            mime="application/json",
+            on_click="ignore",
+        )
 
 
 def build_campaign_argv(
@@ -270,6 +319,7 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
             },
         }
     )
+    _render_admission_audit(campaign, plan_path)
 
     action = None
     cols = st.columns(6)
