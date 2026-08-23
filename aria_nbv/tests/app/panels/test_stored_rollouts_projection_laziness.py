@@ -657,6 +657,7 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
         "_cached_targets",
         "_cached_masks",
         "_cached_candidates",
+        "_cached_candidate_population_cached",
         "_cached_q_h",
         "_cached_tree",
         "_cached_root_geometry",
@@ -676,6 +677,34 @@ def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkey
     session._clear_stored_rollout_caches()
     assert set(cleared) == set(names)
     assert len(cleared) == len(set(cleared))
+
+
+def test_stored_rollout_session_clear_forces_candidate_population_recomputation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refreshing the direct candidate-population owner cannot reuse its prior result."""
+
+    class Owner:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.clears = 0
+
+        def __call__(self, _path: str, _identity: str, _sample_size: int) -> dict[str, int]:
+            self.calls += 1
+            return {"calls": self.calls}
+
+        def clear(self) -> None:
+            self.clears += 1
+
+    owner = Owner()
+    monkeypatch.setattr(session, "_cached_candidate_population_cached", owner)
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+    monkeypatch.setattr(handle, "_assert_current_identity", lambda: "first")
+
+    assert handle.candidate_population() == {"calls": 1}
+    session._clear_stored_rollout_caches()
+    assert handle.candidate_population() == {"calls": 2}
+    assert owner.clears == 1
 
 
 def test_stored_rollout_session_discounted_returns_reads_generated_store(tmp_path: Path) -> None:

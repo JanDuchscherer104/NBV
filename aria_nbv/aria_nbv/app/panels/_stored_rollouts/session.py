@@ -689,6 +689,7 @@ def _clear_stored_rollout_caches() -> None:
         _cached_targets,
         _cached_masks,
         _cached_candidates,
+        _cached_candidate_population_cached,
         _cached_q_h,
         _cached_tree,
         _cached_root_geometry,
