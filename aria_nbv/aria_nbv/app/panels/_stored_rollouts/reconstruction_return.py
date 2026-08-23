@@ -224,6 +224,7 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
 def _corpus_temporal_group_fields(rows: pd.DataFrame) -> list[str]:
     """Return the persisted dimensions that define a comparable corpus series."""
 
+    lineage_field = "generation_series_id" if "generation_series_id" in rows else "generation_cohort_id"
     return [
         field
         for field in (
@@ -235,7 +236,7 @@ def _corpus_temporal_group_fields(rows: pd.DataFrame) -> list[str]:
             "horizon",
             "branch_factor",
             "beam_width",
-            "generation_series_id",
+            lineage_field,
         )
         if field in rows
     ]
@@ -292,7 +293,12 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
             "generation_cohort_ids_json",
             "generation_cohort_payloads_json",
         ):
-            custom_frame[field] = ordered[field] if field in ordered else "unknown"
+            if field == "generation_series_id" and field not in ordered and "generation_cohort_id" in ordered:
+                custom_frame[field] = ordered["generation_cohort_id"]
+            elif field == "generation_cohort_ids_json" and field not in ordered and "generation_cohort_id" in ordered:
+                custom_frame[field] = ordered["generation_cohort_id"].map(lambda value: f'["{value}"]')
+            else:
+                custom_frame[field] = ordered[field] if field in ordered else "unknown"
         custom = custom_frame.to_numpy()
         figure.add_trace(
             go.Scatter(
@@ -311,7 +317,8 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
                     "profile=%{customdata[6]}<br>policy=%{customdata[7]}<br>"
                     "temperature=%{customdata[8]}<br>horizon=%{customdata[9]}<br>"
                     "branch=%{customdata[10]}<br>beam=%{customdata[11]}<br>"
-                    "series=%{customdata[12]}<br>cohorts=%{customdata[13]}<extra></extra>"
+                    "series=%{customdata[12]}<br>generation_cohort=%{customdata[12]}<br>"
+                    "cohorts=%{customdata[13]}<extra></extra>"
                 ),
             )
         )
@@ -354,8 +361,9 @@ def _temporal_series_display_labels(grouped: list[tuple[object, pd.DataFrame]], 
         suffix = (
             contract_id[:12] if contract_id not in {"unknown", "nan"} else str(values.get("contract", "unknown"))[:12]
         )
-        series_id = str(values.get("generation_series_id", "unknown"))
-        series_suffix = f" · series={series_id[:12]}" if series_id not in {"unknown", "nan"} else ""
+        lineage_name = "series" if "generation_series_id" in values else "cohort"
+        series_id = str(values.get("generation_series_id", values.get("generation_cohort_id", "unknown")))
+        series_suffix = f" · {lineage_name}={series_id[:12]}" if series_id not in {"unknown", "nan"} else ""
         unique.append(f"{label} · contract={suffix}{series_suffix}")
     return unique
 

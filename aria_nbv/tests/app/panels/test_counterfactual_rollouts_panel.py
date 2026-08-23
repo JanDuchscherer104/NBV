@@ -1070,6 +1070,43 @@ def test_corpus_reward_figure_keeps_same_contract_cohorts_as_separate_traces() -
     assert all("generation_cohort=%{customdata[12]}" in str(trace.hovertemplate) for trace in median_traces)
 
 
+def test_corpus_reward_figure_exposes_series_and_contributing_cohorts() -> None:
+    """A pooled trace remains auditable through its scientific series metadata."""
+
+    rows = pd.DataFrame(
+        [
+            {
+                "metric": "cumulative_target_root_gain",
+                "contract_id": "contract-a",
+                "contract": "contract A",
+                "profile": "rich-60",
+                "policy": "temperature_softmax",
+                "temperature": 0.5,
+                "horizon": 8,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "generation_series_id": "series-a",
+                "generation_cohort_ids_json": '["cohort-a","cohort-b"]',
+                "generation_cohort_payloads_json": '{"cohort-a":"payload-a","cohort-b":"payload-b"}',
+                "step_index": 0,
+                "store_count": 2,
+                "total_count": 2,
+                "finite_count": 2,
+                "iqr_width": 0.2,
+                "median": 0.2,
+                "q25": 0.1,
+                "q75": 0.3,
+            }
+        ]
+    )
+    figure = reconstruction_return._corpus_temporal_figure(rows, metric_label="Cumulative target root gain")
+    trace = next(trace for trace in figure.data if trace.mode == "lines+markers")
+    assert trace.customdata[0, 12] == "series-a"
+    assert trace.customdata[0, 13] == '["cohort-a","cohort-b"]'
+    assert "series=%{customdata[12]}" in trace.hovertemplate
+    assert "cohorts=%{customdata[13]}" in trace.hovertemplate
+
+
 def test_log_y_axis_control_copies_figure_and_preserves_linear_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every opted-in plot gets an independent, non-mutating axis control."""
 

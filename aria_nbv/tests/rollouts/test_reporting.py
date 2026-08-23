@@ -556,6 +556,61 @@ def test_corpus_temporal_summary_separates_candidate_or_branch_changes(monkeypat
     assert summary["generation_series_id"].nunique() == 2
 
 
+def test_corpus_temporal_summary_uses_factual_early_terminated_depths(monkeypatch) -> None:
+    """An early-terminated rollout contributes no fabricated later-depth zero."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {"id": "contract", "label": "contract", "profile": profile, "payload": {}},
+    )
+    common = {
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 2,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+        "generation_cohort_id": "cohort",
+        "generation_cohort": "cohort",
+    }
+
+    def bundle(rows: list[dict[str, object]], store_id: str) -> dict[str, pd.DataFrame]:
+        return {
+            "steps": pd.DataFrame(rows),
+            "parameters": pd.DataFrame(
+                [
+                    {
+                        "store_id": store_id,
+                        "key": "writer_config.recipes[0].policy.horizon",
+                        "value_text": np.nan,
+                        "value_float": np.nan,
+                        "value_int": 2,
+                        "value_bool": np.nan,
+                    }
+                ]
+            ),
+        }
+
+    rows_a = [
+        {**common, "step_index": 0, "cumulative_target_root_gain": 0.1},
+        {**common, "step_index": 1, "cumulative_target_root_gain": 0.2},
+    ]
+    rows_b = [{**common, "step_index": 0, "cumulative_target_root_gain": 0.3}]
+    summary = reporting._corpus_temporal_summary(
+        [bundle(rows_a, "a"), bundle(rows_b, "b")],
+        [{"path": "/a", "store_id": "a", "profile": "profile"}, {"path": "/b", "store_id": "b", "profile": "profile"}],
+    )
+    gain = summary[summary["metric"] == "cumulative_target_root_gain"]
+    assert gain.set_index("step_index").loc[0, "finite_count"] == 2
+    assert gain.set_index("step_index").loc[1, "finite_count"] == 1
+    assert gain.set_index("step_index").loc[1, "median"] == pytest.approx(0.2)
+
+
 def test_contract_additive_totals_match_single_store_baselines() -> None:
     def bundle(rollouts: int, steps: int, candidates: int, bytes_: int) -> dict[str, pd.DataFrame]:
         return {
