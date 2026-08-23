@@ -138,3 +138,45 @@ def test_pooled_candidate_choice_keeps_absent_family_as_zero_across_temperatures
 
     assert set(pooled["family"]) == {"forward", "side"}
     assert pooled["fraction"].tolist() == [0.5, 0.5]
+
+
+def test_candidate_family_breakdown_requires_family_and_cohort_identity(monkeypatch) -> None:
+    warnings: list[str] = []
+    monkeypatch.setattr(candidate_generation.st, "warning", warnings.append)
+
+    missing = candidate_generation._require_family_cohort_columns(pd.DataFrame({"position": ["forward"]}), "Family")
+    complete = candidate_generation._require_family_cohort_columns(
+        pd.DataFrame({"family": ["forward"], "generation_cohort_id": ["cohort-a"]}), "Family"
+    )
+
+    assert missing.empty
+    assert "missing family, generation_cohort_id" in warnings[0]
+    assert complete.to_dict("records") == [{"family": "forward", "generation_cohort_id": "cohort-a"}]
+
+
+def test_candidate_support_explanation_keeps_theory_and_inspection_owner() -> None:
+    explanation = candidate_generation._candidate_population_explanation(
+        "Question",
+        "Population",
+        "Metric",
+        "Denominator",
+        "Expected",
+        "Warning",
+        "inspection.candidate_direction_evidence",
+        "actor-visible",
+        candidate_generation.TheoryReferences(
+            equation_ids=("action.angle_cap_transform",),
+            term_ids=("finite-candidate-action-set",),
+        ),
+        external_references=(
+            (
+                "Candidate inspection contract",
+                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+            ),
+        ),
+    )
+
+    assert explanation.theory is not None
+    assert explanation.theory.equation_ids == ("action.angle_cap_transform",)
+    assert explanation.theory.term_ids == ("finite-candidate-action-set",)
+    assert explanation.external_references[0][1].endswith("aria_nbv/aria_nbv/rollouts/inspection.py")

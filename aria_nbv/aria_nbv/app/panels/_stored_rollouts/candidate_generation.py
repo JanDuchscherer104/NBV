@@ -473,6 +473,7 @@ def _candidate_population_explanation(
     source: str,
     role: str,
     theory: TheoryReferences | None = None,
+    external_references: tuple[tuple[str, str], ...] = (),
 ) -> ScientificExplanation:
     """Build consistent scientific context for complete candidate-support plots."""
 
@@ -492,6 +493,7 @@ def _candidate_population_explanation(
         evidence_role=role,
         source_fields=(source,),
         theory=theory,
+        external_references=external_references,
     )
 
 
@@ -512,6 +514,20 @@ def _support_count_caption(frame: pd.DataFrame) -> None:
             values.append(f"{label}={int(value):,}")
     if values:
         st.caption("Selected support facet: " + ", ".join(values) + ".")
+
+
+def _require_family_cohort_columns(frame: pd.DataFrame, label: str) -> pd.DataFrame:
+    """Fail closed when a family plot lacks its persisted cohort identity."""
+
+    required = {"family", "generation_cohort_id"}
+    missing = sorted(required.difference(frame.columns))
+    if missing:
+        st.warning(
+            f"{label} unavailable: complete candidate composition must provide "
+            f"{', '.join(sorted(required))}; missing {', '.join(missing)}."
+        )
+        return frame.iloc[0:0].copy()
+    return frame
 
 
 def _render_complete_candidate_support(population: dict[str, object], *, evidence_role: str) -> None:
@@ -545,7 +561,10 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                         "Spikes or missing direction rows indicate support or pose-frame issues.",
                         "inspection.candidate_direction_evidence",
                         evidence_role,
-                        TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+                        TheoryReferences(
+                            equation_ids=("action.angle_cap_transform",),
+                            term_ids=("finite-candidate-action-set",),
+                        ),
                     ),
                 )
                 with st.expander("Direction support rows and CSV"):
@@ -666,6 +685,12 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "High non-applicability or low evaluation counts indicate evaluator coverage limitations.",
                     "inspection.candidate_motion_support_evidence.collision",
                     evidence_role,
+                    external_references=(
+                        (
+                            "Candidate inspection contract",
+                            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+                        ),
+                    ),
                 ),
             )
 
@@ -1103,10 +1128,12 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
 
     population = session_handle.candidate_population()
     composition_by_group = population.get("composition", {})
-    families = pd.DataFrame(composition_by_group.get("position", []))
+    families = _require_family_cohort_columns(
+        pd.DataFrame(composition_by_group.get("position", [])), "Candidate-family breakdown"
+    )
     if not families.empty:
-        family_field = "family" if "family" in families else "position"
-        cohort_field = "generation_cohort_id" if "generation_cohort_id" in families else None
+        family_field = "family"
+        cohort_field = "generation_cohort_id"
         families["selection_rate_given_available"] = np.where(
             families["actor_valid_count"] > 0,
             families["selected_count"] / families["actor_valid_count"],
@@ -1157,6 +1184,12 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
                 evidence_role="actor-visible",
                 source_fields=("candidate position_id", "actor_action_mask", "selected_mask"),
                 theory=TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+                external_references=(
+                    (
+                        "Candidate inspection contract",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+                    ),
+                ),
             ),
         )
         _download_frame("Download family support CSV", "candidate-family-support.csv", families)
@@ -1167,9 +1200,11 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
     breakdown = pd.DataFrame(composition_by_group.get(breakdown_by, []))
+    if breakdown_by == "position":
+        breakdown = _require_family_cohort_columns(breakdown, "Candidate mask-population breakdown")
     count_fields = [name for name in ("actor_valid_count", "trainable_count", "selected_count") if name in breakdown]
     if not breakdown.empty and count_fields:
-        family_field = "family" if "family" in breakdown else breakdown_by
+        family_field = "family" if breakdown_by == "position" else breakdown_by
         cohort_field = "generation_cohort_id" if "generation_cohort_id" in breakdown else None
         long = breakdown.melt(
             id_vars=[field for field in (family_field, cohort_field) if field is not None],
@@ -1217,6 +1252,13 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
                     "inspection.candidate_group_summary_rows",
                     f"candidate {breakdown_by}",
                     "candidate masks",
+                ),
+                theory=TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+                external_references=(
+                    (
+                        "Candidate inspection contract",
+                        "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+                    ),
                 ),
             ),
         )
