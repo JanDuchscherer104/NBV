@@ -192,6 +192,22 @@ def test_pr1_routing_trials_are_frozen_and_non_proposal() -> None:
         assert "proposal" not in serialized.lower()
 
 
+def test_pr2_routing_trials_are_exactly_frozen_and_paired() -> None:
+    ids = {
+        "human-intent-proposal-eligible",
+        "human-intent-proposal-ineligible",
+        "agents-db-verified-residual-work",
+        "human-intent-proposal-review-resolution",
+    }
+    prompts = trials.load_prompts()
+    rubric = trials.load_rubric()
+    assert ids <= set(prompts)
+    assert ids <= set(rubric)
+    assert len(ids) == 4
+    assert all(trial_id in prompts and trial_id in rubric for trial_id in ids)
+    assert set(prompts) == set(rubric)
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,

@@ -52,3 +52,7 @@
 {"id":"typst-prose-matt-writing-modes","task":"Draft or polish ARIA thesis prose with writing mechanics."}
 {"id":"scaffold-cleanup","task":"Prune or simplify scaffold skills, metadata, or references while preserving behavior."}
 {"id":"lrz-failed-job-container-start","task":"Route a failed LRZ job or container-start failure to the exact troubleshooting owner."}
+{"id":"human-intent-proposal-eligible","task":"Classify reusable, cross-task user evidence as an eligible human-intent proposal and route it through the bounded review path."}
+{"id":"human-intent-proposal-ineligible","task":"Classify a one-task implementation detail or already-owned fact that must not become a human-intent proposal."}
+{"id":"agents-db-verified-residual-work","task":"Turn a verified actionable residual finding into the smallest Agents DB follow-up record and retain its completion proof."}
+{"id":"human-intent-proposal-review-resolution","task":"Review a human-intent proposal, choose accept, reject, narrow, or defer, and resolve the resulting follow-up only after proof."}
