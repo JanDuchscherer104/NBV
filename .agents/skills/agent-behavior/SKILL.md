@@ -49,10 +49,12 @@ explicit.
    owner and use stable owner-defined pointers elsewhere. Do not introduce a
    second source of truth.
 
-When the current exact owner leaves a material policy choice unsettled, read
-[`references/reviewed-intent.md`](references/reviewed-intent.md) and follow its
-scoped-specification precedence before consulting general reviewed intent. Do
-not load reviewed intent for a settled exact-owner task.
+When the current exact owner leaves a material policy choice unsettled, or the
+question asks for policy inside an accepted scoped rework, read
+[`references/reviewed-intent.md`](references/reviewed-intent.md). Follow its
+scoped-specification precedence and stop before general reviewed intent when
+that specification settles the choice. Do not load reviewed intent for a
+settled exact-owner task outside such a scoped policy decision.
 
 ## Conditional branches
 

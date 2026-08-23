@@ -1,7 +1,7 @@
 {"id":"local-file-lookup","task":"Find where a cross-surface ARIA-NBV symbol or document owner lives."}
 {"id":"reviewed-intent-unsettled-external-skill","task":"Decide whether ARIA-NBV should vendor a new third-party agent skill that has no accepted per-bundle decision. Identify the governing current owners and give the permitted decision outcome without editing files."}
 {"id":"scoped-spec-settles-graphify-bundle","task":"Determine whether the project-installed Graphify skill may carry ARIA-specific edits or must remain byte-identical upstream. Identify the governing current owners and stop at the accepted decision without editing files."}
-{"id":"thesis-code-shared-contract","task":"The implementation of state-relative RRI is changing. Identify the executable owner, active thesis owner, and focused proofs that must stay synchronized; do not edit files."}
+{"id":"thesis-code-shared-contract","task":"The implementation of state-relative RRI is changing. Identify the executable owner, active thesis owner, and exact focused code-test and thesis-render or notation-check commands that must stay synchronized; do not edit files."}
 {"id":"helper-lowest-shared-domain-owner","task":"A helper is currently used by both oracle scoring and scene-level RRI scoring. Identify the lowest demonstrated shared domain owner using repository evidence; reject a generic utils bucket and do not edit files."}
 {"id":"deliberate-angle-bracket-capture-read-only","task":"Inspect only: <Preserve this operator preference in its smallest durable owner and name the owner's verification.>"}
 {"id":"active-thesis-scientific-language","task":"Locate the active thesis section plus the owning glossary, shared symbol, or shared equation before editing scientific prose."}
