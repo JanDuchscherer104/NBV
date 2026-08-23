@@ -115,6 +115,8 @@ def test_legacy_v1_audit_remains_readable_and_exportable() -> None:
         "same_class_scored": 1,
         "ambiguous": 0,
         "duplicate_gt_groups": 0,
+        "zero_observation_samples": 0,
+        "zero_observation_scenes": 0,
     }
     assert exported["rows"][0]["target_id"] == "target-1"
 
@@ -139,6 +141,78 @@ def test_malformed_or_tampered_audit_fails_closed(change, message: str) -> None:
 def test_expected_identity_mismatch_fails_closed() -> None:
     with pytest.raises(ValueError, match="campaign identity"):
         read_campaign_admission_evidence(_payload([_row()]), expected_campaign_id="other")
+
+
+def test_zero_observation_sample_sentinel_is_not_an_observed_target() -> None:
+    sentinel = {
+        "sample_key": "sample-empty",
+        "scene_id": "scene-empty",
+        "target_id": "",
+        "reason": "excluded_no_observed_target",
+        "admitted": False,
+        "oriented_iou": None,
+        "qualified_gt_match_count": 0,
+        "gt_match_id": None,
+        "detected_source_row": None,
+        "row_kind": "zero_observation_sample",
+        "observed_target_count": 0,
+    }
+    evidence = read_campaign_admission_evidence(_payload([_row(), sentinel]))
+    assert evidence.observed_count == 1
+    assert evidence.zero_observation_sample_count == 1
+    assert evidence.zero_observation_scene_count == 1
+    assert all(row["scene_id"] != "scene-empty" for row in evidence.scene_rows)
+
+
+def test_writer_shaped_legacy_zero_observation_sentinel_is_inferred() -> None:
+    sentinel = {
+        "sample_key": "sample-empty",
+        "scene_id": "scene-empty",
+        "target_id": "",
+        "reason": "excluded_no_observed_target",
+        "admitted": False,
+        "oriented_iou": None,
+        "qualified_gt_match_count": 0,
+        "gt_match_id": None,
+        "detected_source_row": None,
+        "observed_target_count": 0,
+    }
+    evidence = read_campaign_admission_evidence(_payload([sentinel]))
+    assert evidence.observed_count == 0
+    assert evidence.zero_observation_sample_count == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("oriented_iou", 0.2),
+        ("qualified_gt_match_count", 1),
+        ("gt_match_count", 1),
+        ("gt_match_id", "gt-1"),
+        ("detected_source_row", 0),
+    ],
+)
+@pytest.mark.parametrize("explicit_kind", [False, True])
+def test_zero_observation_sentinel_rejects_contradictory_gt_evidence(
+    field: str, value: object, explicit_kind: bool
+) -> None:
+    row = {
+        "sample_key": "sample-empty",
+        "scene_id": "scene-empty",
+        "target_id": "",
+        "reason": "excluded_no_observed_target",
+        "admitted": False,
+        "oriented_iou": None,
+        "qualified_gt_match_count": 0,
+        "gt_match_id": None,
+        "detected_source_row": None,
+        "observed_target_count": 0,
+    }
+    row[field] = value
+    if explicit_kind:
+        row["row_kind"] = "zero_observation_sample"
+    with pytest.raises(ValueError):
+        read_campaign_admission_evidence(_payload([row]))
 
 
 def test_consistency_and_iou_checks_run_after_hash_validation() -> None:

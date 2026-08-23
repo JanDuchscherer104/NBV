@@ -36,6 +36,8 @@ class AdmissionAuditRow:
     gt_match_id: str | None
     qualified_gt_match_count: int
     detected_source_row: int | None
+    row_kind: str = "observed_target"
+    observed_target_count: int = 1
 
     def to_jsonable(self) -> dict[str, Any]:
         """Return the validated factual row for exports and presentation."""
@@ -50,6 +52,8 @@ class AdmissionAuditRow:
             "gt_match_id": self.gt_match_id,
             "qualified_gt_match_count": self.qualified_gt_match_count,
             "detected_source_row": self.detected_source_row,
+            "row_kind": self.row_kind,
+            "observed_target_count": self.observed_target_count,
         }
 
 
@@ -68,7 +72,15 @@ class AdmissionEvidenceSummary:
 
     @property
     def observed_count(self) -> int:
-        return len(self.rows)
+        return sum(row.observed_target_count for row in self.rows if row.row_kind == "observed_target")
+
+    @property
+    def zero_observation_sample_count(self) -> int:
+        return sum(row.row_kind == "zero_observation_sample" for row in self.rows)
+
+    @property
+    def zero_observation_scene_count(self) -> int:
+        return len({row.scene_id for row in self.rows if row.row_kind == "zero_observation_sample"})
 
     @property
     def admitted_count(self) -> int:
@@ -107,6 +119,8 @@ class AdmissionEvidenceSummary:
                 "same_class_scored": self.same_class_scored_count,
                 "ambiguous": self.ambiguous_count,
                 "duplicate_gt_groups": len(self.duplicate_gt_rows),
+                "zero_observation_samples": self.zero_observation_sample_count,
+                "zero_observation_scenes": self.zero_observation_scene_count,
             },
             "reason_rows": list(self.reason_rows),
             "iou_rows": list(self.iou_rows),
@@ -180,9 +194,34 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
     scene_id = _required_str(raw, "scene_id", index=index)
     target_id = _optional_str(raw, "target_id", index=index) or ""
     reason = _required_str(raw, "reason", index=index)
+    observed_count_raw = raw.get("observed_target_count")
+    row_kind_raw = raw.get("row_kind")
+    # Older writer output omitted ``row_kind`` but emitted the complete
+    # sentinel tuple. Infer only that exact tuple; partial combinations fail closed.
+    if row_kind_raw is None and (
+        observed_count_raw == 0
+        and target_id == ""
+        and raw.get("admitted") is False
+        and reason == "excluded_no_observed_target"
+    ):
+        row_kind = "zero_observation_sample"
+    else:
+        row_kind = row_kind_raw if row_kind_raw is not None else "observed_target"
+    if row_kind not in {"observed_target", "zero_observation_sample"}:
+        raise ValueError(f"admission audit row {index} row_kind is unsupported")
+    observed_count = raw.get("observed_target_count", 1 if row_kind == "observed_target" else 0)
+    if type(observed_count) is not int or observed_count < 0:
+        raise ValueError(f"admission audit row {index} observed_target_count must be non-negative integer")
     admitted = raw.get("admitted")
     if type(admitted) is not bool:
         raise ValueError(f"admission audit row {index} admitted must be boolean")
+    if row_kind == "zero_observation_sample":
+        if observed_count != 0 or target_id or admitted:
+            raise ValueError(f"admission audit row {index} zero-observation sentinel is malformed")
+        if reason != "excluded_no_observed_target":
+            raise ValueError(f"admission audit row {index} zero-observation sentinel has wrong reason")
+    elif observed_count != 1:
+        raise ValueError(f"admission audit row {index} observed-target row must describe exactly one target")
     iou = raw.get("oriented_iou")
     if iou is not None:
         if type(iou) not in (int, float) or isinstance(iou, bool) or not math.isfinite(float(iou)):
@@ -207,6 +246,14 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
     source_row = raw.get("detected_source_row")
     if source_row is not None and (type(source_row) is not int or source_row < 0):
         raise ValueError(f"admission audit row {index} detected source row is invalid")
+    if row_kind == "zero_observation_sample" and (
+        iou is not None
+        or qualified != 0
+        or raw.get("gt_match_count", 0) != 0
+        or gt_match_id is not None
+        or source_row is not None
+    ):
+        raise ValueError(f"admission audit row {index} zero-observation sentinel contains GT evidence")
     return AdmissionAuditRow(
         sample_key,
         scene_id,
@@ -217,6 +264,8 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
         gt_match_id,
         qualified,
         source_row,
+        row_kind,
+        observed_count,
     )
 
 
@@ -226,7 +275,8 @@ def _summarize(
     source_hash: str,
     audit_hash: str,
 ) -> AdmissionEvidenceSummary:
-    reason_counts = Counter(row.reason for row in rows)
+    target_rows = tuple(row for row in rows if row.row_kind == "observed_target")
+    reason_counts = Counter(row.reason for row in target_rows)
     reason_rows = tuple(
         {"reason": reason, "count": reason_counts[reason], "admitted": reason == _ADMITTED_REASON}
         for reason in sorted(reason_counts)
@@ -240,11 +290,11 @@ def _summarize(
             "admitted": row.admitted,
             "oriented_iou": row.oriented_iou,
         }
-        for row in rows
+        for row in target_rows
         if row.oriented_iou is not None
     )
     scene_acc: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    for row in rows:
+    for row in target_rows:
         scene_acc[row.scene_id][0] += 1
         scene_acc[row.scene_id][1] += int(row.admitted)
     scene_rows = tuple(
@@ -257,7 +307,7 @@ def _summarize(
         for scene, values in sorted(scene_acc.items())
     )
     matches: dict[tuple[str, str], list[AdmissionAuditRow]] = defaultdict(list)
-    for row in rows:
+    for row in target_rows:
         if row.gt_match_id:
             matches[(row.sample_key, row.gt_match_id)].append(row)
     duplicate_rows = tuple(
