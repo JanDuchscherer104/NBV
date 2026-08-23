@@ -8,6 +8,17 @@ separate trackers unless the user explicitly asks for GitHub publication.
 Classify incoming work by updating existing `priority`, `status`, and `labels`.
 Do not add new TOML schema fields for triage state.
 
+For a residual, search all active and resolved records, open the candidates,
+and prove each candidate against the exact current owner and its acceptance or
+verification state. Select or amend the closest active record only when it is
+independently actionable. Treat resolved records as precedent; do not recreate
+completed work unless fresh exact-owner proof establishes a distinct
+recurrence. Create a new record only after all-scope deduplication proves that
+no active or resolved record can own the residual. In an abstract or read-only
+residual simulation, instantiate the route on an existing active record whose
+acceptance or proof remains incomplete, never on a completed historical
+residual.
+
 ## to-issues
 
 Split a plan into independently grabbable vertical slices in

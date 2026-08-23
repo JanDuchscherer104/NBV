@@ -44,6 +44,7 @@ and target owner, and a proposed disposition with a testable consequence;
 naming the template or repeating a broad preference is insufficient. Route
 verified actionable residual work to the [agents-db skill](../../agents-db/SKILL.md)
 only after executing and retaining the exact current-owner proof. Search
-existing records and amend an independently actionable one before creating a
-new follow-up rather than inventing a duplicate. A described future proof is
+and representative selection belong to the
+[agents-db triage mode](../../agents-db/references/modes.md#triage), including
+all-scope deduplication before any new follow-up. A described future proof is
 not verified, and this reference does not mutate policy or records.

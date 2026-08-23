@@ -46,7 +46,9 @@ scientific truth stays with its smallest source owner.
 
 When `agent-behavior` reaches verified actionable residual work or a reviewed
 intent-promotion review, activate this skill as the leaf maintenance owner.
-Use the existing triage, to-issues, proposal-review, and resolution modes.
+Use the existing [triage](references/modes.md#triage), to-issues,
+proposal-review, and resolution modes; triage owns residual candidate search,
+proof, and record selection.
 For proposal review or resolution, read
 [`agent-behavior` external-actions](../agent-behavior/references/external-actions.md)
 for the human-authority boundary and use the exact lifecycle contract in

@@ -873,6 +873,48 @@ def test_capture_and_routing_contracts() -> None:
     ).returncode == 0
 
 
+def test_residual_follow_up_points_to_agents_db_triage_owner() -> None:
+    modes = _read(
+        ROOT / ".agents" / "skills" / "agents-db" / "references" / "modes.md"
+    )
+    agents_db_skill = _read(ROOT / ".agents" / "skills" / "agents-db" / "SKILL.md")
+    intent_reference = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "agent-behavior"
+        / "references"
+        / "reviewed-intent.md"
+    )
+
+    assert "triage owns residual candidate search" in agents_db_skill
+    assert "proof, and record selection" in agents_db_skill
+    assert (
+        "[agents-db triage mode](../../agents-db/references/modes.md#triage)"
+        in intent_reference
+    )
+    triage = modes.split("## triage", 1)[1].split("## to-issues", 1)[0]
+    assert "search all active and resolved records" in triage
+    assert "open the candidates" in triage
+    assert "exact current owner" in triage
+    assert "independently actionable" in triage
+
+
+def test_residual_triage_prevents_retrospective_new_records() -> None:
+    modes = _read(
+        ROOT / ".agents" / "skills" / "agents-db" / "references" / "modes.md"
+    )
+    triage = modes.split("## triage", 1)[1].split("## to-issues", 1)[0]
+
+    assert "resolved records as precedent" in triage
+    assert "do not recreate\ncompleted work" in triage
+    assert "fresh exact-owner proof" in triage
+    assert "only after all-scope deduplication proves" in triage
+    assert "existing active record" in triage
+    assert "acceptance or proof remains incomplete" in triage
+    assert "completed historical\nresidual" in triage
+
+
 def test_pr1_reviewed_intent_fixture_contracts() -> None:
     routing = json.loads(
         _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
