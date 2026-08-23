@@ -331,6 +331,28 @@ def test_qh_readiness_rejects_incomplete_promotion_evidence_before_dataset_const
     assert any("trust" in blocker or "promotion" in blocker for blocker in readiness.blockers)
 
 
+def test_qh_preview_rejects_incomplete_promotion_evidence_before_dataset_construction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The direct preview API shares readiness's fail-closed promotion gate."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="tampered-preview.zarr", source_hash=source_hash)
+    (rollout / "_SUCCESS.json").write_text("{}", encoding="utf-8")
+    called = False
+
+    def unexpected(_config: QhDatasetConfig) -> None:
+        nonlocal called
+        called = True
+        raise AssertionError("dataset construction must not run")
+
+    monkeypatch.setattr(QhDatasetConfig, "setup_target", unexpected)
+    with pytest.raises(ValueError, match="trust|promotion"):
+        preview_qh_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+
+    assert not called
+
+
 def _write_root_store(root: Path) -> tuple[Path, str]:
     store = root / "vin"
     store.mkdir()

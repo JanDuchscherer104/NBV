@@ -456,6 +456,9 @@ def preview_qh_batch(
     """Read one selected chain and collate one batch through the real loader."""
 
     normalized_stage = Stage.from_str(stage) if isinstance(stage, str) else stage
+    promotion_blockers = _qh_promotion_blockers(selection)
+    if promotion_blockers:
+        raise ValueError("; ".join(promotion_blockers))
     datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
     dataset = datasets.get(normalized_stage)
     if dataset is None:
