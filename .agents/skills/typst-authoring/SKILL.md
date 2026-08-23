@@ -36,7 +36,11 @@ supported; route that question to `scientific-review`.
    - slides or package-backed content: read [`slides.md`](references/slides.md)
      or [`packages/index.md`](references/packages/index.md) only when that
      surface is present, then the selected package leaf;
-   - prose, claim, or citation handoff: [`claim-citation-discipline.md`](references/claim-citation-discipline.md);
+   - accepted prose realization or claim/citation handoff:
+     [`claim-citation-discipline.md`](references/claim-citation-discipline.md);
+     consult [`upstream-matt-writing.md`](references/upstream-matt-writing.md)
+     only when generic fragment, shape, or beat mechanics help realize an
+     already accepted paragraph;
    - accepted empirical results or report-backed content:
      [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md);
    - compile, render, or release QA: [`workflow.md`](references/workflow.md).
