@@ -1,0 +1,223 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Loaded agent-behavior routing guidance and searched memory for the state-relative RRI contract.",
+          "event_index": 0,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected executable target-RRI code, focused rollout tests, active thesis prose, shared equation sources, and documentation verification commands.",
+          "event_index": 3,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Checked the executable evidence contract alongside target scoring and RRI metric implementations.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected focused RRI and counterfactual tests plus the active thesis section and notation-generation surfaces.",
+          "event_index": 8,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Named and attempted the exact focused code-test command for the state-relative RRI and target scorer contract.",
+          "event_index": 9,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Confirmed the checkout had no usable pytest environment and remained clean.",
+          "event_index": 10,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+      "tested_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+      "trial_id": "thesis-code-shared-contract",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "checkout_digest_before": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "checkout_digest_expected": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "elapsed_seconds": 114.51637816429138,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && printf '\\\\n--- MEMORY MATCHES ---\\\\n' && rg -n -i 'state-relative RRI|state_relative_rri|\u0394_t|RRI' /home/jd/.codex/memories/MEMORY.md | head -40\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- guides ---'; rg --files -g 'AGENTS.md' -g '\"'! .git'\"' | sort; printf '%s\\\\n' '--- RRI sources ---'; rg -n -i --glob '\"'!*.jsonl'\"' --glob '\"'!*.lock'\"' 'state_relative_rri|state-relative RRI|state relative RRI|target_reward|\u0394_t|Delta_t' aria_nbv tests docs scripts Makefile pyproject.toml 2>/dev/null | head -240\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- package guide ---'; sed -n '1,240p' aria_nbv/AGENTS.md; printf '%s\\\\n' '--- oracle guide ---'; if test -f aria_nbv/aria_nbv/oracle/AGENTS.md; then sed -n '1,220p' aria_nbv/aria_nbv/oracle/AGENTS.md; fi; printf '%s\\\\n' '--- docs guide ---'; sed -n '1,260p' docs/AGENTS.md; printf '%s\\\\n' '--- exact symbols ---'; rg -n -i 'STATE_RELATIVE_RRI|state_relative_rri|one_step_target_rri|reward_mode|target_rri' aria_nbv/aria_nbv aria_nbv/tests docs/typst/thesis docs/typst/shared --glob '*.py' --glob '*.typ' | head -300\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' aria_nbv/aria_nbv/oracle/target_rri.py; sed -n '1,140p' aria_nbv/tests/rollouts/test_counterfactuals.py; sed -n '380,430p' aria_nbv/tests/rollouts/test_counterfactuals.py; sed -n '1,130p' docs/typst/shared/equations/entity.typ; sed -n '145,190p' docs/typst/shared/equations/rl.typ; sed -n '250,295p' docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ; printf '%s\\\\n' '--- docs commands ---'; sed -n '1,260p' docs/README.md; printf '%s\\\\n' '--- make targets ---'; rg -n 'glossary|notation|thesis|typst|docs' Makefile docs/Makefile aria_nbv/Makefile 2>/dev/null | head -180\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n 'STATE_RELATIVE_RRI|ROOT_NORMALIZED_GAIN|state_relative|root_normalized_gain|log_error_gain' aria_nbv/aria_nbv/oracle/target_rri.py aria_nbv/aria_nbv/oracle/evidence.py aria_nbv/aria_nbv/rri_metrics/returns.py aria_nbv/tests/rollouts/test_counterfactuals.py; sed -n '220,390p' aria_nbv/aria_nbv/oracle/target_rri.py; sed -n '1,180p' aria_nbv/aria_nbv/rri_metrics/returns.py; sed -n '716,748p' Makefile; sed -n '300,320p' Makefile; sed -n '1,200p' scripts/tests/test_typst_authoring_hygiene.py\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- status ---'; git status --short; printf '%s\\\\n' '--- relevant scripts ---'; rg --files scripts docs | rg 'typst_author|glossary|notation|thesis|README' | sort | head -100; printf '%s\\\\n' '--- qh target vars ---'; rg -n 'QH_CI_TESTS|PYTEST|PKG_DIR|CI_RENDER_DIR|PYTHON_INTERPRETER' Makefile | head -100; printf '%s\\\\n' '--- test names ---'; rg -n '\"'^def test_.*(state|reward|rri|target)'\"' aria_nbv/tests/rollouts/test_counterfactuals.py aria_nbv/tests/oracle aria_nbv/tests/rri_metrics | head -100\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n 'def score|rri =' aria_nbv/aria_nbv/oracle/_scoring.py aria_nbv/aria_nbv/rri_metrics/rri.py; sed -n '150,250p' aria_nbv/aria_nbv/oracle/_scoring.py; sed -n '90,120p' aria_nbv/aria_nbv/oracle/evidence.py; sed -n '112,132p' Makefile; sed -n '160,190p' docs/typst/thesis/sections/01-research-questions.typ; sed -n '1,120p' docs/typst/thesis/main.typ\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"pwd; rg --files -g 'main.typ' -g 'test_typst_authoring_hygiene.py' -g 'glossary_build.py' | sort; sed -n '1,155p' aria_nbv/aria_nbv/rri_metrics/rri.py; sed -n '80,155p' aria_nbv/aria_nbv/oracle/_scoring.py; git status --porcelain=v1\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,90p' aria_nbv/tests/rri_metrics/test_rri.py; sed -n '1,100p' aria_nbv/tests/oracle/test_scoring.py; sed -n '1,95p' docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ; rg -n '\"'^#import|03-02|03-oracle'\"' docs/typst/thesis -g '*.typ' | head -80; rg -n 'glossary_build.py|notation.generated|notation.yml|generate.*notation' aria_nbv/scripts Makefile docs -g '*.py' -g 'Makefile' -g '*.md' -g '*.typ' | head -120\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'uv run pytest --import-mode=importlib tests/rri_metrics/test_rri.py::test_compute_rri_returns_directional_diagnostics tests/rollouts/test_counterfactuals.py::test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch'",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"ls -la; ls -la .venv/bin/python aria_nbv/.venv/bin/python 2>/dev/null || true; command -v python3; python3 -m pytest --version 2>&1 || true; rg -n '\\\\[tool.uv|pytest' aria_nbv/pyproject.toml pyproject.toml 2>/dev/null | head -40; git status --short\"",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 11,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 11,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 5919,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "52d4f85e388af4783647d1704bee81eccde5fa477434f4358096e9e6066bdff7",
+  "returncode": 0,
+  "rubric_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/.agents/work/routing-trials/bea876d39f17-bea876d39f17/thesis-code-shared-contract__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-bea876d39f17-m7o7o9u2/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787510435.2980888,
+  "tested_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+  "timed_out": false,
+  "trial_id": "thesis-code-shared-contract",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"Executable metric owner: aria_nbv/aria_nbv/rri_metrics/rri.py::compute_rri. Target-rollout integration owner: aria_nbv/aria_nbv/oracle/target_rri.py::TargetRriScorer._score. Active thesis prose owner: docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ. Canonical notation owners: docs/typst/shared/equations.typ and docs/typst/shared/equations/rl.typ; generated notation is derived.\",\"handoff\":null,\"loaded_guides\":[\"AGENTS.md\",\"aria_nbv/AGENTS.md\",\"docs/AGENTS.md\",\".agents/skills/agent-behavior/SKILL.md\"],\"opened_references\":[\"aria_nbv/aria_nbv/rri_metrics/rri.py\",\"aria_nbv/aria_nbv/oracle/target_rri.py\",\"aria_nbv/tests/rri_metrics/test_rri.py\",\"aria_nbv/tests/rollouts/test_counterfactuals.py\",\"docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ\",\"docs/typst/shared/equations.typ\",\"docs/typst/shared/equations/rl.typ\",\"Makefile\"],\"outcome\":\"Scoped decision: keep state-relative one-step diagnostic semantics synchronized with compute_rri, TargetRriScorer integration, thesis section 03-02, and shared equation sources; do not conflate it with root-normalized training reward. The focused test was blocked because pytest is not installed or executable in this checkout. No files were modified; git status was clean. \",\"selected_skill\":\"agent-behavior\",\"selected_verification\":\"cd aria_nbv && uv run pytest --import-mode=importlib tests/rri_metrics/test_rri.py::test_compute_rri_returns_directional_diagnostics tests/rollouts/test_counterfactuals.py::test_target_scorer_computes_target_and_scene_rri_from_one_pointcloud_batch; then make thesis-pdf-ci and make typst-authoring-contract. If notation changes, run make glossary first.\",\"tool_calls\":[\"rg/sed owner tracing\",\"git status --short\",\"focused pytest attempt (blocked: pytest unavailable)\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

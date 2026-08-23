@@ -1,0 +1,269 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "Loaded the agent-behavior skill instructions.",
+          "event_index": 1,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Loaded the reviewed-intent reference.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected the accepted target-state specification as a scoped requirements owner.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Inspected the general human-owner intent, including the external-skill open choice.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Checked owner-hierarchy and external-skill policy routing in exact repository sources.",
+          "event_index": 9,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Verified the checkout was clean and located exact policy markers stating that external-skill vendoring and related policy remain unresolved and cannot be silently decided.",
+          "event_index": 14,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Captured exact excerpts for the governing policy, reviewed-intent open choice, and owner hierarchy.",
+          "event_index": 15,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+      "tested_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+      "trial_id": "reviewed-intent-unsettled-external-skill",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "checkout_digest_before": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "checkout_digest_expected": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "elapsed_seconds": 79.56004118919373,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' /home/jd/.codex/memories/MEMORY.md | rg -n -C 2 'ARIA-NBV|skill|vendor|owner|routing' | head -120\"",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agent-behavior/SKILL.md\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agent-behavior/references/reviewed-intent.md\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i --hidden --glob '\"'! .git/**'\"' 'vendor|vendoring|third-party|agent skill|per-bundle|bundle decision|skill bundle' AGENTS.md .agents docs aria_nbv scripts pyproject.toml Makefile 2>/dev/null | head -240\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git status --short --branch && rg --files -g 'AGENTS.md' -g '*skill*' -g '*bundle*' -g '*vendor*' | head -200\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,320p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i --hidden --glob '\"'! .git/**'\"' 'bundle|bundles|third.party|third party|agent skill|skill(s)? should|allowlist|allowlisted|vendor' .omx .agents docs AGENTS.md aria_nbv/AGENTS.md 2>/dev/null | head -300\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '130,225p' .agents/references/human_owner_intent.md\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '520,585p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md && sed -n '800,850p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -C 4 'owner-hierarchy|capture-rule|external skills|vendored|third-party|skill bundle|allowlist' .agents/skills/aria-nbv-context/SKILL.md .agents/skills/README.md .agents/references/human_owner_intent.md\"",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find .agents/skills -maxdepth 2 -type f -name SKILL.md -print | sort | sed -n '1,160p'; git diff --stat; git status --porcelain=v1\"",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '848,910p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 11,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,120p' .agents/skills/README.md\"",
+        "event_index": 12,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,230p' .agents/skills/aria-nbv-context/SKILL.md\"",
+        "event_index": 13,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -o pipefail\nprintf '%s\\\\n' '--- worktree ---'\ngit status --porcelain=v1\nif git diff --quiet && git diff --cached --quiet && test -z \\\"\"'$(git status --porcelain=v1)\"; then\n  echo CLEAN\nelse\n  echo DIRTY\n  exit 1\nfi\nprintf '\"'%s\\\\n' '--- governing decision markers ---'\nrg -n -F -e 'Which external skills should be referenced, allowlisted, or vendored.' -e 'Do not vendor or reimplement maintained external capabilities without a measured gap, an explicit owner, and a smaller justified maintenance surface.' -e 'Any external-skill pin, allowlist, vendoring policy, or recursive integrity check requires a dedicated decision and evidence package.' -e 'Exact external-skill reference, allowlist, pinning, vendoring, and integrity policy.' -e 'resolving an open decision without the specified evidence or human choice' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md .agents/references/human_owner_intent.md\nprintf '%s\\\\n' '--- accepted-spec metadata ---'\nsed -n '1,12p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 14,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- exact policy excerpts ---'\nnl -ba .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | sed -n '548,570p;820,867p'\nprintf '%s\\\\n' '--- reviewed-intent open choice ---'\nnl -ba .agents/references/human_owner_intent.md | sed -n '168,186p'\nprintf '%s\\\\n' '--- owner hierarchy excerpt ---'\nnl -ba .agents/skills/aria-nbv-context/SKILL.md | sed -n '1,42p'\"",
+        "event_index": 15,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 16,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 16,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 5465,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "a5e23e89311586148359394628077681bcaf58936819f98f815721f0f2493d05",
+  "returncode": 0,
+  "rubric_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/.agents/work/routing-trials/bea876d39f17-bea876d39f17/reviewed-intent-unsettled-external-skill__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-bea876d39f17-6c7qncla/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787510225.253098,
+  "tested_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+  "timed_out": false,
+  "trial_id": "reviewed-intent-unsettled-external-skill",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md; .agents/references/human_owner_intent.md\",\"handoff\":\"No implementation handoff. Any vendoring proposal requires a dedicated decision/evidence package or explicit human decision.\",\"loaded_guides\":[\"agent-behavior\",\"aria-nbv-context\"],\"opened_references\":[\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\",\".agents/references/human_owner_intent.md\",\".agents/skills/aria-nbv-context/SKILL.md\",\".agents/skills/README.md\"],\"outcome\":\"Do not vendor the new third-party agent skill now. The current decision is deferred/blocked, not an accepted rejection: external-skill reference, allowlist, pinning, vendoring, and integrity policy remain open. The governing spec requires a measured gap, explicit owner, smaller justified maintenance surface, and dedicated evidence before vendoring; normal repository work must remain possible from exact sources.\",\"selected_skill\":\"agent-behavior\",\"selected_verification\":\"Checkout is clean; exact sources mark external-skill vendoring policy as unresolved and prohibit silently resolving it.\",\"tool_calls\":[\"git status/diff cleanliness proof\",\"exact-source policy and owner excerpts via nl/sed/rg\",\"memory routing lookup\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

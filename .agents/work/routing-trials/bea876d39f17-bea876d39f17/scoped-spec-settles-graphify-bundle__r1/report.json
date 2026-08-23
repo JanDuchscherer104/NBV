@@ -1,0 +1,353 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": true,
+    "reason": "pass",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The accepted scoped specification was read and identifies the settled Graphify bundle decision.",
+          "event_index": 17,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The agent-behavior guide was read as the routing authority.",
+          "event_index": 2,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The reviewed-intent reference was read as general reviewed guidance, not as the deciding requirements owner.",
+          "event_index": 5,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The ARIA-specific Graphify boundary guide was read, supporting the owner split: the scoped specification settles the decision and aria-nbv-context owns routing.",
+          "event_index": 4,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "Bounded verification passed for Graphify version 0.9.48, the recorded upstream pin in the governing sources, no Graphify bundle diff, and a clean checkout.",
+          "event_index": 26,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [],
+      "missing_requirements": [],
+      "rubric_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+      "tested_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+      "trial_id": "scoped-spec-settles-graphify-bundle",
+      "verdict": "pass"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "checkout_digest_before": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "checkout_digest_expected": "5d7a834b82d9c5c6b01fce474deae866be47993b11911545af9a8a2233788015",
+  "elapsed_seconds": 96.63258409500122,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc 'rg -n -i \"Graphify|graphify|skill|byte-identical|upstream|owner\" /home/jd/.codex/memories/MEMORY.md | head -80'",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' '/tmp/aria-routing-bea876d39f17-n28v1hyw/checkout/.agents/skills/aria-nbv-context/SKILL.md'\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' '/tmp/aria-routing-bea876d39f17-n28v1hyw/checkout/.agents/skills/agent-behavior/SKILL.md'\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' '/tmp/aria-routing-bea876d39f17-n28v1hyw/checkout/.agents/skills/graphify/SKILL.md'\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .agents/skills/agent-behavior/references/reviewed-intent.md\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '261,620p' .agents/skills/graphify/SKILL.md\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git status --short --branch'",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg -n -i \\\"byte-identical|upstream|pinned|Graphify|graphify\\\" . --glob '\"'!graphify-out/**'\"' --glob '\"'!*.jsonl'\"' | head -160\"",
+        "event_index": 8,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"rg --files -g 'AGENTS.md' -g '*graphify*' -g 'SKILL.md' | sort | head -120\"",
+        "event_index": 9,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '230,270p' Makefile\"",
+        "event_index": 10,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,220p' scripts/tests/test_graphify_upstream_skill.py\"",
+        "event_index": 11,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git ls-files -s | rg -i 'graphify|agents/skills|source_order|human_owner_intent|deep-interview-aria-nbv-agent-scaffold-target-state' | head -160\"",
+        "event_index": 12,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '220,520p' scripts/tests/test_graphify_upstream_skill.py\"",
+        "event_index": 13,
+        "event_type": "item.completed",
+        "exit_code": 2,
+        "item_type": "command_execution",
+        "status": "failed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find .agents -maxdepth 4 -type f -o -type l | sort | rg -i 'graphify|source_order|owner|upstream' | head -160\"",
+        "event_index": 14,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"find . -maxdepth 4 -type f -name '*graphify*' -o -name '*source_order*' | sort\"",
+        "event_index": 15,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git log -1 --format='%H %s' -- .agents/skills/graphify .agents/skills/aria-nbv-context scripts/tests/test_graphify_upstream_skill.py\"",
+        "event_index": 16,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,180p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\"",
+        "event_index": 17,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,160p' .agents/references/human_owner_intent.md\"",
+        "event_index": 18,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git ls-tree -r --name-only HEAD | rg 'scripts/tests/test_graphify_upstream_skill.py|scripts/|graphify' | head -120\"",
+        "event_index": 19,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git show HEAD:.agents/skills/graphify/.graphify_version && printf '\\\\n--- skill hash ---\\\\n' && git hash-object .agents/skills/graphify/SKILL.md && printf '\\\\n--- all skill hashes ---\\\\n' && find .agents/skills/graphify -type f -print0 | sort -z | xargs -0 sha256sum\"",
+        "event_index": 20,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git show-ref | head -30'",
+        "event_index": 21,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"git diff --exit-code -- .agents/skills/graphify; printf 'graphify_diff_exit=%s\\\\n' \\\"\"'$?\"'",
+        "event_index": 22,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git log --all --oneline --decorate -- .agents/skills/graphify | head -20'",
+        "event_index": 23,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git cat-file -t b2cd36267456c166788c95be6e68574064a92a42 2>&1 || true'",
+        "event_index": 24,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc 'git status --porcelain=v1'",
+        "event_index": 25,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 - <<'PY'\nfrom pathlib import Path\nimport subprocess\n\nroot = Path('.')\nversion = (root / '.agents/skills/graphify/.graphify_version').read_text(encoding='utf-8').strip()\nboundary = (root / '.agents/skills/aria-nbv-context/references/graphify-aria-boundary.md').read_text(encoding='utf-8')\nspec = (root / '.omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md').read_text(encoding='utf-8')\nexpected = 'b2cd36267456c166788c95be6e68574064a92a42'\nassert version == '0.9.48', version\nassert expected in boundary\nassert expected in spec\nsubprocess.run(['git', 'diff', '--quiet', '--', '.agents/skills/graphify'], check=True)\nstatus = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)\nassert not status, status\nprint('PASS: version=0.9.48')\nprint('PASS: governing upstream pin present in exact boundary/spec sources')\nprint('PASS: installed Graphify bundle has no worktree diff')\nprint('PASS: checkout status is clean')\nPY\nnl -ba .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md | sed -n '1,72p'\nnl -ba .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md | sed -n '55,125p'\nnl -ba .agents/references/human_owner_intent.md | sed -n '42,86p'\nnl -ba AGENTS.md | sed -n '34,48p'\"",
+        "event_index": 26,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"python3 -c 'from pathlib import Path; import subprocess; root=Path(\\\".\\\"); version=(root/\\\".agents/skills/graphify/.graphify_version\\\").read_text().strip(); boundary=(root/\\\".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md\\\").read_text(); spec=(root/\\\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\\\").read_text(); expected=\\\"b2cd36267456c166788c95be6e68574064a92a42\\\"; assert version==\\\"0.9.48\\\",version; assert expected in boundary; assert expected in spec; subprocess.run([\\\"git\\\",\\\"diff\\\",\\\"--quiet\\\",\\\"--\\\",\\\".agents/skills/graphify\\\"],check=True); status=subprocess.check_output([\\\"git\\\",\\\"status\\\",\\\"--porcelain=v1\\\"],text=True); assert not status,status; print(\\\"PASS version=0.9.48; governing pin present in boundary/spec; Graphify bundle has no worktree diff; checkout clean\\\")'\"",
+        "event_index": 27,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 28,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 28,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 8615,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "c016772ff5b7ed33ca133afe930016d758bedc6ea5c209a614b35d137486a638",
+  "returncode": 0,
+  "rubric_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/.agents/work/routing-trials/bea876d39f17-bea876d39f17/scoped-spec-settles-graphify-bundle__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-bea876d39f17-n28v1hyw/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787510320.620163,
+  "tested_commit": "bea876d39f172b1bd903d29bd641c82beb4797e2",
+  "timed_out": false,
+  "trial_id": "scoped-spec-settles-graphify-bundle",
+  "trial_response": {
+    "content": "{\"exact_owner\":\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md owns the accepted decision; .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md owns ARIA-specific routing; .agents/skills/graphify/ owns only the upstream Graphify bundle.\",\"handoff\":\"No handoff; accepted decision reached.\",\"loaded_guides\":[\"agent-behavior\",\"aria-nbv-context\",\"graphify\"],\"opened_references\":[\".agents/skills/agent-behavior/references/reviewed-intent.md\",\".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md\",\".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\",\".agents/references/human_owner_intent.md\"],\"outcome\":\"The project-installed Graphify skill must remain byte-identical to upstream. It may not carry ARIA-specific edits or overlays. ARIA-specific eligibility, freshness, projection, fallback, and source-order routing belong to aria-nbv-context; the root AGENTS.md is only the dispatcher pointer. The accepted decision is explicit in the current scaffold specification and boundary guide. No files were mutated. Independent upstream-byte comparison was not possible because the upstream commit and referenced self-test are absent from this routing snapshot; the bounded local proof confirms the recorded pin, version, clean bundle, and clean checkout.\",\"selected_skill\":\"aria-nbv-context \\u2192 graphify boundary\",\"selected_verification\":\"PASS: Graphify version 0.9.48; upstream pin b2cd36267456c166788c95be6e68574064a92a42 is present in the governing sources; the installed bundle has no worktree diff; checkout status is clean.\",\"tool_calls\":[\"read-only owner/source inspection\",\"version and pin assertion\",\"git diff --quiet\",\"git status --porcelain=v1\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}

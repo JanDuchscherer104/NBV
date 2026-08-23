@@ -1,0 +1,33 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "helper-lowest-shared-domain-owner__r1/events.jsonl": "0e318263dfb25fd74bdc4d1a822fe251868776c38e8aea8df2a1d86f223b1c5d",
+    "helper-lowest-shared-domain-owner__r1/report.json": "382f818a6c6491a1e76500db44209059be7a93e7fb8b65de4c02c7a343c0b179",
+    "helper-lowest-shared-domain-owner__r1/stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "helper-lowest-shared-domain-owner__r1/trial-response.json": "47408419445ce324c358999f142d9fb458c71c87e31704a91b12a16952d5c1b5",
+    "helper-lowest-shared-domain-owner__r1/verifier-events.jsonl": "99ea1b48833eaaa8ceff3cd35cf72ccff0c4977407e504adfd28db4c8b156ed4",
+    "helper-lowest-shared-domain-owner__r1/verifier-report.json": "86894e19e1b1c4c436ec016d1fff0963a10624de67c818c795b0e0f47ec72d73",
+    "helper-lowest-shared-domain-owner__r1/verifier-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reviewed-intent-unsettled-external-skill__r1/events.jsonl": "b0002f0339f4e0c7fdb766778b19bbe38935a071c5628ecb3053bd5e87b2d4da",
+    "reviewed-intent-unsettled-external-skill__r1/report.json": "edb704cb2a973f3f5e9fd72f2b9cfc751a369f20848c164f78082694383901bf",
+    "reviewed-intent-unsettled-external-skill__r1/stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reviewed-intent-unsettled-external-skill__r1/trial-response.json": "977445ef7d2d04233bf0dacf9f99f7bfa790e60dd757ca14fa34f98849108bab",
+    "reviewed-intent-unsettled-external-skill__r1/verifier-events.jsonl": "a3c27a90d1332fc0bcb8116b1d18fcd7cdbd1c2455667a0b7db24ecbd7dd621f",
+    "reviewed-intent-unsettled-external-skill__r1/verifier-report.json": "46fd018f77ed7fcacdac6047d6310132b81fe62a74d752392c76fb41ee0277eb",
+    "reviewed-intent-unsettled-external-skill__r1/verifier-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scoped-spec-settles-graphify-bundle__r1/events.jsonl": "73f1499bc851dd91ce2ddd5a58474d272d13a171d09218028e95596c267f47d6",
+    "scoped-spec-settles-graphify-bundle__r1/report.json": "9d0db352e5530ab61e3c6425fd6f7f7876881c4021cba71f4877e476c458835f",
+    "scoped-spec-settles-graphify-bundle__r1/stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scoped-spec-settles-graphify-bundle__r1/trial-response.json": "4b19ef329dd60a5fd4e933b4be66b769c8deb2578dcbb39e0b17ab7c318d1370",
+    "scoped-spec-settles-graphify-bundle__r1/verifier-events.jsonl": "1b42b721b88abcf9988e0ed170e74db6c5e6eeb0c01ec9e24847772d59bde84c",
+    "scoped-spec-settles-graphify-bundle__r1/verifier-report.json": "aa85fedbf861d93653042f1689ba1b27e108c38bdaeb4359018dc08c86fb840d",
+    "scoped-spec-settles-graphify-bundle__r1/verifier-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "thesis-code-shared-contract__r1/events.jsonl": "8320517f401d8882aa734490374c487c39b2569e893191e85722aa3ff53e16c6",
+    "thesis-code-shared-contract__r1/report.json": "539639ed0f64af237e8cec4e9217b968b865b7ed140d9e8a386dfc8b4764f202",
+    "thesis-code-shared-contract__r1/stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "thesis-code-shared-contract__r1/trial-response.json": "f374e515acfce840db9a24e8f32ba82322148b34f0ac524ba65f991ce70e4f58",
+    "thesis-code-shared-contract__r1/verifier-events.jsonl": "f18e3889d9f9c6776f0572e5f7291d8d9f407cab9fb1e06a456455e3306d301d",
+    "thesis-code-shared-contract__r1/verifier-report.json": "5001c2765dfcf2c0c6e8406ff4833088661f295542ee991ec630a93a604167f4",
+    "thesis-code-shared-contract__r1/verifier-stderr.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

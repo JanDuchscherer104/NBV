@@ -1,0 +1,187 @@
+{
+  "adjudication": {
+    "artifacts": {
+      "events": "verifier-events.jsonl",
+      "report": "verifier-report.json",
+      "stderr": "verifier-stderr.txt"
+    },
+    "passed": false,
+    "reason": "semantic fail",
+    "returncode": 0,
+    "timed_out": false,
+    "verdict": {
+      "evidence": [
+        {
+          "claim": "The agent-behavior, aria-nbv-context, and graphify skill guides were read.",
+          "event_index": 1,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The accepted scoped specification was inspected for Graphify ownership and byte-identity requirements.",
+          "event_index": 6,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        },
+        {
+          "claim": "The checkout remained clean after the read-only checks.",
+          "event_index": 7,
+          "event_type": "item.completed",
+          "item_type": "command_execution"
+        }
+      ],
+      "forbidden_observations": [
+        ".agents/references/human_owner_intent.md was used as a deciding requirements source.",
+        "The response characterized the decision as accepted through the human_owner_intent path, contrary to the required owner routing."
+      ],
+      "missing_requirements": [
+        "The required reviewed-intent owner path .agents/skills/agent-behavior/references/reviewed-intent.md was not observed as opened.",
+        "The trial did not demonstrate that general reviewed intent was unnecessary after locating the scoped specification."
+      ],
+      "rubric_commit": "1b63b3c040f7c8733d8a989f2d3a309703c4f3ef",
+      "tested_commit": "a121cd821f7748f979c2cddf0f7c3af0e0b6a5a7",
+      "trial_id": "scoped-spec-settles-graphify-bundle",
+      "verdict": "fail"
+    }
+  },
+  "artifacts": {
+    "events": "events.jsonl",
+    "stderr": "stderr.txt",
+    "trial_response": "trial-response.json"
+  },
+  "checkout_clean_after": true,
+  "checkout_clean_before": true,
+  "checkout_digest_after": "44b16b1df3aa12e2808ca152b582c46e9ebfd737602a820643830bcdd6cbbf33",
+  "checkout_digest_before": "44b16b1df3aa12e2808ca152b582c46e9ebfd737602a820643830bcdd6cbbf33",
+  "checkout_digest_expected": "44b16b1df3aa12e2808ca152b582c46e9ebfd737602a820643830bcdd6cbbf33",
+  "elapsed_seconds": 94.98689842224121,
+  "event_evidence": {
+    "bounds": {
+      "max_field_chars": 4096,
+      "max_items": 64,
+      "max_total_chars": 32768
+    },
+    "dropped_items": 0,
+    "field_truncations": 0,
+    "invalid_items": 0,
+    "items": [
+      {
+        "command": "/usr/bin/zsh -lc 'rg -n -i \"graphify|project-installed|byte-identical|upstream|owner hierarchy|exact owner\" /home/jd/.codex/memories/MEMORY.md | head -80'",
+        "event_index": 0,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/agent-behavior/SKILL.md && sed -n '1,280p' .agents/skills/aria-nbv-context/SKILL.md && sed -n '1,260p' .agents/skills/graphify/SKILL.md\"",
+        "event_index": 1,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,240p' .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md; printf '\\\\n--- root/package guides ---\\\\n'; rg --files -g 'AGENTS.md' -g 'SKILL.md' | sort | head -80; printf '\\\\n--- graphify skill files ---\\\\n'; find .agents/skills/graphify -maxdepth 2 -type f -print | sort; printf '\\\\n--- status ---\\\\n'; git status --short --branch; printf '\\\\n--- graphify refs ---\\\\n'; git remote -v; git log -1 --format='%H%n%s'\"",
+        "event_index": 2,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '220,270p' Makefile; sed -n '1,260p' scripts/tests/test_graphify_upstream_skill.py; rg -n \\\"UPSTREAM|upstream|graphify\\\" scripts/tests scripts .agents -g '*.py' -g '*.md' -g '*.toml' -g '*.json' | head -120\"",
+        "event_index": 3,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"printf '%s\\\\n' '--- named contract references ---'; rg -n -i \\\"byte-identical|upstream Graphify|graphify.*skill|graphify.*0\\\\.9\\\\.48|b2cd36267456c166788c95be6e68574064a92a42\\\" --glob '\"'!*.jsonl'\"' --glob '\"'!graphify-out/**'\"' --glob '\"'!.agents/memory/**'\"' .; printf '%s\\\\n' '--- installed skill identity ---'; cat .agents/skills/graphify/.graphify_version; sha256sum .agents/skills/graphify/SKILL.md; git log --all --oneline -- .agents/skills/graphify/SKILL.md | head -20; printf '%s\\\\n' '--- candidate upstream copies ---'; find /home/jd /tmp -path '*/graphify/SKILL.md' -type f 2>/dev/null | head -40\"",
+        "event_index": 4,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,145p' .agents/references/human_owner_intent.md; sed -n '55,80p' .agents/skills/README.md; printf '\\\\n--- graphify history ---\\\\n'; git log --all --date=short --format='%h %ad %s' -- .agents/skills/graphify .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md .agents/references/human_owner_intent.md | head -40; printf '\\\\n--- tracked contract paths ---\\\\n'; git ls-files .agents/skills/graphify scripts | head -100; printf '\\\\n--- installed skill byte stats ---\\\\n'; wc -c -l .agents/skills/graphify/SKILL.md; git status --porcelain=v1 -uno\"",
+        "event_index": 5,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"sed -n '1,260p' .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md; printf '\\\\n--- exact owner pointers ---\\\\n'; rg -n \\\"Graphify|graphify|byte-identical|upstream\\\" .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md AGENTS.md .agents/skills/aria-nbv-context/SKILL.md .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md .agents/references/human_owner_intent.md .agents/skills/README.md\"",
+        "event_index": 6,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      },
+      {
+        "command": "/usr/bin/zsh -lc \"set -o pipefail\nprintf '%s\\\\n' '--- clean-scope proof ---'\ngit diff --quiet -- .agents/skills/graphify && echo 'graphify bundle: no worktree diff'\ngit status --short -- .agents/skills/graphify\nprintf '%s\\\\n' '--- pinned identity ---'\nprintf 'version='; cat .agents/skills/graphify/.graphify_version\nprintf 'skill_sha256='; sha256sum .agents/skills/graphify/SKILL.md | awk '{print \"'$1}'\"'\nprintf '%s\\\\n' '--- owner-defined validator availability ---'\nif [ -f scripts/tests/test_graphify_upstream_skill.py ]; then echo 'validator present'; else echo 'validator missing in this checkout: scripts/tests/test_graphify_upstream_skill.py'; fi\nprintf '%s\\\\n' '--- no mutation after checks ---'\ngit status --porcelain=v1\"",
+        "event_index": 7,
+        "event_type": "item.completed",
+        "exit_code": 0,
+        "item_type": "command_execution",
+        "status": "completed"
+      }
+    ],
+    "lifecycle": {
+      "completed_items": 8,
+      "duplicate_completions": 0,
+      "duplicate_starts": 0,
+      "error_events": 0,
+      "started_items": 8,
+      "terminal_completed": 1,
+      "terminal_failed": 0,
+      "unmatched_completions": 0,
+      "unmatched_starts": 0
+    },
+    "malformed_lines": 0,
+    "payload_chars": 4542,
+    "read_error": false,
+    "truncated": false
+  },
+  "prompt_sha256": "c016772ff5b7ed33ca133afe930016d758bedc6ea5c209a614b35d137486a638",
+  "returncode": 0,
+  "rubric_commit": "1b63b3c040f7c8733d8a989f2d3a309703c4f3ef",
+  "runtime": {
+    "codex_version": "codex-cli 0.147.0",
+    "command_flags": [
+      "exec",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "--output-schema",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/scripts/scaffold/fixtures/routing_trial_report.schema.json",
+      "--output-last-message",
+      "/home/jd/.codex/worktrees/aria-scaffold-intent-pr1/.agents/work/routing-trials/a121cd821f77-1b63b3c040f7/scoped-spec-settles-graphify-bundle__r1/trial-response.json",
+      "-C",
+      "/tmp/aria-routing-a121cd821f77-9jccrjgy/checkout",
+      "-c",
+      "approval_policy=\"never\"",
+      "--model",
+      "gpt-5.6-luna",
+      "-c",
+      "model_reasoning_effort=\"medium\""
+    ],
+    "requested_effort": "medium",
+    "requested_model": "gpt-5.6-luna"
+  },
+  "started_unix": 1787508853.1459608,
+  "tested_commit": "a121cd821f7748f979c2cddf0f7c3af0e0b6a5a7",
+  "timed_out": false,
+  "trial_id": "scoped-spec-settles-graphify-bundle",
+  "trial_response": {
+    "content": "{\"exact_owner\":\"The accepted scaffold specification owns this scoped decision. aria-nbv-context owns ARIA-specific Graphify routing, freshness, projection, and fallback. .agents/skills/graphify/ owns upstream Graphify procedure.\",\"handoff\":\"Keep all ARIA-specific policy in aria-nbv-context; do not edit or overlay .agents/skills/graphify/.\",\"loaded_guides\":[\"agent-behavior\",\"aria-nbv-context\",\"graphify\"],\"opened_references\":[\"AGENTS.md\",\" .agents/skills/aria-nbv-context/SKILL.md\",\" .agents/skills/aria-nbv-context/references/graphify-aria-boundary.md\",\" .agents/skills/graphify/SKILL.md\",\" .agents/references/human_owner_intent.md\",\" .omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md\",\" .agents/skills/README.md\"],\"outcome\":\"Accepted decision: the project-installed Graphify bundle must remain byte-identical to pinned upstream Graphify 0.9.48 at commit b2cd36267456c166788c95be6e68574064a92a42. It may not carry ARIA-specific edits. The exact-source route is complete and no files were mutated.\\n\\n\",\"selected_skill\":\"agent-behavior -> aria-nbv-context -> graphify\",\"selected_verification\":\"The Graphify bundle has no worktree diff; version is 0.9.48 and the current SKILL.md SHA-256 is 3898b1042721cad27d6f87ca44f638415a7f763203aefd86b90f9358ffea3a43. Checkout remains clean. The referenced upstream-comparison test is absent, so byte identity against the external upstream object was not independently recomputed.\",\"tool_calls\":[\"Read-only owner/source inspection\",\"Scoped git diff/status check\",\"Pinned-version and SHA inspection\"]}",
+    "format": "json",
+    "label": "untrusted_trial_response",
+    "max_chars": 16384,
+    "truncated": false
+  }
+}
