@@ -31,6 +31,7 @@ from aria_nbv.app.panels._stored_rollouts import (
     reconstruction_return,
     session,
     shared,
+    validity_support,
 )
 from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
@@ -553,7 +554,7 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Opening support flow should not materialize geometry, rewards, or candidate audit rows."""
+    """Opening support flow keeps candidate reads bounded and avoids the heavy aggregate audit."""
 
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "flow.zarr",
@@ -561,16 +562,53 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
     )
     session.clear_rollout_page_caches()
 
-    def fail_heavy_audit(*_args, **_kwargs):
-        raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
+    limits: list[int | None] = []
 
-    monkeypatch.setattr(session, "candidate_audit_rows", fail_heavy_audit)
+    def bounded_audit(*_args, **kwargs):
+        limits.append(kwargs.get("limit"))
+        return []
+
+    monkeypatch.setattr(session, "candidate_audit_rows", bounded_audit)
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Admission & feasibility")
 
     assert not app.exception
+    assert limits and all(limit == 50_000 for limit in limits)
     assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
+
+
+def test_bounded_geometry_reads_exact_limit_without_heavy_population_audit(monkeypatch) -> None:
+    calls: list[tuple[str, int]] = []
+    rendered: list[tuple[pd.DataFrame, int]] = []
+
+    class Handle:
+        validation = SimpleNamespace(num_candidates=60)
+
+        def candidates(self, *, limit: int):
+            calls.append(("candidates", limit))
+            return [{"target_distance_m": 2.0, "normalized_radius": 0.5}]
+
+        def proposal_geometry(self, *, limit: int):
+            calls.append(("proposal_geometry", limit))
+            return {"points": [], "frames": []}
+
+        def trajectory_geometry(self):
+            calls.append(("trajectory_geometry", 0))
+            return {"points": [], "frames": []}
+
+    monkeypatch.setattr(
+        validity_support,
+        "_render_candidate_geometry_diagnostics",
+        lambda candidates, _proposal, _trajectory, *, total_candidates: rendered.append((candidates, total_candidates)),
+    )
+
+    validity_support._render_bounded_candidate_geometry(Handle(), limit=17)
+
+    assert calls == [("candidates", 17), ("proposal_geometry", 17), ("trajectory_geometry", 0)]
+    assert len(rendered) == 1
+    assert rendered[0][0]["target_distance_m"].tolist() == [2.0]
+    assert rendered[0][1] == 60
 
 
 def test_stored_rollouts_default_evidence_defers_selected_rank_flow(

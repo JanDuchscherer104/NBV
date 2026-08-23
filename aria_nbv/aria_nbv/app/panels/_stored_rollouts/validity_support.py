@@ -19,6 +19,19 @@ from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
 
+def _render_bounded_candidate_geometry(session_handle: object, *, limit: int) -> None:
+    """Render geometry from one identity-bound, bounded candidate read."""
+
+    candidates = pd.DataFrame(session_handle.candidates(limit=limit))
+    proposal = session_handle.proposal_geometry(limit=limit)
+    _render_candidate_geometry_diagnostics(
+        candidates,
+        proposal,
+        session_handle.trajectory_geometry(),
+        total_candidates=int(session_handle.validation.num_candidates),
+    )
+
+
 def _render_targets_and_support(session_handle: object) -> None:
     st.subheader("Targets and action support")
     candidate_plot_limit = int(
@@ -157,10 +170,4 @@ def _render_targets_and_support(session_handle: object) -> None:
             "Bounded preview is loaded automatically from the validated candidate shell; "
             "the explicit heavy population audit above remains opt-in."
         )
-        proposal = session_handle.proposal_geometry(limit=candidate_plot_limit)
-        _render_candidate_geometry_diagnostics(
-            pd.DataFrame(),
-            proposal,
-            session_handle.trajectory_geometry(),
-            total_candidates=int(session_handle.validation.num_candidates),
-        )
+        _render_bounded_candidate_geometry(session_handle, limit=candidate_plot_limit)
