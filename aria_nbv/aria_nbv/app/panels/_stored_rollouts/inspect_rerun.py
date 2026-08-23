@@ -32,12 +32,9 @@ from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
 
-LAUNCH_HANDLE_KEY = "stored_rollouts_rerun_handle"
-ACTIVE_QUERY_STORE_KEY = "stored_rollouts_active_query_store"
-QUERY_SCOPES = ("Rollout summaries", "Factual steps", "Candidates")
-_LAUNCH_HANDLE_KEY = LAUNCH_HANDLE_KEY
-_ACTIVE_QUERY_STORE_KEY = ACTIVE_QUERY_STORE_KEY
-_QUERY_SCOPES = QUERY_SCOPES
+_LAUNCH_HANDLE_KEY = "stored_rollouts_rerun_handle"
+_ACTIVE_QUERY_STORE_KEY = "stored_rollouts_active_query_store"
+_QUERY_SCOPES = ("Rollout summaries", "Factual steps", "Candidates")
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
 
 

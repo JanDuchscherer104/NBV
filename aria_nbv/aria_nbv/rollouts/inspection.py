@@ -1665,15 +1665,6 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
     return _sort_candidate_summary_rows(result)
 
 
-def _group_candidate_rows_by_state(
-    rows: Iterable[Mapping[str, object]],
-) -> dict[tuple[str, str, str], list[dict[str, object]]]:
-    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
-    for row in rows:
-        grouped.setdefault(_candidate_state_key(row), []).append(dict(row))
-    return grouped
-
-
 def _probability_state_error(state: Mapping[str, object]) -> str | None:
     """Return the fail-closed reason for one complete sampler vector."""
 
