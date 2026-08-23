@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
+from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines import cli as rollout_cli
 from aria_nbv.oracle.pipelines.campaign import CampaignOutcome, CudaRolloutCampaignConfig
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
@@ -517,7 +518,10 @@ def test_canonical_campaign_root_and_smoke_plan_resolution(tmp_path, monkeypatch
     config = CudaRolloutCampaignConfig.from_toml(
         Path(__file__).resolve().parents[3] / ".configs/build_rollouts_v1_cuda_campaign.toml"
     )
-    assert config.output_root == Path(".campaign/cuda-rollouts-v1")
+    assert (
+        config.output_root
+        == (PathConfig().offline_cache_dir / "rollout_supervision" / "campaigns" / "cuda-rollouts-v1").resolve()
+    )
 
     output_root = tmp_path / "cuda-rollouts-v1"
     output_root.mkdir()
