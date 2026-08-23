@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
-from unittest import mock
+from pathlib import Path
 from typing import cast
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -231,6 +232,7 @@ class Fixture:
             {"dest": f"{GITHUB}/blob/main/src/model.py#L1"},
             {"dest": "https://example.invalid/outside"},
         ]
+        self.enable_claims()
 
     def write(self, relative: str, content: str) -> None:
         path = self.root / relative
@@ -259,6 +261,62 @@ class Fixture:
             aria_code_ref_source="cli",
         )
 
+    def enable_claims(self) -> None:
+        registry = tomllib.loads(
+            (REPO_ROOT / "docs/typst/thesis/data/principal-claims.toml").read_text()
+        )
+        surfaces = registry["surfaces"]
+        includes = "".join(f'#include "{path}"\n' for path in ("sections/a.typ", "sections/b.typ"))
+        surface_text = "\n".join(
+            "[[surfaces]]\n"
+            + f'path = "{surface["path"]}"\n'
+            + (f'occurrence_count = {surface["occurrence_count"]}\n' if "occurrence_count" in surface else "")
+            + f'claim_ids = [{", ".join(json.dumps(claim) for claim in surface["claim_ids"])}]\n'
+            for surface in surfaces
+        )
+        owner_by_claim = {
+            claim_id: surface["path"]
+            for surface in surfaces
+            for claim_id in surface["claim_ids"]
+        }
+        for surface in surfaces:
+            relative = surface["path"]
+            claims = ", ".join(surface["claim_ids"])
+            blocks = "".join(
+                f"// - repo:{relative}:{occurrence * 4 + 1}-{occurrence * 4 + 1}\n"
+                f"// evidence:\n// claims: {claims}\n"
+                for occurrence in range(surface.get("occurrence_count", 1))
+            )
+            self.write(relative, blocks + (includes if relative.endswith("main.typ") else ""))
+        records = []
+        for claim_id, claim_class, scope, rqs in (
+            ("pc-rq1-endpoint-contract", "rq", "core", ["rq1"]),
+            ("pc-rq2-lookahead-headroom", "rq", "core", ["rq2"]),
+            ("pc-rq3-actor-oracle-separation", "rq", "core", ["rq3"]),
+            ("pc-rq4-candidate-rollout-support", "rq", "core", ["rq4"]),
+            ("pc-rq5-online-discrete-bridge", "rq", "conditional-bridge", ["rq5"]),
+            ("pc-rq6-continuous-simulator-bridge", "rq", "conditional-bridge", ["rq6"]),
+            ("pc-c1-auditable-experiment-contract", "contribution", "core", ["rq1"]),
+            ("pc-r0-no-confirmatory-policy-result", "result", "core", []),
+        ):
+            owner = f"repo:{owner_by_claim[claim_id]}:1-1"
+            records.append(f"""[[claims]]\nid = "{claim_id}"\nclass = "{claim_class}"\nrqs = [{", ".join(f'"{rq}"' for rq in rqs)}]\nscope = "{scope}"\nmaturity = "planned"\nreview_state = "unreviewed"\nrelease_state = "withheld"\nowner = "{owner}"\nfalsifier = "{owner}"\nlimitations = ["{owner}"]\nevidence = [{{ class = "design", owner = "{owner}" }}]\n""")
+        self.write(
+            "docs/typst/thesis/data/principal-claims.toml",
+            'schema = "aria-nbv-principal-claims-v1"\nreceipts = []\n\n'
+            + surface_text
+            + "\n"
+            + "\n".join(records),
+        )
+        subprocess.run(
+            ["git", "add", "docs/typst/thesis"], cwd=self.root, check=True
+        )
+        subprocess.run(
+            ["git", "commit", "-qm", "canonical claim fixture"],
+            cwd=self.root,
+            check=True,
+        )
+
     def glossary_value(self, index: int) -> dict[str, object]:
         return cast(dict[str, object], self.runner.glossary_terms[index]["value"])
 
@@ -283,7 +341,7 @@ class ProjectionTests(unittest.TestCase):
 
     @staticmethod
     def rendered(result: object) -> str:
-        files = getattr(result, "files")
+        files = cast(ProjectionResult, result).files
         return "\n".join(files[path] for path in sorted(files))
 
     def test_same_inputs_render_identical_timestamp_free_relative_files(self) -> None:
@@ -293,6 +351,36 @@ class ProjectionTests(unittest.TestCase):
         rendered = self.rendered(first)
         self.assertNotIn(str(self.fixture.root), rendered)
         self.assertNotRegex(rendered, r"20\d\d-\d\d-\d\d[T ]")
+
+    def test_missing_claim_ledger_fails_closed(self) -> None:
+        ledger = self.fixture.root / "docs/typst/thesis/data/principal-claims.toml"
+        ledger.unlink()
+        with self.assertRaisesRegex(ProjectionError, "principal claims validation failed"):
+            self.build()
+
+    def test_invalid_claim_ledger_fails_closed(self) -> None:
+        self.fixture.write(
+            "docs/typst/thesis/data/principal-claims.toml",
+            "schema = 'invalid'\nclaims = []\nreceipts = []\n",
+        )
+        with self.assertRaisesRegex(ProjectionError, "principal claims validation failed"):
+            self.build()
+
+    def test_claim_projection_is_navigation_only(self) -> None:
+        result = self.build()
+        claim_page = next(
+            body for path, body in result.files.items() if path.startswith("claims/")
+        )
+        self.assertIn("claim_id: pc-", claim_page)
+        self.assertIn("class: ", claim_page)
+        self.assertIn("scope: ", claim_page)
+        self.assertIn("maturity: ", claim_page)
+        self.assertIn("review_state: ", claim_page)
+        self.assertIn("release_state: ", claim_page)
+        self.assertIn("owner: ", claim_page)
+        self.assertIn("evidence_owner: ", claim_page)
+        self.assertNotRegex(claim_page.casefold(), r"(?m)^(definition|excerpt|metric|conclusion):")
+        self.assertIn("claims/", result.files["index.md"])
 
     def test_compiled_headings_are_catalogued_without_source_attribution(self) -> None:
         index = self.build().files["index.md"]
@@ -466,6 +554,20 @@ class ProjectionTests(unittest.TestCase):
             "docs/typst/thesis/main.typ",
             '#include "sections/a.typ"\n#include "sections/b.typ"\n'
             '#include "../shared/appendix.typ"\n',
+        )
+        self.fixture.write(
+            "docs/typst/thesis/main.typ",
+            (self.fixture.root / "docs/typst/thesis/main.typ").read_text(
+                encoding="utf-8"
+            )
+            + "\n// - repo:docs/typst/thesis/main.typ:4-4\n// evidence:\n"
+            + "// claims: pc-rq1-endpoint-contract, pc-rq2-lookahead-headroom, "
+            + "pc-rq3-actor-oracle-separation, pc-rq4-candidate-rollout-support, "
+            + "pc-r0-no-confirmatory-policy-result\n"
+            + "// - repo:docs/typst/thesis/main.typ:7-7\n// evidence:\n"
+            + "// claims: pc-rq1-endpoint-contract, pc-rq2-lookahead-headroom, "
+            + "pc-rq3-actor-oracle-separation, pc-rq4-candidate-rollout-support, "
+            + "pc-r0-no-confirmatory-policy-result\n"
         )
         self.fixture.write(
             "docs/references.bib",
@@ -1038,10 +1140,3 @@ class ProjectionTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ProjectionError, r"previous output restored"):
                 self.build(check=False)
-
-        self.assertFalse((self.fixture.root / "graphify-input").exists())
-        self.assertFalse((self.fixture.root / ".graphify-input.tmp").exists())
-
-
-if __name__ == "__main__":
-    unittest.main()

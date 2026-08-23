@@ -16,8 +16,20 @@ actor-visible policy receives observed or predicted target descriptors and
 validity masks. Claims are restricted to the sampled candidate support,
 horizon, branch factor, target protocol, and held-out split.
 
+// - repo:docs/typst/thesis/sections/01-introduction.typ:12-17
+// evidence:
+// claims: pc-rq1-endpoint-contract, pc-rq3-actor-oracle-separation, pc-rq4-candidate-rollout-support, pc-r0-no-confirmatory-policy-result
+
 *Problem statement.* Given a GT-defined target task, actor-visible reconstruction evidence, a finite candidate table with hard validity constraints, and a fixed acquisition budget, determine whether bounded oracle lookahead improves endpoint target reconstruction over one-step oracle-greedy selection and, only if such headroom exists, whether a learned policy using non-privileged inputs recovers a meaningful fraction of it under the same oracle evaluation.
 
+// - repo:docs/typst/thesis/sections/01-introduction.typ:23-23
+// evidence:
+// claims: pc-rq1-endpoint-contract, pc-rq2-lookahead-headroom
+
 The thesis separates supervision from decision-time information. Ground-truth geometry defines current target tasks, target crops, oracle labels, and evaluation; it is not an ordinary actor input. Invalid candidates are outside the admissible action set rather than examples with low utility. One-step oracle greedy is an immediate-reward comparator over the evaluated valid candidate table, while oracle lookahead is an upper reference only within the fixed candidate generator, horizon, branch factor, target pool, and validity regime. These restrictions make negative results interpretable without turning a bounded experiment into a universal statement about view planning.
+
+// - repo:docs/typst/thesis/sections/01-introduction.typ:29-29
+// evidence:
+// claims: pc-rq3-actor-oracle-separation, pc-rq4-candidate-rollout-support, pc-r0-no-confirmatory-policy-result
 
 #include "01-research-questions.typ"

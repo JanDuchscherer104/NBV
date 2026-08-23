@@ -4,26 +4,32 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
 import posixpath
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Callable, Iterable, Mapping, Sequence
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
+from check_thesis_claims import (
+    ClaimValidationError,
+    Locator,
+    Occurrence,
+    PrincipalClaims,
+    read_principal_claims,
+)
 from glossary_build import (
     GlossaryError,
     normalize_and_validate_metadata,
 )
-
 
 SCHEMA_VERSION = "1"
 Runner = Callable[..., subprocess.CompletedProcess[str]]
@@ -53,6 +59,7 @@ class ProjectionConfig:
     output_path: Path = Path("graphify-input")
     aria_code_ref: str = "main"
     aria_code_ref_source: str = "default"
+    claim_ledger_path: Path = Path("docs/typst/thesis/data/principal-claims.toml")
 
 
 @dataclass(frozen=True)
@@ -129,6 +136,7 @@ class _RenderData:
     notation: Mapping[str, Mapping[str, Mapping[str, object]]]
     notation_owners: Mapping[tuple[str, str], Path]
     usage_by_source: Mapping[Path, Mapping[str, Counter[str]]]
+    claims: PrincipalClaims
 
 
 @dataclass
@@ -142,6 +150,7 @@ class _Pages:
     terms: dict[str, _Page]
     symbols: dict[str, _Page]
     equations: dict[str, _Page]
+    claims: dict[str, _Page]
 
     def all(self) -> list[_Page]:
         return [
@@ -153,6 +162,7 @@ class _Pages:
             *self.terms.values(),
             *self.symbols.values(),
             *self.equations.values(),
+            *self.claims.values(),
         ]
 
 
@@ -1048,6 +1058,45 @@ def _human_link(source_path: str, owner: str, label: str) -> str:
     return f"[{label}]({posixpath.relpath(target, posixpath.dirname(source_path))}) (human provenance)"
 
 
+def _locator_link(
+    source_path: str,
+    locator: Locator,
+    paths: Mapping[str, str],
+    *,
+    config: ProjectionConfig,
+) -> str:
+    """Link a validated locator without interpreting its source content."""
+
+    if locator.kind == "bib" and f"citation:{locator.identity}" in paths:
+        return _link(source_path, paths[f"citation:{locator.identity}"], locator.raw)
+    if locator.kind == "repo" and f"thesis-source:{locator.path}" in paths:
+        return _link(source_path, paths[f"thesis-source:{locator.path}"], locator.raw)
+    if locator.kind in {"repo", "bib", "artifact"}:
+        return _human_link(source_path, locator.path, locator.raw)
+    raise ProjectionError(f"unsupported validated locator kind: {locator.kind}")
+
+
+def _claim_occurrence_lines(
+    source_path: str,
+    occurrence: Occurrence,
+    paths: Mapping[str, str],
+    *,
+    config: ProjectionConfig,
+) -> list[str]:
+    identity = f"thesis-source:{occurrence.surface}"
+    source = (
+        _link(source_path, paths[identity], f"{occurrence.surface}:{occurrence.line}")
+        if identity in paths
+        else _human_link(source_path, occurrence.surface, f"{occurrence.surface}:{occurrence.line}")
+    )
+    lines = [f"occurrence: {source}"]
+    lines.extend(
+        f"  evidence: {_locator_link(source_path, locator, paths, config=config)}"
+        for locator in occurrence.evidence
+    )
+    return lines
+
+
 def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
     thesis = {
         source: _Page(f"thesis-source:{source.as_posix()}", "thesis")
@@ -1066,6 +1115,10 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
     }
     equations = {
         key: _Page(f"equation:{key}", "equations") for key in data.notation["equations"]
+    }
+    claims = {
+        claim.id: _Page(f"principal-claim:{claim.id}", "claims")
+        for claim in data.claims.claims
     }
     for row in data.manifest:
         for kind, root, field_name in (
@@ -1091,6 +1144,7 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
         terms=terms,
         symbols=symbols,
         equations=equations,
+        claims=claims,
     )
 
 
@@ -1327,7 +1381,7 @@ def _populate_entity_pages(
                 page.lines.append(
                     f"{ref_field.removesuffix('_refs')}: {_link(source_path, paths[identity], identity)}"
                 )
-    for group, collection, prefix in (
+    for group, collection, _prefix in (
         ("symbols", pages.symbols, "symbol"),
         ("equations", pages.equations, "equation"),
     ):
@@ -1347,6 +1401,52 @@ def _populate_entity_pages(
                 page.lines.append(f"description: {entry['description']}")
 
 
+def _populate_claim_pages(
+    config: ProjectionConfig,
+    data: _RenderData,
+    pages: _Pages,
+    paths: Mapping[str, str],
+) -> None:
+    for claim in data.claims.claims:
+        page = pages.claims[claim.id]
+        source_path = paths[page.identity]
+        page.lines.extend(
+            [
+                f"claim_id: {claim.id}",
+                f"class: {claim.claim_class}",
+                f"scope: {claim.scope}",
+                f"maturity: {claim.maturity}",
+                f"review_state: {claim.review_state}",
+                f"release_state: {claim.release_state}",
+                f"rq_ids: {', '.join(claim.rqs) if claim.rqs else 'none'}",
+                f"owner: {_locator_link(source_path, claim.owner, paths, config=config)}",
+                f"falsifier: {_locator_link(source_path, claim.falsifier, paths, config=config)}",
+            ]
+        )
+        page.lines.extend(
+            f"limitation: {_locator_link(source_path, locator, paths, config=config)}"
+            for locator in claim.limitations
+        )
+        if claim.artifact is not None:
+            page.lines.append(
+                f"artifact: {_locator_link(source_path, claim.artifact, paths, config=config)}"
+            )
+        for evidence in claim.evidence:
+            page.lines.append(f"evidence_class: {evidence.evidence_class}")
+            page.lines.append(
+                f"evidence_owner: {_locator_link(source_path, evidence.owner, paths, config=config)}"
+            )
+            if evidence.bibliography is not None:
+                page.lines.append(
+                    f"evidence_bibliography: {_locator_link(source_path, evidence.bibliography, paths, config=config)}"
+                )
+        for occurrence in data.claims.occurrences:
+            if claim.id in occurrence.claim_ids:
+                page.lines.extend(
+                    _claim_occurrence_lines(source_path, occurrence, paths, config=config)
+                )
+
+
 def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path]:
     return [
         *closure,
@@ -1356,6 +1456,7 @@ def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path
         config.glossary_path,
         config.symbols_path,
         config.equations_path,
+        config.claim_ledger_path,
     ]
 
 
@@ -1425,6 +1526,7 @@ def _render_index(
         "glossary",
         "symbols",
         "equations",
+        "claims",
     ):
         if families[family]:
             candidates = sorted(
@@ -1454,6 +1556,7 @@ def _render_pages(
     _populate_literature_pages(config, data, pages, paths)
     _populate_fact_pages(data, pages, paths)
     _populate_entity_pages(config, data, pages, paths)
+    _populate_claim_pages(config, data, pages, paths)
     files: dict[str, str] = {}
     for page in sorted(pages.all(), key=lambda item: item.identity):
         path = paths[page.identity]
@@ -1573,14 +1676,20 @@ def build_projection(
         **{**config.__dict__, "repo_root": config.repo_root.absolute()}
     )
     closure = _source_closure(config)
+    try:
+        claims = read_principal_claims(config.repo_root / config.claim_ledger_path, config.repo_root)
+    except (ClaimValidationError, OSError, ValueError) as error:
+        raise ProjectionError(f"principal claims validation failed: {error}") from error
     owner_paths = (
         *closure,
+        *(Path(surface.path) for surface in claims.surfaces),
         config.style_path,
         *config.bibliography_paths,
         config.manifest_path,
         config.glossary_path,
         config.symbols_path,
         config.equations_path,
+        config.claim_ledger_path,
     )
     bib = _bib_entries(config)
     terms = _glossary_terms(config, runner, bib)
@@ -1675,6 +1784,7 @@ def build_projection(
             notation=notation,
             notation_owners=notation_owners,
             usage_by_source=usage_by_source,
+            claims=claims,
         ),
     )
     if not check:

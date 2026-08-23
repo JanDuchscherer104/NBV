@@ -74,6 +74,10 @@ Invalid candidates are hard constraints, never the lowest-RRI class. Report
 endpoint gain, cumulative root gain, diagnostic target RRI, scene RRI, view count,
 path length, invalid-action rate, and runtime at matched budgets.
 
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:52-75
+// evidence:
+// claims: pc-rq1-endpoint-contract
+
 === RQ2 — Offline finite-candidate planning <ssec:rq2>
 
 Does bounded oracle lookahead have positive endpoint-quality headroom over
@@ -91,6 +95,10 @@ one-step scoring, bounded oracle lookahead, and oracle-scored temperature-softma
 traces. The learned model emits one masked bounded-horizon value per finite
 candidate; GT meshes, crops, and oracle values remain supervision/evaluation only.
 Gumbel-Top-$k$ is later diversity evidence, not a prerequisite for the first run.
+
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:83-97
+// evidence:
+// claims: pc-rq2-lookahead-headroom
 
 === RQ3 — Actor-visible target representation <ssec:rq3>
 
@@ -114,6 +122,10 @@ area, and semi-dense/EVL support are audit-only evidence fields for this
 association rule, not association scores. Unmatched or ambiguous targets are
 protocol-invalid cases, not low-RRI examples.
 
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:105-123
+// evidence:
+// claims: pc-rq3-actor-oracle-separation
+
 === RQ4 — Candidate, rollout, and scale support <ssec:rq4>
 
 Do mixed target-centric and default-exploration candidates, controlled rollout
@@ -134,6 +146,10 @@ Report scenes, snippets, targets, trajectories, anchor poses, candidates,
 rollout seeds, transitions, split boundaries, invalid gaps, and missing coverage
 separately. Sample-level splits across snippets from one scene are not sufficient
 for final claims.
+
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:131-148
+// evidence:
+// claims: pc-rq4-candidate-rollout-support
 
 === Shared evidence protocol <ssec:protocol>
 
@@ -158,6 +174,10 @@ distribution, and validity constraints; path length, runtime, and oracle calls
 are separate measurements. Coverage, calibration, stage shift, and storage
 lineage are evidence qualifiers rather than proxy objectives.
 
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:156-175
+// evidence:
+// claims: pc-c1-auditable-experiment-contract, pc-r0-no-confirmatory-policy-result
+
 === RQ5 — Conditional online discrete $Q_H$ bridge <ssec:rq5>
 
 After offline finite-candidate evidence is stable, does online interaction over
@@ -169,6 +189,10 @@ positive; it is not required to establish the finite-candidate thesis result.
 Online training must not silently expand the action space, change the target
 protocol, or treat GT renders as actor evidence.
 
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:183-190
+// evidence:
+// claims: pc-rq5-online-discrete-bridge
+
 === RQ6 — Lower-priority continuous and simulator escalation <ssec:rq6>
 
 If the finite-candidate and online-discrete evidence is stable, does a
@@ -179,6 +203,10 @@ for the offline $Q_H$ result. Any comparison must preserve target conditioning,
 matched budgets or cost curves, explicit feasibility handling, and independent
 oracle endpoint evaluation; no continuous-control result is implied by the
 current finite-candidate implementation.
+
+// - repo:docs/typst/thesis/sections/01-research-questions.typ:198-205
+// evidence:
+// claims: pc-rq6-continuous-simulator-bridge
 
 #validation_todo(
   [Freeze one claim-level contribution statement for each research question and link it to the exact estimand, evidence artifact, and decision rule that can answer it. Until those links exist, the questions define intended scope rather than validated contributions.],

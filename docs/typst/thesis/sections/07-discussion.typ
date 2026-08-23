@@ -11,9 +11,17 @@
 
 The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This establishes that the proposed experiment can be represented and audited; it does not establish that one candidate family, rollout policy, representation, or learned model performs better than another.
 
+// - repo:docs/typst/thesis/sections/07-discussion.typ:12-12
+// evidence:
+// claims: pc-c1-auditable-experiment-contract
+
 The rollout attempts also expose a systems limitation. Counterfactual scoring repeatedly renders a large mesh for a candidate set, so renderer memory and latency constrain feasible branch factor and rollout volume before statistical efficiency becomes relevant. An out-of-memory observation is evidence for batching and resource measurement, not for or against the candidate distribution or planning objective. Completed validated stores are required before throughput, storage, or failure rates are generalized.
 
 The scientific limitations are more restrictive. Current attempts use training sources, no held-out paired policy table supports the endpoint estimand, metric repeatability and meaningful oracle-lookahead headroom remain unestablished, and the target-conditioned finite-horizon comparison has not yet been demonstrated. The present evidence therefore cannot distinguish negligible non-myopic structure from inadequate candidate support, target observability, replay coverage, representation support, or model failure.
+
+// - repo:docs/typst/thesis/sections/07-discussion.typ:20-20
+// evidence:
+// claims: pc-r0-no-confirmatory-policy-result
 
 == Evidence-conditioned architecture bridges
 

@@ -44,9 +44,15 @@
   submissionDateText: submissionDateText,
   abstract_en: [
     This thesis studies target-conditioned, quality-driven @next-best-view planning for egocentric 3D reconstruction in @aria-synthetic-environments. It defines target-specific @relative-reconstruction-improvement as an oracle signal, constructs finite candidate and replay contracts, and separates privileged label generation from the actor-visible inputs available to a learned finite-horizon value model. The evaluation is designed to measure oracle-lookahead headroom and the fraction recovered by a learned policy under matched oracle re-evaluation. The evidence available for this version establishes the evaluation contract and implementation readiness, but does not contain confirmatory held-out policy outcomes; it therefore supports no claim that a learned policy improves over the specified baselines. The main remaining limitation is the absence of a validated, population-level rollout bundle with paired endpoint estimates and uncertainty.
+    // - repo:docs/typst/thesis/main.typ:46-46
+    // evidence:
+    // claims: pc-rq1-endpoint-contract, pc-rq2-lookahead-headroom, pc-rq3-actor-oracle-separation, pc-rq4-candidate-rollout-support, pc-r0-no-confirmatory-policy-result
   ],
   abstract_de: [
     Diese Arbeit untersucht zielkonditionierte, qualitätsgetriebene Planung der nächsten besten Ansicht für die egozentrische 3D-Rekonstruktion in @aria-synthetic-environments. Sie definiert die zielspezifische @relative-reconstruction-improvement als Orakelsignal, legt Verträge für endliche Kandidatenmengen und Replay-Daten fest und trennt die privilegierte Erzeugung von Trainingssignalen von den für ein gelerntes Modell mit endlichem Horizont sichtbaren Eingaben. Die Evaluation soll den Spielraum einer vorausschauenden Orakelstrategie und den durch eine gelernte Strategie erreichten Anteil unter identischer Orakel-Neubewertung messen. Die für diese Fassung verfügbare Evidenz belegt den Evaluationsvertrag und die Implementierungsbereitschaft, enthält jedoch keine bestätigenden Ergebnisse auf zurückgehaltenen Daten. Daher wird keine Überlegenheit einer gelernten Strategie gegenüber den festgelegten Baselines behauptet. Die wesentliche verbleibende Einschränkung ist das Fehlen eines validierten Rollout-Datensatzes auf Populationsebene mit gepaarten Endpunktschätzungen und Unsicherheitsangaben.
+    // - repo:docs/typst/thesis/main.typ:52-52
+    // evidence:
+    // claims: pc-rq1-endpoint-contract, pc-rq2-lookahead-headroom, pc-rq3-actor-oracle-separation, pc-rq4-candidate-rollout-support, pc-r0-no-confirmatory-policy-result
   ],
   acknowledgement: [
     Acknowledgements are omitted from this version.

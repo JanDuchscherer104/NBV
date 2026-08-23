@@ -1,0 +1,147 @@
+schema = "aria-nbv-principal-claims-v1"
+receipts = []
+
+[[surfaces]]
+path = "docs/typst/thesis/main.typ"
+occurrence_count = 2
+claim_ids = ["pc-rq1-endpoint-contract", "pc-rq2-lookahead-headroom", "pc-rq3-actor-oracle-separation", "pc-rq4-candidate-rollout-support", "pc-r0-no-confirmatory-policy-result"]
+
+[[surfaces]]
+path = "docs/typst/thesis/sections/01-introduction.typ"
+claim_ids = ["pc-rq1-endpoint-contract", "pc-rq2-lookahead-headroom", "pc-rq3-actor-oracle-separation", "pc-rq4-candidate-rollout-support", "pc-r0-no-confirmatory-policy-result"]
+
+[[surfaces]]
+path = "docs/typst/thesis/sections/01-research-questions.typ"
+claim_ids = ["pc-rq1-endpoint-contract", "pc-rq2-lookahead-headroom", "pc-rq3-actor-oracle-separation", "pc-rq4-candidate-rollout-support", "pc-rq5-online-discrete-bridge", "pc-rq6-continuous-simulator-bridge", "pc-c1-auditable-experiment-contract", "pc-r0-no-confirmatory-policy-result"]
+
+[[surfaces]]
+path = "docs/typst/thesis/sections/06-results.typ"
+claim_ids = ["pc-c1-auditable-experiment-contract", "pc-r0-no-confirmatory-policy-result"]
+
+[[surfaces]]
+path = "docs/typst/thesis/sections/07-discussion.typ"
+claim_ids = ["pc-c1-auditable-experiment-contract", "pc-r0-no-confirmatory-policy-result"]
+
+[[surfaces]]
+path = "docs/typst/thesis/sections/08-conclusion.typ"
+claim_ids = ["pc-c1-auditable-experiment-contract", "pc-r0-no-confirmatory-policy-result"]
+
+[[claims]]
+id = "pc-rq1-endpoint-contract"
+class = "rq"
+rqs = ["rq1"]
+scope = "core"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:52-75"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:52-75"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:52-75"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:52-75"
+
+[[claims]]
+id = "pc-rq2-lookahead-headroom"
+class = "rq"
+rqs = ["rq2"]
+scope = "core"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:83-97"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:83-97"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:83-97"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:83-97"
+
+[[claims]]
+id = "pc-rq3-actor-oracle-separation"
+class = "rq"
+rqs = ["rq3"]
+scope = "core"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:105-123"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:105-123"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:105-123"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:105-123"
+
+[[claims]]
+id = "pc-rq4-candidate-rollout-support"
+class = "rq"
+rqs = ["rq4"]
+scope = "core"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:131-148"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:131-148"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:131-148"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:131-148"
+
+[[claims]]
+id = "pc-rq5-online-discrete-bridge"
+class = "rq"
+rqs = ["rq5"]
+scope = "conditional-bridge"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:183-190"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:183-190"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:183-190"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:183-190"
+
+[[claims]]
+id = "pc-rq6-continuous-simulator-bridge"
+class = "rq"
+rqs = ["rq6"]
+scope = "conditional-bridge"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:198-205"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:198-205"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:198-205"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:198-205"
+
+[[claims]]
+id = "pc-c1-auditable-experiment-contract"
+class = "contribution"
+rqs = ["rq1", "rq2", "rq3", "rq4"]
+scope = "core"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"]
+[[claims.evidence]]
+class = "implementation"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"
+
+[[claims]]
+id = "pc-r0-no-confirmatory-policy-result"
+class = "result"
+rqs = []
+scope = "core"
+maturity = "planned"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"
+falsifier = "repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"
+limitations = ["repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"]
+[[claims.evidence]]
+class = "design"
+owner = "repo:docs/typst/thesis/sections/01-research-questions.typ:156-175"
