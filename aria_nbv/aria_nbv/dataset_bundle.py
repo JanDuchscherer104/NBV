@@ -244,9 +244,9 @@ class QhCorpusReadiness:
                 }
                 for row in self.stages
             ],
-            "contract": self.contract,
-            "actor_contract": self.actor_contract,
-            "loader_settings": self.loader_settings,
+            "contract": _plain_value(self.contract),
+            "actor_contract": _plain_value(self.actor_contract),
+            "loader_settings": _plain_value(self.loader_settings),
             "scene_disjoint": self.scene_disjoint,
             "storage": [
                 {
@@ -511,10 +511,12 @@ def _qh_stage_readiness(stage: Stage, dataset: Any | None) -> QhStageReadiness:
         return QhStageReadiness(stage, False, 0, 0, 0, (), 0, {})
     state_count = 0
     trainable_candidate_count = 0
+    realized_max_horizon = 0
     for index in range(len(dataset)):
         chain = dataset[index]
         state_count += chain.num_steps
         trainable_candidate_count += int(chain.supervision.label_mask.sum().item())
+        realized_max_horizon = max(realized_max_horizon, chain.num_steps)
     return QhStageReadiness(
         stage=stage,
         included=True,
@@ -522,7 +524,7 @@ def _qh_stage_readiness(stage: Stage, dataset: Any | None) -> QhStageReadiness:
         state_count=state_count,
         trainable_candidate_count=trainable_candidate_count,
         scene_ids=tuple(sorted(dataset.scenes)),
-        max_horizon=dataset.max_horizon,
+        max_horizon=realized_max_horizon,
         provenance=_plain_value(dataset.provenance),
     )
 

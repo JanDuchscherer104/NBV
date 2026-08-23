@@ -30,6 +30,7 @@ from aria_nbv.dataset_bundle import (
     preview_qh_batch,
     scan_root_gt_obb_target_opportunities,
 )
+from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils import Stage
@@ -93,12 +94,23 @@ def _qh_chain(*, scene: str, steps: int, width: int, offset: int) -> QhChain:
 
 
 class _QhStageDataset:
-    def __init__(self, stage: Stage, chains: tuple[QhChain, ...], *, contract: QhDataContract = _QH_CONTRACT):
+    def __init__(
+        self,
+        stage: Stage,
+        chains: tuple[QhChain, ...],
+        *,
+        contract: QhDataContract = _QH_CONTRACT,
+        configured_max_horizon: int | None = None,
+    ):
         self.stage = stage
         self.chains = chains
         self.contract = contract
         self.scenes = frozenset(chain.key.scene_id for chain in chains)
-        self.max_horizon = max((chain.num_steps for chain in chains), default=0)
+        self.max_horizon = (
+            max((chain.num_steps for chain in chains), default=0)
+            if configured_max_horizon is None
+            else configured_max_horizon
+        )
         self.provenance = {"stage": stage.value, "stores": ["fixture.zarr"]}
         self.actor_state_contract = QhActorStateContract("evl_v1", "none", "actor-manifest", (), "qh_cf0_v1")
 
@@ -140,6 +152,77 @@ def test_qh_readiness_constructs_real_datamodule_and_binds_profile(
     assert readiness.actor_contract is not None
     assert readiness.actor_contract["experiment_profile"] == "qh_cf0_v1"
     assert [config.experiment_profile for config in captured] == ["qh_cf0_v1"] * 3
+
+
+def test_qh_readiness_reports_realized_maximum_for_early_terminated_chains(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Readiness must report observed chain lengths, not configured horizon."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="qh.zarr", source_hash=source_hash)
+    stages = {
+        Stage.TRAIN: _QhStageDataset(
+            Stage.TRAIN,
+            (
+                _qh_chain(scene="train-a", steps=2, width=1, offset=0),
+                _qh_chain(scene="train-b", steps=3, width=1, offset=1),
+            ),
+            configured_max_horizon=8,
+        ),
+        Stage.VAL: _QhStageDataset(Stage.VAL, ()),
+        Stage.TEST: _QhStageDataset(Stage.TEST, ()),
+    }
+    _patch_qh_stages(monkeypatch, stages)
+
+    readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+
+    assert readiness.verdict == "Ready"
+    assert readiness.stages[0].max_horizon == 3
+
+
+def test_qh_readiness_json_export_plainifies_cfplus_geometry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """CF+ geometry dataclasses must not leak into download JSON."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="qh.zarr", source_hash=source_hash)
+    geometry = QhGeometryContract(
+        projection_model="pinhole",
+        linearization="z",
+        camera_pose="camera_from_root",
+        depth_semantics="metric_z",
+        focal_px=(120.0, 120.0),
+        principal_point_px=(120.0, 120.0),
+        image_size_hw=(240, 240),
+        camera_axes="x-right,y-down,z-forward",
+        camera_forward="+z",
+        camera_handedness="right",
+        pixel_convention="pixel-center",
+        in_ndc=False,
+        znear_m=0.1,
+        zfar_m=20.0,
+        invalid_fill_value=0.0,
+        dtype="float16",
+        renderer="pytorch3d",
+        source_role="selected_action",
+        selected_identity="selected_depth.step_row_id",
+    )
+    contract = replace(_QH_CONTRACT, selected_depth_geometry=geometry)
+    stages = {
+        stage: _QhStageDataset(
+            stage,
+            (_qh_chain(scene=stage.value, steps=1, width=1, offset=index),),
+            contract=contract,
+        )
+        for index, stage in enumerate((Stage.TRAIN, Stage.VAL, Stage.TEST))
+    }
+    _patch_qh_stages(monkeypatch, stages)
+
+    readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+
+    payload = readiness.to_jsonable()
+    json.dumps(payload, sort_keys=True)
+    assert payload["contract"]["selected_depth_geometry"]["image_size_hw"] == [240, 240]  # type: ignore[index]
 
 
 def test_qh_batch_preview_is_seeded_and_reports_real_padding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
