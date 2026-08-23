@@ -593,9 +593,10 @@ def candidate_audit_rows(
         reference_pose = np.asarray(rollout.root_pose_world, dtype=np.float64).reshape(12)
         reference_available = True
         for step in rollout_steps(reader, rollout):
-            if step_row_id is not None and step.step_row_id != int(step_row_id):
-                continue
+            emit_step = step_row_id is None or step.step_row_id == int(step_row_id)
             for local, row in enumerate(step.candidate_row_positions.tolist()):
+                if not emit_step:
+                    continue
                 if limit is not None and emitted >= max(0, int(limit)):
                     return rows
                 strategy_id = int(strategy_ids[row])
@@ -887,6 +888,40 @@ def _iter_candidate_state_groups(
         yield from _population_state_groups(chunk, extra_fields=extra_fields).items()
 
 
+def _sort_candidate_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Restore canonical public ordering after bounded state reduction."""
+
+    normalized: list[dict[str, object]] = []
+    for raw in rows:
+        row = dict(raw)
+        if "candidate_direction_count" not in row and "candidate_total_count" in row:
+            row["candidate_direction_count"] = row["candidate_total_count"]
+        normalized.append(row)
+    level_order = {"state": 0, "scene_macro": 1, "cohort_macro": 2}
+    metric_order = {"root_xy_radius": 0, "root_3d_distance": 1, "root_height": 2}
+    fields = (
+        "generation_cohort_id",
+        "scene",
+        "rollout_row_id",
+        "step_row_id",
+        "population",
+        "position",
+        "evidence",
+        "radius_deg",
+        "azimuth_bin",
+        "sin_elevation_bin",
+    )
+    return sorted(
+        normalized,
+        key=lambda row: (
+            level_order.get(str(row.get("aggregation_level", "")), 99),
+            *(str(row.get(field, "")) for field in fields[:5]),
+            metric_order.get(str(row.get("metric", "")), 99),
+            *(str(row.get(field, "")) for field in fields[5:]),
+        ),
+    )
+
+
 def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
     """Summarize directions per factual state, then scene and cohort macros."""
     azimuth_bins, elevation_bins = 12, 6
@@ -1128,11 +1163,14 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 {
                     **grouped[0],
                     "aggregation_level": level,
+                    "rollout_row_id": "all",
+                    "step_row_id": "all",
                     "scene": key[1],
                     "state_count": len(facet_rows),
                     "defined_state_count": sum(int(row.get("available", False)) for row in facet_rows),
                     "scene_count": len({str(row.get("scene", "unknown")) for row in facet_rows}),
                     "total_count": total_count,
+                    "count": sum(int(row.get("count", 0)) for row in facet_rows),
                     "candidate_direction_count": total_count,
                     "valid_count": valid_count,
                     "finite_count": valid_count,
@@ -1183,6 +1221,8 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                     {
                         **grouped[0],
                         "aggregation_level": level,
+                        "rollout_row_id": "all",
+                        "step_row_id": "all",
                         "scene": key[1],
                         "state_count": len(grouped),
                         "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
@@ -1190,18 +1230,33 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                         "total_count": sum(int(row["candidate_total_count"]) for row in grouped),
                         "finite_count": sum(int(row["candidate_finite_count"]) for row in grouped),
                         "missing_count": sum(int(row["candidate_missing_count"]) for row in grouped),
+                        "valid_count": sum(int(row.get("valid_count", 0)) for row in grouped),
+                        "candidate_direction_count": sum(
+                            int(row.get("candidate_direction_count", row.get("candidate_total_count", 0)))
+                            for row in grouped
+                        ),
                         "candidate_total_count": sum(int(row["candidate_total_count"]) for row in grouped),
                         "candidate_finite_count": sum(int(row["candidate_finite_count"]) for row in grouped),
                         "candidate_missing_count": sum(int(row["candidate_missing_count"]) for row in grouped),
                         "value": None if not values else float(np.mean(values)),
                         value_key: None if not values else float(np.mean(values)),
+                        "nearest_neighbor_available": bool(values) if metric_name == "angular" else None,
+                        "nearest_neighbor_reason": None
+                        if metric_name == "angular" and values
+                        else "undefined for the selected state population"
+                        if metric_name == "angular"
+                        else None,
                         "covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
                         "probe_covering_radius_deg": None if not covering_values else float(np.mean(covering_values)),
                         "available": bool(values or covering_values),
                         "cohort_macro_population": key[2],
                     }
                 )
-    return {"density_rows": density, "cap_rows": cap_rows, "angular_support_rows": angular_rows}
+    return {
+        "density_rows": _sort_candidate_summary_rows(density),
+        "cap_rows": _sort_candidate_summary_rows(cap_rows),
+        "angular_support_rows": _sort_candidate_summary_rows(angular_rows),
+    }
 
 
 def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -1303,6 +1358,8 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 {
                     **grouped[0],
                     "aggregation_level": level,
+                    "rollout_row_id": "all",
+                    "step_row_id": "all",
                     "scene": key[1],
                     "mean": None if not values else float(np.mean(values)),
                     "count": sum(int(row.get("count", 0)) for row in grouped),
@@ -1324,7 +1381,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "available": bool(values),
                 }
             )
-    return output
+    return _sort_candidate_summary_rows(output)
 
 
 def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -1405,6 +1462,8 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                 {
                     **grouped[0],
                     "aggregation_level": level,
+                    "rollout_row_id": "all",
+                    "step_row_id": "all",
                     "scene": key[1],
                     "mean": None if not finite else float(np.mean(finite)),
                     "available": bool(finite),
@@ -1426,7 +1485,7 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                     "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
                 }
             )
-    return result
+    return _sort_candidate_summary_rows(result)
 
 
 def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -1505,6 +1564,8 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
             base = {
                 **grouped[0],
                 "aggregation_level": level,
+                "rollout_row_id": "all",
+                "step_row_id": "all",
                 "scene": key[1],
                 "count": sum(int(row["count"]) for row in grouped),
                 "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
@@ -1561,7 +1622,7 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                     values = [float(row["mean"]) for row in grouped if row.get("mean") is not None]
                 base.update(mean=None if not values else float(np.mean(values)), available=bool(values))
             result.append(base)
-    return result
+    return _sort_candidate_summary_rows(result)
 
 
 def _group_candidate_rows_by_state(

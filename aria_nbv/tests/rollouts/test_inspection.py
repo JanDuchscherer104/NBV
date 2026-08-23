@@ -236,6 +236,19 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert sum(row["count"] for row in flow if row["source_stage"] == "root") == result.num_candidates
 
 
+def test_filtered_nonroot_audit_preserves_previous_selected_reference(tmp_path) -> None:
+    records = build_rollout_records(horizon=2, num_samples=6, seed=143)[:1]
+    result = write_rollout_zarr_store(tmp_path / "filtered-reference.zarr", records)
+    reader = RolloutZarrStoreReader(result.store_dir)
+    full = candidate_audit_rows(reader)
+    nonroot = next(row for row in full if int(row["step_index"]) == 1)
+    filtered = candidate_audit_rows(reader, step_row_id=int(nonroot["step_row_id"]))
+    same = next(row for row in filtered if row["candidate_row_id"] == nonroot["candidate_row_id"])
+    assert tuple(same[f"decision_relative_{axis}_m"] for axis in "xyz") == pytest.approx(
+        tuple(nonroot[f"decision_relative_{axis}_m"] for axis in "xyz")
+    )
+
+
 def test_decision_relative_vector_uses_previous_selected_pose_and_is_global_invariant() -> None:
     identity = np.eye(3)
     root = np.r_[identity.reshape(-1), [0.0, 0.0, 0.0]]
@@ -619,6 +632,49 @@ def test_candidate_direction_evidence_retains_zero_actor_valid_states() -> None:
     assert actor_state["candidate_total_count"] == 0
     assert actor_macro["state_count"] == 1
     assert actor_macro["defined_state_count"] == 0
+
+
+def test_bounded_candidate_reducers_are_order_invariant_across_state_blocks() -> None:
+    """Bounded replay preserves canonical rows even when factual blocks arrive reversed."""
+
+    from aria_nbv.rollouts.inspection import (
+        candidate_direction_evidence,
+        candidate_motion_support_evidence,
+        candidate_spatial_support_evidence,
+        candidate_target_view_evidence,
+    )
+
+    canonical = [
+        {
+            **row,
+            "target_distance_m": 1.0,
+            "motion_step_length_m": 0.1,
+            "motion_height_delta_m": 0.0,
+            "motion_backward_step_m": 0.0,
+            "motion_yaw_delta_deg": 1.0,
+            "free_space_margin_m": 0.2,
+            "path_min_clearance_m": 0.3,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_collision": False,
+        }
+        for row in _direction_fixture_rows()
+    ]
+    canonical[2]["actor_action"] = False
+    canonical[3]["actor_action"] = False
+    blocks: dict[tuple[object, object, object], list[dict[str, object]]] = {}
+    for row in canonical:
+        key = (row["scene"], row["rollout_row_id"], row["step_row_id"])
+        blocks.setdefault(key, []).append(row)
+    reversed_blocks = [row for block in reversed(list(blocks.values())) for row in block]
+
+    for reducer in (
+        candidate_direction_evidence,
+        candidate_spatial_support_evidence,
+        candidate_target_view_evidence,
+        candidate_motion_support_evidence,
+    ):
+        assert reducer(canonical) == reducer(reversed_blocks)
 
 
 def test_candidate_direction_evidence_reports_numeric_cap_and_nearest_neighbor_metrics() -> None:
