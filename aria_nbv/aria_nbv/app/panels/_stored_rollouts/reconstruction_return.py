@@ -74,82 +74,179 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
     if temporal.empty:
         st.info("No validated factual temporal rows are available.")
         return
-    metric_names = [
-        str(value) for value in dict.fromkeys(temporal["metric"].dropna()) if str(value) in _REWARD_TEMPORAL_METRICS
-    ]
-    if not metric_names:
+    reward_metrics = (
+        ("cumulative_target_root_gain", "Cumulative target root gain"),
+        ("selected_target_root_gain", "Selected one-step target root gain"),
+    )
+    available = {str(value) for value in temporal["metric"].dropna()}
+    visible_metrics = tuple(item for item in reward_metrics if item[0] in available)
+    if not visible_metrics:
         st.info("No validated reward or reconstruction metrics are available in the selected corpus.")
         return
-    metric = st.selectbox("Corpus temporal metric", options=metric_names, key="corpus_temporal_metric")
-    rows = temporal.loc[temporal["metric"] == metric].copy()
-    group_fields = [field for field in ("contract", "policy", "temperature", "horizon") if field in rows]
-    rows["series"] = rows[group_fields].astype(str).agg(" · ".join, axis=1) if group_fields else "corpus"
-    figure = go.Figure()
-    for series, group in rows.groupby("series", sort=True):
-        group = group.sort_values("step_index")
-        figure.add_trace(
-            go.Scatter(x=group["step_index"], y=group["q25"], mode="lines", line={"width": 0}, showlegend=False)
+    for metric, metric_label in visible_metrics:
+        rows = temporal.loc[temporal["metric"] == metric].copy()
+        # Corpus reward is expressed per selected acquisition.  Step 0 is the
+        # persisted root baseline, not an acquisition and must not be plotted.
+        rows = rows.loc[pd.to_numeric(rows["step_index"], errors="coerce") > 0].copy()
+        if rows.empty:
+            st.info(f"No post-root factual rows are available for {metric_label}.")
+            continue
+        figure = _corpus_temporal_figure(rows, metric_label=metric_label)
+        context_count = rows[_corpus_temporal_group_fields(rows)].drop_duplicates().shape[0]
+        finite = int(rows["finite_count"].sum())
+        total = int(rows["total_count"].sum())
+        stores = int(rows["store_count"].max())
+        cols = st.columns(3)
+        cols[0].metric("Finite / observed acquisitions", f"{finite:,} / {total:,}")
+        cols[1].metric("Compatible contexts", f"{context_count:,}")
+        cols[2].metric("Max stores / context", f"{stores:,}")
+        st.caption(
+            "Acquisition 1 is the first selected view; the root baseline (step 0) is omitted. "
+            "Ribbon = descriptive IQR, not a confidence interval. n is finite / observed at each depth."
         )
+        _render_plot(
+            figure,
+            _corpus_temporal_explanation(metric),
+            log_y_key=_plot_control_key("corpus-temporal", metric),
+        )
+        with st.expander(f"{metric_label} rows and CSV", expanded=False):
+            st.dataframe(rows, hide_index=True, width="stretch")
+            _download_frame("Download temporal rows CSV", f"corpus-{metric}.csv", rows)
+
+    diagnostics = temporal.loc[
+        temporal["metric"].isin(sorted(_REWARD_TEMPORAL_METRICS - {metric for metric, _ in reward_metrics}))
+    ]
+    if not diagnostics.empty:
+        with st.expander("Selection diagnostics (optional)", expanded=False):
+            st.caption("These descriptive selection metrics are kept separate from reward and reconstruction plots.")
+            st.dataframe(diagnostics, hide_index=True, width="stretch")
+            _download_frame("Download selection diagnostics CSV", "corpus-selection-diagnostics.csv", diagnostics)
+
+
+def _corpus_temporal_group_fields(rows: pd.DataFrame) -> list[str]:
+    """Return the persisted dimensions that define a comparable corpus series."""
+
+    return [
+        field
+        for field in (
+            "contract_id",
+            "contract",
+            "profile",
+            "policy",
+            "temperature",
+            "horizon",
+            "branch_factor",
+            "beam_width",
+        )
+        if field in rows
+    ]
+
+
+def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figure:
+    """Plot compatible corpus rows by one-based selected acquisition number."""
+
+    figure = go.Figure()
+    group_fields = _corpus_temporal_group_fields(rows)
+    working = rows.copy()
+    working["acquisition_number"] = pd.to_numeric(working["step_index"], errors="coerce")
+    working["series"] = working[group_fields].astype(str).agg(" · ".join, axis=1) if group_fields else "corpus"
+    palette = px.colors.qualitative.Plotly
+    for index, (series, group) in enumerate(working.groupby("series", sort=True)):
+        ordered = group.sort_values("acquisition_number")
+        color = palette[index % len(palette)]
         figure.add_trace(
             go.Scatter(
-                x=group["step_index"],
-                y=group["q75"],
+                x=ordered["acquisition_number"],
+                y=ordered["q25"],
                 mode="lines",
-                line={"width": 0},
-                fill="tonexty",
-                name=str(series),
-                opacity=0.2,
+                line={"color": color, "width": 0},
+                legendgroup=str(series),
+                showlegend=False,
+                hoverinfo="skip",
             )
         )
         figure.add_trace(
             go.Scatter(
-                x=group["step_index"],
-                y=group["median"],
+                x=ordered["acquisition_number"],
+                y=ordered["q75"],
+                mode="lines",
+                line={"color": color, "width": 0},
+                fill="tonexty",
+                fillcolor=_with_alpha(color, 0.18),
+                legendgroup=str(series),
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+        custom = ordered[["finite_count", "total_count", "store_count", "iqr_width"]].to_numpy()
+        figure.add_trace(
+            go.Scatter(
+                x=ordered["acquisition_number"],
+                y=ordered["median"],
                 mode="lines+markers",
+                line={"color": color},
                 name=str(series),
-                customdata=group[["finite_count", "total_count", "store_count"]],
-                hovertemplate="step=%{x}<br>median=%{y:.4g}<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}<br>stores=%{customdata[2]:.0f}<extra></extra>",
+                legendgroup=str(series),
+                customdata=custom,
+                hovertemplate=(
+                    "acquisition=%{x}<br>median=%{y:.4g}<br>"
+                    "n=%{customdata[0]:.0f} / %{customdata[1]:.0f}<br>"
+                    "stores=%{customdata[2]:.0f}<br>IQR width=%{customdata[3]:.4g}<extra></extra>"
+                ),
             )
         )
     figure.update_layout(
-        title=f"{metric}: corpus median and IQR by factual depth", xaxis_title="factual step_index", yaxis_title="value"
+        title=f"{metric_label}: median and interquartile range by acquisition number",
+        xaxis_title="acquisition number (1 = first selected view; root baseline omitted)",
+        yaxis_title=current_scientific_label(str(rows["metric"].iloc[0]), surface="plain"),
+        hovermode="x unified",
     )
-    _render_plot(
-        figure,
-        ScientificExplanation(
-            question="How does this reward or reconstruction metric evolve across selected compatible shards?",
-            answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
-            sections=(
-                ExplanationSection(
-                    "population",
-                    "Factual finite step rows separated by persisted contract, policy, temperature, and horizon.",
-                ),
-                ExplanationSection(
-                    "metric", "Median and interquartile range; hover shows finite/total rows and store count."
-                ),
-                ExplanationSection(
-                    "denominator masks", "Observed factual rows only; early-terminated rollouts are not zero-filled."
-                ),
-                ExplanationSection("comparability", "Only identical persisted contracts are comparable."),
-                ExplanationSection(
-                    "expected pattern", "The IQR reflects between-row spread, not a confidence interval."
-                ),
-                ExplanationSection(
-                    "failure interpretation", "Small depth counts or abrupt missingness require store-level drill-down."
-                ),
+    return figure
+
+
+def _corpus_temporal_explanation(metric: str) -> ScientificExplanation:
+    """Build the metric-specific scientific guide for corpus reward plots."""
+
+    cumulative = metric == "cumulative_target_root_gain"
+    label = "cumulative target root gain" if cumulative else "selected one-step target root gain"
+    equation = "rl.cumulative_target_root_gain" if cumulative else "rl.target_root_gain_reward"
+    symbol = "entity.target_root_gain_cumulative" if cumulative else "rl.reward_target"
+    term = "target-root-gain-reward"
+    return ScientificExplanation(
+        question=f"How does {label} evolve across the selected compatible shards?",
+        answer=(
+            "Each line summarizes the same persisted contract and control context across factual selected steps; "
+            "the center is the median and the shaded band is the between-row IQR."
+        ),
+        sections=(
+            ExplanationSection(
+                "population", "Only validated factual rows are included; incompatible contracts remain separate."
             ),
-            evidence_role="oracle/evaluation",
-            source_fields=("reporting.RolloutCorpusSummary.temporal_summary", "steps", "rollout contract"),
-            theory=TheoryReferences(
-                equation_ids=("rl.cumulative_target_root_gain",),
-                symbol_ids=("oracle.rri",),
-                term_ids=("relative-reconstruction-improvement",),
+            ExplanationSection(
+                "metric / units",
+                "The target-root gain is a dimensionless fraction normalized by the rollout-root target error.",
+            ),
+            ExplanationSection(
+                "denominator / masks",
+                "n is finite / observed at that acquisition. Early-terminated rollouts are not zero-filled.",
+            ),
+            ExplanationSection(
+                "comparison",
+                "Policy, temperature, horizon, branch, beam, profile, and contract identify each series; this is descriptive evidence, not a causal estimate.",
+            ),
+            ExplanationSection(
+                "intuition",
+                "A rising cumulative curve means persisted selected views reduced the target-root reconstruction error; a one-step curve shows the gain attributable to that acquisition alone.",
+            ),
+            ExplanationSection(
+                "uncertainty",
+                "The IQR describes dispersion among observed rows. It is not a confidence interval, and small n should be read as fragile evidence.",
             ),
         ),
+        evidence_role="oracle/evaluation",
+        source_fields=("reporting.RolloutCorpusSummary.temporal_summary", "steps", "rollout contract"),
+        theory=TheoryReferences(equation_ids=(equation,), symbol_ids=(symbol,), term_ids=(term,)),
     )
-    with st.expander("Temporal rows and CSV", expanded=False):
-        st.dataframe(rows.drop(columns="series"), hide_index=True, width="stretch")
-        _download_frame("Download temporal rows CSV", "corpus-temporal-summary.csv", rows.drop(columns="series"))
 
 
 def _render_scientific_evidence(session_handle: object) -> None:

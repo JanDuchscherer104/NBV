@@ -456,7 +456,10 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
     assert "Corpus reward and reconstruction" in [subheader.value for subheader in app.subheader]
-    assert len(app.get("plotly_chart")) >= 2
+    # A one-step fixture contains only the persisted root baseline; corpus
+    # reward plots correctly omit it, leaving the endpoint distribution plot.
+    assert len(app.get("plotly_chart")) >= 1
+    assert any("No post-root factual rows" in info.value for info in app.info)
     assert any("rows and CSV" in expander.label for expander in app.expander)
 
     app = _set_stored_rollout_workspace(app, "Admission & feasibility")
@@ -892,6 +895,48 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
     assert all(np.asarray(trace.customdata)[:, :2].tolist() == [[3.0, 4.0], [3.0, 4.0]] for trace in median_traces)
     assert sum(trace.fill == "tonexty" for trace in figure.data) == 2
     assert not any("rollout" in str(trace.name).lower() for trace in figure.data)
+
+
+def test_corpus_reward_figure_uses_one_based_acquisitions_and_exact_context() -> None:
+    """Corpus reward plots omit the root baseline and retain comparable context."""
+
+    rows = pd.DataFrame(
+        [
+            {
+                "metric": "cumulative_target_root_gain",
+                "units": "fraction",
+                "contract_id": "contract-a",
+                "contract": "contract A",
+                "profile": "rich-60",
+                "policy": "temperature_softmax",
+                "temperature": temperature,
+                "horizon": 8,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "step_index": step,
+                "store_count": 3,
+                "total_count": 4,
+                "finite_count": 3,
+                "missing_count": 1,
+                "median": 0.1 * step,
+                "q25": 0.05 * step,
+                "q75": 0.15 * step,
+                "iqr_width": 0.1 * step,
+            }
+            for temperature in (0.5,)
+            for step in (1, 2)
+        ]
+    )
+
+    figure = reconstruction_return._corpus_temporal_figure(rows, metric_label="Cumulative target root gain")
+
+    median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
+    assert len(median_traces) == 1
+    assert list(median_traces[0].x) == [1, 2]
+    assert "contract-a" in median_traces[0].name
+    assert "temperature_softmax" in median_traces[0].name
+    assert "acquisition number" in figure.layout.xaxis.title.text
+    assert "root baseline omitted" in figure.layout.xaxis.title.text
 
 
 def test_log_y_axis_control_copies_figure_and_preserves_linear_default(monkeypatch: pytest.MonkeyPatch) -> None:
