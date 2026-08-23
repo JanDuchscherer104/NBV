@@ -14,6 +14,7 @@ import pytest
 import zarr
 
 from aria_nbv.app.panels._stored_rollouts import overview_topology, qh_admission, session
+from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
@@ -36,6 +37,7 @@ def test_corpus_overview_defers_per_store_qh_rows_to_drill_down(monkeypatch: pyt
         included_stores=({"path": "/fixture.zarr", "store_id": "fixture", "profile": "pilot"},),
         excluded_stores=(),
         totals={
+            "selected_store_count": 1,
             "included_store_count": 1,
             "excluded_store_count": 0,
             "q_h_chain_count": 3,
@@ -55,14 +57,9 @@ def test_corpus_overview_defers_per_store_qh_rows_to_drill_down(monkeypatch: pyt
 
     overview_topology._render_corpus_overview(summary, selected_count=1)
 
-    assert metrics == {
-        "Included stores": 1,
-        "Excluded stores": 0,
-        "Q_H chains": "3",
-        "Q_H states": "6",
-        "Trainable candidates": "17",
-        "Storage": "1.0 KiB",
-    }
+    assert metrics["Selected stores (operational)"] == 1
+    assert metrics["Included stores (operational)"] == 1
+    assert metrics["Excluded stores (operational)"] == 0
     assert frames == []
 
     overview_topology._render_corpus_details(summary)
@@ -445,6 +442,357 @@ def test_session_open_rejects_mid_open_generation_swap(monkeypatch: pytest.Monke
     monkeypatch.setattr(session, "_cached_store_bundle_cached", swap_during_bundle)
     with pytest.raises(RuntimeError, match="changed while opening"):
         session.open_stored_rollout_session(selected)
+
+
+def test_lightweight_dispatch_does_not_materialize_candidate_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Opening the named session boundary never opens the heavyweight candidate audit."""
+
+    monkeypatch.setattr(session, "candidate_audit_rows", lambda *_a, **_k: pytest.fail("candidate audit opened"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "fixture")
+    monkeypatch.setattr(
+        session,
+        "_cached_store_bundle_cached",
+        lambda *_a, **_k: (object(), object(), {"manifest": "fixture"}),
+    )
+    opened = session.open_stored_rollout_session(Path("/fixture.zarr"))
+    assert opened.store_identity == "fixture"
+
+
+def test_manifest_read_failure_blocks_session_without_synthetic_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A manifest read failure cannot become a trusted synthetic empty payload."""
+
+    class Reader:
+        def manifest(self):
+            raise RuntimeError("manifest read failed")
+
+    monkeypatch.setattr(session, "RolloutZarrStoreReader", lambda _path: Reader())
+    with pytest.raises(RuntimeError, match="manifest read failed"):
+        session._cached_store_bundle_cached.__wrapped__("/unpromoted.zarr", store_identity="fixture")
+
+
+def test_open_session_binds_real_projections_until_next_open(tmp_path: Path) -> None:
+    """An old handle fails closed after replacement while a new handle reads the new generation."""
+
+    first = write_rollout_zarr_store(
+        tmp_path / "first.zarr", build_rollout_records(horizon=1, num_samples=6, seed=111)[:1]
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "second.zarr", build_rollout_records(horizon=1, num_samples=6, seed=112)[:2]
+    )
+    selected = tmp_path / "selected.zarr"
+    selected.symlink_to(first.store_dir, target_is_directory=True)
+    old = session.open_stored_rollout_session(selected)
+    old_steps = old.steps()
+    replacement = tmp_path / "replacement.zarr"
+    replacement.symlink_to(second.store_dir, target_is_directory=True)
+    replacement.replace(selected)
+    with pytest.raises(RuntimeError, match="store changed"):
+        old.steps()
+    new = session.open_stored_rollout_session(selected)
+    assert len(new.steps()) > len(old_steps)
+
+
+def test_open_session_rejects_mid_open_generation_swap(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Opening cannot return a reader from one generation after the selected path swaps."""
+
+    selected = tmp_path / "selected.zarr"
+    selected.mkdir()
+    identities = iter(("first", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda *_a, **_k: _swap_selected(tmp_path, selected))
+    with pytest.raises(RuntimeError, match="changed while opening"):
+        session.open_stored_rollout_session(selected)
+
+
+def _swap_selected(tmp_path: Path, selected: Path):
+    replacement = tmp_path / "replacement.zarr"
+    replacement.mkdir()
+    replacement.replace(selected)
+    return object(), object(), {}
+
+
+def test_open_session_symlink_aliases_share_canonical_identity_and_cache_owner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Symlink aliases use one canonical path and identity key."""
+
+    target = tmp_path / "target.zarr"
+    target.mkdir()
+    aliases = [tmp_path / "a.zarr", tmp_path / "b.zarr"]
+    for alias in aliases:
+        alias.symlink_to(target, target_is_directory=True)
+    calls = []
+    monkeypatch.setattr(
+        session, "_cached_store_bundle_cached", lambda path, **kw: calls.append((path, kw)) or (object(), object(), {})
+    )
+    first = session.open_stored_rollout_session(aliases[0])
+    second = session.open_stored_rollout_session(aliases[1])
+    assert first.canonical_path == second.canonical_path == target.resolve()
+    assert first.store_identity == second.store_identity
+    assert all(path == target.resolve().as_posix() for path, _ in calls)
+
+
+def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(tmp_path: Path) -> None:
+    """Named projections receive a replacement-sensitive identity key."""
+
+    store = tmp_path / "replacement.zarr"
+    store.mkdir()
+    manifest = store / "manifest.json"
+    manifest.write_text('{"generation": "first"}', encoding="utf-8")
+    first = session._store_projection_identity(store)
+    manifest.write_text('{"generation": "second"}', encoding="utf-8")
+    second = session._store_projection_identity(store)
+    assert first != second
+
+
+def test_store_cache_identity_does_not_enumerate_payload_chunks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Identity inspection remains marker-only and never walks payload chunks."""
+
+    store = tmp_path / "marker.zarr"
+    store.mkdir()
+    (store / "manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(Path, "rglob", lambda *_a, **_k: pytest.fail("payload chunks enumerated"))
+    assert session._store_projection_identity(store)
+
+
+def test_store_cache_identity_ignores_payload_mutation_until_replacement(tmp_path: Path) -> None:
+    """Payload edits alone do not change the lightweight cache identity."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "mutation.zarr", build_rollout_records(horizon=1, num_samples=6, seed=901)[:1]
+    )
+    first = session._store_projection_identity(result.store_dir)
+    root = zarr.open_group(result.store_dir, mode="a")
+    root["candidates/candidate_row_id"][0] = int(root["candidates/candidate_row_id"][0]) + 1
+    assert session._store_projection_identity(result.store_dir) == first
+
+
+def test_stored_rollout_lightweight_header_reads_manifest_validation_promotion_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Header demand composes manifest, validation, and promotion once."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "header.zarr", build_rollout_records(horizon=1, num_samples=6, seed=103)[:1]
+    )
+    calls = {"manifest": 0, "validation": 0, "promotion": 0}
+    original_manifest = session.build_manifest_facts
+    original_schema = session.build_schema_validation
+    original_promotion = session.build_promotion_evidence
+
+    monkeypatch.setattr(
+        session,
+        "build_manifest_facts",
+        lambda *args, **kwargs: (
+            calls.__setitem__("manifest", calls["manifest"] + 1) or original_manifest(*args, **kwargs)
+        ),
+    )
+    monkeypatch.setattr(
+        session,
+        "build_schema_validation",
+        lambda *args, **kwargs: (
+            calls.__setitem__("validation", calls["validation"] + 1) or original_schema(*args, **kwargs)
+        ),
+    )
+    monkeypatch.setattr(
+        session,
+        "build_promotion_evidence",
+        lambda *args, **kwargs: (
+            calls.__setitem__("promotion", calls["promotion"] + 1) or original_promotion(*args, **kwargs)
+        ),
+    )
+    _, validation, manifest = session._cached_store_bundle_cached.__wrapped__(
+        result.store_dir.as_posix(), store_identity="fixture"
+    )
+    assert validation.ok
+    assert manifest
+    assert calls["manifest"] == 1
+
+
+def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
+    """The current session retains explicit cache owners and no generic dispatcher."""
+
+    source = Path(session.__file__).read_text(encoding="utf-8")
+    assert "def _cached_projection" not in source
+    assert "def candidate_group(" not in source
+    assert "@st.cache_resource(show_spinner=False)" in source
+    assert "Evaluating failure predicates" in source
+
+
+def test_stored_rollout_session_candidate_population_uses_captured_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Candidate population uses the opened handle identity rather than recomputing a path key."""
+
+    calls = []
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_population_cached",
+        lambda path, identity, sample_size=500: calls.append((path, identity, sample_size)) or {"sample": []},
+    )
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+    monkeypatch.setattr(handle, "_assert_current_identity", lambda: "first")
+    assert handle.candidate_population(17) == {"sample": []}
+    assert calls == [("/selected.zarr", "first", 17)]
+
+
+def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cache clearing visits every current owner exactly once."""
+
+    names = (
+        "_cached_inventory",
+        "_cached_store_bundle_cached",
+        "_cached_invariants",
+        "_cached_header",
+        "_cached_cohorts",
+        "_cached_paired",
+        "_cached_steps",
+        "_cached_reconstruction_metrics",
+        "_cached_reconstruction_endpoints",
+        "_cached_discounted_returns",
+        "_cached_headroom",
+        "_cached_candidate_flow",
+        "_cached_ranks",
+        "_cached_temporal",
+        "_cached_targets",
+        "_cached_masks",
+        "_cached_candidates",
+        "_cached_q_h",
+        "_cached_tree",
+        "_cached_root_geometry",
+        "_cached_depth_summary",
+        "_cached_proposal_geometry",
+        "_cached_trajectory_geometry",
+        "_cached_topology_cached",
+        "_cached_failures_cached",
+        "_cached_evidence_bundle_cached",
+        "_cached_corpus_summary",
+    )
+    cleared = []
+    for name in names:
+        monkeypatch.setattr(
+            session, name, type("Owner", (), {"clear": lambda _self, name=name: cleared.append(name)})()
+        )
+    session._clear_stored_rollout_caches()
+    assert set(cleared) == set(names)
+    assert len(cleared) == len(set(cleared))
+
+
+def test_stored_rollout_session_discounted_returns_reads_generated_store(tmp_path: Path) -> None:
+    """Discounted-return projection reads the generated store through the session."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "returns.zarr", build_rollout_records(horizon=2, num_samples=6, seed=1201)[:1]
+    )
+    opened = session.open_stored_rollout_session(result.store_dir)
+    returns = opened.discounted_returns()
+    assert returns["available"] is True
+    assert returns["rows"]
+
+
+def test_stored_rollout_session_failure_projection_stays_bound_to_old_handle(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Failure projection carries the captured identity into its cache owner."""
+
+    calls = []
+    monkeypatch.setattr(
+        session, "_cached_failures", lambda *args, **kwargs: calls.append(kwargs["store_identity"]) or []
+    )
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+    monkeypatch.setattr(handle, "_assert_current_identity", lambda: "first")
+    assert handle.failures(1, 0.5, 1.0) == []
+    assert calls == ["first"]
+
+
+def test_stored_rollout_session_has_no_legacy_candidate_group_owner() -> None:
+    """Candidate grouping remains owned by the candidate population projection."""
+
+    source = Path(session.__file__).read_text(encoding="utf-8")
+    assert "def candidate_group(" not in source
+    assert "def _cached_candidate_group" not in source
+
+
+def test_stored_rollout_session_inventory_row_is_presentation_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inventory metadata does not influence the session identity or core reader."""
+
+    store = tmp_path / "inventory.zarr"
+    store.mkdir()
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: "identity")
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda *_a, **_k: ("reader", object(), {}))
+    first = session.open_stored_rollout_session(store, inventory_row={"count": 1})
+    second = session.open_stored_rollout_session(store, inventory_row={"count": 99})
+    assert first.store_identity == second.store_identity == "identity"
+    assert first.reader == second.reader == "reader"
+
+
+def test_stored_rollout_session_next_open_observes_replacement(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A later open captures the replacement identity."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    identities = iter(("first", "first", "second", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    monkeypatch.setattr(
+        session, "_cached_store_bundle_cached", lambda _path, **kwargs: (kwargs["store_identity"], object(), {})
+    )
+    first = session.open_stored_rollout_session(store)
+    second = session.open_stored_rollout_session(store)
+    assert first.store_identity == "first"
+    assert second.store_identity == "second"
+
+
+def test_stored_rollout_session_open_computes_identity_once_and_binds_core_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Session opening binds one identity to one canonical core cache key."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    calls = []
+    monkeypatch.setattr(session, "_store_projection_identity", lambda path: calls.append(path) or "identity")
+    core = object()
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda path, **kwargs: (core, object(), {}))
+    opened = session.open_stored_rollout_session(store)
+    assert calls == [store.resolve().as_posix(), store.resolve().as_posix()]
+    assert opened.reader is core
+
+
+def test_stored_rollout_session_open_does_not_materialize_heavy_projection_owners(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Opening a session does not invoke candidate, Q_H, or statistics owners."""
+
+    store = tmp_path / "selected.zarr"
+    store.mkdir()
+    heavy = []
+    for name in ("candidate_audit_rows", "candidate_population_evidence", "q_h_evidence_rows"):
+        monkeypatch.setattr(session, name, lambda *args, name=name, **kwargs: heavy.append(name))
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda *_a, **_k: (object(), object(), {}))
+    session.open_stored_rollout_session(store)
+    assert heavy == []
+
+
+def test_stored_rollout_session_rejects_mid_handle_swap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Named session operations fail closed when the selected identity changes."""
+
+    identities = iter(("first", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+    with pytest.raises(RuntimeError, match="store changed"):
+        handle.header()
+
+
+def test_stored_rollout_session_topology_preserves_structured_cache_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Topology retains structured VIN directories, PathConfig, source row, and identity."""
+
+    calls = []
+    monkeypatch.setattr(session, "_cached_topology", lambda *args, **kwargs: calls.append((args, kwargs)) or object())
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "identity", object(), object(), {}, None)
+    monkeypatch.setattr(handle, "_assert_current_identity", lambda: "identity")
+    paths = PathConfig()
+    handle.topology(("/vin-a", "/vin-b"), paths, 7)
+    assert calls and calls[0][0][1:4] == (("/vin-a", "/vin-b"), paths, 7)
 
 
 def _owner_stub(result: object) -> Callable[..., object]:

@@ -209,9 +209,6 @@ class StoredRolloutSession:
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
         return _cached_candidate_population_cached(self._projection_path(), self.store_identity, sample_size)
 
-    def candidate_group(self, group_by: str) -> Any:
-        return _cached_candidate_group(self._projection_path(), group_by, store_identity=self.store_identity)
-
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
 
@@ -506,17 +503,6 @@ def _cached_candidates(
 
 
 @_identity_cache
-def _cached_candidate_group(store_path: str, group_by: str) -> Any:
-    evidence = _cached_candidate_population_cached(store_path, _store_projection_identity(store_path))
-    return evidence["groups"][group_by]
-
-
-@_identity_cache
-def _cached_candidate_population(store_path: str) -> dict[str, object]:
-    return _cached_candidate_population_cached(store_path, _store_projection_identity(store_path))
-
-
-@_identity_cache
 def _cached_q_h(store_path: str, deep_count: bool = False) -> Any:
     reader, validation, _ = _cached_store_bundle(store_path)
     return q_h_evidence_rows(reader, deep_count=deep_count, validation_result=validation)
@@ -703,12 +689,12 @@ def _clear_stored_rollout_caches() -> None:
         _cached_targets,
         _cached_masks,
         _cached_candidates,
-        _cached_candidate_group,
-        _cached_candidate_population,
         _cached_q_h,
         _cached_tree,
         _cached_root_geometry,
         _cached_depth_summary,
+        _cached_proposal_geometry,
+        _cached_trajectory_geometry,
     ):
         projection.clear()
     _cached_topology_cached.clear()
