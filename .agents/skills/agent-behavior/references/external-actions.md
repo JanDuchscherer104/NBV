@@ -47,15 +47,17 @@ Publication lifecycle:
 - An active external orchestrator owns lifecycle coordination; ARIA skills own
   domain implementation and proof.
 
-Proposal review or resolution also opens this reference. This route is not a simulation.
-Human review selects exactly one disposition: `accept`, `reject`, `narrow`, or
-`defer`; explicit current-user authority means direction selecting that
-disposition in the current task; this is a human choice. Any already-reviewed
-policy is evidence only; it cannot substitute for that choice. An agent cannot self-accept
-or select any disposition. Without current authority, record no disposition:
-route to a human reviewer and leave the proposal active and unresolved.
-Installation and its proof precede resolution.
-After human review selects `defer`, defer and keep the record active.
+Proposal review or resolution also opens this reference. Use the exact lifecycle
+contract in `.agents/skills/agents-db/references/modes.md#proposal-review`;
+this route is not a simulation. Human review selects exactly one disposition:
+`accept`, `reject`, `narrow`, or `defer`; explicit current-user authority means
+direction selecting that disposition in the current task; this is a human
+choice. Any already-reviewed policy is evidence only; it cannot substitute for
+that choice. An agent cannot self-accept or select any disposition. Without
+current authority, record no disposition: route to a human reviewer and leave
+the proposal active and unresolved. For `accept` or `narrow`, install and prove
+the owner edit before resolution; `reject` resolves with a reason while policy
+stays unchanged; `defer` stays active.
 
 ## Completion
 

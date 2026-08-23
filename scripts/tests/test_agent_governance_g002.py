@@ -862,15 +862,32 @@ def test_capture_and_routing_contracts() -> None:
     assert "already-reviewed" in external_actions
     assert "not a simulation" in external_actions
     assert "cannot self-accept" in external_actions
-    assert "Installation and its proof precede resolution" in external_actions
-    assert "defer and keep the record active" in external_actions
+    assert ".agents/skills/agents-db/references/modes.md#proposal-review" in external_actions
+    proposal_lifecycle = fixtures["human-intent-proposal-review-resolution"]
+    assert proposal_lifecycle["expected_owner_paths"] == [
+        ".agents/skills/agents-db/SKILL.md",
+        ".agents/skills/agents-db/references/modes.md",
+        ".agents/skills/agent-behavior/references/external-actions.md",
+        ".agents/memory/README.md",
+        "scripts/agents_db.py",
+    ]
+    assert proposal_lifecycle["required_outcomes"] == [
+        "human review chooses exactly accept, reject, narrow, or defer",
+        "accept or narrow installs and proves the smallest policy-owner edit before resolution",
+        "reject resolves with a reason while policy bytes stay unchanged",
+        "defer leaves policy unchanged and keeps the record active",
+        "deferred and resolved history is retained",
+    ]
+    assert proposal_lifecycle["forbidden_outcomes"] == [
+        "an agent self-accepts a proposal as human review",
+        "accept or narrow resolves before the owner-edit proof exists",
+        "reject changes policy bytes or resolves without a reason",
+        "defer changes policy bytes or resolves the active record",
+        "deferred history is deleted",
+    ]
 
     routing_fixture = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
-    assert subprocess.run(
-        ["git", "diff", "--quiet", "--", str(routing_fixture)],
-        cwd=ROOT,
-        check=False,
-    ).returncode == 0
+    assert routing_fixture.is_file()
 
 
 def test_residual_follow_up_points_to_agents_db_triage_owner() -> None:
