@@ -28,7 +28,7 @@ from ...rerun_launch import (
 )
 from ..common import _report_exception
 from .qh_admission import _render_q_h_evidence
-from .shared import ScientificExplanation
+from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
@@ -483,12 +483,21 @@ def _render_inspect_export_rerun(
                     fig,
                     ScientificExplanation(
                         question="Is the persisted selected-action depth artifact finite, aligned, and geometrically plausible?",
-                        population="One selected rollout step, downsampled only for display.",
-                        metric="Mesh depth in metres; invalid pixels are masked.",
-                        denominator_masks="Pixels marked valid and finite in selected_depth; full row statistics remain in the table.",
-                        comparability="Compare only cameras with compatible calibration and depth representation.",
-                        expected_pattern="Finite depth support aligns with the selected candidate and target evaluation crop.",
-                        failure_interpretation="Missing or corrupt depth disables this view only; it does not erase factual rollout rows.",
+                        answer="This view checks one persisted selected-action depth artifact; display downsampling does not change the underlying row statistics.",
+                        sections=(
+                            ExplanationSection(
+                                "Metric and units",
+                                "Mesh depth is measured in metres; invalid pixels are masked and finite support is retained.",
+                            ),
+                            ExplanationSection(
+                                "Denominator and comparison",
+                                "The denominator is the finite valid-mask support in selected_depth. Compare only compatible camera calibration and depth representation.",
+                            ),
+                            ExplanationSection(
+                                "Expected pattern and warning",
+                                "Finite depth should align with the selected candidate and target crop. Missing or corrupt depth disables this view without erasing factual rollout rows.",
+                            ),
+                        ),
                         evidence_role="oracle/evaluation",
                         source_fields=(
                             "selected_depth/depth_m",

@@ -11,6 +11,14 @@ import streamlit as st
 
 from ...data_handling.vin_store.diagnostics import VinOfflineDatasetStats
 from ...utils.reporting import _pretty_label
+from ..scientific_labels import (
+    LabelSurface,
+    TheoryResolutionError,
+    format_identifier,
+    format_scientific_label,
+    scientific_label,
+)
+from ..state import get_label_display_mode
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -45,6 +53,29 @@ def _plot_with_y_axis_control(fig: go.Figure, *, key: str) -> tuple[go.Figure, b
     return rendered, logarithmic
 
 
+def current_scientific_label(identifier: str, *, surface: LabelSurface = "plain") -> str:
+    """Format a canonical scientific label using the app-wide display mode."""
+
+    label = scientific_label(identifier)
+    try:
+        return format_scientific_label(label, mode=get_label_display_mode(), surface=surface)
+    except TheoryResolutionError as exc:
+        st.warning(f"Canonical notation is unavailable for {identifier!r}: {exc}")
+        units = f" ({label.units})" if label.units else ""
+        return f"{label.text or format_identifier(label.identifier)}{units}"
+
+
+def render_scientific_notation(*identifiers: str) -> None:
+    """Render canonical notation beside a chart without changing Plotly axes."""
+
+    if get_label_display_mode() == "Text" or not identifiers:
+        return
+    st.caption(
+        "**Notation:** "
+        + " · ".join(current_scientific_label(identifier, surface="markdown") for identifier in identifiers)
+    )
+
+
 def _report_exception(exc: Exception, *, context: str) -> None:
     """Render a full traceback in the UI and emit it to stdout."""
     trace = traceback.format_exc()
@@ -72,4 +103,6 @@ __all__ = [
     "_pretty_label",
     "_report_exception",
     "_strip_ansi",
+    "current_scientific_label",
+    "render_scientific_notation",
 ]

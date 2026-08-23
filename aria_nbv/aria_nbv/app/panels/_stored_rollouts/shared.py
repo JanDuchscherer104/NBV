@@ -35,38 +35,21 @@ class ExplanationSection:
 
 @dataclass(frozen=True, slots=True)
 class ScientificExplanation:
-    """Complete interpretation contract shown beside one primary visualization."""
+    """Narrative interpretation contract shown beside one primary visualization."""
 
     question: str
-    population: str = ""
-    metric: str = ""
-    denominator_masks: str = ""
-    comparability: str = ""
-    expected_pattern: str = ""
-    failure_interpretation: str = ""
-    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"] = "provenance"
-    source_fields: tuple[str, ...] = ()
-    answer: str = ""
-    sections: tuple[ExplanationSection, ...] = ()
+    answer: str
+    sections: tuple[ExplanationSection, ...]
+    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
+    source_fields: tuple[str, ...]
     theory: TheoryReferences | None = None
     external_references: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
-        required = (
-            self.question,
-            self.population,
-            self.metric,
-            self.denominator_masks,
-            self.comparability,
-            self.expected_pattern,
-            self.failure_interpretation,
-        )
-        if self.answer and not self.sections:
-            raise ValueError("Narrative explanations require at least one section.")
-        if any(not value.strip() for value in required if value) and not self.answer:
-            raise ValueError("Scientific explanations require every interpretation field and at least one source.")
-        if not self.source_fields and not self.answer:
-            raise ValueError("Scientific explanations require at least one source.")
+        if not self.question.strip() or not self.answer.strip() or not self.source_fields:
+            raise ValueError("Scientific explanations require a question, answer, and source fields.")
+        if not self.sections or any(not section.title.strip() or not section.body.strip() for section in self.sections):
+            raise ValueError("Scientific explanations require ordered nonempty narrative sections.")
 
 
 def render_stale_store_boundary(
@@ -103,16 +86,7 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
             explanation_item("Answer", explanation.answer)
             for section in explanation.sections:
                 explanation_item(section.title, section.body)
-        for label, value in (
-            ("Question", explanation.question),
-            ("Population / grain", explanation.population),
-            ("Metric / units", explanation.metric),
-            ("Denominator / masks", explanation.denominator_masks),
-            ("Valid comparison conditions", explanation.comparability),
-            ("Expected pattern", explanation.expected_pattern),
-            ("Warnings / failure modes", explanation.failure_interpretation),
-        ):
-            explanation_item(label, value)
+        explanation_item("Question", explanation.question)
         if log_y_key is not None:
             explanation_item(
                 "Axis scale",

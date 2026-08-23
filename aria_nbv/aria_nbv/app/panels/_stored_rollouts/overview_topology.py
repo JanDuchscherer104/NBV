@@ -16,7 +16,7 @@ from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
 from .session import _clear_stored_rollout_caches
-from .shared import _ROLE_COLORS, ScientificExplanation
+from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
@@ -145,12 +145,30 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
                 fig,
                 ScientificExplanation(
                     question="How are factual rollout endpoints distributed across the selected compatible shards?",
-                    population="One store-qualified factual terminal endpoint, separated by persisted contract, policy, and horizon.",
-                    metric=f"{metric}; units follow the persisted endpoint metric contract.",
-                    denominator_masks="Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
-                    comparability="Compare only within the same persisted contract, policy, and horizon; store identity remains visible.",
-                    expected_pattern="Endpoint distributions remain supported across shards rather than being driven by one store.",
-                    failure_interpretation="Separated or heavy-tailed distributions indicate coverage, profile, or rollout-quality issues for drill-down.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection(
+                            "population",
+                            "One store-qualified factual terminal endpoint, separated by persisted contract, policy, and horizon.",
+                        ),
+                        ExplanationSection("metric", f"{metric}; units follow the persisted endpoint metric contract."),
+                        ExplanationSection(
+                            "denominator masks",
+                            "Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
+                        ),
+                        ExplanationSection(
+                            "comparability",
+                            "Compare only within the same persisted contract, policy, and horizon; store identity remains visible.",
+                        ),
+                        ExplanationSection(
+                            "expected pattern",
+                            "Endpoint distributions remain supported across shards rather than being driven by one store.",
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Separated or heavy-tailed distributions indicate coverage, profile, or rollout-quality issues for drill-down.",
+                        ),
+                    ),
                     evidence_role="oracle/evaluation",
                     source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
                 ),
@@ -182,12 +200,29 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             figure,
             ScientificExplanation(
                 question="Which observed targets are actor-admissible and which also receive an unambiguous GT label?",
-                population="One persisted target row across validated selected stores.",
-                metric="Additive target count; categories preserve actor validity, GT-label validity, and match status.",
-                denominator_masks="All target rows remain visible, including ambiguous, unmatched, invalid, and below-threshold outcomes.",
-                comparability="Compare only when target-selection and GT-matching contracts agree.",
-                expected_pattern="Exactly one same-class oriented-IoU match strictly above 0.20 is required for privileged label admission.",
-                failure_interpretation="Ambiguous or unmatched outcomes are coverage/debugging signals, not low reward examples.",
+                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                sections=(
+                    ExplanationSection("population", "One persisted target row across validated selected stores."),
+                    ExplanationSection(
+                        "metric",
+                        "Additive target count; categories preserve actor validity, GT-label validity, and match status.",
+                    ),
+                    ExplanationSection(
+                        "denominator masks",
+                        "All target rows remain visible, including ambiguous, unmatched, invalid, and below-threshold outcomes.",
+                    ),
+                    ExplanationSection(
+                        "comparability", "Compare only when target-selection and GT-matching contracts agree."
+                    ),
+                    ExplanationSection(
+                        "expected pattern",
+                        "Exactly one same-class oriented-IoU match strictly above 0.20 is required for privileged label admission.",
+                    ),
+                    ExplanationSection(
+                        "failure interpretation",
+                        "Ambiguous or unmatched outcomes are coverage/debugging signals, not low reward examples.",
+                    ),
+                ),
                 evidence_role="oracle/evaluation",
                 source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets", "GT match audit"),
             ),
@@ -210,7 +245,9 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
         clearance_finite = pd.to_numeric(feasibility.get("clearance_finite_count"), errors="coerce").sum()
         clearance_denominator = pd.to_numeric(feasibility.get("clearance_denominator"), errors="coerce").sum()
         metrics[0].metric("Candidates", _format_count(candidates))
-        metrics[1].metric("Collision rate", _format_fraction(collisions / collision_evaluated if collision_evaluated else None))
+        metrics[1].metric(
+            "Collision rate", _format_fraction(collisions / collision_evaluated if collision_evaluated else None)
+        )
         metrics[2].metric(
             "Clearance coverage",
             _format_fraction(clearance_finite / clearance_denominator if clearance_denominator else None),
@@ -227,12 +264,32 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             figure,
             ScientificExplanation(
                 question="Are candidate collision and clearance checks sufficiently observed across generation cohorts?",
-                population="Additive candidate feasibility denominators grouped by exact generation cohort.",
-                metric="Collision rate and clearance coverage are dimensionless fractions recomputed from additive counts.",
-                denominator_masks="Only finite persisted collision and clearance evidence enters each corresponding denominator.",
-                comparability="Cohorts remain separate; do not interpret missing clearance as a successful clearance.",
-                expected_pattern="High clearance coverage and low collision rate support usable candidate geometry.",
-                failure_interpretation="Low coverage or high collision rate points to generator, rendering, or validity issues.",
+                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                sections=(
+                    ExplanationSection(
+                        "population", "Additive candidate feasibility denominators grouped by exact generation cohort."
+                    ),
+                    ExplanationSection(
+                        "metric",
+                        "Collision rate and clearance coverage are dimensionless fractions recomputed from additive counts.",
+                    ),
+                    ExplanationSection(
+                        "denominator masks",
+                        "Only finite persisted collision and clearance evidence enters each corresponding denominator.",
+                    ),
+                    ExplanationSection(
+                        "comparability",
+                        "Cohorts remain separate; do not interpret missing clearance as a successful clearance.",
+                    ),
+                    ExplanationSection(
+                        "expected pattern",
+                        "High clearance coverage and low collision rate support usable candidate geometry.",
+                    ),
+                    ExplanationSection(
+                        "failure interpretation",
+                        "Low coverage or high collision rate points to generator, rendering, or validity issues.",
+                    ),
+                ),
                 evidence_role="actor-visible",
                 source_fields=("reporting.RolloutCorpusSummary.feasibility", "candidate_collision_support"),
             ),
@@ -256,12 +313,31 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
         px.bar(summary.failure_counts, x="kind", y="count", color="severity", title="Failures across included stores"),
         ScientificExplanation(
             question="Which validation and data-quality failure classes dominate the selected corpus?",
-            population="Additive failure findings from validated included stores, grouped by exact kind and severity.",
-            metric="Finding count; counts prioritize debugging and are not independent scientific samples.",
-            denominator_masks="Only findings emitted by included validated stores; excluded-store reasons remain in Overview.",
-            comparability="Compare counts only for the same selected corpus and failure rules.",
-            expected_pattern="Hard contract failures are absent or sparse and every count is traceable to a store.",
-            failure_interpretation="Large counts identify debugging priorities, not policy-performance effects.",
+            answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+            sections=(
+                ExplanationSection(
+                    "population",
+                    "Additive failure findings from validated included stores, grouped by exact kind and severity.",
+                ),
+                ExplanationSection(
+                    "metric", "Finding count; counts prioritize debugging and are not independent scientific samples."
+                ),
+                ExplanationSection(
+                    "denominator masks",
+                    "Only findings emitted by included validated stores; excluded-store reasons remain in Overview.",
+                ),
+                ExplanationSection(
+                    "comparability", "Compare counts only for the same selected corpus and failure rules."
+                ),
+                ExplanationSection(
+                    "expected pattern",
+                    "Hard contract failures are absent or sparse and every count is traceable to a store.",
+                ),
+                ExplanationSection(
+                    "failure interpretation",
+                    "Large counts identify debugging priorities, not policy-performance effects.",
+                ),
+            ),
             evidence_role="provenance",
             source_fields=("reporting.RolloutCorpusSummary.failure_counts", "inspection.suspicious_rollout_rows"),
         ),
@@ -343,12 +419,31 @@ def _render_trust_and_topology(
                 fig,
                 ScientificExplanation(
                     question="Which persisted artifacts are embedded, resolved, inferred, or missing?",
-                    population="Aggregate artifact nodes and typed edges; source rows are collapsed by default.",
-                    metric="Edge width is relationship count, not bytes or scientific effect size.",
-                    denominator_masks="All recorded topology links for the selected rollout store and discovered VIN stores.",
-                    comparability="Compare resolution classes only; node width does not imply data quality.",
-                    expected_pattern="Manifest hashes resolve uniquely and required actor/oracle modalities have one owner.",
-                    failure_interpretation="Missing or ambiguous links indicate incomplete local provenance, not invalid scientific values by themselves.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection(
+                            "population",
+                            "Aggregate artifact nodes and typed edges; source rows are collapsed by default.",
+                        ),
+                        ExplanationSection(
+                            "metric", "Edge width is relationship count, not bytes or scientific effect size."
+                        ),
+                        ExplanationSection(
+                            "denominator masks",
+                            "All recorded topology links for the selected rollout store and discovered VIN stores.",
+                        ),
+                        ExplanationSection(
+                            "comparability", "Compare resolution classes only; node width does not imply data quality."
+                        ),
+                        ExplanationSection(
+                            "expected pattern",
+                            "Manifest hashes resolve uniquely and required actor/oracle modalities have one owner.",
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Missing or ambiguous links indicate incomplete local provenance, not invalid scientific values by themselves.",
+                        ),
+                    ),
                     evidence_role="provenance",
                     source_fields=("rollout manifest source lineage", "VIN manifest", "PathConfig", "mesh paths"),
                 ),

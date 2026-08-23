@@ -10,6 +10,8 @@ import yaml
 
 from ..configs import PathConfig
 
+_GITHUB_SOURCE_ROOT = "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main"
+
 LabelDisplayMode = Literal["Symbols", "Text", "Both"]
 LABEL_DISPLAY_MODES: tuple[LabelDisplayMode, ...] = ("Symbols", "Text", "Both")
 LabelSurface = Literal["markdown", "plain"]
@@ -38,30 +40,30 @@ SCIENTIFIC_LABELS: dict[str, ScientificLabel] = {
         "cumulative_target_rri", "Cumulative target RRI", "entity.rri_e", "fraction"
     ),
     "selected_target_root_gain": ScientificLabel(
-        "selected_target_root_gain", "Selected one-step target root gain", "entity.target_reward", "fraction"
+        "selected_target_root_gain", "Selected one-step target root gain", "rl.reward_target", "fraction"
     ),
     "target_root_gain": ScientificLabel(
-        "target_root_gain", "One-step target root gain", "entity.target_reward", "fraction"
+        "target_root_gain", "One-step target root gain", "rl.reward_target", "fraction"
     ),
     "cumulative_target_root_gain": ScientificLabel(
-        "cumulative_target_root_gain", "Cumulative target root gain", "rl.observed_cumulative_root_gain", "fraction"
+        "cumulative_target_root_gain", "Cumulative target root gain", None, "fraction"
     ),
     "endpoint_gain": ScientificLabel("endpoint_gain", "Endpoint gain", "entity.endpoint_gain", "fraction"),
     "log_gain": ScientificLabel("log_gain", "Log endpoint gain", "entity.log_gain"),
     "q_h": ScientificLabel("q_h", "Finite-horizon action value", "rl.qh"),
     "qh": ScientificLabel("qh", "Finite-horizon action value", "rl.qh"),
-    "return_h": ScientificLabel("return_h", "Finite-horizon return", "entity.return_h"),
+    "return_h": ScientificLabel("return_h", "Finite-horizon return", "rl.return_h"),
     "discount_gamma": ScientificLabel("discount_gamma", "Discount factor", "rl.gamma"),
     "horizon": ScientificLabel("horizon", "Rollout horizon", "rl.H", "steps"),
     "candidate_table": ScientificLabel("candidate_table", "Candidate set", "rl.candidate_table"),
     "validity_mask": ScientificLabel("validity_mask", "Candidate validity mask", "rl.validity_mask"),
-    "target_error": ScientificLabel("target_error", "Target error", "entity.target_error"),
-    "target_error_next": ScientificLabel("target_error_next", "Next target error", "entity.target_error_next"),
-    "target_error_0": ScientificLabel("target_error_0", "Root target error", "entity.target_error_0"),
-    "point_to_mesh_error": ScientificLabel("point_to_mesh_error", "Point-to-mesh error", "oracle.dist_pm"),
-    "mesh_to_point_error": ScientificLabel("mesh_to_point_error", "Mesh-to-point error", "oracle.dist_mp"),
-    "pm_acc_after": ScientificLabel("pm_acc_after", "Point-to-mesh error", "oracle.dist_pm"),
-    "pm_comp_after": ScientificLabel("pm_comp_after", "Mesh-to-point error", "oracle.dist_mp"),
+    "target_error": ScientificLabel("target_error", "Target error"),
+    "target_error_next": ScientificLabel("target_error_next", "Next target error"),
+    "target_error_0": ScientificLabel("target_error_0", "Root target error"),
+    "point_to_mesh_error": ScientificLabel("point_to_mesh_error", "Point-to-mesh error"),
+    "mesh_to_point_error": ScientificLabel("mesh_to_point_error", "Mesh-to-point error"),
+    "pm_acc_after": ScientificLabel("pm_acc_after", "Point-to-mesh error"),
+    "pm_comp_after": ScientificLabel("pm_comp_after", "Mesh-to-point error"),
 }
 
 
@@ -118,18 +120,12 @@ def resolve_theory(references: TheoryReferences, *, root: Path | None = None) ->
         raise TheoryResolutionError(f"canonical theory registry unavailable: {exc}") from exc
     equations = notation.get("equations", {})
     symbols = notation.get("symbols", {})
-    # Some generated identifiers are equation-owned although older plot
-    # explanations requested them in a symbol slot.
-    all_notation = {**symbols, **equations}
     term_map = {str(row.get("id")): row for row in terms if isinstance(row, dict)}
     return ResolvedTheory(
         equations=tuple(
             _notation_row(equations, identifier, "equation", root) for identifier in references.equation_ids
         ),
-        symbols=tuple(
-            _notation_row(symbols, identifier, "symbol", root, fallback=all_notation)
-            for identifier in references.symbol_ids
-        ),
+        symbols=tuple(_notation_row(symbols, identifier, "symbol", root) for identifier in references.symbol_ids),
         terms=tuple(_term_row(term_map, identifier, root) for identifier in references.term_ids),
     )
 
@@ -208,21 +204,9 @@ def _notation_row(
     identifier: str,
     kind: Literal["equation", "symbol"],
     root: Path,
-    *,
-    fallback: dict[str, object] | None = None,
 ) -> ResolvedNotation:
     del root
-    aliases = {
-        "rl.target_rri_reward": "rl.target_root_gain_reward",
-        "rl.observed_cumulative_root_gain": "rl.cumulative_target_root_gain",
-        "entity.target_error_next": "entity.target_error",
-        "entity.target_error_0": "entity.target_error",
-        "rl.epsilon": "rl.gamma",
-    }
-    canonical_id = aliases.get(identifier, identifier)
-    row = registry.get(canonical_id)
-    if row is None and fallback is not None:
-        row = fallback.get(canonical_id)
+    row = registry.get(identifier)
     if not isinstance(row, dict) or not row.get("tex"):
         raise TheoryResolutionError(f"unknown canonical {kind}: {identifier}")
     return ResolvedNotation(
@@ -231,8 +215,20 @@ def _notation_row(
         tex=str(row["tex"]),
         typst=str(row.get("typst", "")),
         description=row.get("description"),
-        source_url=f"https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/notation.yml#{identifier}",
+        source_url=_notation_source_url(identifier, str(row.get("typst", "")), kind=kind),
     )
+
+
+def _notation_source_url(identifier: str, typst: str, *, kind: Literal["equation", "symbol"]) -> str:
+    """Return a browser-valid link to the canonical Typst owner."""
+
+    prefix = "#eqs." if kind == "equation" else "#symb."
+    expected = f"{prefix}{identifier}"
+    if typst != expected:
+        raise TheoryResolutionError(f"canonical {kind} {identifier!r} has unsupported Typst reference {typst!r}")
+    module = identifier.split(".", 1)[0]
+    directory = "equations" if kind == "equation" else "symbols"
+    return f"{_GITHUB_SOURCE_ROOT}/docs/typst/shared/{directory}/{module}.typ"
 
 
 def _term_row(registry: dict[str, dict[str, object]], identifier: str, root: Path) -> ResolvedTerm:
@@ -246,5 +242,5 @@ def _term_row(registry: dict[str, dict[str, object]], identifier: str, root: Pat
         label=str(row.get("label", identifier)),
         short=row.get("short"),
         definition=str(row.get("definition_long") or row.get("definition_short") or ""),
-        source_url=f"https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/docs/glossary/terms.yml#{row.get('anchor', identifier)}",
+        source_url=f"{_GITHUB_SOURCE_ROOT}/docs/typst/shared/glossary.typ",
     )

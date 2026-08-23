@@ -13,7 +13,7 @@ from .candidate_generation import (
     _render_candidate_provenance_flow,
     _render_target_score_diagnostics,
 )
-from .shared import ScientificExplanation
+from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
@@ -55,12 +55,21 @@ def _render_targets_and_support(session_handle: object) -> None:
                 fig,
                 ScientificExplanation(
                     question="Are actor target choices and privileged GT evaluation labels being kept distinct?",
-                    population="One persisted target row grouped by actor task validity, GT-label validity, and match status.",
-                    metric="Target count; no scientific effect units.",
-                    denominator_masks="All target rows; neither invalid population is silently removed.",
-                    comparability="Compare target protocols only when target selection and GT matching configuration agree.",
-                    expected_pattern="Actor-valid targets may lack GT labels, but such rows remain masked from oracle-label training.",
-                    failure_interpretation="Actor-valid/GT-invalid concentration signals evaluation coverage gaps, not low RRI.",
+                    answer="Actor task validity and privileged GT-label validity are separate masks, so an actor-valid target is not silently treated as trainable.",
+                    sections=(
+                        ExplanationSection(
+                            "Population and metric",
+                            "Rows are grouped by actor validity, GT-label validity, and match status; the metric is a count, not an effect size.",
+                        ),
+                        ExplanationSection(
+                            "Denominator and comparison",
+                            "All target rows remain in the denominator. Compare protocols only when target selection and GT matching agree.",
+                        ),
+                        ExplanationSection(
+                            "Expected pattern and warning",
+                            "Actor-valid targets may lack GT labels and remain masked from oracle training; concentration of such rows indicates evaluation coverage gaps.",
+                        ),
+                    ),
                     evidence_role="oracle/evaluation",
                     source_fields=(
                         "targets/target_valid_mask",
@@ -89,12 +98,21 @@ def _render_targets_and_support(session_handle: object) -> None:
                 fig,
                 ScientificExplanation(
                     question="Which actor, oracle, training, and selection mask combinations actually occur?",
-                    population="One candidate row summarized by its exact four-mask bit pattern.",
-                    metric="Candidate count and fraction of the full sampled shell.",
-                    denominator_masks="All persisted candidate rows; selected must imply actor_action, while q_train is not a selection stage.",
-                    comparability="Compare stores only under the same candidate-shell generation and label-availability protocol.",
-                    expected_pattern="No selected/actor_action violation; selected-but-not-q_train may legitimately occur.",
-                    failure_interpretation="A selected actor-invalid row is a hard contract failure; missing q_train is a label/cache issue, not invalid action support.",
+                    answer="The mask combinations expose the boundary between actor admissibility, oracle labels, trainability, and realized selection.",
+                    sections=(
+                        ExplanationSection(
+                            "Population and metric",
+                            "Each candidate row contributes its exact four-mask pattern and count within the complete sampled shell.",
+                        ),
+                        ExplanationSection(
+                            "Denominator and comparison",
+                            "All persisted rows are retained; selection must imply actor action validity, while q_train is not a selection stage. Compare only matched shell and label protocols.",
+                        ),
+                        ExplanationSection(
+                            "Expected pattern and warning",
+                            "Selected actor-invalid rows are hard contract failures. Selected-but-not-q_train rows can be valid when labels are unavailable.",
+                        ),
+                    ),
                     evidence_role="derived training data",
                     source_fields=(
                         "candidates/actor_action_mask",
@@ -131,8 +149,10 @@ def _render_targets_and_support(session_handle: object) -> None:
         help="Builds interactive candidate-level traces up to the row limit above; aggregate plots remain complete-store.",
     ):
         candidate_rows = session_handle.candidates(limit=candidate_plot_limit)
+        proposal = session_handle.proposal_geometry(limit=candidate_plot_limit)
         _render_candidate_geometry_diagnostics(
             pd.DataFrame(candidate_rows),
-            pd.DataFrame(candidate_rows),
+            pd.DataFrame(proposal.get("points", [])),
+            session_handle.trajectory_geometry(),
             total_candidates=int(session_handle.validation.num_candidates),
         )

@@ -20,15 +20,16 @@ from aria_nbv.app.scientific_labels import (
 def test_resolve_theory_uses_current_typst_registries() -> None:
     theory = resolve_theory(
         TheoryReferences(
-            equation_ids=("rl.target_rri_reward",),
-            symbol_ids=("entity.target_error",),
+            equation_ids=("rl.target_root_gain_reward",),
+            symbol_ids=("oracle.rri",),
             term_ids=("target-rri-reward",),
         ),
         root=Path(__file__).parents[3],
     )
 
     assert theory.equations[0].typst == "#eqs.rl.target_root_gain_reward"
-    assert theory.symbols[0].typst == "#eqs.entity.target_error"
+    assert theory.symbols[0].typst == "#symb.oracle.rri"
+    assert theory.equations[0].source_url.endswith("/docs/typst/shared/equations/rl.typ")
     assert theory.terms[0].label == "Target-Specific RRI"
     assert all(
         item.source_url.startswith("https://github.com/")
@@ -63,4 +64,19 @@ def test_unknown_scientific_label_fails_closed(tmp_path) -> None:
     (docs / "glossary" / "terms.yml").write_text("[]\n", encoding="utf-8")
     with pytest.raises(TheoryResolutionError):
         symbol_label("missing", root=tmp_path)
-    assert SCIENTIFIC_LABELS["cumulative_target_root_gain"].symbol_key == "rl.observed_cumulative_root_gain"
+    assert SCIENTIFIC_LABELS["cumulative_target_root_gain"].symbol_key is None
+
+
+def test_narrative_explanation_requires_ordered_content() -> None:
+    from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
+
+    with pytest.raises(ValueError):
+        ScientificExplanation(question="q", answer="a", sections=(), evidence_role="provenance", source_fields=("x",))
+    explanation = ScientificExplanation(
+        question="What does this show?",
+        answer="It describes persisted evidence.",
+        sections=(ExplanationSection("Metric", "A descriptive count."),),
+        evidence_role="provenance",
+        source_fields=("inspection.rows",),
+    )
+    assert explanation.sections[0].title == "Metric"

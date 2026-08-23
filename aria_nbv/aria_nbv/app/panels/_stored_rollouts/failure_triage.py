@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from .shared import ScientificExplanation
+from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
@@ -29,12 +29,21 @@ def _render_failure_triage(session_handle: object) -> None:
         fig,
         ScientificExplanation(
             question="Which contract or data-quality failures dominate this store, and where should inspection begin?",
-            population="One emitted triage finding per rollout, step, candidate, target, or store-level condition.",
-            metric="Finding count by severity and predicate; counts are not independent scientific samples.",
-            denominator_masks="All rows checked by the active threshold configuration.",
-            comparability="Thresholds and store schema must match before comparing counts across stores.",
-            expected_pattern="Few hard mask/linkage failures; warnings are sparse and traceable to exact rows.",
-            failure_interpretation="Counts prioritize debugging only; they do not estimate policy performance.",
+            answer="Failure counts prioritize traceable debugging evidence; they are not independent scientific samples or policy estimates.",
+            sections=(
+                ExplanationSection(
+                    "Population and metric",
+                    "Each row is one emitted finding over a rollout, step, candidate, target, or store condition. Counts are grouped by severity and predicate.",
+                ),
+                ExplanationSection(
+                    "Denominator and comparison",
+                    "All rows checked by the active thresholds are retained. Compare stores only when thresholds and schema match.",
+                ),
+                ExplanationSection(
+                    "Expected pattern and warning",
+                    "Hard mask or linkage failures should be sparse and traceable. Concentrated warnings identify where to inspect next.",
+                ),
+            ),
             evidence_role="provenance",
             source_fields=(
                 "inspection.suspicious_rollout_rows",

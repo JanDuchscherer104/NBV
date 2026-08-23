@@ -16,7 +16,8 @@ from ....rollouts.inspection import (
     candidate_selection_pooled_summary_rows,
     candidate_selection_transition_rows,
 )
-from .shared import ScientificExplanation
+from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
+from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
@@ -75,19 +76,47 @@ def _add_geometry_anchors(
     three_dimensional: bool,
     axis_frames: pd.DataFrame,
 ) -> None:
-    """Add reference and target anchors without implicitly adding pose triads."""
+    """Add root/target anchors and optional RGB pose triads in one frame."""
 
     if three_dimensional:
-        figure.add_trace(go.Scatter3d(x=[0], y=[0], z=[0], mode="markers", name="Reference pose (all at origin)"))
         figure.add_trace(
             go.Scatter3d(
-                x=frames["target_x"],
-                y=frames["target_y"],
-                z=frames["target_z"],
-                mode="markers",
-                name="Observed target center",
+                x=[0], y=[0], z=[0], mode="markers", name="Reference pose (all at origin)", marker={"symbol": "cross", "color": "white"}
             )
         )
+        target_x = frames.get("target_x", pd.Series(dtype=float)).dropna()
+        target_y = frames.get("target_y", pd.Series(dtype=float)).dropna()
+        target_z = frames.get("target_z", pd.Series(dtype=float)).dropna()
+        figure.add_trace(
+            go.Scatter3d(
+                x=target_x,
+                y=target_y,
+                z=target_z,
+                mode="markers",
+                name="Observed target center",
+                marker={"symbol": "diamond", "color": "gold"},
+            )
+        )
+        axis_frames = _pose_axis_frames(frames, mode="All frames") if not axis_frames.empty else axis_frames
+        for prefix, label, centers in (
+            ("reference_axis", "Expansion-pose axes", np.zeros((len(axis_frames), 3))),
+            (
+                "target_axis",
+                "Target-pose axes",
+                np.column_stack(
+                    [
+                        axis_frames.get("target_x", pd.Series(0.0, index=axis_frames.index)),
+                        axis_frames.get("target_y", pd.Series(0.0, index=axis_frames.index)),
+                        axis_frames.get("target_z", pd.Series(0.0, index=axis_frames.index)),
+                    ]
+                ),
+            ),
+        ):
+            axis_columns = [f"{prefix}_{axis}" for axis in ("x", "y", "z")]
+            if axis_frames.empty or not set(axis_columns).issubset(axis_frames.columns):
+                continue
+            axes = axis_frames.loc[:, axis_columns].to_numpy(dtype=float).reshape(-1, 3, 3)
+            add_pose_axes_to_figure(figure, centers, axes, title=label, scale=0.12, line_width=4)
 
 
 def _normalized_radius_figure(geometry: pd.DataFrame) -> go.Figure:
@@ -137,6 +166,31 @@ def _orientation_diagnostic_figure(rows: pd.DataFrame) -> go.Figure:
     """Plot diagnostic angle distributions by named diagnostic."""
 
     figure = px.scatter(rows, x="step_index", y="angle_deg", color="diagnostic")
+    return figure
+
+
+def _trajectory_figure(points: pd.DataFrame, frames: pd.DataFrame) -> go.Figure:
+    """Plot only the factual root and selected-pose path in target-normalized coordinates."""
+
+    figure = go.Figure()
+    for rollout_id, rows in points.sort_values("path_order").groupby("rollout_row_id", sort=True):
+        figure.add_trace(
+            go.Scatter3d(
+                x=rows["x"],
+                y=rows["y"],
+                z=rows["z"],
+                mode="lines+markers",
+                name=f"rollout {rollout_id}",
+                customdata=rows[[c for c in ("step_index", "path_order") if c in rows]],
+                hovertemplate="rollout=%{fullData.name}<br>step=%{customdata[0]}<br>(x,y,z)=(%{x:.3f}, %{y:.3f}, %{z:.3f})<extra></extra>",
+            )
+        )
+    _add_geometry_anchors(figure, frames, three_dimensional=True, axis_frames=frames)
+    configure_3d_scene(
+        figure,
+        axis_titles=("target-forward / d₀", "target-lateral / d₀", "up / d₀"),
+        title="Factual root and selected trajectory",
+    )
     return figure
 
 
@@ -199,9 +253,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
     selection_dynamics = population.get("selection_dynamics", {})
     if isinstance(selection_dynamics, dict):
         available_groups = [
-            str(group)
-            for group, value in selection_dynamics.items()
-            if isinstance(value, list) and value
+            str(group) for group, value in selection_dynamics.items() if isinstance(value, list) and value
         ]
         dynamics = pd.DataFrame()
         if available_groups:
@@ -314,11 +366,11 @@ def _candidate_population_role(population: dict[str, object]) -> str | None:
 
 def _candidate_population_explanation(
     question: str,
-    population: str,
-    metric: str,
-    denominator_masks: str,
-    expected_pattern: str,
-    failure_interpretation: str,
+    population_text: str,
+    metric_text: str,
+    denominator_text: str,
+    expected_text: str,
+    warning_text: str,
     source: str,
     role: str,
 ) -> ScientificExplanation:
@@ -326,17 +378,19 @@ def _candidate_population_explanation(
 
     return ScientificExplanation(
         question=question,
-        population=population,
-        metric=metric,
-        denominator_masks=denominator_masks,
-        comparability="Compare only matching persisted candidate contracts and generation cohorts.",
-        expected_pattern=expected_pattern,
-        failure_interpretation=failure_interpretation,
+        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+        sections=(
+            ExplanationSection("Population / grain", population_text),
+            ExplanationSection("Metric / units", metric_text),
+            ExplanationSection("Denominator / masks", denominator_text),
+            ExplanationSection(
+                "comparability", "Compare only matching persisted candidate contracts and generation cohorts."
+            ),
+            ExplanationSection("Expected pattern", expected_text),
+            ExplanationSection("Warnings / failure modes", warning_text),
+        ),
         evidence_role=role,
         source_fields=(source,),
-        intuition="These are descriptive diagnostics of persisted support, not causal policy effects.",
-        visual_encoding="Bars and heatmaps retain generation-cohort and population facets where available.",
-        uncertainty="Missing values remain unavailable; descriptive summaries are not confidence intervals.",
     )
 
 
@@ -589,12 +643,33 @@ def _render_candidate_provenance_flow(session_handle: object) -> None:
         _candidate_flow_figure(flow),
         ScientificExplanation(
             question="How does persisted candidate-generation provenance flow into actor-valid support and terminal outcomes?",
-            population="Every candidate row matching the visible policy/depth filters, including actor-valid and actor-invalid rows, aggregated through proposal signature, actor validity, and outcome.",
-            metric="Candidate count and fraction of the filtered root population; no reward or geometric units.",
-            denominator_masks="The filtered complete candidate population is the root denominator. Actor validity is a hard action constraint; selected actor-invalid rows remain explicit selection_contract_violation evidence.",
-            comparability="Candidate proposal signatures, budgets, and active policy/depth filters must match.",
-            expected_pattern="Intended center/view proposal signatures retain actor-valid support, while invalid rows terminate at explicit reasons and selected rows remain actor-valid.",
-            failure_interpretation="Unknown provenance indicates missing persisted labels; concentrated invalid reasons indicate support loss; selection_contract_violation is a hard invariant failure.",
+            answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+            sections=(
+                ExplanationSection(
+                    "population",
+                    "Every candidate row matching the visible policy/depth filters, including actor-valid and actor-invalid rows, aggregated through proposal signature, actor validity, and outcome.",
+                ),
+                ExplanationSection(
+                    "metric",
+                    "Candidate count and fraction of the filtered root population; no reward or geometric units.",
+                ),
+                ExplanationSection(
+                    "denominator masks",
+                    "The filtered complete candidate population is the root denominator. Actor validity is a hard action constraint; selected actor-invalid rows remain explicit selection_contract_violation evidence.",
+                ),
+                ExplanationSection(
+                    "comparability",
+                    "Candidate proposal signatures, budgets, and active policy/depth filters must match.",
+                ),
+                ExplanationSection(
+                    "expected pattern",
+                    "Intended center/view proposal signatures retain actor-valid support, while invalid rows terminate at explicit reasons and selected rows remain actor-valid.",
+                ),
+                ExplanationSection(
+                    "failure interpretation",
+                    "Unknown provenance indicates missing persisted labels; concentrated invalid reasons indicate support loss; selection_contract_violation is a hard invariant failure.",
+                ),
+            ),
             evidence_role="provenance",
             source_fields=(
                 "inspection.candidate_flow_rows",
@@ -651,12 +726,32 @@ def _render_selected_action_policy_flow(ranks: pd.DataFrame) -> None:
             _selected_action_flow_figure(selection_flow),
             ScientificExplanation(
                 question="Which candidate/action policy selected each persisted action, and where did that action rank by target RRI?",
-                population="One persisted selected rollout step matching the active policy/depth filters.",
-                metric="Selected-step count and target-RRI competition rank among finite actor-valid candidates.",
-                denominator_masks="The root denominator is selected rollout steps. Target-RRI rank excludes actor-invalid and non-finite alternatives; unavailable ranks remain explicit.",
-                comparability="Compare policies only under matched roots, targets, candidate proposals, acquisition budgets, and score semantics.",
-                expected_pattern="Temperature-softmax covers more than rank one without collapsing to uniformly poor target-RRI ranks; greedy policies concentrate near the top.",
-                failure_interpretation="Unavailable ranks indicate missing oracle diagnostics; high-rank concentration can indicate excessive temperature or score/RRI mismatch.",
+                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                sections=(
+                    ExplanationSection(
+                        "population", "One persisted selected rollout step matching the active policy/depth filters."
+                    ),
+                    ExplanationSection(
+                        "metric",
+                        "Selected-step count and target-RRI competition rank among finite actor-valid candidates.",
+                    ),
+                    ExplanationSection(
+                        "denominator masks",
+                        "The root denominator is selected rollout steps. Target-RRI rank excludes actor-invalid and non-finite alternatives; unavailable ranks remain explicit.",
+                    ),
+                    ExplanationSection(
+                        "comparability",
+                        "Compare policies only under matched roots, targets, candidate proposals, acquisition budgets, and score semantics.",
+                    ),
+                    ExplanationSection(
+                        "expected pattern",
+                        "Temperature-softmax covers more than rank one without collapsing to uniformly poor target-RRI ranks; greedy policies concentrate near the top.",
+                    ),
+                    ExplanationSection(
+                        "failure interpretation",
+                        "Unavailable ranks indicate missing oracle diagnostics; high-rank concentration can indicate excessive temperature or score/RRI mismatch.",
+                    ),
+                ),
                 evidence_role="oracle/evaluation",
                 source_fields=(
                     "inspection.selected_candidate_rank_rows",
@@ -855,12 +950,29 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
             fig,
             ScientificExplanation(
                 question="Is a candidate family selected because it is useful, or merely because it is frequently available?",
-                population="Candidate rows grouped by root-relative position family.",
-                metric="Actor-valid fraction of sampled rows and selected/actor-valid rate; both dimensionless fractions.",
-                denominator_masks="Availability uses the full family shell; selection rate uses actor-valid family rows only.",
-                comparability="Family names, mixture weights, and branch budgets must match across stores.",
-                expected_pattern="Useful families retain availability and non-degenerate normalized selection without monopolizing support.",
-                failure_interpretation="High raw selection with tiny availability can be unstable; zero availability is a generator/mask clue.",
+                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                sections=(
+                    ExplanationSection("population", "Candidate rows grouped by root-relative position family."),
+                    ExplanationSection(
+                        "metric",
+                        "Actor-valid fraction of sampled rows and selected/actor-valid rate; both dimensionless fractions.",
+                    ),
+                    ExplanationSection(
+                        "denominator masks",
+                        "Availability uses the full family shell; selection rate uses actor-valid family rows only.",
+                    ),
+                    ExplanationSection(
+                        "comparability", "Family names, mixture weights, and branch budgets must match across stores."
+                    ),
+                    ExplanationSection(
+                        "expected pattern",
+                        "Useful families retain availability and non-degenerate normalized selection without monopolizing support.",
+                    ),
+                    ExplanationSection(
+                        "failure interpretation",
+                        "High raw selection with tiny availability can be unstable; zero availability is a generator/mask clue.",
+                    ),
+                ),
                 evidence_role="actor-visible",
                 source_fields=("candidate position_id", "actor_action_mask", "selected_mask"),
             ),
@@ -873,11 +985,7 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
     breakdown = pd.DataFrame(composition_by_group.get(breakdown_by, []))
-    count_fields = [
-        name
-        for name in ("actor_valid_count", "trainable_count", "selected_count")
-        if name in breakdown
-    ]
+    count_fields = [name for name in ("actor_valid_count", "trainable_count", "selected_count") if name in breakdown]
     if not breakdown.empty and count_fields:
         long = breakdown.melt(
             id_vars=breakdown_by,
@@ -897,12 +1005,28 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
             fig,
             ScientificExplanation(
                 question=f"How do actor-valid, trainable, and selected populations differ across {breakdown_by}?",
-                population=f"Complete-store candidate rows grouped by persisted {breakdown_by} provenance.",
-                metric="Candidate count in each explicitly named mask population.",
-                denominator_masks="Actor-valid, q_train, and selected are overlapping sets, not sequential waterfall stages.",
-                comparability="Candidate protocol, group vocabulary, and store schema must match.",
-                expected_pattern="Trainable support is no larger than label availability permits, and selection stays within actor support.",
-                failure_interpretation="Missing groups, selected-only spikes, or large actor/train gaps identify generator, mask, or label-cache issues.",
+                answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                sections=(
+                    ExplanationSection(
+                        "population", f"Complete-store candidate rows grouped by persisted {breakdown_by} provenance."
+                    ),
+                    ExplanationSection("metric", "Candidate count in each explicitly named mask population."),
+                    ExplanationSection(
+                        "denominator masks",
+                        "Actor-valid, q_train, and selected are overlapping sets, not sequential waterfall stages.",
+                    ),
+                    ExplanationSection(
+                        "comparability", "Candidate protocol, group vocabulary, and store schema must match."
+                    ),
+                    ExplanationSection(
+                        "expected pattern",
+                        "Trainable support is no larger than label availability permits, and selection stays within actor support.",
+                    ),
+                    ExplanationSection(
+                        "failure interpretation",
+                        "Missing groups, selected-only spikes, or large actor/train gaps identify generator, mask, or label-cache issues.",
+                    ),
+                ),
                 evidence_role="derived training data",
                 source_fields=(
                     "inspection.candidate_group_summary_rows",
@@ -961,12 +1085,30 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                 fig,
                 ScientificExplanation(
                     question="Does persisted target rank agree with the score used to prioritize targets?",
-                    population="One target proposal with finite rank and selection score.",
-                    metric="Selection rank is ordinal; selection score is a dimensionless configured composite.",
-                    denominator_masks="All scored target proposals, including actor-invalid and GT-invalid rows.",
-                    comparability="Target-selection weights, proposal source, and GT-matching protocol must match.",
-                    expected_pattern="Higher-priority ranks follow higher scores while validity classes remain visibly distinct.",
-                    failure_interpretation="Rank inversions, score ties, or high-scoring invalid targets indicate selection or matching problems.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection("population", "One target proposal with finite rank and selection score."),
+                        ExplanationSection(
+                            "metric",
+                            "Selection rank is ordinal; selection score is a dimensionless configured composite.",
+                        ),
+                        ExplanationSection(
+                            "denominator masks",
+                            "All scored target proposals, including actor-invalid and GT-invalid rows.",
+                        ),
+                        ExplanationSection(
+                            "comparability",
+                            "Target-selection weights, proposal source, and GT-matching protocol must match.",
+                        ),
+                        ExplanationSection(
+                            "expected pattern",
+                            "Higher-priority ranks follow higher scores while validity classes remain visibly distinct.",
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Rank inversions, score ties, or high-scoring invalid targets indicate selection or matching problems.",
+                        ),
+                    ),
                     evidence_role="provenance",
                     source_fields=("targets/selection_rank", "targets/selection_score", "targets/gt_match_status_id"),
                 ),
@@ -996,12 +1138,32 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     fig,
                     ScientificExplanation(
                         question="How strongly does visible target support influence the persisted target score?",
-                        population=f"One target proposal with finite selection score and {support_field}.",
-                        metric=f"{support_field} and selection score are dimensionless configured diagnostics.",
-                        denominator_masks="Scored target proposals; actor and GT validity remain explicit marks.",
-                        comparability="Support computation, crop geometry, score weights, and target source must match.",
-                        expected_pattern="Support contributes monotonically without becoming the only determinant of score.",
-                        failure_interpretation="High scores at negligible support or validity-separated clusters can reveal weighting or GT-association issues.",
+                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        sections=(
+                            ExplanationSection(
+                                "population", f"One target proposal with finite selection score and {support_field}."
+                            ),
+                            ExplanationSection(
+                                "metric",
+                                f"{support_field} and selection score are dimensionless configured diagnostics.",
+                            ),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Scored target proposals; actor and GT validity remain explicit marks.",
+                            ),
+                            ExplanationSection(
+                                "comparability",
+                                "Support computation, crop geometry, score weights, and target source must match.",
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "Support contributes monotonically without becoming the only determinant of score.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "High scores at negligible support or validity-separated clusters can reveal weighting or GT-association issues.",
+                            ),
+                        ),
                         evidence_role="oracle/evaluation",
                         source_fields=(
                             f"targets/{support_field}",
@@ -1048,12 +1210,33 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
                     fig,
                     ScientificExplanation(
                         question="Which target-score components are redundant, opposed, or unexpectedly disconnected?",
-                        population="Pairwise-complete target proposals; each heatmap cell reports its own finite pair count.",
-                        metric="Pearson correlation coefficient, dimensionless in [-1, 1]; hover shows pair-local n.",
-                        denominator_masks="Only rows finite for both components enter that pair; ±inf and missing values are excluded.",
-                        comparability="Only compare matrices from identical score definitions and target protocols.",
-                        expected_pattern="Components reflect their intended roles without perfect accidental duplication.",
-                        failure_interpretation="Near-perfect n=2 correlations are algebraically degenerate; sparse or unexpected signs need more evidence.",
+                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        sections=(
+                            ExplanationSection(
+                                "population",
+                                "Pairwise-complete target proposals; each heatmap cell reports its own finite pair count.",
+                            ),
+                            ExplanationSection(
+                                "metric",
+                                "Pearson correlation coefficient, dimensionless in [-1, 1]; hover shows pair-local n.",
+                            ),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Only rows finite for both components enter that pair; ±inf and missing values are excluded.",
+                            ),
+                            ExplanationSection(
+                                "comparability",
+                                "Only compare matrices from identical score definitions and target protocols.",
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "Components reflect their intended roles without perfect accidental duplication.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Near-perfect n=2 correlations are algebraically degenerate; sparse or unexpected signs need more evidence.",
+                            ),
+                        ),
                         evidence_role="oracle/evaluation",
                         source_fields=tuple(f"targets/{name}" for name in component_cols),
                     ),
@@ -1067,6 +1250,7 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
 def _render_candidate_geometry_diagnostics(
     candidates: pd.DataFrame,
     root_geometry: pd.DataFrame,
+    trajectory_geometry: dict[str, object] | None = None,
     *,
     total_candidates: int,
 ) -> None:
@@ -1109,12 +1293,30 @@ def _render_candidate_geometry_diagnostics(
                 fig,
                 ScientificExplanation(
                     question=f"What is the support, tail behavior, and invalidity structure of {metric}?",
-                    population="Bounded candidate audit rows with a finite selected metric.",
-                    metric=f"{metric}; units follow the field suffix (`_m`, `_deg`) or are dimensionless for reward/RRI.",
-                    denominator_masks="Finite metric rows; invalid reasons remain explicit rather than silently filtered.",
-                    comparability="Field definition, candidate protocol, and interactive row limit must match.",
-                    expected_pattern="Support respects configured physical bounds and avoids unexplained clipping or spikes.",
-                    failure_interpretation="Heavy tails, discontinuities, or invalidity-specific modes guide row-level debugging.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection("population", "Bounded candidate audit rows with a finite selected metric."),
+                        ExplanationSection(
+                            "metric",
+                            f"{metric}; units follow the field suffix (`_m`, `_deg`) or are dimensionless for reward/RRI.",
+                        ),
+                        ExplanationSection(
+                            "denominator masks",
+                            "Finite metric rows; invalid reasons remain explicit rather than silently filtered.",
+                        ),
+                        ExplanationSection(
+                            "comparability",
+                            "Field definition, candidate protocol, and interactive row limit must match.",
+                        ),
+                        ExplanationSection(
+                            "expected pattern",
+                            "Support respects configured physical bounds and avoids unexplained clipping or spikes.",
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Heavy tails, discontinuities, or invalidity-specific modes guide row-level debugging.",
+                        ),
+                    ),
                     evidence_role="oracle/evaluation"
                     if metric in {"target_root_gain", "target_rri"}
                     else "actor-visible",
@@ -1122,15 +1324,18 @@ def _render_candidate_geometry_diagnostics(
                 ),
             )
         if not root_geometry.empty:
+            x_column = "root_relative_x_m" if "root_relative_x_m" in root_geometry else "x"
+            y_column = "root_relative_y_m" if "root_relative_y_m" in root_geometry else "y"
+            z_column = "root_relative_z_m" if "root_relative_z_m" in root_geometry else "z"
             fig = px.scatter(
                 root_geometry,
-                x="root_relative_x_m",
-                y="root_relative_y_m",
+                x=x_column,
+                y=y_column,
                 color="position" if "position" in root_geometry else None,
                 symbol="selected" if "selected" in root_geometry else None,
                 hover_data=[
                     name
-                    for name in ("rollout_row_id", "step_index", "root_relative_z_m", "actor_action", "mixture")
+                    for name in ("rollout_row_id", "step_index", z_column, "actor_action", "mixture")
                     if name in root_geometry
                 ],
                 title="Candidate centers relative to each rollout root (ground plane)",
@@ -1147,12 +1352,32 @@ def _render_candidate_geometry_diagnostics(
                 fig,
                 ScientificExplanation(
                     question="Do candidate families cover the intended local motion support around each rollout root?",
-                    population="Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed.",
-                    metric="Root-relative X/Y displacement in metres; Z-up height is available on hover.",
-                    denominator_masks="Bounded full candidate shell; actor validity and selection remain explicit fields.",
-                    comparability="Coordinate convention, generator profile, and plotting row limit must match.",
-                    expected_pattern="Families occupy their intended local regions with selected actions inside actor-valid support.",
-                    failure_interpretation="Collapsed clusters, extreme radii, or family overlap can expose pose, frame, or generator defects.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection(
+                            "population",
+                            "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed.",
+                        ),
+                        ExplanationSection(
+                            "metric", "Root-relative X/Y displacement in metres; Z-up height is available on hover."
+                        ),
+                        ExplanationSection(
+                            "denominator masks",
+                            "Bounded full candidate shell; actor validity and selection remain explicit fields.",
+                        ),
+                        ExplanationSection(
+                            "comparability",
+                            "Coordinate convention, generator profile, and plotting row limit must match.",
+                        ),
+                        ExplanationSection(
+                            "expected pattern",
+                            "Families occupy their intended local regions with selected actions inside actor-valid support.",
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Collapsed clusters, extreme radii, or family overlap can expose pose, frame, or generator defects.",
+                        ),
+                    ),
                     evidence_role="actor-visible",
                     source_fields=(
                         "inspection.root_relative_candidate_rows",
@@ -1162,18 +1387,92 @@ def _render_candidate_geometry_diagnostics(
                 ),
             )
 
+            if {x_column, y_column, z_column}.issubset(root_geometry.columns):
+                figure_3d = px.scatter_3d(
+                    root_geometry,
+                    x=x_column,
+                    y=y_column,
+                    z=z_column,
+                    color="position" if "position" in root_geometry else None,
+                    symbol="selected" if "selected" in root_geometry else None,
+                    title="Candidate centers in target-normalized 3D support",
+                )
+                frame_rows = pd.DataFrame(trajectory_geometry.get("frames", [])) if trajectory_geometry else pd.DataFrame()
+                configure_3d_scene(
+                    figure_3d,
+                    axis_titles=("target-forward / d", "target-lateral / d", "up / d"),
+                )
+                if not frame_rows.empty:
+                    _add_geometry_anchors(figure_3d, frame_rows, three_dimensional=True, axis_frames=frame_rows)
+                _render_plot(
+                    figure_3d,
+                    ScientificExplanation(
+                        question="Where do candidate poses lie relative to the root and observed target?",
+                        answer="The 3D view keeps the candidate shell and factual anchors in one target-aligned frame.",
+                        sections=(
+                            ExplanationSection("population", "Bounded candidate shell rows with persisted root/target anchors."),
+                            ExplanationSection("metric", "Coordinates are dimensionless displacements divided by the target-distance scale."),
+                            ExplanationSection("denominator masks", "Only finite pose rows are plotted; missing geometry remains unavailable."),
+                            ExplanationSection("comparability", "Compare only matching pose conventions and generation contracts."),
+                            ExplanationSection("expected pattern", "Candidate support surrounds the root without unexplained frame rotation or scale."),
+                            ExplanationSection("failure interpretation", "Offset anchors or collapsed axes indicate pose decoding or target association defects."),
+                        ),
+                        evidence_role="actor-visible",
+                        source_fields=("inspection.proposal_support_geometry",),
+                    ),
+                )
+
+        if trajectory_geometry:
+            trajectory_points = pd.DataFrame(trajectory_geometry.get("points", []))
+            trajectory_frames = pd.DataFrame(trajectory_geometry.get("frames", []))
+            if not trajectory_points.empty and {"x", "y", "z", "path_order"}.issubset(trajectory_points.columns):
+                _render_plot(
+                    _trajectory_figure(trajectory_points, trajectory_frames),
+                    ScientificExplanation(
+                        question="How did the factual selected pose move from the rollout root?",
+                        answer="Only persisted root and selected actions are shown; candidate alternatives are excluded from this path.",
+                        sections=(
+                            ExplanationSection("population", "Factual selected steps plus the root for each rollout."),
+                            ExplanationSection("metric", "Target-aligned displacement normalized by initial root-to-target distance."),
+                            ExplanationSection("denominator masks", "Early termination is retained as a shorter factual path; no missing steps are fabricated."),
+                            ExplanationSection("comparability", "Compare only stores with matching target-alignment and rollout contracts."),
+                            ExplanationSection("expected pattern", "The path remains physically coherent and its target anchor stays fixed."),
+                            ExplanationSection("failure interpretation", "Jumps or anchor inconsistencies expose pose/frame or persisted-step defects."),
+                        ),
+                        evidence_role="actor-visible",
+                        source_fields=("inspection.rollout_trajectory_geometry",),
+                    ),
+                )
+
         if "normalized_radius" in candidates and candidates["normalized_radius"].notna().any():
             radius = candidates.dropna(subset=["normalized_radius"])
             _render_plot(
                 _normalized_radius_figure(radius),
                 ScientificExplanation(
                     question="Do candidate radii respect the target-normalized geometry envelope?",
-                    population="Bounded candidate rows with finite target-distance-normalized radius.",
-                    metric="Candidate radius divided by the persisted target-distance scale; dimensionless.",
-                    denominator_masks="Finite normalized-radius rows; missing geometry remains unavailable.",
-                    comparability="Compare only stores sharing the same target normalization and candidate contract.",
-                    expected_pattern="Most support remains within the unit target-normalized envelope.",
-                    failure_interpretation="Clipping or heavy tails can expose impossible geometry or frame mistakes.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection(
+                            "population", "Bounded candidate rows with finite target-distance-normalized radius."
+                        ),
+                        ExplanationSection(
+                            "metric", "Candidate radius divided by the persisted target-distance scale; dimensionless."
+                        ),
+                        ExplanationSection(
+                            "denominator masks", "Finite normalized-radius rows; missing geometry remains unavailable."
+                        ),
+                        ExplanationSection(
+                            "comparability",
+                            "Compare only stores sharing the same target normalization and candidate contract.",
+                        ),
+                        ExplanationSection(
+                            "expected pattern", "Most support remains within the unit target-normalized envelope."
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Clipping or heavy tails can expose impossible geometry or frame mistakes.",
+                        ),
+                    ),
                     evidence_role="actor-visible",
                     source_fields=("candidate_diagnostics/normalized_radius", "target_distance_m"),
                 ),
@@ -1196,12 +1495,28 @@ def _render_candidate_geometry_diagnostics(
                     _orientation_diagnostic_figure(orientation),
                     ScientificExplanation(
                         question="Are candidate and target-facing orientations consistent with the persisted frame?",
-                        population="Bounded finite candidate orientation diagnostics by factual step.",
-                        metric="Yaw/elevation diagnostic angles in degrees.",
-                        denominator_masks="Finite persisted orientation fields; absent fields are not imputed.",
-                        comparability="Use the same pose convention and target-facing contract across stores.",
-                        expected_pattern="Errors remain within configured orientation envelopes.",
-                        failure_interpretation="Systematic offsets indicate frame or target-pose inconsistencies.",
+                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        sections=(
+                            ExplanationSection(
+                                "population", "Bounded finite candidate orientation diagnostics by factual step."
+                            ),
+                            ExplanationSection("metric", "Yaw/elevation diagnostic angles in degrees."),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Finite persisted orientation fields; absent fields are not imputed.",
+                            ),
+                            ExplanationSection(
+                                "comparability",
+                                "Use the same pose convention and target-facing contract across stores.",
+                            ),
+                            ExplanationSection(
+                                "expected pattern", "Errors remain within configured orientation envelopes."
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Systematic offsets indicate frame or target-pose inconsistencies.",
+                            ),
+                        ),
                         evidence_role="actor-visible",
                         source_fields=tuple(f"candidate_diagnostics/{name}" for name in frame_fields),
                     ),
@@ -1228,12 +1543,28 @@ def _render_candidate_geometry_diagnostics(
                 fig,
                 ScientificExplanation(
                     question="Do candidate motions cover the target-bearing angles that the store presents?",
-                    population="Bounded candidate rows with finite bearing or motion-yaw diagnostics.",
-                    metric="Yaw angle in degrees in the persisted ARIA convention.",
-                    denominator_masks="Finite angle diagnostics; invalid candidates remain included unless absent from the persisted audit row.",
-                    comparability="Angle convention, generator families, and candidate budget must match.",
-                    expected_pattern="Executed yaw support overlaps relevant target bearings without implausible spikes.",
-                    failure_interpretation="Systematic offsets suggest frame errors; narrow motion support suggests generator or constraint collapse.",
+                    answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                    sections=(
+                        ExplanationSection(
+                            "population", "Bounded candidate rows with finite bearing or motion-yaw diagnostics."
+                        ),
+                        ExplanationSection("metric", "Yaw angle in degrees in the persisted ARIA convention."),
+                        ExplanationSection(
+                            "denominator masks",
+                            "Finite angle diagnostics; invalid candidates remain included unless absent from the persisted audit row.",
+                        ),
+                        ExplanationSection(
+                            "comparability", "Angle convention, generator families, and candidate budget must match."
+                        ),
+                        ExplanationSection(
+                            "expected pattern",
+                            "Executed yaw support overlaps relevant target bearings without implausible spikes.",
+                        ),
+                        ExplanationSection(
+                            "failure interpretation",
+                            "Systematic offsets suggest frame errors; narrow motion support suggests generator or constraint collapse.",
+                        ),
+                    ),
                     evidence_role="actor-visible",
                     source_fields=(
                         "candidate_diagnostics/target_bearing_yaw_deg",
@@ -1259,12 +1590,26 @@ def _render_candidate_geometry_diagnostics(
                     fig,
                     ScientificExplanation(
                         question="Are translation and rotation jointly plausible for sampled and selected actions?",
-                        population="Bounded candidate rows with finite motion diagnostics.",
-                        metric="Step length in metres and yaw change in degrees.",
-                        denominator_masks="Finite motion rows; validity, family, and selected state remain inspectable.",
-                        comparability="Motion limits and generator configuration must match.",
-                        expected_pattern="Samples respect configured motion support and selected actions avoid extreme corners.",
-                        failure_interpretation="Outliers or family-specific streaks can indicate transform errors, unrealistic moves, or constraint failures.",
+                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        sections=(
+                            ExplanationSection("population", "Bounded candidate rows with finite motion diagnostics."),
+                            ExplanationSection("metric", "Step length in metres and yaw change in degrees."),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Finite motion rows; validity, family, and selected state remain inspectable.",
+                            ),
+                            ExplanationSection(
+                                "comparability", "Motion limits and generator configuration must match."
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "Samples respect configured motion support and selected actions avoid extreme corners.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Outliers or family-specific streaks can indicate transform errors, unrealistic moves, or constraint failures.",
+                            ),
+                        ),
                         evidence_role="actor-visible",
                         source_fields=(
                             "candidate_diagnostics/motion_step_length_m",
@@ -1288,12 +1633,33 @@ def _render_candidate_geometry_diagnostics(
                     fig,
                     ScientificExplanation(
                         question="Which candidate families contain useful oracle reward support, and what does selection choose?",
-                        population="Bounded candidates with finite target root gain, split by family and selected state.",
-                        metric="Target root-normalized gain, dimensionless; negative valid rewards remain real values.",
-                        denominator_masks="Finite oracle labels only; invalid or missing labels are excluded rather than assigned low reward.",
-                        comparability="Target protocol, reward definition, candidate mixture, and row limit must match.",
-                        expected_pattern="Selected rewards occupy competitive support without every family collapsing to one value.",
-                        failure_interpretation="Selected low-tail rewards suggest policy mismatch; missing families suggest generator or label coverage gaps.",
+                        answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
+                        sections=(
+                            ExplanationSection(
+                                "population",
+                                "Bounded candidates with finite target root gain, split by family and selected state.",
+                            ),
+                            ExplanationSection(
+                                "metric",
+                                "Target root-normalized gain, dimensionless; negative valid rewards remain real values.",
+                            ),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Finite oracle labels only; invalid or missing labels are excluded rather than assigned low reward.",
+                            ),
+                            ExplanationSection(
+                                "comparability",
+                                "Target protocol, reward definition, candidate mixture, and row limit must match.",
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "Selected rewards occupy competitive support without every family collapsing to one value.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Selected low-tail rewards suggest policy mismatch; missing families suggest generator or label coverage gaps.",
+                            ),
+                        ),
                         evidence_role="oracle/evaluation",
                         source_fields=(
                             "candidates/target_root_gain",
