@@ -154,6 +154,14 @@ def _render_candidate_population_evidence(store_path: str) -> None:
     collision = pd.DataFrame(population["collision"])
     sample = population["sample"]
 
+    evidence_role = _candidate_population_role(population)
+    if evidence_role is None:
+        st.warning(
+            "Normalized target-view evidence is withheld: complete-store target provenance is mixed, unknown, "
+            "or unclassified. The bounded display sample is never used to infer provenance."
+        )
+    _render_complete_candidate_support(population, evidence_role=evidence_role or "provenance")
+
     st.markdown("#### Candidate composition")
     st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
     st.dataframe(composition, hide_index=True, width="stretch")
@@ -175,6 +183,171 @@ def _render_candidate_population_evidence(store_path: str) -> None:
         "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
     )
     st.dataframe(sample_rows, hide_index=True, width="stretch")
+
+
+def _candidate_population_role(population: dict[str, object]) -> str | None:
+    """Return one complete-store target-evidence role, never infer it from samples."""
+
+    rows = population.get("target_evidence_roles", [])
+    if not isinstance(rows, list):
+        return None
+    roles = {
+        str(row.get("target_evidence_role"))
+        for row in rows
+        if isinstance(row, dict) and int(row.get("candidate_count", 0)) > 0
+    }
+    return (
+        next(iter(roles)) if len(roles) == 1 and next(iter(roles)) in {"actor-visible", "oracle/evaluation"} else None
+    )
+
+
+def _candidate_population_explanation(
+    question: str,
+    population: str,
+    metric: str,
+    denominator_masks: str,
+    expected_pattern: str,
+    failure_interpretation: str,
+    source: str,
+    role: str,
+) -> ScientificExplanation:
+    """Build consistent scientific context for complete candidate-support plots."""
+
+    return ScientificExplanation(
+        question=question,
+        population=population,
+        metric=metric,
+        denominator_masks=denominator_masks,
+        comparability="Compare only matching persisted candidate contracts and generation cohorts.",
+        expected_pattern=expected_pattern,
+        failure_interpretation=failure_interpretation,
+        evidence_role=role,
+        source_fields=(source,),
+        intuition="These are descriptive diagnostics of persisted support, not causal policy effects.",
+        visual_encoding="Bars and heatmaps retain generation-cohort and population facets where available.",
+        uncertainty="Missing values remain unavailable; descriptive summaries are not confidence intervals.",
+    )
+
+
+def _render_complete_candidate_support(population: dict[str, object], *, evidence_role: str) -> None:
+    """Render PR101 support facets through the decomposed candidate owner."""
+
+    direction = population.get("direction", {})
+    if isinstance(direction, dict):
+        density = pd.DataFrame(direction.get("density_rows", []))
+        if not density.empty:
+            level = "cohort_macro" if "cohort_macro" in set(density.get("aggregation_level", ())) else "state"
+            selected = density[density["aggregation_level"].eq(level)] if "aggregation_level" in density else density
+            if not selected.empty:
+                pivot = selected.pivot_table(
+                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="first"
+                ).sort_index()
+                fig = px.imshow(
+                    pivot,
+                    origin="lower",
+                    aspect="auto",
+                    labels={"x": "azimuth bin", "y": "sin(elevation) bin", "color": "fraction"},
+                    title="Candidate direction support (equal-area bins)",
+                )
+                _render_plot(
+                    fig,
+                    _candidate_population_explanation(
+                        "Does candidate direction support cover solid angle without coordinate-latitude bias?",
+                        "Complete candidate direction rows, retaining zero-valid states and finite/missing counts.",
+                        "Fraction per azimuth × sin(elevation) equal-area bin.",
+                        "Finite non-zero direction vectors define the state-local direction denominator.",
+                        "Support is broad rather than concentrated in unexplained angular bands.",
+                        "Spikes or missing direction rows indicate support or pose-frame issues.",
+                        "inspection.candidate_direction_evidence",
+                        evidence_role,
+                    ),
+                )
+                with st.expander("Direction support rows and CSV"):
+                    st.dataframe(selected, hide_index=True, width="stretch")
+                    _download_frame("Download direction support CSV", "candidate-direction-support.csv", selected)
+        cap = pd.DataFrame(direction.get("cap_rows", []))
+        if not cap.empty and "discrepancy" in cap:
+            cap = cap.copy()
+            cap["metric"] = "distance_from_isotropy"
+            fig = px.bar(
+                cap,
+                x="radius_deg" if "radius_deg" in cap else "metric",
+                y="discrepancy",
+                color="population" if "population" in cap else None,
+                title="Angular total-variation distance from isotropic reference",
+            )
+            _render_plot(
+                fig,
+                _candidate_population_explanation(
+                    "How far does the observed direction distribution depart from an isotropic reference?",
+                    "Complete factual-state direction support summaries.",
+                    "Angular total-variation distance from the uniform-S² reference; dimensionless fraction.",
+                    "Finite normalized directions only; missing directions are not zero-filled.",
+                    "A small value means closer descriptive agreement with the isotropic reference at that scale.",
+                    "A large value is anisotropy evidence, not proof of generator collapse.",
+                    "inspection.candidate_direction_evidence.cap_rows",
+                    evidence_role,
+                ),
+            )
+
+    for key, title in (("spatial", "Spatial candidate support"), ("motion", "Motion and collision support")):
+        frame = pd.DataFrame(population.get(key, []))
+        if frame.empty:
+            continue
+        value = "mean" if "mean" in frame else "count"
+        if "metric" not in frame or value not in frame:
+            continue
+        level = "cohort_macro" if "cohort_macro" in set(frame.get("aggregation_level", ())) else "state"
+        selected = frame[frame["aggregation_level"].eq(level)] if "aggregation_level" in frame else frame
+        fig = px.bar(
+            selected,
+            x="metric",
+            y=value,
+            color="population" if "population" in selected else None,
+            barmode="group",
+            title=title,
+        )
+        _render_plot(
+            fig,
+            _candidate_population_explanation(
+                f"What physical {key.replace('_', ' ')} support is present?",
+                "Complete candidate audit summaries, including states with no finite support.",
+                "Metric units are persisted per row; metres, degrees, fractions, and counts are not pooled.",
+                "Finite values use their metric-specific denominator; unavailable evidence remains explicit.",
+                "Configured spatial and motion support remains represented across compatible cohorts.",
+                "Concentration, clipping, or missingness indicates a component or evaluator coverage issue.",
+                f"inspection.candidate_{key}_support_evidence",
+                evidence_role,
+            ),
+        )
+        with st.expander(f"{title} rows and CSV"):
+            st.dataframe(selected, hide_index=True, width="stretch")
+            _download_frame(f"Download {key} support CSV", f"candidate-{key}-support.csv", selected)
+
+    target_view = pd.DataFrame(population.get("target_view", []))
+    if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty:
+        value = "mean" if "mean" in target_view else "count"
+        if "metric" in target_view and value in target_view:
+            fig = px.bar(
+                target_view,
+                x="metric",
+                y=value,
+                color="population" if "population" in target_view else None,
+                title="Target-view support and availability",
+            )
+            _render_plot(
+                fig,
+                _candidate_population_explanation(
+                    "How much target-view evidence is available for the selected candidate population?",
+                    "Complete target-view audit rows for one unambiguous target-evidence role.",
+                    "Metric values retain their persisted units; missingness is counted separately.",
+                    "Only finite target-view measurements enter metric summaries; missing rows remain unavailable.",
+                    "Optical and geometric target-view evidence is available for the declared protocol.",
+                    "Large missing counts indicate evaluator coverage gaps, not poor visibility.",
+                    "inspection.candidate_target_view_evidence",
+                    evidence_role,
+                ),
+            )
 
 
 def _render_candidate_provenance_flow(store_path: str) -> None:
