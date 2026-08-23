@@ -420,6 +420,12 @@ def _clear_stored_rollout_caches() -> None:
     st.session_state.pop(CORPUS_SUMMARY_STATE_KEY, None)
 
 
+def clear_rollout_page_caches() -> None:
+    """Clear the shared stored-rollout and dataset-bundle read caches."""
+
+    _clear_stored_rollout_caches()
+
+
 @st.cache_data(show_spinner="Aggregating validated rollout stores…", max_entries=8)
 def _cached_corpus_summary(
     store_paths: tuple[str, ...],
