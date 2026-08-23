@@ -324,10 +324,10 @@ def test_permuted_inputs_and_independent_rebuilds_are_byte_stable(tmp_path) -> N
     )
 
     assert serialize_thesis_report_bundle(first_frames) == serialize_thesis_report_bundle(rebuilt_frames)
-    assert len(first_frames["sidecars"]) == 1
+    assert len(first_frames["sidecars"]) == 2
     assert first_frames["sidecars"]["sha256"].nunique() == 1
-    assert first_frames["sidecars"]["sidecar_id"].nunique() == 1
-    assert first_frames["sidecars"].iloc[0]["path"] == "evidence.json"
+    assert first_frames["sidecars"]["sidecar_id"].nunique() == 2
+    assert set(first_frames["sidecars"]["path"]) == {"first/evidence.json", "second/evidence.json"}
     assert str(tmp_path) not in serialize_thesis_report_bundle(first_frames).decode()
 
 
@@ -355,6 +355,63 @@ def test_same_name_different_content_sidecars_remain_distinct(tmp_path) -> None:
     assert set(frames["sidecars"]["name"]) == {"evidence.json"}
     assert frames["sidecars"]["sha256"].nunique() == 2
     assert frames["sidecars"]["sidecar_id"].nunique() == 2
+
+
+def test_nested_sidecars_round_trip_physical_paths_facts_and_artifacts(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=8632)[:1]
+    )
+    sidecars = []
+    for directory, logical_name, key, value in (
+        (tmp_path / "left" / "nested", "left-analysis", "left.metric", 1.0),
+        (tmp_path / "right" / "nested", "right-analysis", "right.metric", 2.0),
+    ):
+        directory.mkdir(parents=True)
+        sidecar = _empirical_sidecar(directory, result).rename(directory / "evidence.json")
+        artifact = directory / "artifact.txt"
+        (directory / "analysis" / "artifact.txt").rename(artifact)
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        payload["logical_name"] = logical_name
+        payload["empirical_results"][0]["result_id"] = f"{logical_name}-result"
+        payload["facts"] = [
+            {
+                "store_id": result.manifest_sha256,
+                "key": key,
+                "value": value,
+                "unit": "fraction",
+                "n": 1,
+                "aggregation": "single",
+                "provenance": f"{logical_name}/facts.json",
+            }
+        ]
+        sidecar.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        sidecars.append(sidecar)
+
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=sidecars, evidence_status="pilot")
+    payload = serialize_thesis_report_bundle(frames)
+    rebuilt = deserialize_thesis_report_bundle(payload)
+    validated = validate_thesis_report_provenance(rebuilt, evidence_root=tmp_path)
+
+    assert set(validated["sidecars"]["path"]) == {
+        "left/nested/evidence.json",
+        "right/nested/evidence.json",
+    }
+    assert set(validated["sidecars"]["name"]) == {"left-analysis", "right-analysis"}
+    assert validated["sidecars"]["sidecar_id"].nunique() == 2
+    assert set(validated["facts"]["key"]) >= {"left.metric", "right.metric"}
+    assert set(validated["empirical_results"]["artifact_path"]) == {"artifact.txt"}
+    assert serialize_thesis_report_bundle(validated) == payload
+
+
+def test_report_frames_reject_duplicate_physical_stores_with_same_store_id(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "original.zarr", build_rollout_records(horizon=1, num_samples=6, seed=8633)[:1]
+    )
+    duplicate = tmp_path / "duplicate.zarr"
+    shutil.copytree(result.store_dir, duplicate)
+
+    with pytest.raises(ValueError, match="duplicate store_id identities"):
+        build_thesis_report_frames([result.store_dir, duplicate], evidence_status="pilot")
 
 
 def test_report_frames_preserve_parameters_sidecars_missingness_and_provenance(tmp_path) -> None:
@@ -586,6 +643,7 @@ def test_analysis_sidecar_logical_name_round_trips_with_all_promoted_rows(tmp_pa
     ("field", "value", "message"),
     [
         ("path", "paired-policy-analysis", "does not exist"),
+        ("path", "/tmp/analysis.json", "portable relative path"),
         ("name", "other-logical-name", "logical_name"),
         ("sidecar_id", "0" * 64, "sidecar_id"),
     ],

@@ -238,6 +238,35 @@ def test_untracked_unreferenced_visual_does_not_fail(fixture) -> None:
     assert passed.returncode == 0, passed.stderr
 
 
+@pytest.mark.parametrize("directive", ("import", "include"))
+def test_missing_active_local_source_fails_closed(fixture, directive: str) -> None:
+    root, output, revision = fixture
+    source = root / "docs/typst/thesis/main.typ"
+    source.write_text(
+        source.read_text() + f'#{directive} "missing-active.typ"\n', encoding="utf-8"
+    )
+
+    failed = _run(root, output, "generate", "--source-revision", revision)
+
+    assert failed.returncode == 1
+    assert "active thesis source is missing" in failed.stderr
+    assert "missing-active.typ" in failed.stderr
+
+
+def test_active_local_source_outside_root_fails_closed(fixture) -> None:
+    root, output, revision = fixture
+    source = root / "docs/typst/thesis/main.typ"
+    source.write_text(
+        source.read_text() + '#include "../../../outside.typ"\n', encoding="utf-8"
+    )
+
+    failed = _run(root, output, "generate", "--source-revision", revision)
+
+    assert failed.returncode == 1
+    assert "active thesis source is outside docs" in failed.stderr
+    assert "../../../outside.typ" in failed.stderr
+
+
 def test_missing_font_and_fallback_family_are_rejected(fixture) -> None:
     root, output, _revision = fixture
     source = root / "docs/typst/thesis/main.typ"

@@ -839,7 +839,7 @@ thesis-report-contract: ## Verify the producer, CLI, and Typst report-bundle con
 	@confirmatory_bundle="$$(mktemp "$(TYPST_ROOT)/typst/thesis/data/report-bundle-confirmatory.XXXXXX.json")"; \
 	output="$$(mktemp "$(abspath $(CI_RENDER_DIR))/report-data-submission-mismatch.XXXXXX.log")"; \
 	trap 'rm -f "$$confirmatory_bundle" "$$output"' EXIT; \
-	sed -e 's/"bundle_role": "fixture"/"bundle_role": "evidence"/' -e 's/"status"[[:space:]]*:[[:space:]]*"pilot"/"status": "confirmatory"/g' docs/typst/thesis/data/report-bundle-fixture.json > "$$confirmatory_bundle"; \
+	sed -e 's/"bundle_role": "fixture"/"bundle_role": "evidence"/' -e 's/"status"[[:space:]]*:[[:space:]]*"pilot"/"status": "confirmatory"/g' -e '/"fixture_notice":/d' -e '0,/"source_revision": "1111111111111111111111111111111111111111"/s//"source_revision": "2222222222222222222222222222222222222222"/' docs/typst/thesis/data/report-bundle-fixture.json > "$$confirmatory_bundle"; \
 	if $(TYPST) compile --root $(TYPST_ROOT) docs/typst/thesis/tests/report_data_smoke.typ "$(CI_RENDER_DIR)/report_data_submission-mismatch.pdf" \
 		--input aria-thesis-mode=submission --input aria-thesis-data="/typst/thesis/data/$$(basename "$$confirmatory_bundle")" \
 		--input aria-thesis-evidence-status=confirmatory --input aria-code-ref=2222222222222222222222222222222222222222 >"$$output" 2>&1; then \

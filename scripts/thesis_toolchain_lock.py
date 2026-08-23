@@ -93,6 +93,27 @@ def _local_path(root: Path, source: Path, reference: str) -> Path | None:
     return None
 
 
+def _local_source_path(
+    root: Path, source: Path, reference: str, tracked: dict[str, str]
+) -> Path:
+    """Resolve an active local source or reject it explicitly.
+
+    This is lexical source closure for the lock; Typst's runtime execution may
+    select a different set of code paths than the active source references.
+    """
+    if reference.startswith("@"):
+        raise AssertionError("package imports must bypass local source resolution")
+    base = root / "docs" if reference.startswith("/") else source.parent
+    candidate = (base / reference.lstrip("/")).resolve()
+    try:
+        candidate.relative_to(root / "docs")
+    except ValueError as exc:
+        raise LockError(f"active thesis source is outside docs: {reference}") from exc
+    if candidate.suffix == "" and candidate.relative_to(root).as_posix() not in tracked:
+        candidate = candidate.with_suffix(".typ")
+    return candidate
+
+
 def _docs_relative_path(root: Path, source: Path, reference: str) -> str | None:
     if reference.startswith("@"):
         return None
@@ -156,9 +177,15 @@ def _source_closure(
                 ) from exc
         sources.add(relative)
         for reference in LOCAL_SOURCE_RE.findall(text):
-            child = _local_path(root, source, reference)
-            if child is not None:
-                pending.append(child)
+            if reference.startswith("@"):
+                continue
+            child = _local_source_path(root, source, reference, all_files)
+            child_relative = child.relative_to(root).as_posix()
+            if child_relative not in all_files:
+                raise LockError(f"active thesis source is missing: {child_relative}")
+            if revision is None and not child.is_file():
+                raise LockError(f"active thesis source is missing: {child_relative}")
+            pending.append(child)
         for reference in BIBLIOGRAPHY_OPERAND_RE.findall(text):
             operand = _docs_relative_path(root, source, reference)
             if operand is not None:
@@ -175,8 +202,10 @@ def _source_closure(
                 resolved = (root / "docs" / reference.lstrip("/")).resolve()
                 try:
                     assets.add(resolved.relative_to(root).as_posix())
-                except ValueError:
-                    raise LockError(f"active thesis asset is outside docs: {reference}")
+                except ValueError as exc:
+                    raise LockError(
+                        f"active thesis asset is outside docs: {reference}"
+                    ) from exc
     return sources, assets
 
 

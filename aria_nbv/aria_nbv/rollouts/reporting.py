@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -582,11 +583,19 @@ def build_thesis_report_frames(
         raise ValueError("At least one rollout store is required to build thesis report frames.")
     for store_path in resolved_stores:
         _append_store_rows(rows, store_path, evidence_status=evidence_status)
-    for sidecar_path in sorted(
+        _reject_duplicate_store_identities(rows["stores"])
+    resolved_sidecars = sorted(
         {Path(path).expanduser().resolve() for path in sidecar_paths},
         key=Path.as_posix,
-    ):
-        _append_sidecar_rows(rows, sidecar_path, evidence_status=evidence_status)
+    )
+    sidecar_root = _common_sidecar_root(resolved_sidecars)
+    for sidecar_path in resolved_sidecars:
+        _append_sidecar_rows(
+            rows,
+            sidecar_path,
+            evidence_root=sidecar_root,
+            evidence_status=evidence_status,
+        )
     frames = {name: _frame(name, table_rows) for name, table_rows in rows.items()}
     _validate_empirical_bundle(frames)
     return frames
@@ -743,13 +752,8 @@ def validate_thesis_report_provenance(
     canonical_promoted_facts: list[dict[str, object]] = []
     canonical_sidecar_values: list[dict[str, object]] = []
     canonical_empirical_results: list[dict[str, object]] = []
-    store_identities = {
-        str(row.store_id): (
-            _canonical_store_identity(row.source_offline_store_version, "source_offline_store_version"),
-            _canonical_store_identity(row.split_manifest_hash, "split_manifest_hash"),
-        )
-        for row in frames["stores"].itertuples(index=False)
-    }
+    _reject_duplicate_store_identities(frames["stores"].to_dict(orient="records"))
+    store_identities = _store_identities(frames["stores"])
     for index, row in frames["sidecars"].iterrows():
         logical_path = _portable_relative_path(row["path"], field=f"sidecars row {index} path")
         sidecar_file = (root / logical_path).resolve()
@@ -1060,6 +1064,7 @@ def _append_sidecar_rows(
     rows: dict[str, list[dict[str, object]]],
     sidecar_path: Path,
     *,
+    evidence_root: Path,
     evidence_status: Literal["exploratory", "pilot", "confirmatory"],
 ) -> None:
     if not sidecar_path.is_file():
@@ -1075,8 +1080,8 @@ def _append_sidecar_rows(
     else:
         raise ValueError(f"Unsupported report sidecar format for {sidecar_path}; expected .json or .jsonl.")
     digest = hashlib.sha256(data).hexdigest()
-    evidence_path = sidecar_path.name
-    logical_name = _sidecar_logical_name(payload, fallback=evidence_path)
+    evidence_path = sidecar_path.relative_to(evidence_root).as_posix()
+    logical_name = _sidecar_logical_name(payload, fallback=sidecar_path.name)
     sidecar_id = _sidecar_id(evidence_path, digest)
     if any(row["sidecar_id"] == sidecar_id for row in rows["sidecars"]):
         return
@@ -1532,13 +1537,8 @@ def _validate_bundle_statuses(frames: Mapping[str, pd.DataFrame]) -> None:
 def _validate_empirical_bundle(frames: Mapping[str, pd.DataFrame]) -> None:
     """Validate empirical identities and uniqueness against serialized store rows."""
 
-    store_identities = {
-        str(row.store_id): (
-            _canonical_store_identity(row.source_offline_store_version, "source_offline_store_version"),
-            _canonical_store_identity(row.split_manifest_hash, "split_manifest_hash"),
-        )
-        for row in frames["stores"].itertuples(index=False)
-    }
+    _reject_duplicate_store_identities(frames["stores"].to_dict(orient="records"))
+    store_identities = _store_identities(frames["stores"])
     empirical = frames["empirical_results"]
     result_ids = empirical["result_id"].astype(str)
     if result_ids.duplicated(keep=False).any():
@@ -1579,6 +1579,32 @@ def _portable_relative_path(value: object, *, field: str) -> Path:
     if path.is_absolute() or path == Path(".") or ".." in path.parts:
         raise ValueError(f"{field} must be a portable relative path.")
     return path
+
+
+def _common_sidecar_root(paths: list[Path]) -> Path:
+    if not paths:
+        return Path.cwd()
+    return Path(os.path.commonpath([path.parent.as_posix() for path in paths]))
+
+
+def _store_identities(stores: pd.DataFrame) -> dict[str, tuple[str, str]]:
+    return {
+        str(row.store_id): (
+            _canonical_store_identity(row.source_offline_store_version, "source_offline_store_version"),
+            _canonical_store_identity(row.split_manifest_hash, "split_manifest_hash"),
+        )
+        for row in stores.itertuples(index=False)
+    }
+
+
+def _reject_duplicate_store_identities(rows: list[Mapping[str, object]]) -> None:
+    stores_by_id: dict[str, list[str]] = {}
+    for row in rows:
+        store_id = str(row["store_id"])
+        stores_by_id.setdefault(store_id, []).append(str(row["name"]))
+    duplicates = {store_id: names for store_id, names in stores_by_id.items() if len(names) > 1}
+    if duplicates:
+        raise ValueError(f"Report contains duplicate store_id identities: {duplicates!r}.")
 
 
 def _canonical_store_identity(value: object, field: str) -> str:
