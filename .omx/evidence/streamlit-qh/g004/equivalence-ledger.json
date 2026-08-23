@@ -1,0 +1,118 @@
+{
+  "integration_remote_oid": {
+    "status": "pending_g006",
+    "value": null
+  },
+  "row_count": 12,
+  "rows": [
+    {
+      "integration_commit": "b3477ff426bc5e9fabbf88730db7c684e979ccd6",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/95#discussion_r3836670981",
+      "repaired_source_commit": "703aff7cfa0292079d3332e4f8870323fc45c56e",
+      "repaired_source_head_oid": "05273423cb8413accc5e08c617224f87abbd6cb6",
+      "review_thread": "PR95#discussion_r3836670981",
+      "same_regression_fixture_test": "tests/rollouts/test_inspection.py::candidate_choice family/transition fixtures",
+      "semantic_parity_result": "local_source_and_integration_behavior_mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "5bad8d0d08af3597d1f09e28f1454368a087eeb2",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/95#discussion_r3836670982",
+      "repaired_source_commit": "c7f5f9e8c003ce5f54fbc4a94eadfad4293d969c",
+      "repaired_source_head_oid": "05273423cb8413accc5e08c617224f87abbd6cb6",
+      "review_thread": "PR95#discussion_r3836670982",
+      "same_regression_fixture_test": "tests/app/panels/test_training_dataset_panel.py::preview control identity/invalidation",
+      "semantic_parity_result": "local_source_and_integration_behavior mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "547d138dee3bcbf59cc74c5615d45e18e9c36d89",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836490020",
+      "repaired_source_commit": "fbe8a081bcf3e9547d8fc40103c9ad9e6c61525e",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836490020",
+      "same_regression_fixture_test": "tests/rollouts/test_inspection.py::actor_valid zero-state macro fixtures",
+      "semantic_parity_result": "local source repair and integration reducer mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "547d138dee3bcbf59cc74c5615d45e18e9c36d89",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836490021",
+      "repaired_source_commit": "fbe8a081bcf3e9547d8fc40103c9ad9e6c61525e",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836490021",
+      "same_regression_fixture_test": "tests/rollouts/test_inspection.py::bounded scientific reducer/read-count fixtures",
+      "semantic_parity_result": "local source repair and integration bounded reducer mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "6717784285f3571a633b29351dc014b51e662248",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728980",
+      "repaired_source_commit": "9ebb41896638dc8af8f0e241f230f749accdc253",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728980",
+      "same_regression_fixture_test": "tests/rollouts/test_inspection.py::target provenance fail-closed",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "982be201b268cc9de66d995268bca70598dfc9e0",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728984",
+      "repaired_source_commit": "d88e63e84ce7541da5db6a7fa5b006412fbe1b8a",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728984",
+      "same_regression_fixture_test": "tests/app/panels/test_stored_rollouts_geometry_diagnostics.py::geometry provenance",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "679c5e15cc7b376c720bf29d0e718a25299167eb",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728989",
+      "repaired_source_commit": "8a8a4a74772efc9b46eb100f46728952b72c2d8d",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728989",
+      "same_regression_fixture_test": "tests/app/test_scientific_labels.py::scientific context and null semantics",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "dd8ca5624eeb3665bb2556c002b111d09634006b",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728994",
+      "repaired_source_commit": "662c2d5517199265dc7c479c1eb0f558ee23eed2",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728994",
+      "same_regression_fixture_test": "tests/oracle/test_admission_evidence.py::zero-observation sentinel",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "547d138dee3bcbf59cc74c5615d45e18e9c36d89",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728996",
+      "repaired_source_commit": "7dba04eb468991567630beb17e9a968227d3be90",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728996",
+      "same_regression_fixture_test": "tests/app/panels/test_stored_rollouts_projection_laziness.py::bounded candidate read",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "34ea70836d7792e87426242653a5a7afd2b6f0c1",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728997",
+      "repaired_source_commit": "614a10006bf2de73b0e7e3a6f5ba2407373857d9",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728997",
+      "same_regression_fixture_test": "tests/app/panels/test_stored_rollouts_projection_laziness.py::fixed-generation mid-open",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "1fcb86b923f4733b0390405c49bc4d0f6127e117",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728998",
+      "repaired_source_commit": "53a9ddc2f94592b322a3cf9632abbc174e80e08b",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836728998",
+      "same_regression_fixture_test": "tests/app/panels/test_stored_rollouts_projection_laziness.py::current identity binding",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    },
+    {
+      "integration_commit": "213f3a27fb367675a037e88294b270693e01d6e3",
+      "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836729001",
+      "repaired_source_commit": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+      "review_thread": "PR101#discussion_r3836729001",
+      "same_regression_fixture_test": "tests/app/panels/test_stored_rollouts_projection_laziness.py::mixed-generation session open",
+      "semantic_parity_result": "mapped; final exact-head run pending"
+    }
+  ],
+  "status": "local_integration_parity_mapped; final_remote_oid_pending_g006"
+}

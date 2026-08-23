@@ -1,0 +1,133 @@
+{
+  "baseline": "origin/main:a121cd821f7748f979c2cddf0f7c3af0e0b6a5a7",
+  "integration_remote_oid": {
+    "status": "pending_g006",
+    "value": null
+  },
+  "row_count": 17,
+  "rows": [
+    {
+      "current_owner": "aria_nbv/aria_nbv/rollouts/qh_reader.py",
+      "feature": "Q_H factual chain, candidate identity, homogeneous contracts, bounded selected-depth preflight",
+      "proof": "PR90 reader/data tests; G007 V10 identity; final qh-ci pending",
+      "source_owner": "PR90 qh_reader.py",
+      "status": "retained"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/data_handling/qh_data/{views.py,dataset.py}",
+      "feature": "Typed CF-GT root/selected observation, causal j<s, actor/oracle fields, CPU audit provenance",
+      "proof": "PR90 Q_H tests and G007 V10 batch identity",
+      "source_owner": "PR90 qh_data views/dataset",
+      "status": "retained"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/lightning/{qh_datamodule.py,qh_module.py}",
+      "feature": "Learning-contract hash, checkpoint identity, fit/validate/test/predict admission",
+      "proof": "PR90 lifecycle tests; final qh-ci pending",
+      "source_owner": "PR90 qh_datamodule/qh_module",
+      "status": "retained"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/app/app.py",
+      "feature": "Streamlit owner/lazy-router contract",
+      "proof": "router and entrypoint tests",
+      "source_owner": "merged PR92 app router",
+      "status": "retained"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/app/panels/_stored_rollouts/ and _stored_rollouts_page.py",
+      "feature": "Decomposed Rollout Supervision coordinator and section modules",
+      "proof": "module-owner structure and page dispatch",
+      "source_owner": "PR95 _stored_rollouts",
+      "status": "retained"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/app/panels/_stored_rollouts/session.py",
+      "feature": "Replacement-sensitive identity, bounded caches, cross-page refresh, corpus laziness",
+      "proof": "b461f2c902 session parity; final exact-head review pending",
+      "source_owner": "PR95 session plus PR101 session fixes",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/app/panels/training_dataset.py and dataset_bundle.py",
+      "feature": "Training Dataset root/rollout selection, readiness, distinct denominators, deterministic export",
+      "proof": "feature census and panel tests; browser proof G005 pending",
+      "source_owner": "historical hub plus PR95 owner",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "training_dataset.py / dataset_bundle.py",
+      "feature": "Q_H corpus readiness and one-real-batch preview",
+      "proof": "5bad8d0d08 named contract; G007 V10 identity; browser proof pending",
+      "source_owner": "PR95 Training Dataset",
+      "status": "retained_and_hardened"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py plus training_dataset.py",
+      "feature": "VIN detected/GT target inventory including zero-target physical samples",
+      "proof": "target inventory tests and current Training Dataset rendering",
+      "source_owner": "PR101 target_inventory",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py and campaign_generation.py",
+      "feature": "Campaign admission evidence with strict oriented-IoU > threshold, provenance, failure reasons",
+      "proof": "14bee9e41c plot repair and admission tests; browser proof pending",
+      "source_owner": "PR101 admission_evidence",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/rollouts/inspection.py and stored-rollouts validity/candidate modules",
+      "feature": "Candidate support direction/spatial/target-view/motion/collision/clearance with truthful zero states and bounded reads",
+      "proof": "547d138dee bounded reads; 98421c53 angular/collision; focused tests pending final receipt",
+      "source_owner": "PR101 inspection",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/rollouts/inspection.py and candidate_generation.py",
+      "feature": "Candidate-choice dynamics and selected-family trajectories across temperature cohorts",
+      "proof": "864613a726 and b3477ff426; family fixture parity pending final gate",
+      "source_owner": "PR95 inspection/presentation",
+      "status": "retained_and_repaired"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/rollouts/reporting.py",
+      "feature": "Corpus-first reporting, compatible-shard pooling, exact contract separation",
+      "proof": "31b2a515 contract-qualified aggregates and 3fad4c2 temporal facets",
+      "source_owner": "PR95/PR101 reporting",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "_stored_rollouts/reconstruction_return.py, overview_topology.py, failure_triage.py, shared.py",
+      "feature": "Reward/reconstruction, primary metrics, topology, failure triage, exact rows/downloads",
+      "proof": "54ac9158 reward plots; 32977b0d collapse/blocked diagnostics; browser proof pending",
+      "source_owner": "PR95 decomposed modules",
+      "status": "retained"
+    },
+    {
+      "current_owner": "_stored_rollouts/inspect_rerun.py and rollouts/inspection.py",
+      "feature": "Read-only Rerun drill-down and selected-depth preview",
+      "proof": "read-only owner and bounded preview tests; real browser/Rerun proof G005 pending",
+      "source_owner": "PR95 inspect module",
+      "status": "retained"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/app/scientific_labels.py and shared theory registry",
+      "feature": "Canonical scientific labels, theory, Typst-derived notation",
+      "proof": "670799214 and 679c5e15 scientific label/narrative tests; browser proof pending",
+      "source_owner": "PR95 labels plus merged Typst owners",
+      "status": "adapted"
+    },
+    {
+      "current_owner": "aria_nbv/aria_nbv/streamlit_app.py and app/app.py",
+      "feature": "Streamlit file-watcher and entrypoint behavior",
+      "proof": "entrypoint tests; hosted/browser gate pending",
+      "source_owner": "PR95 entrypoint plus PR92 baseline",
+      "status": "retained"
+    }
+  ],
+  "source_heads": {
+    "pr101": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
+    "pr95": "05273423cb8413accc5e08c617224f87abbd6cb6"
+  }
+}
