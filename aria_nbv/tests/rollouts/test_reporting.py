@@ -32,6 +32,10 @@ from aria_nbv.rollouts.manifest import RolloutStoreInvocation, RolloutStoreManif
 from aria_nbv.rollouts.reporting import (
     ANALYSIS_FACT_SIDECAR_VERSION,
     THESIS_REPORT_TABLE_COLUMNS,
+    _candidate_corpus_support,
+    _corpus_failure_counts,
+    _corpus_feasibility,
+    _corpus_target_admission,
     _corpus_temporal_summary,
     build_thesis_report_frames,
     serialize_thesis_report_bundle,
@@ -39,6 +43,78 @@ from aria_nbv.rollouts.reporting import (
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -> None:
+    common = {
+        "contract": "contract",
+        "profile": "profile",
+        "generation_cohort_id": "cohort",
+        "generation_cohort": "cohort",
+        "store_id": "store",
+    }
+    candidate = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "group_by": "mixture",
+                "family": "local",
+                "allocated_count": 2,
+                "actor_valid_count": 1,
+                "oracle_valid_count": 1,
+                "trainable_count": 1,
+                "selected_count": 1,
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+    targets = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "target_valid": True,
+                "gt_label_valid": True,
+                "gt_match_status": "matched",
+                "target_row_id": 0,
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+    feasibility = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "candidate_count": 2,
+                "collision_evaluated_count": 2,
+                "collision_count": 1,
+                "clearance_finite_count": 2,
+                "clearance_denominator": 2,
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+    failures = pd.DataFrame(
+        [
+            {**common, "contract_id": contract_id, "kind": "timeout", "severity": "error", "message": "failed"}
+            for contract_id in ("a", "b")
+        ]
+    )
+
+    support = _candidate_corpus_support(candidate)
+    admission = _corpus_target_admission(targets)
+    safe = _corpus_feasibility(feasibility)
+    failure_counts = _corpus_failure_counts(failures)
+
+    for frame in (support, admission, safe, failure_counts):
+        assert set(frame["contract_id"]) == {"a", "b"}
+        assert list(frame["contract_id"]) == ["a", "b"]
+    assert list(support["allocated_count"]) == [2, 2]
+    assert list(admission["count"]) == [1, 1]
+    assert list(safe["collision_count"]) == [1, 1]
+    assert list(failure_counts["count"]) == [1, 1]
 
 
 def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
