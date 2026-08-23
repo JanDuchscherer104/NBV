@@ -64,6 +64,10 @@ scoped-specification precedence and stop before general reviewed intent when
 that specification settles the choice. Do not load reviewed intent for a
 settled exact-owner task outside such a scoped policy decision.
 
+For proposal eligibility classification, including a negative or already-owned
+candidate, open that reference and `.agents/memory/README.md` before deciding
+proposal, debrief, or none; this is the lifecycle exception to the fast path.
+
 ## Conditional branches
 
 - **Durable capture:** When the user directly requests persistence in deliberate
@@ -90,7 +94,9 @@ settled exact-owner task outside such a scoped policy decision.
 - **Proposal or verified residual work:** After the leaf proposal, retrieval,
   validation, and tests are present, classify the completion as owner update
   now, debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or
-  none; route actionable residual work to `agents-db` as its leaf owner.
+  none; for residual work, execute and retain the exact current-owner proof,
+  then search existing records and amend an independently actionable one before
+  creating a new Agents-DB follow-up.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
   durable interface, architecture, or research-facing direction.
 - **Concrete failure owner:** Hand the reproducer and exact evidence to the

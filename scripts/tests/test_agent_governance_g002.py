@@ -762,8 +762,12 @@ def test_capture_and_routing_contracts() -> None:
     assert "Open Choices" in intent_reference
     assert "durable-capture.md" in intent_reference
     assert "accepted plan only for sequencing" in intent_reference
-    assert "Route\nverified actionable residual work to `agents-db`" in intent_reference
+    assert "Route\nverified actionable residual work" in intent_reference
     assert "does not\nmutate policy or records" in intent_reference
+    assert "../../../memory/README.md" in intent_reference
+    assert "../../agents-db/SKILL.md" in intent_reference
+    assert "A described future proof is not verified" in intent_reference
+    assert intent_reference.count("future lifecycle workflows") == 0
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
@@ -826,6 +830,29 @@ def test_capture_and_routing_contracts() -> None:
     assert "Deliberate user-authored `<...>` prose" in root_guidance
     assert "including a read-only capture request" in root_guidance
     assert "markup tags" in agent_behavior
+
+    memory_readme = _read(ROOT / ".agents" / "memory" / "README.md")
+    assert "Current Policy" in memory_readme
+    assert "The proposal is only evidence until" in memory_readme
+    assert "proposal, debrief, or none" in agent_behavior
+    assert "negative or already-owned" in agent_behavior
+    assert ".agents/memory/README.md" in agent_behavior
+    assert "execute and retain the exact current-owner proof" in agent_behavior
+    assert "search existing records and amend" in agent_behavior
+    assert "proposal review or resolution" not in agent_behavior.lower()
+    assert "explicit current-user authority" in external_actions
+    assert "already-reviewed" in external_actions
+    assert "not a simulation" in external_actions
+    assert "cannot self-accept" in external_actions
+    assert "Installation and its proof precede resolution" in external_actions
+    assert "defer and keep the record active" in external_actions
+
+    routing_fixture = ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"
+    assert subprocess.run(
+        ["git", "diff", "--quiet", "--", str(routing_fixture)],
+        cwd=ROOT,
+        check=False,
+    ).returncode == 0
 
 
 def test_pr1_reviewed_intent_fixture_contracts() -> None:

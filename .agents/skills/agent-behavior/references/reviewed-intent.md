@@ -32,8 +32,14 @@ after the choice is settled.
 
 Keep observed history separate from current intent. A normal completed task
 with no reusable evidence creates neither a debrief nor actionable follow-up.
+For proposal eligibility, including a negative or already-owned candidate,
+also open the repository [memory owner](../../../memory/README.md) before
+deciding proposal, debrief, or none.
 After the proposal schema, retrieval query, review dispositions, and validation
 tests are present, classify eligible completion as one of: owner update now,
 debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or none. Route
-verified actionable residual work to `agents-db`; this reference does not
-mutate policy or records.
+verified actionable residual work to the [agents-db skill](../../agents-db/SKILL.md)
+only after executing and retaining the exact current-owner proof. Search
+existing records and amend an independently actionable one before creating a
+new follow-up. A described future proof is not verified, and this reference
+does not mutate policy or records.

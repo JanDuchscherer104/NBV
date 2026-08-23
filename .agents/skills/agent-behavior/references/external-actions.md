@@ -47,6 +47,12 @@ Publication lifecycle:
 - An active external orchestrator owns lifecycle coordination; ARIA skills own
   domain implementation and proof.
 
+Proposal review or resolution also opens this reference. Apply exactly one
+disposition only when explicit current-user authority or already-reviewed
+policy evidence selects it; an agent cannot self-accept a proposal, and the
+route is not a simulation. Installation and its proof precede resolution. If
+no authority selects a disposition, defer and keep the record active.
+
 ## Completion
 
 - Only request-owned paths entered the change.
