@@ -51,7 +51,7 @@ from tests.rollout_fixtures import build_rollout_records
 
 
 def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
-    def frames(value: str) -> dict[str, pd.DataFrame]:
+    def frames(value: str, *, work_unit: str = "a") -> dict[str, pd.DataFrame]:
         return {
             "parameters": pd.DataFrame(
                 [
@@ -71,6 +71,22 @@ def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
                         "value_int": np.nan,
                         "value_bool": np.nan,
                     },
+                    {
+                        "store_id": "store",
+                        "key": "root_attrs.split_manifest_hash",
+                        "value_text": work_unit,
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                    {
+                        "store_id": "store",
+                        "key": "writer_config.recipes[0].policy.seed",
+                        "value_text": work_unit,
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
                 ]
             )
         }
@@ -80,6 +96,7 @@ def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
     assert first["id"] != second["id"]
     assert first["payload"]["parameters"] != second["payload"]["parameters"]
     assert first["label"] == second["label"]
+    assert first["id"] == _persisted_rollout_contract(frames("v1", work_unit="b"), "store", "rich")["id"]
 
 
 def test_report_export_preserves_one_manifest_validation_promotion_and_statistics_call_per_store(

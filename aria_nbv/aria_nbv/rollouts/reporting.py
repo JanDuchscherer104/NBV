@@ -873,26 +873,27 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
     def value(key: str) -> object:
         return values(key)[0] if values(key) else None
 
-    # These prefixes are the persisted compatibility vocabulary.  Keep the
-    # extraction generic so adding a new typed contract parameter cannot create
-    # a silent pooling bug merely because this report adapter was not updated.
-    prefixes = (
-        "config_hashes",
+    # Compatibility is semantic, not work-unit identity.  In particular,
+    # rollout/source/split hashes, seeds, sample keys, temporary store paths,
+    # and recipe controls are intentionally excluded: they vary across shards
+    # while the persisted scientific contract remains comparable.
+    config_hash_suffixes = {
         "candidate",
         "oracle",
-        "rollout",
-        "source",
-        "split",
-        "actor",
-        "writer_config",
-        "lineage",
-        "return",
-        "discount",
-        "q_h",
-        "selected_depth",
-        "view",
-        "contract",
+        "target_crop_policy",
+        "target_protocol",
+    }
+    volatile_tokens = ("seed", "path", "paths", "store_dir", "sample_keys", "verbosity", "is_debug", "device")
+    writer_semantic_prefixes = (
+        "writer_config.candidate_mixture.",
+        "writer_config.store.",
+        "writer_config.target_scorer.",
     )
+    writer_excluded_suffixes = {
+        "writer_config.store.split_manifest_hash",
+        "writer_config.store.store_dir",
+        "writer_config.store.paths",
+    }
     root_attr_suffixes = {
         "schema_id",
         "schema_version",
@@ -910,8 +911,6 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
         "source_offline_store_version",
         "source_split",
         "campaign_split",
-        "split_manifest_hash",
-        "split_lineage",
         "q_h_source_tables",
         "q_h_view_persisted",
         "selected_depth_enabled",
@@ -942,10 +941,16 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
     exact_rows: list[dict[str, object]] = []
     for _, row in parameters[parameters["store_id"] == store_id].iterrows():
         key = str(row["key"])
-        if key == "store_id" or not (
-            key.startswith(prefixes)
-            or (key.startswith("root_attrs.") and key.removeprefix("root_attrs.") in root_attr_suffixes)
-        ):
+        root_attr_key = key.removeprefix("root_attrs.")
+        config_hash_key = key.removeprefix("config_hashes.")
+        is_config_hash = key.startswith("config_hashes.") and any(
+            config_hash_key == suffix or config_hash_key.startswith(f"{suffix}[") for suffix in config_hash_suffixes
+        )
+        is_writer_semantic = key.startswith(writer_semantic_prefixes) and key not in writer_excluded_suffixes
+        if is_writer_semantic and any(token in key for token in volatile_tokens):
+            is_writer_semantic = False
+        is_root_attr = key.startswith("root_attrs.") and root_attr_key in root_attr_suffixes
+        if key == "store_id" or not (is_config_hash or is_writer_semantic or is_root_attr):
             continue
         exact_rows.append({"key": key, "value": json_value(row)})
     exact_rows.sort(key=lambda item: (str(item["key"]), json.dumps(item["value"], sort_keys=True, default=str)))
