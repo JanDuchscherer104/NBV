@@ -28,6 +28,7 @@ from ....rollouts.inspection import (
     paired_policy_comparison_rows,
     promoted_store_validation_error,
     proposal_support_geometry,
+    rollout_trajectory_geometry,
     q_h_evidence_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
@@ -279,6 +280,16 @@ class StoredRolloutSession:
     def root_geometry(self, limit: int | None = None) -> Any:
         return _cached_root_geometry(self._projection_path(), limit, store_identity=self.store_identity)
 
+    def proposal_geometry(self, limit: int | None = None) -> Any:
+        """Return bounded candidate points plus their normalized pose frames."""
+
+        return _cached_proposal_geometry(self._projection_path(), limit, store_identity=self.store_identity)
+
+    def trajectory_geometry(self) -> Any:
+        """Return factual root and selected-pose trajectory geometry."""
+
+        return _cached_trajectory_geometry(self._projection_path(), store_identity=self.store_identity)
+
     def depth_summary(self, rollout_row_id: int | None = None, limit: int | None = None) -> Any:
         return _cached_depth_summary(self._projection_path(), rollout_row_id, limit, store_identity=self.store_identity)
 
@@ -519,6 +530,30 @@ def _cached_root_geometry(store_path: str, limit: int | None = None) -> Any:
     reader, _, _ = _cached_store_bundle(store_path)
     rows = [asdict(point) for point in proposal_support_geometry(reader).points]
     return rows if limit is None else rows[:limit]
+
+
+@_identity_cache
+def _cached_proposal_geometry(store_path: str, limit: int | None = None) -> Any:
+    reader, _, _ = _cached_store_bundle(store_path)
+    projection = proposal_support_geometry(reader, max_candidates=limit or 50_000)
+    return {
+        "points": [asdict(point) for point in projection.points],
+        "frames": [asdict(frame) for frame in projection.frames],
+        "issues": [asdict(issue) for issue in projection.issues],
+        "truncated": projection.truncated,
+    }
+
+
+@_identity_cache
+def _cached_trajectory_geometry(store_path: str) -> Any:
+    reader, _, _ = _cached_store_bundle(store_path)
+    projection = rollout_trajectory_geometry(reader)
+    return {
+        "points": [asdict(point) for point in projection.points],
+        "frames": [asdict(frame) for frame in projection.frames],
+        "issues": [asdict(issue) for issue in projection.issues],
+        "truncated": projection.truncated,
+    }
 
 
 @_identity_cache
