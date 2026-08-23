@@ -55,6 +55,19 @@ CANDIDATE_GROUP_FIELDS: tuple[CandidateGroupField, ...] = (
     "invalid_reason",
     "policy",
 )
+CandidateSelectionGroupField = Literal["position", "strategy", "mixture", "position_strategy"]
+CANDIDATE_SELECTION_GROUP_FIELDS: tuple[CandidateSelectionGroupField, ...] = (
+    "position",
+    "strategy",
+    "mixture",
+    "position_strategy",
+)
+_CANDIDATE_SELECTION_TEMPORAL_METRICS = (
+    "allocation_share",
+    "valid_share",
+    "policy_mass",
+    "selected_share",
+)
 _SAMPLER_PROBABILITY_TOLERANCE = 1e-5
 _GEOMETRY_EPSILON = 1e-9
 
@@ -765,6 +778,23 @@ def candidate_population_evidence(
         calibrations = accumulator.calibrations()
         groups = accumulator.groups()
         collision = accumulator.collision()
+        selection_dynamics = accumulator.selection_dynamics()
+        selection_transitions = {
+            selection_group: (
+                candidate_selection_transition_rows(selection_dynamics[selection_group])
+                if _selection_rows_have_factual_identity(selection_dynamics[selection_group])
+                else []
+            )
+            for selection_group in CANDIDATE_SELECTION_GROUP_FIELDS
+        }
+        selection_sequences = {
+            selection_group: (
+                candidate_selection_sequence_rows(selection_dynamics[selection_group])
+                if _selection_rows_have_factual_identity(selection_dynamics[selection_group])
+                else []
+            )
+            for selection_group in CANDIDATE_SELECTION_GROUP_FIELDS
+        }
         sample_rows = list(sample["rows"])
         return {
             "composition": compositions,
@@ -772,6 +802,13 @@ def candidate_population_evidence(
             "collision": collision,
             "groups": groups,
             "target_evidence_roles": accumulator.target_evidence_roles(),
+            "selection_dynamics": selection_dynamics,
+            "selection_transitions": selection_transitions,
+            "selection_sequences": selection_sequences,
+            "sequence_returns": {
+                selection_group: candidate_sequence_return_summary_rows(selection_sequences[selection_group])
+                for selection_group in CANDIDATE_SELECTION_GROUP_FIELDS
+            },
             "sample": sample,
             "population_count": accumulator.population_count,
             "geometry": candidate_geometry_evidence_rows(sample_rows),
@@ -1674,6 +1711,8 @@ class _CandidatePopulationAccumulator:
         }
         self._collision: dict[str, dict[str, object]] = {}
         self._target_evidence_roles: dict[str, dict[str, int]] = {}
+        self._selection_states: dict[tuple[str, str], dict[str, object]] = {}
+        self._selection_vocab: dict[tuple[str, CandidateSelectionGroupField], set[str]] = {}
 
     def consume(self, row: Mapping[str, object]) -> None:
         normalized = dict(row)
@@ -1721,6 +1760,61 @@ class _CandidatePopulationAccumulator:
             state["probability_sum"] += probability
             state["finite_probability_count"] += 1
             state["negative"] |= probability < 0.0
+        selection_probability = _finite_or_none(normalized.get("selection_probability"))
+        selection_state = self._selection_states.setdefault(
+            (cohort_id, state_id),
+            {
+                "generation_cohort": normalized.get("generation_cohort"),
+                "scene": scene,
+                "rollout_row_id": normalized.get("rollout_row_id"),
+                "step_row_id": normalized.get("step_row_id"),
+                "step_index": normalized.get("step_index"),
+                "policy": normalized.get("policy"),
+                "temperature": normalized.get("temperature"),
+                "horizon": normalized.get("horizon"),
+                "branch_factor": normalized.get("branch_factor"),
+                "beam_width": normalized.get("beam_width"),
+                "cumulative_target_root_gain": normalized.get("cumulative_target_root_gain"),
+                "total": 0,
+                "actor_valid": 0,
+                "selected": 0,
+                "probability_sum": 0.0,
+                "finite_probability_count": 0,
+                "missing": False,
+                "negative": False,
+                "families": {group_by: {} for group_by in CANDIDATE_SELECTION_GROUP_FIELDS},
+            },
+        )
+        selection_state["total"] += 1
+        selection_state["actor_valid"] += int(bool(normalized.get("actor_action")))
+        selection_state["selected"] += int(bool(normalized.get("selected")))
+        if selection_probability is None:
+            selection_state["missing"] = True
+        else:
+            selection_state["probability_sum"] += selection_probability
+            selection_state["finite_probability_count"] += 1
+            selection_state["negative"] |= selection_probability < 0.0
+        selection_families = selection_state["families"]
+        assert isinstance(selection_families, dict)
+        for selection_group in CANDIDATE_SELECTION_GROUP_FIELDS:
+            family = _candidate_selection_family(normalized, selection_group)
+            self._selection_vocab.setdefault((cohort_id, selection_group), set()).add(family)
+            family_state = selection_families[selection_group].setdefault(
+                family,
+                {
+                    "allocated": 0,
+                    "actor_valid": 0,
+                    "selected": 0,
+                    "probability_sum": 0.0,
+                    "finite_probability_count": 0,
+                },
+            )
+            family_state["allocated"] += 1
+            family_state["actor_valid"] += int(bool(normalized.get("actor_action")))
+            family_state["selected"] += int(bool(normalized.get("selected")))
+            if selection_probability is not None:
+                family_state["probability_sum"] += selection_probability
+                family_state["finite_probability_count"] += 1
         collision = self._collision.setdefault(
             cohort_id,
             {
@@ -2054,6 +2148,68 @@ class _CandidatePopulationAccumulator:
             )
         return rows
 
+    def selection_dynamics(self) -> dict[CandidateSelectionGroupField, list[dict[str, object]]]:
+        """Return state-level family availability, policy mass, and realized selection."""
+
+        output: dict[CandidateSelectionGroupField, list[dict[str, object]]] = {}
+        for group_by in CANDIDATE_SELECTION_GROUP_FIELDS:
+            rows: list[dict[str, object]] = []
+            for (cohort_id, _state_id), state in sorted(
+                self._selection_states.items(),
+                key=lambda item: (
+                    item[0][0],
+                    int(item[1].get("rollout_row_id") or -1),
+                    int(item[1].get("step_index") or 0),
+                ),
+            ):
+                probability_error = _probability_state_error(state)
+                families = state["families"]
+                assert isinstance(families, dict)
+                selected_total = int(state["selected"])
+                for family in sorted(self._selection_vocab.get((cohort_id, group_by), set())):
+                    family_state = families[group_by].get(
+                        family,
+                        {
+                            "allocated": 0,
+                            "actor_valid": 0,
+                            "selected": 0,
+                            "probability_sum": 0.0,
+                            "finite_probability_count": 0,
+                        },
+                    )
+                    policy_mass = None if probability_error is not None else float(family_state["probability_sum"])
+                    rows.append(
+                        {
+                            "group_by": group_by,
+                            "family": family,
+                            "generation_cohort_id": cohort_id,
+                            "generation_cohort": state["generation_cohort"],
+                            "scene": state["scene"],
+                            "rollout_row_id": state["rollout_row_id"],
+                            "step_row_id": state["step_row_id"],
+                            "step_index": state["step_index"],
+                            "policy": state["policy"],
+                            "temperature": state["temperature"],
+                            "horizon": state["horizon"],
+                            "branch_factor": state["branch_factor"],
+                            "beam_width": state["beam_width"],
+                            "cumulative_target_root_gain": _finite_or_none(state["cumulative_target_root_gain"]),
+                            "candidate_count": int(state["total"]),
+                            "actor_valid_count": int(state["actor_valid"]),
+                            "family_candidate_count": int(family_state["allocated"]),
+                            "family_actor_valid_count": int(family_state["actor_valid"]),
+                            "family_selected_count": int(family_state["selected"]),
+                            "allocation_share": _safe_fraction(int(family_state["allocated"]), int(state["total"])),
+                            "valid_share": _safe_fraction(int(family_state["actor_valid"]), int(state["actor_valid"])),
+                            "policy_mass": policy_mass,
+                            "selected_share": _safe_fraction(int(family_state["selected"]), selected_total),
+                            "probability_available": probability_error is None,
+                            "probability_unavailable_reason": probability_error,
+                        }
+                    )
+            output[group_by] = rows
+        return output
+
     def groups(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
         output: dict[CandidateGroupField, list[dict[str, object]]] = {}
         for group_by in CANDIDATE_GROUP_FIELDS:
@@ -2085,6 +2241,539 @@ class _CandidatePopulationAccumulator:
             "seed": "stored-rollout-display-v1",
             "display_only": True,
         }
+
+
+def _candidate_selection_family(row: Mapping[str, object], group_by: CandidateSelectionGroupField) -> str:
+    """Return one closed-vocabulary family label for selection diagnostics."""
+
+    if group_by == "position_strategy":
+        return f"{row.get('position', 'unknown')} · {row.get('strategy', 'unknown')}"
+    return str(row.get(group_by, "unknown"))
+
+
+def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, object]]) -> bool:
+    """Return whether state rows can form ordered factual sequences."""
+
+    materialized = list(rows)
+    return bool(materialized) and all(
+        row.get("rollout_row_id") is not None and row.get("step_index") is not None for row in materialized
+    )
+
+
+def _materialize_selection_family_union(
+    rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Add zero-valued rows for families absent from compatible factual states."""
+
+    materialized = [dict(row) for row in rows]
+    families_by_contract: dict[tuple[object, ...], set[str]] = {}
+    for row in materialized:
+        contract = (
+            row.get("group_by"),
+            row.get("policy"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+        )
+        families_by_contract.setdefault(contract, set()).add(str(row["family"]))
+
+    states: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for row in materialized:
+        contract = (
+            row.get("group_by"),
+            row.get("policy"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+        )
+        state = (
+            contract,
+            row.get("generation_cohort_id"),
+            row.get("scene"),
+            row.get("rollout_row_id"),
+            row.get("step_row_id"),
+            row.get("step_index"),
+        )
+        states.setdefault(state, []).append(row)
+
+    output: list[dict[str, object]] = []
+    zero_fields = (
+        "family_candidate_count",
+        "family_actor_valid_count",
+        "family_selected_count",
+        "allocation_share",
+        "valid_share",
+        "selected_share",
+    )
+    for state_rows in states.values():
+        template = state_rows[0]
+        contract = (
+            template.get("group_by"),
+            template.get("policy"),
+            template.get("horizon"),
+            template.get("branch_factor"),
+            template.get("beam_width"),
+        )
+        present = {str(row["family"]) for row in state_rows}
+        output.extend(state_rows)
+        for family in sorted(families_by_contract[contract] - present):
+            zero_row = dict(template)
+            zero_row["family"] = family
+            for field in zero_fields:
+                zero_row[field] = 0 if field.endswith("_count") else 0.0
+            zero_row["policy_mass"] = 0.0 if _finite_or_none(template.get("policy_mass")) is not None else None
+            zero_row["probability_available"] = template.get("probability_available")
+            zero_row["probability_unavailable_reason"] = template.get("probability_unavailable_reason")
+            output.append(zero_row)
+    return output
+
+
+def candidate_selection_transition_rows(
+    dynamics_rows: Iterable[Mapping[str, object]],
+    *,
+    pool_temperatures: bool = False,
+) -> list[dict[str, object]]:
+    """Summarize expected and realized family transitions over factual depth.
+
+    ``policy_mass`` is the complete candidate-level selection-probability mass
+    for the next family. Realized transitions use the one persisted selected
+    family. Both remain conditioned on the previous selected family and exact
+    generation cohort unless ``pool_temperatures`` is requested. The pooled
+    view recomputes frequencies from factual states while retaining the policy,
+    horizon, branch-factor, and beam-width compatibility controls.
+    """
+
+    rows = [dict(row) for row in dynamics_rows]
+    if pool_temperatures:
+        rows = _materialize_selection_family_union(rows)
+    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
+    for row in rows:
+        rollout_row_id = row.get("rollout_row_id")
+        step_index = row.get("step_index")
+        if rollout_row_id is None or step_index is None:
+            raise ValueError("Selection dynamics require rollout_row_id and step_index.")
+        key = (str(row.get("generation_cohort_id", "unknown")), int(rollout_row_id))
+        by_rollout.setdefault(key, {}).setdefault(int(step_index), []).append(row)
+
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    for (_cohort_id, _rollout_row_id), steps in sorted(by_rollout.items()):
+        indices = sorted(steps)
+        if indices != list(range(len(indices))):
+            raise ValueError(f"Selection dynamics require contiguous zero-based factual steps; received {indices}.")
+        for step_index in indices[1:]:
+            previous_rows = steps[step_index - 1]
+            current_rows = steps[step_index]
+            previous_selected = [str(row["family"]) for row in previous_rows if int(row["family_selected_count"]) == 1]
+            if len(previous_selected) != 1:
+                raise ValueError("Each factual selection state must identify exactly one previously selected family.")
+            previous_family = previous_selected[0]
+            for row in current_rows:
+                key = (
+                    (
+                        row.get("group_by"),
+                        row.get("policy"),
+                        row.get("horizon"),
+                        row.get("branch_factor"),
+                        row.get("beam_width"),
+                        int(step_index),
+                        previous_family,
+                        str(row["family"]),
+                    )
+                    if pool_temperatures
+                    else (
+                        row.get("group_by"),
+                        row.get("generation_cohort_id"),
+                        row.get("generation_cohort"),
+                        row.get("policy"),
+                        row.get("temperature"),
+                        row.get("horizon"),
+                        row.get("branch_factor"),
+                        row.get("beam_width"),
+                        int(step_index),
+                        previous_family,
+                        str(row["family"]),
+                    )
+                )
+                summary = grouped.setdefault(
+                    key,
+                    {
+                        "context_count": 0,
+                        "realized_count": 0,
+                        "expected_values": [],
+                        "missing_probability_count": 0,
+                    },
+                )
+                summary["context_count"] = int(summary["context_count"]) + 1
+                summary["realized_count"] = int(summary["realized_count"]) + int(row["family_selected_count"])
+                policy_mass = _finite_or_none(row.get("policy_mass"))
+                expected_values = summary["expected_values"]
+                assert isinstance(expected_values, list)
+                if policy_mass is None:
+                    summary["missing_probability_count"] = int(summary["missing_probability_count"]) + 1
+                else:
+                    expected_values.append(policy_mass)
+
+    output: list[dict[str, object]] = []
+    for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
+        expected = np.asarray(summary["expected_values"], dtype=np.float64)
+        q25, median, q75 = (
+            (None, None, None)
+            if not expected.size
+            else tuple(
+                float(value) for value in np.quantile(np.sort(expected), (0.25, 0.5, 0.75), method="linear").tolist()
+            )
+        )
+        if pool_temperatures:
+            group_by, policy, horizon, branch_factor, beam_width, step_index, previous_family, next_family = key
+            cohort_id = None
+            cohort = None
+            temperature = None
+        else:
+            (
+                group_by,
+                cohort_id,
+                cohort,
+                policy,
+                temperature,
+                horizon,
+                branch_factor,
+                beam_width,
+                step_index,
+                previous_family,
+                next_family,
+            ) = key
+        context_count = int(summary["context_count"])
+        output.append(
+            {
+                "group_by": group_by,
+                "generation_cohort_id": cohort_id,
+                "generation_cohort": cohort,
+                "policy": policy,
+                "temperature": temperature,
+                "pooled_temperatures": pool_temperatures,
+                "horizon": horizon,
+                "branch_factor": branch_factor,
+                "beam_width": beam_width,
+                "step_index": step_index,
+                "previous_family": previous_family,
+                "next_family": next_family,
+                "context_count": context_count,
+                "expected_finite_count": int(expected.size),
+                "expected_missing_count": int(summary["missing_probability_count"]),
+                "expected_policy_mass_mean": None if not expected.size else float(np.mean(expected)),
+                "expected_policy_mass_median": median,
+                "expected_policy_mass_q25": q25,
+                "expected_policy_mass_q75": q75,
+                "realized_count": int(summary["realized_count"]),
+                "realized_rate": _safe_fraction(int(summary["realized_count"]), context_count),
+            }
+        )
+    return output
+
+
+def candidate_selection_temporal_summary_rows(
+    dynamics_rows: Iterable[Mapping[str, object]],
+    *,
+    metric: str,
+) -> list[dict[str, object]]:
+    """Summarize one state-level candidate-family quantity over factual depth."""
+
+    if metric not in _CANDIDATE_SELECTION_TEMPORAL_METRICS:
+        raise ValueError(
+            f"Unsupported candidate selection metric {metric!r}; "
+            f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
+        )
+    grouped: dict[tuple[object, ...], list[object]] = {}
+    for source_row in dynamics_rows:
+        row = dict(source_row)
+        step_index = row.get("step_index")
+        if step_index is None:
+            raise ValueError("Candidate selection summaries require factual step_index values.")
+        key = (
+            row.get("group_by"),
+            row.get("generation_cohort_id"),
+            row.get("generation_cohort"),
+            row.get("policy"),
+            row.get("temperature"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+            int(step_index),
+            row.get("family"),
+        )
+        grouped.setdefault(key, []).append(row.get(metric))
+    output: list[dict[str, object]] = []
+    for key, values in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
+        finite = np.asarray(
+            [value for value in (_finite_or_none(value) for value in values) if value is not None],
+            dtype=np.float64,
+        )
+        q25, median, q75 = (
+            (None, None, None)
+            if not finite.size
+            else tuple(
+                float(value) for value in np.quantile(np.sort(finite), (0.25, 0.5, 0.75), method="linear").tolist()
+            )
+        )
+        (
+            group_by,
+            cohort_id,
+            cohort,
+            policy,
+            temperature,
+            horizon,
+            branch_factor,
+            beam_width,
+            step_index,
+            family,
+        ) = key
+        output.append(
+            {
+                "metric": metric,
+                "group_by": group_by,
+                "generation_cohort_id": cohort_id,
+                "generation_cohort": cohort,
+                "policy": policy,
+                "temperature": temperature,
+                "horizon": horizon,
+                "branch_factor": branch_factor,
+                "beam_width": beam_width,
+                "step_index": step_index,
+                "family": family,
+                "total_count": len(values),
+                "finite_count": int(finite.size),
+                "missing_count": len(values) - int(finite.size),
+                "mean": None if not finite.size else float(np.mean(finite)),
+                "median": median,
+                "q25": q25,
+                "q75": q75,
+            }
+        )
+    return output
+
+
+def candidate_selection_pooled_summary_rows(
+    dynamics_rows: Iterable[Mapping[str, object]],
+    *,
+    metric: str,
+) -> list[dict[str, object]]:
+    """Pool one compatible candidate-family fraction over factual trajectories.
+
+    This is a sample-population view for one selected store. It deliberately
+    omits temperature and exact generation-cohort identity while retaining
+    policy, horizon, branch factor, and beam width as compatibility controls.
+    Candidate and selected shares are recomputed from additive counts; policy
+    mass is the equal-state mean of complete persisted probability vectors.
+    """
+
+    if metric not in _CANDIDATE_SELECTION_TEMPORAL_METRICS:
+        raise ValueError(
+            f"Unsupported candidate selection metric {metric!r}; "
+            f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
+        )
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    for row in _materialize_selection_family_union(dynamics_rows):
+        step_index = row.get("step_index")
+        if step_index is None:
+            raise ValueError("Candidate selection summaries require factual step_index values.")
+        key = (
+            row.get("group_by"),
+            row.get("policy"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+            int(step_index),
+            row.get("family"),
+        )
+        summary = grouped.setdefault(
+            key,
+            {
+                "state_ids": set(),
+                "numerator": 0,
+                "denominator": 0,
+                "policy_values": [],
+                "policy_missing_count": 0,
+            },
+        )
+        state_ids = summary["state_ids"]
+        assert isinstance(state_ids, set)
+        state_ids.add((row.get("generation_cohort_id"), row.get("rollout_row_id"), int(step_index)))
+        if metric == "policy_mass":
+            value = _finite_or_none(row.get("policy_mass"))
+            if value is None:
+                summary["policy_missing_count"] = int(summary["policy_missing_count"]) + 1
+            else:
+                values = summary["policy_values"]
+                assert isinstance(values, list)
+                values.append(value)
+            continue
+        numerator_field, denominator_field = {
+            "allocation_share": ("family_candidate_count", "candidate_count"),
+            "valid_share": ("family_actor_valid_count", "actor_valid_count"),
+            "selected_share": ("family_selected_count", None),
+        }[metric]
+        summary["numerator"] = int(summary["numerator"]) + int(row[numerator_field])
+        denominator = 1 if denominator_field is None else int(row[denominator_field])
+        summary["denominator"] = int(summary["denominator"]) + denominator
+
+    output: list[dict[str, object]] = []
+    for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
+        group_by, policy, horizon, branch_factor, beam_width, step_index, family = key
+        state_ids = summary["state_ids"]
+        assert isinstance(state_ids, set)
+        state_count = len(state_ids)
+        if metric == "policy_mass":
+            values = summary["policy_values"]
+            assert isinstance(values, list)
+            finite_count = len(values)
+            fraction = None if not finite_count else float(np.mean(np.asarray(values, dtype=np.float64)))
+            numerator = None
+            denominator = None
+        else:
+            finite_count = state_count
+            numerator = int(summary["numerator"])
+            denominator = int(summary["denominator"])
+            fraction = _safe_fraction(numerator, denominator)
+        output.append(
+            {
+                "metric": metric,
+                "group_by": group_by,
+                "policy": policy,
+                "horizon": horizon,
+                "branch_factor": branch_factor,
+                "beam_width": beam_width,
+                "step_index": step_index,
+                "family": family,
+                "state_count": state_count,
+                "finite_state_count": finite_count,
+                "missing_state_count": state_count - finite_count,
+                "numerator": numerator,
+                "denominator": denominator,
+                "fraction": fraction,
+            }
+        )
+    return output
+
+
+def candidate_selection_sequence_rows(
+    dynamics_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Return one selected-family sequence and terminal gain per factual rollout."""
+
+    rows = [dict(row) for row in dynamics_rows]
+    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
+    for row in rows:
+        rollout_row_id = row.get("rollout_row_id")
+        step_index = row.get("step_index")
+        if rollout_row_id is None or step_index is None:
+            raise ValueError("Selection dynamics require rollout_row_id and step_index.")
+        key = (str(row.get("generation_cohort_id", "unknown")), int(rollout_row_id))
+        by_rollout.setdefault(key, {}).setdefault(int(step_index), []).append(row)
+
+    output: list[dict[str, object]] = []
+    for (cohort_id, rollout_row_id), steps in sorted(by_rollout.items()):
+        indices = sorted(steps)
+        if indices != list(range(len(indices))):
+            raise ValueError(f"Selection sequences require contiguous zero-based factual steps; received {indices}.")
+        selected_sequence: list[str] = []
+        for step_index in indices:
+            selected = [str(row["family"]) for row in steps[step_index] if int(row["family_selected_count"]) == 1]
+            if len(selected) != 1:
+                raise ValueError("Each factual selection state must identify exactly one selected family.")
+            selected_sequence.append(selected[0])
+        terminal = steps[indices[-1]][0]
+        horizon = int(terminal.get("horizon") or len(indices))
+        output.append(
+            {
+                "group_by": terminal.get("group_by"),
+                "generation_cohort_id": cohort_id,
+                "generation_cohort": terminal.get("generation_cohort"),
+                "scene": terminal.get("scene"),
+                "rollout_row_id": rollout_row_id,
+                "policy": terminal.get("policy"),
+                "temperature": terminal.get("temperature"),
+                "horizon": horizon,
+                "branch_factor": terminal.get("branch_factor"),
+                "beam_width": terminal.get("beam_width"),
+                "observed_steps": len(indices),
+                "completed_horizon": len(indices) == horizon,
+                "sequence": " → ".join(selected_sequence),
+                "sequence_families": tuple(selected_sequence),
+                "terminal_cumulative_target_root_gain": _finite_or_none(terminal.get("cumulative_target_root_gain")),
+            }
+        )
+    return output
+
+
+def candidate_sequence_return_summary_rows(
+    sequence_rows: Iterable[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Summarize terminal return by exact selected-family sequence."""
+
+    grouped: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    for source_row in sequence_rows:
+        row = dict(source_row)
+        key = (
+            row.get("group_by"),
+            row.get("generation_cohort_id"),
+            row.get("generation_cohort"),
+            row.get("policy"),
+            row.get("temperature"),
+            row.get("horizon"),
+            row.get("branch_factor"),
+            row.get("beam_width"),
+            row.get("sequence"),
+        )
+        grouped.setdefault(key, []).append(row)
+    output: list[dict[str, object]] = []
+    for key, rows in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
+        gains = np.asarray(
+            [
+                value
+                for row in rows
+                if (value := _finite_or_none(row.get("terminal_cumulative_target_root_gain"))) is not None
+            ],
+            dtype=np.float64,
+        )
+        q25, median, q75 = (
+            (None, None, None)
+            if not gains.size
+            else tuple(
+                float(value) for value in np.quantile(np.sort(gains), (0.25, 0.5, 0.75), method="linear").tolist()
+            )
+        )
+        (
+            group_by,
+            cohort_id,
+            cohort,
+            policy,
+            temperature,
+            horizon,
+            branch_factor,
+            beam_width,
+            sequence,
+        ) = key
+        output.append(
+            {
+                "group_by": group_by,
+                "generation_cohort_id": cohort_id,
+                "generation_cohort": cohort,
+                "policy": policy,
+                "temperature": temperature,
+                "horizon": horizon,
+                "branch_factor": branch_factor,
+                "beam_width": beam_width,
+                "sequence": sequence,
+                "rollout_count": len(rows),
+                "completed_count": sum(bool(row.get("completed_horizon")) for row in rows),
+                "finite_return_count": int(gains.size),
+                "terminal_return_mean": None if not gains.size else float(np.mean(gains)),
+                "terminal_return_median": median,
+                "terminal_return_q25": q25,
+                "terminal_return_q75": q75,
+            }
+        )
+    return output
 
 
 def temporal_metric_summary_rows(
@@ -6066,6 +6755,11 @@ __all__ = [
     "candidate_collision_support_rows",
     "candidate_composition_rows",
     "candidate_proposal_calibration_rows",
+    "candidate_selection_pooled_summary_rows",
+    "candidate_selection_sequence_rows",
+    "candidate_selection_temporal_summary_rows",
+    "candidate_selection_transition_rows",
+    "candidate_sequence_return_summary_rows",
     "deterministic_candidate_display_sample",
     "candidate_result_diagnostic_counts",
     "comparable_policy_cohorts",

@@ -27,6 +27,11 @@ from aria_nbv.rollouts.inspection import (
     candidate_group_summary_rows,
     candidate_population_evidence,
     candidate_proposal_calibration_rows,
+    candidate_selection_pooled_summary_rows,
+    candidate_selection_sequence_rows,
+    candidate_selection_temporal_summary_rows,
+    candidate_selection_transition_rows,
+    candidate_sequence_return_summary_rows,
     comparable_policy_cohorts,
     deterministic_candidate_display_sample,
     discounted_rollout_return_rows,
@@ -55,6 +60,26 @@ from aria_nbv.rollouts.inspection import (
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_candidate_population_owner_census_keeps_selection_domain_surface() -> None:
+    """The pooled inspection bundle retains the candidate-choice public owners."""
+
+    assert all(
+        callable(owner)
+        for owner in (
+            candidate_selection_pooled_summary_rows,
+            candidate_selection_sequence_rows,
+            candidate_selection_temporal_summary_rows,
+            candidate_selection_transition_rows,
+            candidate_sequence_return_summary_rows,
+        )
+    )
+    bundle = candidate_population_evidence(
+        cast(Any, object()),
+        audit_reader=lambda _reader, row_callback: None,
+    )
+    assert set(bundle["selection_dynamics"]) == {"position", "strategy", "mixture", "position_strategy"}
 
 
 def test_candidate_group_summary_rejects_unsupported_field() -> None:
