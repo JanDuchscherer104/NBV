@@ -27,3 +27,13 @@ scope, and missing decision instead of selecting a policy.
 Explicit current-user capture continues through
 [`durable-capture.md`](durable-capture.md). Return to the smallest exact owner
 after the choice is settled.
+
+## Follow-up boundary
+
+Keep observed history separate from current intent. A normal completed task
+with no reusable evidence creates neither a debrief nor actionable follow-up.
+After the proposal schema, retrieval query, review dispositions, and validation
+tests are present, classify eligible completion as one of: owner update now,
+debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or none. Route
+verified actionable residual work to `agents-db`; this reference does not
+mutate policy or records.

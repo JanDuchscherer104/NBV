@@ -44,6 +44,13 @@ scientific truth stays with its smallest source owner.
    independently actionable.
 4. Run the target's validation before handing off or completing the change.
 
+When `agent-behavior` reaches verified actionable residual work or a reviewed
+intent-promotion review, activate this skill as the leaf maintenance owner.
+Use the existing triage, to-issues, proposal-review, and resolution modes;
+ordinary reviewed TOML edits install accepted changes, while rejected,
+narrowed, or deferred proposals do not automatically mutate policy. Resolve a
+completed record into `.agents/resolved.toml` so its history remains auditable.
+
 ## Completion
 
 Report the changed record IDs, stable references, validation result, and any

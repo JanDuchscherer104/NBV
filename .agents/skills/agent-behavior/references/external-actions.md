@@ -29,6 +29,24 @@ or another action that changes external state.
 - Report the resulting URL, identifier, or exact blocker. Do not describe a
   local draft or successful command preparation as a completed external action.
 
+Publication lifecycle:
+
+- Preserve immutable workpackage commit links in committed debriefs: publish
+  them with GitHub **Create a merge commit** (or an equivalent no-ff merge),
+  never squash or rebase them away. If a rebase or amend is unavoidable, update
+  every link and `repo_head` in the separate debrief/index owner before
+  publication.
+- Actionable P0-P2 review findings become resolvable line threads. The fixing
+  agent replies with what changed and exact-head proof; only then does the
+  orchestrator resolve the thread.
+- `$code-review` leaves one holistic verdict, architecture/verification/risk
+  handoff in addition to line findings.
+- With explicit continuing publication authority, Ultragoal may open a draft
+  PR after the first coherent verified workpackage and push completed
+  workpackages. Otherwise local commits remain the publication boundary.
+- An active external orchestrator owns lifecycle coordination; ARIA skills own
+  domain implementation and proof.
+
 ## Completion
 
 - Only request-owned paths entered the change.

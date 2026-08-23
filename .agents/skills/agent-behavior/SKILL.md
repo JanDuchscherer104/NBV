@@ -87,6 +87,10 @@ settled exact-owner task outside such a scoped policy decision.
   open status.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
+- **Proposal or verified residual work:** After the leaf proposal, retrieval,
+  validation, and tests are present, classify the completion as owner update
+  now, debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or
+  none; route actionable residual work to `agents-db` as its leaf owner.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
   durable interface, architecture, or research-facing direction.
 - **Concrete failure owner:** Hand the reproducer and exact evidence to the

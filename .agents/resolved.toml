@@ -1170,6 +1170,26 @@ resolved_at = "2026-07-30"
 resolution_note = "Retired with the LitKG scaffold integration; no replacement backlog is created."
 resolved_from = ".agents/todos.toml"
 
+[[todo]]
+id = "todo-044"
+title = "Define a source-backed memory consolidation proposal workflow"
+description = "Provide a bounded proposal-only route from debrief and backlog evidence to reviewed exact-owner updates without reviving LitKG."
+priority = "medium"
+status = "resolved"
+labels = ["memory", "consolidation", "agents-db", "scaffold"]
+issue_ids = ["issue-025"]
+loc_min = 20
+loc_expected = 80
+loc_max = 180
+context = ["Debriefs record whether owner updates are needed, but the current process does not define one small review path for applying those proposals.", "The requirement is tool-independent: evidence must cite exact owners, and no automated helper may overwrite Typst, code, configuration, tests, or guidance."]
+references = ["repo:.agents/memory/README.md", "repo:.agents/skills/agents-db/references/provenance.md", "repo:.agents/skills/aria-nbv-context/SKILL.md#capture-rule"]
+implementation_notes = ["Start with the existing debrief frontmatter and agents-db workflow.", "Prefer a documented review step or a small existing-command extension over a new service, ontology, graph, or transcript processor."]
+acceptance = ["A maintainer can identify pending owner updates from source-backed debriefs and review them by target owner.", "No helper mutates an owner surface or backlog without an explicit ordinary repository edit."]
+verification = ["make check-agent-memory", "make agents-db AGENTS_ARGS='validate'"]
+resolved_at = "2026-08-23"
+resolution_note = "accepted and completed in G002 PR2: proposal target/body lookup, accept/reject/narrow/defer review lifecycle, no automatic policy mutation, resolution history, and commit-link validation are covered by focused debrief tests plus make check-agent-memory and agents-db validation"
+resolved_from = ".agents/todos.toml"
+
 [[refactor]]
 id = "refactor-013"
 title = "Pilot optional OMX and Codex templates after scaffold cleanup"

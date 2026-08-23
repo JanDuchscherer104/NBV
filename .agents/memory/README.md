@@ -88,6 +88,29 @@ codex_thread: codex://threads/<thread-id>
 
 When it materially clarifies the work, note staged or commit scope in a dirty
 worktree and whether compatibility was deliberately preserved or removed.
+For a reviewed-intent proposal, put the existing target owner path in
+`canonical_updates_needed`; the body must contain the exact five-field
+`## Human Intent Proposal` template below. Pending proposals can be listed
+without opening every source:
+
+```sh
+jq -r 'select(.canonical_update_paths | index(".agents/references/human_owner_intent.md")) | .source_path' \
+  .agents/memory/index/debriefs.jsonl
+```
+
+```md
+## Human Intent Proposal
+- Proposed statement: <reusable statement>
+- Evidence: <exact user statement or bounded evidence>
+- Current owner or conflict: <reviewed policy or unresolved conflict>
+- Scope and target owner: <scope and exact owner path>
+- Disposition: proposed
+```
+
+The proposal is only evidence until a maintainer reviews it. Review
+dispositions are `accept`, `reject`, `narrow`, or `defer`; accept/narrow use an
+ordinary reviewed owner edit, reject/defer leave policy bytes unchanged, and
+the related Agents-DB record is resolved rather than deleted only after proof.
 The JSONL file at `index/debriefs.jsonl` is a derived navigation index only.
 It contains no findings, rankings, authority scores, or current-truth claims.
 Every row exposes `touched_owner_paths` and `codex_thread`. Older
