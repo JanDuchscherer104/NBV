@@ -5,11 +5,7 @@ from scripts.quartodoc_expand_config import discover_modules
 
 def test_qh_modules_are_discovered_for_api_generation() -> None:
     discovered = {name for name, _is_package in discover_modules()}
-    qh_modules = {
-        name
-        for name in discovered
-        if name.startswith(("data_handling.qh", "lightning.qh", "rollouts.qh"))
-    }
+    qh_modules = {name for name in discovered if name.startswith(("data_handling.qh", "lightning.qh", "rollouts.qh"))}
 
     assert qh_modules == {
         "data_handling.qh_data",
@@ -28,17 +24,13 @@ def test_qh_modules_are_discovered_for_api_generation() -> None:
 def test_renamed_data_modules_are_discovered_for_api_generation() -> None:
     discovered = {name for name, _is_package in discover_modules()}
 
-    assert {
-        name for name in discovered if name.startswith("data_handling.ase_efm")
-    } == {
+    assert {name for name in discovered if name.startswith("data_handling.ase_efm")} == {
         "data_handling.ase_efm",
         "data_handling.ase_efm.dataset",
         "data_handling.ase_efm.loader",
         "data_handling.ase_efm.views",
     }
-    assert {
-        name for name in discovered if name.startswith("data_handling.vin_store")
-    } == {
+    assert {name for name in discovered if name.startswith("data_handling.vin_store")} == {
         "data_handling.vin_store",
         "data_handling.vin_store.adapter",
         "data_handling.vin_store.batch",
