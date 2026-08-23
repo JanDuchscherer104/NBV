@@ -375,6 +375,37 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     evidence_role,
                 ),
             )
+        angular = pd.DataFrame(direction.get("angular_support_rows", []))
+        if not angular.empty:
+            angular = _select_support_facet(angular, "Angular support")
+            value_columns = [name for name in ("nearest_neighbor_deg", "covering_radius_deg") if name in angular]
+            if value_columns:
+                angular_plot = angular.melt(
+                    id_vars=[name for name in ("metric", "population") if name in angular],
+                    value_vars=value_columns,
+                    var_name="support_metric",
+                    value_name="degrees",
+                ).dropna(subset=["degrees"])
+                if not angular_plot.empty:
+                    _render_plot(
+                        px.bar(
+                            angular_plot,
+                            x="support_metric",
+                            y="degrees",
+                            color="population" if "population" in angular_plot else None,
+                            title="Angular nearest-neighbor and covering support",
+                        ),
+                        _candidate_population_explanation(
+                            "Do sampled directions cover the sphere locally and globally?",
+                            "Complete direction-support summaries for the selected exact facet.",
+                            "Mean nearest-neighbor separation and probe covering radius in degrees.",
+                            "Finite normalized directions; singleton states report unavailable nearest-neighbor support.",
+                            "Small nearest-neighbor gaps and bounded covering radius indicate broad angular support.",
+                            "Large gaps or unavailable values expose sparse direction generation or missing geometry.",
+                            "inspection.candidate_direction_evidence.angular_support_rows",
+                            evidence_role,
+                        ),
+                    )
 
     for key, title in (("spatial", "Spatial candidate support"), ("motion", "Motion and collision support")):
         frame = pd.DataFrame(population.get(key, []))
@@ -408,6 +439,41 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
         with st.expander(f"{title} rows and CSV"):
             st.dataframe(selected, hide_index=True, width="stretch")
             _download_frame(f"Download {key} support CSV", f"candidate-{key}-support.csv", selected)
+
+    collision = pd.DataFrame(population.get("collision", []))
+    if not collision.empty:
+        collision = _select_support_facet(collision, "Collision support")
+        collision_fields = [
+            name
+            for name in (
+                "applicable_count",
+                "evaluated_count",
+                "collision_count",
+                "not_applicable_count",
+                "available",
+                "collisions",
+                "not_applicable",
+            )
+            if name in collision
+        ]
+        if collision_fields:
+            collision_plot = collision[collision_fields].sum(numeric_only=True).rename("count").reset_index()
+            collision_plot.columns = ["metric", "count"]
+            _render_plot(
+                px.bar(
+                    collision_plot, x="metric", y="count", title="Collision applicability and evaluation denominators"
+                ),
+                _candidate_population_explanation(
+                    "How much of the candidate population was eligible for collision evaluation?",
+                    "Complete collision diagnostics for the selected exact candidate facet.",
+                    "Counts of applicable, evaluated, colliding, and not-applicable candidates.",
+                    "Collision rates use evaluated candidates only; applicability and missing evaluation remain separate.",
+                    "Most applicable candidates are evaluated and denominators are explicit.",
+                    "High non-applicability or low evaluation counts indicate evaluator coverage limitations.",
+                    "inspection.candidate_motion_support_evidence.collision",
+                    evidence_role,
+                ),
+            )
 
     target_view = pd.DataFrame(population.get("target_view", []))
     if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty:
