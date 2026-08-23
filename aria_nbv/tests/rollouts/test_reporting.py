@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 
 import numpy as np
 import pandas as pd
@@ -159,6 +160,83 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
     assert list(admission["count"]) == [1, 1]
     assert list(safe["collision_count"]) == [1, 1]
     assert list(failure_counts["count"]) == [1, 1]
+
+
+def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_support(tmp_path) -> None:
+    """An invalid selection remains visible and contributes no scientific rows."""
+
+    valid = write_rollout_zarr_store(
+        tmp_path / "valid.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=111)[:1],
+    ).store_dir
+    invalid = tmp_path / "invalid.zarr"
+    shutil.copytree(valid, invalid)
+    (invalid / "manifest.json").write_text("{}", encoding="utf-8")
+
+    summary = reporting.build_rollout_corpus_summary([invalid, valid])
+    baseline = reporting.build_rollout_corpus_summary([valid])
+
+    assert summary.verdict == "Incomplete"
+    assert summary.totals["selected_store_count"] == 2
+    assert summary.totals["included_store_count"] == 1
+    assert summary.totals["excluded_store_count"] == 1
+    assert summary.totals == baseline.totals | {
+        "selected_store_count": 2,
+        "excluded_store_count": 1,
+    }
+    assert summary.excluded_stores[0]["path"] == invalid.resolve().as_posix()
+    assert summary.excluded_stores[0]["reason"]
+    assert set(summary.candidate_support["contract_id"]) == {summary.included_stores[0]["contract_id"]}
+    assert not summary.candidate_support.empty
+    assert set(summary.endpoints["store_id"]) == {summary.included_stores[0]["store_id"]}
+
+
+def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(tmp_path) -> None:
+    """Matching generated shards pool factual depths; profile changes stay faceted."""
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=112)[:1]
+
+    def store(name: str, profile: str):
+        return write_rollout_zarr_store(
+            tmp_path / f"{name}.zarr",
+            records,
+            manifest_context=RolloutStoreManifestContext(writer_config={"profile": profile}),
+        ).store_dir
+
+    same_a = store("same-a", "rich_local_60")
+    same_b = store("same-b", "rich_local_60")
+    incompatible = store("incompatible", "realistic_core_60")
+    summary = reporting.build_rollout_corpus_summary([incompatible, same_b, same_a])
+
+    root_gain = summary.temporal_summary[
+        (summary.temporal_summary["metric"] == "cumulative_target_root_gain")
+        & (summary.temporal_summary["step_index"] == 0)
+    ]
+    assert set(root_gain["profile"]) == {"realistic_core_60", "rich_local_60"}
+    assert set(root_gain["store_count"]) == {1, 2}
+    pooled = root_gain[root_gain["profile"] == "rich_local_60"]
+    assert len(pooled) == 1
+    assert pooled.iloc[0]["total_count"] == 2
+    assert pooled.iloc[0]["finite_count"] == 2
+    assert summary.totals["included_store_count"] == 3
+    assert summary.totals["q_h_state_count"] is not None
+
+
+def test_report_profile_falls_back_to_explicit_campaign_profile_hash(tmp_path) -> None:
+    """Generated stores without a name expose their campaign profile hash."""
+
+    profile_hash = "campaign-profile-hash-1234567890"
+    result = write_rollout_zarr_store(
+        tmp_path / "profile-hash.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=113)[:1],
+        manifest_context=RolloutStoreManifestContext(
+            shard={"campaign_binding": {"profile_hash": profile_hash}},
+        ),
+    )
+    frames = reporting.build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+    store_id = str(frames["stores"].iloc[0]["store_id"])
+
+    assert reporting._report_profile(frames, store_id) == f"profile_hash={profile_hash[:12]}"
 
 
 def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
