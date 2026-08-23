@@ -497,6 +497,21 @@ def _candidate_population_role(population: dict[str, object]) -> str | None:
     )
 
 
+_CANDIDATE_POPULATION_ANSWERS = {
+    "How does candidate-family choice evolve across factual acquisition?": "The traces separate available family support, actor-valid support, policy probability mass, and realized selections by factual acquisition.",
+    "How does the previously selected family relate to the next family?": "The heatmaps compare expected policy mass with realized next-family frequency for the same adjacent factual contexts.",
+    "Which selected-family sequences produce the observed terminal return distribution?": "The grouped distributions connect complete selected-family sequences to their observed terminal target-root gains.",
+    "Does candidate direction support cover solid angle without coordinate-latitude bias?": "The equal-area direction bins show where the complete candidate shell supplies angular support without overweighting the poles.",
+    "How far does the observed direction distribution depart from an isotropic reference?": "The distance summarizes how far observed normalized directions depart from the uniform-sphere reference at each factual state.",
+    "Do sampled directions cover the sphere locally and globally?": "Nearest-neighbor separation and covering radius expose local gaps and the largest uncovered angular region in the sampled support.",
+    "How often do evaluated candidates collide, at population and state-macro levels?": "The paired summaries distinguish candidate-weighted collision frequency from the equal-weight state macro, preserving both denominators.",
+    "How much geometric clearance is observed for the candidate population?": "The summaries report finite path clearance for the full candidate population and separately for state-level macros.",
+    "How much of the candidate shell is represented by collision and clearance evidence?": "The additive counts show which portions of the candidate shell were evaluated, collision-labelled, and assigned finite clearance.",
+    "What finite target distance is represented in the selected target-view population?": "The bars show the finite target-distance scale represented in the selected target-view population, separate from optical availability.",
+    "Which optical and visibility measurements are actually persisted?": "The grouped counts show which optical and visibility measurements are finite or missing, without treating absence as a zero-valued measurement.",
+}
+
+
 def _candidate_population_explanation(
     question: str,
     population_text: str,
@@ -511,22 +526,11 @@ def _candidate_population_explanation(
 ) -> ScientificExplanation:
     """Build consistent scientific context for complete candidate-support plots."""
 
-    answers = {
-        "How does candidate-family choice evolve across factual acquisition?": "The traces separate available family support, actor-valid support, policy probability mass, and realized selections by factual acquisition.",
-        "How does the previously selected family relate to the next family?": "The heatmaps compare expected policy mass with realized next-family frequency for the same adjacent factual contexts.",
-        "Which selected-family sequences produce the observed terminal return distribution?": "The grouped distributions connect complete selected-family sequences to their observed terminal target-root gains.",
-        "Does candidate direction support cover solid angle without coordinate-latitude bias?": "The equal-area direction bins show where the complete candidate shell supplies angular support without overweighting the poles.",
-        "How far does the observed direction distribution depart from an isotropic reference?": "The distance summarizes how far observed normalized directions depart from the uniform-sphere reference at each factual state.",
-        "Do sampled directions cover the sphere locally and globally?": "Nearest-neighbor separation and covering radius expose local gaps and the largest uncovered angular region in the sampled support.",
-        "How often do evaluated candidates collide, at population and state-macro levels?": "The paired summaries distinguish candidate-weighted collision frequency from the equal-weight state macro, preserving both denominators.",
-        "How much geometric clearance is observed for the candidate population?": "The summaries report finite path clearance for the full candidate population and separately for state-level macros.",
-        "How much of the candidate shell is represented by collision and clearance evidence?": "The additive counts show which portions of the candidate shell were evaluated, collision-labelled, and assigned finite clearance.",
-    }
     return ScientificExplanation(
         question=question,
-        answer=answers.get(
+        answer=_CANDIDATE_POPULATION_ANSWERS.get(
             question,
-            f"The plot reports {question[:-1].lower()} from complete persisted candidate evidence, with unavailable rows retained explicitly.",
+            f"Complete persisted candidate evidence is used to answer: {question}",
         ),
         sections=(
             ExplanationSection("Population / grain", population_text),

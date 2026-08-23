@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -120,6 +121,22 @@ def test_stored_rollout_plot_answers_are_not_generic() -> None:
     generic = "This plot answers the question using the persisted evidence rows"
     for module in (candidate_generation, overview_topology, reconstruction_return, shared):
         assert generic not in Path(module.__file__).read_text(encoding="utf-8")
+
+
+def test_candidate_population_literal_questions_have_authored_answers() -> None:
+    source = Path(candidate_generation.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    literal_questions = {
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_candidate_population_explanation"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    }
+    assert literal_questions <= set(candidate_generation._CANDIDATE_POPULATION_ANSWERS)
 
 
 def test_scientific_guide_has_one_ordered_narrative_answer(monkeypatch: pytest.MonkeyPatch) -> None:
