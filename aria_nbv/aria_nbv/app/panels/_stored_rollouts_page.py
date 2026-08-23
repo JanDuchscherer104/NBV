@@ -39,7 +39,10 @@ def render_stored_rollouts_page() -> None:
 
     selected_inventory = next((row for row in inventory if Path(str(row["path"])) == store_path), None)
     try:
-        reader, validation, manifest_payload = session._cached_store_bundle(store_path.as_posix())
+        active_session = session.open_stored_rollout_session(store_path)
+        reader = active_session
+        validation = active_session.validation
+        manifest_payload = active_session.manifest_payload
     except Exception as exc:
         st.error(f"The selected store cannot be opened: {type(exc).__name__}: {exc}")
         download_json("Download store identity JSON", "rollout-store-identity.json", selected_inventory or {})

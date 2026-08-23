@@ -60,10 +60,7 @@ def _cached_store_bundle_cached(
 
     reader = RolloutZarrStoreReader(Path(store_path))
     validation = reader.validate()
-    try:
-        manifest_payload = reader.manifest()
-    except Exception:
-        manifest_payload = {"root_attrs": {}, "manifest": {}}
+    manifest_payload = reader.manifest()
     if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
         validation.errors.append(promotion_error)
     return reader, validation, manifest_payload
@@ -97,7 +94,7 @@ def _cached_candidate_population_cached(
 ) -> dict[str, object]:
     """Build the complete candidate bundle once per immutable store identity."""
 
-    reader, _, _ = _cached_store_bundle(store_path)
+    reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
     return candidate_population_evidence(reader, sample_size=sample_size)
 
 
@@ -139,6 +136,213 @@ def _assert_current_identity(store_path: str, expected_identity: str) -> None:
         raise RuntimeError("selected rollout store changed during inspection; reopen it before reading")
 
 
+class StoredRolloutSession:
+    """Fixed-generation handle for one selected rollout store.
+
+    The selected directory entry is the identity boundary: callers may keep a
+    handle across Streamlit reruns, but every named projection verifies that
+    entry before reading.  This prevents a page-held reader from silently
+    mixing evidence after an atomic store replacement.
+    """
+
+    def __init__(
+        self,
+        canonical_path: Path,
+        store_identity: str,
+        reader: Any,
+        validation: Any,
+        manifest_payload: dict[str, Any],
+        inventory_row: dict[str, object] | None = None,
+        selected_path: Path | None = None,
+    ) -> None:
+        self.canonical_path = Path(canonical_path)
+        self.store_identity = store_identity
+        self._reader = reader
+        self.validation = validation
+        self.manifest_payload = manifest_payload
+        self.inventory_row = inventory_row
+        self._selected_path = selected_path or self.canonical_path
+
+    @property
+    def reader(self) -> Any:
+        """Return the opened reader only while the selected generation is current."""
+
+        self._assert_current_identity()
+        return self._reader
+
+    def __getattr__(self, name: str) -> Any:
+        """Proxy reader access for existing renderers while preserving the handle boundary."""
+
+        reader = object.__getattribute__(self, "_reader")
+        self._assert_current_identity()
+        value = getattr(reader, name)
+        if not callable(value):
+            return value
+
+        @wraps(value)
+        def guarded(*args: Any, **kwargs: Any) -> Any:
+            self._assert_current_identity()
+            result = value(*args, **kwargs)
+            self._assert_current_identity()
+            return result
+
+        return guarded
+
+    def _assert_current_identity(self) -> str:
+        current = _store_projection_identity(self._selected_path)
+        if current != self.store_identity:
+            raise RuntimeError(
+                "selected rollout store changed after this session opened; reopen the store before projecting evidence"
+            )
+        return self.store_identity
+
+    def _projection_path(self) -> str:
+        """Check the selected entry and return the fixed canonical cache path."""
+
+        self._assert_current_identity()
+        return self.canonical_path.as_posix()
+
+    def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
+        return _cached_candidate_population_cached(self._projection_path(), self.store_identity, sample_size)
+
+    def invariants(self) -> Any:
+        return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
+
+    def header(self) -> Any:
+        return _cached_header(self._projection_path(), store_identity=self.store_identity)
+
+    def cohorts(self) -> Any:
+        return _cached_cohorts(self._projection_path(), store_identity=self.store_identity)
+
+    def paired(self) -> Any:
+        return _cached_paired(self._projection_path(), store_identity=self.store_identity)
+
+    def steps(self, rollout_row_id: int | None = None) -> Any:
+        return _cached_steps(self._projection_path(), rollout_row_id=rollout_row_id, store_identity=self.store_identity)
+
+    def reconstruction_metrics(self) -> Any:
+        return _cached_reconstruction_metrics(self._projection_path(), store_identity=self.store_identity)
+
+    def reconstruction_endpoints(self) -> Any:
+        return _cached_reconstruction_endpoints(self._projection_path(), store_identity=self.store_identity)
+
+    def discounted_returns(self) -> Any:
+        return _cached_discounted_returns(self._projection_path(), store_identity=self.store_identity)
+
+    def headroom(self) -> Any:
+        return _cached_headroom(self._projection_path(), store_identity=self.store_identity)
+
+    def temporal(self, metric: str, group_fields: tuple[str, ...] = ()) -> Any:
+        return _cached_temporal(self._projection_path(), metric, group_fields, store_identity=self.store_identity)
+
+    def candidate_flow(
+        self,
+        policies: tuple[str, ...] | None = None,
+        step_indices: tuple[int, ...] | None = None,
+    ) -> Any:
+        return _cached_candidate_flow(
+            self._projection_path(), policies, step_indices, store_identity=self.store_identity
+        )
+
+    def ranks(
+        self,
+        policies: tuple[str, ...] | None = None,
+        step_indices: tuple[int, ...] | None = None,
+    ) -> Any:
+        return _cached_ranks(self._projection_path(), policies, step_indices, store_identity=self.store_identity)
+
+    def targets(self) -> Any:
+        return _cached_targets(self._projection_path(), store_identity=self.store_identity)
+
+    def masks(self) -> Any:
+        return _cached_masks(self._projection_path(), store_identity=self.store_identity)
+
+    def candidates(
+        self,
+        rollout_row_id: int | None = None,
+        step_row_id: int | None = None,
+        limit: int | None = None,
+    ) -> Any:
+        return _cached_candidates(
+            self._projection_path(), rollout_row_id, step_row_id, limit, store_identity=self.store_identity
+        )
+
+    def q_h(self, deep_count: bool = False) -> Any:
+        return _cached_q_h(self._projection_path(), deep_count, store_identity=self.store_identity)
+
+    def tree(self) -> Any:
+        return _cached_tree(self._projection_path(), store_identity=self.store_identity)
+
+    def root_geometry(self, limit: int | None = None) -> Any:
+        return _cached_root_geometry(self._projection_path(), limit, store_identity=self.store_identity)
+
+    def depth_summary(self, rollout_row_id: int | None = None, limit: int | None = None) -> Any:
+        return _cached_depth_summary(self._projection_path(), rollout_row_id, limit, store_identity=self.store_identity)
+
+    def failures(
+        self, min_valid_candidates: int, dominant_invalid_fraction: float, max_step_distance_m: float
+    ) -> list[dict[str, object]]:
+        return _cached_failures(
+            self._projection_path(),
+            min_valid_candidates,
+            dominant_invalid_fraction,
+            max_step_distance_m,
+            store_identity=self.store_identity,
+        )
+
+    def topology(
+        self,
+        vin_store_dirs: tuple[str, ...],
+        paths: PathConfig,
+        selected_source_row_id: int | None = None,
+    ) -> Any:
+        return _cached_topology(
+            self._projection_path(),
+            vin_store_dirs,
+            paths,
+            selected_source_row_id,
+            store_identity=self.store_identity,
+        )
+
+    def evidence_bundle(self, evidence_status: str) -> bytes:
+        identity = self._assert_current_identity()
+        bundle = _cached_evidence_bundle(self._projection_path(), evidence_status, store_identity=self.store_identity)
+        _assert_current_identity(self._selected_path.as_posix(), identity)
+        return bundle
+
+
+def open_stored_rollout_session(
+    path: str | Path, inventory_row: dict[str, object] | None = None
+) -> StoredRolloutSession:
+    """Open a metadata-bound session and reject a replacement during opening."""
+
+    selected_path = Path(path).expanduser().absolute()
+    canonical_path = selected_path.resolve()
+    identity = _store_projection_identity(selected_path.as_posix())
+    reader, validation, manifest_payload = _cached_store_bundle_cached(
+        canonical_path.as_posix(), store_identity=identity
+    )
+    try:
+        identity_unchanged = _store_projection_identity(selected_path.as_posix()) == identity
+        target_unchanged = selected_path.resolve() == canonical_path
+    except OSError as error:
+        raise RuntimeError("selected rollout store changed while opening; reopen the store") from error
+    if not identity_unchanged or not target_unchanged:
+        raise RuntimeError("selected rollout store changed while opening; reopen the store")
+    reader_store_dir = getattr(reader, "store_dir", canonical_path)
+    if Path(reader_store_dir).resolve() != canonical_path:
+        raise RuntimeError("selected rollout reader resolved to a different canonical path")
+    return StoredRolloutSession(
+        canonical_path,
+        identity,
+        reader,
+        validation,
+        manifest_payload,
+        inventory_row,
+        selected_path,
+    )
+
+
 def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
     """Cache one named projection against fixed metadata identity."""
 
@@ -163,7 +367,8 @@ def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
 
     @wraps(function)
     def wrapper(store_path: str, *args: Any, **kwargs: Any) -> Any:
-        identity = _store_projection_identity(store_path)
+        supplied_identity = kwargs.pop("store_identity", None)
+        identity = supplied_identity or _store_projection_identity(store_path)
         _assert_current_identity(store_path, identity)
         result = cached(
             store_path,
@@ -352,10 +557,12 @@ def _cached_topology(
     vin_store_dirs: tuple[str, ...],
     paths: PathConfig,
     selected_source_row_id: int | None = None,
+    *,
+    store_identity: str | None = None,
 ) -> Any:
     """Resolve topology through a cache key bound to the selected store identity."""
 
-    identity = _store_projection_identity(store_path)
+    identity = store_identity or _store_projection_identity(store_path)
     _assert_current_identity(store_path, identity)
     result = _cached_topology_cached(
         store_path,
@@ -394,10 +601,12 @@ def _cached_failures(
     min_valid_candidates: int,
     dominant_invalid_fraction: float,
     max_step_distance_m: float,
+    *,
+    store_identity: str | None = None,
 ) -> list[dict[str, object]]:
     """Evaluate failure triage through a cache key bound to the selected store identity."""
 
-    identity = _store_projection_identity(store_path)
+    identity = store_identity or _store_projection_identity(store_path)
     _assert_current_identity(store_path, identity)
     result = _cached_failures_cached(
         store_path,
@@ -419,10 +628,10 @@ def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, sto
 
 
 @wraps(_cached_evidence_bundle_cached.__wrapped__)
-def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
+def _cached_evidence_bundle(store_path: str, evidence_status: str, *, store_identity: str | None = None) -> bytes:
     """Build a report bundle through the replacement-sensitive store cache key."""
 
-    identity = _store_projection_identity(store_path)
+    identity = store_identity or _store_projection_identity(store_path)
     _assert_current_identity(store_path, identity)
     result = _cached_evidence_bundle_cached(
         store_path,

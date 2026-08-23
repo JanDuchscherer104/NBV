@@ -336,6 +336,49 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     assert len(failure_calls) == 2
 
 
+def test_fixed_session_rejects_mid_handle_swap(tmp_path: Path) -> None:
+    """A page-held session cannot project a replacement generation."""
+
+    first = write_rollout_zarr_store(
+        tmp_path / "session-first.zarr", build_rollout_records(horizon=1, num_samples=6, seed=201)[:1]
+    )
+    second = write_rollout_zarr_store(
+        tmp_path / "session-second.zarr", build_rollout_records(horizon=1, num_samples=6, seed=202)[:2]
+    )
+    selected = tmp_path / "session-selected.zarr"
+    selected.symlink_to(first.store_dir, target_is_directory=True)
+    handle = session.open_stored_rollout_session(selected)
+    assert handle.header()["rollouts"] == 1
+
+    replacement = tmp_path / "session-replacement.zarr"
+    replacement.symlink_to(second.store_dir, target_is_directory=True)
+    replacement.replace(selected)
+
+    with pytest.raises(RuntimeError, match="changed"):
+        handle.header()
+
+
+def test_session_open_rejects_mid_open_generation_swap(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Opening fails if the selected entry changes while the reader is built."""
+
+    first = tmp_path / "generation-a.zarr"
+    second = tmp_path / "generation-b.zarr"
+    first.mkdir()
+    second.mkdir()
+    selected = tmp_path / "selected.zarr"
+    selected.symlink_to(first, target_is_directory=True)
+
+    def swap_during_bundle(path: str, *, store_identity: str):
+        replacement = tmp_path / "replacement.zarr"
+        replacement.symlink_to(second, target_is_directory=True)
+        replacement.replace(selected)
+        return object(), object(), {"generation": path, "identity": store_identity}
+
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", swap_during_bundle)
+    with pytest.raises(RuntimeError, match="changed while opening"):
+        session.open_stored_rollout_session(selected)
+
+
 def _owner_stub(result: object) -> Callable[..., object]:
     def owner(*_args: object, **_kwargs: object) -> object:
         return result
