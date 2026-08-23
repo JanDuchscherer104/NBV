@@ -273,14 +273,27 @@ def materialize_trial_snapshot(
         target.write_bytes(blob)
         os.chmod(target, int(mode, 8))
 
-    evaluator_needles = {
-        line.strip()
-        for source in EVALUATOR_FIXTURE_PATHS
-        for line in read_git_blob(tested_commit, source, root=root)
-        .decode("utf-8")
-        .splitlines()
-        if line.strip()
-    }
+    evaluator_needles: set[str] = set()
+    for source in EVALUATOR_FIXTURE_PATHS:
+        try:
+            raw = read_git_blob("HEAD", source, root=root).decode("utf-8")
+        except ValueError:
+            continue
+        records: list[Any]
+        if source == PROMPTS_RELATIVE:
+            records = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        else:
+            payload = json.loads(raw)
+            records = payload.get("fixtures", []) if isinstance(payload, dict) else []
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            for key in ("id", "task", "required_outcomes", "forbidden_outcomes"):
+                value = record.get(key)
+                values = value if isinstance(value, list) else [value]
+                evaluator_needles.update(
+                    item for item in values if isinstance(item, str) and len(item) >= 12
+                )
     for path in checkout.rglob("*"):
         if not path.is_file():
             continue
