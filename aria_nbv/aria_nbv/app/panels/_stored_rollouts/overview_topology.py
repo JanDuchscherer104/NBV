@@ -204,7 +204,7 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
     if summary.target_admission.empty:
         st.info("No validated target-admission rows are available.")
     else:
-        target_rows = summary.target_admission.copy()
+        target_rows = _select_contract_facet(summary.target_admission, "Target admission")
         target_rows["outcome"] = target_rows.apply(
             lambda row: (
                 f"actor={bool(row['target_valid'])} · gt={bool(row['gt_label_valid'])} · {row['gt_match_status']}"
@@ -251,7 +251,7 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
     if summary.feasibility.empty:
         st.info("No validated clearance/collision evidence is available.")
     else:
-        feasibility = summary.feasibility
+        feasibility = _select_contract_facet(summary.feasibility, "Feasibility")
         metrics = st.columns(4)
         # Cards summarize the selected corpus, not the first generation
         # cohort. Rates are recomputed from additive denominators.
@@ -325,8 +325,9 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
     if summary.failure_counts.empty:
         st.success("No validated aggregate failure rows were reported.")
         return
+    failures = _select_contract_facet(summary.failure_counts, "Corpus failures")
     _render_plot(
-        px.bar(summary.failure_counts, x="kind", y="count", color="severity", title="Failures across included stores"),
+        px.bar(failures, x="kind", y="count", color="severity", title="Failures across the selected contract facet"),
         ScientificExplanation(
             question="Which validation and data-quality failure classes dominate the selected corpus?",
             answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
@@ -359,8 +360,28 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
         ),
     )
     with st.expander("Failure rows and CSV"):
-        st.dataframe(summary.failure_counts, hide_index=True, width="stretch")
-        _download_frame("Download corpus failures CSV", "corpus-failures.csv", summary.failure_counts)
+        st.dataframe(failures, hide_index=True, width="stretch")
+        _download_frame("Download corpus failures CSV", "corpus-failures.csv", failures)
+
+
+def _select_contract_facet(frame: pd.DataFrame, label: str) -> pd.DataFrame:
+    """Gate corpus plots/cards to one exact persisted contract and profile."""
+
+    selected = frame.copy()
+    for field in ("contract_id", "contract", "profile"):
+        if field not in selected.columns:
+            continue
+        values = sorted(selected[field].dropna().astype(str).unique())
+        if len(values) <= 1:
+            continue
+        choice = st.selectbox(
+            f"{label}: {field}",
+            values,
+            index=0,
+            key=f"corpus-{label.lower().replace(' ', '-')}-{field}",
+        )
+        selected = selected.loc[selected[field].astype(str).eq(str(choice))]
+    return selected
 
 
 def _render_role_legend() -> None:

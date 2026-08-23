@@ -270,7 +270,17 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                 help="Select the exact persisted family vocabulary; policies, temperatures, and rollout contracts are not pooled.",
             )
             dynamics = pd.DataFrame(selection_dynamics[group_by])
-            control_fields = ("policy", "horizon", "branch_factor", "beam_width")
+            selected_controls: dict[str, object] = {}
+            control_fields = (
+                "contract_id",
+                "profile",
+                "generation_cohort_id",
+                "policy",
+                "temperature",
+                "horizon",
+                "branch_factor",
+                "beam_width",
+            )
             for field in control_fields:
                 if field not in dynamics:
                     continue
@@ -282,6 +292,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                         format_func=str,
                         key=f"candidate-choice-{group_by}-{field}",
                     )
+                    selected_controls[field] = choice
                     dynamics = dynamics.loc[dynamics[field].eq(choice)]
         if not dynamics.empty:
             pooled = pd.DataFrame(
@@ -332,6 +343,11 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
 
             sequence_rows = pd.DataFrame(population.get("selection_sequences", {}).get(group_by, []))
             return_rows = pd.DataFrame(population.get("sequence_returns", {}).get(group_by, []))
+            for field, choice in selected_controls.items():
+                if field in sequence_rows:
+                    sequence_rows = sequence_rows.loc[sequence_rows[field].eq(choice)]
+                if field in return_rows:
+                    return_rows = return_rows.loc[return_rows[field].eq(choice)]
             if not sequence_rows.empty and not return_rows.empty:
                 st.markdown("#### Selected-family sequences and terminal returns")
                 st.caption(
@@ -474,6 +490,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     _download_frame("Download direction support CSV", "candidate-direction-support.csv", selected)
         cap = pd.DataFrame(direction.get("cap_rows", []))
         if not cap.empty and "discrepancy" in cap:
+            cap = _select_support_facet(cap, "Direction isotropy")
             cap = cap.copy()
             cap["metric"] = "distance_from_isotropy"
             fig = px.bar(
@@ -536,6 +553,9 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
         if "metric" not in frame or value not in frame:
             continue
         selected = _select_support_facet(frame, title)
+        selected = _select_metric_unit(selected, title)
+        if selected.empty:
+            continue
         fig = px.bar(
             selected,
             x="metric",
@@ -564,19 +584,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
     collision = pd.DataFrame(population.get("collision", []))
     if not collision.empty:
         collision = _select_support_facet(collision, "Collision support")
-        collision_fields = [
-            name
-            for name in (
-                "applicable_count",
-                "evaluated_count",
-                "collision_count",
-                "not_applicable_count",
-                "available",
-                "collisions",
-                "not_applicable",
-            )
-            if name in collision
-        ]
+        collision_fields = [name for name in collision.columns if name.endswith("_count")]
         if collision_fields:
             collision_plot = collision[collision_fields].sum(numeric_only=True).rename("count").reset_index()
             collision_plot.columns = ["metric", "count"]
@@ -649,6 +657,31 @@ def _select_support_facet(frame: pd.DataFrame, label: str) -> pd.DataFrame:
         default = "cohort_macro" if field == "aggregation_level" and "cohort_macro" in values else values[0]
         choice = st.selectbox(f"{label}: {field}", values, index=values.index(default), key=f"support-{label}-{field}")
         selected = selected[selected[field].astype(str).eq(str(choice))]
+    return selected
+
+
+def _select_metric_unit(frame: pd.DataFrame, label: str) -> pd.DataFrame:
+    """Keep one metric/unit family on a single quantitative axis."""
+
+    selected = frame.copy()
+    if "metric" in selected.columns:
+        metrics = sorted(selected["metric"].dropna().astype(str).unique())
+        if len(metrics) > 1:
+            metric = st.selectbox(
+                f"{label}: metric",
+                metrics,
+                key=f"support-metric-{label.lower().replace(' ', '-')}",
+            )
+            selected = selected.loc[selected["metric"].astype(str).eq(str(metric))]
+    if "units" in selected.columns:
+        units = sorted(selected["units"].dropna().astype(str).unique())
+        if len(units) > 1:
+            unit = st.selectbox(
+                f"{label}: units",
+                units,
+                key=f"support-units-{label.lower().replace(' ', '-')}",
+            )
+            selected = selected.loc[selected["units"].astype(str).eq(str(unit))]
     return selected
 
 
