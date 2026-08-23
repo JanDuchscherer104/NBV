@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from ...data_handling import EfmSnippetView
     from ...pose_generation import CandidateViewGeneratorConfig
     from ...pose_generation.types import CandidateSamplingResult
-from .common import _info_popover, _pretty_label
+from .common import _info_popover, _pretty_label, current_scientific_label
 
 
 def _target_point_from_config(cand_cfg: CandidateViewGeneratorConfig | None) -> torch.Tensor | None:
@@ -101,7 +101,7 @@ def _full_shell_color_payload(candidates: CandidateSamplingResult, mode: str) ->
 
     mask_valid = candidates.mask_valid.detach().cpu().reshape(-1)
     if mode == "validity":
-        return mask_valid.to(dtype=torch.float32), "valid"
+        return mask_valid.to(dtype=torch.float32), current_scientific_label("validity_mask")
     if mode == "position_family" and candidates.position_id is not None:
         return candidates.position_id.detach().cpu().to(dtype=torch.float32).reshape(-1), "position_id"
     if mode == "strategy" and candidates.strategy_id is not None:

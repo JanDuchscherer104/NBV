@@ -40,12 +40,27 @@ from ...utils.wandb_utils import (
     plot_dynamics_scatter,
     plot_metric_curves,
 )
-from .common import _info_popover, _pretty_label, _report_exception
+from .common import (
+    _info_popover,
+    _pretty_label,
+    _report_exception,
+    current_scientific_label,
+)
 
 _ENTITY_CACHE_TTL_S = 300
 _DEFAULT_METRIC_FILTER = (
     "train/coral_loss_rel_random_step|train/pred_rri_mean_epoch|val-aux/spearman|val/coral_loss_rel_random"
 )
+
+
+def _wandb_metric_label(metric: str) -> str:
+    """Format only recognized RRI metrics; preserve arbitrary W&B keys."""
+
+    normalized = metric.rsplit("/", maxsplit=1)[-1].lower()
+    if normalized in {"rri", "oracle_rri", "pred_rri_mean_epoch"}:
+        identifier = "oracle_rri" if normalized != "pred_rri_mean_epoch" else "target_rri"
+        return current_scientific_label(identifier)
+    return _pretty_label(metric)
 
 
 @st.cache_data(ttl=_ENTITY_CACHE_TTL_S)
