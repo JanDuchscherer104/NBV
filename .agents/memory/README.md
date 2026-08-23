@@ -90,8 +90,10 @@ When it materially clarifies the work, note staged or commit scope in a dirty
 worktree and whether compatibility was deliberately preserved or removed.
 For a reviewed-intent proposal, put the existing target owner path in
 `canonical_updates_needed`; the body must contain the exact five-field
-`## Human Intent Proposal` template below. Pending proposals can be listed
-without opening every source:
+`## Human Intent Proposal` template below. The jq query is only a first-stage
+candidate listing: open each source and confirm the exact five fields with
+`Disposition: proposed` before treating it as pending. Legacy target-path rows
+without that body are not proposals. The candidates can be listed with:
 
 ```sh
 jq -r 'select(.canonical_update_paths | index(".agents/references/human_owner_intent.md")) | .source_path' \
@@ -107,10 +109,12 @@ jq -r 'select(.canonical_update_paths | index(".agents/references/human_owner_in
 - Disposition: proposed
 ```
 
-The proposal is only evidence until a maintainer reviews it. Review
-dispositions are `accept`, `reject`, `narrow`, or `defer`; accept/narrow use an
-ordinary reviewed owner edit, reject/defer leave policy bytes unchanged, and
-the related Agents-DB record is resolved rather than deleted only after proof.
+The proposal is only evidence until the `agents-db` `proposal-review` mode
+assigns exactly one disposition. That mode owns the lifecycle: `accept` and
+`narrow` require an ordinary edit to the smallest policy owner; `reject`
+resolves the existing record with a reason while policy bytes stay unchanged;
+`defer` leaves policy unchanged and keeps the record active. TOML records the
+lifecycle but never installs policy automatically.
 The JSONL file at `index/debriefs.jsonl` is a derived navigation index only.
 It contains no findings, rankings, authority scores, or current-truth claims.
 Every row exposes `touched_owner_paths` and `codex_thread`. Older

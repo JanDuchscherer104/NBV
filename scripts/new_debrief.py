@@ -124,6 +124,9 @@ worktree_kind: {provenance["worktree_kind"]}
 ## Canonical Owner Impact
 <list exact Typst/Python/configuration/test/setup/guidance owner updates, or say "none" explicitly>
 
+## Commits
+- [<full commit OID>](https://github.com/JanDuchscherer104/ARIA-NBV/commit/<full commit OID>) — <workpackage>: <outcome>
+
 ## Human Intent Proposal
 - Proposed statement: <reusable statement, or none>
 - Evidence: <exact user statement or bounded evidence, or none>

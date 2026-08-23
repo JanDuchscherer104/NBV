@@ -762,6 +762,8 @@ def test_capture_and_routing_contracts() -> None:
     assert "Open Choices" in intent_reference
     assert "durable-capture.md" in intent_reference
     assert "accepted plan only for sequencing" in intent_reference
+    assert "Route\nverified actionable residual work to `agents-db`" in intent_reference
+    assert "does not\nmutate policy or records" in intent_reference
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"

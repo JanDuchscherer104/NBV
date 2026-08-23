@@ -46,10 +46,12 @@ scientific truth stays with its smallest source owner.
 
 When `agent-behavior` reaches verified actionable residual work or a reviewed
 intent-promotion review, activate this skill as the leaf maintenance owner.
-Use the existing triage, to-issues, proposal-review, and resolution modes;
-ordinary reviewed TOML edits install accepted changes, while rejected,
-narrowed, or deferred proposals do not automatically mutate policy. Resolve a
-completed record into `.agents/resolved.toml` so its history remains auditable.
+Use the existing triage, to-issues, proposal-review, and resolution modes.
+The `proposal-review` mode owns dispositions: accept/narrow require an
+ordinary edit to the smallest policy owner; reject resolves the existing
+record with a reason while policy bytes stay unchanged; defer leaves policy
+unchanged and keeps the record active. TOML records the lifecycle but never
+installs policy automatically.
 
 ## Completion
 

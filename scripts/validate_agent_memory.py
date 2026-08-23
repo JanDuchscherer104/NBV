@@ -56,6 +56,7 @@ REQUIRED_NATIVE_KEYS = {
 }
 NATIVE_THREAD_CUTOFF = date(2026, 8, 21)
 NATIVE_PROVENANCE_CUTOFF = date(2026, 8, 22)
+NATIVE_LIVE_PROVENANCE_CUTOFF = date(2026, 8, 23)
 CODEX_THREAD_URI_PATTERN = re.compile(
     r"^codex://threads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
@@ -398,6 +399,42 @@ def check_history_records() -> list[str]:
                     errors.append(
                         f"{rel}: repo_head must be a full {repo_object_format} Git OID"
                     )
+                else:
+                    if record_date >= NATIVE_LIVE_PROVENANCE_CUTOFF:
+                        git_root = subprocess.run(
+                            ["git", "rev-parse", "--is-inside-work-tree"],
+                            cwd=REPO_ROOT,
+                            check=False,
+                            capture_output=True,
+                        )
+                        if git_root.returncode == 0:
+                            repo_head_exists = subprocess.run(
+                                ["git", "cat-file", "-e", f"{repo_head}^{{commit}}"],
+                                cwd=REPO_ROOT,
+                                check=False,
+                                capture_output=True,
+                            )
+                            if repo_head_exists.returncode != 0:
+                                errors.append(
+                                    f"{rel}: repo_head must resolve to a repository commit: {repo_head}"
+                                )
+                            else:
+                                repo_head_is_current = subprocess.run(
+                                    [
+                                        "git",
+                                        "merge-base",
+                                        "--is-ancestor",
+                                        repo_head,
+                                        "HEAD",
+                                    ],
+                                    cwd=REPO_ROOT,
+                                    check=False,
+                                    capture_output=True,
+                                )
+                                if repo_head_is_current.returncode != 0:
+                                    errors.append(
+                                        f"{rel}: repo_head is not an ancestor of live HEAD: {repo_head}"
+                                    )
                 if not is_valid_repo_branch(repo_branch):
                     errors.append(
                         f"{rel}: repo_branch must be a valid Git branch or detached"
@@ -452,9 +489,16 @@ def _body_sections(path: Path) -> dict[str, list[str]]:
 
 def check_proposal_body(path: Path, canonical_updates: object) -> list[str]:
     """Require the existing target path to carry the five-field proposal body."""
-    if not isinstance(canonical_updates, list) or PROPOSAL_TARGET not in canonical_updates:
+    if (
+        not isinstance(canonical_updates, list)
+        or PROPOSAL_TARGET not in canonical_updates
+    ):
         return []
-    rel = path.relative_to(REPO_ROOT).as_posix() if path.is_relative_to(REPO_ROOT) else path.as_posix()
+    rel = (
+        path.relative_to(REPO_ROOT).as_posix()
+        if path.is_relative_to(REPO_ROOT)
+        else path.as_posix()
+    )
     section = _body_sections(path).get("Human Intent Proposal")
     if section is None:
         return [f"{rel}: proposal target requires `## Human Intent Proposal`"]
@@ -469,9 +513,15 @@ def check_proposal_body(path: Path, canonical_updates: object) -> list[str]:
         if field in fields:
             return [f"{rel}: proposal field is duplicated: {field}"]
         fields[field] = value.strip()
-    if tuple(fields) != PROPOSAL_FIELDS or any(not fields[field] for field in PROPOSAL_FIELDS):
+    if tuple(fields) != PROPOSAL_FIELDS or any(
+        not fields[field] for field in PROPOSAL_FIELDS
+    ):
         return [f"{rel}: proposal body must contain exactly the five named fields"]
-    disposition = fields["Disposition"].lower()
+    for field in PROPOSAL_FIELDS[:-1]:
+        value = fields[field]
+        if value.lower() == "none" or re.search(r"<[^>\n]*>", value):
+            return [f"{rel}: proposal field must contain concrete evidence: {field}"]
+    disposition = fields["Disposition"]
     if disposition not in {"proposed", "accept", "reject", "narrow", "defer"}:
         return [f"{rel}: unsupported proposal disposition: {disposition}"]
     return []
@@ -481,10 +531,21 @@ def check_commit_links(
     path: Path, frontmatter: dict[str, object], record_date: date
 ) -> list[str]:
     """Validate immutable workpackage links for current committed debriefs."""
-    section = _body_sections(path).get("Commits")
-    if section is None or record_date < date(2026, 8, 23):
+    if record_date < date(2026, 8, 23):
         return []
-    rel = path.relative_to(REPO_ROOT).as_posix() if path.is_relative_to(REPO_ROOT) else path.as_posix()
+    section = _body_sections(path).get("Commits")
+    if section is None:
+        rel = (
+            path.relative_to(REPO_ROOT).as_posix()
+            if path.is_relative_to(REPO_ROOT)
+            else path.as_posix()
+        )
+        return [f"{rel}: `## Commits` must contain a commit link or none line"]
+    rel = (
+        path.relative_to(REPO_ROOT).as_posix()
+        if path.is_relative_to(REPO_ROOT)
+        else path.as_posix()
+    )
     lines = [line.strip() for line in section if line.strip()]
     if not lines:
         return [f"{rel}: `## Commits` must contain a commit link or none line"]
@@ -514,15 +575,6 @@ def check_commit_links(
         if label_oid in seen:
             errors.append(f"{rel}: duplicate commit OID: {label_oid}")
         seen.add(label_oid)
-        current_head = subprocess.run(
-            ["git", "rev-parse", "--verify", "HEAD"],
-            cwd=REPO_ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-        if label_oid == repo_head and repo_head == current_head:
-            errors.append(f"{rel}: commit link cannot self-reference repo_head")
         exists = subprocess.run(
             ["git", "cat-file", "-e", f"{label_oid}^{{commit}}"],
             cwd=REPO_ROOT,
@@ -539,7 +591,39 @@ def check_commit_links(
             capture_output=True,
         )
         if ancestor.returncode != 0:
-            errors.append(f"{rel}: commit OID is not an ancestor of repo_head: {label_oid}")
+            errors.append(
+                f"{rel}: commit OID is not an ancestor of repo_head: {label_oid}"
+            )
+            continue
+        try:
+            source_path = path.resolve().relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            continue
+        source_changed = subprocess.run(
+            [
+                "git",
+                "show",
+                "--format=",
+                "--name-only",
+                "-r",
+                "--find-renames",
+                label_oid,
+                "--",
+                source_path,
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if source_changed.returncode != 0:
+            errors.append(
+                f"{rel}: unable to inspect linked commit changes: {label_oid}"
+            )
+        elif source_path in source_changed.stdout.splitlines():
+            errors.append(
+                f"{rel}: linked commit creates or modifies the debrief source: {label_oid}"
+            )
     return errors
 
 

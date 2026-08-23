@@ -30,7 +30,7 @@ than public docs.
 
 Review an evidence-backed Human Intent Proposal with exactly one disposition:
 `accept`, `reject`, `narrow`, or `defer`. Accept or narrow only through an
-ordinary reviewed edit to the smallest policy owner. Reject or defer leave the
-reviewed policy bytes unchanged and record the reason in the existing review
-surface. After the installed change and its proof, resolve the Agents-DB
-record; never delete it, and keep deferred records active.
+ordinary edit to the smallest policy owner. Reject resolves the existing
+record with a reason while policy bytes stay unchanged. Defer leaves policy
+unchanged and keeps the record active. TOML records the lifecycle but never
+installs policy automatically.

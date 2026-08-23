@@ -202,22 +202,105 @@ def _proposal_body(disposition: str = "proposed") -> str:
     )
 
 
-@pytest.mark.parametrize("disposition", ["proposed", "accept", "reject", "narrow", "defer"])
+@pytest.mark.parametrize(
+    "disposition", ["proposed", "accept", "reject", "narrow", "defer"]
+)
 def test_human_intent_proposal_body_uses_existing_target_and_review_dispositions(
     tmp_path: Path, disposition: str
 ) -> None:
     source = tmp_path / "proposal.md"
     source.write_text(_proposal_body(disposition), encoding="utf-8")
-    assert validator.check_proposal_body(source, [".agents/references/human_owner_intent.md"]) == []
+    assert (
+        validator.check_proposal_body(
+            source, [".agents/references/human_owner_intent.md"]
+        )
+        == []
+    )
 
 
 def test_proposal_target_requires_exact_five_field_body(tmp_path: Path) -> None:
     source = tmp_path / "proposal.md"
-    source.write_text(_proposal_body().replace("- Evidence:", "- Extra: x\n- Evidence:"), encoding="utf-8")
-    assert validator.check_proposal_body(source, [".agents/references/human_owner_intent.md"])
+    source.write_text(
+        _proposal_body().replace("- Evidence:", "- Extra: x\n- Evidence:"),
+        encoding="utf-8",
+    )
+    assert validator.check_proposal_body(
+        source, [".agents/references/human_owner_intent.md"]
+    )
 
 
-def test_commit_links_require_matching_full_ancestor_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_jq_candidate_listing_requires_opening_and_proposed_disposition(
+    tmp_path: Path,
+) -> None:
+    readme = (ROOT / ".agents/memory/README.md").read_text(encoding="utf-8")
+    query = "jq -r 'select(.canonical_update_paths | index(\".agents/references/human_owner_intent.md\")) | .source_path'"
+    assert query in readme
+    legacy = tmp_path / "legacy.md"
+    legacy.write_text("---\nstatus: done\n---\n\nBody\n", encoding="utf-8")
+    assert validator.check_proposal_body(
+        legacy, [".agents/references/human_owner_intent.md"]
+    )
+    proposed = tmp_path / "proposed.md"
+    proposed.write_text(_proposal_body("proposed"), encoding="utf-8")
+    assert (
+        validator.check_proposal_body(
+            proposed, [".agents/references/human_owner_intent.md"]
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "field, replacement",
+    [
+        ("Proposed statement", "<reusable statement>"),
+        ("Evidence", "none"),
+        ("Current owner or conflict", "<unresolved conflict>"),
+        ("Scope and target owner", "none"),
+    ],
+)
+def test_proposal_target_rejects_placeholders_and_none(
+    tmp_path: Path, field: str, replacement: str
+) -> None:
+    source = tmp_path / "proposal.md"
+    source.write_text(
+        _proposal_body().replace(
+            next(
+                line
+                for line in _proposal_body().splitlines()
+                if line.startswith(f"- {field}:")
+            ),
+            f"- {field}: {replacement}",
+        ),
+        encoding="utf-8",
+    )
+    assert validator.check_proposal_body(
+        source, [".agents/references/human_owner_intent.md"]
+    )
+
+
+def test_proposal_disposition_is_case_sensitive(tmp_path: Path) -> None:
+    source = tmp_path / "proposal.md"
+    source.write_text(_proposal_body("Accept"), encoding="utf-8")
+    assert validator.check_proposal_body(
+        source, [".agents/references/human_owner_intent.md"]
+    )
+
+
+def test_native_commit_section_is_required_and_nonempty(tmp_path: Path) -> None:
+    source = tmp_path / "record.md"
+    for section in ("", "## Commits\n"):
+        source.write_text(f"---\nstatus: done\n---\n\n{section}", encoding="utf-8")
+        assert validator.check_commit_links(
+            source,
+            {"repo_object_format": "sha1", "repo_head": "f" * 40},
+            date(2026, 8, 23),
+        )
+
+
+def test_commit_links_require_matching_full_ancestor_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = tmp_path / "repo"
     root.mkdir()
     _git(root, "init", "-q")
@@ -226,10 +309,22 @@ def test_commit_links_require_matching_full_ancestor_commit(tmp_path: Path, monk
     (root / "file").write_text("one\n", encoding="utf-8")
     _git(root, "add", "file")
     _git(root, "commit", "-qm", "first")
-    linked = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    linked = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     (root / "file").write_text("two\n", encoding="utf-8")
     _git(root, "commit", "-qam", "second")
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     source = root / "proposal.md"
     source.write_text(
         "---\nstatus: done\n---\n\n## Commits\n"
@@ -237,11 +332,14 @@ def test_commit_links_require_matching_full_ancestor_commit(tmp_path: Path, monk
         encoding="utf-8",
     )
     monkeypatch.setattr(validator, "REPO_ROOT", root)
-    assert validator.check_commit_links(
-        source,
-        {"repo_object_format": "sha1", "repo_head": head},
-        date(2026, 8, 23),
-    ) == []
+    assert (
+        validator.check_commit_links(
+            source,
+            {"repo_object_format": "sha1", "repo_head": head},
+            date(2026, 8, 23),
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize(
@@ -254,7 +352,9 @@ def test_commit_links_require_matching_full_ancestor_commit(tmp_path: Path, monk
 )
 def test_invalid_commit_link_forms_fail(tmp_path: Path, line: str) -> None:
     source = tmp_path / "record.md"
-    source.write_text(f"---\nstatus: done\n---\n\n## Commits\n{line}\n", encoding="utf-8")
+    source.write_text(
+        f"---\nstatus: done\n---\n\n## Commits\n{line}\n", encoding="utf-8"
+    )
     assert validator.check_commit_links(
         source,
         {"repo_object_format": "sha1", "repo_head": "f" * 40},
@@ -264,11 +364,18 @@ def test_invalid_commit_link_forms_fail(tmp_path: Path, line: str) -> None:
 
 def test_none_commit_form_is_exclusive(tmp_path: Path) -> None:
     source = tmp_path / "record.md"
-    source.write_text("---\nstatus: done\n---\n\n## Commits\n- none — no repository commit (planning only)\n- none — no repository commit (duplicate)\n", encoding="utf-8")
-    assert validator.check_commit_links(source, {"repo_object_format": "sha1", "repo_head": "f" * 40}, date(2026, 8, 23))
+    source.write_text(
+        "---\nstatus: done\n---\n\n## Commits\n- none — no repository commit (planning only)\n- none — no repository commit (duplicate)\n",
+        encoding="utf-8",
+    )
+    assert validator.check_commit_links(
+        source, {"repo_object_format": "sha1", "repo_head": "f" * 40}, date(2026, 8, 23)
+    )
 
 
-def test_self_referencing_current_head_commit_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_final_workpackage_at_current_head_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = tmp_path / "repo"
     root.mkdir()
     _git(root, "init", "-q")
@@ -277,11 +384,102 @@ def test_self_referencing_current_head_commit_fails(tmp_path: Path, monkeypatch:
     (root / "file").write_text("one\n", encoding="utf-8")
     _git(root, "add", "file")
     _git(root, "commit", "-qm", "first")
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     source = root / "record.md"
-    source.write_text(f"---\nstatus: done\n---\n\n## Commits\n- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: self\n", encoding="utf-8")
+    source.write_text(
+        f"---\nstatus: done\n---\n\n## Commits\n- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: self\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(validator, "REPO_ROOT", root)
-    assert validator.check_commit_links(source, {"repo_object_format": "sha1", "repo_head": head}, date(2026, 8, 23))
+    assert (
+        validator.check_commit_links(
+            source, {"repo_object_format": "sha1", "repo_head": head}, date(2026, 8, 23)
+        )
+        == []
+    )
+
+
+def test_linked_commit_cannot_modify_debrief_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    source = root / ".agents/memory/history/2026/08/record.md"
+    source.write_text(
+        source.read_text(encoding="utf-8")
+        + "\n## Commits\n- none — no repository commit (planning only)\nchanged\n",
+        encoding="utf-8",
+    )
+    _git(root, "add", str(source.relative_to(root)))
+    _git(root, "commit", "-qm", "modify debrief")
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "- none — no repository commit (planning only)",
+            f"- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: modify",
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    assert any(
+        "creates or modifies the debrief source" in error
+        for error in validator.check_commit_links(
+            source, {"repo_object_format": "sha1", "repo_head": head}, date(2026, 8, 23)
+        )
+    )
+
+
+def test_check_history_records_rejects_stale_post_rebase_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    old_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    native = root / ".agents/memory/history/2026/08/native.md"
+    native.write_text(
+        "---\n"
+        "id: native\n"
+        "date: 2026-08-23\n"
+        "title: Native\n"
+        "status: done\n"
+        "topics: []\n"
+        "confidence: high\n"
+        "canonical_updates_needed: []\n"
+        f"codex_thread: {THREAD_URI}\n"
+        "repo_object_format: sha1\n"
+        f"repo_head: {old_head}\n"
+        "repo_branch: main\n"
+        "worktree_kind: primary\n"
+        "---\n\n## Commits\n- none — no repository commit (planning only)\n",
+        encoding="utf-8",
+    )
+    _git(root, "checkout", "--orphan", "rebased")
+    _git(root, "rm", "-rf", ".")
+    native.write_text(native.read_text(encoding="utf-8"), encoding="utf-8")
+    _git(root, "add", str(native.relative_to(root)))
+    _git(root, "commit", "-qm", "rebased live head")
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    monkeypatch.setattr(validator, "HISTORY_ROOT", root / ".agents/memory/history")
+    assert any(
+        "repo_head is not an ancestor of live HEAD" in error
+        for error in validator.check_history_records()
+    )
 
 
 @pytest.mark.parametrize(
@@ -309,6 +507,7 @@ def test_title_round_trips_generator_and_canonical_parser(
     assert path.name == f"2026-08-22_{expected_slug}.md"
     payload = body.split("\n---\n", 1)[0].removeprefix("---\n")
     assert yaml.safe_load(payload)["title"] == title
+    assert "## Commits\n- [<full commit OID>]" in body
     source = tmp_path / "record.md"
     source.write_text(body, encoding="utf-8")
     assert validator.parse_frontmatter(source)["title"] == title
@@ -326,13 +525,22 @@ def test_branch_round_trips_generator_parser_validator_and_index(
         check=True,
         capture_output=True,
     )
+    root = _repo(tmp_path)
+    _git(root, "branch", "-m", branch)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     _, body = new_debrief.render(
         date(2026, 8, 22),
         "Example",
         THREAD_ID,
         {
             "repo_object_format": "sha1",
-            "repo_head": "a" * 40,
+            "repo_head": head,
             "repo_branch": branch,
             "worktree_kind": "linked",
         },
@@ -341,7 +549,6 @@ def test_branch_round_trips_generator_parser_validator_and_index(
     frontmatter = yaml.safe_load(payload)
     assert "touched_owner_paths: []\n" in body
     assert frontmatter["repo_branch"] == branch
-    root = _repo(tmp_path)
     source = root / ".agents/memory/history/2026/08/generated.md"
     source.write_text(body, encoding="utf-8")
     assert validator.parse_frontmatter(source)["repo_branch"] == branch
