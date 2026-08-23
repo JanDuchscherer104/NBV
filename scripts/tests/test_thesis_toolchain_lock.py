@@ -43,6 +43,12 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
         '#let logo: "/figures/branding/hm-logo.svg"\n',
         encoding="utf-8",
     )
+    (tmp_path / "docs/typst/thesis/inactive.typ").write_text(
+        '#import "@preview/fake-package:9.9.9": thing\n'
+        '#show: bibliography(style: "/fake.csl")\n'
+        '#set text(font: "Fake Font")\n',
+        encoding="utf-8",
+    )
     (tmp_path / "docs/typst/thesis/experiment_data.typ").write_text(
         '#let report-schema-version = "report-v2"\n', encoding="utf-8"
     )
@@ -55,6 +61,7 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
         "unrelated\n", encoding="utf-8"
     )
     (tmp_path / "docs/ieee.csl").write_text("csl\n", encoding="utf-8")
+    (tmp_path / "docs/fake.csl").write_text("fake csl\n", encoding="utf-8")
     render = tmp_path / ".agents/skills/typst-authoring/scripts/render_png.sh"
     render.write_text("#!/bin/sh\necho render\n", encoding="utf-8")
     render.chmod(0o755)
@@ -80,6 +87,13 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
         encoding="utf-8",
     )
     typst.chmod(0o755)
+    pdftoppm = tmp_path / "bin/pdftoppm"
+    pdftoppm.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = -v ]; then echo "pdftoppm version 1.0 (fixture)" >&2; exit; fi\n',
+        encoding="utf-8",
+    )
+    pdftoppm.chmod(0o755)
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.email", "test@example.invalid")
     _git(tmp_path, "config", "user.name", "Test")
@@ -134,9 +148,28 @@ def test_generation_records_closure_and_path_independent_identities(fixture) -> 
     assert payload["toolchain"]["compiler"]["command"] == "typst"
     assert "executable" not in payload["toolchain"]["compiler"]
     assert len(payload["toolchain"]["compiler"]["binary_sha256"]) == 64
+    comparator = payload["toolchain"]["pdf_comparator"]
+    assert comparator["command"] == "pdftoppm"
+    assert comparator["ppi"] == 72
+    assert len(comparator["binary_sha256"]) == 64
     font = payload["toolchain"]["fonts"][0]
     assert font["source"] == "system"
     assert font["system_files"][0]["basename"] == "system-test.ttf"
+
+
+def test_inactive_typst_source_does_not_define_identities_or_drift(fixture) -> None:
+    root, output, revision = fixture
+    payload = _generate(root, output, revision)
+
+    toolchain = payload["toolchain"]
+    assert toolchain["packages"] == [{"identity": "@preview/example:1.2.3"}]
+    assert [font["family"] for font in toolchain["fonts"]] == ["System Test"]
+    assert toolchain["csl"]["path"] == "docs/ieee.csl"
+
+    inactive = root / "docs/typst/thesis/inactive.typ"
+    inactive.write_text(inactive.read_text() + '#set text(font: "Another Fake Font")\n')
+    passed = _run(root, output, "check")
+    assert passed.returncode == 0, passed.stderr
 
 
 def test_exact_generated_outputs_are_excluded_but_other_assets_are_material(
@@ -216,8 +249,21 @@ def test_binary_drift_is_detected_by_hash(fixture) -> None:
     assert "lock drift detected" in failed.stderr
 
 
+def test_comparator_binary_drift_is_detected_by_hash(fixture) -> None:
+    root, output, revision = fixture
+    _generate(root, output, revision)
+    comparator = root / "bin/pdftoppm"
+    comparator.write_text(comparator.read_text() + "# drift\n")
+    failed = _run(root, output, "check")
+    assert failed.returncode == 1
+    assert "lock drift detected" in failed.stderr
+
+
 def test_schema_is_strict_and_compiler_identity_is_portable() -> None:
     schema = json.loads(SCHEMA.read_text())
     compiler = schema["properties"]["toolchain"]["properties"]["compiler"]
     assert compiler["required"] == ["command", "version", "binary_sha256"]
     assert "executable" not in compiler["properties"]
+    comparator = schema["properties"]["toolchain"]["properties"]["pdf_comparator"]
+    assert comparator["required"] == ["command", "version", "binary_sha256", "ppi"]
+    assert comparator["properties"]["ppi"]["const"] == 72

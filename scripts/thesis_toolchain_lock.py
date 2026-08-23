@@ -51,6 +51,17 @@ def _run(args: list[str], *, cwd: Path) -> str:
     return result.stdout.strip()
 
 
+def _version(args: list[str], *, cwd: Path) -> str:
+    try:
+        result = subprocess.run(
+            args, cwd=cwd, check=True, text=True, capture_output=True
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", "") or str(exc)
+        raise LockError(f"command failed: {' '.join(args)}: {detail.strip()}") from exc
+    return (result.stdout or result.stderr).strip()
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -200,12 +211,6 @@ def _revision_material(root: Path, revision: str) -> dict[str, str]:
     return result
 
 
-def _thesis_sources(root: Path) -> list[Path]:
-    paths = [p for p in (root / "docs/typst/thesis").rglob("*.typ")]
-    paths += [p for p in (root / "docs/typst/shared").rglob("*.typ") if p not in paths]
-    return sorted(paths)
-
-
 def _typst_font_variants(output: str, family: str) -> list[dict[str, Any]]:
     current: str | None = None
     variants: list[dict[str, Any]] = []
@@ -250,10 +255,17 @@ def _system_font_files(
 
 
 def _identities(
-    root: Path, *, typst_bin: str, render_script: Path, ppi: int
+    root: Path,
+    *,
+    typst_bin: str,
+    pdftoppm_bin: str,
+    render_script: Path,
+    ppi: int,
 ) -> dict[str, Any]:
-    sources = _thesis_sources(root)
-    text = "\n".join(path.read_text(encoding="utf-8") for path in sources)
+    source_paths, _assets = _source_closure(root)
+    text = "\n".join(
+        (root / path).read_text(encoding="utf-8") for path in sorted(source_paths)
+    )
     packages = sorted(set(IMPORT_RE.findall(text)))
     csl_paths = sorted(set(re.findall(r"style\s*:\s*\"([^\"]+\.csl)\"", text)))
     if not csl_paths:
@@ -273,7 +285,7 @@ def _identities(
     executable_path = Path(executable).resolve()
     if not executable_path.is_file():
         raise LockError(f"compiler executable is not a file: {typst_bin}")
-    version = _run([typst_bin, "--version"], cwd=root)
+    version = _version([typst_bin, "--version"], cwd=root)
     binary_sha256 = _sha256(executable_path)
     fonts: list[dict[str, Any]] = []
     for family in families:
@@ -316,6 +328,14 @@ def _identities(
             "render_script_sha256": _sha256(render_script),
             "ppi": ppi,
         },
+        "pdf_comparator": {
+            "command": Path(pdftoppm_bin).name,
+            "version": _version([pdftoppm_bin, "-v"], cwd=root),
+            "binary_sha256": _sha256(
+                Path(shutil.which(pdftoppm_bin) or pdftoppm_bin).resolve()
+            ),
+            "ppi": 72,
+        },
     }
 
 
@@ -357,7 +377,14 @@ def _schema_validate(value: Any, schema: dict[str, Any], path: str = "$") -> Non
             raise LockError(f"{path}: must be at least {schema['minimum']}")
 
 
-def _build(root: Path, revision: str, *, typst_bin: str, ppi: int) -> dict[str, Any]:
+def _build(
+    root: Path,
+    revision: str,
+    *,
+    typst_bin: str,
+    pdftoppm_bin: str,
+    ppi: int,
+) -> dict[str, Any]:
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise LockError(f"source revision must be a full commit OID: {revision}")
     material = _current_material(root)
@@ -384,7 +411,11 @@ def _build(root: Path, revision: str, *, typst_bin: str, ppi: int) -> dict[str, 
             for path, digest in sorted(material.items())
         ],
         "toolchain": _identities(
-            root, typst_bin=typst_bin, render_script=render_script, ppi=ppi
+            root,
+            typst_bin=typst_bin,
+            pdftoppm_bin=pdftoppm_bin,
+            render_script=render_script,
+            ppi=ppi,
         ),
         "report_schema_version": report_match.group(1),
         "build_commands": {
@@ -414,6 +445,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-revision")
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--typst-bin", default=os.environ.get("TYPST_BIN", "typst"))
+    parser.add_argument(
+        "--pdftoppm-bin", default=os.environ.get("PDFTOPPM_BIN", "pdftoppm")
+    )
     parser.add_argument("--ppi", type=int, default=300)
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -422,14 +456,26 @@ def main(argv: list[str] | None = None) -> int:
             revision = args.source_revision or _run(
                 ["git", "rev-parse", "HEAD"], cwd=root
             )
-            data = _build(root, revision, typst_bin=args.typst_bin, ppi=args.ppi)
+            data = _build(
+                root,
+                revision,
+                typst_bin=args.typst_bin,
+                pdftoppm_bin=args.pdftoppm_bin,
+                ppi=args.ppi,
+            )
             _schema_validate(data, json.loads(SCHEMA.read_text(encoding="utf-8")))
             _write_atomic(args.output.resolve(), data)
         else:
             actual = json.loads(args.output.read_text(encoding="utf-8"))
             _schema_validate(actual, json.loads(SCHEMA.read_text(encoding="utf-8")))
             revision = args.source_revision or actual["source_revision"]
-            data = _build(root, revision, typst_bin=args.typst_bin, ppi=args.ppi)
+            data = _build(
+                root,
+                revision,
+                typst_bin=args.typst_bin,
+                pdftoppm_bin=args.pdftoppm_bin,
+                ppi=args.ppi,
+            )
             if actual != data:
                 raise LockError("lock drift detected; run thesis-toolchain-lock")
     except (OSError, LockError, json.JSONDecodeError, AttributeError) as exc:

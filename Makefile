@@ -25,6 +25,7 @@ SRC_DIR := aria_nbv
 TEST_DIR := tests
 DOCS_DIR := docs
 TYPST ?= typst
+PDFTOPPM ?= pdftoppm
 TYPST_ROOT ?= docs
 TYPST_PAPER ?= $(DOCS_DIR)/typst/seminar_paper/main.typ
 TYPST_PAPER_PDF ?= $(DOCS_DIR)/typst/seminar_paper/main.pdf
@@ -750,13 +751,13 @@ thesis-pdf-ci: ## Compile the development thesis into an ignored CI artifact pat
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) "$(CI_RENDER_DIR)/thesis.pdf"
 
 thesis-toolchain-lock: ## Refresh the generated thesis toolchain lock
-	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py generate --typst-bin "$(TYPST)"
+	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py generate --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"
 
 thesis-toolchain-lock-check: ## Check thesis toolchain lock schema and material-input drift
-	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py check --typst-bin "$(TYPST)"
+	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py check --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"
 
 thesis-release-audit: _check_python ## Run the final thesis release audit after verifying the toolchain lock
-	@$(PYTHON_INTERPRETER) scripts/thesis_release.py audit --final --typst-bin "$(TYPST)"
+	@$(PYTHON_INTERPRETER) scripts/thesis_release.py audit --final --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"
 
 thesis-submission-build: _check_python ## Strictly build a submission from an explicit evidence report and output
 	@test -n "$(strip $(THESIS_REPORT))" || { echo "THESIS_REPORT is required" >&2; exit 2; }

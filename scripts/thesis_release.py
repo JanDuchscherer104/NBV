@@ -8,8 +8,10 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from datetime import date
 from pathlib import Path
@@ -99,7 +101,7 @@ def _require_real_commit(root: Path, revision: object) -> str:
     return revision
 
 
-def _validate_lock_schema(root: Path, payload: object) -> None:
+def _validate_lock_schema(root: Path, payload: object, *, final: bool = True) -> None:
     try:
         schema = json.loads(
             (
@@ -113,6 +115,8 @@ def _validate_lock_schema(root: Path, payload: object) -> None:
             raise ImportError("unable to load thesis_toolchain_lock")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        if not final:
+            schema["properties"]["toolchain"]["required"].remove("pdf_comparator")
         module._schema_validate(payload, schema)
     except (
         ImportError,
@@ -307,7 +311,7 @@ def _validate_ledger(
         if not isinstance(raw_payload, dict):
             raise ReleaseRequirementsError("toolchain lock must be a JSON object")
         payload: dict[str, Any] = raw_payload
-        _validate_lock_schema(root, payload)
+        _validate_lock_schema(root, payload, final=final)
         _require_real_commit(root, payload.get("source_revision"))
         return payload
     if lock_sha != LOCK_PLACEHOLDER or lock.get("sha256_state") != "pending":
@@ -441,7 +445,9 @@ def _validate_report_provenance_exact_root(
         ) from exc
 
 
-def _check_toolchain_lock(*, root: Path, typst_bin: str) -> None:
+def _check_toolchain_lock(
+    *, root: Path, typst_bin: str, pdftoppm_bin: str = "pdftoppm"
+) -> None:
     lock_path = root / LOCK_RELATIVE_PATH
     try:
         subprocess.run(
@@ -455,6 +461,8 @@ def _check_toolchain_lock(*, root: Path, typst_bin: str) -> None:
                 str(lock_path),
                 "--typst-bin",
                 typst_bin,
+                "--pdftoppm-bin",
+                pdftoppm_bin,
             ],
             cwd=root,
             check=True,
@@ -467,6 +475,105 @@ def _check_toolchain_lock(*, root: Path, typst_bin: str) -> None:
             "toolchain lock check failed; Typst submission compile was not started: "
             + detail.strip()
         ) from exc
+
+
+def _rasterized_pages(
+    *, pdf: Path, output_dir: Path, pdftoppm_bin: str, ppi: int
+) -> list[Path]:
+    prefix = output_dir / "page"
+    try:
+        subprocess.run(
+            [pdftoppm_bin, "-r", str(ppi), "-png", str(pdf), str(prefix)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", "") or str(exc)
+        raise ReleaseRequirementsError(
+            f"PDF rasterization failed: {detail.strip()}"
+        ) from exc
+    pages = list(output_dir.glob("page-*.png"))
+    pages.sort(key=lambda path: int(path.stem.rsplit("-", 1)[1]))
+    return pages
+
+
+def _compare_rasterized_pages(
+    fresh_pages: list[Path], tracked_pages: list[Path]
+) -> None:
+    if len(fresh_pages) != len(tracked_pages):
+        raise ReleaseRequirementsError(
+            "tracked final PDF differs from a fresh compile: page count mismatch"
+        )
+    for index, (fresh_page, tracked_page) in enumerate(
+        zip(fresh_pages, tracked_pages, strict=True), start=1
+    ):
+        if (
+            hashlib.sha256(fresh_page.read_bytes()).digest()
+            != hashlib.sha256(tracked_page.read_bytes()).digest()
+        ):
+            raise ReleaseRequirementsError(
+                "tracked final PDF differs from a fresh compile: "
+                f"page {index} raster hash mismatch"
+            )
+
+
+def _final_pdf_freshness(
+    *, root: Path, typst_bin: str, pdftoppm_bin: str, lock: dict[str, Any]
+) -> None:
+    tracked_pdf = root / "docs/typst/thesis/main.pdf"
+    if not tracked_pdf.is_file():
+        raise ReleaseRequirementsError("tracked final PDF is missing")
+    comparator = lock.get("toolchain", {}).get("pdf_comparator", {})
+    if comparator.get("command") != Path(pdftoppm_bin).name:
+        raise ReleaseRequirementsError("PDF comparator identity drift detected")
+    actual_comparator = shutil.which(pdftoppm_bin) or pdftoppm_bin
+    if Path(actual_comparator).name != comparator.get("command"):
+        raise ReleaseRequirementsError("PDF comparator identity drift detected")
+    ppi = comparator.get("ppi")
+    if ppi != 72:
+        raise ReleaseRequirementsError("PDF comparator PPI is not fixed at 72")
+
+    with tempfile.TemporaryDirectory(prefix="aria-thesis-final-") as directory:
+        temporary = Path(directory)
+        fresh_pdf = temporary / "fresh.pdf"
+        try:
+            subprocess.run(
+                [
+                    typst_bin,
+                    "compile",
+                    "--root",
+                    "docs",
+                    str(root / "docs/typst/thesis/main.typ"),
+                    str(fresh_pdf),
+                ],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = getattr(exc, "stderr", "") or str(exc)
+            raise ReleaseRequirementsError(
+                f"fresh final PDF compile failed: {detail.strip()}"
+            ) from exc
+        fresh_pages_dir = temporary / "fresh-pages"
+        fresh_pages_dir.mkdir()
+        fresh_pages = _rasterized_pages(
+            pdf=fresh_pdf,
+            output_dir=fresh_pages_dir,
+            pdftoppm_bin=actual_comparator,
+            ppi=ppi,
+        )
+        tracked_pages_dir = temporary / "tracked-pages"
+        tracked_pages_dir.mkdir()
+        tracked_pages = _rasterized_pages(
+            pdf=tracked_pdf,
+            output_dir=tracked_pages_dir,
+            pdftoppm_bin=actual_comparator,
+            ppi=ppi,
+        )
+        _compare_rasterized_pages(fresh_pages, tracked_pages)
 
 
 def typst_report_path(root: Path, report: Path) -> str:
@@ -531,6 +638,7 @@ def main(argv: list[str] | None = None) -> int:
         help="require and verify the generated final lock",
     )
     audit.add_argument("--typst-bin", default=os.environ.get("TYPST", "typst"))
+    audit.add_argument("--pdftoppm-bin", default=os.environ.get("PDFTOPPM", "pdftoppm"))
     build = sub.add_parser("submission-build")
     build.add_argument("--root", type=Path, default=ROOT)
     build.add_argument("--report", type=Path, required=True)
@@ -540,12 +648,22 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve()
     try:
         if args.command == "audit":
-            _check_toolchain_lock(root=root, typst_bin=args.typst_bin)
-            validate_release_requirements(
+            _check_toolchain_lock(
+                root=root, typst_bin=args.typst_bin, pdftoppm_bin=args.pdftoppm_bin
+            )
+            lock = validate_release_requirements(
                 load_release_requirements(root / LEDGER_PATH.relative_to(ROOT)),
                 root,
                 final=args.final,
             )
+            if args.final:
+                assert lock is not None
+                _final_pdf_freshness(
+                    root=root,
+                    typst_bin=args.typst_bin,
+                    pdftoppm_bin=args.pdftoppm_bin,
+                    lock=lock,
+                )
             print("thesis release audit passed; submission remains externally blocked")
         else:
             build_submission(

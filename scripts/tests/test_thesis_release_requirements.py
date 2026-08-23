@@ -30,20 +30,36 @@ def test_audit_accepts_documented_pending_lock_without_submission_claim() -> Non
 def test_audit_routes_exact_root_and_typst_binary_through_lock_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[Path, str]] = []
+    calls: list[tuple[Path, str, str]] = []
     monkeypatch.setattr(
         RELEASE,
         "_check_toolchain_lock",
-        lambda *, root, typst_bin: calls.append((root, typst_bin)),
+        lambda *, root, typst_bin, pdftoppm_bin: calls.append(
+            (root, typst_bin, pdftoppm_bin)
+        ),
     )
-    monkeypatch.setattr(RELEASE, "validate_release_requirements", lambda *a, **k: None)
+    monkeypatch.setattr(
+        RELEASE,
+        "validate_release_requirements",
+        lambda *a, **k: {"source_revision": "a" * 40},
+    )
+    monkeypatch.setattr(RELEASE, "_final_pdf_freshness", lambda **_kwargs: None)
     assert (
         RELEASE.main(
-            ["audit", "--root", str(ROOT), "--final", "--typst-bin", "alt-typst"]
+            [
+                "audit",
+                "--root",
+                str(ROOT),
+                "--final",
+                "--typst-bin",
+                "alt-typst",
+                "--pdftoppm-bin",
+                "alt-pdftoppm",
+            ]
         )
         == 0
     )
-    assert calls == [(ROOT, "alt-typst")]
+    assert calls == [(ROOT, "alt-typst", "alt-pdftoppm")]
 
 
 def test_hm_submission_is_institutional_guidance_not_binding_aspo() -> None:
@@ -82,6 +98,78 @@ def test_audit_lock_drift_is_fail_closed_before_typst(
         )
         == 1
     )
+
+
+def _pdf_comparator_lock(command: str = "pdftoppm") -> dict[str, object]:
+    return {"toolchain": {"pdf_comparator": {"command": command, "ppi": 72}}}
+
+
+def test_final_pdf_accepts_byte_different_same_content_pdfs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tracked = tmp_path / "docs/typst/thesis/main.pdf"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_bytes(b"tracked PDF metadata")
+    monkeypatch.setattr(
+        RELEASE.subprocess,
+        "run",
+        lambda command, **kwargs: Path(command[-1]).write_bytes(b"fresh PDF metadata"),
+    )
+
+    def rasterize(*, output_dir, **kwargs):
+        page = output_dir / "page-1.png"
+        page.write_bytes(b"same rendered page")
+        return [page]
+
+    monkeypatch.setattr(RELEASE, "_rasterized_pages", rasterize)
+    RELEASE._final_pdf_freshness(
+        root=tmp_path,
+        typst_bin="typst",
+        pdftoppm_bin="pdftoppm",
+        lock=_pdf_comparator_lock(),
+    )
+
+
+def test_final_pdf_rejects_stale_tracked_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tracked = tmp_path / "docs/typst/thesis/main.pdf"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_bytes(b"tracked PDF")
+    monkeypatch.setattr(
+        RELEASE.subprocess,
+        "run",
+        lambda command, **kwargs: Path(command[-1]).write_bytes(b"fresh PDF"),
+    )
+
+    def rasterize(*, output_dir, **kwargs):
+        page = output_dir / "page-1.png"
+        page.write_bytes(
+            b"stale page" if "tracked-pages" in str(output_dir) else b"fresh page"
+        )
+        return [page]
+
+    monkeypatch.setattr(RELEASE, "_rasterized_pages", rasterize)
+    with pytest.raises(RELEASE.ReleaseRequirementsError, match="hash mismatch"):
+        RELEASE._final_pdf_freshness(
+            root=tmp_path,
+            typst_bin="typst",
+            pdftoppm_bin="pdftoppm",
+            lock=_pdf_comparator_lock(),
+        )
+
+
+def test_final_pdf_rejects_comparator_identity_drift(tmp_path: Path) -> None:
+    tracked = tmp_path / "docs/typst/thesis/main.pdf"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_bytes(b"tracked PDF")
+    with pytest.raises(RELEASE.ReleaseRequirementsError, match="identity drift"):
+        RELEASE._final_pdf_freshness(
+            root=tmp_path,
+            typst_bin="typst",
+            pdftoppm_bin="other-pdftoppm",
+            lock=_pdf_comparator_lock(),
+        )
 
 
 @pytest.mark.parametrize(
