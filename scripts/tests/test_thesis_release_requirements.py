@@ -47,7 +47,7 @@ def test_provenance_and_external_submission_claims_are_rejected(mutation) -> Non
 def test_final_lock_is_required_and_its_sha256_is_verified(tmp_path: Path) -> None:
     data = RELEASE.load_release_requirements()
     with pytest.raises(
-        RELEASE.ReleaseRequirementsError, match="generated toolchain lock"
+        RELEASE.ReleaseRequirementsError, match="missing generated lock"
     ):
         RELEASE.validate_release_requirements(data, final=True, lock_root=tmp_path)
     lock_path = tmp_path / RELEASE.LOCK_RELATIVE_PATH
