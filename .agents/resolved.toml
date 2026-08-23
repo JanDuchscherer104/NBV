@@ -1187,7 +1187,7 @@ implementation_notes = ["Start with the existing debrief frontmatter and agents-
 acceptance = ["A maintainer can identify pending owner updates from source-backed debriefs and review them by target owner.", "No helper mutates an owner surface or backlog without an explicit ordinary repository edit."]
 verification = ["make check-agent-memory", "make agents-db AGENTS_ARGS='validate'"]
 resolved_at = "2026-08-23"
-resolution_note = "Resolved after the controlled G002 PR2 comparison: baseline exit 1 with 1/4 passes versus candidate exit 0 with 4/4 passes, matched prompts/runner, no caps or timeouts, and clean checkouts; the proposal-only, explicit-review lifecycle and no-auto-install policy are verified."
+resolution_note = "Old-rubric historical snapshots: .agents/work/routing-trials/dae2171918b9-96b01d7679b3/index.json (1/4) and .agents/work/routing-trials/96b01d7679b3-96b01d7679b3/index.json (4/4). Corrected authenticated baseline .agents/work/routing-trials/6a3cdab23aba-a285097dfe5e/index.json and candidate .agents/work/routing-trials/a285097dfe5e-a285097dfe5e/index.json are both 4/4, with comparison matched=true, identical prompt hashes/runner, no caps/timeouts, and clean canonical checkouts; proposal-only explicit-review/no-auto-install remains verified."
 resolved_from = ".agents/todos.toml"
 
 [[refactor]]
