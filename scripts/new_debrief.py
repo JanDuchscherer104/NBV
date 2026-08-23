@@ -123,6 +123,13 @@ worktree_kind: {provenance["worktree_kind"]}
 
 ## Canonical Owner Impact
 <list exact Typst/Python/configuration/test/setup/guidance owner updates, or say "none" explicitly>
+
+## Human Intent Proposal
+- Proposed statement: <reusable statement, or none>
+- Evidence: <exact user statement or bounded evidence, or none>
+- Current owner or conflict: <reviewed policy or unresolved conflict, or none>
+- Scope and target owner: <scope and exact owner path, or none>
+- Disposition: proposed
 """
     return file_path, body
 

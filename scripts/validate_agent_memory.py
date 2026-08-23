@@ -60,6 +60,20 @@ CODEX_THREAD_URI_PATTERN = re.compile(
     r"^codex://threads/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
 WORKTREE_KINDS = {"primary", "linked"}
+PROPOSAL_TARGET = ".agents/references/human_owner_intent.md"
+PROPOSAL_FIELDS = (
+    "Proposed statement",
+    "Evidence",
+    "Current owner or conflict",
+    "Scope and target owner",
+    "Disposition",
+)
+COMMIT_LINK_PATTERN = re.compile(
+    r"^- \[([0-9a-f]+)\]"
+    r"\(https://github\.com/JanDuchscherer104/ARIA-NBV/commit/([0-9a-f]+)\)"
+    r" — ([^:]+): (.+)$"
+)
+NONE_COMMIT_PATTERN = re.compile(r"^- none — no repository commit \(([^()]+)\)$")
 RETIRED_SOURCE_PATHS = {
     "docs/contents/thesis/roadmap.qmd",
     "docs/contents/thesis/questions.qmd",
@@ -412,6 +426,120 @@ def check_history_records() -> list[str]:
                     f"{rel}: canonical update path does not exist: {update_text}"
                 )
 
+        if record_date >= date(2026, 8, 23):
+            errors.extend(check_proposal_body(path, canonical_updates))
+        errors.extend(check_commit_links(path, frontmatter, record_date))
+
+    return errors
+
+
+def _body_sections(path: Path) -> dict[str, list[str]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        body = lines[lines.index("---", 1) + 1 :]
+    except ValueError:
+        return {}
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in body:
+        if line.startswith("## "):
+            current = line[3:].strip()
+            sections[current] = []
+        elif current is not None:
+            sections[current].append(line)
+    return sections
+
+
+def check_proposal_body(path: Path, canonical_updates: object) -> list[str]:
+    """Require the existing target path to carry the five-field proposal body."""
+    if not isinstance(canonical_updates, list) or PROPOSAL_TARGET not in canonical_updates:
+        return []
+    rel = path.relative_to(REPO_ROOT).as_posix() if path.is_relative_to(REPO_ROOT) else path.as_posix()
+    section = _body_sections(path).get("Human Intent Proposal")
+    if section is None:
+        return [f"{rel}: proposal target requires `## Human Intent Proposal`"]
+    fields: dict[str, str] = {}
+    for line in section:
+        if not line.strip():
+            continue
+        match = re.fullmatch(r"- ([^:]+):\s*(.+)", line)
+        if not match or match.group(1) not in PROPOSAL_FIELDS:
+            return [f"{rel}: proposal body must contain exactly the five named fields"]
+        field, value = match.groups()
+        if field in fields:
+            return [f"{rel}: proposal field is duplicated: {field}"]
+        fields[field] = value.strip()
+    if tuple(fields) != PROPOSAL_FIELDS or any(not fields[field] for field in PROPOSAL_FIELDS):
+        return [f"{rel}: proposal body must contain exactly the five named fields"]
+    disposition = fields["Disposition"].lower()
+    if disposition not in {"proposed", "accept", "reject", "narrow", "defer"}:
+        return [f"{rel}: unsupported proposal disposition: {disposition}"]
+    return []
+
+
+def check_commit_links(
+    path: Path, frontmatter: dict[str, object], record_date: date
+) -> list[str]:
+    """Validate immutable workpackage links for current committed debriefs."""
+    section = _body_sections(path).get("Commits")
+    if section is None or record_date < date(2026, 8, 23):
+        return []
+    rel = path.relative_to(REPO_ROOT).as_posix() if path.is_relative_to(REPO_ROOT) else path.as_posix()
+    lines = [line.strip() for line in section if line.strip()]
+    if not lines:
+        return [f"{rel}: `## Commits` must contain a commit link or none line"]
+    none_matches = [NONE_COMMIT_PATTERN.fullmatch(line) for line in lines]
+    if any(none_matches):
+        if len(lines) != 1:
+            return [f"{rel}: `none` cannot coexist with a commit OID"]
+        return []
+    object_format = str(frontmatter.get("repo_object_format", "sha1"))
+    repo_head = str(frontmatter.get("repo_head", ""))
+    oid_length = REPO_OBJECT_FORMAT_OID_LENGTHS.get(object_format)
+    if oid_length is None or not is_full_repo_oid(repo_head, object_format):
+        return [f"{rel}: commit links require valid checkout provenance"]
+    seen: set[str] = set()
+    errors: list[str] = []
+    for line in lines:
+        match = COMMIT_LINK_PATTERN.fullmatch(line)
+        if not match:
+            errors.append(f"{rel}: invalid commit-link grammar: {line}")
+            continue
+        label_oid, url_oid, _workpackage, _outcome = match.groups()
+        if len(label_oid) != oid_length or len(url_oid) != oid_length:
+            errors.append(f"{rel}: commit links must use full {object_format} OIDs")
+            continue
+        if label_oid != url_oid:
+            errors.append(f"{rel}: commit link label and URL OID differ")
+        if label_oid in seen:
+            errors.append(f"{rel}: duplicate commit OID: {label_oid}")
+        seen.add(label_oid)
+        current_head = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if label_oid == repo_head and repo_head == current_head:
+            errors.append(f"{rel}: commit link cannot self-reference repo_head")
+        exists = subprocess.run(
+            ["git", "cat-file", "-e", f"{label_oid}^{{commit}}"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+        )
+        if exists.returncode != 0:
+            errors.append(f"{rel}: commit OID is not a repository commit: {label_oid}")
+            continue
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", label_oid, repo_head],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+        )
+        if ancestor.returncode != 0:
+            errors.append(f"{rel}: commit OID is not an ancestor of repo_head: {label_oid}")
     return errors
 
 

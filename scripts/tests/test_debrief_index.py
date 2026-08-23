@@ -180,6 +180,110 @@ def test_grandfathered_missing_thread_is_indexed_as_null(tmp_path: Path) -> None
     assert row["codex_thread"] is None
 
 
+def _proposal_body(disposition: str = "proposed") -> str:
+    return (
+        "---\n"
+        "id: proposal\n"
+        "date: 2026-08-23\n"
+        "title: Proposal\n"
+        "status: done\n"
+        "topics: [test]\n"
+        "confidence: high\n"
+        "canonical_updates_needed:\n"
+        "  - .agents/references/human_owner_intent.md\n"
+        f"codex_thread: {THREAD_URI}\n"
+        "---\n\n"
+        "## Human Intent Proposal\n"
+        "- Proposed statement: Keep one owner per durable policy.\n"
+        "- Evidence: exact bounded task evidence.\n"
+        "- Current owner or conflict: current policy is unsettled.\n"
+        "- Scope and target owner: scaffold guidance; exact owner path.\n"
+        f"- Disposition: {disposition}\n"
+    )
+
+
+@pytest.mark.parametrize("disposition", ["proposed", "accept", "reject", "narrow", "defer"])
+def test_human_intent_proposal_body_uses_existing_target_and_review_dispositions(
+    tmp_path: Path, disposition: str
+) -> None:
+    source = tmp_path / "proposal.md"
+    source.write_text(_proposal_body(disposition), encoding="utf-8")
+    assert validator.check_proposal_body(source, [".agents/references/human_owner_intent.md"]) == []
+
+
+def test_proposal_target_requires_exact_five_field_body(tmp_path: Path) -> None:
+    source = tmp_path / "proposal.md"
+    source.write_text(_proposal_body().replace("- Evidence:", "- Extra: x\n- Evidence:"), encoding="utf-8")
+    assert validator.check_proposal_body(source, [".agents/references/human_owner_intent.md"])
+
+
+def test_commit_links_require_matching_full_ancestor_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Test")
+    (root / "file").write_text("one\n", encoding="utf-8")
+    _git(root, "add", "file")
+    _git(root, "commit", "-qm", "first")
+    linked = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    (root / "file").write_text("two\n", encoding="utf-8")
+    _git(root, "commit", "-qam", "second")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    source = root / "proposal.md"
+    source.write_text(
+        "---\nstatus: done\n---\n\n## Commits\n"
+        f"- [{linked}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{linked}) — WP1: first\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    assert validator.check_commit_links(
+        source,
+        {"repo_object_format": "sha1", "repo_head": head},
+        date(2026, 8, 23),
+    ) == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "- [abc](https://github.com/JanDuchscherer104/ARIA-NBV/commit/abc) — WP1: short",
+        "- [0000000000000000000000000000000000000000](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1111111111111111111111111111111111111111) — WP1: mismatch",
+        "- [0000000000000000000000000000000000000000](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0000000000000000000000000000000000000000) — WP1: missing",
+    ],
+)
+def test_invalid_commit_link_forms_fail(tmp_path: Path, line: str) -> None:
+    source = tmp_path / "record.md"
+    source.write_text(f"---\nstatus: done\n---\n\n## Commits\n{line}\n", encoding="utf-8")
+    assert validator.check_commit_links(
+        source,
+        {"repo_object_format": "sha1", "repo_head": "f" * 40},
+        date(2026, 8, 23),
+    )
+
+
+def test_none_commit_form_is_exclusive(tmp_path: Path) -> None:
+    source = tmp_path / "record.md"
+    source.write_text("---\nstatus: done\n---\n\n## Commits\n- none — no repository commit (planning only)\n- none — no repository commit (duplicate)\n", encoding="utf-8")
+    assert validator.check_commit_links(source, {"repo_object_format": "sha1", "repo_head": "f" * 40}, date(2026, 8, 23))
+
+
+def test_self_referencing_current_head_commit_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Test")
+    (root / "file").write_text("one\n", encoding="utf-8")
+    _git(root, "add", "file")
+    _git(root, "commit", "-qm", "first")
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+    source = root / "record.md"
+    source.write_text(f"---\nstatus: done\n---\n\n## Commits\n- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: self\n", encoding="utf-8")
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    assert validator.check_commit_links(source, {"repo_object_format": "sha1", "repo_head": head}, date(2026, 8, 23))
+
+
 @pytest.mark.parametrize(
     ("title", "expected_slug"),
     [
