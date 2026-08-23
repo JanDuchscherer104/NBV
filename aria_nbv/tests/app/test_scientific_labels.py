@@ -46,6 +46,16 @@ def test_persisted_metric_labels_use_current_entity_symbol_owners() -> None:
     assert SCIENTIFIC_LABELS["return_h"].symbol_key == "entity.return_h"
 
 
+def test_every_scientific_label_symbol_resolves_from_canonical_registry() -> None:
+    root = Path(__file__).parents[3]
+    symbol_ids = {label.symbol_key for label in SCIENTIFIC_LABELS.values() if label.symbol_key is not None}
+
+    for symbol_id in sorted(symbol_ids):
+        resolved = resolve_theory(TheoryReferences(symbol_ids=(symbol_id,)), root=root).symbols
+        assert len(resolved) == 1
+        assert resolved[0].identifier == symbol_id
+
+
 def test_scientific_label_modes_resolve_at_the_presentation_boundary(tmp_path) -> None:
     docs = tmp_path / "docs"
     (docs / "glossary").mkdir(parents=True)

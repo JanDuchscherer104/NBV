@@ -54,6 +54,7 @@
   (key: "entity.target_rri_marginal", tex: "\\mathrm{RRI}_{t,i}^e", description: "State-relative marginal target RRI for candidate i at rollout step t.", thesis_list: true, order: 201),
   (key: "entity.target_rri_cumulative", tex: "C_t^{\\mathrm{RRI},e}", description: "Running sum of selected state-relative target RRIs.", thesis_list: true, order: 202),
   (key: "entity.target_root_gain_cumulative", tex: "J_t^e", description: "Running cumulative target gain normalized by rollout-root error.", thesis_list: true, order: 203),
+  (key: "entity.target_reward", tex: "r_t^e", description: "Canonical target-specific reward at rollout step t.", thesis_list: true, order: 331),
   (key: "entity.target_desc", tex: "\\boldsymbol{\\phi}_e", description: "Actor-visible target/entity descriptor used to condition target-specific value prediction.", thesis_list: true, order: 205),
   (key: "rl.s", tex: "s", description: "Abstract planning state.", thesis_list: true, order: 210),
   (key: "rl.a", tex: "a", description: "Action index selecting a candidate row.", thesis_list: true, order: 220),

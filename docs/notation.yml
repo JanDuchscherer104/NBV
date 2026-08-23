@@ -152,6 +152,12 @@ symbols:
     description: 'Running cumulative target gain normalized by rollout-root error.'
     thesis_list: true
     order: 203
+  entity.target_reward:
+    tex: 'r_t^e'
+    typst: '#symb.entity.target_reward'
+    description: 'Canonical target-specific reward at rollout step t.'
+    thesis_list: true
+    order: 331
   entity.target_desc:
     tex: '\boldsymbol{\phi}_e'
     typst: '#symb.entity.target_desc'
