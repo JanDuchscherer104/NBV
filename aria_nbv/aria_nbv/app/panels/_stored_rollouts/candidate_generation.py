@@ -327,7 +327,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
             selected = density[density["aggregation_level"].eq(level)] if "aggregation_level" in density else density
             if not selected.empty:
                 pivot = selected.pivot_table(
-                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="first"
+                    index="sin_elevation_bin", columns="azimuth_bin", values="mean_state_fraction", aggfunc="mean"
                 ).sort_index()
                 fig = px.imshow(
                     pivot,
@@ -1015,6 +1015,13 @@ def _render_candidate_geometry_diagnostics(
                 title="Candidate centers relative to each rollout root (ground plane)",
             )
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            if {"target_x", "target_y"}.issubset(root_geometry.columns):
+                _add_geometry_anchors(
+                    fig,
+                    root_geometry,
+                    three_dimensional=False,
+                    axis_frames=root_geometry,
+                )
             _render_plot(
                 fig,
                 ScientificExplanation(
@@ -1033,6 +1040,51 @@ def _render_candidate_geometry_diagnostics(
                     ),
                 ),
             )
+
+        if "normalized_radius" in candidates and candidates["normalized_radius"].notna().any():
+            radius = candidates.dropna(subset=["normalized_radius"])
+            _render_plot(
+                _normalized_radius_figure(radius),
+                ScientificExplanation(
+                    question="Do candidate radii respect the target-normalized geometry envelope?",
+                    population="Bounded candidate rows with finite target-distance-normalized radius.",
+                    metric="Candidate radius divided by the persisted target-distance scale; dimensionless.",
+                    denominator_masks="Finite normalized-radius rows; missing geometry remains unavailable.",
+                    comparability="Compare only stores sharing the same target normalization and candidate contract.",
+                    expected_pattern="Most support remains within the unit target-normalized envelope.",
+                    failure_interpretation="Clipping or heavy tails can expose impossible geometry or frame mistakes.",
+                    evidence_role="actor-visible",
+                    source_fields=("candidate_diagnostics/normalized_radius", "target_distance_m"),
+                ),
+            )
+
+        orientation_fields = {
+            "rig_target_yaw_error_deg",
+            "target_elevation_deg",
+        }
+        if orientation_fields.intersection(candidates.columns):
+            frame_fields = [name for name in orientation_fields if name in candidates]
+            orientation = candidates[frame_fields].copy()
+            orientation["step_index"] = candidates.get("step_index", pd.Series(index=candidates.index))
+            orientation["diagnostic"] = "candidate orientation"
+            orientation = orientation.melt(
+                id_vars=["step_index", "diagnostic"], var_name="source", value_name="angle_deg"
+            ).dropna(subset=["angle_deg"])
+            if not orientation.empty:
+                _render_plot(
+                    _orientation_diagnostic_figure(orientation),
+                    ScientificExplanation(
+                        question="Are candidate and target-facing orientations consistent with the persisted frame?",
+                        population="Bounded finite candidate orientation diagnostics by factual step.",
+                        metric="Yaw/elevation diagnostic angles in degrees.",
+                        denominator_masks="Finite persisted orientation fields; absent fields are not imputed.",
+                        comparability="Use the same pose convention and target-facing contract across stores.",
+                        expected_pattern="Errors remain within configured orientation envelopes.",
+                        failure_interpretation="Systematic offsets indicate frame or target-pose inconsistencies.",
+                        evidence_role="actor-visible",
+                        source_fields=tuple(f"candidate_diagnostics/{name}" for name in frame_fields),
+                    ),
+                )
 
         angle_cols = [
             name
