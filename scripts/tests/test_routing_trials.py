@@ -209,6 +209,23 @@ def test_pr2_routing_trials_are_exactly_frozen_and_paired() -> None:
     assert set(prompts) == set(rubric)
 
 
+def test_g003_routing_trials_cover_behavior_and_near_misses() -> None:
+    ids = {
+        "config-factory-composition-root",
+        "config-factory-hot-path-near-miss",
+        "helper-single-consumer-local",
+        "helper-shared-domain-owner",
+        "graphify-accepted-bundle-refresh",
+        "app-scientific-metric-interpretation",
+        "app-operational-count-near-miss",
+    }
+    prompts = trials.load_prompts()
+    rubric = trials.load_rubric()
+    assert ids <= set(prompts)
+    assert ids <= set(rubric)
+    assert set(prompts) == set(rubric)
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,

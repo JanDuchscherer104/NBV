@@ -27,15 +27,14 @@ blueprints, camera/depth evidence, and viewer behavior.
 
 ## Interaction Contract
 
-- Lead with plot/metric interpretation—what it means—then the answer, readiness
-  verdict, essential metrics, and primary plot.
-- For a scientific plot or metric that needs explanation, state its definition,
-  units, assumptions, formula or computational transform when relevant,
-  normalization/denominator, intuition, and failure modes; include exact
-  notation and links to canonical equation, symbol, glossary, and source owners.
+- Lead with the answer or readiness verdict and one sentence interpreting the
+  decisive evidence, then show essential metrics and the primary plot.
+- When a scientific metric needs more than that sentence, apply the conditional
+  [scientific interpretation rubric](references/scientific-interpretation.md).
 - Keep raw/exact tables and exports subordinate to the interpretation and
   collapsed directly beneath it.
-- Keep operational counts and provenance as concise narrative; do not invent equations for them.
+- Keep operational counts and provenance on the lightweight path as concise
+  narrative; do not load the scientific rubric or invent equations for them.
 - Separate reward/reconstruction evidence from admission/feasibility evidence.
 - Aggregate compatible shards by their persisted contract. Keep invalid or
   incompatible stores visible and unpooled.

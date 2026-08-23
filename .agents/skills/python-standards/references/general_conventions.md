@@ -10,10 +10,10 @@ detail.
 
 ## Core Rules
 - Config classes should inherit from `BaseConfig` where appropriate.
-- Call config `.setup_target()` at composition edges such as CLI, Lightning,
-  pipeline, or equivalent setup boundaries. Domain, `forward`, and scoring
-  methods consume already-constructed dependencies and do not construct runtime
-  objects internally.
+- Call config `.setup_target()` once per owning lifecycle at a composition root,
+  such as a CLI entrypoint, Lightning setup/factory, pipeline orchestrator, or
+  application controller. Inject the constructed dependency into domain,
+  `forward`, and scoring hot paths; those calls do not construct it internally.
 - Keep single-consumer private helpers local and inline trivial helpers. Promote
   behavior only after multiple demonstrated consumers establish the lowest
   shared domain owner; avoid hypothetical generic utility buckets.
@@ -31,7 +31,17 @@ detail.
 - Use `Literal` for constrained string values when the set of values is small and stable.
 - Keep helper dataclasses and typed containers explicit rather than passing around untyped dict payloads.
 
-## Config-as-Factory and Validators
+## Config-as-Factory And Lifecycle
+
+The composition root owns reuse and teardown for the object it constructs.
+Reuse an object for the root's declared cache, request, stage, trainer, or
+pipeline lifetime; close or release it at that same boundary when the object has
+an explicit lifecycle. Framework-owned device, rank, checkpoint, and worker
+hooks may construct or reconstruct objects when the framework defines that
+lifecycle. Keep that exception in the framework adapter and document why normal
+injection cannot own it.
+
+## Validators
 Use `field_validator` and `model_validator` when validation logic belongs in the config rather than in runtime classes.
 
 ```python

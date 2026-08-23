@@ -1,216 +1,164 @@
 #!/usr/bin/env python3
-"""Focused migration checks for G003 owner-specific preferences."""
+"""Current-owner and behavior checks for G003 guidance."""
 
 from __future__ import annotations
 
+import ast
+import json
 import re
-import subprocess
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parents[2]
-BASE = "61a93f19792433f6d94f265e5e43d5f08d80fccc"
-
-PYTHON_OWNER = ".agents/skills/python-standards/references/general_conventions.md"
-SKILLS_OWNER = ".agents/skills/README.md"
-APP_OWNER = "aria_nbv/aria_nbv/app/AGENTS.md"
-ROOT_GUIDANCE = "AGENTS.md"
-HUMAN_INTENT = ".agents/references/human_owner_intent.md"
 
 
-def _current(relative: str) -> str:
+def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def _baseline(relative: str) -> str:
-    result = subprocess.run(
-        ["git", "show", f"{BASE}:{relative}"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
+def _normalized(text: str) -> str:
+    return re.sub(r"\s+", " ", text)
+
+
+def _setup_target_functions(relative: str) -> set[str]:
+    tree = ast.parse(_read(relative))
+    owners: set[str] = set()
+    stack: list[str] = []
+
+    class Visitor(ast.NodeVisitor):
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            stack.append(node.name)
+            self.generic_visit(node)
+            stack.pop()
+
+        def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+            stack.append(node.name)
+            if any(
+                isinstance(item, ast.Call)
+                and isinstance(item.func, ast.Attribute)
+                and item.func.attr == "setup_target"
+                for item in ast.walk(node)
+            ):
+                owners.add(".".join(stack))
+            self.generic_visit(node)
+            stack.pop()
+
+        visit_FunctionDef = _visit_function
+        visit_AsyncFunctionDef = _visit_function
+
+    Visitor().visit(tree)
+    return owners
+
+
+def test_pointer_preservation_contract_is_mechanical() -> None:
+    guide = _normalized(_read(".agents/skills/README.md"))
+    for phrase in (
+        "explicit activation condition",
+        "link directly to the leaf",
+        "one named branch index",
+        "reachable, non-orphaned",
+        "at most two hops",
+        "old owner must no longer carry",
+        "positive routing case",
+        "near-miss",
+    ):
+        assert phrase in guide
+
+
+def test_graphify_is_the_only_accepted_pinned_bundle_in_this_change() -> None:
+    guide = _read(".agents/skills/README.md")
+    boundary = _read(
+        ".agents/skills/aria-nbv-context/references/graphify-aria-boundary.md"
     )
-    return result.stdout
+    assert "accepted per-bundle decision" in guide
+    assert "#accepted-bundle-manifest" in guide
+    for value in (
+        "https://github.com/Graphify-Labs/graphify",
+        "b2cd36267456c166788c95be6e68574064a92a42",
+        "graphify/skill-codex.md",
+        "2b19efe36ad87d1fe84e396dc7065de512b37bc3",
+        ".agents/skills/graphify/",
+        "6943c772de908bdac1dc0d1b7f73fa7ed285433a",
+        "graphify install --project --platform agents",
+        "make graphify-skill-upstream-self-test",
+    ):
+        assert value in boundary
 
 
-def _contains_all(text: str, *phrases: str) -> bool:
-    normalized = re.sub(r"\s+", " ", text.lower())
-    return all(re.sub(r"\s+", " ", phrase.lower()) in normalized for phrase in phrases)
-
-
-def _heading_section(text: str, heading: str) -> str:
-    """Return one Markdown heading's body, excluding following peer sections."""
-    lines = text.splitlines()
-    start = next(
-        index
-        for index, line in enumerate(lines)
-        if re.fullmatch(r"#{1,6} " + re.escape(heading), line.strip())
+def test_config_factory_has_one_non_competing_lifecycle_owner() -> None:
+    package = _read("aria_nbv/AGENTS.md")
+    conventions = _normalized(
+        _read(".agents/skills/python-standards/references/general_conventions.md")
     )
-    level = len(lines[start]) - len(lines[start].lstrip("#"))
-    end = len(lines)
-    for index in range(start + 1, len(lines)):
-        match = re.match(r"^(#{1,6}) ", lines[index])
-        if match and len(match.group(1)) <= level:
-            end = index
-            break
-    return "\n".join(lines[start:end])
+    assert "Construct config targets only at owning composition roots" in package
+    assert "general_conventions.md#config-as-factory-and-lifecycle" in package
+    for phrase in (
+        "once per owning lifecycle",
+        "Inject the constructed dependency",
+        "reuse and teardown",
+        "device, rank, checkpoint, and worker hooks",
+    ):
+        assert phrase in conventions
 
 
-def _scientific_contract(text: str) -> bool:
-    return _contains_all(
-        text,
-        "what it means",
-        "definition",
-        "units",
-        "assumptions",
-        "formula or computational transform",
-        "normalization/denominator",
-        "intuition",
-        "failure modes",
-        "exact notation",
-        "links to canonical",
-        "canonical equation",
-        "symbol",
-        "glossary",
-        "source owners",
-        "raw",
-        "exact",
-        "tables",
-        "exports",
-        "subordinate",
-        "interpretation",
-        "collapsed",
-        "directly beneath",
-    )
+def test_current_composition_roots_construct_targets() -> None:
+    expected = {
+        "aria_nbv/aria_nbv/streamlit_app.py": {"main"},
+        "aria_nbv/aria_nbv/oracle/pipelines/cli.py": {"_campaign"},
+        "aria_nbv/aria_nbv/lightning/aria_nbv_experiment.py": {
+            "AriaNBVExperimentConfig._init_module_for_resume"
+        },
+        "aria_nbv/aria_nbv/app/controller.py": {
+            "PipelineController.get_sample",
+            "PipelineController.get_candidates",
+            "PipelineController.get_depths",
+        },
+    }
+    for relative, owners in expected.items():
+        assert owners <= _setup_target_functions(relative)
 
 
-def test_python_owner_migrates_composition_and_helper_locality_contract() -> None:
-    baseline = _baseline(PYTHON_OWNER)
-    candidate = _current(PYTHON_OWNER)
-    baseline_core_rules = _heading_section(baseline, "Core Rules")
-    candidate_core_rules = _heading_section(candidate, "Core Rules")
-
-    assert (
-        "Instantiate runtime objects through config `.setup_target()`"
-        in baseline_core_rules
-    )
-    assert not _contains_all(
-        baseline_core_rules,
-        "composition edges",
-        "already-constructed dependencies",
-        "do not construct runtime objects internally",
-    )
-    assert not _contains_all(
-        baseline_core_rules,
-        "single-consumer private helpers",
-        "multiple demonstrated consumers",
-        "hypothetical generic utility buckets",
-    )
-
-    assert _contains_all(
-        candidate_core_rules,
-        "call config `.setup_target()` at composition edges",
-        "CLI",
-        "Lightning",
-        "pipeline",
-        "domain",
-        "forward",
-        "scoring",
-        "methods consume",
-        "already-constructed dependencies",
-        "do not construct runtime objects internally",
-    )
-    assert _contains_all(
-        candidate_core_rules,
-        "single-consumer private helpers local",
-        "inline trivial helpers",
-        "multiple demonstrated consumers",
-        "lowest shared domain owner",
-        "hypothetical generic utility buckets",
-    )
-    assert "domain methods call `.setup_target()`" not in candidate
-    assert (
-        "Instantiate runtime objects through config `.setup_target()`" not in candidate
-    )
+def test_forward_and_scoring_hot_paths_do_not_construct_targets() -> None:
+    for path in (ROOT / "aria_nbv/aria_nbv").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name not in {"forward", "score", "_score", "scoring"}:
+                continue
+            assert not any(
+                isinstance(item, ast.Call)
+                and isinstance(item.func, ast.Attribute)
+                and item.func.attr == "setup_target"
+                for item in ast.walk(node)
+            ), f"{path.relative_to(ROOT)}:{node.lineno} constructs in {node.name}"
 
 
-def test_skills_owner_migrates_pointer_and_upstream_maintenance_contract() -> None:
-    baseline = _baseline(SKILLS_OWNER)
-    candidate = _current(SKILLS_OWNER)
-    baseline_references = _heading_section(baseline, "Conditional references")
-    candidate_references = _heading_section(candidate, "Conditional references")
-    baseline_upstream = _heading_section(baseline, "Upstream skills")
-    candidate_upstream = _heading_section(candidate, "Upstream skills")
-
-    assert not _contains_all(
-        baseline_references,
-        "pointer preservation",
-        "names the branch and target",
-        "bounded refresh/check",
-    )
-    assert not _contains_all(
-        baseline_upstream,
-        "exact upstream body",
-        "pinned release/commit reference",
-        "refresh/check procedure",
-    )
-
-    assert _contains_all(
-        candidate_references,
-        "conditional references",
-        "pointer preservation",
-        "names the branch and target strongly enough",
-        "load the moved detail",
-    )
-    assert _contains_all(
-        candidate_upstream,
-        "preserve its upstream frontmatter",
-        "all upstream bytes",
-        "exact upstream body",
-        "pinned release/commit reference",
-        "ARIA-owned companion",
-        "maintenance surface outside the bundle",
-        "byte-identical",
-        "bounded refresh/check procedure",
-    )
+def test_app_interpretation_is_verdict_first_and_conditional() -> None:
+    app = _read("aria_nbv/aria_nbv/app/AGENTS.md")
+    rubric = _read("aria_nbv/aria_nbv/app/references/scientific-interpretation.md")
+    assert "Lead with the answer or readiness verdict" in app
+    assert "references/scientific-interpretation.md" in app
+    assert "do not load the scientific rubric" in app
+    assert "only when" in rubric
+    assert "Never fabricate" in rubric
 
 
-def test_app_owner_migrates_interpretation_and_operational_exception_contract() -> None:
-    baseline = _baseline(APP_OWNER)
-    candidate = _current(APP_OWNER)
-    baseline_interaction = _heading_section(baseline, "Interaction Contract")
-    candidate_interaction = _heading_section(candidate, "Interaction Contract")
-
-    assert not _scientific_contract(baseline_interaction)
-    assert _scientific_contract(candidate_interaction)
-    assert _contains_all(
-        candidate_interaction,
-        "operational counts",
-        "provenance",
-        "concise narrative",
-        "do not invent equations",
-    )
-
-
-def test_migration_keeps_contracts_at_their_designated_owners() -> None:
-    root_guidance = _current(ROOT_GUIDANCE)
-    human_intent = _current(HUMAN_INTENT)
-    forbidden_duplications = (
-        "already-constructed dependencies",
-        "single-consumer private helpers",
-        "bounded refresh/check procedure",
-        "exact upstream body",
-        "normalization/denominator",
-        "do not invent equations",
-    )
-    for phrase in forbidden_duplications:
-        assert phrase not in root_guidance.lower()
-        assert phrase not in human_intent.lower()
-
-
-if __name__ == "__main__":
-    tests = [
-        value for name, value in sorted(globals().items()) if name.startswith("test_")
-    ]
-    for test in tests:
-        test()
-    print(f"G003 governance migration tests passed: {len(tests)}")
+def test_g003_routing_cases_cover_positive_and_near_miss_behavior() -> None:
+    routing = json.loads(_read("scripts/scaffold/fixtures/routing.json"))
+    fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
+    expected = {
+        "config-factory-composition-root",
+        "config-factory-hot-path-near-miss",
+        "helper-single-consumer-local",
+        "helper-shared-domain-owner",
+        "graphify-accepted-bundle-refresh",
+        "app-scientific-metric-interpretation",
+        "app-operational-count-near-miss",
+    }
+    assert expected <= set(fixtures)
+    for trial_id in expected:
+        fixture = fixtures[trial_id]
+        assert fixture["expected_owner_paths"]
+        assert fixture["required_outcomes"]
+        assert fixture["forbidden_outcomes"]

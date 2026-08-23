@@ -51,8 +51,8 @@ navigation, and require direct verification of affected sources.
 
 ## Upstream Lifecycle And Hooks
 
-- ARIA pins Graphify 0.9.48 and keeps the Codex skill byte-identical to upstream
-  commit `b2cd36267456c166788c95be6e68574064a92a42`.
+- The accepted bundle provenance and maintenance owner is the
+  [manifest below](#accepted-bundle-manifest).
 - `graphify hook install` is the upstream post-commit and post-checkout
   no-LLM accelerator. It refreshes changed code and the pinned executable may
   AST-quick-scan changed Markdown headings. It does not semantically refresh
@@ -66,6 +66,25 @@ navigation, and require direct verification of affected sources.
 - `graphify codex install` supplies generic always-on guidance, but ARIA's root
   dispatcher already owns the narrower source-order and exact-owner contract.
   Do not install a second generated Graphify section over that owner.
+
+## Accepted Bundle Manifest
+
+The accepted Graphify decision pins exactly this bundle; it does not establish
+a policy for other external skills.
+
+- Upstream repository: `https://github.com/Graphify-Labs/graphify`.
+- Upstream ref: `b2cd36267456c166788c95be6e68574064a92a42`
+  (Graphify 0.9.48).
+- Upstream sources: `graphify/skill-codex.md` (blob
+  `af3f723c7878b8ca9252af511270511002086ed4`) and
+  `graphify/skills/codex/` (tree
+  `2b19efe36ad87d1fe84e396dc7065de512b37bc3`).
+- Local bundle: `.agents/skills/graphify/`; assembled Git tree
+  `6943c772de908bdac1dc0d1b7f73fa7ed285433a`.
+- Refresh: install `graphifyy==0.9.48`, then run
+  `graphify install --project --platform agents` from the repository root.
+- Integrity proof: `make graphify-skill-upstream-self-test` verifies the exact
+  file set and every pinned Git blob without modifying the upstream bundle.
 
 ## Corpus And Upstream Ownership
 

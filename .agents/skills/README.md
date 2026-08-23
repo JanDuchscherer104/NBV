@@ -42,9 +42,12 @@ chain through a second index. Convert weak plain reference-name inventories into
 concise Markdown pointers where practical. Put branch-specific commands, lookup
 tables, examples, version details, and longer procedures in those references.
 Do not create a registry that mirrors the skill set or source ownership.
-Make pointer preservation a completion condition: complete a progressive-
-disclosure edit only when an existing or replacement pointer names the branch
-and target strongly enough to load the moved detail.
+Make pointer preservation checkable. The prompt-visible parent must state an
+explicit activation condition and link directly to the leaf, or to one named
+branch index that links to the leaf. The reference graph must prove the leaf is
+reachable, non-orphaned, and at most two hops away; the old owner must no longer
+carry the moved meaning. A positive routing case must load the leaf and a
+near-miss must stop before it.
 
 Use the repository's current owner paths for implementation and scientific
 claims. A pointer identifies where to look; it does not make the pointer's
@@ -68,12 +71,12 @@ references only when their branch condition is active.
 
 ## Upstream skills
 
-For every upstream-derived bundle, preserve its upstream frontmatter, exact
-upstream body, and all upstream bytes. The pinned release/commit reference and
-bounded refresh/check procedure belong, with ARIA-specific activation,
-source-order, safety, and verification, in an ARIA-owned companion or
-maintenance surface outside the bundle, while the upstream bundle remains
-byte-identical.
+Apply byte-identical pinning only when an accepted per-bundle decision requires
+it. That decision must name one ARIA-owned provenance manifest containing the
+upstream repository, source path, ref and tree digest, local path, refresh
+command, and integrity proof. Companions point to that manifest; they do not
+create another lifecycle owner. The accepted Graphify bundle manifest lives in
+[`graphify-aria-boundary.md`](aria-nbv-context/references/graphify-aria-boundary.md#accepted-bundle-manifest).
 
 ## Review
 

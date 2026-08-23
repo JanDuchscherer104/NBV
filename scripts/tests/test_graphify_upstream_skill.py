@@ -66,6 +66,20 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         self.assertRegex(boundary, r"Remove\s+`graphify-out/needs_update` only after")
         self.assertIn("leave it after partial, failed, or unverified work", boundary)
 
+    def test_accepted_bundle_manifest_is_complete_and_single_owned(self) -> None:
+        boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
+        for value in (
+            "https://github.com/Graphify-Labs/graphify",
+            UPSTREAM_COMMIT,
+            "graphify/skill-codex.md",
+            "2b19efe36ad87d1fe84e396dc7065de512b37bc3",
+            ".agents/skills/graphify/",
+            "6943c772de908bdac1dc0d1b7f73fa7ed285433a",
+            "graphify install --project --platform agents",
+            "make graphify-skill-upstream-self-test",
+        ):
+            self.assertIn(value, boundary)
+
     def test_hook_boundary_preserves_upstream_bytes_and_runtime_caveat(self) -> None:
         hooks = (SKILL_ROOT / "references/hooks.md").read_text(encoding="utf-8")
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
