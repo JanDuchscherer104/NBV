@@ -34,6 +34,7 @@ from ...rollouts.inspection import discover_rollout_store_paths
 from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from ._stored_rollouts.shared import plot_control_key as _plot_control_key
 from ._stored_rollouts.shared import render_plot as _render_plot
+from .common import current_scientific_label
 
 _VALIDATED_STATE_KEY = "training_dataset_validated_evidence"
 _DEEP_STATE_KEY = "training_dataset_deep_statistics"
@@ -690,10 +691,10 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             else:
                 st.success("No readiness findings.")
     with qh_tab:
-        st.subheader("Q_H dataset and collation readiness")
+        st.subheader(f"{current_scientific_label('q_h')} dataset and collation readiness")
         st.caption(
             "This action constructs the selected stage datasets and the production "
-            "Q_H DataModule. "
+            f"{current_scientific_label('q_h')} DataModule. "
             "It does not create a model or Trainer."
         )
         controls = st.columns(3)
@@ -755,7 +756,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     st.dataframe(pd.DataFrame(stage_rows), hide_index=True, width="stretch")
                 storage_rows = [
                     {
-                        "metric": metric.name,
+                        "metric": current_scientific_label(metric.name),
                         "value": metric.value,
                         "unit": metric.unit,
                         "bytes": metric.numerator_bytes,
