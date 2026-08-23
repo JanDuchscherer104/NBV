@@ -114,8 +114,10 @@ def test_invalid_utf8_theory_registry_fails_closed(tmp_path) -> None:
 def test_narrative_explanation_requires_ordered_content() -> None:
     from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 
-    with pytest.raises(ValueError):
-        ScientificExplanation(question="q", answer="a", sections=(), evidence_role="provenance", source_fields=("x",))
+    empty = ScientificExplanation(
+        question="q", answer="a", sections=(), evidence_role="provenance", source_fields=("x",)
+    )
+    assert empty.sections == ()
     explanation = ScientificExplanation(
         question="What does this show?",
         answer="It describes persisted evidence.",

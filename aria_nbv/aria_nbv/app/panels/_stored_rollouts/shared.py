@@ -48,7 +48,7 @@ class ScientificExplanation:
     def __post_init__(self) -> None:
         if not self.question.strip() or not self.answer.strip() or not self.source_fields:
             raise ValueError("Scientific explanations require a question, answer, and source fields.")
-        if not self.sections or any(not section.title.strip() or not section.body.strip() for section in self.sections):
+        if any(not section.title.strip() or not section.body.strip() for section in self.sections):
             raise ValueError("Scientific explanations require ordered nonempty narrative sections.")
 
 
@@ -81,52 +81,65 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         f"{html.escape(explanation.evidence_role)}</span>",
         unsafe_allow_html=True,
     )
+    st.markdown(f"**Answer:** {explanation.answer}")
     with col_info.popover("Interpret this plot", icon="ℹ️"):
-        if explanation.answer:
-            explanation_item("Answer", explanation.answer)
-            for section in explanation.sections:
-                explanation_item(section.title, section.body)
-        explanation_item("Question", explanation.question)
-        if log_y_key is not None:
-            explanation_item(
-                "Axis scale",
-                "Linear by default. Logarithmic scale is independently selectable for this plot and hides zero or negative observations.",
-            )
-        if explanation.theory is not None:
-            try:
-                resolved = resolve_theory(explanation.theory)
-                if resolved.equations:
-                    st.markdown("**Canonical equations**")
-                    for item in resolved.equations:
-                        st.caption(item.identifier)
-                        st.latex(item.tex)
-                        if item.description:
-                            st.markdown(item.description)
-                        st.markdown(f"[Notation source]({item.source_url})")
-                if resolved.symbols:
-                    st.markdown("**Symbols**")
-                    for item in resolved.symbols:
-                        description = f" — {item.description}" if item.description else ""
-                        st.markdown(f"`${item.identifier}`: ${item.tex}${description}")
-                        st.markdown(f"[Symbol source]({item.source_url})")
-                if resolved.terms:
-                    st.markdown("**Glossary**")
-                    for item in resolved.terms:
-                        st.markdown(f"**{item.label}** — {item.definition}")
-                        st.markdown(f"[Glossary source]({item.source_url})")
-            except TheoryResolutionError as exc:
-                st.warning(f"Canonical theory unavailable: {type(exc).__name__}: {exc}")
-        if explanation.external_references:
-            explanation_item(
-                "External sources", "\n\n".join(f"[{label}]({url})" for label, url in explanation.external_references)
-            )
-        if explanation.source_fields:
-            explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
+        _render_interpretation_guide(explanation, log_y_key=log_y_key)
     rendered = fig
     if log_y_key is not None:
         with columns[2]:
             rendered, _ = _plot_with_y_axis_control(fig, key=log_y_key)
     st.plotly_chart(rendered, width="stretch")
+
+
+def _render_interpretation_guide(explanation: ScientificExplanation, *, log_y_key: str | None) -> None:
+    """Render the reusable interpretation guide inside a plot popover."""
+
+    explanation_item("Answer", explanation.answer)
+    for section in explanation.sections:
+        explanation_item(section.title, section.body)
+    explanation_item("Question", explanation.question)
+    if log_y_key is not None:
+        explanation_item(
+            "Axis scale",
+            "Linear by default. Logarithmic scale is independently selectable for this plot and hides zero or negative observations.",
+        )
+    _render_theory(explanation.theory)
+    if explanation.external_references:
+        explanation_item(
+            "External sources", "\n\n".join(f"[{label}]({url})" for label, url in explanation.external_references)
+        )
+    explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
+
+
+def _render_theory(theory: TheoryReferences | None) -> None:
+    """Render canonical equations, symbols, and glossary terms if available."""
+
+    if theory is None:
+        return
+    try:
+        resolved = resolve_theory(theory)
+    except TheoryResolutionError as exc:
+        st.warning(f"Canonical theory unavailable: {type(exc).__name__}: {exc}")
+        return
+    if resolved.equations:
+        st.markdown("**Canonical equations**")
+        for item in resolved.equations:
+            st.caption(item.identifier)
+            st.latex(item.tex)
+            if item.description:
+                st.markdown(item.description)
+            st.markdown(f"[Notation source]({item.source_url})")
+    if resolved.symbols:
+        st.markdown("**Symbols**")
+        for item in resolved.symbols:
+            description = f" — {item.description}" if item.description else ""
+            st.markdown(f"`${item.identifier}`: ${item.tex}${description}")
+            st.markdown(f"[Symbol source]({item.source_url})")
+    if resolved.terms:
+        st.markdown("**Glossary**")
+        for item in resolved.terms:
+            st.markdown(f"**{item.label}** — {item.definition}")
+            st.markdown(f"[Glossary source]({item.source_url})")
 
 
 def explanation_item(label: str, value: str, *, code: bool = False) -> None:
