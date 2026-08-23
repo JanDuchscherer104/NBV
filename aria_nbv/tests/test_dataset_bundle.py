@@ -661,6 +661,34 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     assert scan["per_sample"][1]["gt_obb_target_opportunities"] == 1
 
 
+def test_root_gt_obb_scan_does_not_mask_unexpected_reader_failures(monkeypatch, tmp_path: Path) -> None:
+    root, _source_hash = _write_root_store(tmp_path)
+    manifest = VinOfflineManifest.read(root / "manifest.json")
+    block = VinOfflineBlockSpec.for_zarr_array(
+        name="gt.obbs",
+        array_path="gt/obbs",
+        dtype="float32",
+        shape=[1, 1, 34],
+    )
+    manifest.shards = [
+        VinOfflineShardSpec("shard-a", "shards/shard-a", 0, 1, {"gt.obbs": block}),
+        VinOfflineShardSpec("shard-b", "shards/shard-b", 1, 1, {"gt.obbs": block}),
+    ]
+    manifest.write(root / "manifest.json")
+
+    class _BrokenReader:
+        def __init__(self, _config: object) -> None:
+            pass
+
+        def read_numeric_block(self, _record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
+            raise RuntimeError("unexpected implementation failure")
+
+    monkeypatch.setattr("aria_nbv.dataset_bundle.VinOfflineStoreReader", _BrokenReader)
+
+    with pytest.raises(RuntimeError, match="unexpected implementation failure"):
+        scan_root_gt_obb_target_opportunities(root)
+
+
 def test_root_gt_obb_scan_does_not_fall_back_when_blocks_are_absent(tmp_path: Path) -> None:
     root, _source_hash = _write_root_store(tmp_path)
 

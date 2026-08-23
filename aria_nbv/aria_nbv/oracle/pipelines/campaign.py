@@ -1184,6 +1184,8 @@ class CudaRolloutCampaign:
                 list(gt_rows),
                 threshold=self.config.observed_target_iou_threshold,
             )
+            if len(matches) != len(observed):
+                raise ValueError("campaign target matcher must return one result per observed target")
             if not matches:
                 audited.append(
                     {
@@ -1194,7 +1196,7 @@ class CudaRolloutCampaign:
                         "gt_match_count": 0,
                         "qualified_gt_match_count": 0,
                         "admitted": False,
-                        "reason": "excluded_no_observed_target" if not observed else "excluded_no_gt_match",
+                        "reason": "excluded_no_observed_target",
                     }
                 )
             for match in matches:

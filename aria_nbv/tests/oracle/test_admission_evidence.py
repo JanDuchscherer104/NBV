@@ -202,6 +202,24 @@ def test_writer_shaped_legacy_zero_observation_sentinel_is_inferred() -> None:
     assert evidence.zero_observation_sample_count == 1
 
 
+def test_writer_shaped_ordinary_no_match_row_remains_an_observed_target() -> None:
+    row = _row(
+        reason="no_match",
+        admitted=False,
+        oriented_iou=None,
+        qualified_gt_match_count=0,
+        gt_match_id=None,
+        observed_target_count=1,
+    )
+
+    evidence = read_campaign_admission_evidence(_payload([row]))
+
+    assert evidence.observed_count == 1
+    assert evidence.rejected_count == 1
+    assert evidence.zero_observation_sample_count == 0
+    assert evidence.reason_rows == ({"reason": "no_match", "count": 1, "admitted": False},)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

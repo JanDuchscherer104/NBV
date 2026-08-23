@@ -921,7 +921,7 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
             )
             scene_counts[record.scene_id] += count
             split_counts[record.split] += count
-    except Exception as exc:
+    except (OSError, ValueError, TypeError, KeyError, IndexError, msgspec.MsgspecError) as exc:
         return _unavailable_target_opportunities(store, f"gt_obb_block_unreadable:{type(exc).__name__}:{exc}")
     return {
         "path": store.as_posix(),
