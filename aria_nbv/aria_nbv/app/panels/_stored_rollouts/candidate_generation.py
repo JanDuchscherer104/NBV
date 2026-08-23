@@ -238,6 +238,44 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> di
     }
 
 
+def _select_candidate_choice_controls(
+    dynamics: pd.DataFrame, *, group_by: str
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    """Select only exact compatibility controls before pooling temperatures.
+
+    Temperature and generation cohort are deliberately absent: pooling across
+    those dimensions is the purpose of the pooled candidate-choice view.
+    """
+
+    selected_controls: dict[str, object] = {}
+    control_fields = (
+        "contract_id",
+        "contract",
+        "profile",
+        "policy",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+    )
+    for field in control_fields:
+        if field not in dynamics:
+            continue
+        values = sorted(dynamics[field].dropna().unique().tolist(), key=str)
+        if len(values) <= 1:
+            continue
+        choice = st.selectbox(
+            f"Candidate-choice {field}",
+            options=values,
+            format_func=str,
+            key=f"candidate-choice-{group_by}-{field}",
+        )
+        if choice not in values:
+            choice = values[0]
+        selected_controls[field] = choice
+        dynamics = dynamics.loc[dynamics[field].eq(choice)]
+    return dynamics, selected_controls
+
+
 def _render_candidate_population_evidence(session_handle: object) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
@@ -271,33 +309,28 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                 help="Select the exact persisted family vocabulary; policies, temperatures, and rollout contracts are not pooled.",
             )
             dynamics = pd.DataFrame(selection_dynamics[group_by])
-            selected_controls: dict[str, object] = {}
-            control_fields = (
-                "contract_id",
-                "profile",
-                "generation_cohort_id",
-                "policy",
-                "temperature",
-                "horizon",
-                "branch_factor",
-                "beam_width",
-            )
-            for field in control_fields:
-                if field not in dynamics:
-                    continue
-                values = sorted(dynamics[field].dropna().unique().tolist(), key=str)
-                if len(values) > 1:
-                    choice = st.selectbox(
-                        f"Candidate-choice {field}",
-                        options=values,
-                        format_func=str,
-                        key=f"candidate-choice-{group_by}-{field}",
-                    )
-                    selected_controls[field] = choice
-                    dynamics = dynamics.loc[dynamics[field].eq(choice)]
+            dynamics, selected_controls = _select_candidate_choice_controls(dynamics, group_by=group_by)
         if not dynamics.empty:
+            quantity_options = ("allocation_share", "valid_share", "policy_mass", "selected_share")
+            selection_metric = st.selectbox(
+                "Per-step quantity",
+                options=quantity_options,
+                index=2,
+                format_func={
+                    "allocation_share": "Candidate availability",
+                    "valid_share": "Actor-valid support",
+                    "policy_mass": "Policy mass",
+                    "selected_share": "Realized selection",
+                }.get,
+                help=(
+                    "Availability uses the full candidate shell; actor-valid support uses actor-valid rows; "
+                    "policy mass is the mean persisted probability; realized selection is the selected-family fraction."
+                ),
+            )
+            if selection_metric not in quantity_options:
+                selection_metric = "policy_mass"
             pooled = pd.DataFrame(
-                candidate_selection_pooled_summary_rows(dynamics.to_dict("records"), metric="policy_mass")
+                candidate_selection_pooled_summary_rows(dynamics.to_dict("records"), metric=selection_metric)
             )
             if not pooled.empty:
                 _render_plot(
@@ -305,7 +338,12 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                     _candidate_population_explanation(
                         "How does candidate-family choice evolve across factual acquisition?",
                         "Complete candidate-choice dynamics from compatible factual states.",
-                        "Policy mass per family and acquisition; dimensionless fraction.",
+                        {
+                            "allocation_share": "Candidate availability per family and acquisition; fraction of the full shell.",
+                            "valid_share": "Actor-valid support per family and acquisition; fraction of actor-valid rows.",
+                            "policy_mass": "Policy mass per family and acquisition; dimensionless fraction.",
+                            "selected_share": "Realized selected-family fraction per acquisition; dimensionless.",
+                        }[selection_metric],
                         "Persisted selection probabilities over finite candidate rows; observed states remain explicit.",
                         "Choice mass changes smoothly without unexplained family monopolies or missing depths.",
                         "Abrupt changes or absent families can indicate generator, policy, or state-frame issues.",
@@ -1473,7 +1511,7 @@ def _render_candidate_geometry_diagnostics(
                     for name in ("rollout_row_id", "step_index", z_column, "actor_action", "mixture")
                     if name in root_geometry
                 ],
-                title="Candidate centers relative to each rollout root (ground plane)",
+                title="Candidate centers in the proposal expansion frame (ground plane)",
             )
             fig.update_layout(xaxis_title="target-forward / d", yaxis_title="target-lateral / d")
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
@@ -1487,12 +1525,12 @@ def _render_candidate_geometry_diagnostics(
             _render_plot(
                 fig,
                 ScientificExplanation(
-                    question="Do candidate families cover the intended local motion support around each rollout root?",
+                    question="Do candidate families cover the intended local motion support around each proposal expansion pose?",
                     answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
                     sections=(
                         ExplanationSection(
                             "population",
-                            "Bounded candidate rows translated by their own rollout root; unrelated scene origins are removed.",
+                            "Bounded candidate rows expressed in their own proposal expansion frame and current target-distance scale.",
                         ),
                         ExplanationSection(
                             "metric",
@@ -1517,9 +1555,9 @@ def _render_candidate_geometry_diagnostics(
                     ),
                     evidence_role="actor-visible",
                     source_fields=(
-                        "inspection.root_relative_candidate_rows",
-                        "candidate pose_world_cam",
-                        "rollout root_pose_world",
+                        "inspection.proposal_support_geometry",
+                        "proposal expansion pose",
+                        "current target-distance scale",
                     ),
                 ),
             )
