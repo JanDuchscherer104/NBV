@@ -27,6 +27,123 @@ from .shared import render_plot as _render_plot
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
 
 
+def _pooled_candidate_selection_figure(summary: pd.DataFrame) -> go.Figure:
+    """Plot pooled policy mass by candidate family and factual acquisition."""
+
+    figure = go.Figure()
+    for family, rows in summary.sort_values("step_index").groupby("family", sort=True):
+        figure.add_trace(
+            go.Scatter(
+                x=rows["step_index"].astype(int) + 1,
+                y=rows["fraction"],
+                mode="lines+markers",
+                name=str(family),
+            )
+        )
+    figure.update_layout(xaxis_title="acquisition number", yaxis_title="policy mass")
+    return figure
+
+
+def _candidate_transition_figure(rows: pd.DataFrame) -> go.Figure:
+    """Show expected and realized family transitions as matched heatmaps."""
+
+    families = sorted(set(rows["previous_family"]) | set(rows["next_family"]))
+    expected = rows.pivot(index="previous_family", columns="next_family", values="expected_policy_mass_mean").reindex(
+        index=families, columns=families
+    )
+    realized = rows.pivot(index="previous_family", columns="next_family", values="realized_rate").reindex(
+        index=families, columns=families
+    )
+    figure = go.Figure()
+    figure.add_trace(go.Heatmap(z=expected.to_numpy(), x=families, y=families, name="expected"))
+    figure.add_trace(go.Heatmap(z=realized.to_numpy(), x=families, y=families, name="realized", visible=False))
+    step = int(rows["step_index"].iloc[0])
+    figure.update_layout(title=f"Candidate-family transitions at acquisition {step}")
+    return figure
+
+
+def _pose_axis_frames(frames: pd.DataFrame, *, mode: str, frame_id: str | None = None) -> pd.DataFrame:
+    """Apply bounded pose-axis overlay disclosure controls."""
+
+    if mode == "Hidden":
+        return frames.iloc[0:0].copy()
+    if mode == "One frame":
+        return frames.loc[frames["frame_id"] == frame_id].copy()
+    return frames.head(32).copy()
+
+
+def _add_geometry_anchors(
+    figure: go.Figure,
+    frames: pd.DataFrame,
+    *,
+    three_dimensional: bool,
+    axis_frames: pd.DataFrame,
+) -> None:
+    """Add reference and target anchors without implicitly adding pose triads."""
+
+    if three_dimensional:
+        figure.add_trace(go.Scatter3d(x=[0], y=[0], z=[0], mode="markers", name="Reference pose (all at origin)"))
+        figure.add_trace(
+            go.Scatter3d(
+                x=frames["target_x"],
+                y=frames["target_y"],
+                z=frames["target_z"],
+                mode="markers",
+                name="Observed target center",
+            )
+        )
+
+
+def _normalized_radius_figure(geometry: pd.DataFrame) -> go.Figure:
+    """Plot target-distance-normalized candidate radii with the unit threshold."""
+
+    figure = px.scatter(geometry, x="step_index", y="normalized_radius", color="position")
+    figure.add_hline(y=1.0, line_dash="dash", line_color="red")
+    return figure
+
+
+def _orientation_diagnostic_rows(geometry: pd.DataFrame, frames: pd.DataFrame) -> pd.DataFrame:
+    """Return explicit rig, selected-camera, and target-elevation diagnostics."""
+
+    rows: list[dict[str, object]] = []
+    for _, frame in frames.iterrows():
+        rollout = int(frame["rollout_row_id"])
+        step = int(frame["step_index"])
+        selected = geometry[(geometry["rollout_row_id"] == rollout) & (geometry["step_index"] == step)]
+        rows.extend(
+            [
+                {
+                    "diagnostic": "Rig-to-target yaw error",
+                    "rollout_row_id": rollout,
+                    "step_index": step,
+                    "angle_deg": frame["rig_target_yaw_error_deg"],
+                },
+                {
+                    "diagnostic": "Selected camera-to-target error",
+                    "rollout_row_id": rollout,
+                    "step_index": step,
+                    "angle_deg": selected.loc[selected["selected"], "target_facing_error_deg"].iloc[0]
+                    if selected["selected"].any()
+                    else np.nan,
+                },
+                {
+                    "diagnostic": "Target elevation",
+                    "rollout_row_id": rollout,
+                    "step_index": step,
+                    "angle_deg": frame["target_elevation_deg"],
+                },
+            ]
+        )
+    return pd.DataFrame(rows)
+
+
+def _orientation_diagnostic_figure(rows: pd.DataFrame) -> go.Figure:
+    """Plot diagnostic angle distributions by named diagnostic."""
+
+    figure = px.scatter(rows, x="step_index", y="angle_deg", color="diagnostic")
+    return figure
+
+
 def _render_candidate_population_evidence(store_path: str) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 

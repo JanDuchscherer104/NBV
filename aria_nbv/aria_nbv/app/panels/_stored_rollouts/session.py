@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from dataclasses import asdict
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from ....rollouts.inspection import (
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
     promoted_store_validation_error,
+    proposal_support_geometry,
     q_h_evidence_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
@@ -33,7 +35,6 @@ from ....rollouts.inspection import (
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
     rollout_tree_summary_rows,
-    root_relative_candidate_rows,
     selected_candidate_rank_rows,
     selected_depth_summary_rows,
     store_invariant_rows,
@@ -271,7 +272,7 @@ def _cached_tree(store_path: str) -> Any:
 @_identity_cache
 def _cached_root_geometry(store_path: str, limit: int | None = None) -> Any:
     reader, _, _ = _cached_store_bundle(store_path)
-    rows = root_relative_candidate_rows(reader, actor_valid_only=False)
+    rows = [asdict(point) for point in proposal_support_geometry(reader).points]
     return rows if limit is None else rows[:limit]
 
 

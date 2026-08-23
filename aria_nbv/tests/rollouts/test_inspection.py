@@ -17,6 +17,7 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
+    ProposalAlignment,
     RolloutSuspiciousQueryConfig,
     candidate_audit_rows,
     candidate_collision_support_rows,
@@ -25,6 +26,11 @@ from aria_nbv.rollouts.inspection import (
     candidate_group_summary_rows,
     candidate_population_evidence,
     candidate_proposal_calibration_rows,
+    candidate_selection_pooled_summary_rows,
+    candidate_selection_sequence_rows,
+    candidate_selection_temporal_summary_rows,
+    candidate_selection_transition_rows,
+    candidate_sequence_return_summary_rows,
     comparable_policy_cohorts,
     deterministic_candidate_display_sample,
     discounted_rollout_return_rows,
@@ -33,6 +39,7 @@ from aria_nbv.rollouts.inspection import (
     mask_combination_rows,
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    proposal_support_geometry,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
@@ -40,8 +47,8 @@ from aria_nbv.rollouts.inspection import (
     rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_trajectory_geometry,
     rollout_tree_summary_rows,
-    root_relative_candidate_rows,
     selected_candidate_rank_rows,
     selected_depth_preview,
     selected_depth_summary_rows,
@@ -51,6 +58,7 @@ from aria_nbv.rollouts.inspection import (
     temporal_metric_summary_rows,
     validity_waterfall_rows,
 )
+from aria_nbv.rollouts.read_model import rollout_at, rollout_steps
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 
@@ -1020,6 +1028,253 @@ def test_candidate_population_evidence_is_compact_callback_parity_and_order_inva
     ]
 
 
+def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_sequences() -> None:
+    selected_families = {
+        (0, 0): "forward",
+        (0, 1): "side",
+        (0, 2): "forward",
+        (1, 0): "forward",
+        (1, 1): "forward",
+        (1, 2): "side",
+    }
+    forward_mass = {
+        (0, 0): 0.8,
+        (0, 1): 0.3,
+        (0, 2): 0.6,
+        (1, 0): 0.6,
+        (1, 1): 0.6,
+        (1, 2): 0.3,
+    }
+    terminal_gain = {0: 0.5, 1: 0.1}
+    rows: list[dict[str, object]] = []
+    candidate_row_id = 0
+    for rollout_row_id in range(2):
+        for step_index in range(3):
+            for family in ("forward", "side"):
+                probability = forward_mass[(rollout_row_id, step_index)]
+                if family == "side":
+                    probability = 1.0 - probability
+                rows.append(
+                    {
+                        "candidate_row_id": candidate_row_id,
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "{}",
+                        "scene": f"scene-{rollout_row_id}",
+                        "rollout_row_id": rollout_row_id,
+                        "step_row_id": 10 * rollout_row_id + step_index,
+                        "step_index": step_index,
+                        "policy": "temperature_softmax",
+                        "temperature": 2.0,
+                        "horizon": 3,
+                        "branch_factor": 1,
+                        "beam_width": 1,
+                        "mixture": family,
+                        "position": family,
+                        "strategy": "target_point" if family == "forward" else "forward_rig",
+                        "invalid_reason": "none",
+                        "actor_action": True,
+                        "oracle_label": True,
+                        "q_train": True,
+                        "selected": selected_families[(rollout_row_id, step_index)] == family,
+                        "sampler_probability": 0.5,
+                        "selection_probability": probability,
+                        "target_root_gain": 0.1,
+                        "cumulative_target_root_gain": terminal_gain[rollout_row_id]
+                        if step_index == 2
+                        else 0.05 * (step_index + 1),
+                        "path_collision": False,
+                        "path_collision_applicable": True,
+                        "path_collision_evaluated": True,
+                        "path_min_clearance_m": 1.0,
+                    }
+                )
+                candidate_row_id += 1
+
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+    dynamics = evidence["selection_dynamics"]["position"]
+    assert len(dynamics) == 12
+    rollout_zero_step_one_side = next(
+        row for row in dynamics if row["rollout_row_id"] == 0 and row["step_index"] == 1 and row["family"] == "side"
+    )
+    assert rollout_zero_step_one_side["policy_mass"] == pytest.approx(0.7)
+    assert rollout_zero_step_one_side["selected_share"] == pytest.approx(1.0)
+
+    temporal = candidate_selection_temporal_summary_rows(dynamics, metric="policy_mass")
+    forward_step_one = next(row for row in temporal if row["step_index"] == 1 and row["family"] == "forward")
+    assert forward_step_one["finite_count"] == 2
+    assert forward_step_one["median"] == pytest.approx(0.45)
+
+    transitions = candidate_selection_transition_rows(dynamics)
+    a_to_a = next(
+        row
+        for row in transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "forward"
+    )
+    assert a_to_a["context_count"] == 2
+    assert a_to_a["expected_policy_mass_mean"] == pytest.approx(0.45)
+    assert a_to_a["realized_rate"] == pytest.approx(0.5)
+
+    temperature_pooled_dynamics = [
+        {
+            **row,
+            "generation_cohort_id": f"cohort-{row['rollout_row_id']}",
+            "temperature": 0.5 if row["rollout_row_id"] == 0 else 2.0,
+        }
+        for row in dynamics
+    ]
+    pooled = candidate_selection_pooled_summary_rows(temperature_pooled_dynamics, metric="policy_mass")
+    pooled_forward_step_one = next(row for row in pooled if row["step_index"] == 1 and row["family"] == "forward")
+    assert pooled_forward_step_one["state_count"] == 2
+    assert pooled_forward_step_one["fraction"] == pytest.approx(0.45)
+    assert "temperature" not in pooled_forward_step_one
+
+    pooled_transitions = candidate_selection_transition_rows(temperature_pooled_dynamics, pool_temperatures=True)
+    pooled_a_to_a = next(
+        row
+        for row in pooled_transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "forward"
+    )
+    assert pooled_a_to_a["context_count"] == 2
+    assert pooled_a_to_a["expected_policy_mass_mean"] == pytest.approx(0.45)
+    assert pooled_a_to_a["temperature"] is None
+    assert pooled_a_to_a["pooled_temperatures"] is True
+
+    sequences = candidate_selection_sequence_rows(dynamics)
+    assert [row["sequence"] for row in sequences] == [
+        "forward → side → forward",
+        "forward → forward → side",
+    ]
+    assert [row["terminal_cumulative_target_root_gain"] for row in sequences] == [0.5, 0.1]
+    summaries = candidate_sequence_return_summary_rows(sequences)
+    assert {row["sequence"]: row["terminal_return_median"] for row in summaries} == {
+        "forward → forward → side": pytest.approx(0.1),
+        "forward → side → forward": pytest.approx(0.5),
+    }
+    assert evidence["selection_sequences"]["position"] == sequences
+    assert evidence["sequence_returns"]["position"] == summaries
+
+
+def test_pooled_selection_materializes_families_absent_from_a_temperature_cohort() -> None:
+    rows: list[dict[str, object]] = []
+
+    def add_state(cohort: str, temperature: float, step_index: int, families: tuple[str, ...], selected: str) -> None:
+        for family in families:
+            rows.append(
+                {
+                    "group_by": "position",
+                    "family": family,
+                    "generation_cohort_id": cohort,
+                    "generation_cohort": cohort,
+                    "scene": cohort,
+                    "rollout_row_id": 0,
+                    "step_row_id": 10 + step_index,
+                    "step_index": step_index,
+                    "policy": "temperature_softmax",
+                    "temperature": temperature,
+                    "horizon": 2,
+                    "branch_factor": 1,
+                    "beam_width": 1,
+                    "candidate_count": len(families),
+                    "actor_valid_count": len(families),
+                    "family_candidate_count": 1,
+                    "family_actor_valid_count": 1,
+                    "family_selected_count": int(family == selected),
+                    "allocation_share": 1.0 / len(families),
+                    "valid_share": 1.0 / len(families),
+                    "selected_share": float(family == selected),
+                    "policy_mass": 0.25 if family == "side" else 0.75 if len(families) == 2 else 1.0,
+                    "probability_available": True,
+                    "probability_unavailable_reason": None,
+                }
+            )
+
+    add_state("hot", 2.0, 0, ("forward", "side"), "forward")
+    add_state("hot", 2.0, 1, ("forward", "side"), "side")
+    add_state("cold", 0.5, 0, ("forward",), "forward")
+    add_state("cold", 0.5, 1, ("forward",), "forward")
+
+    pooled_allocation = candidate_selection_pooled_summary_rows(rows, metric="allocation_share")
+    side_allocation = next(row for row in pooled_allocation if row["step_index"] == 1 and row["family"] == "side")
+    assert side_allocation["state_count"] == 2
+    assert side_allocation["numerator"] == 1
+    assert side_allocation["denominator"] == 3
+    assert side_allocation["fraction"] == pytest.approx(1 / 3)
+
+    pooled_policy = candidate_selection_pooled_summary_rows(rows, metric="policy_mass")
+    side_policy = next(row for row in pooled_policy if row["step_index"] == 1 and row["family"] == "side")
+    assert side_policy["state_count"] == 2
+    assert side_policy["finite_state_count"] == 2
+    assert side_policy["fraction"] == pytest.approx(0.125)
+
+    pooled_selected = candidate_selection_pooled_summary_rows(rows, metric="selected_share")
+    side_selected = next(row for row in pooled_selected if row["step_index"] == 1 and row["family"] == "side")
+    assert side_selected["state_count"] == 2
+    assert side_selected["numerator"] == 1
+    assert side_selected["denominator"] == 2
+    assert side_selected["fraction"] == pytest.approx(0.5)
+
+    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
+    forward_to_side = next(
+        row
+        for row in transitions
+        if row["step_index"] == 1 and row["previous_family"] == "forward" and row["next_family"] == "side"
+    )
+    assert forward_to_side["context_count"] == 2
+    assert forward_to_side["expected_policy_mass_mean"] == pytest.approx(0.125)
+    assert forward_to_side["realized_count"] == 1
+    assert forward_to_side["realized_rate"] == pytest.approx(0.5)
+
+
+def test_candidate_selection_probability_failure_closes_policy_mass_only() -> None:
+    rows = [
+        {
+            "candidate_row_id": index,
+            "generation_cohort_id": "cohort",
+            "generation_cohort": "{}",
+            "scene": "scene",
+            "rollout_row_id": 0,
+            "step_row_id": 0,
+            "step_index": 0,
+            "policy": "temperature_softmax",
+            "temperature": 2.0,
+            "horizon": 1,
+            "branch_factor": 1,
+            "beam_width": 1,
+            "mixture": family,
+            "position": family,
+            "strategy": "target_point",
+            "invalid_reason": "none",
+            "actor_action": True,
+            "oracle_label": True,
+            "q_train": True,
+            "selected": index == 0,
+            "sampler_probability": 0.5,
+            "selection_probability": probability,
+            "target_root_gain": 0.1,
+            "cumulative_target_root_gain": 0.1,
+            "path_collision": False,
+            "path_collision_applicable": True,
+            "path_collision_evaluated": True,
+            "path_min_clearance_m": 1.0,
+        }
+        for index, (family, probability) in enumerate((("forward", 0.8), ("side", None)))
+    ]
+    evidence = candidate_population_evidence(
+        object(),
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+
+    dynamics = evidence["selection_dynamics"]["position"]
+    assert all(row["policy_mass"] is None for row in dynamics)
+    assert all(row["probability_unavailable_reason"] == "incomplete_probability_vector" for row in dynamics)
+    assert evidence["calibration"]["position"][0]["proposal_available"] is True
+    with pytest.raises(ValueError, match="Unsupported candidate selection metric"):
+        candidate_selection_temporal_summary_rows(dynamics, metric="unsupported")
+
+
 @pytest.mark.parametrize(
     ("probabilities", "reason"),
     [
@@ -1589,28 +1844,111 @@ def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailabl
     assert row["target_rri_rank_label"] == "unavailable"
 
 
-def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_path) -> None:
-    """Geometry projection should never expose cross-scene absolute centers as comparison axes."""
+def test_proposal_support_geometry_uses_factual_expansion_pose_and_current_target_scale(tmp_path) -> None:
+    """Each proposal shell must use the state that actually generated it."""
 
-    records = build_rollout_records(horizon=1, num_samples=6, seed=59)[:1]
-    root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
-    root_tensor[9:12] = root_tensor.new_tensor([1.0, 2.0, 3.0])
-    records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
-    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=59)[1:2],
+    )
     reader = RolloutZarrStoreReader(result.store_dir)
 
-    rows = root_relative_candidate_rows(reader, rollout_row_id=0)
-    first = rows[0]
-    world_pose = np.asarray(reader.array("candidates/pose_world_cam")[0], dtype=np.float32)
-    root_pose = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float32)
+    projection = proposal_support_geometry(reader)
+    frames = {frame.step_index: frame for frame in projection.frames}
+    steps = rollout_steps(reader, rollout_at(reader, 0))
+    root = np.asarray(reader.array("rollouts/root_pose_world")[0], dtype=np.float64)
+    target = np.asarray(reader.array("targets/target_pose_world_object")[0], dtype=np.float64)
+    selected_zero = np.asarray(steps[0].pose_world_cam[steps[0].selected_local_index], dtype=np.float64)
 
-    assert len(rows) == result.num_candidates
-    assert first["coordinate_frame"] == "root-centered ARIA world (RIGHT_HAND_Z_UP)"
-    assert first["units"] == "m"
-    assert first["root_relative_x_m"] == pytest.approx(float(world_pose[9] - root_pose[9]))
-    assert first["root_relative_y_m"] == pytest.approx(float(world_pose[10] - root_pose[10]))
-    assert first["root_relative_z_m"] == pytest.approx(float(world_pose[11] - root_pose[11]))
-    assert "center_x" not in first
+    assert len(projection.points) == result.num_candidates
+    assert frames[0].expansion_pose_source == "root"
+    assert frames[1].expansion_pose_source == "previous_selected"
+    assert frames[0].scale_m == pytest.approx(np.linalg.norm(target[9:12] - root[9:12]))
+    assert frames[1].scale_m == pytest.approx(np.linalg.norm(target[9:12] - selected_zero[9:12]))
+    assert frames[1].scale_m != pytest.approx(frames[0].scale_m)
+    for frame in projection.frames:
+        assert np.linalg.norm([frame.target_x, frame.target_y, frame.target_z]) == pytest.approx(1.0)
+        assert frame.target_y == pytest.approx(0.0, abs=1e-7)
+        assert frame.rig_target_yaw_error_deg is None or 0.0 <= frame.rig_target_yaw_error_deg <= 180.0
+        assert frame.target_elevation_deg == pytest.approx(
+            np.degrees(np.arctan2(frame.target_z, np.hypot(frame.target_x, frame.target_y)))
+        )
+    for point in projection.points:
+        assert point.normalized_radius == pytest.approx(point.displacement_m / point.normalization_distance_m)
+        assert point.target_facing_error_deg is not None
+    assert all(point.strategy != "unknown" for point in projection.points)
+
+
+def test_proposal_support_rig_alignment_maps_reference_forward_to_positive_x(tmp_path) -> None:
+    """Rig-forward comparison must retain Z-up while aligning LUF forward."""
+
+    records = build_rollout_records(horizon=1, num_samples=6, seed=61)[1:2]
+    root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
+    root_tensor[:9] = root_tensor.new_tensor([0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+    records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
+    result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
+
+    projection = proposal_support_geometry(
+        RolloutZarrStoreReader(result.store_dir),
+        alignment=ProposalAlignment.RIG_FORWARD_Z_UP,
+    )
+
+    assert len(projection.frames) == 1
+    assert projection.frames[0].reference_axis_z == pytest.approx((1.0, 0.0, 0.0), abs=1e-7)
+    assert projection.frames[0].alignment == ProposalAlignment.RIG_FORWARD_Z_UP.value
+
+
+def test_rollout_trajectory_geometry_contains_only_root_and_factual_selected_path(tmp_path) -> None:
+    """Trajectory comparison must not leak alternative proposal candidates."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=63)[1:2],
+    )
+    projection = rollout_trajectory_geometry(RolloutZarrStoreReader(result.store_dir))
+    frame = projection.frames[0]
+
+    assert [point.role for point in projection.points] == ["root", "selected_action", "selected_action"]
+    assert [point.path_order for point in projection.points] == [0, 1, 2]
+    assert {point.normalization_distance_m for point in projection.points} == {frame.initial_scale_m}
+    assert np.linalg.norm([frame.target_x, frame.target_y, frame.target_z]) == pytest.approx(1.0)
+    assert frame.target_y == pytest.approx(0.0, abs=1e-7)
+
+
+def test_geometry_projection_preserves_complete_shells_and_rejects_malformed_steps(tmp_path) -> None:
+    """Soft limits retain whole shells and factual step partitions fail closed."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=65)[1:2],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    bounded = proposal_support_geometry(reader, max_candidates=1)
+    assert bounded.truncated is True
+    assert len(bounded.points) == int(reader.array("steps/num_candidates")[0])
+    assert {point.step_index for point in bounded.points} == {0}
+
+    root = zarr.open_group(result.store_dir, mode="a")
+    root["steps/step_index"][1] = np.asarray(2, dtype=np.int32)
+    with pytest.raises(ValueError, match="non-contiguous factual step indices"):
+        rollout_trajectory_geometry(reader)
+
+
+def test_geometry_projection_rejects_invalid_pose_rotation(tmp_path) -> None:
+    """Geometry frames must fail closed instead of plotting malformed rotations."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=66)[1:2],
+    )
+    root = zarr.open_group(result.store_dir, mode="a")
+    malformed = np.asarray(root["rollouts/root_pose_world"][0], dtype=np.float32)
+    malformed[:9] = 0.0
+    root["rollouts/root_pose_world"][0] = malformed
+
+    with pytest.raises(ValueError, match="invalid rotation matrix"):
+        proposal_support_geometry(RolloutZarrStoreReader(result.store_dir))
 
 
 def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:
