@@ -24,6 +24,14 @@ explicit.
 
 ## Owner-first loop
 
+For scaffold or tool policy, the routing branch is part of locating the owner:
+open [`references/reviewed-intent.md`](references/reviewed-intent.md) before a
+specialist skill, broad navigation source, or general intent source. When the
+task is inside the accepted scaffold rework, that branch requires opening the
+accepted scoped specification and using it as the requirements owner. Lower-
+level boundary references may prove current implementation, but they do not
+replace the accepted specification for the policy decision.
+
 1. **Locate the owner.** Read the root `AGENTS.md`, then the nearest guide or
    active skill for the touched surface. Stop when the exact owner is named or
    the ambiguity is explicit.
@@ -49,14 +57,12 @@ explicit.
    owner and use stable owner-defined pointers elsewhere. Do not introduce a
    second source of truth.
 
-For scaffold or tool policy, read
-[`references/reviewed-intent.md`](references/reviewed-intent.md) before opening
-any general intent source. Also load it when the current exact owner leaves a
-material policy choice unsettled or the question asks for policy inside an
-accepted scoped rework. Follow its scoped-specification precedence and stop
-before general reviewed intent when that specification settles the choice. Do
-not load reviewed intent for a settled exact-owner task outside such a scoped
-policy decision.
+Outside scaffold or tool policy, load
+[`references/reviewed-intent.md`](references/reviewed-intent.md) only when the
+current exact owner leaves a material policy choice unsettled. Follow its
+scoped-specification precedence and stop before general reviewed intent when
+that specification settles the choice. Do not load reviewed intent for a
+settled exact-owner task outside such a scoped policy decision.
 
 ## Conditional branches
 
