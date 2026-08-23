@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -15,6 +16,7 @@ import zarr
 
 pytest.importorskip("efm3d")
 
+import aria_nbv.rollouts.inspection as inspection_module
 from aria_nbv.rollouts import RolloutZarrStoreReader
 from aria_nbv.rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
@@ -40,6 +42,7 @@ from aria_nbv.rollouts.inspection import (
     mask_combination_rows,
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    proposal_support_geometry,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
@@ -47,6 +50,7 @@ from aria_nbv.rollouts.inspection import (
     rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_trajectory_geometry,
     rollout_tree_summary_rows,
     root_relative_candidate_rows,
     selected_candidate_rank_rows,
@@ -60,6 +64,88 @@ from aria_nbv.rollouts.inspection import (
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_geometry_projections_keep_complete_shells_and_factual_selected_path(tmp_path, monkeypatch) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "geometry.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=731)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
+    target = inspection_module.target_rows(reader)[0]
+    target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
+    target_pose[9:12] = target_center
+    target = replace(target, center_world=target_center, pose_world_object=target_pose)
+    monkeypatch.setattr(inspection_module, "target_rows", lambda _reader: (target,))
+
+    proposal = proposal_support_geometry(reader, max_candidates=10_000)
+    trajectory = rollout_trajectory_geometry(reader)
+
+    assert proposal.view == "proposal_support"
+    assert proposal.points
+    assert all(point.role == "candidate" for point in proposal.points)
+    assert all(point.normalization_distance_m > 0 for point in proposal.points)
+    assert trajectory.view == "rollout_trajectory"
+    assert [point.role for point in trajectory.points] == ["root", "selected_action", "selected_action"]
+    assert [point.path_order for point in trajectory.points] == [0, 1, 2]
+
+
+def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(tmp_path, monkeypatch) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "geometry-bounded.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=732)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
+    target = inspection_module.target_rows(reader)[0]
+    target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
+    target_pose[9:12] = target_center
+    target = replace(target, center_world=target_center, pose_world_object=target_pose)
+    monkeypatch.setattr(inspection_module, "target_rows", lambda _reader: (target,))
+    original_array = reader.array
+
+    def reject_candidate_array(path: str):
+        if path.startswith("candidates/"):
+            raise AssertionError(f"geometry must use bounded Zarr handles, not reader.array({path!r})")
+        return original_array(path)
+
+    monkeypatch.setattr(reader, "array", reject_candidate_array)
+    assert proposal_support_geometry(reader, max_candidates=10_000).points
+
+
+def test_geometry_contract_rejects_malformed_steps_and_invalid_rotations() -> None:
+    valid_pose = np.r_[np.eye(3, dtype=np.float64).reshape(-1), [0.0, 0.0, 0.0]]
+    malformed = SimpleNamespace(
+        step_row_id=11,
+        step_index=1,
+        selected_mask=np.asarray([True]),
+        candidate_row_ids=np.asarray([4]),
+        selected_candidate_row_id=4,
+        pose_world_cam=np.asarray([valid_pose]),
+    )
+    with pytest.raises(ValueError, match="non-contiguous factual step indices"):
+        inspection_module._validate_factual_steps(7, (malformed,))
+
+    invalid = valid_pose.copy()
+    invalid[0] = 2.0
+    with pytest.raises(ValueError, match="invalid rotation"):
+        inspection_module._geometry_pose(invalid, role="test pose")
+
+
+def test_geometry_rig_alignment_is_yaw_only_and_current_scale_is_explicit() -> None:
+    rig_rotation = np.asarray([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
+    root = np.r_[rig_rotation.reshape(-1), [0.0, 0.0, 0.0]]
+    target = np.asarray([2.0, 1.0, 3.0])
+    basis = inspection_module._proposal_basis(
+        root,
+        target,
+        inspection_module.ProposalAlignment.RIG_FORWARD_Z_UP,
+    )
+    assert basis is not None
+    assert basis[:, 2].tolist() == [0.0, 0.0, 1.0]
+    assert np.linalg.norm(basis[:, 0][:2]) == pytest.approx(1.0)
+    assert inspection_module._positive_distance(target - root[9:12]) == pytest.approx(np.sqrt(14.0))
 
 
 def test_candidate_population_owner_census_keeps_selection_domain_surface() -> None:

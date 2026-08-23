@@ -22,6 +22,7 @@ from typing import Any, Literal
 import numpy as np
 import torch
 import zarr
+from numpy.typing import NDArray
 
 from ..oracle.target_selection import TARGET_INVALID_REASON_CODES
 from ..pose_generation import ViewDirectionMode, candidate_strategy_id
@@ -29,6 +30,7 @@ from ..targets.protocol import ORACLE_GT_TARGET_SOURCE, ActorVisibleTargetSource
 from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
+    StoredRollout,
     decode_invalid_reason,
     decode_position_id,
     rollout_at,
@@ -6330,6 +6332,91 @@ class GeometryProjection:
         return [asdict(frame) for frame in self.frames]
 
 
+@dataclass(frozen=True, slots=True)
+class _GeometryStep:
+    """Bounded factual shell used by geometry projections.
+
+    Unlike ``rollout_steps`` this helper never converts the complete candidate
+    tables to NumPy.  The persisted selected-shell index and candidate id
+    define one contiguous slice, which is the only payload materialized.
+    """
+
+    step_row_id: int
+    step_index: int
+    selected_candidate_row_id: int
+    selected_local_index: int
+    candidate_row_positions: NDArray[np.int64]
+    candidate_row_ids: NDArray[np.int64]
+    actor_action_mask: NDArray[np.bool_]
+    selected_mask: NDArray[np.bool_]
+    pose_world_cam: NDArray[np.float32]
+    position_names: NDArray[np.str_]
+    mixture_names: NDArray[np.str_]
+
+
+def _bounded_geometry_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tuple[_GeometryStep, ...]:
+    """Read only the candidate shells referenced by one factual rollout."""
+
+    candidates = reader.root["candidates"]
+    diagnostics = reader.root["candidate_diagnostics"]
+    steps = reader.root["steps"]
+    candidate_count = int(candidates["candidate_row_id"].shape[0])
+    component_names: dict[int, str] = {}
+    payload = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config", {})
+    mixture = payload.get("candidate_mixture") if isinstance(payload, dict) else None
+    components = mixture.get("components") if isinstance(mixture, dict) else None
+    if isinstance(components, list):
+        component_names = {
+            index: str(component.get("name") or component.get("family") or component.get("position_mode"))
+            for index, component in enumerate(components)
+            if isinstance(component, dict)
+            and (component.get("name") or component.get("family") or component.get("position_mode")) is not None
+        }
+
+    result: list[_GeometryStep] = []
+    for step_position in rollout.step_row_positions.tolist():
+        step_row_id = int(steps["step_row_id"][step_position])
+        step_index = int(steps["step_index"][step_position])
+        shell_size = int(steps["num_candidates"][step_position])
+        selected_shell = int(steps["selected_shell_index"][step_position])
+        selected_candidate = int(steps["selected_candidate_row_id"][step_position])
+        start = selected_candidate - selected_shell
+        stop = start + shell_size
+        if start < 0 or stop > candidate_count:
+            raise ValueError(f"Step row {step_row_id} references candidate rows outside the persisted shell.")
+        positions = np.arange(start, stop, dtype=np.int64)
+        candidate_ids = np.asarray(candidates["candidate_row_id"][start:stop], dtype=np.int64)
+        if not np.array_equal(candidate_ids, np.arange(start, stop, dtype=np.int64)):
+            raise ValueError(f"Step row {step_row_id} candidate ids are not contiguous with their physical rows.")
+        step_ids = np.asarray(candidates["step_row_id"][start:stop], dtype=np.int64)
+        if not np.all(step_ids == step_row_id):
+            raise ValueError(f"Step row {step_row_id} candidate shell is interleaved with another factual step.")
+        selected_mask = np.asarray(candidates["selected_mask"][start:stop], dtype=np.bool_)
+        matches = np.flatnonzero(selected_mask)
+        if matches.size != 1 or int(matches[0]) != selected_shell:
+            raise ValueError(f"Step row {step_row_id} has an invalid selected-shell index.")
+        position_ids = np.asarray(diagnostics["position_id"][start:stop], dtype=np.int32)
+        mixture_ids = np.asarray(candidates["mixture_id"][start:stop], dtype=np.int32)
+        result.append(
+            _GeometryStep(
+                step_row_id=step_row_id,
+                step_index=step_index,
+                selected_candidate_row_id=selected_candidate,
+                selected_local_index=selected_shell,
+                candidate_row_positions=positions,
+                candidate_row_ids=candidate_ids,
+                actor_action_mask=np.asarray(candidates["actor_action_mask"][start:stop], dtype=np.bool_),
+                selected_mask=selected_mask,
+                pose_world_cam=np.asarray(candidates["pose_world_cam"][start:stop], dtype=np.float32).reshape(-1, 12),
+                position_names=np.asarray([decode_position_id(value) for value in position_ids], dtype=str),
+                mixture_names=np.asarray(
+                    [component_names.get(int(value), str(int(value))) for value in mixture_ids], dtype=str
+                ),
+            )
+        )
+    return tuple(result)
+
+
 def proposal_support_geometry(
     reader: RolloutZarrStoreReader,
     *,
@@ -6348,12 +6435,12 @@ def proposal_support_geometry(
     if max_candidates is not None and max_candidates <= 0:
         raise ValueError("max_candidates must be positive when provided.")
     targets = {target.target_row_id: target for target in target_rows(reader)}
-    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    strategy_ids = reader.root["candidates"]["strategy_id"]
     frames: list[GeometryFrame] = []
     points: list[GeometryPoint] = []
     issues: list[GeometryIssue] = []
     truncated = False
-    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    rollout_count = int(reader.root["rollouts"]["rollout_row_id"].shape[0])
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
         if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
@@ -6381,7 +6468,7 @@ def proposal_support_geometry(
                 )
             )
             continue
-        steps = rollout_steps(reader, rollout)
+        steps = _bounded_geometry_steps(reader, rollout)
         _validate_factual_steps(rollout.rollout_row_id, steps)
         reference_pose = root_pose
         for expected_index, step in enumerate(steps):
@@ -6488,11 +6575,11 @@ def rollout_trajectory_geometry(
 
     requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
     targets = {target.target_row_id: target for target in target_rows(reader)}
-    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    strategy_ids = reader.root["candidates"]["strategy_id"]
     frames: list[GeometryFrame] = []
     points: list[GeometryPoint] = []
     issues: list[GeometryIssue] = []
-    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    rollout_count = int(reader.root["rollouts"]["rollout_row_id"].shape[0])
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
         if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
@@ -6522,7 +6609,7 @@ def rollout_trajectory_geometry(
                 )
             )
             continue
-        steps = rollout_steps(reader, rollout)
+        steps = _bounded_geometry_steps(reader, rollout)
         _validate_factual_steps(rollout.rollout_row_id, steps)
         frame_id = f"trajectory:{rollout.rollout_row_id}:target_aligned_z_up"
         target_normalized = basis.T @ (target_center - root_center) / scale
