@@ -32,7 +32,6 @@ PRODUCTION_CORPUS_PATHS = (
     Path(".agents/references/human_owner_intent.md"),
     Path(".agents/skills"),
     Path(".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md"),
-    Path(".omx/plans"),
     Path("aria_nbv/AGENTS.md"),
     Path("aria_nbv/aria_nbv"),
     Path("aria_nbv/tests"),
