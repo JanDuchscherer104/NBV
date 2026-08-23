@@ -14,6 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from ...scientific_labels import TheoryReferences, resolve_theory
 from ..common import _plot_with_y_axis_control
 
 _ROLE_COLORS = {
@@ -25,18 +26,30 @@ _ROLE_COLORS = {
 
 
 @dataclass(frozen=True, slots=True)
+class ExplanationSection:
+    """One concise narrative section in a scientific plot explanation."""
+
+    title: str
+    body: str
+
+
+@dataclass(frozen=True, slots=True)
 class ScientificExplanation:
     """Complete interpretation contract shown beside one primary visualization."""
 
     question: str
-    population: str
-    metric: str
-    denominator_masks: str
-    comparability: str
-    expected_pattern: str
-    failure_interpretation: str
-    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
-    source_fields: tuple[str, ...]
+    population: str = ""
+    metric: str = ""
+    denominator_masks: str = ""
+    comparability: str = ""
+    expected_pattern: str = ""
+    failure_interpretation: str = ""
+    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"] = "provenance"
+    source_fields: tuple[str, ...] = ()
+    answer: str = ""
+    sections: tuple[ExplanationSection, ...] = ()
+    theory: TheoryReferences | None = None
+    external_references: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         required = (
@@ -48,8 +61,12 @@ class ScientificExplanation:
             self.expected_pattern,
             self.failure_interpretation,
         )
-        if any(not value.strip() for value in required) or not self.source_fields:
+        if self.answer and not self.sections:
+            raise ValueError("Narrative explanations require at least one section.")
+        if any(not value.strip() for value in required if value) and not self.answer:
             raise ValueError("Scientific explanations require every interpretation field and at least one source.")
+        if not self.source_fields and not self.answer:
+            raise ValueError("Scientific explanations require at least one source.")
 
 
 def render_stale_store_boundary(
@@ -82,6 +99,10 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         unsafe_allow_html=True,
     )
     with col_info.popover("How to read this", icon="ℹ️"):
+        if explanation.answer:
+            explanation_item("Answer", explanation.answer)
+            for section in explanation.sections:
+                explanation_item(section.title, section.body)
         for label, value in (
             ("Question", explanation.question),
             ("Population / grain", explanation.population),
@@ -97,7 +118,26 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
                 "Axis scale",
                 "Linear by default. Logarithmic scale is independently selectable for this plot and hides zero or negative observations.",
             )
-        explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
+        if explanation.theory is not None:
+            try:
+                resolved = resolve_theory(explanation.theory)
+                if resolved.equations:
+                    explanation_item(
+                        "Canonical equations",
+                        "\n\n".join(f"{item.identifier}: ${item.tex}$" for item in resolved.equations),
+                    )
+                if resolved.symbols:
+                    explanation_item("Symbols", ", ".join(item.identifier for item in resolved.symbols))
+                if resolved.terms:
+                    explanation_item("Glossary", ", ".join(item.label for item in resolved.terms))
+            except Exception as exc:
+                st.warning(f"Canonical theory unavailable: {type(exc).__name__}: {exc}")
+        if explanation.external_references:
+            explanation_item(
+                "External sources", "\n\n".join(f"[{label}]({url})" for label, url in explanation.external_references)
+            )
+        if explanation.source_fields:
+            explanation_item("Sources", ", ".join(explanation.source_fields), code=True)
     rendered = fig
     if log_y_key is not None:
         with columns[2]:

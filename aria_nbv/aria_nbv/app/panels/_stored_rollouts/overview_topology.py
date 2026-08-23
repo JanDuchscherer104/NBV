@@ -114,66 +114,11 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
 
     st.subheader("Corpus reward and reconstruction")
     if summary is None:
-        st.info("Build the corpus summary in Overview before viewing aggregate reward evidence.")
+        st.info("Build the corpus summary in Overview to render reward and reconstruction evidence.")
         return
-    temporal = summary.temporal_summary
-    if temporal.empty:
-        st.info("No validated factual temporal rows are available.")
-    else:
-        metric_names = list(dict.fromkeys(str(value) for value in temporal["metric"].dropna()))
-        metric = st.selectbox("Corpus temporal metric", options=metric_names, key="corpus_temporal_metric")
-        rows = temporal.loc[temporal["metric"] == metric].copy()
-        group_fields = [field for field in ("contract", "policy", "temperature", "horizon") if field in rows]
-        rows["series"] = rows[group_fields].astype(str).agg(" · ".join, axis=1) if group_fields else "corpus"
-        figure = go.Figure()
-        for series, group in rows.groupby("series", sort=True):
-            group = group.sort_values("step_index")
-            figure.add_trace(
-                go.Scatter(x=group["step_index"], y=group["q25"], mode="lines", line={"width": 0}, showlegend=False)
-            )
-            figure.add_trace(
-                go.Scatter(
-                    x=group["step_index"],
-                    y=group["q75"],
-                    mode="lines",
-                    line={"width": 0},
-                    fill="tonexty",
-                    name=str(series),
-                    opacity=0.2,
-                )
-            )
-            figure.add_trace(
-                go.Scatter(
-                    x=group["step_index"],
-                    y=group["median"],
-                    mode="lines+markers",
-                    name=str(series),
-                    customdata=group[["finite_count", "total_count", "store_count"]],
-                    hovertemplate="step=%{x}<br>median=%{y:.4g}<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}<br>stores=%{customdata[2]:.0f}<extra></extra>",
-                )
-            )
-        figure.update_layout(
-            title=f"{metric}: corpus median and IQR by factual depth",
-            xaxis_title="factual step_index",
-            yaxis_title="value",
-        )
-        _render_plot(
-            figure,
-            ScientificExplanation(
-                question="How does this reward or reconstruction metric evolve across the selected compatible shards?",
-                population="Factual finite step rows aggregated across selected stores and separated by persisted contract, policy, temperature, and horizon.",
-                metric="Median and interquartile range; units follow the persisted metric contract. Hover shows finite/total rows and store count.",
-                denominator_masks="Only observed factual rows contribute; early-terminated rollouts are not zero-filled or extended to configured horizon.",
-                comparability="Only identical persisted contracts are comparable. Series remain separated by contract and policy dimensions.",
-                expected_pattern="The median trajectory is supported by multiple stores and the IQR reflects between-row spread, not a confidence interval.",
-                failure_interpretation="Small depth counts, wide IQR, or abrupt missingness require inspecting the contributing stores and factual rows.",
-                evidence_role="oracle/evaluation",
-                source_fields=("reporting.RolloutCorpusSummary.temporal_summary", "steps", "rollout contract"),
-            ),
-        )
-        with st.expander("Temporal rows and CSV", expanded=False):
-            st.dataframe(rows.drop(columns="series"), hide_index=True, width="stretch")
-            _download_frame("Download temporal rows CSV", "corpus-temporal-summary.csv", rows.drop(columns="series"))
+    from .reconstruction_return import _render_corpus_temporal_evidence
+
+    _render_corpus_temporal_evidence(summary)
 
     if summary.endpoints.empty:
         st.info("No validated endpoint rows are available.")

@@ -130,13 +130,33 @@ def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
     """Cache one named projection against fixed metadata identity."""
 
     @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-    def cached(store_path: str, args: tuple[Any, ...], kwargs: tuple[tuple[str, Any], ...], identity: str) -> Any:
-        del identity
+    def cached(
+        store_path: str,
+        args: tuple[Any, ...],
+        kwargs: tuple[tuple[str, Any], ...],
+        identity: str,
+        owner: str,
+    ) -> Any:
+        del identity, owner
         return function(store_path, *args, **dict(kwargs))
+
+    # Streamlit derives the cache key from the wrapped callable's qualified
+    # name.  Every nested ``cached`` function otherwise shares the same name,
+    # allowing unrelated projections (for example header and steps) to reuse
+    # one another's result.  Keep the small decorator seam, but give each
+    # named owner a stable cache identity.
+    cached.__name__ = f"{function.__name__}_cached"
+    cached.__qualname__ = f"{function.__qualname__}_cached"
 
     @wraps(function)
     def wrapper(store_path: str, *args: Any, **kwargs: Any) -> Any:
-        return cached(store_path, args, tuple(sorted(kwargs.items())), _store_projection_identity(store_path))
+        return cached(
+            store_path,
+            args,
+            tuple(sorted(kwargs.items())),
+            _store_projection_identity(store_path),
+            function.__qualname__,
+        )
 
     wrapper.clear = cached.clear  # type: ignore[attr-defined]
     return wrapper
