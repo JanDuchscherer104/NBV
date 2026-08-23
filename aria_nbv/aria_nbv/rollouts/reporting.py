@@ -321,6 +321,7 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "file_count",
         "total_bytes",
         "bytes_per_candidate",
+        "bytes_per_candidate_reason",
         "file_count_limit",
         "bytes_per_candidate_limit",
         "status",
@@ -620,6 +621,8 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
                 "profile": profile,
                 "contract_id": contract["id"],
                 "contract": contract["label"],
+                "contract_payload": contract["payload"],
+                "contract_payload_json": json.dumps(contract["payload"], sort_keys=True, separators=(",", ":")),
             }
         )
         valid_frames.append(frames)
@@ -630,6 +633,8 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
                 "contract_id": contract["id"],
                 "contract": contract["label"],
                 "profile": contract["profile"],
+                "contract_payload": contract["payload"],
+                "contract_payload_json": json.dumps(contract["payload"], sort_keys=True, separators=(",", ":")),
                 **q_h_row,
             }
         )
@@ -732,10 +737,8 @@ def _corpus_temporal_summary(
 ) -> pd.DataFrame:
     """Recompute factual depth summaries over compatible validated shards.
 
-    The persisted contract is deliberately narrower than a campaign identity:
-    campaign shards with the same profile, candidate/oracle configuration, and
-    return semantics combine, while different generated data contracts remain
-    separate. Policy, temperature, and rollout controls stay as explicit plot
+    Campaign shards combine only when their full persisted compatibility payload
+    matches. Policy, temperature, and rollout controls stay as explicit plot
     strata rather than being pooled into a single trace.
     """
 
@@ -744,6 +747,7 @@ def _corpus_temporal_summary(
         "units",
         "contract_id",
         "contract",
+        "contract_payload_json",
         "profile",
         "policy",
         "temperature",
@@ -775,6 +779,7 @@ def _corpus_temporal_summary(
         steps["corpus_store_path"] = str(store["path"])
         steps["contract_id"] = contract["id"]
         steps["contract"] = contract["label"]
+        steps["contract_payload_json"] = json.dumps(contract.get("payload", {}), sort_keys=True, separators=(",", ":"))
         steps["profile"] = contract["profile"]
         annotated.append(steps)
     if not annotated:
@@ -783,10 +788,20 @@ def _corpus_temporal_summary(
     from .inspection import temporal_metric_summary_rows
 
     source = pd.concat(annotated, ignore_index=True)
-    groups = ("contract_id", "contract", "profile", "policy", "temperature", "horizon", "branch_factor", "beam_width")
+    groups = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+    )
     for group_field in groups:
         source[group_field] = source[group_field].map(_temporal_group_scalar)
-    outer_groups = ("contract_id", "contract", "profile")
+    outer_groups = ("contract_id", "contract", "contract_payload_json", "profile")
     inner_groups = ("policy", "temperature", "horizon", "branch_factor", "beam_width")
     summaries: list[pd.DataFrame] = []
     for outer_key, partition in source.groupby(list(outer_groups), dropna=False, sort=True):
@@ -830,8 +845,15 @@ def _corpus_temporal_summary(
     )
 
 
-def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, str]:
-    """Return the stable, persisted compatibility contract for one store."""
+def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, object]:
+    """Return the exact persisted compatibility contract for one store.
+
+    The human label is intentionally compact, but the identity is derived from
+    every persisted parameter that can change the meaning of a report row.  In
+    particular, two shards with the same display profile are not pooled when a
+    target protocol, source/split lineage, Q_H/return contract, or selected
+    depth modality differs.
+    """
 
     parameters = frames["parameters"]
 
@@ -852,22 +874,90 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
     def value(key: str) -> object:
         return values(key)[0] if values(key) else None
 
-    payload = {
-        "profile": profile,
-        "candidate_configs": values("config_hashes.candidate"),
-        "oracle_configs": values("config_hashes.oracle"),
-        "return_semantics": value("root_attrs.return_semantics"),
-        "discount_gamma": value("root_attrs.discount_gamma"),
-        "q_h_return_semantics": value("root_attrs.q_h_return_semantics"),
+    # These prefixes are the persisted compatibility vocabulary.  Keep the
+    # extraction generic so adding a new typed contract parameter cannot create
+    # a silent pooling bug merely because this report adapter was not updated.
+    prefixes = (
+        "config_hashes",
+        "candidate",
+        "oracle",
+        "rollout",
+        "source",
+        "split",
+        "actor",
+        "writer_config",
+        "lineage",
+        "return",
+        "discount",
+        "q_h",
+        "selected_depth",
+        "view",
+        "contract",
+    )
+    root_attr_suffixes = {
+        "schema_id",
+        "schema_version",
+        "target_protocol_version",
+        "reason_code_version",
+        "return_semantics",
+        "discount_gamma",
+        "q_h_return_semantics",
+        "q_h_reward_metric",
+        "q_h_td_semantics",
+        "q_h_horizon",
+        "q_h_max_candidates",
+        "q_h_view_role",
+        "view_role",
+        "source_offline_store_version",
+        "source_split",
+        "campaign_split",
+        "split_manifest_hash",
+        "split_lineage",
+        "q_h_source_tables",
+        "q_h_view_persisted",
+        "selected_depth_enabled",
+        "selected_depth_role",
+        "selected_depth_renderer",
+        "selected_depth_source_resolution",
+        "selected_depth_units",
+        "selected_depth_dtype",
+        "selected_depth_width_px",
+        "selected_depth_height_px",
+        "selected_depth_znear_m",
+        "selected_depth_zfar_m",
+        "selected_depth_invalid_fill_value",
+        "selected_depth_valid_mask_dtype",
+        "selected_depth_codec",
     }
+
+    def json_value(row: pd.Series) -> object:
+        for column in ("value_text", "value_float", "value_int", "value_bool"):
+            candidate = row[column]
+            if pd.notna(candidate):
+                candidate = candidate.item() if isinstance(candidate, np.generic) else candidate
+                if isinstance(candidate, float) and not math.isfinite(candidate):
+                    return str(candidate)
+                return candidate
+        return None
+
+    exact_rows: list[dict[str, object]] = []
+    for _, row in parameters[parameters["store_id"] == store_id].iterrows():
+        key = str(row["key"])
+        if key == "store_id" or not (
+            key.startswith(prefixes)
+            or (key.startswith("root_attrs.") and key.removeprefix("root_attrs.") in root_attr_suffixes)
+        ):
+            continue
+        exact_rows.append({"key": key, "value": json_value(row)})
+    exact_rows.sort(key=lambda item: (str(item["key"]), json.dumps(item["value"], sort_keys=True, default=str)))
+    payload: dict[str, object] = {"profile": profile, "parameters": exact_rows}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    candidate_configs = values("config_hashes.candidate")
     return {
         "id": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
         "profile": profile,
-        "label": (
-            f"{profile} · candidate "
-            f"{str(payload['candidate_configs'][0] if payload['candidate_configs'] else 'unknown')[:12]}"
-        ),
+        "payload": payload,
+        "label": (f"{profile} · candidate {str(candidate_configs[0] if candidate_configs else 'unknown')[:12]}"),
     }
 
 
@@ -906,6 +996,7 @@ def _contract_frames(
         frame.insert(1, "contract_id", contract["id"])
         frame.insert(2, "contract", contract["label"])
         frame.insert(3, "profile", contract["profile"])
+        frame["contract_payload_json"] = json.dumps(contract["payload"], sort_keys=True, separators=(",", ":"))
         annotated.append(frame)
     if not annotated:
         return pd.DataFrame()
@@ -922,6 +1013,7 @@ def _contract_additive_totals(
     columns = (
         "contract_id",
         "contract",
+        "contract_payload_json",
         "profile",
         "store_count",
         "rollout_count",
@@ -948,6 +1040,7 @@ def _contract_additive_totals(
             {
                 "contract_id": store["contract_id"],
                 "contract": store["contract"],
+                "contract_payload_json": store.get("contract_payload_json", "{}"),
                 "profile": store["profile"],
                 "store_count": 1,
                 "rollout_count": int(store_row.get("rollouts", 0)),
@@ -965,13 +1058,13 @@ def _contract_additive_totals(
     source = pd.DataFrame(rows)
     additive = {
         field: (field, "sum")
-        for field in columns[3:]
+        for field in columns[4:]
         if field not in {"store_count", "q_h_state_count", "q_h_trainable_count", "q_h_padding_count"}
     }
     for field_name in ("q_h_state_count", "q_h_trainable_count", "q_h_padding_count"):
         additive[field_name] = (field_name, lambda values: values.sum(min_count=1))
     grouped = (
-        source.groupby(["contract_id", "contract", "profile"], dropna=False, sort=True)
+        source.groupby(["contract_id", "contract", "contract_payload_json", "profile"], dropna=False, sort=True)
         .agg(store_count=("store_count", "sum"), **additive)
         .reset_index()
     )
@@ -991,6 +1084,7 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
     columns = (
         "contract_id",
         "contract",
+        "contract_payload_json",
         "profile",
         "generation_cohort_id",
         "generation_cohort",
@@ -1021,7 +1115,9 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
         source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
     grouped = (
         source.groupby(
-            ["contract_id", "contract", "profile", "generation_cohort_id", "family"], dropna=False, sort=True
+            ["contract_id", "contract", "contract_payload_json", "profile", "generation_cohort_id", "family"],
+            dropna=False,
+            sort=True,
         )
         .agg(
             generation_cohort=("generation_cohort", "first"),
@@ -1049,6 +1145,7 @@ def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
     columns = (
         "contract_id",
         "contract",
+        "contract_payload_json",
         "profile",
         "target_valid",
         "gt_label_valid",
@@ -1060,7 +1157,15 @@ def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=columns)
     return (
         targets.groupby(
-            ["contract_id", "contract", "profile", "target_valid", "gt_label_valid", "gt_match_status"],
+            [
+                "contract_id",
+                "contract",
+                "contract_payload_json",
+                "profile",
+                "target_valid",
+                "gt_label_valid",
+                "gt_match_status",
+            ],
             dropna=False,
             sort=True,
         )
@@ -1076,6 +1181,7 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
     columns = (
         "contract_id",
         "contract",
+        "contract_payload_json",
         "profile",
         "generation_cohort_id",
         "generation_cohort",
@@ -1102,7 +1208,16 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
         source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
     grouped = (
         source.groupby(
-            ["contract_id", "contract", "profile", "generation_cohort_id", "generation_cohort"], dropna=False, sort=True
+            [
+                "contract_id",
+                "contract",
+                "contract_payload_json",
+                "profile",
+                "generation_cohort_id",
+                "generation_cohort",
+            ],
+            dropna=False,
+            sort=True,
         )
         .agg(store_count=("store_id", "nunique"), **{column: (column, "sum") for column in count_columns})
         .reset_index()
@@ -1128,6 +1243,11 @@ def _corpus_endpoints(
         frame.insert(2, "profile", str(store["profile"]))
         frame.insert(3, "contract_id", contract["id"])
         frame.insert(4, "contract", contract["label"])
+        frame.insert(
+            5,
+            "contract_payload_json",
+            json.dumps(contract.get("payload", {}), sort_keys=True, separators=(",", ":")),
+        )
         rows.append(frame)
     columns = (
         "store_id",
@@ -1135,6 +1255,7 @@ def _corpus_endpoints(
         "profile",
         "contract_id",
         "contract",
+        "contract_payload_json",
         *THESIS_REPORT_TABLE_COLUMNS["reconstruction_endpoints"][1:],
     )
     if not rows:
@@ -1154,11 +1275,24 @@ def _corpus_endpoints(
 def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
     """Count suspicious rows by kind and severity without pooling causes."""
 
-    columns = ("contract_id", "contract", "profile", "kind", "severity", "count", "store_count")
+    columns = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "kind",
+        "severity",
+        "count",
+        "store_count",
+    )
     if failures.empty:
         return pd.DataFrame(columns=columns)
     return (
-        failures.groupby(["contract_id", "contract", "profile", "kind", "severity"], dropna=False, sort=True)
+        failures.groupby(
+            ["contract_id", "contract", "contract_payload_json", "profile", "kind", "severity"],
+            dropna=False,
+            sort=True,
+        )
         .agg(count=("message", "size"), store_count=("store_id", "nunique"))
         .reset_index()
         .loc[:, columns]
@@ -1320,7 +1454,17 @@ def _append_store_rows(
     rows["runtime_storage"].append(
         {
             "store_id": store_id,
-            **storage,
+            **{
+                key: storage[key]
+                for key in (
+                    "file_count",
+                    "total_bytes",
+                    "bytes_per_candidate",
+                    "bytes_per_candidate_reason",
+                    "file_count_limit",
+                    "bytes_per_candidate_limit",
+                )
+            },
             "status": evidence_status,
             "source": "inspection.runtime_storage_statistics",
         }

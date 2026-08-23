@@ -253,9 +253,9 @@ def _preflight_payload(
             warnings.append(message)
 
     storage = runtime_storage_statistics(reader.store_dir, candidate_count=int(counts.get("candidates") or 0))
-    if (
-        storage["file_count"] > storage["file_count_limit"]
-        or storage["bytes_per_candidate"] > storage["bytes_per_candidate_limit"]
+    bytes_per_candidate = storage["bytes_per_candidate"]
+    if storage["file_count"] > storage["file_count_limit"] or (
+        bytes_per_candidate is not None and bytes_per_candidate > storage["bytes_per_candidate_limit"]
     ):
         message = "excessive_chunk_file_bloat"
         if profile == "production":

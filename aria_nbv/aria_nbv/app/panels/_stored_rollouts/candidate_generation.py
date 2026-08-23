@@ -16,6 +16,7 @@ from ....rollouts.inspection import (
     CANDIDATE_GROUP_FIELDS,
     candidate_selection_pooled_summary_rows,
     candidate_selection_transition_rows,
+    pairwise_finite_pearson,
 )
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
@@ -252,40 +253,17 @@ def _trajectory_figure(points: pd.DataFrame, frames: pd.DataFrame) -> go.Figure:
 
 
 def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> dict[str, object]:
-    """Prepare pair-local finite Pearson evidence, including auditable support counts."""
+    """Adapt the typed domain reducer to the Streamlit dataframe surface."""
 
-    numeric = frame.loc[:, columns].apply(pd.to_numeric, errors="coerce")
-    correlation = pd.DataFrame(np.nan, index=columns, columns=columns, dtype=float)
-    counts = pd.DataFrame(0, index=columns, columns=columns, dtype=int)
-    reasons: dict[tuple[str, str], str] = {}
-    has_finite_off_diagonal = False
-    for left in columns:
-        for right in columns:
-            values = numeric.loc[:, [left, right]].to_numpy(dtype=float)
-            finite_values = values[np.isfinite(values).all(axis=1)]
-            n = len(finite_values)
-            counts.loc[left, right] = n
-            if n < 2:
-                reasons[(left, right)] = f"insufficient finite paired rows (n={n}; need n>=2)"
-                continue
-            left_values, right_values = finite_values[:, 0], finite_values[:, 1]
-            if np.unique(left_values).size == 1 or np.unique(right_values).size == 1:
-                reasons[(left, right)] = "constant pair value (zero variance)"
-                continue
-            value = float(pd.Series(left_values).corr(pd.Series(right_values)))
-            if not np.isfinite(value):
-                reasons[(left, right)] = "non-finite Pearson correlation after finite pair filtering"
-                continue
-            correlation.loc[left, right] = value
-            if left != right:
-                has_finite_off_diagonal = True
-                if n == 2:
-                    reasons[(left, right)] = "n=2 is algebraically degenerate: |r|=1 is not substantive evidence"
+    result = pairwise_finite_pearson(
+        {column: pd.to_numeric(frame[column], errors="coerce").to_numpy() for column in columns},
+        columns,
+    )
     return {
-        "correlation": correlation,
-        "counts": counts,
-        "reasons": reasons,
-        "has_finite_off_diagonal": has_finite_off_diagonal,
+        "correlation": pd.DataFrame(result.correlation, index=columns, columns=columns),
+        "counts": pd.DataFrame(result.counts, index=columns, columns=columns),
+        "reasons": result.reasons,
+        "has_finite_off_diagonal": result.has_finite_off_diagonal,
     }
 
 

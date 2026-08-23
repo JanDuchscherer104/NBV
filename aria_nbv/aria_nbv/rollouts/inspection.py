@@ -8,6 +8,7 @@ choose its own rendering library without owning rollout-store semantics.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import pickle
 import tempfile
@@ -64,6 +65,62 @@ CANDIDATE_SELECTION_GROUP_FIELDS: tuple[CandidateSelectionGroupField, ...] = (
     "mixture",
     "position_strategy",
 )
+
+
+@dataclass(frozen=True)
+class PairwiseCorrelationResult:
+    """Pair-local finite Pearson evidence for one set of named components."""
+
+    columns: tuple[str, ...]
+    correlation: np.ndarray
+    counts: np.ndarray
+    reasons: dict[tuple[str, str], str]
+    has_finite_off_diagonal: bool
+
+
+def pairwise_finite_pearson(
+    values: Mapping[str, Iterable[object]], columns: Collection[str]
+) -> PairwiseCorrelationResult:
+    """Compute finite paired Pearson correlations without pooling missing rows.
+
+    Each pair has its own finite-row denominator.  Fewer than two paired rows,
+    constant values, and non-finite results remain unavailable with an explicit
+    reason; in particular, ``n=2`` is retained as degenerate evidence rather
+    than silently presented as a substantive correlation.
+    """
+
+    names = tuple(columns)
+    numeric = {name: np.asarray(list(values[name]), dtype=float) for name in names}
+    correlation = np.full((len(names), len(names)), np.nan, dtype=float)
+    counts = np.zeros((len(names), len(names)), dtype=np.int64)
+    reasons: dict[tuple[str, str], str] = {}
+    has_finite_off_diagonal = False
+    for left_index, left in enumerate(names):
+        for right_index, right in enumerate(names):
+            length = min(numeric[left].size, numeric[right].size)
+            paired = np.column_stack((numeric[left][:length], numeric[right][:length]))
+            finite_values = paired[np.isfinite(paired).all(axis=1)]
+            n = int(len(finite_values))
+            counts[left_index, right_index] = n
+            if n < 2:
+                reasons[(left, right)] = f"insufficient finite paired rows (n={n}; need n>=2)"
+                continue
+            left_values, right_values = finite_values[:, 0], finite_values[:, 1]
+            if np.unique(left_values).size == 1 or np.unique(right_values).size == 1:
+                reasons[(left, right)] = "constant pair value (zero variance)"
+                continue
+            value = float(np.corrcoef(left_values, right_values)[0, 1])
+            if not np.isfinite(value):
+                reasons[(left, right)] = "non-finite Pearson correlation after finite pair filtering"
+                continue
+            correlation[left_index, right_index] = value
+            if left != right:
+                has_finite_off_diagonal = True
+                if n == 2:
+                    reasons[(left, right)] = "n=2 is algebraically degenerate: |r|=1 is not substantive evidence"
+    return PairwiseCorrelationResult(names, correlation, counts, reasons, has_finite_off_diagonal)
+
+
 _CANDIDATE_SELECTION_TEMPORAL_METRICS = (
     "allocation_share",
     "valid_share",
@@ -466,12 +523,13 @@ def rollout_header_summary(
         "physical_store_bytes": int(storage["total_bytes"]),
         "physical_bytes_per_rollout": _ratio(int(storage["total_bytes"]), rollouts),
         "physical_bytes_per_candidate": _ratio(int(storage["total_bytes"]), candidates),
+        "physical_bytes_per_candidate_reason": storage["bytes_per_candidate_reason"],
         "return_semantics": root_attrs.get("return_semantics"),
         "discount_gamma": _finite_or_none(root_attrs.get("discount_gamma")),
     }
 
 
-def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict[str, float | int]:
+def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict[str, float | int | str | None]:
     """Return compact file-count and byte-cost statistics for one store.
 
     Args:
@@ -490,11 +548,13 @@ def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict
             continue
         file_count += 1
         total_bytes += int(path.stat().st_size)
-    denominator = max(1, int(candidate_count))
+    denominator = int(candidate_count)
+    bytes_per_candidate = float(total_bytes) / float(denominator) if denominator > 0 else None
     return {
         "file_count": file_count,
         "total_bytes": total_bytes,
-        "bytes_per_candidate": float(total_bytes) / float(denominator),
+        "bytes_per_candidate": bytes_per_candidate,
+        "bytes_per_candidate_reason": None if denominator > 0 else "unavailable: no persisted candidate rows",
         "file_count_limit": max(2000, denominator * 20),
         "bytes_per_candidate_limit": 2_000_000.0,
     }
@@ -757,11 +817,18 @@ def candidate_population_evidence(
         accumulator.consume(row)
         pickle.dump(dict(row), spooled_rows, protocol=pickle.HIGHEST_PROTOCOL)
 
-    try:
+    signature = inspect.signature(audit_reader)
+    callback_parameter = signature.parameters.get("row_callback")
+    accepts_callback = callback_parameter is not None and callback_parameter.kind not in {
+        inspect.Parameter.POSITIONAL_ONLY,
+    }
+    accepts_kwargs = any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values())
+    if accepts_callback or accepts_kwargs:
+        # Signature inspection decides the protocol before invocation.  A
+        # TypeError raised inside a callback is therefore an actual producer
+        # failure and cannot trigger a second, duplicate read.
         audit_reader(reader, row_callback=consume)
-    except TypeError as error:
-        if "row_callback" not in str(error):
-            raise
+    else:
         for row in audit_reader(reader):  # type: ignore[operator]
             consume(row)
     spooled_rows.seek(0)

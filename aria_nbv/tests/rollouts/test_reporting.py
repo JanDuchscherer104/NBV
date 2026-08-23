@@ -41,12 +41,45 @@ from aria_nbv.rollouts.reporting import (
     _corpus_feasibility,
     _corpus_target_admission,
     _corpus_temporal_summary,
+    _persisted_rollout_contract,
     build_thesis_report_frames,
     serialize_thesis_report_bundle,
     write_thesis_report_bundle,
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
+    def frames(value: str) -> dict[str, pd.DataFrame]:
+        return {
+            "parameters": pd.DataFrame(
+                [
+                    {
+                        "store_id": "store",
+                        "key": "root_attrs.target_protocol_version",
+                        "value_text": value,
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                    {
+                        "store_id": "store",
+                        "key": "config_hashes.candidate",
+                        "value_text": "candidate-a",
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                ]
+            )
+        }
+
+    first = _persisted_rollout_contract(frames("v1"), "store", "rich")
+    second = _persisted_rollout_contract(frames("v0"), "store", "rich")
+    assert first["id"] != second["id"]
+    assert first["payload"]["parameters"] != second["payload"]["parameters"]
+    assert first["label"] == second["label"]
 
 
 def test_report_export_preserves_one_manifest_validation_promotion_and_statistics_call_per_store(
@@ -220,6 +253,9 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
     assert pooled.iloc[0]["finite_count"] == 2
     assert summary.totals["included_store_count"] == 3
     assert summary.totals["q_h_state_count"] is not None
+    for frame in (summary.candidate_support, summary.temporal_summary, summary.target_admission, summary.feasibility, summary.failure_counts, summary.endpoints, summary.contract_totals):
+        if not frame.empty:
+            assert "contract_payload_json" in frame.columns
 
 
 def test_report_profile_falls_back_to_explicit_campaign_profile_hash(tmp_path) -> None:

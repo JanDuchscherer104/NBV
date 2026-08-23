@@ -42,6 +42,7 @@ from aria_nbv.rollouts.inspection import (
     mask_combination_rows,
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
+    pairwise_finite_pearson,
     proposal_support_geometry,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
@@ -64,6 +65,37 @@ from aria_nbv.rollouts.inspection import (
 )
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_candidate_population_propagates_callback_type_error_without_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"rows": 0}
+
+    def audit_reader(_reader: object, *, row_callback) -> None:
+        calls["rows"] += 1
+        row_callback({"candidate_row_id": 1})
+
+    def failing_consume(_self: object, _row: dict[str, object]) -> None:
+        raise TypeError("callback-internal failure")
+
+    monkeypatch.setattr(inspection_module._CandidatePopulationAccumulator, "consume", failing_consume)
+
+    with pytest.raises(TypeError, match="callback-internal failure"):
+        candidate_population_evidence(object(), audit_reader=audit_reader)
+    assert calls["rows"] == 1
+
+
+def test_pairwise_finite_pearson_keeps_pair_local_support_and_degenerate_reason() -> None:
+    result = pairwise_finite_pearson({"left": [1.0, 2.0, np.inf], "right": [2.0, 4.0, 8.0]}, ("left", "right"))
+    assert result.counts.tolist() == [[2, 2], [2, 3]]
+    assert result.has_finite_off_diagonal
+    assert "n=2" in result.reasons[("left", "right")]
+
+
+def test_runtime_storage_statistics_does_not_fabricate_zero_candidate_ratio(tmp_path) -> None:
+    (tmp_path / "payload").write_bytes(b"payload")
+    stats = inspection_module.runtime_storage_statistics(tmp_path, candidate_count=0)
+    assert stats["bytes_per_candidate"] is None
+    assert stats["bytes_per_candidate_reason"] == "unavailable: no persisted candidate rows"
 
 
 def test_geometry_projections_keep_complete_shells_and_factual_selected_path(tmp_path, monkeypatch) -> None:

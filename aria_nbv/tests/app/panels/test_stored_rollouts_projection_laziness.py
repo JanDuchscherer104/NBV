@@ -634,6 +634,7 @@ def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
     assert "def candidate_group(" not in source
     assert "@st.cache_resource(show_spinner=False)" in source
     assert "Evaluating failure predicates" in source
+    assert "def __getattr__" not in source
 
 
 def test_stored_rollout_session_candidate_population_uses_captured_identity(monkeypatch: pytest.MonkeyPatch) -> None:

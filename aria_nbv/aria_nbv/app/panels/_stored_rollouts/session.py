@@ -176,24 +176,6 @@ class StoredRolloutSession:
         self._assert_current_identity()
         return self._reader
 
-    def __getattr__(self, name: str) -> Any:
-        """Proxy reader access for existing renderers while preserving the handle boundary."""
-
-        reader = object.__getattribute__(self, "_reader")
-        self._assert_current_identity()
-        value = getattr(reader, name)
-        if not callable(value):
-            return value
-
-        @wraps(value)
-        def guarded(*args: Any, **kwargs: Any) -> Any:
-            self._assert_current_identity()
-            result = value(*args, **kwargs)
-            self._assert_current_identity()
-            return result
-
-        return guarded
-
     def _assert_current_identity(self) -> str:
         current = _store_projection_identity(self._selected_path)
         if current != self.store_identity:
