@@ -297,6 +297,12 @@ def _render_target_inventory(inventory: dict[str, Any]) -> None:
         value = "Unavailable" if rows.empty else f"{int((rows['count'] == 0).sum()):,} / {len(rows):,}"
         cols[index].metric(label, value)
 
+    st.info(
+        "**Admission-quality handoff:** this page describes detected/GT availability and source geometry only. "
+        "The Campaign Generation page owns immutable admission decisions, including strict same-class oriented "
+        "IoU **> 0.20** and exactly one qualifying GT match; those criteria are not recomputed here."
+    )
+
     exclusion_rows = [
         {"population": population, "reason": reason, "count": int(evidence.get(field, 0))}
         for population, evidence in (("detected", detected), ("gt", gt))
@@ -562,46 +568,54 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
             findings_by_store.setdefault(finding.store_path, []).append(
                 {"code": finding.code, "message": finding.message, "severity": finding.severity}
             )
+    binding_rows: list[dict[str, Any]] = []
     for row in evidence.rollouts:
         path = str(row["path"])
         included = bool(row.get("included_in_training_totals"))
         status = "Compatible" if included else "Excluded"
         status_renderer = st.success if included else st.error
+        store_findings = findings_by_store.get(path, [])
+        blocking = [finding for finding in store_findings if finding["severity"] == "blocking"]
+        reasons = blocking or store_findings
+        reason = "; ".join(f"{finding['code']}: {finding['message']}" for finding in reasons)
         status_renderer(f"**{status}: {Path(path).name}**")
-        st.caption(f"Full path: `{path}`")
-        source_manifest = row.get("source_manifest_hash") or "unavailable"
-        split_manifests = row.get("split_manifest_hashes") or []
-        split_binding = ", ".join(str(value) for value in split_manifests) or "unavailable"
         validation = row.get("validation_status") or "unavailable"
-        st.caption(
-            f"Validation: **{validation}** · VIN root manifest: `{root_manifest}` · "
-            f"source manifest: `{source_manifest}` · split manifest: `{split_binding}`"
-        )
+        st.caption(f"Full path: `{path}` · validation: **{validation}**")
         if not included:
-            store_findings = findings_by_store.get(path, [])
-            blocking = [finding for finding in store_findings if finding["severity"] == "blocking"]
-            reasons = blocking or store_findings
             if reasons:
-                st.markdown("**Exclusion reason**")
-                for finding in reasons:
-                    st.markdown(f"- `{finding['code']}` — {finding['message']}")
+                st.caption(f"**Exclusion reason:** {reason}")
             else:
-                st.markdown(
-                    "**Exclusion reason** — bundle compatibility check failed without a store-specific message."
-                )
-        with st.expander(f"Detailed binding evidence · {Path(path).name}", expanded=False):
-            st.json(
-                {
-                    "store_path": path,
-                    "status": status,
-                    "validation_status": validation,
-                    "vin_root_manifest_hash": root_manifest,
-                    "source_manifest_hash": row.get("source_manifest_hash"),
-                    "split_manifest_hashes": split_manifests,
-                    "source_splits": row.get("source_splits", {}),
-                    "findings": findings_by_store.get(path, []),
-                }
-            )
+                st.caption("**Exclusion reason:** compatibility check failed without a store-specific message.")
+        binding_rows.append(
+            {
+                "store": Path(path).name,
+                "status": status,
+                "path": path,
+                "validation": validation,
+                "reason": reason or ("included in totals" if included else "unavailable"),
+                "vin_root_manifest_hash": root_manifest,
+                "source_manifest_hash": row.get("source_manifest_hash"),
+                "split_manifest_hashes": row.get("split_manifest_hashes") or [],
+                "source_splits": row.get("source_splits", {}),
+                "findings": store_findings,
+            }
+        )
+    with st.expander("Root/source binding hashes and raw findings", expanded=False):
+        st.caption("VIN root manifest, source manifest, split manifest, source splits, and raw finding details.")
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        key: json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else value
+                        for key, value in row.items()
+                    }
+                    for row in binding_rows
+                ]
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+    st.caption("Root/source binding identifiers are available in the collapsed disclosure above.")
 
 
 def _render_summary_metrics(
@@ -615,6 +629,7 @@ def _render_summary_metrics(
     state_count: str = pending
     trainable_count: str = pending
     storage_per_trainable: str = pending
+    storage_reason: str | None = None
     if readiness is not None and readiness.verdict == "Ready":
         train = next((row for row in readiness.stages if row.stage.value == "train"), None)
         train_scenes = _metric_value(None if train is None else len(train.scene_ids))
@@ -625,9 +640,11 @@ def _render_summary_metrics(
             (metric for metric in readiness.storage if metric.name == "rollout_bytes_per_trainable_candidate"),
             None,
         )
-        storage_per_trainable = (
-            "Unavailable" if storage is None or storage.value is None else _format_bytes(storage.value)
-        )
+        if storage is None or storage.value is None:
+            storage_per_trainable = "Unavailable"
+            storage_reason = storage.reason if storage is not None else "storage_metric_missing"
+        else:
+            storage_per_trainable = _format_bytes(storage.value)
     elif readiness is not None:
         train_scenes = chain_count = state_count = trainable_count = storage_per_trainable = "Blocked"
 
@@ -637,6 +654,13 @@ def _render_summary_metrics(
     columns[2].metric("Q_H states", state_count)
     columns[3].metric("Trainable candidates", trainable_count)
     columns[4].metric("Storage / trainable", storage_per_trainable)
+    if storage_reason is not None:
+        st.info(
+            "Storage / trainable is unavailable because "
+            f"`{storage_reason}`. The validated rollout-store byte total and a positive factual "
+            "trainable-candidate denominator must both be persisted before this ratio can be computed; "
+            "no value is inferred from file paths or row counts."
+        )
 
 
 def _rollout_rows(evidence: DatasetBundleEvidence) -> list[dict[str, Any]]:
@@ -924,8 +948,6 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 st.session_state[_DEEP_STATE_KEY] = (identity, deep)
             if deep is None:
                 st.info("Run the deep scan to materialize target and candidate denominators.")
-            else:
-                st.json(deep)
             root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
             if deep is not None:
                 deep_aggregate = deep.get("aggregate", {})
@@ -957,6 +979,8 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 )
                 if detected.get("available") or gt.get("available"):
                     _render_target_inventory(inventory)
+                with st.expander("Raw deep evidence JSON", expanded=False):
+                    st.json(deep)
             if not bool(root_target_scan.get("available")):
                 reason = root_target_scan.get("reason", "deep scan not run")
                 st.warning(

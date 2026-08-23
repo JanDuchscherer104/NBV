@@ -209,9 +209,8 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert f"Excluded: {blocked.name}" in visible
     assert blocked.as_posix() in visible
     assert "source_manifest_hash_mismatch" in visible
-    assert "VIN root manifest" in visible
-    assert "source manifest" in visible
-    assert "split manifest" in visible
+    assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
+    assert "Root/source binding identifiers are available" in visible
 
 
 def test_compatible_store_attribution_shows_root_and_source_bindings(
@@ -228,9 +227,8 @@ def test_compatible_store_attribution_shows_root_and_source_bindings(
     visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
     assert f"Compatible: {compatible.name}" in visible
     assert compatible.as_posix() in visible
-    assert source_hash in visible
-    assert "VIN root manifest" in visible
-    assert "split manifest" in visible
+    assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
+    assert "Root/source binding identifiers are available" in visible
 
 
 def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
