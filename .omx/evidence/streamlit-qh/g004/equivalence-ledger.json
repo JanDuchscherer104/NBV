@@ -12,7 +12,7 @@
       "repaired_source_head_oid": "05273423cb8413accc5e08c617224f87abbd6cb6",
       "review_thread": "PR95#discussion_r3836670981",
       "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_pooled_selection_materializes_families_absent_from_a_temperature_cohort",
-      "same_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_candidate_choice.py::test_pooled_candidate_selection_figure_shows_one_fraction_per_family_and_step",
+      "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_pooled_selection_materializes_families_absent_from_a_temperature_cohort",
       "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
     },
     {
@@ -52,7 +52,6 @@
     {
       "integration_commit": "7c45be2657",
       "proof": "https://github.com/JanDuchscherer104/ARIA-NBV/pull/101#discussion_r3836728980",
-      "repaired_source_commit": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
       "repaired_source_commit": "614a10006bf2de73b0e7e3a6f5ba2407373857d9",
       "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
       "review_thread": "PR101#discussion_r3836728980",
@@ -67,10 +66,14 @@
       "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
       "review_thread": "PR101#discussion_r3836728984",
       "source_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_open_session_rejects_mid_open_generation_swap",
-      "same_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_session_open_rejects_mid_open_generation_swap",
+      "same_regression_fixture_test": "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_stored_rollout_session_rejects_mid_handle_swap",
+      "source_regression_fixture_tests": [
+        "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_stored_rollout_session_rejects_mid_handle_swap",
+        "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_open_session_rejects_mid_open_generation_swap"
+      ],
       "integration_regression_fixture_tests": [
-        "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_session_open_rejects_mid_open_generation_swap",
-        "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_fixed_session_rejects_mid_handle_swap"
+        "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_stored_rollout_session_rejects_mid_handle_swap",
+        "aria_nbv/tests/app/panels/test_stored_rollouts_projection_laziness.py::test_open_session_rejects_mid_open_generation_swap"
       ],
       "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
     },
@@ -80,8 +83,8 @@
       "repaired_source_commit": "fbe8a081bcf3e9547d8fc40103c9ad9e6c61525e",
       "repaired_source_head_oid": "bf4f8fb231bb6444595d6adbf247a899de17d70a",
       "review_thread": "PR101#discussion_r3836728989",
-      "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_scientific_state_chunks_bound_raw_retention_and_reject_interleave",
-      "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_candidate_scientific_state_chunks_bound_raw_retention_and_reject_interleave",
+      "source_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_rollout_inspection_helpers_join_candidates_targets_and_groups",
+      "same_regression_fixture_test": "aria_nbv/tests/rollouts/test_inspection.py::test_rollout_inspection_helpers_join_candidates_targets_and_groups",
       "semantic_parity_result": "exact-head f24d9baded: combined product suite passed 389 tests in 137.31s"
     },
     {
