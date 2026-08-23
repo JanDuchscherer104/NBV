@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -277,6 +278,33 @@ def test_launch_ready_rejects_stale_smoke_evidence(tmp_path: Path) -> None:
     plan_path.write_text("{}", encoding="utf-8")
     campaign = _FakeCampaign(tmp_path, error=RuntimeError("stale smoke"))
     assert panel._launch_ready(campaign, plan_path) is False
+
+
+def test_admission_audit_renders_all_three_figures(monkeypatch) -> None:
+    """Real audit-shaped payloads reach reason, IoU, and scene plots."""
+
+    figures = []
+    monkeypatch.setattr(panel.st, "plotly_chart", lambda figure, **_: figures.append(figure))
+    monkeypatch.setattr(
+        panel.st, "columns", lambda count: [SimpleNamespace(metric=lambda *_args, **_kwargs: None)] * count
+    )
+    monkeypatch.setattr(panel.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(panel.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(panel.st, "download_button", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(panel, "_admission_plot_context", lambda *_args, **_kwargs: None)
+
+    panel._render_admission_audit(
+        {
+            "counts": {},
+            "reason_rows": [{"reason": "admitted", "count": 1, "admitted": True}],
+            "iou_rows": [{"oriented_iou": 0.4, "reason": "admitted"}],
+            "scene_rows": [{"admission_rate": 1.0}],
+            "rows": [],
+        },
+        threshold=0.2,
+    )
+
+    assert len(figures) == 3
 
 
 class _FakeColumn:

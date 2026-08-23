@@ -90,8 +90,7 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
     reason_frame = pd.DataFrame(payload.get("reason_rows", []))
     if not reason_frame.empty:
         _render_admission_figure(
-            px.bar(reason_frame, x="reason", y="count", color="admitted", title="Observed-target admission outcomes"),
-            width="stretch",
+            px.bar(reason_frame, x="reason", y="count", color="admitted", title="Observed-target admission outcomes")
         )
         _admission_plot_context(
             "Why did actor-visible detections enter or leave the campaign?",
@@ -117,8 +116,7 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
     scene_frame = pd.DataFrame(payload.get("scene_rows", []))
     if not scene_frame.empty:
         _render_admission_figure(
-            px.histogram(scene_frame, x="admission_rate", title="Admission-rate distribution across scenes"),
-            width="stretch",
+            px.histogram(scene_frame, x="admission_rate", title="Admission-rate distribution across scenes")
         )
         st.caption("Each scene contributes once; target-dense scenes do not dominate this availability view.")
     with st.expander("Admission evidence rows and export", expanded=False):
