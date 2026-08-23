@@ -243,7 +243,6 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
     if summary.failure_counts.empty:
         st.success("No validated aggregate failure rows were reported.")
         return
-    st.dataframe(summary.failure_counts, hide_index=True, width="stretch")
     _render_plot(
         px.bar(summary.failure_counts, x="kind", y="count", color="severity", title="Failures across included stores"),
         ScientificExplanation(
@@ -258,6 +257,9 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
             source_fields=("reporting.RolloutCorpusSummary.failure_counts", "inspection.suspicious_rollout_rows"),
         ),
     )
+    with st.expander("Failure rows and CSV"):
+        st.dataframe(summary.failure_counts, hide_index=True, width="stretch")
+        _download_frame("Download corpus failures CSV", "corpus-failures.csv", summary.failure_counts)
 
 
 def _render_role_legend() -> None:
@@ -405,17 +407,12 @@ def _render_store_header_summary(store_path: str) -> None:
             f"source rows {_format_fraction(header.get('reference_source_row_fraction'))}. "
             "Observed rows never define their own reference denominator."
         )
-    cost = pd.DataFrame(
-        [
-            {
-                "bytes_per_rollout": header.get("physical_bytes_per_rollout"),
-                "bytes_per_candidate": header.get("physical_bytes_per_candidate"),
-                "return_semantics": header.get("return_semantics"),
-                "discount_gamma": header.get("discount_gamma"),
-            }
-        ]
-    )
-    st.dataframe(cost, hide_index=True, width="stretch")
+    cost_cols = st.columns(4)
+    cost_cols[0].metric("Bytes / rollout", _format_bytes(header.get("physical_bytes_per_rollout")))
+    cost_cols[1].metric("Bytes / candidate", _format_bytes(header.get("physical_bytes_per_candidate")))
+    cost_cols[2].metric("Return semantics", str(header.get("return_semantics") or "n/a"))
+    discount_gamma = header.get("discount_gamma")
+    cost_cols[3].metric("Discount gamma", "n/a" if discount_gamma is None else f"{float(discount_gamma):g}")
     _download_json("Download coverage and cost JSON", "rollout-coverage-cost.json", header)
 
 

@@ -44,8 +44,33 @@ def render_stored_rollouts_page() -> None:
         validation = active_session.validation
         manifest_payload = active_session.manifest_payload
     except Exception as exc:
+        counts = selected_inventory or {}
+        st.subheader("Active-store validation")
+        diagnostic_cols = st.columns(5)
+        diagnostic_cols[0].metric("Schema", str(counts.get("schema_status", "unknown")))
+        diagnostic_cols[1].metric("Validation", "BLOCKED")
+        diagnostic_cols[2].metric("Rollouts", str(counts.get("observed_rollouts", "?")))
+        diagnostic_cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
+        diagnostic_cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
         st.error(f"The selected store cannot be opened: {type(exc).__name__}: {exc}")
+        st.info("Build the corpus summary after selecting only stores that pass validation.")
         download_json("Download store identity JSON", "rollout-store-identity.json", selected_inventory or {})
+        if st.toggle(
+            "Show advanced validation, topology, and raw metadata",
+            value=False,
+            help="The store is blocked; only diagnostic metadata and the failure reason are available.",
+        ):
+            st.json({"inventory": selected_inventory, "open_error": str(exc)}, expanded=False)
+            download_json(
+                "Download store metadata JSON",
+                "rollout-store-metadata.json",
+                {"inventory": selected_inventory, "open_error": str(exc)},
+            )
+            download_json(
+                "Download topology JSON",
+                "dataset-topology.json",
+                {"status": "blocked", "reason": str(exc)},
+            )
         return
 
     tabs = st.tabs(
@@ -104,6 +129,7 @@ def render_stored_rollouts_page() -> None:
                 inspect_rerun._render_inspect_export_rerun(
                     reader, store_path=store_path, manifest_payload=manifest_payload, paths=paths
                 )
+                overview._render_corpus_details(corpus_summary)
             else:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
