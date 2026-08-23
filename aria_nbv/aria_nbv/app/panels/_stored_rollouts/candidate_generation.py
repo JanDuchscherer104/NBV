@@ -17,6 +17,7 @@ from ....rollouts.inspection import (
     candidate_selection_transition_rows,
 )
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
+from ...scientific_labels import TheoryReferences
 from .shared import ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
@@ -1378,6 +1379,25 @@ def _render_candidate_geometry_diagnostics(
             f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "
             "Proposal coordinates are target-distance-normalized (RIGHT_HAND_Z_UP), never pooled absolute scene origins; factual trajectories remain a separate projection."
         )
+        axis_mode = "Hidden"
+        axis_frame_id: str | None = None
+        if "frame_id" in proposal_frames and not proposal_frames.empty:
+            axis_mode = st.selectbox(
+                "Proposal pose-axis overlay",
+                options=("Hidden", "One frame", "All frames"),
+                index=2,
+                help="Pose triads are optional context overlays; the candidate points remain the primary projection.",
+            )
+            if axis_mode not in {"Hidden", "One frame", "All frames"}:
+                # Streamlit's bare-mode fallback returns None; keep direct renderer tests deterministic.
+                axis_mode = "All frames"
+            if axis_mode == "One frame":
+                axis_frame_id = st.selectbox("Proposal frame", options=proposal_frames["frame_id"].astype(str).tolist())
+        proposal_axis_frames = (
+            _pose_axis_frames(proposal_frames, mode=axis_mode, frame_id=axis_frame_id)
+            if not proposal_frames.empty
+            else proposal_frames
+        )
         metric_options = [
             name
             for name in (
@@ -1520,7 +1540,12 @@ def _render_candidate_geometry_diagnostics(
                     axis_titles=("target-forward / d", "target-lateral / d", "up / d"),
                 )
                 if not frame_rows.empty:
-                    _add_geometry_anchors(figure_3d, frame_rows, three_dimensional=True, axis_frames=frame_rows)
+                    _add_geometry_anchors(
+                        figure_3d,
+                        frame_rows,
+                        three_dimensional=True,
+                        axis_frames=proposal_axis_frames,
+                    )
                 _render_plot(
                     figure_3d,
                     ScientificExplanation(
@@ -1625,9 +1650,12 @@ def _render_candidate_geometry_diagnostics(
                 ),
             )
 
+        frame_fields_required = {"rollout_row_id", "step_index", "rig_target_yaw_error_deg", "target_elevation_deg"}
+        geometry_fields_required = {"rollout_row_id", "step_index", "selected", "target_facing_error_deg"}
         frame_orientation = (
             _orientation_diagnostic_rows(root_geometry, proposal_frames)
-            if not proposal_frames.empty and {"rollout_row_id", "step_index"}.issubset(root_geometry.columns)
+            if frame_fields_required.issubset(proposal_frames.columns)
+            and geometry_fields_required.issubset(root_geometry.columns)
             else pd.DataFrame()
         )
         orientation_fields = {
@@ -1824,6 +1852,11 @@ def _render_candidate_geometry_diagnostics(
                             "candidates/target_root_gain",
                             "candidates/selected_mask",
                             "candidates/position_id",
+                        ),
+                        theory=TheoryReferences(
+                            equation_ids=("rl.target_root_gain_reward",),
+                            symbol_ids=("rl.reward_target",),
+                            term_ids=("target-root-gain-reward",),
                         ),
                     ),
                 )

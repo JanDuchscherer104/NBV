@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from ...scientific_labels import TheoryReferences
 from .candidate_generation import (
     _render_candidate_aggregate_breakdowns,
     _render_candidate_geometry_diagnostics,
@@ -119,6 +120,11 @@ def _render_targets_and_support(session_handle: object) -> None:
                         "oracle_label_mask",
                         "q_train_mask",
                         "selected_mask",
+                    ),
+                    theory=TheoryReferences(
+                        equation_ids=("rl.masked_candidate_selection",),
+                        symbol_ids=("rl.validity_mask",),
+                        term_ids=("validity-mask",),
                     ),
                 ),
             )
