@@ -468,7 +468,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
     assert "Download mask combinations CSV" in {button.label for button in app.get("download_button")}
     assert any(toggle.label == "Load complete candidate aggregate breakdowns" for toggle in app.toggle)
-    assert any(toggle.label == "Load bounded candidate geometry and reward plots" for toggle in app.toggle)
+    assert any(expander.label == "Bounded candidate geometry and reward plots" for expander in app.expander)
 
     app = _set_stored_rollout_workspace(app, "Failures")
     assert not app.exception

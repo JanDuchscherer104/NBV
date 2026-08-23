@@ -121,7 +121,12 @@ def _add_geometry_anchors(
             axis_columns = [f"{prefix}_{axis}" for axis in ("x", "y", "z")]
             if axis_frames.empty or not set(axis_columns).issubset(axis_frames.columns):
                 continue
-            axes = axis_frames.loc[:, axis_columns].to_numpy(dtype=float).reshape(-1, 3, 3)
+            try:
+                axes = axis_frames.loc[:, axis_columns].to_numpy(dtype=float).reshape(-1, 3, 3)
+            except (TypeError, ValueError):
+                # Malformed persisted axis payloads must not hide the bounded
+                # point projection; omit only the optional triad overlay.
+                continue
             add_pose_axes_to_figure(figure, centers, axes, title=label, scale=0.12, line_width=4)
 
 
@@ -503,6 +508,8 @@ def _support_count_caption(frame: pd.DataFrame) -> None:
     labels = {
         "candidate_total_count": "candidates",
         "candidate_count": "candidates",
+        "candidate_finite_count": "finite candidates",
+        "candidate_missing_count": "missing/unavailable candidates",
         "state_count": "states",
         "defined_state_count": "defined states",
         "scene_count": "scenes",
@@ -644,6 +651,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
             x="metric",
             y=value,
             color="population" if "population" in selected else None,
+            facet_row="declared_shell" if key == "spatial" and "declared_shell" in selected else None,
             barmode="group",
             title=title,
         )
@@ -668,21 +676,30 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
     if not collision.empty:
         collision = _select_support_facet(collision, "Collision support")
         _support_count_caption(collision)
-        collision_fields = [name for name in collision.columns if name.endswith("_count")]
-        if collision_fields:
-            collision_plot = collision[collision_fields].sum(numeric_only=True).rename("count").reset_index()
-            collision_plot.columns = ["metric", "count"]
+        rate_rows = collision.melt(
+            id_vars=[field for field in ("generation_cohort_id", "generation_cohort") if field in collision],
+            value_vars=[field for field in ("population_collision_rate", "collision_rate") if field in collision],
+            var_name="population",
+            value_name="fraction",
+        ).dropna(subset=["fraction"])
+        if not rate_rows.empty:
             _render_plot(
                 px.bar(
-                    collision_plot, x="metric", y="count", title="Collision applicability and evaluation denominators"
+                    rate_rows,
+                    x="generation_cohort_id",
+                    y="fraction",
+                    color="population",
+                    barmode="group",
+                    title="Collision rates: candidate population and state macro",
+                    labels={"fraction": "collision rate [fraction]"},
                 ),
                 _candidate_population_explanation(
-                    "How much of the candidate population was eligible for collision evaluation?",
-                    "Complete collision diagnostics for the selected exact candidate facet.",
-                    "Counts of applicable, evaluated, colliding, and not-applicable candidates.",
-                    "Collision rates use evaluated candidates only; applicability and missing evaluation remain separate.",
-                    "Most applicable candidates are evaluated and denominators are explicit.",
-                    "High non-applicability or low evaluation counts indicate evaluator coverage limitations.",
+                    "How often do evaluated candidates collide, at population and state-macro levels?",
+                    "Collision rates are shown separately for the complete candidate population and the state-then-scene macro.",
+                    "Collision rate is a dimensionless fraction of explicitly evaluated candidates.",
+                    "The population denominator is collision_evaluated_count; the macro averages finite state rates.",
+                    "The two estimates agree when candidate fan-out is balanced across states.",
+                    "A zero rate is a valid result; missing evaluation is not silently treated as no collision.",
                     "inspection.candidate_motion_support_evidence.collision",
                     evidence_role,
                     external_references=(
@@ -693,6 +710,85 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     ),
                 ),
             )
+        clearance_rows = collision.melt(
+            id_vars=[field for field in ("generation_cohort_id", "generation_cohort") if field in collision],
+            value_vars=[field for field in ("population_clearance_mean_m", "clearance_mean_m") if field in collision],
+            var_name="population",
+            value_name="clearance_m",
+        ).dropna(subset=["clearance_m"])
+        if not clearance_rows.empty:
+            _render_plot(
+                px.bar(
+                    clearance_rows,
+                    x="generation_cohort_id",
+                    y="clearance_m",
+                    color="population",
+                    barmode="group",
+                    title="Clearance means: candidate population and state macro",
+                    labels={"clearance_m": "minimum path clearance [m]"},
+                ),
+                _candidate_population_explanation(
+                    "How much geometric clearance is observed for the candidate population?",
+                    "Population and state-macro clearance means remain separate because they answer different weighting questions.",
+                    "Mean minimum path clearance in metres; collision and clearance are not the same metric.",
+                    "Only finite path_min_clearance_m values enter the population denominator or state macro.",
+                    "Positive clearance indicates separation from the evaluated obstacle boundary.",
+                    "Missing clearance means unavailable evaluation, not zero clearance.",
+                    "inspection.candidate_motion_support_evidence.collision",
+                    evidence_role,
+                    external_references=(
+                        (
+                            "Candidate inspection contract",
+                            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+                        ),
+                    ),
+                ),
+            )
+        count_fields = (
+            "collision_available_count",
+            "collision_evaluated_count",
+            "collision_not_applicable_count",
+            "collision_unavailable_count",
+            "collision_count",
+            "clearance_finite_count",
+            "collision_denominator",
+            "clearance_denominator",
+        )
+        count_rows = (
+            collision[[field for field in count_fields if field in collision]].sum().rename("count").reset_index()
+        )
+        count_rows.columns = ["metric", "count"]
+        if not count_rows.empty:
+            _render_plot(
+                px.bar(
+                    count_rows,
+                    x="metric",
+                    y="count",
+                    title="Collision and clearance applicability denominators",
+                    labels={"count": "candidate states [count]"},
+                ),
+                _candidate_population_explanation(
+                    "How much of the candidate shell is represented by collision and clearance evidence?",
+                    "Only explicit applicability, evaluation, collision, and finite-clearance denominator counts are shown.",
+                    "Counts of candidate states; zero collision is a valid measured count, while unavailable evidence remains separate.",
+                    "The eight displayed fields are additive denominators or outcomes and are never inferred from status flags.",
+                    "Evaluated and finite-clearance counts make the scientific rates auditable.",
+                    "A small denominator limits interpretation even when the observed collision count is zero.",
+                    "inspection.candidate_motion_support_evidence.collision",
+                    evidence_role,
+                    external_references=(
+                        (
+                            "Candidate inspection contract",
+                            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+                        ),
+                    ),
+                ),
+            )
+            with st.expander("Collision and clearance denominator rows", expanded=False):
+                st.dataframe(count_rows, hide_index=True, width="stretch")
+                _download_frame(
+                    "Download collision denominator CSV", "candidate-collision-denominators.csv", count_rows
+                )
 
     target_view = pd.DataFrame(population.get("target_view", []))
     if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty and "evidence" in target_view:
@@ -1199,13 +1295,13 @@ def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
         options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
-    breakdown = pd.DataFrame(composition_by_group.get(breakdown_by, []))
-    if breakdown_by == "position":
-        breakdown = _require_family_cohort_columns(breakdown, "Candidate mask-population breakdown")
+    breakdown = _require_family_cohort_columns(
+        pd.DataFrame(composition_by_group.get(breakdown_by, [])), "Candidate mask-population breakdown"
+    )
     count_fields = [name for name in ("actor_valid_count", "trainable_count", "selected_count") if name in breakdown]
     if not breakdown.empty and count_fields:
-        family_field = "family" if breakdown_by == "position" else breakdown_by
-        cohort_field = "generation_cohort_id" if "generation_cohort_id" in breakdown else None
+        family_field = "family"
+        cohort_field = "generation_cohort_id"
         long = breakdown.melt(
             id_vars=[field for field in (family_field, cohort_field) if field is not None],
             value_vars=count_fields,
@@ -1487,8 +1583,6 @@ def _render_candidate_geometry_diagnostics(
     if isinstance(root_geometry, dict):
         proposal_frames = pd.DataFrame(root_geometry.get("frames", []))
         root_geometry = pd.DataFrame(root_geometry.get("points", []))
-    if candidates.empty:
-        return
     with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
         st.caption(
             f"Interactive plots use {len(candidates):,} of {total_candidates:,} candidate rows. "

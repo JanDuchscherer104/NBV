@@ -15,11 +15,21 @@ from ....configs import PathConfig
 from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
+from ...scientific_labels import TheoryReferences
 from .session import _clear_stored_rollout_caches
 from .shared import _ROLE_COLORS, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
 from .shared import render_plot as _render_plot
+
+_INSPECTION_REFERENCE = (
+    "Inspection projection owner",
+    "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/rollouts/inspection.py",
+)
+_ADMISSION_REFERENCE = (
+    "Admission evidence owner",
+    "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py",
+)
 
 
 def _render_store_selector(
@@ -139,15 +149,34 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
     if summary.endpoints.empty:
         st.info("No validated endpoint rows are available.")
     else:
-        metric = next(
-            (
-                name
-                for name in ("endpoint_gain", "target_rri", "cumulative_target_root_gain")
-                if name in summary.endpoints
-            ),
-            None,
+        metric_options = [
+            name for name in ("endpoint_gain", "target_rri", "cumulative_target_root_gain") if name in summary.endpoints
+        ]
+        metric = (
+            st.selectbox(
+                "Endpoint metric",
+                options=metric_options,
+                format_func={
+                    "endpoint_gain": "Endpoint reconstruction gain",
+                    "target_rri": "Target RRI",
+                    "cumulative_target_root_gain": "Cumulative target-root gain",
+                }.get,
+            )
+            if metric_options
+            else None
         )
         if metric is not None:
+            endpoint_theory = {
+                "endpoint_gain": TheoryReferences(equation_ids=("entity.endpoint_gain",)),
+                "target_rri": TheoryReferences(
+                    symbol_ids=("entity.rri_e",), term_ids=("relative-reconstruction-improvement",)
+                ),
+                "cumulative_target_root_gain": TheoryReferences(
+                    equation_ids=("rl.cumulative_target_root_gain",),
+                    symbol_ids=("entity.target_root_gain_cumulative",),
+                    term_ids=("target-root-gain-reward",),
+                ),
+            }.get(metric)
             endpoint_rows = summary.endpoints.copy()
             if {"contract", "contract_id"}.issubset(endpoint_rows.columns):
                 endpoint_rows["contract_facet"] = (
@@ -162,12 +191,12 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
                 color="policy",
                 facet_col="horizon",
                 hover_data=[name for name in ("store_id", "profile", "contract_id") if name in endpoint_rows],
-                title="Store-qualified factual endpoint distributions",
+                title=f"Store-qualified factual {metric} distributions",
             )
             _render_plot(
                 fig,
                 ScientificExplanation(
-                    question="How are factual rollout endpoints distributed across the selected compatible shards?",
+                    question=f"How is {metric} distributed across the selected compatible shards?",
                     answer="This plot answers the question using the persisted evidence rows and preserves the denominator and comparison caveats below.",
                     sections=(
                         ExplanationSection(
@@ -194,6 +223,8 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
                     ),
                     evidence_role="oracle/evaluation",
                     source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
+                    theory=endpoint_theory,
+                    external_references=(_INSPECTION_REFERENCE,),
                 ),
             )
         with st.expander("Endpoint rows and CSV", expanded=False):
@@ -248,6 +279,7 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
                 ),
                 evidence_role="oracle/evaluation",
                 source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets", "GT match audit"),
+                external_references=(_ADMISSION_REFERENCE,),
             ),
         )
         with st.expander("Target-admission rows and CSV", expanded=False):
@@ -332,6 +364,8 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
                         "candidate composition",
                         "validated stores",
                     ),
+                    theory=TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+                    external_references=(_INSPECTION_REFERENCE,),
                 ),
             )
         with st.expander("Candidate-family support rows and CSV", expanded=False):
@@ -397,6 +431,8 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
                 ),
                 evidence_role="actor-visible",
                 source_fields=("reporting.RolloutCorpusSummary.feasibility", "candidate_collision_support"),
+                theory=TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+                external_references=(_INSPECTION_REFERENCE,),
             ),
         )
         with st.expander("Feasibility rows and CSV", expanded=False):
@@ -446,6 +482,7 @@ def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:
             ),
             evidence_role="provenance",
             source_fields=("reporting.RolloutCorpusSummary.failure_counts", "inspection.suspicious_rollout_rows"),
+            external_references=(_INSPECTION_REFERENCE,),
         ),
     )
     with st.expander("Failure rows and CSV"):
@@ -572,6 +609,12 @@ def _render_trust_and_topology(
                     ),
                     evidence_role="provenance",
                     source_fields=("rollout manifest source lineage", "VIN manifest", "PathConfig", "mesh paths"),
+                    external_references=(
+                        (
+                            "Dataset topology owner",
+                            "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/dataset_topology.py",
+                        ),
+                    ),
                 ),
             )
         modality_df = pd.DataFrame(topology.modality_rows())
