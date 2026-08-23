@@ -14,16 +14,241 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+import plotly.express as px
 import streamlit as st
 
+from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
 from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaignConfig
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 
+from ..scientific_labels import TheoryReferences
+from ._stored_rollouts.shared import ExplanationSection, ScientificExplanation
+from ._stored_rollouts.shared import plot_control_key as _plot_control_key
+from ._stored_rollouts.shared import render_plot as _render_plot
+
 _DEFAULT_CONFIG = ".configs/build_rollouts_v1_cuda_campaign.toml"
+_REVIEWED_CONFIGS = (
+    _DEFAULT_CONFIG,
+    ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml",
+)
 _SAFE_SESSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _MAX_NEW_UNITS = 100
 _MAX_TIME_BUDGET_MINUTES = 24 * 60
 _MAX_FREE_DISK_FLOOR_GB = 1024
+_ADMISSION_STATE_KEY = "campaign_generation_admission_evidence"
+
+
+def _admission_audit_identity(path: Path) -> tuple[str, int, int, int, int] | None:
+    """Bind admission state to one immutable audit entry."""
+
+    try:
+        resolved = path.resolve()
+        stat = resolved.stat()
+    except OSError:
+        return None
+    return (resolved.as_posix(), stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+@st.cache_data(show_spinner="Validating campaign admission evidence…", max_entries=8)
+def _cached_admission_evidence(
+    path: str,
+    identity: tuple[str, int, int, int, int],
+    *,
+    campaign_id: str,
+    source_manifest_hash: str,
+    admission_audit_hash: str,
+) -> dict[str, Any]:
+    """Read one provenance-bound audit while retaining its identity in the cache key."""
+
+    del identity
+    return read_campaign_admission_evidence(
+        Path(path),
+        expected_campaign_id=campaign_id,
+        expected_source_manifest_hash=source_manifest_hash,
+        expected_audit_hash=admission_audit_hash,
+    ).to_jsonable()
+
+
+def _render_admission_figure(figure: Any, explanation: ScientificExplanation, key: str) -> None:
+    """Render one admission figure through the shared scientific explanation seam."""
+
+    _render_plot(figure, explanation, log_y_key=_plot_control_key("campaign-admission", key))
+
+
+def _admission_explanation(kind: str, *, threshold: float) -> ScientificExplanation:
+    """Build consistent scientific context for one admission audit figure."""
+
+    if kind == "reasons":
+        question = "Why did observed targets enter or leave campaign admission?"
+        answer = "Each bar counts an audited actor-visible target; rejection reasons remain explicit and are never converted into low-quality training examples."
+        metric = "Counts of observed targets; the denominator is the audited observed-target population."
+        denominator = "Ambiguous, unmatched, invalid, and below-threshold rows remain in the denominator with their persisted reason."
+        intuition = (
+            "A large rejected share identifies target-source or matching coverage work, not a policy-quality score."
+        )
+        theory = TheoryReferences(
+            equation_ids=(
+                "entity.target_identity_iou",
+                "entity.target_identity_threshold",
+                "entity.target_identity_qualified_count",
+            )
+        )
+    elif kind == "iou":
+        question = "How much same-class oriented 3D overlap supports target association?"
+        answer = "The ECDF shows the empirical overlap distribution for audited same-class candidate/GT comparisons. Admission requires exactly one qualifying match strictly above the threshold."
+        metric = "Oriented 3D IoU is dimensionless; the dashed line marks the strict threshold. Equality is rejected."
+        denominator = "Only scored same-class comparisons enter the ECDF; missing or invalid geometry is not silently treated as zero overlap."
+        intuition = (
+            "The curve crossing the threshold shows availability of geometric evidence, not correctness by itself."
+        )
+        theory = None
+    else:
+        question = "How is admission coverage distributed across source scenes?"
+        answer = "Each scene contributes one admission-rate observation, preventing target-dense scenes from dominating this availability diagnostic."
+        metric = "Admission rate is the fraction of observed targets admitted within one scene."
+        denominator = "The denominator is observed targets in that scene; scenes with no observed targets are not fabricated into zero-rate samples."
+        intuition = "Variation across scenes indicates source or matching heterogeneity and should be inspected alongside target counts."
+        theory = None
+    return ScientificExplanation(
+        question=question,
+        answer=answer,
+        sections=(
+            ExplanationSection(
+                "population",
+                "Validated campaign admission evidence is bound to one campaign, source manifest, and audit identity.",
+            ),
+            ExplanationSection("metric / units", metric),
+            ExplanationSection("denominator / missingness", denominator),
+            ExplanationSection(
+                "evidence role",
+                "Admission is privileged oracle/evaluation evidence; it is not actor-visible input or a training mask.",
+            ),
+            ExplanationSection("intuition", intuition),
+            ExplanationSection(
+                "warning", f"Same-class oriented-IoU threshold is strict: > {threshold:.2f}; equality does not qualify."
+            ),
+        ),
+        evidence_role="oracle/evaluation",
+        source_fields=(
+            "oracle.pipelines.admission_evidence.read_campaign_admission_evidence",
+            "admission-audit.json",
+            "campaign/source/audit binding",
+        ),
+        theory=theory,
+        external_references=(
+            (
+                "Admission evidence contract",
+                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py",
+            ),
+        ),
+    )
+
+
+def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> None:
+    """Render validated admission evidence as metrics and plot-first diagnostics."""
+
+    counts = payload["counts"]
+    metric_groups = (
+        (
+            ("Observed targets", "observed"),
+            ("Admitted", "admitted"),
+            ("Rejected", "rejected"),
+            ("Same-class overlap scored", "same_class_scored"),
+        ),
+        (
+            ("Zero-target samples", "zero_observation_samples"),
+            ("Scenes containing zero-target samples", "scenes_with_zero_observation_samples"),
+            ("Zero-only scenes", "zero_only_scenes"),
+            ("Ambiguous", "ambiguous"),
+            ("Duplicate GT groups", "duplicate_gt_groups"),
+        ),
+    )
+    for group in metric_groups:
+        for column, (label, key) in zip(st.columns(len(group)), group, strict=True):
+            column.metric(label, f"{int(counts.get(key, 0)):,}")
+    reason_frame = pd.DataFrame(payload.get("reason_rows", []))
+    if not reason_frame.empty:
+        _render_admission_figure(
+            px.bar(reason_frame, x="reason", y="count", color="admitted", title="Observed-target admission outcomes"),
+            _admission_explanation("reasons", threshold=threshold),
+            "reasons",
+        )
+    iou_frame = pd.DataFrame(payload.get("iou_rows", []))
+    if not iou_frame.empty:
+        figure = px.ecdf(
+            iou_frame,
+            x="oriented_iou",
+            color="reason",
+            markers=True,
+            title="Same-class oriented-IoU empirical distribution",
+        )
+        figure.add_vline(x=float(threshold), line_dash="dash", annotation_text=f"strict admission > {threshold:.2f}")
+        _render_admission_figure(
+            figure,
+            _admission_explanation("iou", threshold=threshold),
+            "iou",
+        )
+    scene_frame = pd.DataFrame(payload.get("scene_rows", []))
+    observed_scene_frame = scene_frame.dropna(subset=["admission_rate"])
+    if not observed_scene_frame.empty:
+        _render_admission_figure(
+            px.histogram(
+                observed_scene_frame,
+                x="admission_rate",
+                title="Admission-rate distribution across scenes with observed targets",
+            ),
+            _admission_explanation("scenes", threshold=threshold),
+            "scenes",
+        )
+    with st.expander("Admission evidence rows and export", expanded=False):
+        st.dataframe(pd.DataFrame(payload.get("rows", [])), hide_index=True, width="stretch")
+        st.download_button(
+            "Download validated admission evidence JSON",
+            data=json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            file_name="campaign_admission_evidence.json",
+            mime="application/json",
+            on_click="ignore",
+        )
+
+
+def _render_admission_section(campaign: Any, plan_path: Path) -> None:
+    """Load campaign admission evidence only after explicit user dispatch."""
+
+    cfg = campaign.config
+    audit_path = cfg.output_root / "admission-audit.json"
+    identity = _admission_audit_identity(audit_path)
+    st.subheader("Target admission audit")
+    st.caption(
+        f"Same-class oriented-IoU admission requires exactly one match strictly greater than {cfg.observed_target_iou_threshold:.2f}; equality is rejected."
+    )
+    if st.button(
+        "Load admission audit",
+        disabled=identity is None or not plan_path.is_file(),
+        key="campaign_load_admission_audit",
+    ):
+        try:
+            assert identity is not None
+            plan = campaign.load_plan(plan_path)
+            payload = _cached_admission_evidence(
+                audit_path.as_posix(),
+                identity,
+                campaign_id=cfg.campaign_id,
+                source_manifest_hash=plan.source_manifest_hash,
+                admission_audit_hash=plan.admission_audit_hash,
+            )
+            st.session_state[_ADMISSION_STATE_KEY] = (identity, payload)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            st.session_state.pop(_ADMISSION_STATE_KEY, None)
+            st.error(f"Admission evidence unavailable: {exc}")
+    state = st.session_state.get(_ADMISSION_STATE_KEY)
+    if state is not None and state[0] != identity:
+        st.session_state.pop(_ADMISSION_STATE_KEY, None)
+        state = None
+    if state is None:
+        st.info("Render a deterministic plan, then load the provenance-bound admission audit.")
+        return
+    _render_admission_audit(state[1], threshold=cfg.observed_target_iou_threshold)
 
 
 def build_campaign_argv(
@@ -155,7 +380,7 @@ def _disk_usage_path(path: Path) -> Path:
 def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit presentation
     """Render controls and typed status without owning campaign semantics."""
     st.header("Campaign Generation")
-    config_text = st.selectbox("Reviewed campaign config", [_DEFAULT_CONFIG], key="campaign_config_path")
+    config_text = st.selectbox("Reviewed campaign config", _REVIEWED_CONFIGS, key="campaign_config_path")
     try:
         config_path = resolve_config_toml_path(config_text)
         campaign = _campaign(config_path)
@@ -270,6 +495,7 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
             },
         }
     )
+    _render_admission_section(campaign, plan_path)
 
     action = None
     cols = st.columns(6)

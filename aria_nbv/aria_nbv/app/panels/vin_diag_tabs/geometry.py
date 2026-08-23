@@ -15,7 +15,7 @@ from ....data_handling import VinSnippetView
 from ....vin.diagnostics import build_alignment_figures
 from ....vin.diagnostics.plotting import build_geometry_overview_figure, build_semidense_projection_figure
 from ....vin.ordinal import coral_loss
-from ..common import _info_popover
+from ..common import _info_popover, current_scientific_label
 from ..data import scene_plot_options_ui
 from .context import VinDiagContext
 
@@ -353,7 +353,7 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             else:
                 candidate_plot_mode = "scalar"
                 candidate_color_values = batch.rri
-                candidate_color_title = "oracle_rri"
+                candidate_color_title = current_scientific_label("rri")
         case "voxel_valid_frac":
             values = pred.voxel_valid_frac
             if values is None:

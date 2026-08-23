@@ -15,7 +15,7 @@ from ...data_handling import EfmSnippetView
 from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...rri_metrics.rri import RriResult
-from .common import _info_popover, _pretty_label
+from .common import _info_popover, _pretty_label, current_scientific_label
 
 
 def render_rri_page(
@@ -56,7 +56,7 @@ def render_rri_page(
             rri,
             labels,
             bar_color_map,
-            title=_pretty_label("Oracle RRI per candidate"),
+            title=current_scientific_label("oracle_rri") + " per candidate",
         ),
         width="stretch",
     )
@@ -73,7 +73,11 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_pretty_label("Chamfer-like (bidirectional)"),
+            title=(
+                current_scientific_label("point_to_mesh_error")
+                + " and "
+                + current_scientific_label("mesh_to_point_error")
+            ),
         ),
         width="stretch",
     )
@@ -89,7 +93,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_pretty_label("Point→Mesh (accuracy)"),
+            title=current_scientific_label("point_to_mesh_error"),
         ),
         width="stretch",
     )
@@ -105,7 +109,7 @@ def render_rri_page(
             labels,
             bar_color_map,
             baseline_label=baseline_label,
-            title=_pretty_label("Mesh→Point (completeness)"),
+            title=current_scientific_label("mesh_to_point_error"),
         ),
         width="stretch",
     )

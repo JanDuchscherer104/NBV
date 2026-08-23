@@ -282,6 +282,7 @@ def _make_stub_backbone() -> EvlBackboneOutput:
         occ_pr=scalar_grid,
         occ_input=scalar_grid * 2.0,
         free_input=scalar_grid * 3.0,
+        free_input_provenance="native_evl_v1",
         counts=torch.ones((1, 2, 2, 2), dtype=torch.int64),
         counts_m=torch.ones((1, 2, 2, 2), dtype=torch.int64) * 2,
         voxel_select_t=torch.zeros((1, 1), dtype=torch.int64),
@@ -800,7 +801,7 @@ def _write_test_store(
         created_at="2026-03-29T00:00:00Z",
         source={"dataset_config": dataset_config or {}},
         oracle={"max_candidates": 4},
-        vin={"pad_points": 4},
+        vin={"pad_points": 4, "free_input_provenance": "native_evl_v1"} if include_backbone else {"pad_points": 4},
         materialized_blocks=VinOfflineMaterializedBlocks(
             backbone=include_backbone,
             depths=True,
@@ -1271,6 +1272,56 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     assert torch.equal(batch.trajectory.time_ns, torch.tensor([100, 200], dtype=torch.int64))  # noqa: S101
 
 
+def test_vin_offline_dataset_rejects_conflicting_rich_backbone_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rich backbone payload labels must agree with the V10 manifest."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True, include_diagnostic_payloads=True)
+    dataset = VinOfflineDatasetConfig(store=store_cfg, return_format="sample").setup_target()
+    record = dataset._records[0]
+    payload = dataset._store.read_optional_record(record, "backbone.payload")
+    assert isinstance(payload, dict)  # noqa: S101
+    payload["free_input_provenance"] = "derived_observed_complement_occ_input_v1"
+    monkeypatch.setattr(
+        dataset._store,
+        "read_optional_record",
+        lambda requested, block_name: payload if requested == record and block_name == "backbone.payload" else None,
+    )
+
+    with pytest.raises(ValueError, match="does not match the V10 store manifest"):
+        dataset[0]
+
+
+def test_vin_offline_dataset_canonicalizes_legacy_rich_backbone_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Legacy rich payloads without a provenance field inherit the manifest label."""
+
+    store_cfg = _write_test_store(tmp_path, include_backbone=True, include_diagnostic_payloads=True)
+    dataset = VinOfflineDatasetConfig(store=store_cfg, return_format="sample").setup_target()
+    record = dataset._records[0]
+    payload = dataset._store.read_optional_record(record, "backbone.payload")
+    assert isinstance(payload, dict)  # noqa: S101
+    payload.pop("free_input_provenance", None)
+    original_read = dataset._store.read_optional_record
+    monkeypatch.setattr(
+        dataset._store,
+        "read_optional_record",
+        lambda requested, block_name: (
+            payload
+            if requested == record and block_name == "backbone.payload"
+            else original_read(requested, block_name)
+        ),
+    )
+
+    sample = dataset[0]
+    assert sample.backbone_out is not None  # noqa: S101
+    assert sample.backbone_out.free_input_provenance == "native_evl_v1"  # noqa: S101
+
+
 def test_actor_snippet_reader_matches_one_step_sample_and_reads_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1448,7 +1499,7 @@ def test_vin_offline_manifest_omits_counterfactual_placeholders(tmp_path: Path) 
     store_cfg = _write_test_store(tmp_path)
     manifest_payload = json.loads(store_cfg.manifest_path.read_text(encoding="utf-8"))
 
-    assert OFFLINE_DATASET_VERSION == 9  # noqa: S101
+    assert OFFLINE_DATASET_VERSION == 10  # noqa: S101
     assert "counterfactuals" not in manifest_payload  # noqa: S101
     assert "counterfactuals" not in manifest_payload["materialized_blocks"]  # noqa: S101
 

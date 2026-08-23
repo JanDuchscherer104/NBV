@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Literal
 from torch import Tensor
 
 from ...rollouts.qh_geometry import QhGeometryContract  # noqa: F401
+from ...vin.types import FreeInputProvenance
 from ..vin_store.views import VinSnippetView
 
 if TYPE_CHECKING:
@@ -90,6 +91,9 @@ class QhActorStateContract:
 
     geometry_contract_hash: str | None = None
     """Stable selected-depth geometry hash; absent for CF0 and legacy actors."""
+
+    free_input_provenance: FreeInputProvenance | None = None
+    """Persisted EVL free-input provenance; absent for legacy diagnostic actors."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -21,7 +21,7 @@
     "sources": {
       "aria_nbv/aria_nbv/oracle/pipelines/evaluated_rollout.py": "1b3fb123e04606e9783aab036ad93b9a58f9e52b2a3651480503679043cbb892",
       "aria_nbv/aria_nbv/rollouts/replay/engine.py": "75e15e6c67f2473f40f1d264b6c9dc0cbf1f4ae12fb6cc4b056439de48cc4418",
-      "aria_nbv/aria_nbv/rollouts/zarr_store.py": "50881f4fd10f323d76e4b3fbeec79298862e1175f2bc0ae66e22f146c03f96d2",
+      "aria_nbv/aria_nbv/rollouts/zarr_store.py": "c80588f554b8a40e73e4dc0c8d12ffad3d692c9f84c6c1466bfded36891243d5",
       "aria_nbv/tests/rollout_fixtures.py": "5e913fc4a952189115f41eed57ee4b98d3604e6dc3e66b12467e01108dc43cbb"
     }
   },

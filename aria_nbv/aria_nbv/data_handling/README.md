@@ -83,7 +83,7 @@ The canonical one-step offline format is a strict indexed-shard store:
 
 ```text
 vin_offline/
-  manifest.json                         # version, source config, materialized blocks, shards
+  manifest.json                         # version 10, source config, materialized blocks, shards
   sample_index.jsonl                    # global sample row -> split, scene, snippet, shard row
   splits/
     all.npy                             # global sample indices
@@ -639,7 +639,7 @@ uv run nbv-summary --config-path offline_only.toml
 
 Current compatibility gates:
 
-- VIN offline stores must match `OFFLINE_DATASET_VERSION`, currently `9`.
+- VIN offline stores must match `OFFLINE_DATASET_VERSION`, currently `10`.
   Named Q_H profiles additionally require the manifest's homogeneous eight-key
   compact-EVL signature and hashed ordered point-feature schema; older stores
   must be rebuilt. Rollout-Zarr compatibility is independent of this VIN bump.

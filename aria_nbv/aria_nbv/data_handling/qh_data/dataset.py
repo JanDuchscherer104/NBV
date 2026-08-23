@@ -18,6 +18,7 @@ from ...rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
 from ...rollouts.shard_manifest import build_rollout_split_manifest_hash
 from ...utils import Stage, TargetConfig
 from ...utils.fingerprints import stable_msgspec_hash
+from ...vin.types import FreeInputProvenance, validate_free_input_provenance
 from ..identifiers import compact_ase_atek_sample_id
 from ..vin_store.format import VinOfflineIndexRecord
 from ..vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
@@ -176,8 +177,9 @@ class QhDataset(Dataset[QhChain]):
             )
         self.experiment_profile = experiment_profile
         self.include_audit = include_audit
+        free_input_provenance: FreeInputProvenance | None = None
         if experiment_profile is not None:
-            _require_named_profile_store(actor_reader)
+            free_input_provenance = _require_named_profile_store(actor_reader)
         self._manifest_hash = stable_msgspec_hash(actor_reader.manifest)
         self._actor_state_contract = QhActorStateContract(
             root_evl_profile=root_evl_profile,
@@ -190,6 +192,7 @@ class QhDataset(Dataset[QhChain]):
                 if experiment_profile == "qh_cfplus_gt_depth_v1"
                 else None
             ),
+            free_input_provenance=free_input_provenance,
         )
         self._records = {record.sample_index: record for record in actor_reader.get_split_records(None)}
         self._validate_source_refs()
@@ -355,16 +358,17 @@ class QhDataset(Dataset[QhChain]):
         return record
 
 
-def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> None:
-    """Require version-9 EVL and semantic point evidence for named profiles."""
+def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> FreeInputProvenance:
+    """Require current EVL, semantic point, and free-input provenance evidence."""
 
     manifest = actor_reader.manifest
     if manifest.version != OFFLINE_DATASET_VERSION:
         raise ValueError(
-            "Named Q_H profiles require VIN offline dataset version 9 with compact EVL semantics; "
+            "Named Q_H profiles require VIN offline dataset version 10 with compact EVL semantics; "
             f"found version {manifest.version}. Rebuild the VIN offline store."
         )
     vin = manifest.vin
+    free_input_provenance = validate_free_input_provenance(vin.get("free_input_provenance"))
     schema = vin.get("point_feature_schema")
     schema_hash = vin.get("point_feature_schema_hash")
     if not isinstance(schema, list) or schema_hash != stable_msgspec_hash(schema):
@@ -406,3 +410,4 @@ def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> None:
             raise ValueError(
                 f"Named Q_H profile shard {shard.shard_id!r} disagrees with declared EVL dtype/shape signature; rebuild the store."
             )
+    return free_input_provenance

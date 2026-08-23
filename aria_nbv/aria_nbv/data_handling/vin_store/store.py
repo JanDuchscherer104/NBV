@@ -26,7 +26,7 @@ from pydantic import Field, field_validator
 from ...configs import PathConfig
 from ...utils import BaseConfig, Stage
 from ...utils.config_paths import resolve_cache_artifact_dir
-from ...vin.types import EvlBackboneOutput
+from ...vin.types import EvlBackboneOutput, validate_free_input_provenance
 from .format import (
     VinOfflineBlockSpec,
     VinOfflineIndexRecord,
@@ -35,7 +35,7 @@ from .format import (
 )
 from .views import VinSnippetView
 
-OFFLINE_DATASET_VERSION = 9
+OFFLINE_DATASET_VERSION = 10
 """Version of the immutable VIN offline dataset format."""
 
 _ACTOR_SNIPPET_BLOCKS = (
@@ -276,6 +276,8 @@ class VinOfflineStoreReader:
                 f"{self.manifest.version}; expected {OFFLINE_DATASET_VERSION}. "
                 "Rebuild the store with the current VIN offline writer.",
             )
+        if self.manifest.materialized_blocks.backbone:
+            validate_free_input_provenance(self.manifest.vin.get("free_input_provenance"))
         self.sample_index = VinOfflineIndexRecord.read_many(config.sample_index_path)
         self._records_by_sample_index = {record.sample_index: record for record in self.sample_index}
         self._shards = {spec.shard_id: spec for spec in self.manifest.shards}
@@ -468,6 +470,7 @@ class VinOfflineStoreReader:
             occ_pr=read_optional("backbone.occ_pr", dtype=torch.float32),
             occ_input=read_optional("backbone.occ_input", dtype=torch.float32),
             free_input=read_optional("backbone.free_input", dtype=torch.float32),
+            free_input_provenance=validate_free_input_provenance(self.manifest.vin["free_input_provenance"]),
             counts=read_optional("backbone.counts", dtype=torch.int64),
             cent_pr=read_optional("backbone.cent_pr", dtype=torch.float32),
             pts_world=read_optional("backbone.pts_world", dtype=torch.float32),

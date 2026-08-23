@@ -10,7 +10,7 @@ fresh: `vin_offline_rollout_campaign100_v8_rebuilt`.
 | `build_rollouts_v1_cuda_campaign.toml` | Broad 100-scene CUDA campaign | `build_rollouts_v1_cuda_campaign_writer.toml` |
 | `build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml` | Corrected paired pilot | `build_rollouts_v1_cuda_campaign_writer.toml` |
 | `build_rollouts_v1_cuda_campaign_writer.toml` | Local 100-row generation writer | `rollout_campaign100_source_manifest.json` and local VIN source store |
-| `build_vin_offline_rollout_campaign100_v8.toml` | Local 100-row V8 source-store build | VIN source shards listed in the file |
+| `build_vin_offline_rollout_campaign100_v8.toml` | Historical immutable reviewed V8 source-store build (non-current) | VIN source shards listed in the file |
 | `build_rollouts_v1_lrz.template.toml` | LRZ generation template | Replace `/ABS/PATH/TO/...` placeholders |
 
 ## Exact operator commands

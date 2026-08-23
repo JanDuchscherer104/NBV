@@ -16,7 +16,7 @@ import streamlit as st
 import torch
 
 from ....rri_metrics.ordinal import RriOrdinalBinner
-from ..common import _info_popover, _pretty_label
+from ..common import _info_popover, _pretty_label, current_scientific_label
 from .context import VinDiagContext
 
 
@@ -161,7 +161,7 @@ def render_bin_values_tab(ctx: VinDiagContext) -> None:
         fig_edges.update_layout(
             title=_pretty_label("Binner edges (quantile thresholds)"),
             xaxis_title=_pretty_label("threshold k"),
-            yaxis_title=_pretty_label("RRI"),
+            yaxis_title=current_scientific_label("rri"),
         )
         st.plotly_chart(fig_edges, width="stretch")
 
@@ -196,7 +196,7 @@ def render_bin_values_tab(ctx: VinDiagContext) -> None:
         fig_centers.update_layout(
             title=_pretty_label("Bin centers vs learned u_k"),
             xaxis_title=_pretty_label("class k"),
-            yaxis_title=_pretty_label("RRI"),
+            yaxis_title=current_scientific_label("rri"),
         )
         st.plotly_chart(fig_centers, width="stretch")
 

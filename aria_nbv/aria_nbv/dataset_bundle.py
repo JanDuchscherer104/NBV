@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, Literal
 
@@ -20,10 +20,24 @@ import msgspec
 import numpy as np
 
 from .data_handling.identifiers import compact_ase_atek_sample_id
+from .data_handling.qh_data.views import (
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,
+)
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig, VinOfflineStoreReader
+from .data_handling.vin_store.target_inventory import inspect_target_inventory
+from .rollouts.inspection import (
+    build_effective_streamlit_trust,
+    build_manifest_facts,
+    build_promotion_evidence,
+    build_schema_validation,
+)
 from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
+from .utils import Stage
 from .utils.fingerprints import stable_msgspec_hash
 
 DatasetBundleVerdict = Literal["Ready", "Incomplete", "Blocked"]
@@ -130,6 +144,567 @@ class DatasetBundleEvidence:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class QhStageReadiness:
+    """Materialized readiness facts for one learning stage."""
+
+    stage: Stage
+    """Campaign/learning split represented by this row."""
+
+    included: bool
+    """Whether the stage contains chains and is configured in the DataModule."""
+
+    chain_count: int
+    """Number of complete factual rollout chains."""
+
+    state_count: int
+    """Number of realized candidate-bearing states across the stage."""
+
+    trainable_candidate_count: int
+    """Number of candidates admitted by the persisted Q_H label mask."""
+
+    scene_ids: tuple[str, ...]
+    """Ordered scene identities admitted by the stage dataset."""
+
+    max_horizon: int
+    """Largest realized chain length in the stage."""
+
+    provenance: dict[str, object]
+    """Actor and rollout identities reported by the validated dataset."""
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedStorageMetric:
+    """One storage total normalized by an explicit factual denominator."""
+
+    name: str
+    """Stable metric name."""
+
+    value: float | None
+    """Bytes per denominator row, or ``None`` when unavailable."""
+
+    numerator_bytes: int | None
+    """Persisted storage byte total used by the ratio."""
+
+    denominator: int | None
+    """Factual row count used by the ratio."""
+
+    unit: str
+    """Human-readable ratio unit."""
+
+    reason: str | None
+    """Why the ratio is unavailable, otherwise ``None``."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhCorpusReadiness:
+    """Actual Q_H dataset and DataModule admission evidence for one bundle."""
+
+    selection: DatasetBundleSelection
+    """Normalized VIN root and rollout-store selection."""
+
+    verdict: Literal["Ready", "Blocked"]
+    """Whether the selected stores construct one admitted DataModule."""
+
+    blockers: tuple[str, ...]
+    """Exact fail-closed construction or validation errors."""
+
+    stages: tuple[QhStageReadiness, ...]
+    """Train, validation, and test rows in stable order."""
+
+    contract: dict[str, object] | None
+    """Homogeneous horizon-independent Q_H data contract."""
+
+    actor_contract: dict[str, object] | None
+    """Exact named actor contract used to construct every stage."""
+
+    loader_settings: dict[str, int | bool]
+    """Deterministic DataLoader settings used for admission and preview."""
+
+    scene_disjoint: bool | None
+    """Whether configured stage scene sets passed pairwise disjointness checks."""
+
+    storage: tuple[NormalizedStorageMetric, ...]
+    """Persisted bytes normalized by physical and Q_H factual denominators."""
+
+    def to_jsonable(self) -> dict[str, object]:
+        """Return presentation-neutral readiness evidence."""
+
+        return {
+            "selection": {
+                "root_store": self.selection.root_store.as_posix(),
+                "rollout_stores": [path.as_posix() for path in self.selection.rollout_stores],
+            },
+            "verdict": self.verdict,
+            "blockers": list(self.blockers),
+            "stages": [
+                {
+                    "stage": row.stage.value,
+                    "included": row.included,
+                    "chain_count": row.chain_count,
+                    "state_count": row.state_count,
+                    "trainable_candidate_count": row.trainable_candidate_count,
+                    "scene_ids": list(row.scene_ids),
+                    "max_horizon": row.max_horizon,
+                    "provenance": _plain_value(row.provenance),
+                }
+                for row in self.stages
+            ],
+            "contract": _plain_value(self.contract),
+            "actor_contract": _plain_value(self.actor_contract),
+            "loader_settings": _plain_value(self.loader_settings),
+            "scene_disjoint": self.scene_disjoint,
+            "storage": [
+                {
+                    "name": metric.name,
+                    "value": metric.value,
+                    "numerator_bytes": metric.numerator_bytes,
+                    "denominator": metric.denominator,
+                    "unit": metric.unit,
+                    "reason": metric.reason,
+                }
+                for metric in self.storage
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class QhReadinessContract:
+    """Named Q_H actor/data contract required by readiness inspection."""
+
+    experiment_profile: QhExperimentProfile
+    """Closed experiment role, never inferred from a diagnostic default."""
+
+    root_evl_profile: QhRootEvlProfile
+    """Root EVL profile bound to the actor store."""
+
+    selected_observation_protocol: QhSelectedObservationProtocol
+    """Selected-observation source bound to the actor contract."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhBatchPreview:
+    """Bounded evidence from one selected chain and one actual DataLoader batch."""
+
+    stage: Stage
+    """Stage whose dataset and loader were sampled."""
+
+    selected_chain_index: int
+    """Requested zero-based dataset index."""
+
+    selected_chain_key: dict[str, object]
+    """CPU-only source identity for the directly read chain."""
+
+    selected_chain_steps: int
+    """Realized state count in the directly read chain."""
+
+    batch_chain_keys: tuple[dict[str, object], ...]
+    """CPU-only identities collated by the actual DataLoader."""
+
+    batch_step_counts: tuple[int, ...]
+    """Realized chain lengths before time-axis padding."""
+
+    shapes: dict[str, tuple[int, ...]]
+    """Principal actor and supervision tensor shapes."""
+
+    dtypes: dict[str, str]
+    """Principal actor and supervision tensor dtypes."""
+
+    step_padding_count: int
+    """False entries in the batch step mask."""
+
+    candidate_padding_count: int
+    """False entries in the materialized-candidate mask."""
+
+    action_count: int
+    """Actor-valid candidate entries in the batch."""
+
+    trainable_candidate_count: int
+    """Persisted label-supported candidate entries in the batch."""
+
+    def to_jsonable(self) -> dict[str, object]:
+        """Return JSON-compatible chain and collation evidence."""
+
+        return {
+            "stage": self.stage.value,
+            "selected_chain_index": self.selected_chain_index,
+            "selected_chain_key": self.selected_chain_key,
+            "selected_chain_steps": self.selected_chain_steps,
+            "batch_chain_keys": list(self.batch_chain_keys),
+            "batch_step_counts": list(self.batch_step_counts),
+            "shapes": {name: list(shape) for name, shape in self.shapes.items()},
+            "dtypes": self.dtypes,
+            "step_padding_count": self.step_padding_count,
+            "candidate_padding_count": self.candidate_padding_count,
+            "action_count": self.action_count,
+            "trainable_candidate_count": self.trainable_candidate_count,
+        }
+
+
+def build_qh_corpus_readiness(
+    selection: DatasetBundleSelection,
+    *,
+    contract: QhReadinessContract,
+    batch_size: int = 1,
+    seed: int = 0,
+) -> QhCorpusReadiness:
+    """Construct and inspect the real stage datasets and Q_H DataModule.
+
+    The call is intentionally explicit and potentially expensive: it validates
+    selected stores, joins every admitted rollout source to the immutable VIN
+    actor store, scans factual chains for realized support counts, and then
+    crosses the production DataModule admission seam. It never creates a model,
+    Trainer, writer, or mutable store handle.
+    """
+
+    loader_settings = {
+        "batch_size": batch_size,
+        "num_workers": 0,
+        "pin_memory": False,
+        "persistent_workers": False,
+        "seed": seed,
+    }
+    if batch_size < 1:
+        return _blocked_qh_readiness(selection, loader_settings, "Q_H batch_size must be positive.")
+    light = build_dataset_bundle_summary(selection, validate_rollouts=False)
+    blocking = tuple(finding.message for finding in light.findings if finding.severity == "blocking")
+    if blocking:
+        return _blocked_qh_readiness(selection, loader_settings, *blocking)
+    if not selection.rollout_stores:
+        return _blocked_qh_readiness(selection, loader_settings, "Select at least one rollout store.")
+
+    promotion_blockers = _qh_promotion_blockers(selection)
+    if promotion_blockers:
+        return _blocked_qh_readiness(selection, loader_settings, *promotion_blockers)
+
+    try:
+        datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
+        stage_rows = tuple(_qh_stage_readiness(stage, datasets.get(stage)) for stage in _QH_STAGES)
+    except Exception as exc:
+        return _blocked_qh_readiness(selection, loader_settings, f"{type(exc).__name__}: {exc}")
+
+    data_contract = {
+        field.name: getattr(data_module.train_dataset.contract, field.name)
+        for field in fields(data_module.train_dataset.contract)
+    }
+    storage = _normalized_qh_storage(light, stage_rows)
+    return QhCorpusReadiness(
+        selection=selection,
+        verdict="Ready",
+        blockers=(),
+        stages=stage_rows,
+        contract=data_contract,
+        actor_contract={
+            "experiment_profile": data_module.train_dataset.actor_state_contract.experiment_profile,
+            "root_evl_profile": data_module.train_dataset.actor_state_contract.root_evl_profile,
+            "selected_observation_protocol": data_module.train_dataset.actor_state_contract.selected_observation_protocol,
+            "actor_manifest_hash": data_module.actor_state_contract_hash,
+        },
+        loader_settings=loader_settings,
+        scene_disjoint=True,
+        storage=storage,
+    )
+
+
+def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]:
+    """Return fail-closed trust errors for promoted rollout stores.
+
+    Legacy V0 stores without promotion markers remain compatible with the
+    existing Q_H contract. Once a store advertises promotion through either
+    marker, however, both typed promotion evidence and canonical schema
+    validation must agree before dataset construction is admitted. Root and
+    rollout provenance remain validated independently by the lightweight
+    bundle summary above.
+    """
+
+    blockers: list[str] = []
+    for store in selection.rollout_stores:
+        marker_present = _promotion_marker_present(store)
+        if not marker_present:
+            # V0/non-promoted stores intentionally have no promotion trust
+            # contract; their existing lineage/provenance checks above remain
+            # the compatibility boundary.
+            continue
+        try:
+            reader = RolloutZarrStoreReader(store)
+            manifest_facts = build_manifest_facts(reader)
+            promotion = build_promotion_evidence(reader, manifest_payload=manifest_facts.payload)
+        except Exception as exc:
+            blockers.append(f"Q_H rollout trust could not be evaluated for {store.name}: {type(exc).__name__}: {exc}")
+            continue
+        try:
+            schema = build_schema_validation(reader)
+            trust = build_effective_streamlit_trust(schema, promotion)
+        except Exception as exc:
+            blockers.append(f"Q_H promoted rollout validation failed for {store.name}: {type(exc).__name__}: {exc}")
+            continue
+        if not trust.ok:
+            detail = "; ".join(trust.errors[:3]) or "unknown trust error"
+            blockers.append(f"Q_H promoted rollout {store.name} is not trusted: {detail}")
+    return tuple(blockers)
+
+
+def _promotion_marker_present(store: Path) -> bool:
+    """Treat broken marker symlinks as advertised, not as absent V0 metadata."""
+
+    return any(_lstat_exists(store / marker) for marker in ("_SUCCESS.json", "_owner.json"))
+
+
+def _lstat_exists(path: Path) -> bool:
+    """Check entry membership without following symlinks."""
+
+    try:
+        path.lstat()
+    except OSError:
+        return False
+    return True
+
+
+def preview_qh_batch(
+    selection: DatasetBundleSelection,
+    *,
+    contract: QhReadinessContract,
+    stage: Stage | str = Stage.TRAIN,
+    chain_index: int = 0,
+    batch_size: int = 1,
+    seed: int = 0,
+) -> QhBatchPreview:
+    """Read one selected chain and collate one batch through the real loader."""
+
+    normalized_stage = Stage.from_str(stage) if isinstance(stage, str) else stage
+    promotion_blockers = _qh_promotion_blockers(selection)
+    if promotion_blockers:
+        raise ValueError("; ".join(promotion_blockers))
+    datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
+    dataset = datasets.get(normalized_stage)
+    if dataset is None:
+        raise ValueError(f"Q_H stage {normalized_stage.value!r} contains no chains.")
+    chain = dataset[chain_index]
+    loader = {
+        Stage.TRAIN: data_module.train_dataloader,
+        Stage.VAL: data_module.val_dataloader,
+        Stage.TEST: data_module.test_dataloader,
+    }[normalized_stage]()
+    if isinstance(loader, list):
+        raise ValueError(f"Q_H stage {normalized_stage.value!r} is not configured.")
+    batch = next(iter(loader))
+    tensors = {
+        "candidate_pose_relative_root": batch.actor.candidate_pose_relative_root,
+        "candidate_mask": batch.actor.candidate_mask,
+        "action_mask": batch.actor.action_mask,
+        "horizon_remaining": batch.actor.horizon_remaining,
+        "step_mask": batch.actor.step_mask,
+        "label_mask": batch.supervision.label_mask,
+        "candidate_reward": batch.supervision.candidate_reward,
+    }
+    return QhBatchPreview(
+        stage=normalized_stage,
+        selected_chain_index=chain_index,
+        selected_chain_key=_qh_key_row(chain.key),
+        selected_chain_steps=chain.num_steps,
+        batch_chain_keys=tuple(_qh_key_row(key) for key in batch.keys),
+        batch_step_counts=tuple(int(value) for value in batch.num_steps.tolist()),
+        shapes={name: tuple(int(axis) for axis in tensor.shape) for name, tensor in tensors.items()},
+        dtypes={name: str(tensor.dtype) for name, tensor in tensors.items()},
+        step_padding_count=int((~batch.actor.step_mask).sum().item()),
+        candidate_padding_count=int((~batch.actor.candidate_mask).sum().item()),
+        action_count=int(batch.actor.action_mask.sum().item()),
+        trainable_candidate_count=int(batch.supervision.label_mask.sum().item()),
+    )
+
+
+_QH_STAGES = (Stage.TRAIN, Stage.VAL, Stage.TEST)
+
+
+def _build_qh_data_module(
+    selection: DatasetBundleSelection,
+    *,
+    contract: QhReadinessContract,
+    batch_size: int,
+    seed: int,
+) -> tuple[dict[Stage, Any], Any]:
+    """Construct non-empty stage datasets and the production DataModule."""
+
+    from .data_handling.qh_data import QhDatasetConfig
+    from .lightning.qh_datamodule import QhDataModule
+
+    validate_experiment_profile(
+        contract.experiment_profile,
+        root_evl_profile=contract.root_evl_profile,
+        selected_observation_protocol=contract.selected_observation_protocol,
+        privileged=contract.experiment_profile == "qh_cfplus_gt_depth_v1",
+    )
+    datasets: dict[Stage, Any] = {}
+    actor = VinOfflineStoreConfig(store_dir=selection.root_store)
+    for stage in _QH_STAGES:
+        dataset = QhDatasetConfig(
+            rollout_store_dirs=selection.rollout_stores,
+            actor=actor,
+            split=stage,
+            root_evl_profile=contract.root_evl_profile,
+            selected_observation_protocol=contract.selected_observation_protocol,
+            experiment_profile=contract.experiment_profile,
+        ).setup_target()
+        if len(dataset):
+            datasets[stage] = dataset
+    train = datasets.get(Stage.TRAIN)
+    if train is None:
+        raise ValueError("Q_H training stage must contain at least one chain.")
+    data_module = QhDataModule(
+        train=train,
+        val=datasets.get(Stage.VAL),
+        test=datasets.get(Stage.TEST),
+        batch_size=batch_size,
+        num_workers=0,
+        pin_memory=False,
+        persistent_workers=False,
+        seed=seed,
+        experiment_profile=contract.experiment_profile,
+    )
+    actor_contract = data_module.train_dataset.actor_state_contract
+    if (
+        actor_contract.experiment_profile != contract.experiment_profile
+        or actor_contract.root_evl_profile != contract.root_evl_profile
+        or actor_contract.selected_observation_protocol != contract.selected_observation_protocol
+    ):
+        raise ValueError("Q_H actor-state contract does not match the requested named readiness contract.")
+    return datasets, data_module
+
+
+def _qh_stage_readiness(stage: Stage, dataset: Any | None) -> QhStageReadiness:
+    """Inspect one configured dataset through its public chain interface."""
+
+    if dataset is None:
+        return QhStageReadiness(stage, False, 0, 0, 0, (), 0, {})
+    state_count = 0
+    trainable_candidate_count = 0
+    realized_max_horizon = 0
+    for index in range(len(dataset)):
+        chain = dataset[index]
+        state_count += chain.num_steps
+        trainable_candidate_count += int(chain.supervision.label_mask.sum().item())
+        realized_max_horizon = max(realized_max_horizon, chain.num_steps)
+    return QhStageReadiness(
+        stage=stage,
+        included=True,
+        chain_count=len(dataset),
+        state_count=state_count,
+        trainable_candidate_count=trainable_candidate_count,
+        scene_ids=tuple(sorted(dataset.scenes)),
+        max_horizon=realized_max_horizon,
+        provenance=_plain_value(dataset.provenance),
+    )
+
+
+def _normalized_qh_storage(
+    light: DatasetBundleEvidence,
+    stages: tuple[QhStageReadiness, ...],
+) -> tuple[NormalizedStorageMetric, ...]:
+    """Normalize persisted storage totals by explicit factual row counts."""
+
+    chain_count = sum(stage.chain_count for stage in stages)
+    state_count = sum(stage.state_count for stage in stages)
+    trainable_count = sum(stage.trainable_candidate_count for stage in stages)
+    return (
+        _storage_metric(
+            "root_bytes_per_sample",
+            light.root.get("storage_bytes"),
+            light.root.get("sample_count"),
+            "bytes / physical sample",
+        ),
+        _storage_metric(
+            "rollout_bytes_per_chain",
+            light.aggregate.get("rollout_storage_bytes"),
+            chain_count,
+            "bytes / factual Q_H chain",
+        ),
+        _storage_metric(
+            "rollout_bytes_per_state",
+            light.aggregate.get("rollout_storage_bytes"),
+            state_count,
+            "bytes / factual Q_H state",
+        ),
+        _storage_metric(
+            "rollout_bytes_per_trainable_candidate",
+            light.aggregate.get("rollout_storage_bytes"),
+            trainable_count,
+            "bytes / trainable Q_H candidate",
+        ),
+    )
+
+
+def _storage_metric(
+    name: str,
+    numerator: Any,
+    denominator: Any,
+    unit: str,
+) -> NormalizedStorageMetric:
+    """Build one ratio without fabricating missing or zero denominators."""
+
+    if not isinstance(numerator, int) or numerator < 0:
+        return NormalizedStorageMetric(
+            name, None, None, denominator if isinstance(denominator, int) else None, unit, "storage_bytes_unavailable"
+        )
+    if not isinstance(denominator, int) or denominator <= 0:
+        return NormalizedStorageMetric(
+            name,
+            None,
+            numerator,
+            denominator if isinstance(denominator, int) else None,
+            unit,
+            "denominator_unavailable",
+        )
+    return NormalizedStorageMetric(name, numerator / denominator, numerator, denominator, unit, None)
+
+
+def _blocked_qh_readiness(
+    selection: DatasetBundleSelection,
+    loader_settings: dict[str, int | bool],
+    *blockers: str,
+) -> QhCorpusReadiness:
+    """Return a fail-closed readiness result without partial admission claims."""
+
+    return QhCorpusReadiness(
+        selection=selection,
+        verdict="Blocked",
+        blockers=tuple(blockers),
+        stages=(),
+        contract=None,
+        actor_contract=None,
+        loader_settings=loader_settings,
+        scene_disjoint=None,
+        storage=(),
+    )
+
+
+def _qh_key_row(key: Any) -> dict[str, object]:
+    """Project one CPU-only chain key into a presentation-neutral row."""
+
+    return {
+        "store_index": int(key.store_index),
+        "rollout_row_id": int(key.rollout_row_id),
+        "source_sample_index": int(key.source_sample_index),
+        "scene_id": str(key.scene_id),
+        "target_row_id": int(key.target_row_id),
+    }
+
+
+def _plain_value(value: Any) -> Any:
+    """Convert paths, stages, dataclasses, and containers into JSON values."""
+
+    if isinstance(value, Stage):
+        return value.value
+    if isinstance(value, Path):
+        return value.as_posix()
+    if isinstance(value, dict):
+        return {str(key): _plain_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set | frozenset):
+        return [_plain_value(item) for item in value]
+    if hasattr(value, "__dataclass_fields__"):
+        return {field.name: _plain_value(getattr(value, field.name)) for field in fields(value)}
+    return value
+
+
 def build_dataset_bundle_summary(
     selection: DatasetBundleSelection,
     *,
@@ -198,6 +773,7 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
     """
 
     light = build_dataset_bundle_summary(selection, validate_rollouts=False)
+    root_target_inventory = inspect_target_inventory(selection.root_store)
     root_target_scan = scan_root_gt_obb_target_opportunities(selection.root_store)
     stores: list[dict[str, Any]] = []
     unique_targets: set[tuple[str, int, str]] = set()
@@ -261,6 +837,7 @@ def compute_dataset_bundle_deep_statistics(selection: DatasetBundleSelection) ->
             "rollout_stores": [path.as_posix() for path in selection.rollout_stores],
         },
         "stores": stores,
+        "root_target_inventory": root_target_inventory.to_jsonable(),
         "root_gt_obb_target_opportunities": root_target_scan,
         "aggregate": {
             "root_gt_obb_target_opportunities": root_target_scan["target_opportunity_count"],
@@ -318,7 +895,7 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
 
     try:
         reader = VinOfflineStoreReader(VinOfflineStoreConfig(store_dir=store))
-        per_sample = []
+        per_sample: list[dict[str, Any]] = []
         scene_counts: Counter[str] = Counter()
         split_counts: Counter[str] = Counter()
         for record in records:
@@ -344,7 +921,7 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
             )
             scene_counts[record.scene_id] += count
             split_counts[record.split] += count
-    except Exception as exc:
+    except (OSError, ValueError, TypeError, KeyError, IndexError, msgspec.MsgspecError) as exc:
         return _unavailable_target_opportunities(store, f"gt_obb_block_unreadable:{type(exc).__name__}:{exc}")
     return {
         "path": store.as_posix(),
@@ -356,6 +933,20 @@ def scan_root_gt_obb_target_opportunities(root_store: Path | str) -> dict[str, A
         "scene_counts": dict(sorted(scene_counts.items())),
         "split_counts": dict(sorted(split_counts.items())),
         "per_sample": per_sample,
+    }
+
+
+def _unavailable_target_opportunities(store: Path, reason: str) -> dict[str, Any]:
+    return {
+        "path": store.as_posix(),
+        "available": False,
+        "reason": reason,
+        "semantic_role": "gt_obb_label_evaluation_target_opportunities",
+        "target_opportunity_count": None,
+        "sample_count": None,
+        "scene_counts": {},
+        "split_counts": {},
+        "per_sample": [],
     }
 
 
@@ -895,20 +1486,6 @@ def _unreadable_rollout_row(store: Path) -> dict[str, Any]:
     }
 
 
-def _unavailable_target_opportunities(store: Path, reason: str) -> dict[str, Any]:
-    return {
-        "path": store.as_posix(),
-        "available": False,
-        "reason": reason,
-        "semantic_role": "gt_obb_label_evaluation_target_opportunities",
-        "target_opportunity_count": None,
-        "sample_count": None,
-        "scene_counts": {},
-        "split_counts": {},
-        "per_sample": [],
-    }
-
-
 def _verdict(findings: list[DatasetBundleFinding]) -> DatasetBundleVerdict:
     if any(finding.severity == "blocking" for finding in findings):
         return "Blocked"
@@ -922,7 +1499,14 @@ __all__ = [
     "DatasetBundleFinding",
     "DatasetBundleSelection",
     "DatasetBundleVerdict",
+    "NormalizedStorageMetric",
+    "QhBatchPreview",
+    "QhCorpusReadiness",
+    "QhReadinessContract",
+    "QhStageReadiness",
     "build_dataset_bundle_summary",
+    "build_qh_corpus_readiness",
     "compute_dataset_bundle_deep_statistics",
+    "preview_qh_batch",
     "scan_root_gt_obb_target_opportunities",
 ]

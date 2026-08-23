@@ -319,6 +319,27 @@ def test_campaign_source_audit_enumerates_admitted_and_rejected_observed_targets
     assert "explicit_target_config" not in audited[1]
 
 
+def test_campaign_source_audit_rejects_missing_match_rows(tmp_path, monkeypatch) -> None:
+    sample = _sample(
+        detected_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]),
+        gt_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]),
+    )
+    source_row = SimpleNamespace(sample_key=sample.sample_key, to_jsonable=lambda: {"scene_id": sample.scene_id})
+    manifest = SimpleNamespace(rows=(source_row,))
+    writer_config = SimpleNamespace(
+        source=SimpleNamespace(setup_target=lambda: [sample]),
+        sample_keys=None,
+        oracle_target_task_sampler=OracleTargetTaskSamplerConfig(max_targets_per_sample=1),
+        selected_source_manifest_rows=lambda _manifest: (source_row,),
+    )
+    monkeypatch.setattr(RolloutDatasetWriter, "_apply_source_manifest", staticmethod(lambda *_args, **_kwargs: None))
+    monkeypatch.setattr(target_selection_module, "match_observed_target_descriptors", lambda *_args, **_kwargs: ())
+    campaign = CudaRolloutCampaign(CudaRolloutCampaignConfig(output_root=tmp_path))
+
+    with pytest.raises(ValueError, match="one result per observed target"):
+        campaign.audit_source_manifest(writer_config, manifest)
+
+
 def _observed_descriptor(*, source_row: int, sem_id: int = 1) -> ObservedTargetDescriptor:
     descriptor = TargetDescriptor(
         sem_id=sem_id,

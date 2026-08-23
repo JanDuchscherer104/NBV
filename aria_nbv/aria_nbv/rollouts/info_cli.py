@@ -21,7 +21,7 @@ import typer
 from ..data_handling.identifiers import compact_ase_atek_identifiers
 from ..utils.cli_format import cli_console, counts_table, distribution_table, key_value_panel
 from ..utils.typer_cli import run_typer_app
-from .inspection import rollout_statistics, runtime_storage_statistics
+from .inspection import build_compact_statistics, runtime_storage_statistics
 from .reporting import (
     THESIS_REPORT_BUNDLE_ROLE,
     THESIS_REPORT_BUNDLE_VERSION,
@@ -131,7 +131,7 @@ def info_command(
             "errors": validation.errors,
         }
     if stats or preflight:
-        payload["stats"] = rollout_statistics(reader, manifest_payload=payload)
+        payload["stats"] = build_compact_statistics(reader, manifest_payload=payload).payload
     if preflight:
         payload["preflight"] = _preflight_payload(
             reader=reader,
@@ -253,9 +253,9 @@ def _preflight_payload(
             warnings.append(message)
 
     storage = runtime_storage_statistics(reader.store_dir, candidate_count=int(counts.get("candidates") or 0))
-    if (
-        storage["file_count"] > storage["file_count_limit"]
-        or storage["bytes_per_candidate"] > storage["bytes_per_candidate_limit"]
+    bytes_per_candidate = storage["bytes_per_candidate"]
+    if storage["file_count"] > storage["file_count_limit"] or (
+        bytes_per_candidate is not None and bytes_per_candidate > storage["bytes_per_candidate_limit"]
     ):
         message = "excessive_chunk_file_bloat"
         if profile == "production":

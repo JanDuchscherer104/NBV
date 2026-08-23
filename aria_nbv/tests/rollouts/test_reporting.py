@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,8 @@ import pytest
 import zarr
 from pandas.testing import assert_frame_equal
 from typer.testing import CliRunner
+
+import aria_nbv.rollouts.reporting as reporting
 
 pytest.importorskip("efm3d")
 
@@ -32,12 +35,862 @@ from aria_nbv.rollouts.manifest import RolloutStoreInvocation, RolloutStoreManif
 from aria_nbv.rollouts.reporting import (
     ANALYSIS_FACT_SIDECAR_VERSION,
     THESIS_REPORT_TABLE_COLUMNS,
+    _candidate_corpus_support,
+    _contract_additive_totals,
+    _contract_frames,
+    _corpus_failure_counts,
+    _corpus_feasibility,
+    _corpus_target_admission,
+    _corpus_temporal_summary,
+    _persisted_rollout_contract,
     build_thesis_report_frames,
     serialize_thesis_report_bundle,
     write_thesis_report_bundle,
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
+    def frames(value: str, *, work_unit: str = "a") -> dict[str, pd.DataFrame]:
+        return {
+            "parameters": pd.DataFrame(
+                [
+                    {
+                        "store_id": "store",
+                        "key": "root_attrs.target_protocol_version",
+                        "value_text": value,
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                    {
+                        "store_id": "store",
+                        "key": "config_hashes.candidate",
+                        "value_text": "candidate-a",
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                    {
+                        "store_id": "store",
+                        "key": "root_attrs.split_manifest_hash",
+                        "value_text": work_unit,
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                    {
+                        "store_id": "store",
+                        "key": "writer_config.recipes[0].policy.seed",
+                        "value_text": work_unit,
+                        "value_float": np.nan,
+                        "value_int": np.nan,
+                        "value_bool": np.nan,
+                    },
+                ]
+            )
+        }
+
+    first = _persisted_rollout_contract(frames("v1"), "store", "rich")
+    second = _persisted_rollout_contract(frames("v0"), "store", "rich")
+    assert first["id"] != second["id"]
+    assert first["payload"]["parameters"] != second["payload"]["parameters"]
+    assert first["label"] == second["label"]
+    assert first["id"] == _persisted_rollout_contract(frames("v1", work_unit="b"), "store", "rich")["id"]
+
+
+def test_report_export_preserves_one_manifest_validation_promotion_and_statistics_call_per_store(
+    tmp_path, monkeypatch
+) -> None:
+    """Report export composes each demanded inspection facet exactly once."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=102)[:1]
+    )
+    calls = {"manifest": 0, "validation": 0, "promotion": 0, "statistics": 0}
+    original_manifest = RolloutZarrStoreReader.manifest
+    original_validate = RolloutZarrStoreReader.validate
+    original_promotion = reporting.build_promotion_evidence
+    original_statistics = reporting.build_compact_statistics
+
+    def manifest(reader):
+        calls["manifest"] += 1
+        return original_manifest(reader)
+
+    def validate(reader):
+        calls["validation"] += 1
+        return original_validate(reader)
+
+    def promotion(reader, *, manifest_payload=None):
+        calls["promotion"] += 1
+        return original_promotion(reader, manifest_payload=manifest_payload)
+
+    def statistics(reader, *, manifest_payload=None):
+        calls["statistics"] += 1
+        return original_statistics(reader, manifest_payload=manifest_payload)
+
+    monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
+    monkeypatch.setattr(reporting, "build_promotion_evidence", promotion)
+    monkeypatch.setattr(reporting, "build_compact_statistics", statistics)
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+
+    assert calls == {"manifest": 1, "validation": 1, "promotion": 1, "statistics": 1}
+    assert len(frames["stores"]) == 1
+    assert frames["steps"]["generation_cohort_id"].notna().all()
+    assert frames["steps"]["generation_cohort"].notna().all()
+
+
+def test_report_export_requests_only_candidate_facets_it_serializes(tmp_path, monkeypatch) -> None:
+    """Reporting never pays for discarded scientific candidate-support reducers."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=112)[:1]
+    )
+    original = reporting.candidate_population_evidence
+    calls: list[bool] = []
+
+    def candidate_population(reader, **kwargs):
+        calls.append(bool(kwargs.get("scientific_support", True)))
+        return original(reader, **kwargs)
+
+    monkeypatch.setattr(reporting, "candidate_population_evidence", candidate_population)
+
+    build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+
+    assert calls == [False]
+
+
+def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -> None:
+    common = {
+        "contract": "contract",
+        "profile": "profile",
+        "generation_cohort_id": "cohort",
+        "generation_cohort": "cohort",
+        "store_id": "store",
+    }
+
+    def payload(contract_id: str) -> str:
+        return json.dumps({"contract_id": contract_id}, sort_keys=True, separators=(",", ":"))
+
+    candidate = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
+                "group_by": "mixture",
+                "family": "local",
+                "allocated_count": 2,
+                "actor_valid_count": 1,
+                "oracle_valid_count": 1,
+                "trainable_count": 1,
+                "selected_count": 1,
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+    targets = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
+                "target_valid": True,
+                "gt_label_valid": True,
+                "gt_match_status": "matched",
+                "target_row_id": 0,
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+    feasibility = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
+                "candidate_count": 2,
+                "collision_evaluated_count": 2,
+                "collision_count": 1,
+                "clearance_finite_count": 2,
+                "clearance_denominator": 2,
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+    failures = pd.DataFrame(
+        [
+            {
+                **common,
+                "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
+                "kind": "timeout",
+                "severity": "error",
+                "message": "failed",
+            }
+            for contract_id in ("a", "b")
+        ]
+    )
+
+    support = _candidate_corpus_support(candidate)
+    admission = _corpus_target_admission(targets)
+    safe = _corpus_feasibility(feasibility)
+    failure_counts = _corpus_failure_counts(failures)
+
+    for frame in (support, admission, safe, failure_counts):
+        assert set(frame["contract_id"]) == {"a", "b"}
+        assert list(frame["contract_id"]) == ["a", "b"]
+        assert dict(zip(frame["contract_id"], frame["contract_payload_json"], strict=True)) == {
+            "a": payload("a"),
+            "b": payload("b"),
+        }
+    assert list(support["allocated_count"]) == [2, 2]
+    assert list(admission["count"]) == [1, 1]
+    assert list(safe["collision_count"]) == [1, 1]
+    assert list(failure_counts["count"]) == [1, 1]
+
+
+def test_corpus_reducers_count_distinct_physical_paths_with_shared_store_id(monkeypatch) -> None:
+    """Copied shards retain two physical contributors despite one content digest."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {
+            "id": "contract",
+            "label": "contract",
+            "profile": profile,
+            "payload": {"profile": profile},
+        },
+    )
+
+    def bundle() -> dict[str, pd.DataFrame]:
+        return {
+            "candidate_composition": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "group_by": "mixture",
+                        "family": "family-a",
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "cohort",
+                        "allocated_count": 2,
+                        "actor_valid_count": 2,
+                        "oracle_valid_count": 2,
+                        "trainable_count": 2,
+                        "selected_count": 1,
+                    }
+                ]
+            ),
+            "targets": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "target_valid": True,
+                        "gt_label_valid": True,
+                        "gt_match_status": "matched",
+                        "target_row_id": "target",
+                    }
+                ]
+            ),
+            "candidate_collision_support": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "generation_cohort_id": "cohort",
+                        "generation_cohort": "cohort",
+                        "candidate_count": 2,
+                        "collision_evaluated_count": 2,
+                        "collision_count": 1,
+                        "clearance_finite_count": 2,
+                        "clearance_denominator": 2,
+                    }
+                ]
+            ),
+            "failures": pd.DataFrame(
+                [
+                    {
+                        "store_id": "shared-content-id",
+                        "kind": "timeout",
+                        "severity": "error",
+                        "message": "failed",
+                    }
+                ]
+            ),
+        }
+
+    included = [
+        {"path": "/shard-a", "store_id": "shared-content-id", "profile": "profile"},
+        {"path": "/shard-b", "store_id": "shared-content-id", "profile": "profile"},
+    ]
+    frames = [bundle(), bundle()]
+    support = _candidate_corpus_support(_contract_frames(frames, included, "candidate_composition"))
+    admission = _corpus_target_admission(_contract_frames(frames, included, "targets"))
+    feasibility = _corpus_feasibility(_contract_frames(frames, included, "candidate_collision_support"))
+    failures = _corpus_failure_counts(_contract_frames(frames, included, "failures"))
+
+    assert support.iloc[0]["store_count"] == 2
+    assert support.iloc[0]["allocated_count"] == 4
+    assert admission.iloc[0]["store_count"] == 2
+    assert admission.iloc[0]["count"] == 2
+    assert feasibility.iloc[0]["store_count"] == 2
+    assert feasibility.iloc[0]["candidate_count"] == 4
+    assert failures.iloc[0]["store_count"] == 2
+    assert failures.iloc[0]["count"] == 2
+
+
+def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_support(tmp_path) -> None:
+    """An invalid selection remains visible and contributes no scientific rows."""
+
+    valid = write_rollout_zarr_store(
+        tmp_path / "valid.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=111)[:1],
+    ).store_dir
+    invalid = tmp_path / "invalid.zarr"
+    shutil.copytree(valid, invalid)
+    (invalid / "manifest.json").write_text("{}", encoding="utf-8")
+
+    summary = reporting.build_rollout_corpus_summary([invalid, valid])
+    baseline = reporting.build_rollout_corpus_summary([valid])
+
+    assert summary.verdict == "Incomplete"
+    assert summary.totals["selected_store_count"] == 2
+    assert summary.totals["included_store_count"] == 1
+    assert summary.totals["excluded_store_count"] == 1
+    assert summary.totals == baseline.totals | {
+        "selected_store_count": 2,
+        "excluded_store_count": 1,
+    }
+    assert summary.excluded_stores[0]["path"] == invalid.resolve().as_posix()
+    assert summary.excluded_stores[0]["reason"]
+    assert set(summary.candidate_support["contract_id"]) == {summary.included_stores[0]["contract_id"]}
+    assert not summary.candidate_support.empty
+    assert set(summary.endpoints["store_id"]) == {summary.included_stores[0]["store_id"]}
+
+
+def test_corpus_summary_rejects_fractional_persisted_qh_counts(tmp_path) -> None:
+    """Malformed persisted Q_H counts cannot be truncated into Ready evidence."""
+
+    store = write_rollout_zarr_store(
+        tmp_path / "fractional-qh-count.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=114)[:1],
+    ).store_dir
+    root = zarr.open_group(store, mode="r+")
+    root["q_h"].attrs["state_count"] = 1.5
+
+    summary = reporting.build_rollout_corpus_summary([store])
+
+    assert summary.verdict != "Ready"
+    assert summary.totals["included_store_count"] == 0
+    assert summary.totals["excluded_store_count"] == 1
+    assert "q_h/state_count attr does not match the derived state count" in summary.excluded_stores[0]["reason"]
+    assert summary.contract_totals.empty
+
+
+def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(tmp_path) -> None:
+    """Matching generated shards pool factual depths; profile changes stay faceted."""
+
+    records = build_rollout_records(horizon=2, num_samples=6, seed=112)[:1]
+
+    def store(name: str, profile: str):
+        return write_rollout_zarr_store(
+            tmp_path / f"{name}.zarr",
+            records,
+            manifest_context=RolloutStoreManifestContext(writer_config={"profile": profile}),
+        ).store_dir
+
+    same_a = store("same-a", "rich_local_60")
+    same_b = store("same-b", "rich_local_60")
+    incompatible = store("incompatible", "realistic_core_60")
+    summary = reporting.build_rollout_corpus_summary([incompatible, same_b, same_a])
+
+    root_gain = summary.temporal_summary[
+        (summary.temporal_summary["metric"] == "cumulative_target_root_gain")
+        & (summary.temporal_summary["step_index"] == 0)
+    ]
+    assert set(root_gain["profile"]) == {"realistic_core_60", "rich_local_60"}
+    assert set(root_gain["store_count"]) == {1, 2}
+    pooled = root_gain[root_gain["profile"] == "rich_local_60"]
+    assert len(pooled) == 1
+    assert pooled.iloc[0]["total_count"] == 2
+    assert pooled.iloc[0]["finite_count"] == 2
+    assert summary.totals["included_store_count"] == 3
+    assert summary.totals["q_h_state_count"] is not None
+    pyarrow = pytest.importorskip("pyarrow")
+    for frame in (
+        summary.candidate_support,
+        summary.endpoints,
+        summary.failure_counts,
+        summary.q_h_stores,
+        summary.temporal_summary,
+        summary.target_admission,
+        summary.feasibility,
+        summary.contract_totals,
+    ):
+        pyarrow.Table.from_pandas(frame, preserve_index=False)
+    for frame in (
+        summary.candidate_support,
+        summary.temporal_summary,
+        summary.target_admission,
+        summary.feasibility,
+        summary.failure_counts,
+        summary.endpoints,
+        summary.contract_totals,
+    ):
+        if not frame.empty:
+            assert "contract_payload_json" in frame.columns
+
+
+def test_report_profile_falls_back_to_explicit_campaign_profile_hash(tmp_path) -> None:
+    """Generated stores without a name expose their campaign profile hash."""
+
+    profile_hash = "campaign-profile-hash-1234567890"
+    result = write_rollout_zarr_store(
+        tmp_path / "profile-hash.zarr",
+        build_rollout_records(horizon=1, num_samples=6, seed=113)[:1],
+        manifest_context=RolloutStoreManifestContext(
+            shard={"campaign_binding": {"profile_hash": profile_hash}},
+        ),
+    )
+    frames = reporting.build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+    store_id = str(frames["stores"].iloc[0]["store_id"])
+
+    assert reporting._report_profile(frames, store_id) == f"profile_hash={profile_hash[:12]}"
+
+
+def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
+    """Outer compatibility fields stay separate from the inner temporal vocabulary."""
+
+    def contract(_frames, store_id, profile):
+        suffix = "a" if store_id == "store-a" else "b"
+        return {"id": f"contract-{suffix}", "label": f"contract-{suffix}", "profile": profile}
+
+    monkeypatch.setattr("aria_nbv.rollouts.reporting._persisted_rollout_contract", contract)
+    steps = pd.DataFrame(
+        [
+            {
+                "step_index": 0,
+                "policy": "temperature_softmax",
+                "temperature": 1.0,
+                "horizon": 1,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "cumulative_target_root_gain": 0.1,
+                "selected_target_root_gain": 0.1,
+                "selected_probability": 1.0,
+                "selected_entropy": 0.0,
+                "cumulative_target_rri": 0.1,
+                "num_valid_candidates": 10,
+                "invalid_fraction": 0.0,
+            }
+        ]
+    )
+    frames = [{"steps": steps.copy()}, {"steps": steps.copy()}]
+    included = [
+        {"path": "/a", "store_id": "store-a", "profile": "profile-a"},
+        {"path": "/b", "store_id": "store-b", "profile": "profile-b"},
+    ]
+
+    summary = _corpus_temporal_summary(frames, included)
+
+    assert set(summary["contract_id"]) == {"contract-a", "contract-b"}
+    assert set(summary["profile"]) == {"profile-a", "profile-b"}
+    assert set(summary["store_count"]) == {1}
+
+
+def test_corpus_temporal_summary_preserves_generation_cohort_facets(monkeypatch) -> None:
+    """Distinct persisted rollout lineages remain separate temporal populations."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {
+            "id": "contract",
+            "label": "contract",
+            "profile": profile,
+            "payload": {"profile": profile},
+        },
+    )
+    base = {
+        "step_index": 0,
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "cumulative_target_root_gain": 0.1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+    }
+    steps = pd.DataFrame(
+        [
+            {**base, "generation_cohort_id": "cohort-a"},
+            {**base, "generation_cohort_id": "cohort-b"},
+        ]
+    )
+    summary = _corpus_temporal_summary(
+        [{"steps": steps}],
+        [{"path": "/store", "store_id": "store", "profile": "profile"}],
+    )
+
+    assert set(summary["generation_cohort_id"]) == {"cohort-a", "cohort-b"}
+    assert set(summary["store_count"]) == {1}
+
+
+def test_corpus_temporal_summary_pools_seed_only_cohorts_and_retains_provenance(monkeypatch) -> None:
+    """Seed-only work units form one statistical series with nonzero IQR."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {
+            "id": "contract",
+            "label": "contract",
+            "profile": profile,
+            "payload": {"profile": profile},
+        },
+    )
+    base = {
+        "step_index": 0,
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "cumulative_target_root_gain": 0.1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+    }
+
+    def bundle(cohort: str, gain: float, seed: int) -> dict[str, pd.DataFrame]:
+        row = {
+            **base,
+            "cumulative_target_root_gain": gain,
+            "generation_cohort_id": cohort,
+            "generation_cohort": json.dumps(
+                {
+                    "policy": "temperature_softmax",
+                    "horizon": 1,
+                    "branch_factor": 1,
+                    "beam_width": 1,
+                    "temperature": 1.0,
+                    "candidate_config": "candidate",
+                    "branch_schedule": "branch",
+                },
+                sort_keys=True,
+            ),
+        }
+        parameters = pd.DataFrame(
+            [
+                {
+                    "store_id": cohort,
+                    "key": "writer_config.recipes[0].policy.seed",
+                    "value_text": str(seed),
+                    "value_float": np.nan,
+                    "value_int": np.nan,
+                    "value_bool": np.nan,
+                },
+                {
+                    "store_id": cohort,
+                    "key": "writer_config.recipes[0].policy.horizon",
+                    "value_text": np.nan,
+                    "value_float": np.nan,
+                    "value_int": 1,
+                    "value_bool": np.nan,
+                },
+            ]
+        )
+        return {"steps": pd.DataFrame([row]), "parameters": parameters}
+
+    summary = reporting._corpus_temporal_summary(
+        [bundle("cohort-a", 0.1, 11), bundle("cohort-b", 0.3, 22)],
+        [
+            {"path": "/a", "store_id": "cohort-a", "profile": "profile"},
+            {"path": "/b", "store_id": "cohort-b", "profile": "profile"},
+        ],
+    )
+
+    gain = summary.loc[summary["metric"] == "cumulative_target_root_gain"].iloc[0]
+    assert gain["generation_cohort_ids_json"] == '["cohort-a","cohort-b"]'
+    assert gain["finite_count"] == 2
+    assert gain["q25"] < gain["q75"]
+    assert gain["generation_series_id"] == summary["generation_series_id"].iloc[0]
+
+
+def test_corpus_temporal_summary_separates_candidate_or_branch_changes(monkeypatch) -> None:
+    """Scientific candidate and branch controls never pool into one series."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {"id": "contract", "label": "contract", "profile": profile, "payload": {}},
+    )
+    row = {
+        "step_index": 0,
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "cumulative_target_root_gain": 0.1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+    }
+
+    def bundle(cohort: str, candidate: str) -> dict[str, pd.DataFrame]:
+        payload = json.dumps(
+            {
+                "policy": "temperature_softmax",
+                "horizon": 1,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "temperature": 1.0,
+                "candidate_config": candidate,
+                "branch_schedule": "branch",
+            },
+            sort_keys=True,
+        )
+        return {
+            "steps": pd.DataFrame([{**row, "generation_cohort_id": cohort, "generation_cohort": payload}]),
+            "parameters": pd.DataFrame(
+                [
+                    {
+                        "store_id": cohort,
+                        "key": "writer_config.recipes[0].policy.horizon",
+                        "value_text": np.nan,
+                        "value_float": np.nan,
+                        "value_int": 1,
+                        "value_bool": np.nan,
+                    }
+                ]
+            ),
+        }
+
+    summary = reporting._corpus_temporal_summary(
+        [bundle("a", "candidate-a"), bundle("b", "candidate-b")],
+        [{"path": "/a", "store_id": "a", "profile": "profile"}, {"path": "/b", "store_id": "b", "profile": "profile"}],
+    )
+    assert summary["generation_series_id"].nunique() == 2
+
+
+def test_corpus_temporal_summary_uses_factual_early_terminated_depths(monkeypatch) -> None:
+    """An early-terminated rollout contributes no fabricated later-depth zero."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {"id": "contract", "label": "contract", "profile": profile, "payload": {}},
+    )
+    common = {
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 2,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+        "generation_cohort_id": "cohort",
+        "generation_cohort": "cohort",
+    }
+
+    def bundle(rows: list[dict[str, object]], store_id: str) -> dict[str, pd.DataFrame]:
+        return {
+            "steps": pd.DataFrame(rows),
+            "parameters": pd.DataFrame(
+                [
+                    {
+                        "store_id": store_id,
+                        "key": "writer_config.recipes[0].policy.horizon",
+                        "value_text": np.nan,
+                        "value_float": np.nan,
+                        "value_int": 2,
+                        "value_bool": np.nan,
+                    }
+                ]
+            ),
+        }
+
+    rows_a = [
+        {**common, "step_index": 0, "cumulative_target_root_gain": 0.1},
+        {**common, "step_index": 1, "cumulative_target_root_gain": 0.2},
+    ]
+    rows_b = [{**common, "step_index": 0, "cumulative_target_root_gain": 0.3}]
+    summary = reporting._corpus_temporal_summary(
+        [bundle(rows_a, "a"), bundle(rows_b, "b")],
+        [{"path": "/a", "store_id": "a", "profile": "profile"}, {"path": "/b", "store_id": "b", "profile": "profile"}],
+    )
+    gain = summary[summary["metric"] == "cumulative_target_root_gain"]
+    assert gain.set_index("step_index").loc[0, "finite_count"] == 2
+    assert gain.set_index("step_index").loc[1, "finite_count"] == 1
+    assert gain.set_index("step_index").loc[1, "median"] == pytest.approx(0.2)
+
+
+def test_contract_additive_totals_match_single_store_baselines() -> None:
+    def bundle(rollouts: int, steps: int, candidates: int, bytes_: int) -> dict[str, pd.DataFrame]:
+        return {
+            "stores": pd.DataFrame(
+                [{"rollouts": rollouts, "steps": steps, "candidates": candidates, "targets": 1, "sources": 1}]
+            ),
+            "runtime_storage": pd.DataFrame([{"total_bytes": bytes_}]),
+        }
+
+    included = [
+        {"store_id": "a", "contract_id": "contract-a", "contract": "A", "profile": "p-a"},
+        {"store_id": "b", "contract_id": "contract-b", "contract": "B", "profile": "p-b"},
+    ]
+    q_h = [
+        {
+            "store_id": "a",
+            "available": True,
+            "deep_count": True,
+            "truncated": False,
+            "state_count": 2,
+            "trainable_count": 3,
+            "padding_count": 1,
+        },
+        {
+            "store_id": "b",
+            "available": True,
+            "deep_count": True,
+            "truncated": False,
+            "state_count": 5,
+            "trainable_count": 7,
+            "padding_count": 2,
+        },
+    ]
+    totals = _contract_additive_totals([bundle(1, 2, 60, 100), bundle(3, 4, 180, 200)], included, q_h)
+
+    assert list(totals["contract_id"]) == ["contract-a", "contract-b"]
+    assert list(totals["candidate_count"]) == [60, 180]
+    assert list(totals["storage_bytes"]) == [100, 200]
+    assert list(totals["q_h_trainable_count"]) == [3, 7]
+
+
+def test_contract_additive_totals_do_not_fabricate_qh_chains_without_evidence() -> None:
+    """V0/no-Q_H stores expose unavailable chain counts, never rollout totals."""
+
+    bundle = {
+        "stores": pd.DataFrame([{"rollouts": 4, "steps": 8, "candidates": 480, "targets": 1, "sources": 1}]),
+        "runtime_storage": pd.DataFrame([{"total_bytes": 1024}]),
+    }
+    included = [
+        {
+            "store_id": "v0-store",
+            "contract_id": "contract-v0",
+            "contract": "V0",
+            "contract_payload_json": '{"profile":"v0"}',
+            "profile": "v0",
+        }
+    ]
+
+    totals = _contract_additive_totals(
+        [bundle],
+        included,
+        [{"store_id": "v0-store", "available": False, "deep_count": False, "blocking_reason": "no_q_h"}],
+    )
+
+    row = totals.iloc[0]
+    assert pd.isna(row["q_h_chain_count"])
+    assert bool(row["q_h_chain_available"]) is False
+    assert row["q_h_chain_unavailable_reason"] == "no_q_h"
+
+
+def test_contract_additive_totals_fail_closed_for_mixed_qh_completeness() -> None:
+    """One incomplete shard makes every same-contract Q_H total unavailable."""
+
+    def bundle(rollouts: int) -> dict[str, pd.DataFrame]:
+        return {
+            "stores": pd.DataFrame([{"rollouts": rollouts, "steps": 2, "candidates": 10, "targets": 1, "sources": 1}]),
+            "runtime_storage": pd.DataFrame([{"total_bytes": 100}]),
+        }
+
+    included = [
+        {"path": "/complete", "store_id": "same", "contract_id": "contract", "contract": "C", "profile": "p"},
+        {"path": "/incomplete", "store_id": "same", "contract_id": "contract", "contract": "C", "profile": "p"},
+    ]
+    q_h = [
+        {
+            "path": "/complete",
+            "store_id": "same",
+            "available": True,
+            "deep_count": True,
+            "truncated": False,
+            "state_count": 2,
+            "trainable_count": 1,
+            "padding_count": 0,
+        },
+        {
+            "path": "/incomplete",
+            "store_id": "same",
+            "available": False,
+            "deep_count": False,
+            "truncated": True,
+            "blocking_reason": "truncated_q_h",
+        },
+    ]
+
+    totals = _contract_additive_totals([bundle(1), bundle(1)], included, q_h)
+
+    row = totals.iloc[0]
+    assert bool(row["q_h_chain_available"]) is False
+    assert pd.isna(row["q_h_chain_count"])
+    assert pd.isna(row["q_h_state_count"])
+    assert pd.isna(row["q_h_trainable_count"])
+    assert pd.isna(row["q_h_padding_count"])
+    assert row["q_h_chain_unavailable_reason"] == "truncated_q_h"
+
+
+@pytest.mark.parametrize("field,value", [("state_count", None), ("trainable_count", 1.5), ("padding_count", -1)])
+def test_contract_additive_totals_require_complete_nonnegative_qh_counts(field: str, value: object) -> None:
+    """Deep Q_H status is unavailable unless every additive count is valid."""
+
+    bundle = {
+        "stores": pd.DataFrame([{"rollouts": 1, "steps": 2, "candidates": 10, "targets": 1, "sources": 1}]),
+        "runtime_storage": pd.DataFrame([{"total_bytes": 100}]),
+    }
+    included = [
+        {
+            "path": "/incomplete-counts",
+            "store_id": "store",
+            "contract_id": "contract",
+            "contract": "C",
+            "profile": "p",
+        }
+    ]
+    q_h = {
+        "path": "/incomplete-counts",
+        "store_id": "store",
+        "available": True,
+        "deep_count": True,
+        "truncated": False,
+        "state_count": 2,
+        "trainable_count": 1,
+        "padding_count": 0,
+    }
+    q_h[field] = value
+
+    row = _contract_additive_totals([bundle], included, [q_h]).iloc[0]
+
+    assert bool(row["q_h_chain_available"]) is False
+    assert pd.isna(row["q_h_chain_count"])
+    assert pd.isna(row["q_h_state_count"])
+    assert pd.isna(row["q_h_trainable_count"])
+    assert pd.isna(row["q_h_padding_count"])
+    assert row["q_h_chain_unavailable_reason"] == "Q_H evidence unavailable or incomplete"
 
 
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:

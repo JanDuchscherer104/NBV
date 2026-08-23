@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -244,7 +245,7 @@ class _FakeCampaign:
 
     def load_plan(self, path: Path):
         assert path.exists()
-        return object()
+        return SimpleNamespace(source_manifest_hash="source-test", admission_audit_hash="audit-test")
 
     def smoke_evidence(self, plan):
         if self.error:
@@ -279,6 +280,43 @@ def test_launch_ready_rejects_stale_smoke_evidence(tmp_path: Path) -> None:
     assert panel._launch_ready(campaign, plan_path) is False
 
 
+def test_admission_audit_renders_all_three_figures(monkeypatch) -> None:
+    """Real audit-shaped payloads reach reason, IoU, and scene plots."""
+
+    figures = []
+    monkeypatch.setattr(panel, "_render_plot", lambda figure, *_args, **_kwargs: figures.append(figure))
+    metrics: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        panel.st,
+        "columns",
+        lambda count: [SimpleNamespace(metric=lambda label, value: metrics.append((label, value)))] * count,
+    )
+    monkeypatch.setattr(panel.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(panel.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(panel.st, "download_button", lambda *_args, **_kwargs: None)
+
+    panel._render_admission_audit(
+        {
+            "counts": {
+                "zero_observation_samples": 3,
+                "scenes_with_zero_observation_samples": 2,
+                "zero_only_scenes": 1,
+            },
+            "reason_rows": [{"reason": "admitted", "count": 1, "admitted": True}],
+            "iou_rows": [{"oriented_iou": 0.4, "reason": "admitted"}],
+            "scene_rows": [{"admission_rate": 1.0}],
+            "rows": [],
+        },
+        threshold=0.2,
+    )
+
+    assert len(figures) == 3
+    assert ("Zero-target samples", "3") in metrics
+    assert ("Scenes containing zero-target samples", "2") in metrics
+    assert ("Zero-only scenes", "1") in metrics
+    assert "with observed targets" in str(figures[-1].layout.title.text)
+
+
 class _FakeColumn:
     def __init__(self, buttons: set[str]) -> None:
         self.buttons = buttons
@@ -293,6 +331,7 @@ class _FakeStreamlit:
         self.buttons = buttons or set()
         self.controls = controls or {}
         self.number_inputs: dict[str, dict[str, object]] = {}
+        self.selectboxes: dict[str, tuple[object, ...]] = {}
         self.json_payloads: list[object] = []
         self.messages: list[str] = []
         self.warnings: list[str] = []
@@ -303,7 +342,9 @@ class _FakeStreamlit:
         pass
 
     def selectbox(self, label, options, **kwargs):
-        return options[0]
+        key = kwargs.get("key", label)
+        self.selectboxes[key] = tuple(options)
+        return self.controls.get(key, options[0])
 
     def text_input(self, label, value="", **kwargs):
         return value
@@ -389,6 +430,48 @@ def test_page_exposes_bounded_operational_controls(monkeypatch, tmp_path: Path) 
     assert fake_st.number_inputs["campaign_free_disk_floor"]["max_value"] == 1024
 
 
+def test_page_exposes_only_explicitly_reviewed_configs_with_default_unchanged(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
+    panel.render_campaign_generation_page()
+    assert fake_st.selectboxes["campaign_config_path"] == panel._REVIEWED_CONFIGS
+    assert fake_st.selectboxes["campaign_config_path"][0] == panel._DEFAULT_CONFIG
+
+
+def test_selected_reviewed_config_drives_admission_audit_without_launch(monkeypatch, tmp_path: Path) -> None:
+    selected = panel._REVIEWED_CONFIGS[1]
+    campaign, fake_st, _ = _patch_fake_page(
+        monkeypatch,
+        tmp_path,
+        controls={"campaign_config_path": selected},
+        buttons={"Load admission audit"},
+    )
+    selected_config = tmp_path / "pilot-corrected-v10.toml"
+    audit_path = campaign.config.output_root / "admission-audit.json"
+    audit_path.write_text("{}", encoding="utf-8")
+    plan_path = campaign.config.output_root / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    resolved: list[str] = []
+    monkeypatch.setattr(
+        panel,
+        "resolve_config_toml_path",
+        lambda value: resolved.append(value) or selected_config,
+    )
+    loaded: list[str] = []
+    monkeypatch.setattr(
+        panel,
+        "_cached_admission_evidence",
+        lambda path, *_args, **_kwargs: loaded.append(path) or {"counts": {"observed": 1}},
+    )
+    monkeypatch.setattr(panel, "_render_admission_audit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(panel, "build_campaign_argv", lambda *args, **kwargs: ["not", "invoked"])
+
+    panel.render_campaign_generation_page()
+
+    assert resolved == [selected]
+    assert loaded == [audit_path.as_posix()]
+    assert not any("not invoked" in code for code in fake_st.codes)
+
+
 def test_page_disables_launch_for_invalid_operational_control(monkeypatch, tmp_path: Path) -> None:
     _, fake_st, _ = _patch_fake_page(
         monkeypatch,
@@ -399,6 +482,60 @@ def test_page_disables_launch_for_invalid_operational_control(monkeypatch, tmp_p
     panel.render_campaign_generation_page()
     assert fake_st.messages == []
     assert any("within their displayed bounds" in warning for warning in fake_st.warnings)
+
+
+def test_page_does_not_read_admission_audit_until_explicit_load(monkeypatch, tmp_path: Path) -> None:
+    campaign, _, _ = _patch_fake_page(monkeypatch, tmp_path)
+    (campaign.config.output_root / "admission-audit.json").write_text("{}", encoding="utf-8")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        panel,
+        "_cached_admission_evidence",
+        lambda path, *_args, **_kwargs: calls.append(path) or {},
+    )
+
+    panel.render_campaign_generation_page()
+
+    assert calls == []
+
+
+def test_page_loads_and_renders_identity_bound_admission_evidence(monkeypatch, tmp_path: Path) -> None:
+    campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Load admission audit"})
+    audit_path = campaign.config.output_root / "admission-audit.json"
+    audit_path.write_text("{}", encoding="utf-8")
+    payload = {"counts": {"observed": 1}}
+    calls: list[tuple[str, dict[str, object]]] = []
+    rendered: list[tuple[dict[str, object], float]] = []
+
+    def load(path: str, _identity: object, **kwargs: object) -> dict[str, object]:
+        calls.append((path, kwargs))
+        return payload
+
+    monkeypatch.setattr(panel, "_cached_admission_evidence", load)
+    monkeypatch.setattr(
+        panel,
+        "_render_admission_audit",
+        lambda value, *, threshold: rendered.append((value, threshold)),
+    )
+
+    panel.render_campaign_generation_page()
+
+    assert calls == [
+        (
+            audit_path.as_posix(),
+            {
+                "campaign_id": "cuda-campaign",
+                "source_manifest_hash": "source-test",
+                "admission_audit_hash": "audit-test",
+            },
+        )
+    ]
+    assert rendered == [(payload, 0.2)]
+    assert panel._ADMISSION_STATE_KEY in fake_st.session_state
+    assert (
+        "aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py"
+        in panel._admission_explanation("reasons", threshold=0.2).external_references[0][1]
+    )
 
 
 def test_page_warns_and_disables_launch_below_free_disk_floor(monkeypatch, tmp_path: Path) -> None:

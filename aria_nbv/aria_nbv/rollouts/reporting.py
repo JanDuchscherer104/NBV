@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -20,17 +21,20 @@ import pandas as pd
 
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
+    SchemaValidation,
+    build_compact_statistics,
+    build_effective_streamlit_trust,
+    build_manifest_facts,
+    build_promotion_evidence,
     candidate_audit_rows,  # noqa: F401 - retained for direct consumer compatibility
     candidate_population_evidence,
     discounted_rollout_return_rows,
     oracle_headroom_evidence,
-    promoted_store_validation_error,
     q_h_evidence_rows,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
     rollout_header_summary,
-    rollout_statistics,
     rollout_step_objective_rows,
     rollout_tree_summary_rows,
     runtime_storage_statistics,
@@ -40,6 +44,23 @@ from .inspection import (
     validity_waterfall_rows,
 )
 from .zarr_store import RolloutZarrStoreReader
+
+
+class _ManifestSnapshotReader:
+    """Reader view that reuses one already-read manifest snapshot."""
+
+    def __init__(self, reader: RolloutZarrStoreReader, manifest_payload: dict[str, object]) -> None:
+        self._reader = reader
+        self._manifest_payload = manifest_payload
+
+    def manifest(self) -> dict[str, object]:
+        """Return the fixed manifest snapshot for this report projection."""
+
+        return self._manifest_payload
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._reader, name)
+
 
 THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v1"
 """Schema version for compact thesis-report JSON bundles."""
@@ -226,6 +247,8 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "branch_factor",
         "beam_width",
         "temperature",
+        "generation_cohort_id",
+        "generation_cohort",
         "cumulative_target_rri",
         "marginal_target_rri",
         "cumulative_scene_rri",
@@ -300,6 +323,7 @@ THESIS_REPORT_TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
         "file_count",
         "total_bytes",
         "bytes_per_candidate",
+        "bytes_per_candidate_reason",
         "file_count_limit",
         "bytes_per_candidate_limit",
         "status",
@@ -473,6 +497,50 @@ _FACT_SPECS = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class RolloutCorpusSummary:
+    """Safe additive evidence across explicitly selected rollout stores."""
+
+    verdict: Literal["Ready", "Incomplete", "Blocked"]
+    """Whether every selected store contributed validated evidence."""
+
+    selected_paths: tuple[Path, ...]
+    """Normalized requested store paths in deterministic order."""
+
+    included_stores: tuple[dict[str, object], ...]
+    """Validated store identities and profiles included in all totals."""
+
+    excluded_stores: tuple[dict[str, str], ...]
+    """Selected stores excluded with exact validation or projection reasons."""
+
+    totals: dict[str, object]
+    """Additive store, rollout, storage, and complete deep-Q_H counts."""
+
+    candidate_support: pd.DataFrame
+    """Additive candidate support grouped by exact generation cohort and family."""
+
+    endpoints: pd.DataFrame
+    """Store-qualified diagnostic endpoint rows, preserving profile, policy, and horizon."""
+
+    failure_counts: pd.DataFrame
+    """Failure counts grouped only by kind and severity."""
+
+    q_h_stores: pd.DataFrame
+    """Per-store deep Q_H counts and any explicit unavailability reason."""
+
+    temporal_summary: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Factual finite-only depth summaries, separated by persisted contract."""
+
+    target_admission: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Additive target-admission counts across validated stores."""
+
+    feasibility: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Additive collision and clearance availability evidence by exact cohort."""
+
+    contract_totals: pd.DataFrame = field(default_factory=pd.DataFrame)
+    """Deterministic additive totals faceted by persisted compatibility contract."""
+
+
 def build_thesis_report_frames(
     store_paths: Iterable[Path | str],
     *,
@@ -513,6 +581,964 @@ def build_thesis_report_frames(
         _append_sidecar_rows(rows, sidecar_path, evidence_status=evidence_status)
 
     return {name: _frame(name, table_rows) for name, table_rows in rows.items()}
+
+
+def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCorpusSummary:
+    """Build safe multi-store counts without pooling scientific macro estimates.
+
+    Every store first crosses the canonical report validation and promotion
+    seam. Invalid selections remain visible in :attr:`excluded_stores`. Valid
+    stores contribute additive counts, exact-cohort candidate support, raw
+    store-qualified diagnostic endpoints, and grouped failure counts. Q_H mask
+    totals are reported only when every included store completes the explicit
+    deep count.
+    """
+
+    selected = tuple(sorted({Path(path).expanduser().resolve() for path in store_paths}, key=Path.as_posix))
+    if not selected:
+        raise ValueError("At least one rollout store is required to build a corpus summary.")
+
+    included: list[dict[str, object]] = []
+    excluded: list[dict[str, str]] = []
+    valid_frames: list[dict[str, pd.DataFrame]] = []
+    q_h_rows: list[dict[str, object]] = []
+    for path in selected:
+        try:
+            frames = build_thesis_report_frames((path,), evidence_status="pilot")
+            store_row = frames["stores"].iloc[0]
+            store_id = str(store_row["store_id"])
+            profile = _report_profile(frames, store_id)
+            contract = _persisted_rollout_contract(frames, store_id, profile)
+            reader = RolloutZarrStoreReader(path)
+            validation = reader.validate()
+            q_h_row = q_h_evidence_rows(reader, deep_count=True, validation_result=validation)[0]
+        except Exception as exc:
+            excluded.append({"path": path.as_posix(), "reason": f"{type(exc).__name__}: {exc}"})
+            continue
+        included.append(
+            {
+                "path": path.as_posix(),
+                "store_id": store_id,
+                "name": str(store_row["name"]),
+                "profile": profile,
+                "contract_id": contract["id"],
+                "contract": contract["label"],
+                "contract_payload_json": json.dumps(contract["payload"], sort_keys=True, separators=(",", ":")),
+            }
+        )
+        valid_frames.append(frames)
+        q_h_rows.append(
+            {
+                "path": path.as_posix(),
+                "store_id": store_id,
+                "contract_id": contract["id"],
+                "contract": contract["label"],
+                "profile": contract["profile"],
+                "contract_payload_json": json.dumps(contract["payload"], sort_keys=True, separators=(",", ":")),
+                **q_h_row,
+            }
+        )
+
+    stores = _concat_report_frames(valid_frames, "stores")
+    runtime = _concat_report_frames(valid_frames, "runtime_storage")
+    candidate = _candidate_corpus_support(_contract_frames(valid_frames, included, "candidate_composition"))
+    endpoints = _corpus_endpoints(valid_frames, included)
+    failures = _corpus_failure_counts(_contract_frames(valid_frames, included, "failures"))
+    temporal = _corpus_temporal_summary(valid_frames, included)
+    target_admission = _corpus_target_admission(_contract_frames(valid_frames, included, "targets"))
+    feasibility = _corpus_feasibility(_contract_frames(valid_frames, included, "candidate_collision_support"))
+    contract_totals = _contract_additive_totals(valid_frames, included, q_h_rows)
+    q_h_stores = (
+        pd.DataFrame(q_h_rows).sort_values(["store_id"], kind="stable").reset_index(drop=True)
+        if q_h_rows
+        else pd.DataFrame(
+            columns=(
+                "path",
+                "store_id",
+                "contract_id",
+                "contract",
+                "contract_payload_json",
+                "profile",
+                "available",
+                "blocking_reason",
+                "deep_count",
+                "state_count",
+                "trainable_count",
+                "padding_count",
+            )
+        )
+    )
+    q_h_complete = bool(q_h_rows) and all(
+        bool(row.get("available"))
+        and bool(row.get("deep_count"))
+        and not bool(row.get("truncated"))
+        and all(_is_nonnegative_int(row.get(field)) for field in ("state_count", "trainable_count", "padding_count"))
+        for row in q_h_rows
+    )
+    totals = {
+        "selected_store_count": len(selected),
+        "included_store_count": len(included),
+        "excluded_store_count": len(excluded),
+        "rollout_count": _frame_int_sum(stores, "rollouts"),
+        "step_count": _frame_int_sum(stores, "steps"),
+        "candidate_count": _frame_int_sum(stores, "candidates"),
+        "target_row_count": _frame_int_sum(stores, "targets"),
+        "source_row_count": _frame_int_sum(stores, "sources"),
+        "physical_sample_count": _frame_int_sum(stores, "sources"),
+        "storage_bytes": _frame_int_sum(runtime, "total_bytes"),
+        "q_h_chain_count": _frame_int_sum(stores, "rollouts") if q_h_complete else None,
+        "q_h_chain_available": q_h_complete,
+        "q_h_chain_unavailable_reason": None if q_h_complete else "Q_H evidence unavailable or incomplete",
+        "q_h_state_count": _row_int_sum(q_h_rows, "state_count") if q_h_complete else None,
+        "q_h_trainable_count": _row_int_sum(q_h_rows, "trainable_count") if q_h_complete else None,
+        "q_h_padding_count": _row_int_sum(q_h_rows, "padding_count") if q_h_complete else None,
+    }
+    verdict: Literal["Ready", "Incomplete", "Blocked"]
+    if not included:
+        verdict = "Blocked"
+    elif excluded:
+        verdict = "Incomplete"
+    else:
+        verdict = "Ready"
+    return RolloutCorpusSummary(
+        verdict=verdict,
+        selected_paths=selected,
+        included_stores=tuple(included),
+        excluded_stores=tuple(excluded),
+        totals=totals,
+        candidate_support=candidate,
+        endpoints=endpoints,
+        failure_counts=failures,
+        q_h_stores=q_h_stores,
+        temporal_summary=temporal,
+        target_admission=target_admission,
+        feasibility=feasibility,
+        contract_totals=contract_totals,
+    )
+
+
+def _report_profile(frames: Mapping[str, pd.DataFrame], store_id: str) -> str:
+    """Return the first persisted writer-profile spelling for one store."""
+
+    parameters = frames["parameters"]
+    candidates = ("writer_config.profile", "writer_config.recipe_profile", "writer_config.name")
+    for key in candidates:
+        rows = parameters[(parameters["store_id"] == store_id) & (parameters["key"] == key)]
+        if not rows.empty and isinstance(rows.iloc[0]["value_text"], str):
+            return str(rows.iloc[0]["value_text"])
+    binding = parameters[
+        (parameters["store_id"] == store_id) & (parameters["key"] == "shard.campaign_binding.profile_hash")
+    ]
+    if not binding.empty and isinstance(binding.iloc[0]["value_text"], str):
+        return f"profile_hash={str(binding.iloc[0]['value_text'])[:12]}"
+    return "unknown"
+
+
+def _corpus_temporal_summary(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+) -> pd.DataFrame:
+    """Recompute factual depth summaries over compatible validated shards.
+
+    Campaign shards combine only when their full persisted compatibility payload
+    matches. Policy, temperature, and rollout controls stay as explicit plot
+    strata rather than being pooled into a single trace.
+    """
+
+    columns = (
+        "metric",
+        "units",
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "generation_cohort_id",
+        "generation_series_id",
+        "generation_series",
+        "generation_cohort_ids_json",
+        "generation_cohort_payloads_json",
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+        "step_index",
+        "store_count",
+        "total_count",
+        "finite_count",
+        "missing_count",
+        "median",
+        "q25",
+        "q75",
+        "iqr_width",
+        "mean",
+        "min",
+        "max",
+    )
+    annotated: list[pd.DataFrame] = []
+    for bundle, store in zip(frames, included, strict=True):
+        steps = bundle["steps"].copy()
+        if steps.empty:
+            continue
+        contract = _persisted_rollout_contract(bundle, str(store["store_id"]), str(store["profile"]))
+        # A content-derived ``store_id`` can legitimately be equal for two
+        # separately selected shards in a reproducibility fixture. Corpus
+        # presence is about the explicit physical selection, not that digest.
+        steps["corpus_store_path"] = str(store["path"])
+        steps["contract_id"] = contract["id"]
+        steps["contract"] = contract["label"]
+        steps["contract_payload_json"] = json.dumps(contract.get("payload", {}), sort_keys=True, separators=(",", ":"))
+        steps["profile"] = contract["profile"]
+        # Older report frames do not persist this optional cohort identity;
+        # fall back to the exact contract so current shards still pool while
+        # richer frames retain candidate/rollout lineage explicitly.
+        if "generation_cohort_id" not in steps:
+            steps["generation_cohort_id"] = contract["id"]
+        if "generation_cohort" not in steps:
+            steps["generation_cohort"] = steps["generation_cohort_id"].map(str)
+        series_by_cohort: dict[str, tuple[str, str]] = {}
+        for cohort_id, cohort_rows in steps.groupby("generation_cohort_id", dropna=False, sort=False):
+            cohort_id = str(_temporal_group_scalar(cohort_id))
+            cohort_json = cohort_rows.get("generation_cohort", pd.Series(dtype=object)).dropna()
+            series_by_cohort[cohort_id] = _scientific_temporal_series_identity(
+                bundle,
+                store_id=str(store["store_id"]),
+                contract=contract,
+                cohort_id=cohort_id,
+                cohort_payload=None if cohort_json.empty else str(cohort_json.iloc[0]),
+            )
+
+        def series_identity(
+            value: object, index: int, mapping: Mapping[str, tuple[str, str]] = series_by_cohort
+        ) -> str:
+            return mapping[str(_temporal_group_scalar(value))][index]
+
+        steps["generation_series_id"] = steps["generation_cohort_id"].map(lambda value: series_identity(value, 0))
+        steps["generation_series"] = steps["generation_cohort_id"].map(lambda value: series_identity(value, 1))
+        annotated.append(steps)
+    if not annotated:
+        return pd.DataFrame(columns=columns)
+
+    from .inspection import temporal_metric_summary_rows
+
+    source = pd.concat(annotated, ignore_index=True)
+    groups = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "generation_series_id",
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+    )
+    for group_field in groups:
+        source[group_field] = source[group_field].map(_temporal_group_scalar)
+    outer_groups = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "generation_series_id",
+        "generation_series",
+    )
+    inner_groups = (
+        "policy",
+        "temperature",
+        "horizon",
+        "branch_factor",
+        "beam_width",
+    )
+    summaries: list[pd.DataFrame] = []
+    for outer_key, partition in source.groupby(list(outer_groups), dropna=False, sort=True):
+        outer_values = dict(zip(outer_groups, outer_key if isinstance(outer_key, tuple) else (outer_key,), strict=True))
+        partition_records = partition.to_dict("records")
+        cohort_ids = sorted({str(value) for value in partition["generation_cohort_id"].dropna()})
+        cohort_payloads = {
+            str(row["generation_cohort_id"]): row.get("generation_cohort")
+            for row in partition[["generation_cohort_id", "generation_cohort"]].drop_duplicates().to_dict("records")
+        }
+        store_counts = (
+            partition.groupby([*inner_groups, "step_index"], dropna=False, sort=True)["corpus_store_path"]
+            .nunique()
+            .rename("store_count")
+            .reset_index()
+        )
+        for metric in (
+            "cumulative_target_root_gain",
+            "selected_target_root_gain",
+            "selected_probability",
+            "selected_entropy",
+            "cumulative_target_rri",
+            "valid_fanout",
+            "invalid_fraction",
+        ):
+            rows = temporal_metric_summary_rows(partition_records, metric=metric, group_fields=inner_groups)
+            if not rows:
+                continue
+            frame = pd.DataFrame(rows).merge(
+                store_counts,
+                on=[*inner_groups, "step_index"],
+                how="left",
+                validate="one_to_one",
+            )
+            for outer_field, value in outer_values.items():
+                frame[outer_field] = value
+            frame["generation_cohort_id"] = cohort_ids[0] if len(cohort_ids) == 1 else "multiple"
+            frame["generation_cohort_ids_json"] = json.dumps(cohort_ids, separators=(",", ":"))
+            frame["generation_cohort_payloads_json"] = json.dumps(
+                cohort_payloads, sort_keys=True, separators=(",", ":"), default=str
+            )
+            frame["store_count"] = frame["store_count"].astype(np.int64)
+            frame["iqr_width"] = frame["q75"] - frame["q25"]
+            summaries.append(frame.loc[:, columns])
+    if not summaries:
+        return pd.DataFrame(columns=columns)
+    return (
+        pd.concat(summaries, ignore_index=True)
+        .sort_values(
+            ["metric", "contract_id", "generation_series_id", "policy", "temperature", "horizon", "step_index"],
+            kind="stable",
+        )
+        .reset_index(drop=True)
+    )
+
+
+def _scientific_temporal_series_identity(
+    frames: Mapping[str, pd.DataFrame],
+    *,
+    store_id: str,
+    contract: Mapping[str, object],
+    cohort_id: str,
+    cohort_payload: str | None,
+) -> tuple[str, str]:
+    """Build a temporal-series identity while retaining stochastic provenance.
+
+    ``generation_cohort_id`` is deliberately a full provenance identity and
+    may differ for every work-unit seed.  Temporal statistics may pool those
+    cohorts only when the persisted recipe payload is available and agrees
+    after stochastic fields are removed.  Missing recipe evidence therefore
+    fails closed to the full cohort rather than silently pooling unknown
+    configurations.
+    """
+
+    parameters = frames.get("parameters", pd.DataFrame())
+    recipe_rows = parameters[
+        (parameters.get("store_id", pd.Series(dtype=object)) == store_id)
+        & parameters.get("key", pd.Series(dtype=str)).astype(str).str.startswith("writer_config.recipes[")
+    ]
+
+    def scalar(row: pd.Series) -> object:
+        for value_field in ("value_text", "value_float", "value_int", "value_bool"):
+            value = row.get(value_field)
+            if pd.notna(value):
+                return value.item() if isinstance(value, np.generic) else value
+        return None
+
+    def semantic_key(key: str) -> str | None:
+        # Seeds, RNG/work-unit identifiers, and execution-only controls are
+        # provenance, not scientific recipe choices.
+        leaf = key.rsplit(".", 1)[-1].lower()
+        volatile = ("seed", "rng", "random", "work_unit", "sample_key", "store_dir", "path")
+        return None if any(token in leaf for token in volatile) else key
+
+    recipe_payload = {
+        str(row["key"]): scalar(row) for _, row in recipe_rows.iterrows() if semantic_key(str(row["key"])) is not None
+    }
+    cohort_fields: dict[str, object]
+    try:
+        parsed = json.loads(cohort_payload) if cohort_payload else None
+    except (TypeError, json.JSONDecodeError):
+        parsed = None
+    if not recipe_payload or not isinstance(parsed, dict):
+        # Full cohort fallback is the conservative behavior for legacy or
+        # incomplete stores.
+        payload = {"generation_cohort_id": cohort_id, "reason": "recipe_payload_unavailable"}
+    else:
+        cohort_fields = {
+            key: parsed.get(key)
+            for key in (
+                "policy",
+                "horizon",
+                "branch_factor",
+                "beam_width",
+                "temperature",
+                "candidate_config",
+                "branch_schedule",
+            )
+        }
+        payload = {
+            "contract": contract.get("payload", {}),
+            "cohort": cohort_fields,
+            "recipe": recipe_payload,
+        }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16], encoded
+
+
+def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, object]:
+    """Return the exact persisted compatibility contract for one store.
+
+    The human label is intentionally compact, but the identity is derived from
+    every persisted parameter that can change the meaning of a report row.  In
+    particular, two shards with the same display profile are not pooled when a
+    target protocol, source/split lineage, Q_H/return contract, or selected
+    depth modality differs.
+    """
+
+    parameters = frames["parameters"]
+
+    def values(key: str) -> tuple[object, ...]:
+        rows = parameters[
+            (parameters["store_id"] == store_id)
+            & ((parameters["key"] == key) | parameters["key"].str.startswith(f"{key}["))
+        ]
+        output: list[object] = []
+        for _, row in rows.iterrows():
+            for column in ("value_text", "value_float", "value_int", "value_bool"):
+                candidate = row[column]
+                if pd.notna(candidate):
+                    output.append(candidate.item() if isinstance(candidate, np.generic) else candidate)
+                    break
+        return tuple(output)
+
+    def value(key: str) -> object:
+        return values(key)[0] if values(key) else None
+
+    # Compatibility is semantic, not work-unit identity.  In particular,
+    # rollout/source/split hashes, seeds, sample keys, temporary store paths,
+    # and recipe controls are intentionally excluded: they vary across shards
+    # while the persisted scientific contract remains comparable.
+    config_hash_suffixes = {
+        "candidate",
+        "oracle",
+        "target_crop_policy",
+        "target_protocol",
+    }
+    volatile_tokens = ("seed", "path", "paths", "store_dir", "sample_keys", "verbosity", "is_debug", "device")
+    writer_semantic_prefixes = (
+        "writer_config.candidate_mixture.",
+        "writer_config.store.",
+        "writer_config.target_scorer.",
+    )
+    writer_excluded_suffixes = {
+        "writer_config.store.split_manifest_hash",
+        "writer_config.store.store_dir",
+        "writer_config.store.paths",
+    }
+    root_attr_suffixes = {
+        "schema_id",
+        "schema_version",
+        "target_protocol_version",
+        "reason_code_version",
+        "return_semantics",
+        "discount_gamma",
+        "q_h_return_semantics",
+        "q_h_reward_metric",
+        "q_h_td_semantics",
+        "q_h_horizon",
+        "q_h_max_candidates",
+        "q_h_view_role",
+        "view_role",
+        "source_offline_store_version",
+        "source_split",
+        "campaign_split",
+        "q_h_source_tables",
+        "q_h_view_persisted",
+        "selected_depth_enabled",
+        "selected_depth_role",
+        "selected_depth_renderer",
+        "selected_depth_source_resolution",
+        "selected_depth_units",
+        "selected_depth_dtype",
+        "selected_depth_width_px",
+        "selected_depth_height_px",
+        "selected_depth_znear_m",
+        "selected_depth_zfar_m",
+        "selected_depth_invalid_fill_value",
+        "selected_depth_valid_mask_dtype",
+        "selected_depth_codec",
+    }
+
+    def json_value(row: pd.Series) -> object:
+        for column in ("value_text", "value_float", "value_int", "value_bool"):
+            candidate = row[column]
+            if pd.notna(candidate):
+                candidate = candidate.item() if isinstance(candidate, np.generic) else candidate
+                if isinstance(candidate, float) and not math.isfinite(candidate):
+                    return str(candidate)
+                return candidate
+        return None
+
+    exact_rows: list[dict[str, object]] = []
+    for _, row in parameters[parameters["store_id"] == store_id].iterrows():
+        key = str(row["key"])
+        root_attr_key = key.removeprefix("root_attrs.")
+        config_hash_key = key.removeprefix("config_hashes.")
+        is_config_hash = key.startswith("config_hashes.") and any(
+            config_hash_key == suffix or config_hash_key.startswith(f"{suffix}[") for suffix in config_hash_suffixes
+        )
+        is_writer_semantic = key.startswith(writer_semantic_prefixes) and key not in writer_excluded_suffixes
+        if is_writer_semantic and any(token in key for token in volatile_tokens):
+            is_writer_semantic = False
+        is_root_attr = key.startswith("root_attrs.") and root_attr_key in root_attr_suffixes
+        if key == "store_id" or not (is_config_hash or is_writer_semantic or is_root_attr):
+            continue
+        exact_rows.append({"key": key, "value": json_value(row)})
+    exact_rows.sort(key=lambda item: (str(item["key"]), json.dumps(item["value"], sort_keys=True, default=str)))
+    payload: dict[str, object] = {"profile": profile, "parameters": exact_rows}
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    candidate_configs = values("config_hashes.candidate")
+    return {
+        "id": hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16],
+        "profile": profile,
+        "payload": payload,
+        "label": (f"{profile} · candidate {str(candidate_configs[0] if candidate_configs else 'unknown')[:12]}"),
+    }
+
+
+def _temporal_group_scalar(value: object) -> object:
+    """Match the inspection owner's explicit unknown-group normalization."""
+
+    return "unknown" if value is None or (not isinstance(value, str) and bool(pd.isna(value))) else value
+
+
+def _concat_report_frames(frames: list[dict[str, pd.DataFrame]], name: str) -> pd.DataFrame:
+    """Concatenate one canonical report table in deterministic row order."""
+
+    if not frames:
+        return pd.DataFrame(columns=THESIS_REPORT_TABLE_COLUMNS[name])
+    return (
+        pd.concat([bundle[name] for bundle in frames], ignore_index=True)
+        .sort_values(list(THESIS_REPORT_TABLE_COLUMNS[name]), kind="stable", na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+def _contract_frames(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+    name: str,
+) -> pd.DataFrame:
+    """Attach persisted contract identity before any corpus grouping."""
+
+    annotated: list[pd.DataFrame] = []
+    for bundle, store in zip(frames, included, strict=True):
+        frame = bundle[name].copy()
+        if frame.empty:
+            continue
+        store_id = str(store["store_id"])
+        contract = _persisted_rollout_contract(bundle, store_id, str(store["profile"]))
+        frame["corpus_store_path"] = str(store["path"])
+        frame.insert(1, "contract_id", contract["id"])
+        frame.insert(2, "contract", contract["label"])
+        frame.insert(3, "profile", contract["profile"])
+        frame["contract_payload_json"] = json.dumps(contract["payload"], sort_keys=True, separators=(",", ":"))
+        annotated.append(frame)
+    if not annotated:
+        return pd.DataFrame()
+    return pd.concat(annotated, ignore_index=True)
+
+
+def _contract_additive_totals(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+    q_h_rows: list[dict[str, object]],
+) -> pd.DataFrame:
+    """Return additive physical totals without pooling incompatible contracts."""
+
+    columns = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "store_count",
+        "rollout_count",
+        "step_count",
+        "candidate_count",
+        "target_row_count",
+        "source_row_count",
+        "storage_bytes",
+        "q_h_chain_count",
+        "q_h_chain_available",
+        "q_h_chain_unavailable_reason",
+        "q_h_state_count",
+        "q_h_trainable_count",
+        "q_h_padding_count",
+    )
+    if not frames:
+        return pd.DataFrame(columns=columns)
+    rows: list[dict[str, object]] = []
+    for bundle, store in zip(frames, included, strict=True):
+        stores = bundle["stores"]
+        runtime = bundle["runtime_storage"]
+        store_row = stores.iloc[0] if not stores.empty else {}
+        runtime_row = runtime.iloc[0] if not runtime.empty else {}
+        store_path = store.get("path")
+        q_h = next(
+            (
+                row
+                for row in q_h_rows
+                if store_path is not None and row.get("path") is not None and str(row["path"]) == str(store_path)
+            ),
+            next((row for row in q_h_rows if row["store_id"] == store["store_id"]), {}),
+        )
+        q_h_counts_available = all(
+            _is_nonnegative_int(q_h.get(field)) for field in ("state_count", "trainable_count", "padding_count")
+        )
+        q_h_chain_available = (
+            bool(q_h.get("available"))
+            and bool(q_h.get("deep_count"))
+            and not bool(q_h.get("truncated"))
+            and q_h_counts_available
+        )
+        rows.append(
+            {
+                "contract_id": store["contract_id"],
+                "contract": store["contract"],
+                "contract_payload_json": store.get("contract_payload_json", "{}"),
+                "profile": store["profile"],
+                "store_count": 1,
+                "rollout_count": int(store_row.get("rollouts", 0)),
+                "step_count": int(store_row.get("steps", 0)),
+                "candidate_count": int(store_row.get("candidates", 0)),
+                "target_row_count": int(store_row.get("targets", 0)),
+                "source_row_count": int(store_row.get("sources", 0)),
+                "storage_bytes": int(runtime_row.get("total_bytes", 0)),
+                "q_h_chain_count": int(store_row.get("rollouts", 0)) if q_h_chain_available else None,
+                "q_h_chain_available": q_h_chain_available,
+                "q_h_chain_unavailable_reason": None
+                if q_h_chain_available
+                else q_h.get("blocking_reason", "Q_H evidence unavailable or incomplete"),
+                "q_h_state_count": _optional_qh_count(q_h, "state_count") if q_h_chain_available else None,
+                "q_h_trainable_count": _optional_qh_count(q_h, "trainable_count") if q_h_chain_available else None,
+                "q_h_padding_count": _optional_qh_count(q_h, "padding_count") if q_h_chain_available else None,
+            }
+        )
+    source = pd.DataFrame(rows)
+    additive = {
+        field: (field, "sum")
+        for field in columns[4:]
+        if field
+        not in {
+            "store_count",
+            "q_h_chain_available",
+            "q_h_chain_unavailable_reason",
+            "q_h_state_count",
+            "q_h_trainable_count",
+            "q_h_padding_count",
+        }
+    }
+    for field_name in ("q_h_state_count", "q_h_trainable_count", "q_h_padding_count"):
+        additive[field_name] = (field_name, lambda values: values.sum(min_count=1))
+    additive["q_h_chain_count"] = ("q_h_chain_count", lambda values: values.sum(min_count=1))
+    grouped = (
+        source.groupby(["contract_id", "contract", "contract_payload_json", "profile"], dropna=False, sort=True)
+        .agg(store_count=("store_count", "sum"), **additive)
+        .reset_index()
+    )
+    contract_keys = ["contract_id", "contract", "contract_payload_json", "profile"]
+    availability = (
+        source.groupby(contract_keys, dropna=False, sort=True)["q_h_chain_available"]
+        .all()
+        .reset_index(name="q_h_chain_available")
+    )
+    grouped = grouped.drop(columns="q_h_chain_available", errors="ignore").merge(
+        availability, on=contract_keys, how="left", validate="one_to_one"
+    )
+    reasons = (
+        source.groupby(contract_keys, dropna=False, sort=True)["q_h_chain_unavailable_reason"]
+        .agg(lambda values: tuple(sorted({str(value) for value in values if pd.notna(value) and str(value)})))
+        .reset_index(name="_q_h_reasons")
+    )
+    grouped = grouped.merge(reasons, on=contract_keys, how="left", validate="one_to_one")
+    grouped["q_h_chain_unavailable_reason"] = grouped.apply(
+        lambda row: (
+            None
+            if bool(row["q_h_chain_available"])
+            else "; ".join(row["_q_h_reasons"]) or "Q_H evidence unavailable or incomplete"
+        ),
+        axis=1,
+    )
+    unavailable = ~grouped["q_h_chain_available"].astype(bool)
+    grouped.loc[
+        unavailable,
+        [
+            "q_h_chain_count",
+            "q_h_state_count",
+            "q_h_trainable_count",
+            "q_h_padding_count",
+        ],
+    ] = None
+    grouped = grouped.drop(columns="_q_h_reasons")
+    return grouped.loc[:, columns].sort_values("contract_id", kind="stable").reset_index(drop=True)
+
+
+def _optional_qh_count(row: Mapping[str, object], field: str) -> int | None:
+    """Keep unavailable deep counts distinct from an observed zero."""
+
+    value = row.get(field)
+    return int(value) if _is_nonnegative_int(value) else None
+
+
+def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
+    """Recompute additive family support from exact generation cohorts."""
+
+    columns = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "generation_cohort_id",
+        "generation_cohort",
+        "family",
+        "store_count",
+        "allocated_count",
+        "actor_valid_count",
+        "oracle_valid_count",
+        "trainable_count",
+        "selected_count",
+        "actor_valid_rate",
+        "oracle_valid_rate",
+        "trainable_rate",
+        "selected_rate",
+        "aggregation",
+    )
+    if composition.empty:
+        return pd.DataFrame(columns=columns)
+    if "group_by" not in composition:
+        raise ValueError("Candidate composition rows require group_by.")
+    source = composition[composition["group_by"] == "mixture"].copy()
+    if source.empty:
+        return pd.DataFrame(columns=columns)
+    if "corpus_store_path" not in source:
+        source["corpus_store_path"] = source["store_id"]
+    count_columns = (
+        "allocated_count",
+        "actor_valid_count",
+        "oracle_valid_count",
+        "trainable_count",
+        "selected_count",
+    )
+    for column in count_columns:
+        source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
+    grouped = (
+        source.groupby(
+            ["contract_id", "contract", "contract_payload_json", "profile", "generation_cohort_id", "family"],
+            dropna=False,
+            sort=True,
+        )
+        .agg(
+            generation_cohort=("generation_cohort", "first"),
+            store_count=("corpus_store_path", "nunique"),
+            **{column: (column, "sum") for column in count_columns},
+        )
+        .reset_index()
+    )
+    allocated = grouped["allocated_count"].replace(0, np.nan)
+    grouped["actor_valid_rate"] = grouped["actor_valid_count"] / allocated
+    grouped["oracle_valid_rate"] = grouped["oracle_valid_count"] / allocated
+    grouped["trainable_rate"] = grouped["trainable_count"] / allocated
+    grouped["selected_rate"] = grouped["selected_count"] / allocated
+    grouped["aggregation"] = "additive counts within exact generation cohort and family"
+    return (
+        grouped.loc[:, columns]
+        .sort_values(["contract_id", "generation_cohort_id", "family"], kind="stable", na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
+    """Count target-admission outcomes without translating invalidity into RRI."""
+
+    columns = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "target_valid",
+        "gt_label_valid",
+        "gt_match_status",
+        "count",
+        "store_count",
+    )
+    if targets.empty:
+        return pd.DataFrame(columns=columns)
+    targets = targets.copy()
+    if "corpus_store_path" not in targets:
+        targets["corpus_store_path"] = targets["store_id"]
+    return (
+        targets.groupby(
+            [
+                "contract_id",
+                "contract",
+                "contract_payload_json",
+                "profile",
+                "target_valid",
+                "gt_label_valid",
+                "gt_match_status",
+            ],
+            dropna=False,
+            sort=True,
+        )
+        .agg(count=("target_row_id", "size"), store_count=("corpus_store_path", "nunique"))
+        .reset_index()
+        .loc[:, columns]
+    )
+
+
+def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
+    """Recompute only additive collision and clearance denominators by cohort."""
+
+    columns = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "generation_cohort_id",
+        "generation_cohort",
+        "store_count",
+        "candidate_count",
+        "collision_evaluated_count",
+        "collision_count",
+        "collision_rate",
+        "clearance_finite_count",
+        "clearance_denominator",
+        "clearance_coverage",
+    )
+    if collision.empty:
+        return pd.DataFrame(columns=columns)
+    count_columns = (
+        "candidate_count",
+        "collision_evaluated_count",
+        "collision_count",
+        "clearance_finite_count",
+        "clearance_denominator",
+    )
+    source = collision.copy()
+    if "corpus_store_path" not in source:
+        source["corpus_store_path"] = source["store_id"]
+    for column in count_columns:
+        source[column] = pd.to_numeric(source[column], errors="coerce").fillna(0).astype(np.int64)
+    grouped = (
+        source.groupby(
+            [
+                "contract_id",
+                "contract",
+                "contract_payload_json",
+                "profile",
+                "generation_cohort_id",
+                "generation_cohort",
+            ],
+            dropna=False,
+            sort=True,
+        )
+        .agg(store_count=("corpus_store_path", "nunique"), **{column: (column, "sum") for column in count_columns})
+        .reset_index()
+    )
+    grouped["collision_rate"] = grouped["collision_count"] / grouped["collision_evaluated_count"].replace(0, np.nan)
+    grouped["clearance_coverage"] = grouped["clearance_finite_count"] / grouped["clearance_denominator"].replace(
+        0, np.nan
+    )
+    return grouped.loc[:, columns]
+
+
+def _corpus_endpoints(
+    frames: list[dict[str, pd.DataFrame]],
+    included: list[dict[str, object]],
+) -> pd.DataFrame:
+    """Retain raw diagnostic endpoints with store and exact contract identity."""
+
+    rows: list[pd.DataFrame] = []
+    for bundle, store in zip(frames, included, strict=True):
+        frame = bundle["reconstruction_endpoints"].copy()
+        contract = _persisted_rollout_contract(bundle, str(store["store_id"]), str(store["profile"]))
+        frame.insert(1, "store_path", str(store["path"]))
+        frame.insert(2, "profile", str(store["profile"]))
+        frame.insert(3, "contract_id", contract["id"])
+        frame.insert(4, "contract", contract["label"])
+        frame.insert(
+            5,
+            "contract_payload_json",
+            json.dumps(contract.get("payload", {}), sort_keys=True, separators=(",", ":")),
+        )
+        rows.append(frame)
+    columns = (
+        "store_id",
+        "store_path",
+        "profile",
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        *THESIS_REPORT_TABLE_COLUMNS["reconstruction_endpoints"][1:],
+    )
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return (
+        pd.concat(rows, ignore_index=True)
+        .loc[:, columns]
+        .sort_values(
+            ["contract_id", "policy", "horizon", "store_id", "rollout_row_id"],
+            kind="stable",
+            na_position="last",
+        )
+        .reset_index(drop=True)
+    )
+
+
+def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
+    """Count suspicious rows by kind and severity without pooling causes."""
+
+    columns = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "kind",
+        "severity",
+        "count",
+        "store_count",
+    )
+    if failures.empty:
+        return pd.DataFrame(columns=columns)
+    failures = failures.copy()
+    if "corpus_store_path" not in failures:
+        failures["corpus_store_path"] = failures["store_id"]
+    return (
+        failures.groupby(
+            ["contract_id", "contract", "contract_payload_json", "profile", "kind", "severity"],
+            dropna=False,
+            sort=True,
+        )
+        .agg(count=("message", "size"), store_count=("corpus_store_path", "nunique"))
+        .reset_index()
+        .loc[:, columns]
+    )
+
+
+def _frame_int_sum(frame: pd.DataFrame, column: str) -> int:
+    """Sum one canonical nonnegative count column, treating no rows as zero."""
+
+    if frame.empty:
+        return 0
+    values = pd.to_numeric(frame[column], errors="raise")
+    if values.isna().any() or (values < 0).any():
+        raise ValueError(f"Corpus count column {column!r} must contain nonnegative integers.")
+    return int(values.sum())
+
+
+def _row_int_sum(rows: list[dict[str, object]], field: str) -> int:
+    """Sum a deep-Q_H count after completeness has been proven."""
+
+    return sum(int(row[field]) for row in rows)
+
+
+def _is_nonnegative_int(value: object) -> bool:
+    """Return whether a value is a factual nonnegative integer count."""
+
+    return isinstance(value, int | np.integer) and not isinstance(value, bool) and int(value) >= 0
 
 
 def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
@@ -575,9 +1601,20 @@ def _append_store_rows(
     if not validation.ok:
         detail = "; ".join(validation.errors[:3]) or "unknown validation error"
         raise ValueError(f"Rollout store {store_path} failed validation: {detail}")
-    manifest_payload = reader.manifest()
-    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
-        raise ValueError(f"Rollout store {store_path} failed promotion validation: {promotion_error}")
+    schema = SchemaValidation(
+        ok=bool(validation.ok),
+        num_rollouts=int(validation.num_rollouts),
+        num_steps=int(validation.num_steps),
+        num_candidates=int(validation.num_candidates),
+        errors=tuple(str(error) for error in validation.errors),
+    )
+    manifest_payload = build_manifest_facts(reader).payload
+    promotion = build_promotion_evidence(reader, manifest_payload=manifest_payload)
+    trust = build_effective_streamlit_trust(schema, promotion)
+    if not trust.ok:
+        detail = "; ".join(trust.errors[:3]) or "unknown promotion error"
+        raise ValueError(f"Rollout store {store_path} failed promotion validation: {detail}")
+    reader = _ManifestSnapshotReader(reader, manifest_payload)  # type: ignore[assignment]
     manifest = manifest_payload.get("manifest", {})
     root_attrs = manifest_payload.get("root_attrs", {})
     manifest_sha256 = str(root_attrs["manifest_sha256"])
@@ -622,7 +1659,7 @@ def _append_store_rows(
         "root_attrs": parameter_root_attrs,
     }
     rows["parameters"].extend(_typed_leaf_rows("store_id", store_id, parameter_payload))
-    stats = rollout_statistics(reader, manifest_payload=manifest_payload)
+    stats = build_compact_statistics(reader, manifest_payload=manifest_payload).payload
     rows["statistics"].extend(_typed_leaf_rows("store_id", store_id, stats))
     rows["facts"].extend(_fact_rows(store_id, stats, evidence_status=evidence_status))
     rows["source_coverage"].extend(_source_coverage_rows(store_id, stats.get("source_coverage", {})))
@@ -636,7 +1673,17 @@ def _append_store_rows(
     rows["runtime_storage"].append(
         {
             "store_id": store_id,
-            **storage,
+            **{
+                key: storage[key]
+                for key in (
+                    "file_count",
+                    "total_bytes",
+                    "bytes_per_candidate",
+                    "bytes_per_candidate_reason",
+                    "file_count_limit",
+                    "bytes_per_candidate_limit",
+                )
+            },
             "status": evidence_status,
             "source": "inspection.runtime_storage_statistics",
         }
@@ -748,7 +1795,11 @@ def _append_store_rows(
         }
         for failure in suspicious_rollout_rows(reader)
     )
-    candidate_evidence = candidate_population_evidence(reader, audit_reader=candidate_audit_rows)
+    candidate_evidence = candidate_population_evidence(
+        reader,
+        scientific_support=False,
+        audit_reader=candidate_audit_rows,
+    )
     for group_by in CANDIDATE_GROUP_FIELDS:
         rows["candidate_composition"].extend(_with_store_id(store_id, candidate_evidence["composition"][group_by]))
         rows["candidate_calibration"].extend(_with_store_id(store_id, candidate_evidence["calibration"][group_by]))
@@ -1058,9 +2109,11 @@ def _json_scalar(value: object, *, table: str, column: str) -> object:
 
 __all__ = [
     "ANALYSIS_FACT_SIDECAR_VERSION",
+    "RolloutCorpusSummary",
     "THESIS_REPORT_BUNDLE_ROLE",
     "THESIS_REPORT_BUNDLE_VERSION",
     "THESIS_REPORT_TABLE_COLUMNS",
+    "build_rollout_corpus_summary",
     "build_thesis_report_frames",
     "serialize_thesis_report_bundle",
     "write_thesis_report_bundle",

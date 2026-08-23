@@ -11,6 +11,7 @@ import pytest
 import zarr
 from typer.testing import CliRunner
 
+import aria_nbv.rollouts.info_cli as info_cli
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
 from aria_nbv.rollouts.info_cli import main as rollouts_info_main
 from aria_nbv.rollouts.reporting import ANALYSIS_FACT_SIDECAR_VERSION, THESIS_REPORT_BUNDLE_VERSION
@@ -18,6 +19,51 @@ from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, write_roll
 from tests.rollout_fixtures import build_rollout_records
 
 runner = CliRunner()
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected_calls", "has_stats"),
+    [
+        ([], {"manifest": 1, "validation": 0, "statistics": 0}, False),
+        (["--validate"], {"manifest": 1, "validation": 1, "statistics": 0}, False),
+        (["--stats"], {"manifest": 1, "validation": 0, "statistics": 1}, True),
+        (["--preflight"], {"manifest": 1, "validation": 1, "statistics": 1}, True),
+    ],
+)
+def test_rollouts_info_preserves_demand_aligned_inspection_calls(
+    tmp_path, monkeypatch, flags, expected_calls, has_stats
+) -> None:
+    """CLI modes read only the manifest, validation, and statistics facets they demand."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=101)
+    )
+    calls = dict.fromkeys(expected_calls, 0)
+    original_manifest = info_cli.RolloutZarrStoreReader.manifest
+    original_validate = info_cli.RolloutZarrStoreReader.validate
+    original_statistics = info_cli.build_compact_statistics
+
+    def manifest(reader):
+        calls["manifest"] += 1
+        return original_manifest(reader)
+
+    def validate(reader):
+        calls["validation"] += 1
+        return original_validate(reader)
+
+    def statistics(reader, *, manifest_payload=None):
+        calls["statistics"] += 1
+        return original_statistics(reader, manifest_payload=manifest_payload)
+
+    monkeypatch.setattr(info_cli.RolloutZarrStoreReader, "manifest", manifest)
+    monkeypatch.setattr(info_cli.RolloutZarrStoreReader, "validate", validate)
+    monkeypatch.setattr(info_cli, "build_compact_statistics", statistics)
+    cli_result = runner.invoke(info_cli.app, ["--store", str(result.store_dir), "--json", *flags])
+
+    assert cli_result.exit_code == 0
+    payload = json.loads(cli_result.output)
+    assert calls == expected_calls
+    assert ("stats" in payload) is has_stats
 
 
 def test_rollouts_info_json_unchanged_without_new_flags(tmp_path, capsys) -> None:

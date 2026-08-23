@@ -35,7 +35,7 @@ from ...rendering.candidate_depth_renderer import CandidateDepths
 from ...rendering.candidate_pointclouds import CandidatePointClouds
 from ...utils import BaseConfig, Console, Stage, TargetConfig, Verbosity
 from ...utils.semantic_names import normalize_semantic_name_map
-from ...vin.types import EvlBackboneOutput
+from ...vin.types import EvlBackboneOutput, validate_free_input_provenance
 from ..ase_efm.loader import EfmSnippetLoader
 from ..ase_efm.views import EfmSnippetView
 from ..identifiers import compact_ase_atek_sample_id, raw_ase_atek_sample_id
@@ -560,11 +560,19 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             payload = self._store.read_optional_record(record, "backbone.payload")
             if payload is not None:
                 keep_fields = set(self.config.backbone_keep_fields) if self.config.backbone_keep_fields else None
-                return EvlBackboneOutput.from_serializable(
+                output = EvlBackboneOutput.from_serializable(
                     payload,
                     device=self.config.map_location,
                     include_fields=keep_fields,
                 )
+                manifest_provenance = validate_free_input_provenance(self.manifest.vin.get("free_input_provenance"))
+                if output.free_input_provenance is not None and output.free_input_provenance != manifest_provenance:
+                    raise ValueError(
+                        "Backbone payload free_input_provenance does not match the V10 store manifest: "
+                        f"payload={output.free_input_provenance!r}, manifest={manifest_provenance!r}."
+                    )
+                output.free_input_provenance = manifest_provenance
+                return output
 
         keep = set(self.config.backbone_keep_fields or [])
 
@@ -586,6 +594,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             occ_pr=_tensor_or_none("backbone.occ_pr", "occ_pr", dtype=torch.float32),
             occ_input=_tensor_or_none("backbone.occ_input", "occ_input", dtype=torch.float32),
             free_input=_tensor_or_none("backbone.free_input", "free_input", dtype=torch.float32),
+            free_input_provenance=validate_free_input_provenance(self.manifest.vin.get("free_input_provenance")),
             counts=_tensor_or_none("backbone.counts", "counts", dtype=torch.int64),
             cent_pr=_tensor_or_none("backbone.cent_pr", "cent_pr", dtype=torch.float32),
             pts_world=_tensor_or_none("backbone.pts_world", "pts_world", dtype=torch.float32),

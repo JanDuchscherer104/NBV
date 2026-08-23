@@ -119,6 +119,7 @@ def test_datamodule_rejects_different_replay_support_identity(field_name: str, v
             _ACTOR_CONTRACT,
             evl_block_signature=(("backbone.occ_pr", "float32", (1, 4, 4, 4)),),
         ),
+        replace(_ACTOR_CONTRACT, free_input_provenance="native_evl_v1"),
     ),
 )
 def test_datamodule_rejects_incompatible_actor_state_contracts(

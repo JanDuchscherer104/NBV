@@ -9,7 +9,7 @@ canonical definition owner.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING, Annotated, TypedDict
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, cast
 
 import torch
 from typing_extensions import Doc
@@ -22,6 +22,19 @@ if TYPE_CHECKING:
     from efm3d.aria.pose import PoseTW
 
 Tensor = torch.Tensor
+FreeInputMode = Literal["native", "derived"]
+FreeInputProvenance = Literal["native_evl_v1", "derived_observed_complement_occ_input_v1"]
+
+
+def validate_free_input_provenance(value: object) -> FreeInputProvenance:
+    """Validate and narrow the persisted free-input provenance label."""
+
+    if value not in {"native_evl_v1", "derived_observed_complement_occ_input_v1"}:
+        raise ValueError(
+            f"Unknown free-input provenance {value!r}; expected 'native_evl_v1' or "
+            "'derived_observed_complement_occ_input_v1'."
+        )
+    return cast(FreeInputProvenance, value)
 
 
 @dataclass(slots=True)
@@ -43,7 +56,8 @@ class EvlBackboneOutput:
         obb_feat: Optional ``Tensor["B C D H W", float32]`` neck features for OBB detection.
         occ_pr: Optional ``Tensor["B 1 D H W", float32]`` EVL occupancy probability.
         occ_input: Optional ``Tensor["B 1 D H W", float32]`` voxelized occupied evidence from input points.
-        free_input: Optional ``Tensor["B 1 D H W", float32]`` voxelized free-space evidence if provided by EVL.
+        free_input: Optional ``Tensor["B 1 D H W", float32]`` voxelized free-space evidence.
+        free_input_provenance: Native EVL output or the explicit derived construction.
         counts: Optional ``Tensor["B D H W", int64]`` per-voxel observation counts.
         counts_m: Optional ``Tensor["B D H W", int64]`` masked/debug variant of counts.
         voxel_select_t: Optional ``Tensor["B 1", int64]`` frame index anchoring the voxel grid.
@@ -84,7 +98,10 @@ class EvlBackboneOutput:
     """``Tensor["B 1 D H W", float32]`` occupied evidence from input points."""
 
     free_input: Tensor | None = None
-    """``Tensor["B 1 D H W", float32]`` free-space evidence if available."""
+    """``Tensor["B 1 D H W", float32]`` free-space evidence."""
+
+    free_input_provenance: FreeInputProvenance | None = None
+    """How ``free_input`` was produced; required for persisted backbone rows."""
 
     counts: Tensor | None = None
     """``Tensor["B D H W", int64]`` per-voxel observation counts."""
@@ -181,12 +198,15 @@ class EvlBackboneOutput:
             Reconstructed backbone output.
         """
 
-        return from_serializable(
+        output = from_serializable(
             cls,
             payload,
             device=device,
             include_fields=include_fields,
         )
+        if output.free_input_provenance is not None:
+            output.free_input_provenance = validate_free_input_provenance(output.free_input_provenance)
+        return output
 
     def to(self, device: torch.device) -> EvlBackboneOutput:
         """Move all tensors to the specified device."""
@@ -213,6 +233,7 @@ class EvlBackboneOutput:
             occ_pr=_move(self.occ_pr),
             occ_input=_move(self.occ_input),
             free_input=_move(self.free_input),
+            free_input_provenance=self.free_input_provenance,
             counts=_move(self.counts),
             counts_m=_move(self.counts_m),
             voxel_select_t=_move(self.voxel_select_t),

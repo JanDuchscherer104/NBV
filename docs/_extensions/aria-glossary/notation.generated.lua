@@ -32,6 +32,12 @@ return {
       description = "Final rig pose used as an anchor for gravity-aligned local fields.",
       thesis_list = true,
     },
+    ["entity.center"] = {
+      tex = "\\boldsymbol{p}_e^w",
+      typst = "#symb.entity.center",
+      description = "World-space center of the selected target entity e.",
+      thesis_list = true,
+    },
     ["entity.endpoint_gain"] = {
       tex = "J_e^{(H)}",
       typst = "#symb.entity.endpoint_gain",
@@ -72,6 +78,12 @@ return {
       tex = "\\boldsymbol{\\phi}_e",
       typst = "#symb.entity.target_desc",
       description = "Actor-visible target/entity descriptor used to condition target-specific value prediction.",
+      thesis_list = true,
+    },
+    ["entity.target_reward"] = {
+      tex = "r_t^e",
+      typst = "#symb.entity.target_reward",
+      description = "Canonical target-specific reward at rollout step t.",
       thesis_list = true,
     },
     ["entity.target_root_gain_cumulative"] = {
@@ -174,6 +186,12 @@ return {
       tex = "\\mathcal{Q}_t",
       typst = "#symb.oracle.candidates_t",
       description = "Candidate-view set available at rollout step t.",
+      thesis_list = true,
+    },
+    ["oracle.center"] = {
+      tex = "\\boldsymbol{c}",
+      typst = "#symb.oracle.center",
+      description = "World-space camera-center vector; subscripts identify a rollout root or candidate pose.",
       thesis_list = true,
     },
     ["oracle.comp"] = {
@@ -988,6 +1006,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["spatial.candidate_proposal_support_normalization"] = {
+      tex = "d_{t,e}^{\\mathrm{current}}=\\lVert\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_t}^w\\rVert_2,\\quad \\widetilde{\\boldsymbol{c}}_{t,i}^{\\mathrm{support}}=(\\boldsymbol{B}_{r,t}^{\\mathrm{Z-up}})^\\top(\\boldsymbol{c}_{t,i}^w-\\boldsymbol{c}_{r_t}^w)/d_{t,e}^{\\mathrm{current}},\\quad \\widetilde{\\boldsymbol{p}}_{t,e}^{\\mathrm{support}}=(\\boldsymbol{B}_{r,t}^{\\mathrm{Z-up}})^\\top(\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_t}^w)/d_{t,e}^{\\mathrm{current}},\\quad \\lVert\\widetilde{\\boldsymbol{p}}_{t,e}^{\\mathrm{support}}\\rVert_2=1",
+      typst = "#eqs.spatial.candidate_proposal_support_normalization",
+      description = "Candidate support centered on the factual expansion pose, yaw-aligned with Z-up, and scaled by current target distance.",
+      thesis_list = false,
+    },
     ["spatial.candidate_query_local_frame"] = {
       tex = "\\boldsymbol{\\delta}_{a\\mid i}^{p}=\\boldsymbol{R}_{t,i}^{\\top}(\\boldsymbol{p}_a-\\boldsymbol{c}_{t,i})",
       typst = "#eqs.spatial.candidate_query_local_frame",
@@ -1034,6 +1058,12 @@ return {
       tex = "\\boldsymbol{d}_k(\\boldsymbol{v})=(\\boldsymbol{c}_k-\\boldsymbol{v})/\\|\\boldsymbol{c}_k-\\boldsymbol{v}\\|_2",
       typst = "#eqs.spatial.direction_unit",
       description = "",
+      thesis_list = false,
+    },
+    ["spatial.rollout_trajectory_normalization"] = {
+      tex = "d_{0,e}^{\\mathrm{initial}}=\\lVert\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_0}^w\\rVert_2,\\quad \\widetilde{\\boldsymbol{x}}_{r,t}^{\\mathrm{trajectory}}=(\\boldsymbol{B}_{r,0}^{\\mathrm{target-Z-up}})^\\top(\\boldsymbol{x}_{r,t}^w-\\boldsymbol{c}_{r_0}^w)/d_{0,e}^{\\mathrm{initial}}",
+      typst = "#eqs.spatial.rollout_trajectory_normalization",
+      description = "Factual selected trajectory in one initial-root, target-aligned Z-up frame and scale.",
       thesis_list = false,
     },
     ["vin.aux_reg_mse"] = {

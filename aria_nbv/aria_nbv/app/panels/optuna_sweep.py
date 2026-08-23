@@ -23,9 +23,23 @@ except ImportError:  # pragma: no cover - optional dependency guard
     optuna = None
 
 from ...configs import OptunaConfig, PathConfig
-from .common import _info_popover, _pretty_label, _report_exception
+from .common import (
+    _info_popover,
+    _pretty_label,
+    _report_exception,
+    current_scientific_label,
+)
 
 _CACHE_TTL_S = 120
+
+
+def _optuna_field_label(field: str) -> str:
+    """Format a known scientific field without changing arbitrary parameters."""
+
+    if field in {"rri", "oracle_rri", "target_rri"}:
+        identifier = "target_rri" if field == "target_rri" else "oracle_rri"
+        return current_scientific_label(identifier)
+    return _pretty_label(field)
 
 
 def _safe_key(value: str) -> str:

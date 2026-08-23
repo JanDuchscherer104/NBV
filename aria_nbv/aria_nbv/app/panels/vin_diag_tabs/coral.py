@@ -13,7 +13,7 @@ import torch
 
 from ....utils.plotting import _histogram_overlay
 from ....vin.ordinal import coral_loss, coral_monotonicity_violation_rate
-from ..common import _info_popover, _pretty_label
+from ..common import _info_popover, _pretty_label, current_scientific_label
 from .context import VinDiagContext
 
 
@@ -59,7 +59,7 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
 
     col_left, col_right = st.columns(2)
     with col_left:
-        st.subheader("RRI distribution + bin edges")
+        st.subheader(f"{current_scientific_label('rri')} distribution + bin edges")
         if batch.rri is None:
             st.info("Oracle RRI values unavailable in this batch.")
         elif binner is None:
@@ -72,7 +72,7 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
                 go.Histogram(
                     x=rri_flat,
                     nbinsx=60,
-                    name="RRI",
+                    name=current_scientific_label("rri"),
                     marker_color="#5da5da",
                     opacity=0.75,
                 ),
@@ -85,8 +85,8 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
                     line_color="gray",
                 )
             fig_hist.update_layout(
-                title=_pretty_label("Oracle RRI with bin edges"),
-                xaxis_title=_pretty_label("RRI"),
+                title=f"Oracle {current_scientific_label('rri')} with bin edges",
+                xaxis_title=current_scientific_label("rri"),
                 yaxis_title=_pretty_label("count"),
                 barmode="overlay",
             )
@@ -134,7 +134,7 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
             fig_bins.update_layout(
                 title=_pretty_label("Bin representatives (u_k)"),
                 xaxis_title=_pretty_label("bin index"),
-                yaxis_title=_pretty_label("RRI value"),
+                yaxis_title=current_scientific_label("rri"),
             )
             st.plotly_chart(fig_bins, width="stretch")
 
@@ -193,10 +193,10 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
         st.metric("E[y] (ordinal)", f"{float(ordinal_expected):.3f}")
         if head_coral is not None and getattr(head_coral, "has_bin_values", False):
             pred_rri = float(head_coral.expected_from_probs(cand_probs).item())
-            st.metric("E[RRI] (learned u_k)", f"{pred_rri:.4f}")
+            st.metric(f"E[{current_scientific_label('rri')}] (learned u_k)", f"{pred_rri:.4f}")
         elif binner is not None:
             pred_rri = float(binner.expected_from_probs(cand_probs).item())
-            st.metric("E[RRI] (bin means)", f"{pred_rri:.4f}")
+            st.metric(f"E[{current_scientific_label('rri')}] (bin means)", f"{pred_rri:.4f}")
         else:
             st.info("No bin representatives available.")
 
