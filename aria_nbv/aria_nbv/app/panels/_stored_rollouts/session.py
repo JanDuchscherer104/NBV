@@ -209,7 +209,10 @@ class StoredRolloutSession:
         return self.canonical_path.as_posix()
 
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
-        return _cached_candidate_population_cached(self._projection_path(), self.store_identity, sample_size)
+        store_path = self._projection_path()
+        result = _cached_candidate_population_cached(store_path, self.store_identity, sample_size)
+        self._assert_current_identity()
+        return result
 
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
@@ -563,7 +566,7 @@ def _cached_root_geometry(store_path: str, limit: int | None = None) -> Any:
 @_identity_cache
 def _cached_proposal_geometry(store_path: str, limit: int | None = None) -> Any:
     reader, _, _ = _cached_store_bundle(store_path)
-    projection = proposal_support_geometry(reader, max_candidates=limit or 50_000)
+    projection = proposal_support_geometry(reader, max_candidates=50_000 if limit is None else limit)
     return {
         "points": [asdict(point) for point in projection.points],
         "frames": [asdict(frame) for frame in projection.frames],

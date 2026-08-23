@@ -636,6 +636,44 @@ def test_stored_rollout_session_candidate_population_uses_captured_identity(monk
     assert calls == [("/selected.zarr", "first", 17)]
 
 
+def test_stored_rollout_session_candidate_population_fails_closed_on_mid_read_replacement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A replacement during the cached population read is detected afterward."""
+
+    identities = iter(("first", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    monkeypatch.setattr(
+        session,
+        "_cached_candidate_population_cached",
+        lambda _path, _identity, _sample_size: {"sample": ["read"]},
+    )
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+
+    with pytest.raises(RuntimeError, match="changed after this session opened"):
+        handle.candidate_population()
+
+
+def test_cached_proposal_geometry_preserves_zero_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit zero bound is distinct from the uncapped default."""
+
+    captured: list[int | None] = []
+
+    monkeypatch.setattr(session, "_cached_store_bundle", lambda _path: (object(), object(), {}))
+    monkeypatch.setattr(
+        session,
+        "proposal_support_geometry",
+        lambda _reader, *, max_candidates: (
+            captured.append(max_candidates)
+            or type("Projection", (), {"points": (), "frames": (), "issues": (), "truncated": True})()
+        ),
+    )
+
+    session._cached_proposal_geometry.__wrapped__("/selected.zarr", 0)
+
+    assert captured == [0]
+
+
 def test_stored_rollout_session_clear_invalidates_every_matrix_owner_once(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cache clearing visits every current owner exactly once."""
 

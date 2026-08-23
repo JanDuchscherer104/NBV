@@ -114,6 +114,29 @@ def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(tmp_pat
     assert proposal_support_geometry(reader, max_candidates=10_000).points
 
 
+def test_geometry_projection_caps_before_the_first_shell_when_limit_is_smaller(tmp_path, monkeypatch) -> None:
+    """A small bound never lets the first complete candidate shell escape the limit."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "geometry-first-shell-limit.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=733)[:1],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+    target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
+    target = inspection_module.target_rows(reader)[0]
+    target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
+    target_pose[9:12] = target_center
+    target = replace(target, center_world=target_center, pose_world_object=target_pose)
+    monkeypatch.setattr(inspection_module, "target_rows", lambda _reader: (target,))
+
+    proposal = proposal_support_geometry(reader, max_candidates=1)
+
+    assert len(proposal.points) <= 1
+    assert proposal.points == ()
+    assert proposal.truncated is True
+    assert any(issue.code == "candidate_limit_reached" for issue in proposal.issues)
+
+
 def test_geometry_contract_rejects_malformed_steps_and_invalid_rotations() -> None:
     valid_pose = np.r_[np.eye(3, dtype=np.float64).reshape(-1), [0.0, 0.0, 0.0]]
     malformed = SimpleNamespace(

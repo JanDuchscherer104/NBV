@@ -6465,7 +6465,7 @@ def proposal_support_geometry(
         for expected_index, step in enumerate(steps):
             selected_pose = _selected_pose(step)
             shell_size = len(step.candidate_row_ids)
-            if max_candidates is not None and points and len(points) + shell_size > max_candidates:
+            if max_candidates is not None and len(points) + shell_size > max_candidates:
                 truncated = True
                 issues.append(
                     GeometryIssue(
