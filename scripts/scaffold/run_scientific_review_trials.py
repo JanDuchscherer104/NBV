@@ -84,6 +84,8 @@ def load_prompts(source: bytes | Path = PROMPTS_PATH) -> dict[str, dict[str, str
     for line_number, line in enumerate(
         _source_bytes(source).decode("utf-8").splitlines(), 1
     ):
+        if not line.strip():
+            continue
         try:
             record = json.loads(line)
         except json.JSONDecodeError as error:

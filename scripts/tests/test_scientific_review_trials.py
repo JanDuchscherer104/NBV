@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +84,13 @@ def test_explicit_zero_match_selection_fails_closed(
         harness.run_suite(spec, _EmptyAdapter())
 
 
+def test_repository_scientific_review_fixtures_load() -> None:
+    prompts = trials.load_prompts()
+    rubric = trials.load_rubric()
+
+    assert set(prompts) == set(rubric) == set(trials.DEFAULT_TRIAL_IDS)
+
+
 def test_corrected_only_selection_closes_over_repository_original() -> None:
     _, rubric = _fixtures()
     assert trials._initial_selection(("finding-corrected",), rubric) == ("finding",)
@@ -117,3 +125,22 @@ def test_corrected_selection_succeeds_with_persisted_original_report() -> None:
 
     assert [case.trial_id for case in cases] == ["finding-corrected"]
     assert cases[0].adapter_metadata == {"resolution": link}
+
+
+def test_scientific_review_cli_list_only_is_executable() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "scaffold" / "run_scientific_review_trials.py"),
+            "--list",
+            "--id",
+            "seminar-uncontrolled-ablation-corrected",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "seminar-uncontrolled-ablation-corrected"
