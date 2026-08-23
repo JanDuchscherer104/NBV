@@ -353,6 +353,21 @@ def test_qh_preview_rejects_incomplete_promotion_evidence_before_dataset_constru
     assert not called
 
 
+def test_qh_readiness_and_preview_reject_broken_promotion_marker(tmp_path: Path) -> None:
+    """A broken promotion marker cannot masquerade as an unpromoted V0 store."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="broken-marker.zarr", source_hash=source_hash)
+    (rollout / "_owner.json").symlink_to(tmp_path / "missing-owner.json")
+
+    readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+    assert readiness.verdict == "Blocked"
+    assert any("trust" in blocker or "promotion" in blocker for blocker in readiness.blockers)
+
+    with pytest.raises(ValueError, match="trust|promotion"):
+        preview_qh_batch(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+
+
 def _write_root_store(root: Path) -> tuple[Path, str]:
     store = root / "vin"
     store.mkdir()

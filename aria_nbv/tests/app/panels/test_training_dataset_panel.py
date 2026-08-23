@@ -291,6 +291,17 @@ def test_artifact_identity_includes_promotion_sidecars_and_detects_same_path_rep
     assert before != after
 
 
+def test_artifact_identity_retains_broken_promotion_marker_membership(tmp_path: Path) -> None:
+    store = tmp_path / "store.zarr"
+    store.mkdir()
+    (store / "manifest.json").write_text("{}", encoding="utf-8")
+    (store / "_SUCCESS.json").symlink_to(tmp_path / "missing-success.json")
+
+    identity = _artifact_identity(store)
+
+    assert (store / "_SUCCESS.json").as_posix() in {row[0] for row in identity}
+
+
 def test_artifact_identity_tolerates_metadata_disappearing_during_stat(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

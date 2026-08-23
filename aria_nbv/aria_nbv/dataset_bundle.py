@@ -419,7 +419,7 @@ def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]
 
     blockers: list[str] = []
     for store in selection.rollout_stores:
-        marker_present = (store / "_SUCCESS.json").exists() or (store / "_owner.json").exists()
+        marker_present = _promotion_marker_present(store)
         if not marker_present:
             # V0/non-promoted stores intentionally have no promotion trust
             # contract; their existing lineage/provenance checks above remain
@@ -442,6 +442,22 @@ def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]
             detail = "; ".join(trust.errors[:3]) or "unknown trust error"
             blockers.append(f"Q_H promoted rollout {store.name} is not trusted: {detail}")
     return tuple(blockers)
+
+
+def _promotion_marker_present(store: Path) -> bool:
+    """Treat broken marker symlinks as advertised, not as absent V0 metadata."""
+
+    return any(_lstat_exists(store / marker) for marker in ("_SUCCESS.json", "_owner.json"))
+
+
+def _lstat_exists(path: Path) -> bool:
+    """Check entry membership without following symlinks."""
+
+    try:
+        path.lstat()
+    except OSError:
+        return False
+    return True
 
 
 def preview_qh_batch(

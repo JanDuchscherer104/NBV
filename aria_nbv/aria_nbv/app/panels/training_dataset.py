@@ -9,6 +9,7 @@ export; it never repairs stores or persists a training-bundle configuration.
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -77,8 +78,10 @@ def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
             "zarr.json",
         )
         direct = [resolved / name for name in metadata_names]
+        marker_names = {"_SUCCESS.json", "_owner.json"}
+        direct = [child for child in direct if _metadata_entry_present(child, marker=child.name in marker_names)]
         split_metadata = list((resolved / "splits").glob("*.npy"))
-        candidates = (resolved, *[child for child in (*direct, *split_metadata) if child.is_file()])
+        candidates = (resolved, *direct, *[child for child in split_metadata if child.is_file()])
     else:
         candidates = ()
     rows: list[ArtifactEntryIdentity] = []
@@ -89,6 +92,16 @@ def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
             continue
         rows.append((child.as_posix(), stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns, stat.st_ino))
     return tuple(rows)
+
+
+def _metadata_entry_present(path: Path, *, marker: bool = False) -> bool:
+    """Return bounded metadata membership without following marker symlinks."""
+
+    try:
+        entry = path.lstat()
+    except OSError:
+        return False
+    return marker or stat.S_ISREG(entry.st_mode)
 
 
 def _selection_cache_key(selection: DatasetBundleSelection) -> tuple[Any, ...]:
