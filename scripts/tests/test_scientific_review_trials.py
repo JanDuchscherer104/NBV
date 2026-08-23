@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
+from argparse import Namespace
 from pathlib import Path
 from typing import Any, cast
 
@@ -175,3 +177,79 @@ def test_scientific_review_cli_unknown_id_fails_before_listing() -> None:
 
     assert result.returncode != 0
     assert "unknown scientific-review trial IDs" in result.stderr
+
+
+def _main_args() -> Namespace:
+    return Namespace(
+        head="tested-head",
+        ids=["seminar-uncontrolled-ablation-corrected"],
+        all=False,
+        list=False,
+        model=None,
+        effort=None,
+        jobs=1,
+        timeout=1,
+    )
+
+
+def test_main_corrected_selection_hashes_persisted_original_and_links_correction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    report_bytes = b'{"trial_id":"seminar-uncontrolled-ablation"}\n'
+    calls: list[tuple[harness.SuiteSpec, harness.SuiteAdapter]] = []
+
+    def fake_run_suite(
+        spec: harness.SuiteSpec, adapter: harness.SuiteAdapter
+    ) -> harness.SuiteResult:
+        calls.append((spec, adapter))
+        if len(calls) == 1:
+            output_dir = tmp_path / "initial"
+            report_dir = output_dir / "seminar-uncontrolled-ablation"
+            report_dir.mkdir(parents=True)
+            (report_dir / "report.json").write_bytes(report_bytes)
+            return harness.SuiteResult(exit_code=0, output_dir=output_dir)
+        return harness.SuiteResult(exit_code=0, output_dir=tmp_path / "corrected")
+
+    monkeypatch.setattr(trials, "parse_args", _main_args)
+    monkeypatch.setattr(trials, "run_suite", fake_run_suite)
+
+    assert trials.main() == 0
+    assert [call[0].selected_ids for call in calls] == [
+        ("seminar-uncontrolled-ablation",),
+        ("seminar-uncontrolled-ablation-corrected",),
+    ]
+    corrected_adapter = calls[1][1]
+    assert isinstance(corrected_adapter, trials.ScientificReviewAdapter)
+    expected_report_hash = hashlib.sha256(report_bytes).hexdigest()
+    link = corrected_adapter.resolution_links["seminar-uncontrolled-ablation-corrected"]
+    assert link == {
+        "original_trial_id": "seminar-uncontrolled-ablation",
+        "candidate_sha256": trials.candidate_sha256(
+            trials.load_prompts()["seminar-uncontrolled-ablation"]["candidate"]
+        ),
+        "report_sha256": expected_report_hash,
+        "category": "confounding",
+    }
+    assert corrected_adapter.original_report_hashes == {
+        "seminar-uncontrolled-ablation": expected_report_hash
+    }
+
+
+def test_main_corrected_selection_fails_closed_for_missing_source_report(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = 0
+
+    def fake_run_suite(
+        spec: harness.SuiteSpec, adapter: harness.SuiteAdapter
+    ) -> harness.SuiteResult:
+        nonlocal calls
+        calls += 1
+        return harness.SuiteResult(exit_code=0, output_dir=tmp_path / "initial")
+
+    monkeypatch.setattr(trials, "parse_args", _main_args)
+    monkeypatch.setattr(trials, "run_suite", fake_run_suite)
+
+    with pytest.raises(SystemExit, match="missing persisted original report"):
+        trials.main()
+    assert calls == 1
