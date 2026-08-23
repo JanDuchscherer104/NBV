@@ -757,7 +757,8 @@ thesis-toolchain-lock-check: ## Check thesis toolchain lock schema and material-
 	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py check --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"
 
 thesis-release-contract: _check_python ## Verify release and toolchain-lock behavior without requiring the locked release environment
-	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_toolchain_lock.py scripts/tests/test_thesis_release_requirements.py
+	@env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE \
+		$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_toolchain_lock.py scripts/tests/test_thesis_release_requirements.py
 
 thesis-release-audit: _check_python ## Run the final thesis release audit after verifying the toolchain lock
 	@$(PYTHON_INTERPRETER) scripts/thesis_release.py audit --final --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"

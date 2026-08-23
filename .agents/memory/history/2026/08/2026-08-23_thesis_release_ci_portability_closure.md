@@ -33,7 +33,9 @@ Hosted Ubuntu CI cannot satisfy `docs/typst/thesis/toolchain-lock.json` merely b
 installing Poppler: the lock intentionally records the exact local `pdftoppm`
 version and binary hash. `Makefile` now gives hosted `docs-render-core` the
 portable `thesis-release-contract` target, while `thesis-release-audit` remains
-the explicit final-release gate in the exact locked environment.
+the explicit final-release gate in the exact locked environment. The portable
+target also removes inherited Git repository-selection variables before pytest,
+so fixture repositories remain isolated when the target runs from pre-push.
 
 ## Verification
 - `make thesis-release-contract ci-impact-self-test`: 55 release tests and 14 CI
@@ -42,6 +44,9 @@ the explicit final-release gate in the exact locked environment.
   api-docs-self-test docs-render-core`) passed locally.
 - `make thesis-release-audit` passed independently with the locked comparator;
   submission remains externally blocked as recorded in the release ledger.
+- The release-contract suite passed with `GIT_DIR`, `GIT_WORK_TREE`,
+  `GIT_COMMON_DIR`, and `GIT_INDEX_FILE` deliberately set to the linked
+  worktree, proving the target sanitizes hook-owned Git context.
 - Graphify was incrementally refreshed after regenerating the branch projection:
   7,465 nodes and 15,464 edges, zero missing or dangling endpoints, self-loops,
   or duplicate edges, and both freshness/state gates reported `fresh`.
