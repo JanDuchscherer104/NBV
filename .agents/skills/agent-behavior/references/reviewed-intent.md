@@ -37,7 +37,11 @@ also open the repository [memory owner](../../../memory/README.md) before
 deciding proposal, debrief, or none.
 After the proposal schema, retrieval query, review dispositions, and validation
 tests are present, classify eligible completion as one of: owner update now,
-debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or none. Route
+debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or none. An
+eligible proposal instantiates every schema field with a precise policy change,
+reusable cross-task evidence, the specific current owner or conflict, its scope
+and target owner, and a proposed disposition with a testable consequence;
+naming the template or repeating a broad preference is insufficient. Route
 verified actionable residual work to the [agents-db skill](../../agents-db/SKILL.md)
 only after executing and retaining the exact current-owner proof. Search
 existing records and amend an independently actionable one before creating a
