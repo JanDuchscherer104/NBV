@@ -764,14 +764,16 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
             event_type = event.get("type")
             item = event.get("item")
             item_id = item.get("id") if isinstance(item, dict) else None
-            if event_type == "item.started":
+            item_type = item.get("type") if isinstance(item, dict) else None
+            tracks_lifecycle = item_type in _EXECUTION_IDENTITY_FIELDS
+            if event_type == "item.started" and tracks_lifecycle:
                 if not isinstance(item_id, str) or not item_id:
                     invalid_items += 1
                 elif item_id in started_items:
                     duplicate_starts += 1
                 else:
                     started_items.add(item_id)
-            elif event_type == "item.completed":
+            elif event_type == "item.completed" and tracks_lifecycle:
                 if not isinstance(item_id, str) or not item_id:
                     invalid_items += 1
                 elif item_id in completed_items:
