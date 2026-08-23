@@ -110,20 +110,74 @@ def _render_corpus_details(summary: RolloutCorpusSummary | None) -> None:
 
 
 def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
-    """Render cohort-separated additive support and raw endpoint distributions."""
+    """Render the corpus reward/reconstruction surface, plot first."""
 
-    st.subheader("Corpus evidence")
+    st.subheader("Corpus reward and reconstruction")
     if summary is None:
-        st.info("Build the corpus summary in Overview before viewing aggregate evidence.")
+        st.info("Build the corpus summary in Overview before viewing aggregate reward evidence.")
         return
-    if summary.candidate_support.empty:
-        st.info("No validated candidate-support rows are available.")
+    temporal = summary.temporal_summary
+    if temporal.empty:
+        st.info("No validated factual temporal rows are available.")
     else:
-        st.dataframe(summary.candidate_support, hide_index=True, width="stretch")
+        metric_names = list(dict.fromkeys(str(value) for value in temporal["metric"].dropna()))
+        metric = st.selectbox("Corpus temporal metric", options=metric_names, key="corpus_temporal_metric")
+        rows = temporal.loc[temporal["metric"] == metric].copy()
+        group_fields = [field for field in ("contract", "policy", "temperature", "horizon") if field in rows]
+        rows["series"] = rows[group_fields].astype(str).agg(" · ".join, axis=1) if group_fields else "corpus"
+        figure = go.Figure()
+        for series, group in rows.groupby("series", sort=True):
+            group = group.sort_values("step_index")
+            figure.add_trace(
+                go.Scatter(x=group["step_index"], y=group["q25"], mode="lines", line={"width": 0}, showlegend=False)
+            )
+            figure.add_trace(
+                go.Scatter(
+                    x=group["step_index"],
+                    y=group["q75"],
+                    mode="lines",
+                    line={"width": 0},
+                    fill="tonexty",
+                    name=str(series),
+                    opacity=0.2,
+                )
+            )
+            figure.add_trace(
+                go.Scatter(
+                    x=group["step_index"],
+                    y=group["median"],
+                    mode="lines+markers",
+                    name=str(series),
+                    customdata=group[["finite_count", "total_count", "store_count"]],
+                    hovertemplate="step=%{x}<br>median=%{y:.4g}<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}<br>stores=%{customdata[2]:.0f}<extra></extra>",
+                )
+            )
+        figure.update_layout(
+            title=f"{metric}: corpus median and IQR by factual depth",
+            xaxis_title="factual step_index",
+            yaxis_title="value",
+        )
+        _render_plot(
+            figure,
+            ScientificExplanation(
+                question="How does this reward or reconstruction metric evolve across the selected compatible shards?",
+                population="Factual finite step rows aggregated across selected stores and separated by persisted contract, policy, temperature, and horizon.",
+                metric="Median and interquartile range; units follow the persisted metric contract. Hover shows finite/total rows and store count.",
+                denominator_masks="Only observed factual rows contribute; early-terminated rollouts are not zero-filled or extended to configured horizon.",
+                comparability="Only identical persisted contracts are comparable. Series remain separated by contract and policy dimensions.",
+                expected_pattern="The median trajectory is supported by multiple stores and the IQR reflects between-row spread, not a confidence interval.",
+                failure_interpretation="Small depth counts, wide IQR, or abrupt missingness require inspecting the contributing stores and factual rows.",
+                evidence_role="oracle/evaluation",
+                source_fields=("reporting.RolloutCorpusSummary.temporal_summary", "steps", "rollout contract"),
+            ),
+        )
+        with st.expander("Temporal rows and CSV", expanded=False):
+            st.dataframe(rows.drop(columns="series"), hide_index=True, width="stretch")
+            _download_frame("Download temporal rows CSV", "corpus-temporal-summary.csv", rows.drop(columns="series"))
+
     if summary.endpoints.empty:
         st.info("No validated endpoint rows are available.")
     else:
-        st.dataframe(summary.endpoints, hide_index=True, width="stretch")
         metric = next(
             (
                 name
@@ -135,27 +189,103 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
         if metric is not None:
             fig = px.box(
                 summary.endpoints,
-                x="profile",
+                x="contract",
                 y=metric,
                 color="policy",
                 facet_col="horizon",
-                hover_data=["store_id"],
-                title="Store-qualified endpoint distributions",
+                hover_data=["store_id", "profile"],
+                title="Store-qualified factual endpoint distributions",
             )
             _render_plot(
                 fig,
                 ScientificExplanation(
-                    question="How are diagnostic rollout endpoints distributed across validated stores?",
-                    population="One store-qualified factual rollout endpoint, faceted by persisted horizon.",
+                    question="How are factual rollout endpoints distributed across the selected compatible shards?",
+                    population="One store-qualified factual terminal endpoint, separated by persisted contract, policy, and horizon.",
                     metric=f"{metric}; units follow the persisted endpoint metric contract.",
                     denominator_masks="Validated included stores and finite factual endpoints only; excluded stores contribute no values.",
-                    comparability="Compare within profile, policy, horizon, and compatible generation contracts; store identity remains visible.",
-                    expected_pattern="Distributions remain stable across stores of the same profile rather than being driven by one shard.",
-                    failure_interpretation="Separated or heavy-tailed store distributions suggest a source, profile, or rollout-quality issue requiring drill-down.",
+                    comparability="Compare only within the same persisted contract, policy, and horizon; store identity remains visible.",
+                    expected_pattern="Endpoint distributions remain supported across shards rather than being driven by one store.",
+                    failure_interpretation="Separated or heavy-tailed distributions indicate coverage, profile, or rollout-quality issues for drill-down.",
                     evidence_role="oracle/evaluation",
                     source_fields=("reporting.RolloutCorpusSummary.endpoints", "rollouts", "steps"),
                 ),
             )
+        with st.expander("Endpoint rows and CSV", expanded=False):
+            st.dataframe(summary.endpoints, hide_index=True, width="stretch")
+            _download_frame("Download endpoint rows CSV", "corpus-endpoints.csv", summary.endpoints)
+
+
+def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
+    """Render corpus admission and feasibility without reward plots."""
+
+    st.subheader("Corpus admission and feasibility")
+    if summary is None:
+        st.info("Build the corpus summary in Overview before viewing admission evidence.")
+        return
+    if summary.target_admission.empty:
+        st.info("No validated target-admission rows are available.")
+    else:
+        target_rows = summary.target_admission.copy()
+        target_rows["outcome"] = target_rows.apply(
+            lambda row: (
+                f"actor={bool(row['target_valid'])} · gt={bool(row['gt_label_valid'])} · {row['gt_match_status']}"
+            ),
+            axis=1,
+        )
+        figure = px.bar(target_rows, x="outcome", y="count", color="gt_label_valid", title="Target admission outcomes")
+        _render_plot(
+            figure,
+            ScientificExplanation(
+                question="Which observed targets are actor-admissible and which also receive an unambiguous GT label?",
+                population="One persisted target row across validated selected stores.",
+                metric="Additive target count; categories preserve actor validity, GT-label validity, and match status.",
+                denominator_masks="All target rows remain visible, including ambiguous, unmatched, invalid, and below-threshold outcomes.",
+                comparability="Compare only when target-selection and GT-matching contracts agree.",
+                expected_pattern="Exactly one same-class oriented-IoU match strictly above 0.20 is required for privileged label admission.",
+                failure_interpretation="Ambiguous or unmatched outcomes are coverage/debugging signals, not low reward examples.",
+                evidence_role="oracle/evaluation",
+                source_fields=("reporting.RolloutCorpusSummary.target_admission", "targets", "GT match audit"),
+            ),
+        )
+        with st.expander("Target-admission rows and CSV", expanded=False):
+            st.dataframe(target_rows.drop(columns="outcome"), hide_index=True, width="stretch")
+            _download_frame(
+                "Download target-admission rows CSV", "corpus-target-admission.csv", target_rows.drop(columns="outcome")
+            )
+    if summary.feasibility.empty:
+        st.info("No validated clearance/collision evidence is available.")
+    else:
+        feasibility = summary.feasibility
+        metrics = st.columns(4)
+        row = feasibility.iloc[0]
+        metrics[0].metric("Candidates", _format_count(row.get("candidate_count")))
+        metrics[1].metric("Collision rate", _format_fraction(row.get("collision_rate")))
+        metrics[2].metric("Clearance coverage", _format_fraction(row.get("clearance_coverage")))
+        metrics[3].metric("Cohorts", _format_count(len(feasibility)))
+        figure = px.bar(
+            feasibility,
+            x="generation_cohort",
+            y=["collision_rate", "clearance_coverage"],
+            barmode="group",
+            title="Candidate feasibility by generation cohort",
+        )
+        _render_plot(
+            figure,
+            ScientificExplanation(
+                question="Are candidate collision and clearance checks sufficiently observed across generation cohorts?",
+                population="Additive candidate feasibility denominators grouped by exact generation cohort.",
+                metric="Collision rate and clearance coverage are dimensionless fractions recomputed from additive counts.",
+                denominator_masks="Only finite persisted collision and clearance evidence enters each corresponding denominator.",
+                comparability="Cohorts remain separate; do not interpret missing clearance as a successful clearance.",
+                expected_pattern="High clearance coverage and low collision rate support usable candidate geometry.",
+                failure_interpretation="Low coverage or high collision rate points to generator, rendering, or validity issues.",
+                evidence_role="actor-visible",
+                source_fields=("reporting.RolloutCorpusSummary.feasibility", "candidate_collision_support"),
+            ),
+        )
+        with st.expander("Feasibility rows and CSV", expanded=False):
+            st.dataframe(feasibility, hide_index=True, width="stretch")
+            _download_frame("Download feasibility rows CSV", "corpus-feasibility.csv", feasibility)
 
 
 def _render_corpus_failures(summary: RolloutCorpusSummary | None) -> None:

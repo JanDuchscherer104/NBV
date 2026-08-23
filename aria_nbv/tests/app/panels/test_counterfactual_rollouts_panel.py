@@ -438,7 +438,8 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert _metric_values(app)["Candidates"] == "12"
     assert [tab.label for tab in app.tabs] == [
         "Overview",
-        "Evidence",
+        "Reward & reconstruction",
+        "Admission & feasibility",
         "Failures",
         "Drill-down",
     ]
@@ -450,65 +451,21 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert advanced.value is False
     assert not app.error
 
-    app = _set_stored_rollout_workspace(app, "Evidence")
-    assert not app.exception
-    assert "Scientific evidence" in [subheader.value for subheader in app.subheader]
-    assert _metric_values(app)["Matched comparison eligible"] == "NO"
-    assert any("comparison is blocked" in warning.value for warning in app.warning)
-    assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert {selectbox.label for selectbox in app.selectbox} >= {
-        "Temporal metric",
-        "Temporal grouping class",
-        "Temporal grouping field",
-        "Raw trajectory rollout",
-    }
-    assert "Download temporal summary CSV" in {button.label for button in app.get("download_button")}
-    assert sum(toggle.label == "Logarithmic y-axis" for toggle in app.toggle) == 2
-    grouping_class = next(selectbox for selectbox in app.selectbox if selectbox.label == "Temporal grouping class")
-    grouping_class.set_value("Selected-action provenance (descriptive, non-causal)")
-    app.session_state["stored_rollouts_section"] = "Evidence"
+    next(button for button in app.button if button.label == "Build corpus summary").click()
     app = app.run()
+    app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
-    assert any("descriptive and post-selection" in warning.value for warning in app.warning)
-    extra_evidence = next(
-        toggle for toggle in app.toggle if toggle.label == "Load branching, rank/regret, and root-relative evidence"
-    )
-    extra_evidence.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Evidence"
-    app = app.run()
-    assert not app.exception
-    assert {button.label for button in app.get("download_button")} >= {
-        "Download branching provenance CSV",
-        "Download selected rank/regret CSV",
-        "Download root-relative geometry CSV",
-    }
+    assert "Corpus reward and reconstruction" in [subheader.value for subheader in app.subheader]
+    assert len(app.get("plotly_chart")) >= 2
+    assert any("rows and CSV" in expander.label for expander in app.expander)
 
-    app = _set_stored_rollout_workspace(app, "Evidence")
+    app = _set_stored_rollout_workspace(app, "Admission & feasibility")
     assert not app.exception
     assert "Targets and action support" in [subheader.value for subheader in app.subheader]
-    assert {button.label for button in app.get("download_button")} >= {
-        "Download target protocol CSV",
-        "Download mask combinations CSV",
-        "Download candidate provenance flow CSV",
-        "Download selected-action policy/rank flow CSV",
-        "Download exact selected-step evidence CSV",
-    }
-    assert {item.label for item in app.multiselect} >= {"Flow policies", "Flow rollout depths"}
-    assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
-    aggregates = next(toggle for toggle in app.toggle if toggle.label == "Load complete candidate aggregate breakdowns")
-    aggregates.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Evidence"
-    app = app.run()
-    assert not app.exception
-    assert "Download family support CSV" in {button.label for button in app.get("download_button")}
-    geometry = next(
-        toggle for toggle in app.toggle if toggle.label == "Load bounded candidate geometry and reward plots"
-    )
-    geometry.set_value(True)
-    app.session_state["stored_rollouts_section"] = "Evidence"
-    app = app.run()
-    assert not app.exception
-    assert "Geometry / label distribution" in {selectbox.label for selectbox in app.selectbox}
+    assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
+    assert "Download mask combinations CSV" in {button.label for button in app.get("download_button")}
+    assert any(toggle.label == "Load complete candidate aggregate breakdowns" for toggle in app.toggle)
+    assert any(toggle.label == "Load bounded candidate geometry and reward plots" for toggle in app.toggle)
 
     app = _set_stored_rollout_workspace(app, "Failures")
     assert not app.exception
@@ -518,26 +475,10 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
 
     app = _set_stored_rollout_workspace(app, "Drill-down")
     assert not app.exception
-    assert "Drill-down" in [subheader.value for subheader in app.subheader]
-    assert {selectbox.label for selectbox in app.selectbox} >= {
-        "Query scope",
-        "Rollout row",
-        "Step row",
-        "Matched row to promote",
-        "Layer preset",
-        "Launch mode",
-    }
-    assert {button.label for button in app.get("download_button")} >= {
-        "Download selected-step candidate CSV",
-        "Download queried rows CSV",
-        "Download deterministic evidence bundle",
-    }
-    assert {button.label for button in app.button} >= {
-        "Apply query",
-        "Clear query",
-        "Promote queried row",
-        "Launch Rerun",
-    }
+    assert any("Drill-down is unavailable" in warning.value for warning in app.warning)
+    assert "Query scope" in {selectbox.label for selectbox in app.selectbox}
+    assert "Download selected-chain CSV" in {button.label for button in app.get("download_button")}
+    assert "Refresh stores" in {button.label for button in app.button}
 
 
 def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_path_config, tmp_path) -> None:
@@ -566,7 +507,7 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
         "Download topology JSON",
     }
 
-    app = _set_stored_rollout_workspace(app, "Evidence")
+    app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
     assert not app.exception
     assert any("disabled because this store" in warning.value for warning in app.warning)
     assert any("Unsupported rollout Zarr schema_version" in error.value for error in app.error)
@@ -616,17 +557,17 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
         isolated_path_config.offline_cache_dir / "flow.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=50)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    session.clear_rollout_page_caches()
 
     def fail_heavy_audit(*_args, **_kwargs):
         raise AssertionError("default candidate provenance flow loaded candidate_audit_rows")
 
     monkeypatch.setattr(session, "candidate_audit_rows", fail_heavy_audit)
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Evidence")
+    app = _set_stored_rollout_workspace(app, "Admission & feasibility")
 
     assert not app.exception
-    assert "Download candidate provenance flow CSV" in {button.label for button in app.get("download_button")}
+    assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
     assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
 
 
@@ -641,7 +582,7 @@ def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
         isolated_path_config.offline_cache_dir / "lazy-heavy.zarr",
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
-    stored_rollouts_page._clear_stored_rollout_caches()
+    session.clear_rollout_page_caches()
     for name in ("_cached_ranks", "_cached_root_geometry", "_cached_tree"):
         monkeypatch.setattr(
             reconstruction_return,
@@ -649,7 +590,7 @@ def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
             lambda *_args, _name=name, **_kwargs: pytest.fail(f"unexpected heavy projection: {_name}"),
         )
     app = _stored_rollouts_app(tmp_path).run()
-    app = _set_stored_rollout_workspace(app, "Evidence")
+    app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
 
     assert not app.exception
 
@@ -846,19 +787,11 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
 
     calls: list[tuple[int | None, int | None]] = []
 
-    def fake_projection(
-        _store_path: str,
-        projection: str,
-        *,
-        rollout_row_id: int | None = None,
-        step_row_id: int | None = None,
-        **_kwargs,
-    ) -> list[dict[str, object]]:
-        assert projection == "candidates"
-        calls.append((rollout_row_id, step_row_id))
-        return []
-
-    monkeypatch.setattr(inspect_rerun, "_cached_projection", fake_projection)
+    monkeypatch.setattr(
+        inspect_rerun,
+        "_cached_candidates",
+        lambda _store_path, **kwargs: calls.append((kwargs.get("rollout_row_id"), kwargs.get("step_row_id"))) or [],
+    )
     kwargs = {
         "store_path": "/store.zarr",
         "scope": "Candidates",

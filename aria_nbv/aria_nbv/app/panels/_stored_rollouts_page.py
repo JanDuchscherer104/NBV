@@ -1,8 +1,7 @@
 """Thin coordinator for the stored-rollout Streamlit inspector.
 
-The current four-tab workflow remains public.  Its private presentation concerns
-live in :mod:`aria_nbv.app.panels._stored_rollouts`; rollout semantics stay in
-the typed inspection and reporting owners.
+Its five presentation surfaces live in :mod:`aria_nbv.app.panels._stored_rollouts`;
+rollout semantics stay in the typed inspection and reporting owners.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from ._stored_rollouts import overview_topology as overview
 from ._stored_rollouts import reconstruction_return as reconstruction
 from ._stored_rollouts.shared import download_json, render_stale_store_boundary
 
-_SECTIONS = ("Overview", "Evidence", "Failures", "Drill-down")
+_SECTIONS = ("Overview", "Reward & reconstruction", "Admission & feasibility", "Failures", "Drill-down")
 _SECTION_KEY = "stored_rollouts_section"
 
 
@@ -76,17 +75,17 @@ def render_stored_rollouts_page() -> None:
     if tabs[1].open:
         with tabs[1]:
             overview._render_corpus_evidence(corpus_summary)
+    if tabs[2].open:
+        with tabs[2]:
+            overview._render_corpus_admission(corpus_summary)
             if current:
-                with st.expander("Active-store scientific evidence"):
-                    reconstruction._render_scientific_evidence(reader)
-                with st.expander("Active-store targets and action support"):
-                    validity_support._render_targets_and_support(reader)
+                validity_support._render_targets_and_support(reader)
             else:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
                 )
-    if tabs[2].open:
-        with tabs[2]:
+    if tabs[3].open:
+        with tabs[3]:
             overview._render_corpus_failures(corpus_summary)
             if current:
                 failure_triage._render_failure_triage(reader)
@@ -94,10 +93,11 @@ def render_stored_rollouts_page() -> None:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
                 )
-    if tabs[3].open:
-        with tabs[3]:
-            overview._render_corpus_details(corpus_summary)
+    if tabs[4].open:
+        with tabs[4]:
             if current:
+                with st.expander("Active-store scientific evidence"):
+                    reconstruction._render_scientific_evidence(reader)
                 inspect_rerun._render_inspect_export_rerun(
                     reader, store_path=store_path, manifest_payload=manifest_payload, paths=paths
                 )

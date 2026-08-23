@@ -35,37 +35,43 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
     )
     targets = pd.DataFrame(_cached_targets(store_path))
     if not targets.empty:
-        protocol = (
-            targets.groupby(["target_valid", "gt_label_valid", "gt_match_status"], dropna=False)
-            .size()
-            .reset_index(name="count")
-        )
-        fig = px.bar(
-            protocol,
-            x="gt_match_status",
-            y="count",
-            color="target_valid",
-            pattern_shape="gt_label_valid",
-            title="Target protocol: actor validity × GT-label validity",
-        )
-        _render_plot(
-            fig,
-            ScientificExplanation(
-                question="Are actor target choices and privileged GT evaluation labels being kept distinct?",
-                population="One persisted target row grouped by actor task validity, GT-label validity, and match status.",
-                metric="Target count; no scientific effect units.",
-                denominator_masks="All target rows; neither invalid population is silently removed.",
-                comparability="Compare target protocols only when target selection and GT matching configuration agree.",
-                expected_pattern="Actor-valid targets may lack GT labels, but such rows remain masked from oracle-label training.",
-                failure_interpretation="Actor-valid/GT-invalid concentration signals evaluation coverage gaps, not low RRI.",
-                evidence_role="oracle/evaluation",
-                source_fields=(
-                    "targets/target_valid_mask",
-                    "targets/gt_label_valid_mask",
-                    "targets/gt_match_status_id",
+        required_protocol_fields = {"target_valid", "gt_label_valid", "gt_match_status"}
+        missing_protocol_fields = sorted(required_protocol_fields.difference(targets.columns))
+        if missing_protocol_fields:
+            st.warning(
+                "Target-admission plot unavailable: the selected store does not expose the current target audit "
+                f"fields ({', '.join(missing_protocol_fields)}). Raw target evidence remains available below."
+            )
+            protocol = pd.DataFrame()
+        else:
+            protocol = targets.groupby(sorted(required_protocol_fields), dropna=False).size().reset_index(name="count")
+        if not protocol.empty:
+            fig = px.bar(
+                protocol,
+                x="gt_match_status",
+                y="count",
+                color="target_valid",
+                pattern_shape="gt_label_valid",
+                title="Target protocol: actor validity × GT-label validity",
+            )
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Are actor target choices and privileged GT evaluation labels being kept distinct?",
+                    population="One persisted target row grouped by actor task validity, GT-label validity, and match status.",
+                    metric="Target count; no scientific effect units.",
+                    denominator_masks="All target rows; neither invalid population is silently removed.",
+                    comparability="Compare target protocols only when target selection and GT matching configuration agree.",
+                    expected_pattern="Actor-valid targets may lack GT labels, but such rows remain masked from oracle-label training.",
+                    failure_interpretation="Actor-valid/GT-invalid concentration signals evaluation coverage gaps, not low RRI.",
+                    evidence_role="oracle/evaluation",
+                    source_fields=(
+                        "targets/target_valid_mask",
+                        "targets/gt_label_valid_mask",
+                        "targets/gt_match_status_id",
+                    ),
                 ),
-            ),
-        )
+            )
         _download_frame("Download target protocol CSV", "target-protocol.csv", targets)
         _render_target_score_diagnostics(targets)
 
@@ -74,25 +80,38 @@ def _render_targets_and_support(reader: RolloutZarrStoreReader) -> None:
     masks = pd.DataFrame(_cached_masks(store_path))
     if not masks.empty:
         label_cols = [c for c in ("actor_action", "oracle_label", "q_train", "selected") if c in masks]
-        masks["combination"] = masks[label_cols].astype(str).agg(" · ".join, axis=1)
-        fig = px.bar(masks, x="combination", y="count", title="Observed candidate-mask combinations")
-        _render_plot(
-            fig,
-            ScientificExplanation(
-                question="Which actor, oracle, training, and selection mask combinations actually occur?",
-                population="One candidate row summarized by its exact four-mask bit pattern.",
-                metric="Candidate count and fraction of the full sampled shell.",
-                denominator_masks="All persisted candidate rows; selected must imply actor_action, while q_train is not a selection stage.",
-                comparability="Compare stores only under the same candidate-shell generation and label-availability protocol.",
-                expected_pattern="No selected/actor_action violation; selected-but-not-q_train may legitimately occur.",
-                failure_interpretation="A selected actor-invalid row is a hard contract failure; missing q_train is a label/cache issue, not invalid action support.",
-                evidence_role="derived training data",
-                source_fields=("candidates/actor_action_mask", "oracle_label_mask", "q_train_mask", "selected_mask"),
-            ),
-        )
-        st.dataframe(masks.drop(columns="combination"), hide_index=True, width="stretch")
+        if "count" not in masks.columns or not label_cols:
+            st.warning(
+                "Candidate mask-combination plot unavailable: the selected store exposes no grouped mask counts. "
+                "The validated store summary remains available in the raw evidence export."
+            )
+        else:
+            masks["combination"] = masks[label_cols].astype(str).agg(" · ".join, axis=1)
+            fig = px.bar(masks, x="combination", y="count", title="Observed candidate-mask combinations")
+            _render_plot(
+                fig,
+                ScientificExplanation(
+                    question="Which actor, oracle, training, and selection mask combinations actually occur?",
+                    population="One candidate row summarized by its exact four-mask bit pattern.",
+                    metric="Candidate count and fraction of the full sampled shell.",
+                    denominator_masks="All persisted candidate rows; selected must imply actor_action, while q_train is not a selection stage.",
+                    comparability="Compare stores only under the same candidate-shell generation and label-availability protocol.",
+                    expected_pattern="No selected/actor_action violation; selected-but-not-q_train may legitimately occur.",
+                    failure_interpretation="A selected actor-invalid row is a hard contract failure; missing q_train is a label/cache issue, not invalid action support.",
+                    evidence_role="derived training data",
+                    source_fields=(
+                        "candidates/actor_action_mask",
+                        "oracle_label_mask",
+                        "q_train_mask",
+                        "selected_mask",
+                    ),
+                ),
+            )
+        st.dataframe(masks.drop(columns="combination", errors="ignore"), hide_index=True, width="stretch")
         _download_frame(
-            "Download mask combinations CSV", "candidate-mask-combinations.csv", masks.drop(columns="combination")
+            "Download mask combinations CSV",
+            "candidate-mask-combinations.csv",
+            masks.drop(columns="combination", errors="ignore"),
         )
 
     if st.toggle(

@@ -380,6 +380,14 @@ def _render_inspect_export_rerun(
         st.warning("This store has no rollout rows to inspect or query.")
         return
     all_steps = pd.DataFrame(_cached_steps(store_path_key))
+    required_step_fields = {"rollout_row_id", "step_row_id"}
+    missing_step_fields = sorted(required_step_fields.difference(all_steps.columns))
+    if missing_step_fields:
+        st.warning(
+            "Drill-down is unavailable: the selected store does not expose the current factual step fields "
+            f"({', '.join(missing_step_fields)}). Store validation and corpus summaries remain available."
+        )
+        return
     steps_by_rollout = {
         int(rollout): sorted(group["step_row_id"].astype(int).tolist())
         for rollout, group in all_steps.groupby("rollout_row_id", sort=True)
