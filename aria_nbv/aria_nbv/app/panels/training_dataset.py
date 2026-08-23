@@ -564,8 +564,9 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
     )
     findings_by_store: dict[str, list[dict[str, str]]] = {}
     root_findings: list[dict[str, str]] = []
+    root_path = evidence.selection.root_store.as_posix()
     for finding in evidence.findings:
-        if finding.store_path is not None:
+        if finding.store_path is not None and finding.store_path != root_path:
             findings_by_store.setdefault(finding.store_path, []).append(
                 {"code": finding.code, "message": finding.message, "severity": finding.severity}
             )

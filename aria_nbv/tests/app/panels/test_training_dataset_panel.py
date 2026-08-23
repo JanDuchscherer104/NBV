@@ -256,6 +256,25 @@ def test_mixed_store_selection_keeps_compatible_and_excluded_attribution(
     assert "Root/source binding hashes, paths, and raw findings" in "\n".join(item.label for item in app.expander)
 
 
+def test_selected_root_blocker_is_not_mislabeled_as_rollout_finding(
+    isolated_path_config: PathConfig,
+    tmp_path: Path,
+) -> None:
+    root, source_hash = _write_root_store(isolated_path_config.offline_cache_dir)
+    blocked = _write_rollout_store(isolated_path_config.offline_cache_dir, source_hash, compatible=False)
+    (root / "manifest.json").write_text("{not valid json", encoding="utf-8")
+    app = _app(tmp_path).run()
+    app.multiselect[0].set_value([blocked.as_posix()])
+    app = app.run()
+
+    assert not app.exception
+    visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
+    assert "Selected VIN root blocker(s)" in visible
+    assert "root_store_unreadable" in visible
+    excluded_section = visible.split("Selected VIN root blocker(s)", 1)[0]
+    assert "root_store_unreadable" not in excluded_section
+
+
 def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
     selection_a = ("selection-a",)
     baseline = _qh_preview_identity(
