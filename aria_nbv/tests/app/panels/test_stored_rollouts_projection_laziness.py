@@ -558,7 +558,7 @@ def test_stored_rollout_session_open_computes_identity_once_and_binds_core_key(
 
     opened = session.open_stored_rollout_session(store)
 
-    assert identity_calls == [store.resolve().as_posix()]
+    assert identity_calls == [store.resolve().as_posix(), store.resolve().as_posix()]
     assert bundle_calls == [(store.resolve().as_posix(), "identity-1")]
     assert opened.canonical_path == store.resolve()
     assert opened.store_identity == "identity-1"
@@ -792,7 +792,7 @@ def test_stored_rollout_session_next_open_observes_replacement(monkeypatch: pyte
 
     store = tmp_path / "selected.zarr"
     store.mkdir()
-    identities = iter(("first", "second"))
+    identities = iter(("first", "first", "second", "second"))
     monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
     monkeypatch.setattr(
         session,
@@ -805,6 +805,29 @@ def test_stored_rollout_session_next_open_observes_replacement(monkeypatch: pyte
 
     assert first.store_identity == "first"
     assert second.store_identity == "second"
+
+
+def test_open_session_rejects_mid_open_generation_swap(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Opening cannot return an A reader bound to a B selected-path identity."""
+
+    first = tmp_path / "generation-a.zarr"
+    second = tmp_path / "generation-b.zarr"
+    first.mkdir()
+    second.mkdir()
+    (first / "generation.txt").write_text("A", encoding="utf-8")
+    (second / "generation.txt").write_text("B", encoding="utf-8")
+    selected = tmp_path / "selected.zarr"
+    selected.symlink_to(first, target_is_directory=True)
+
+    def swap_during_bundle(_path: str, *, store_identity: str):
+        replacement = tmp_path / "replacement-link.zarr"
+        replacement.symlink_to(second, target_is_directory=True)
+        replacement.replace(selected)
+        return object(), object(), {}
+
+    monkeypatch.setattr(session, "_cached_store_bundle_cached", swap_during_bundle)
+    with pytest.raises(RuntimeError, match="changed while opening"):
+        session.open_stored_rollout_session(selected)
 
 
 def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:

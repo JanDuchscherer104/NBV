@@ -535,6 +535,16 @@ def open_stored_rollout_session(
     reader, validation, manifest_payload = _cached_store_bundle_cached(
         canonical_path.as_posix(), store_identity=identity
     )
+    # The selected entry can be atomically replaced while validation/read-model
+    # construction is in progress.  Never return a session whose identity was
+    # captured from one generation while its reader came from another.
+    try:
+        selected_identity_unchanged = _store_projection_identity(selected_path.as_posix()) == identity
+        selected_target_unchanged = selected_path.resolve() == canonical_path
+    except OSError as error:
+        raise RuntimeError("selected rollout store changed while opening; reopen the store") from error
+    if not selected_identity_unchanged or not selected_target_unchanged:
+        raise RuntimeError("selected rollout store changed while opening; reopen the store")
     return StoredRolloutSession(
         canonical_path, identity, reader, validation, manifest_payload, inventory_row, selected_path
     )
