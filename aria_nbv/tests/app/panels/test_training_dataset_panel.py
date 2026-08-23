@@ -11,7 +11,15 @@ import numpy as np
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from aria_nbv.app.panels.training_dataset import _artifact_identity, _deep_metric_value, _download_payload
+from aria_nbv.app.panels.training_dataset import (
+    _artifact_identity,
+    _deep_metric_value,
+    _download_payload,
+    _qh_preview_for_identity,
+    _qh_preview_identity,
+    _qh_readiness_for_identity,
+    _qh_readiness_identity,
+)
 from aria_nbv.configs import PathConfig
 from aria_nbv.data_handling.vin_store.format import (
     VinOfflineIndexRecord,
@@ -165,7 +173,7 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     assert metrics["Rollout steps"] == "6"
     assert metrics["Candidates"] == "24"
 
-    app.button[1].click()
+    next(button for button in app.button if button.label == "Deep statistics / target scan").click()
     app = app.run()
     assert not app.exception
     metrics = _metrics(app)
@@ -193,6 +201,40 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert _metrics(app)["Compatible rollout stores"] == "0 / 1"
     assert _metrics(app)["Rollouts"] == "0"
     assert any("Blocked" in error.value for error in app.error)
+
+
+def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
+    selection_a = ("selection-a",)
+    baseline = _qh_preview_identity(
+        selection_a,
+        stage="train",
+        chain_index=0,
+        batch_size=4,
+        seed=7,
+    )
+    evidence = object()
+    state = (baseline, evidence)
+
+    assert _qh_preview_for_identity(state, baseline) is evidence
+    for changed in (
+        _qh_preview_identity(("selection-b",), stage="train", chain_index=0, batch_size=4, seed=7),
+        _qh_preview_identity(selection_a, stage="val", chain_index=0, batch_size=4, seed=7),
+        _qh_preview_identity(selection_a, stage="train", chain_index=1, batch_size=4, seed=7),
+        _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=8, seed=7),
+        _qh_preview_identity(selection_a, stage="train", chain_index=0, batch_size=4, seed=8),
+    ):
+        assert _qh_preview_for_identity(state, changed) is None
+
+
+def test_qh_readiness_hides_stale_preflight_after_loader_control_changes() -> None:
+    selection = ("selection",)
+    baseline = _qh_readiness_identity(selection, batch_size=4, seed=7)
+    evidence = object()
+    state = (baseline, evidence)
+
+    assert _qh_readiness_for_identity(state, baseline) is evidence
+    assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=8, seed=7)) is None
+    assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=4, seed=8)) is None
 
 
 def test_download_payload_is_deterministic_and_keeps_denominators_distinct(tmp_path: Path) -> None:

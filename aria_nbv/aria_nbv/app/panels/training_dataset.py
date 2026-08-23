@@ -459,6 +459,21 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     readiness_tab, qh_tab, details_tab = st.tabs(["Readiness", "Q_H corpus", "Details"])
     with readiness_tab:
         st.subheader("Bundle readiness")
+        root_samples = sum(int(value) for value in evidence.root.get("split_counts", {}).values())
+        included_rollouts = [row for row in evidence.rollouts if bool(row.get("included_in_training_totals"))]
+        rollout_counts = [row.get("counts", {}) for row in included_rollouts]
+        summary_columns = st.columns(5)
+        summary_columns[0].metric("Root samples", f"{root_samples:,}")
+        summary_columns[1].metric("Compatible rollout stores", f"{len(included_rollouts)} / {len(evidence.rollouts)}")
+        summary_columns[2].metric(
+            "Rollouts", _metric_value(sum(int(count.get("rollouts", 0)) for count in rollout_counts))
+        )
+        summary_columns[3].metric(
+            "Rollout steps", _metric_value(sum(int(count.get("steps", 0)) for count in rollout_counts))
+        )
+        summary_columns[4].metric(
+            "Candidates", _metric_value(sum(int(count.get("candidates", 0)) for count in rollout_counts))
+        )
         st.subheader("Root splits")
         split_rows = [
             {"split": split, "samples": count} for split, count in sorted(evidence.root.get("split_counts", {}).items())
@@ -599,7 +614,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
     _render_summary_metrics(qh_readiness)
     with details_tab:
         with st.expander("Deep target and candidate evidence"):
-            if st.button("Run deep target and candidate scan", width="stretch"):
+            if st.button("Deep statistics / target scan", width="stretch"):
                 deep = _cached_deep_statistics(root_text, rollout_texts, identity)
                 st.session_state[_DEEP_STATE_KEY] = (identity, deep)
             if deep is None:
@@ -607,6 +622,23 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
             else:
                 st.json(deep)
             root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
+            if deep is not None:
+                deep_aggregate = deep.get("aggregate", {})
+                deep_columns = st.columns(3)
+                deep_columns[0].metric(
+                    "Root target opportunities",
+                    "Unavailable"
+                    if not bool(root_target_scan.get("available"))
+                    else _metric_value(root_target_scan.get("target_opportunity_count")),
+                )
+                deep_columns[1].metric(
+                    "Unique persisted target tasks",
+                    _deep_metric_value(deep_aggregate, "persisted_rollout_unique_target_tasks", deep_available=True),
+                )
+                deep_columns[2].metric(
+                    "Q_H trainable candidates",
+                    _deep_metric_value(deep_aggregate, "q_h_trainable_candidates", deep_available=True),
+                )
             if not bool(root_target_scan.get("available")):
                 reason = root_target_scan.get("reason", "deep scan not run")
                 st.warning(
