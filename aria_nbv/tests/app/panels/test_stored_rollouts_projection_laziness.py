@@ -241,7 +241,16 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     monkeypatch.setattr(qh_admission.st, "empty", lambda: status)
     monkeypatch.setattr(qh_admission.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(qh_admission, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(qh_admission, "_cached_store_bundle", lambda _path: (object(), object(), {}))
+
+    class Handle:
+        canonical_path = Path("/fixture.zarr")
+        reader = object()
+        validation = object()
+
+        def q_h(self, **_kwargs):
+            return []
+
+    handle = Handle()
     callback_results: list[bool] = []
 
     def q_h(_reader, **kwargs):
@@ -257,7 +266,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
         ]
 
     monkeypatch.setattr(qh_admission, "q_h_evidence_rows", q_h)
-    qh_admission._render_q_h_evidence("/fixture.zarr")
+    qh_admission._render_q_h_evidence(handle)
 
     assert callback_results == [False]
     assert progress.calls == [(0.5, "Q_H count: 2/4 state rows")]

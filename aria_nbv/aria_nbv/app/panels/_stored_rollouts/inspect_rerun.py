@@ -14,7 +14,6 @@ import streamlit as st
 
 from ....configs import PathConfig
 from ....rerun_inspector import RolloutLayerName, RolloutLayerPreset
-from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import selected_depth_preview
 from ...rerun_launch import (
     RerunLaunchMode,
@@ -29,7 +28,6 @@ from ...rerun_launch import (
 )
 from ..common import _report_exception
 from .qh_admission import _render_q_h_evidence
-from .session import _cached_candidates, _cached_depth_summary, _cached_evidence_bundle, _cached_steps
 from .shared import ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
@@ -196,7 +194,7 @@ def _consume_pending_promotion(
 
 
 def _query_source_frame(
-    store_path: str,
+    session_handle: object,
     *,
     scope: str,
     candidate_population: str,
@@ -220,11 +218,11 @@ def _query_source_frame(
     if scope != "Candidates":
         raise ValueError(f"Unsupported query scope: {scope}")
     if candidate_population == "Selected step":
-        rows = _cached_candidates(store_path, rollout_row_id=rollout_id, step_row_id=step_id)
+        rows = session_handle.candidates(rollout_row_id=rollout_id, step_row_id=step_id)
     elif candidate_population == "Selected rollout":
-        rows = _cached_candidates(store_path, rollout_row_id=rollout_id)
+        rows = session_handle.candidates(rollout_row_id=rollout_id)
     elif candidate_population == "Explicit full store":
-        rows = _cached_candidates(store_path)
+        rows = session_handle.candidates()
     else:
         raise ValueError(f"Unsupported candidate population: {candidate_population}")
     return _normalized_query_frame(pd.DataFrame(rows))
@@ -355,14 +353,14 @@ def _query_row_label(row: pd.Series) -> str:
 
 
 def _render_inspect_export_rerun(
-    reader: RolloutZarrStoreReader,
+    session_handle: object,
     *,
     store_path: Path,
     manifest_payload: dict[str, Any],
     paths: PathConfig,
 ) -> None:
     st.subheader("Drill-down")
-    store_path_key = reader.store_dir.as_posix()
+    reader = session_handle.reader
     store_identity = _canonical_query_store_identity(store_path)
     _activate_query_store(st.session_state, store_identity)
     scope_key = f"stored_query:{store_identity}:scope"
@@ -379,7 +377,7 @@ def _render_inspect_export_rerun(
     if not rollout_ids:
         st.warning("This store has no rollout rows to inspect or query.")
         return
-    all_steps = pd.DataFrame(_cached_steps(store_path_key))
+    all_steps = pd.DataFrame(session_handle.steps())
     required_step_fields = {"rollout_row_id", "step_row_id"}
     missing_step_fields = sorted(required_step_fields.difference(all_steps.columns))
     if missing_step_fields:
@@ -418,7 +416,7 @@ def _render_inspect_export_rerun(
             key=rollout_widget_key,
         )
     )
-    steps = pd.DataFrame(_cached_steps(store_path_key, rollout_row_id=rollout_id))
+    steps = pd.DataFrame(session_handle.steps(rollout_row_id=rollout_id))
     step_ids = steps["step_row_id"].astype(int).tolist() if not steps.empty else []
     if not step_ids:
         st.warning("The selected rollout has no persisted steps.")
@@ -434,7 +432,7 @@ def _render_inspect_export_rerun(
             "use Selected step or Selected rollout for routine inspection."
         )
     query_source = _query_source_frame(
-        store_path_key,
+        session_handle,
         scope=scope,
         candidate_population=candidate_population,
         rollout_id=rollout_id,
@@ -449,8 +447,7 @@ def _render_inspect_export_rerun(
     )
 
     candidates = pd.DataFrame(
-        _cached_candidates(
-            store_path_key,
+        session_handle.candidates(
             rollout_row_id=rollout_id,
             step_row_id=step_id,
         )
@@ -465,7 +462,7 @@ def _render_inspect_export_rerun(
         "Download selected-step candidate CSV", f"rollout-{rollout_id}-step-{step_id}-candidates.csv", candidates
     )
 
-    depth_rows = pd.DataFrame(_cached_depth_summary(store_path_key, rollout_row_id=rollout_id))
+    depth_rows = pd.DataFrame(session_handle.depth_summary(rollout_row_id=rollout_id))
     selected_depth = depth_rows[depth_rows["step_row_id"] == step_id] if not depth_rows.empty else depth_rows
     with st.expander("Privileged selected-depth evaluation artifact", expanded=not selected_depth.empty):
         st.warning("Selected depth is privileged oracle/evaluation evidence, never actor-visible policy input.")
@@ -473,7 +470,7 @@ def _render_inspect_export_rerun(
             st.info("No selected-depth row exists for this step.")
         else:
             st.dataframe(selected_depth, hide_index=True, width="stretch")
-            preview = selected_depth_preview(reader, step_row_id=step_id)
+            preview = selected_depth_preview(session_handle.reader, step_row_id=step_id)
             if bool(preview.get("available")):
                 array = preview["depth_m"]
                 fig = px.imshow(
@@ -508,12 +505,12 @@ def _render_inspect_export_rerun(
         st.json(manifest_payload, expanded=False)
         st.dataframe(steps, hide_index=True, width="stretch")
     _download_json("Download selected metadata JSON", f"rollout-{rollout_id}-metadata.json", manifest_payload)
-    _render_q_h_evidence(store_path_key)
-    _render_evidence_bundle_download(store_path)
+    _render_q_h_evidence(session_handle)
+    _render_evidence_bundle_download(session_handle)
     _render_rerun_launcher(store_path=store_path, rollout_id=rollout_id, paths=paths)
 
 
-def _render_evidence_bundle_download(store_path: Path) -> None:
+def _render_evidence_bundle_download(session_handle: object) -> None:
     st.markdown("#### Canonical evidence bundle")
     status = st.radio("Evidence status", options=["pilot", "confirmatory"], horizontal=True, key="evidence_status")
     acknowledge = st.checkbox(
@@ -525,7 +522,7 @@ def _render_evidence_bundle_download(store_path: Path) -> None:
     if allowed:
         st.download_button(
             "Download deterministic evidence bundle",
-            data=lambda: _cached_evidence_bundle(store_path.as_posix(), status),
+            data=lambda: session_handle.evidence_bundle(status),
             file_name=f"rollout-evidence-{status}.json",
             mime="application/json",
             on_click="ignore",

@@ -93,6 +93,7 @@ def render_stored_rollouts_page() -> None:
                 st.session_state[session.CORPUS_SUMMARY_STATE_KEY] = (corpus_key, corpus_summary)
             overview._render_corpus_overview(corpus_summary, selected_count=len(corpus_paths))
             overview._render_trust_and_topology(
+                session_handle=active_session,
                 reader=reader,
                 store_path=store_path,
                 inventory_row=selected_inventory,
@@ -107,7 +108,7 @@ def render_stored_rollouts_page() -> None:
         with tabs[2]:
             overview._render_corpus_admission(corpus_summary)
             if current:
-                validity_support._render_targets_and_support(reader)
+                validity_support._render_targets_and_support(active_session)
             else:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
@@ -116,7 +117,7 @@ def render_stored_rollouts_page() -> None:
         with tabs[3]:
             overview._render_corpus_failures(corpus_summary)
             if current:
-                failure_triage._render_failure_triage(reader)
+                failure_triage._render_failure_triage(active_session)
             else:
                 render_stale_store_boundary(
                     validation, inventory_row=selected_inventory, manifest_payload=manifest_payload
@@ -125,9 +126,9 @@ def render_stored_rollouts_page() -> None:
         with tabs[4]:
             if current:
                 with st.expander("Active-store scientific evidence"):
-                    reconstruction._render_scientific_evidence(reader)
+                    reconstruction._render_scientific_evidence(active_session)
                 inspect_rerun._render_inspect_export_rerun(
-                    reader, store_path=store_path, manifest_payload=manifest_payload, paths=paths
+                    active_session, store_path=store_path, manifest_payload=manifest_payload, paths=paths
                 )
                 overview._render_corpus_details(corpus_summary)
             else:

@@ -6,8 +6,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ....rollouts import RolloutZarrStoreReader
-from .session import _cached_failures
 from .shared import ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
@@ -15,13 +13,13 @@ from .shared import render_plot as _render_plot
 _SECTION_KEY = "stored_rollouts_section"
 
 
-def _render_failure_triage(reader: RolloutZarrStoreReader) -> None:
+def _render_failure_triage(session_handle: object) -> None:
     st.subheader("Active-store failure detail")
     with st.expander("Advanced thresholds"):
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
         dominant = float(st.slider("Dominant invalidity fraction", min_value=0.0, max_value=1.0, value=0.8))
         max_step = float(st.slider("Maximum selected step (m)", min_value=0.1, max_value=5.0, value=1.25))
-    failures = pd.DataFrame(_cached_failures(reader.store_dir.as_posix(), min_valid, dominant, max_step))
+    failures = pd.DataFrame(session_handle.failures(min_valid, dominant, max_step))
     if failures.empty:
         st.success("No failure rows match the active thresholds.")
         return

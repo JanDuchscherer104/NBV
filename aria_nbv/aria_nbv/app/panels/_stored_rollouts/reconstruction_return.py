@@ -10,22 +10,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import rollout_endpoint_metric_summary
 from ....rollouts.reporting import RolloutCorpusSummary
-from .session import (
-    _cached_cohorts,
-    _cached_discounted_returns,
-    _cached_headroom,
-    _cached_paired,
-    _cached_ranks,
-    _cached_reconstruction_endpoints,
-    _cached_reconstruction_metrics,
-    _cached_root_geometry,
-    _cached_steps,
-    _cached_temporal,
-    _cached_tree,
-)
 from .shared import ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import plot_control_key as _plot_control_key
@@ -128,18 +114,17 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
         _download_frame("Download temporal rows CSV", "corpus-temporal-summary.csv", rows.drop(columns="series"))
 
 
-def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
+def _render_scientific_evidence(session_handle: object) -> None:
     st.subheader("Scientific evidence")
-    store_path = reader.store_dir.as_posix()
-    _render_reconstruction_summary(store_path)
-    cohort = _cached_cohorts(store_path)
+    _render_reconstruction_summary(session_handle)
+    cohort = session_handle.cohorts()
     eligibility = bool(cohort.get("eligible"))
     st.metric("Matched comparison eligible", "YES" if eligibility else "NO")
     st.caption(
         "Policies are comparison dimensions only after source sample, target protocol, horizon/budget, candidate/oracle configuration, and branch schedule match."
     )
     if eligibility:
-        comparison = pd.DataFrame(_cached_paired(store_path))
+        comparison = pd.DataFrame(session_handle.paired())
         if comparison.empty:
             st.info("Matched cohorts exist, but no finite paired endpoint metric is available.")
         else:
@@ -188,9 +173,9 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
             st.dataframe(mismatch, hide_index=True, width="stretch")
             _download_frame("Download mismatch evidence CSV", "policy-cohort-mismatches.csv", mismatch)
 
-    steps = pd.DataFrame(_cached_steps(store_path))
+    steps = pd.DataFrame(session_handle.steps())
     if not steps.empty:
-        _render_temporal_explorer(store_path, steps, matched_cohorts=eligibility)
+        _render_temporal_explorer(session_handle, steps, matched_cohorts=eligibility)
         _download_frame("Download selected-chain CSV", "selected-chain-evidence.csv", steps)
 
     with st.expander("Additional branching and selected-rank evidence", expanded=False):
@@ -199,11 +184,11 @@ def _render_scientific_evidence(reader: RolloutZarrStoreReader) -> None:
             value=False,
             help="These projections traverse every factual step and candidate shell, then remain cached for this store.",
         ):
-            _render_branching_evidence(steps, pd.DataFrame(_cached_tree(store_path)))
-            _render_selected_rank_and_geometry(store_path)
+            _render_branching_evidence(steps, pd.DataFrame(session_handle.tree()))
+            _render_selected_rank_and_geometry(session_handle)
 
 
-def _render_reconstruction_summary(store_path: str) -> None:
+def _render_reconstruction_summary(session_handle: object) -> None:
     """Render frozen reconstruction, return, and headroom rows on demand."""
 
     if not st.toggle(
@@ -213,10 +198,10 @@ def _render_reconstruction_summary(store_path: str) -> None:
     ):
         return
 
-    metric_rows = pd.DataFrame(_cached_reconstruction_metrics(store_path))
-    endpoint_rows = pd.DataFrame(_cached_reconstruction_endpoints(store_path))
-    discounted = _cached_discounted_returns(store_path)
-    headroom = _cached_headroom(store_path)
+    metric_rows = pd.DataFrame(session_handle.reconstruction_metrics())
+    endpoint_rows = pd.DataFrame(session_handle.reconstruction_endpoints())
+    discounted = session_handle.discounted_returns()
+    headroom = session_handle.headroom()
 
     st.markdown("#### Reconstruction and selection metric plan")
     if metric_rows.empty:
@@ -250,7 +235,7 @@ def _render_reconstruction_summary(store_path: str) -> None:
         st.dataframe(headroom_summary, hide_index=True, width="stretch")
 
 
-def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
+def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
     """Render one population metric at a time and a one-rollout raw drill-down."""
 
     available_labels = [
@@ -279,8 +264,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
         )
 
     summary = pd.DataFrame(
-        _cached_temporal(
-            store_path,
+        session_handle.temporal(
             metric=metric,
             group_fields=(group_field,),
         )
@@ -321,7 +305,7 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
                 f"steps/{_TEMPORAL_SOURCE_FIELDS.get(metric, metric)}",
             ),
         ),
-        log_y_key=_plot_control_key("temporal-summary", store_path, metric, group_field),
+        log_y_key=_plot_control_key("temporal-summary", session_handle.canonical_path.as_posix(), metric, group_field),
     )
     st.dataframe(summary, hide_index=True, width="stretch")
     _download_frame("Download temporal summary CSV", "temporal-metric-summary.csv", summary)
@@ -356,7 +340,9 @@ def _render_temporal_explorer(store_path: str, steps: pd.DataFrame, *, matched_c
                     evidence_role=_temporal_evidence_role(metric),
                     source_fields=("inspection.rollout_step_objective_rows", f"steps/{source_field}"),
                 ),
-                log_y_key=_plot_control_key("raw-trajectory", store_path, metric, selected_rollout),
+                log_y_key=_plot_control_key(
+                    "raw-trajectory", session_handle.canonical_path.as_posix(), metric, selected_rollout
+                ),
             )
 
 
@@ -446,10 +432,10 @@ def _temporal_evidence_role(
         raise ValueError(f"Temporal metric {metric!r} has no explicit evidence role.") from exc
 
 
-def _render_selected_rank_and_geometry(store_path: str) -> None:
+def _render_selected_rank_and_geometry(session_handle: object) -> None:
     """Render expensive selected-rank and complete root-relative evidence on demand."""
 
-    ranks = pd.DataFrame(_cached_ranks(store_path))
+    ranks = pd.DataFrame(session_handle.ranks())
     if not ranks.empty:
         rank_col = "selected_rank" if "selected_rank" in ranks else next((c for c in ranks if "rank" in c), None)
         regret_col = "regret" if "regret" in ranks else next((c for c in ranks if "regret" in c), None)
@@ -483,7 +469,7 @@ def _render_selected_rank_and_geometry(store_path: str) -> None:
         st.dataframe(ranks, hide_index=True, width="stretch")
         _download_frame("Download selected rank/regret CSV", "selected-rank-regret.csv", ranks)
 
-    geometry = pd.DataFrame(_cached_root_geometry(store_path))
+    geometry = pd.DataFrame(session_handle.root_geometry())
     if not geometry.empty:
         st.caption(
             "Coordinates are translated by each rollout root. Absolute world coordinates from unrelated scenes are never aggregated."

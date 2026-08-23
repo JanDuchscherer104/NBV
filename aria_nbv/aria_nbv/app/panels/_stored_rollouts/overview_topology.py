@@ -15,7 +15,7 @@ from ....configs import PathConfig
 from ....dataset_topology import discover_vin_store_dirs
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
-from .session import _cached_header, _cached_invariants, _cached_topology, _clear_stored_rollout_caches
+from .session import _clear_stored_rollout_caches
 from .shared import _ROLE_COLORS, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import download_json as _download_json
@@ -279,6 +279,7 @@ def _render_role_legend() -> None:
 
 def _render_trust_and_topology(
     *,
+    session_handle: Any,
     reader: RolloutZarrStoreReader,
     store_path: Path,
     inventory_row: dict[str, object] | None,
@@ -295,7 +296,7 @@ def _render_trust_and_topology(
     cols[3].metric("Steps", str(counts.get("observed_steps", "?")))
     cols[4].metric("Candidates", str(counts.get("observed_candidates", "?")))
 
-    _render_validated_store_header(reader.store_dir.as_posix(), validation_ok=validation_ok)
+    _render_validated_store_header(session_handle, validation_ok=validation_ok)
 
     if not st.toggle(
         "Show advanced validation, topology, and raw metadata",
@@ -305,7 +306,7 @@ def _render_trust_and_topology(
         return
 
     try:
-        invariants = _cached_invariants(reader.store_dir.as_posix())
+        invariants = session_handle.invariants()
     except Exception as exc:
         invariants = [{"status": "FAIL", "invariant": "invariant projection", "evidence": str(exc)}]
     inv_df = pd.DataFrame(invariants)
@@ -319,11 +320,7 @@ def _render_trust_and_topology(
 
     vin_dirs = discover_vin_store_dirs(paths.offline_cache_dir)
     try:
-        topology = _cached_topology(
-            store_path.as_posix(),
-            tuple(path.as_posix() for path in vin_dirs),
-            paths,
-        )
+        topology = session_handle.topology(tuple(path.as_posix() for path in vin_dirs), paths)
     except Exception as exc:
         st.warning(f"Topology could not be fully resolved: {type(exc).__name__}: {exc}")
         topology = None
@@ -367,12 +364,7 @@ def _render_trust_and_topology(
                     ),
                     key="stored_topology_source_row",
                 )
-                topology = _cached_topology(
-                    store_path.as_posix(),
-                    tuple(path.as_posix() for path in vin_dirs),
-                    paths,
-                    int(source_id),
-                )
+                topology = session_handle.topology(tuple(path.as_posix() for path in vin_dirs), paths, int(source_id))
                 st.dataframe(
                     [row for row in source_rows if int(row["source_row_id"]) == int(source_id)],
                     hide_index=True,
@@ -388,10 +380,10 @@ def _render_trust_and_topology(
     )
 
 
-def _render_store_header_summary(store_path: str) -> None:
+def _render_store_header_summary(session_handle: Any) -> None:
     """Render reference coverage and physical cost without candidate projection."""
 
-    header = _cached_header(store_path)
+    header = session_handle.header()
     st.markdown("#### Coverage and physical cost")
     coverage_cols = st.columns(4)
     coverage_cols[0].metric("Scenes", _format_count(header.get("scenes")))
@@ -416,13 +408,13 @@ def _render_store_header_summary(store_path: str) -> None:
     _download_json("Download coverage and cost JSON", "rollout-coverage-cost.json", header)
 
 
-def _render_validated_store_header(store_path: str, *, validation_ok: bool) -> None:
+def _render_validated_store_header(session_handle: Any, *, validation_ok: bool) -> None:
     """Render scientific coverage only for a store that passed validation."""
 
     if not validation_ok:
         st.info("Coverage and physical-cost projections are withheld until store validation succeeds.")
         return
-    _render_store_header_summary(store_path)
+    _render_store_header_summary(session_handle)
 
 
 def _format_count(value: object) -> str:

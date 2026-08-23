@@ -205,6 +205,9 @@ class StoredRolloutSession:
     def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
         return _cached_candidate_population_cached(self._projection_path(), self.store_identity, sample_size)
 
+    def candidate_group(self, group_by: str) -> Any:
+        return _cached_candidate_group(self._projection_path(), group_by, store_identity=self.store_identity)
+
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
 

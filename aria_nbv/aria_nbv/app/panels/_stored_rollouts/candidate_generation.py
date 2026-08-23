@@ -16,14 +16,6 @@ from ....rollouts.inspection import (
     candidate_selection_pooled_summary_rows,
     candidate_selection_transition_rows,
 )
-from .session import (
-    _cached_candidate_flow,
-    _cached_candidate_group,
-    _cached_candidate_population,
-    _cached_ranks,
-    _cached_steps,
-    _cached_store_bundle,
-)
 from .shared import ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
@@ -186,11 +178,11 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> di
     }
 
 
-def _render_candidate_population_evidence(store_path: str) -> None:
+def _render_candidate_population_evidence(session_handle: object) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
     group_by = st.selectbox("Candidate evidence grouping", options=list(CANDIDATE_GROUP_FIELDS))
-    population = _cached_candidate_population(store_path)
+    population = session_handle.candidate_population()
     composition = pd.DataFrame(population["composition"][group_by])
     calibration = pd.DataFrame(population["calibration"][group_by])
     collision = pd.DataFrame(population["collision"])
@@ -517,20 +509,18 @@ def _select_support_facet(frame: pd.DataFrame, label: str) -> pd.DataFrame:
     return selected
 
 
-def _render_candidate_provenance_flow(store_path: str) -> None:
+def _render_candidate_provenance_flow(session_handle: object) -> None:
     """Render the lightweight complete-population candidate provenance flow."""
 
-    _, validation, _ = _cached_store_bundle(store_path)
-    store_candidate_count = int(validation.num_candidates)
-    steps = pd.DataFrame(_cached_steps(store_path))
+    store_candidate_count = int(session_handle.validation.num_candidates)
+    steps = pd.DataFrame(session_handle.steps())
     policy_options = sorted(str(value) for value in steps.get("policy", pd.Series(dtype=str)).dropna().unique())
     depth_options = sorted(int(value) for value in steps.get("step_index", pd.Series(dtype=int)).dropna().unique())
     col_policy, col_depth = st.columns(2)
     selected_policies = col_policy.multiselect("Flow policies", options=policy_options, default=policy_options)
     selected_depths = col_depth.multiselect("Flow rollout depths", options=depth_options, default=depth_options)
     flow = pd.DataFrame(
-        _cached_candidate_flow(
-            store_path,
+        session_handle.candidate_flow(
             policies=tuple(selected_policies),
             step_indices=tuple(selected_depths),
         )
@@ -575,8 +565,7 @@ def _render_candidate_provenance_flow(store_path: str) -> None:
     _download_frame("Download candidate provenance flow CSV", "candidate-provenance-flow.csv", flow)
 
     ranks = pd.DataFrame(
-        _cached_ranks(
-            store_path,
+        session_handle.ranks(
             policies=tuple(selected_policies),
             step_indices=tuple(selected_depths),
         )
@@ -790,10 +779,10 @@ def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: s
     return figure
 
 
-def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
+def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
     """Render restored complete-store candidate audit plots on demand."""
 
-    families = pd.DataFrame(_cached_candidate_group(store_path, "position"))
+    families = pd.DataFrame(session_handle.candidate_group("position"))
     if not families.empty:
         families["selection_rate_given_available"] = np.where(
             families["actor_valid"] > 0,
@@ -835,7 +824,7 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
         options=list(CANDIDATE_GROUP_FIELDS),
         help="Switches one complete-store aggregate plot without rebuilding the candidate audit.",
     )
-    breakdown = pd.DataFrame(_cached_candidate_group(store_path, breakdown_by))
+    breakdown = pd.DataFrame(session_handle.candidate_group(breakdown_by))
     count_fields = [name for name in ("actor_valid", "q_train", "selected") if name in breakdown]
     if not breakdown.empty and count_fields:
         long = breakdown.melt(
@@ -872,8 +861,8 @@ def _render_candidate_aggregate_breakdowns(store_path: str) -> None:
         )
 
     with st.expander("Invalid reasons and valid fanout"):
-        invalid = pd.DataFrame(_cached_candidate_group(store_path, "invalid_reason"))
-        fanout = pd.DataFrame(_cached_steps(store_path))
+        invalid = pd.DataFrame(session_handle.candidate_group("invalid_reason"))
+        fanout = pd.DataFrame(session_handle.steps())
         if not invalid.empty:
             st.dataframe(invalid, hide_index=True, width="stretch")
         if not fanout.empty:

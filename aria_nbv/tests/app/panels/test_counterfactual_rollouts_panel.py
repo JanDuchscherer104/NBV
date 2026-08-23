@@ -582,11 +582,11 @@ def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
         build_rollout_records(horizon=2, num_samples=8, seed=51)[:2],
     )
     session.clear_rollout_page_caches()
-    for name in ("_cached_ranks", "_cached_root_geometry", "_cached_tree"):
+    for name in ("ranks", "root_geometry", "tree"):
         monkeypatch.setattr(
-            reconstruction_return,
+            session.StoredRolloutSession,
             name,
-            lambda *_args, _name=name, **_kwargs: pytest.fail(f"unexpected heavy projection: {_name}"),
+            lambda _self, _name=name, **_kwargs: pytest.fail(f"unexpected heavy projection: {_name}"),
         )
     app = _stored_rollouts_app(tmp_path).run()
     app = _set_stored_rollout_workspace(app, "Reward & reconstruction")
@@ -644,27 +644,29 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
 
     captured: list[shared.ScientificExplanation] = []
 
-    def fake_ranks(_store_path: str, **_kwargs):
-        return [
-            {
-                "selected_rank": 2,
-                "regret_to_best": 0.25,
-                "policy": "greedy",
-                "rollout_row_id": 0,
-                "step_row_id": 0,
-                "valid_candidate_count": 4,
-            }
-        ]
+    class Handle:
+        def ranks(self, **_kwargs):
+            return [
+                {
+                    "selected_rank": 2,
+                    "regret_to_best": 0.25,
+                    "policy": "greedy",
+                    "rollout_row_id": 0,
+                    "step_row_id": 0,
+                    "valid_candidate_count": 4,
+                }
+            ]
+
+        def root_geometry(self, **_kwargs):
+            return []
 
     def capture_plot(_figure, explanation):
         captured.append(explanation)
 
-    monkeypatch.setattr(reconstruction_return, "_cached_ranks", fake_ranks)
-    monkeypatch.setattr(reconstruction_return, "_cached_root_geometry", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(reconstruction_return, "_render_plot", capture_plot)
     monkeypatch.setattr(reconstruction_return, "_download_frame", lambda *_args, **_kwargs: None)
 
-    reconstruction_return._render_selected_rank_and_geometry("store.zarr")
+    reconstruction_return._render_selected_rank_and_geometry(Handle())
 
     assert [explanation.evidence_role for explanation in captured] == ["oracle/evaluation"]
 
@@ -783,13 +785,13 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
 
     calls: list[tuple[int | None, int | None]] = []
 
-    monkeypatch.setattr(
-        inspect_rerun,
-        "_cached_candidates",
-        lambda _store_path, **kwargs: calls.append((kwargs.get("rollout_row_id"), kwargs.get("step_row_id"))) or [],
-    )
+    class Handle:
+        def candidates(self, **kwargs):
+            calls.append((kwargs.get("rollout_row_id"), kwargs.get("step_row_id")))
+            return []
+
     kwargs = {
-        "store_path": "/store.zarr",
+        "session_handle": Handle(),
         "scope": "Candidates",
         "rollout_id": 7,
         "step_id": 11,

@@ -5,17 +5,14 @@ Corpus construction remains on the Training Dataset page.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 import streamlit as st
 
 from ....rollouts.inspection import q_h_evidence_rows
-from .session import _cached_q_h, _cached_store_bundle
 from .shared import download_frame as _download_frame
 
 
-def _render_q_h_evidence(store_path: str) -> None:
+def _render_q_h_evidence(session_handle: object) -> None:
     """Render metadata-only Q_H facts and gate mask counts behind an explicit toggle."""
 
     st.markdown("#### Store-local Q_H evidence")
@@ -44,9 +41,9 @@ def _render_q_h_evidence(store_path: str) -> None:
     )
     state_limit = None if int(state_limit_value) == 0 else int(state_limit_value)
     if not deep_count:
-        evidence_rows = _cached_q_h(store_path, deep_count=False)
+        evidence_rows = session_handle.q_h(deep_count=False)
     else:
-        cancel_key = f"q_h_cancel:{Path(store_path).resolve().as_posix()}"
+        cancel_key = f"q_h_cancel:{session_handle.canonical_path.as_posix()}"
         stop_requested = bool(
             st.checkbox(
                 "Stop after the current Q_H chunk",
@@ -57,7 +54,8 @@ def _render_q_h_evidence(store_path: str) -> None:
         )
         progress = st.progress(0.0, text="Preparing bounded Q_H count…")
         status = st.empty()
-        reader, validation, _ = _cached_store_bundle(store_path)
+        reader = session_handle.reader
+        validation = session_handle.validation
 
         def update_progress(completed: int, total: int) -> bool:
             fraction = 1.0 if total <= 0 else min(1.0, float(completed) / float(total))
