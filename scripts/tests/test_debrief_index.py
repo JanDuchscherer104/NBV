@@ -70,9 +70,9 @@ def _record(
 def _repo(tmp_path: Path, *, object_format: str | None = None) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
-    init_args = ("init", "-q")
+    init_args = ["init", "-q"]
     if object_format is not None:
-        init_args += (f"--object-format={object_format}",)
+        init_args.append(f"--object-format={object_format}")
     _git(root, *init_args)
     _git(root, "config", "user.email", "test@example.invalid")
     _git(root, "config", "user.name", "Test")
@@ -365,12 +365,74 @@ def test_invalid_commit_link_forms_fail(tmp_path: Path, line: str) -> None:
 def test_none_commit_form_is_exclusive(tmp_path: Path) -> None:
     source = tmp_path / "record.md"
     source.write_text(
-        "---\nstatus: done\n---\n\n## Commits\n- none — no repository commit (planning only)\n- none — no repository commit (duplicate)\n",
+        "---\nstatus: done\n---\n\n## Commits\n- none — no repository commit (planning/read-only)\n- none — no repository commit (duplicate)\n",
         encoding="utf-8",
     )
     assert validator.check_commit_links(
         source, {"repo_object_format": "sha1", "repo_head": "f" * 40}, date(2026, 8, 23)
     )
+
+
+def test_tracked_completed_workpackage_cannot_use_scaffold_placeholder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    source = root / ".agents/memory/history/2026/08/record.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "Body", "## Commits\n- none — no repository commit (not yet recorded)\n"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    errors = validator.check_commit_links(
+        source,
+        {"repo_object_format": "sha1", "repo_head": "f" * 40},
+        date(2026, 8, 23),
+    )
+    assert any("tracked debriefs must replace the scaffold placeholder" in error for error in errors)
+
+
+def test_tracked_planning_read_only_record_requires_empty_owner_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    source = root / ".agents/memory/history/2026/08/record.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "topics: [test]\n",
+            "topics: [test]\ntouched_owner_paths:\n  - README.md\n",
+        ).replace(
+            "Body", "## Commits\n- none — no repository commit (planning/read-only)\n"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    errors = validator.check_commit_links(
+        source,
+        validator.parse_frontmatter(source),
+        date(2026, 8, 23),
+    )
+    assert any("empty `touched_owner_paths`" in error for error in errors)
+
+
+def test_tracked_planning_read_only_record_with_empty_owner_paths_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    source = root / ".agents/memory/history/2026/08/record.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "Body", "## Commits\n- none — no repository commit (planning/read-only)\n"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    assert validator.check_commit_links(
+        source,
+        {"repo_object_format": "sha1", "repo_head": "f" * 40},
+        date(2026, 8, 23),
+    ) == []
 
 
 def test_final_workpackage_at_current_head_passes(
@@ -412,7 +474,7 @@ def test_linked_commit_cannot_modify_debrief_source(
     source = root / ".agents/memory/history/2026/08/record.md"
     source.write_text(
         source.read_text(encoding="utf-8")
-        + "\n## Commits\n- none — no repository commit (planning only)\nchanged\n",
+        + "\n## Commits\n- none — no repository commit (planning/read-only)\nchanged\n",
         encoding="utf-8",
     )
     _git(root, "add", str(source.relative_to(root)))
@@ -426,7 +488,7 @@ def test_linked_commit_cannot_modify_debrief_source(
     ).stdout.strip()
     source.write_text(
         source.read_text(encoding="utf-8").replace(
-            "- none — no repository commit (planning only)",
+            "- none — no repository commit (planning/read-only)",
             f"- [{head}](https://github.com/JanDuchscherer104/ARIA-NBV/commit/{head}) — WP1: modify",
         ),
         encoding="utf-8",
@@ -541,7 +603,7 @@ def test_check_history_records_rejects_stale_post_rebase_provenance(
         f"repo_head: {old_head}\n"
         "repo_branch: main\n"
         "worktree_kind: primary\n"
-        "---\n\n## Commits\n- none — no repository commit (planning only)\n",
+        "---\n\n## Commits\n- none — no repository commit (planning/read-only)\n",
         encoding="utf-8",
     )
     _git(root, "checkout", "--orphan", "rebased")

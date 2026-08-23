@@ -43,6 +43,21 @@ provenance: `repo_object_format` (`sha1` or `sha256`), the corresponding full
 (`primary` or `linked`). The recorded object format makes OID validation
 portable across checkouts. Earlier and legacy-imported records are
 grandfathered; provenance is never backfilled.
+
+For records dated on or after 2026-08-23, `## Commits` has one of two exact
+forms. A committed workpackage uses one or more lines of
+`- [<full OID>](https://github.com/JanDuchscherer104/ARIA-NBV/commit/<full OID>) — <workpackage>: <outcome>`;
+each OID must resolve, be an ancestor of `repo_head`, and must not create or
+modify the debrief source or derived index. A newly generated, untracked
+scaffold uses exactly `- none — no repository commit (not yet recorded)`.
+After the debrief is tracked, that placeholder is invalid. The only tracked
+no-commit exception is exactly
+`- none — no repository commit (planning/read-only)`, and it requires an empty
+`touched_owner_paths: []`; any touched owner path requires immutable commit
+links. This decision is based on tracking and owner paths, not on `status: done`.
+Generate the scaffold before filling the task record, then replace the
+placeholder when recording a completed workpackage or use the planning/read-only
+exception only when no owner path was touched.
 Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.

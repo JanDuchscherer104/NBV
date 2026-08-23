@@ -75,6 +75,8 @@ COMMIT_LINK_PATTERN = re.compile(
     r" — ([^:]+): (.+)$"
 )
 NONE_COMMIT_PATTERN = re.compile(r"^- none — no repository commit \(([^()]+)\)$")
+PLANNING_READ_ONLY_REASON = "planning/read-only"
+NOT_YET_RECORDED_REASON = "not yet recorded"
 RETIRED_SOURCE_PATHS = {
     "docs/contents/thesis/roadmap.qmd",
     "docs/contents/thesis/questions.qmd",
@@ -554,6 +556,30 @@ def check_commit_links(
     if any(none_matches):
         if len(lines) != 1:
             return [f"{rel}: `none` cannot coexist with a commit OID"]
+        reason = none_matches[0].group(1) if none_matches[0] else ""
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", rel],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+        ).returncode == 0
+        if reason == NOT_YET_RECORDED_REASON:
+            if tracked:
+                return [
+                    f"{rel}: tracked debriefs must replace the scaffold placeholder"
+                    " with immutable commit links or an exact planning/read-only reason"
+                ]
+            return []
+        if reason != PLANNING_READ_ONLY_REASON:
+            return [
+                f"{rel}: no-commit records must use the exact reason"
+                f" `{PLANNING_READ_ONLY_REASON}`"
+            ]
+        touched_owner_paths = frontmatter.get("touched_owner_paths", [])
+        if tracked and touched_owner_paths:
+            return [
+                f"{rel}: tracked no-commit records require empty `touched_owner_paths`"
+            ]
         return []
     object_format = str(frontmatter.get("repo_object_format", "sha1"))
     repo_head = str(frontmatter.get("repo_head", ""))
