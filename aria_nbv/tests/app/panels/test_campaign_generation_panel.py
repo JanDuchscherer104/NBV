@@ -284,14 +284,13 @@ def test_admission_audit_renders_all_three_figures(monkeypatch) -> None:
     """Real audit-shaped payloads reach reason, IoU, and scene plots."""
 
     figures = []
-    monkeypatch.setattr(panel.st, "plotly_chart", lambda figure, **_: figures.append(figure))
+    monkeypatch.setattr(panel, "_render_plot", lambda figure, *_args, **_kwargs: figures.append(figure))
     monkeypatch.setattr(
         panel.st, "columns", lambda count: [SimpleNamespace(metric=lambda *_args, **_kwargs: None)] * count
     )
     monkeypatch.setattr(panel.st, "expander", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(panel.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(panel.st, "download_button", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(panel, "_admission_plot_context", lambda *_args, **_kwargs: None)
 
     panel._render_admission_audit(
         {
