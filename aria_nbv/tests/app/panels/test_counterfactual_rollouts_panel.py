@@ -68,6 +68,7 @@ stored_rollouts_page = SimpleNamespace(
     _query_namespace=inspect_rerun._query_namespace,
     _render_store_selector=overview_topology._render_store_selector,
     _temporal_evidence_role=reconstruction_return._temporal_evidence_role,
+    _temporal_theory=reconstruction_return._temporal_theory,
     _temporal_summary_figure=reconstruction_return._temporal_summary_figure,
 )
 
@@ -613,6 +614,11 @@ def test_stored_rollout_evidence_roles_are_explicit() -> None:
     assert {metric: stored_rollouts_page._temporal_evidence_role(metric) for metric in expected} == expected
     with pytest.raises(ValueError, match="no explicit evidence role"):
         stored_rollouts_page._temporal_evidence_role("derived_q_h")
+    assert stored_rollouts_page._temporal_theory("selected_probability") is not None
+    assert stored_rollouts_page._temporal_theory("valid_fanout") is not None
+    assert stored_rollouts_page._temporal_theory("selected_entropy") is not None
+    with pytest.raises(ValueError, match="no theory mapping"):
+        stored_rollouts_page._temporal_theory("derived_q_h")
 
 
 def test_branching_probability_entropy_plot_is_actor_visible(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -890,7 +896,8 @@ def test_temporal_summary_figure_contains_population_median_iqr_and_exact_counts
 
     median_traces = [trace for trace in figure.data if trace.mode == "lines+markers"]
     assert {trace.name for trace in median_traces} == {"greedy", "softmax"}
-    assert all(trace.customdata.shape == (2, 6) for trace in median_traces)
+    assert all(trace.customdata.shape == (2, 7) for trace in median_traces)
+    assert all(list(trace.x) == [1, 2] for trace in median_traces)
     assert all(np.asarray(trace.customdata)[:, :2].tolist() == [[3.0, 4.0], [3.0, 4.0]] for trace in median_traces)
     assert sum(trace.fill == "tonexty" for trace in figure.data) == 2
     assert not any("rollout" in str(trace.name).lower() for trace in figure.data)

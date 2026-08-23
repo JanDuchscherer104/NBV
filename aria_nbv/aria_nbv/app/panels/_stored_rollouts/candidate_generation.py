@@ -423,27 +423,28 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                         "Download selected-family sequence CSV", "selected-family-sequences.csv", sequence_rows
                     )
 
-    st.markdown("#### Candidate composition")
-    st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
-    st.dataframe(composition, hide_index=True, width="stretch")
-    _download_frame("Download candidate composition CSV", "candidate-composition.csv", composition)
+    with st.expander("Candidate choice rows, aggregate tables, and CSV", expanded=False):
+        st.markdown("#### Candidate composition")
+        st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
+        st.dataframe(composition, hide_index=True, width="stretch")
+        _download_frame("Download candidate composition CSV", "candidate-composition.csv", composition)
 
-    st.markdown("#### Proposal calibration")
-    st.caption("Empirical frequency, proposal mass, and selection enrichment remain descriptive within cohort.")
-    st.dataframe(calibration, hide_index=True, width="stretch")
-    _download_frame("Download proposal calibration CSV", "candidate-proposal-calibration.csv", calibration)
+        st.markdown("#### Proposal calibration")
+        st.caption("Empirical frequency, proposal mass, and selection enrichment remain descriptive within cohort.")
+        st.dataframe(calibration, hide_index=True, width="stretch")
+        _download_frame("Download proposal calibration CSV", "candidate-proposal-calibration.csv", calibration)
 
-    st.markdown("#### Collision support")
-    st.dataframe(collision, hide_index=True, width="stretch")
-    _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
+        st.markdown("#### Collision support")
+        st.dataframe(collision, hide_index=True, width="stretch")
+        _download_frame("Download collision support CSV", "candidate-collision-support.csv", collision)
 
-    sample_rows = pd.DataFrame(sample.get("rows", []))
-    st.markdown("#### Deterministic display sample")
-    st.caption(
-        f"Showing {int(sample.get('display_count', 0)):,} of {int(sample.get('population_count', 0)):,} rows. "
-        "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
-    )
-    st.dataframe(sample_rows, hide_index=True, width="stretch")
+        sample_rows = pd.DataFrame(sample.get("rows", []))
+        st.markdown("#### Deterministic display sample")
+        st.caption(
+            f"Showing {int(sample.get('display_count', 0)):,} of {int(sample.get('population_count', 0)):,} rows. "
+            "This bounded, order-invariant sample is display-only; aggregates above use the complete population."
+        )
+        st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
 def _candidate_population_role(population: dict[str, object]) -> str | None:

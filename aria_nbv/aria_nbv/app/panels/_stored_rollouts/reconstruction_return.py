@@ -62,6 +62,47 @@ _REWARD_TEMPORAL_METRICS = frozenset(
         "marginal_target_rri",
     }
 )
+_TEMPORAL_THEORY: dict[str, TheoryReferences | None] = {
+    "cumulative_target_root_gain": TheoryReferences(
+        equation_ids=("rl.cumulative_target_root_gain",),
+        symbol_ids=("entity.target_root_gain_cumulative",),
+        term_ids=("target-root-gain-reward",),
+    ),
+    "selected_target_root_gain": TheoryReferences(
+        equation_ids=("rl.target_root_gain_reward",),
+        symbol_ids=("rl.reward_target",),
+        term_ids=("target-root-gain-reward",),
+    ),
+    "selected_target_rri": TheoryReferences(
+        equation_ids=("rl.marginal_target_rri",),
+        symbol_ids=("entity.rri_e",),
+        term_ids=("relative-reconstruction-improvement",),
+    ),
+    "marginal_target_rri": TheoryReferences(
+        equation_ids=("rl.marginal_target_rri",),
+        symbol_ids=("entity.rri_e",),
+        term_ids=("relative-reconstruction-improvement",),
+    ),
+    "selected_probability": TheoryReferences(
+        equation_ids=("action.robust_temperature_softmax",),
+        term_ids=("finite-candidate-action-set",),
+    ),
+    "selected_entropy": TheoryReferences(
+        equation_ids=("action.robust_temperature_softmax",),
+        term_ids=("finite-candidate-action-set",),
+    ),
+    "valid_fanout": TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+    "invalid_fraction": TheoryReferences(symbol_ids=("rl.validity_mask",), term_ids=("validity-mask",)),
+}
+
+
+def _temporal_theory(metric: str) -> TheoryReferences | None:
+    """Return metric-owned theory, failing closed for an unregistered metric."""
+
+    try:
+        return _TEMPORAL_THEORY[metric]
+    except KeyError as exc:
+        raise ValueError(f"Temporal metric {metric!r} has no theory mapping.") from exc
 
 
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
@@ -429,13 +470,13 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
     finite_count = int(summary["finite_count"].sum())
     total_count = int(summary["total_count"].sum())
     missing_count = int(summary["missing_count"].sum())
-    endpoint_depth = int(summary["step_index"].max())
+    endpoint_depth = int(summary["step_index"].max()) + 1
     endpoint = rollout_endpoint_metric_summary(steps.to_dict("records"), metric=metric)
     endpoint_median = endpoint["median"]
     cols = st.columns(4)
     cols[0].metric("Finite temporal rows", f"{finite_count:,} / {total_count:,}")
     cols[1].metric("Missing temporal rows", f"{missing_count:,}")
-    cols[2].metric("Observed depth", f"0–{endpoint_depth}")
+    cols[2].metric("Observed acquisitions", f"1–{endpoint_depth}")
     cols[3].metric(
         "Factual endpoint median",
         "n/a" if endpoint_median is None else f"{float(endpoint_median):.4g}",
@@ -478,11 +519,7 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
                 "inspection.temporal_metric_summary_rows",
                 f"steps/{_TEMPORAL_SOURCE_FIELDS.get(metric, metric)}",
             ),
-            theory=TheoryReferences(
-                equation_ids=("rl.cumulative_target_root_gain",),
-                symbol_ids=("oracle.rri",),
-                term_ids=("relative-reconstruction-improvement",),
-            ),
+            theory=_temporal_theory(metric),
         ),
         log_y_key=_plot_control_key("temporal-summary", session_handle.canonical_path.as_posix(), metric, group_field),
     )
@@ -498,14 +535,16 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
         if raw.empty:
             st.info(f"Rollout {selected_rollout} has no finite {metric_label.lower()} rows.")
         else:
+            raw = raw.assign(acquisition_number=pd.to_numeric(raw["step_index"], errors="coerce") + 1)
             fig = px.line(
                 raw,
-                x="step_index",
+                x="acquisition_number",
                 y=source_field,
                 markers=True,
                 title=f"Raw trajectory for rollout {selected_rollout}",
-                hover_data=[column for column in ("step_row_id", "policy") if column in raw],
+                hover_data=[column for column in ("step_row_id", "step_index", "policy") if column in raw],
             )
+            fig.update_xaxes(title="acquisition number (1 = first selected view; persisted step_index + 1)")
             _render_plot(
                 fig,
                 ScientificExplanation(
@@ -537,6 +576,7 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
                     ),
                     evidence_role=_temporal_evidence_role(metric),
                     source_fields=("inspection.rollout_step_objective_rows", f"steps/{source_field}"),
+                    theory=_temporal_theory(metric),
                 ),
                 log_y_key=_plot_control_key(
                     "raw-trajectory", session_handle.canonical_path.as_posix(), metric, selected_rollout
@@ -550,7 +590,8 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
     figure = go.Figure()
     palette = px.colors.qualitative.Plotly
     for index, (group_value, rows) in enumerate(summary.groupby(group_field, sort=True, dropna=False)):
-        ordered = rows.sort_values("step_index")
+        ordered = rows.sort_values("step_index").copy()
+        ordered["acquisition_number"] = pd.to_numeric(ordered["step_index"], errors="coerce") + 1
         color = palette[index % len(palette)]
         custom = np.column_stack(
             (
@@ -560,11 +601,12 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
                 ordered["mean"],
                 ordered["min"],
                 ordered["max"],
+                ordered["step_index"],
             )
         )
         figure.add_trace(
             go.Scatter(
-                x=ordered["step_index"],
+                x=ordered["acquisition_number"],
                 y=ordered["q25"],
                 mode="lines",
                 line={"color": color, "width": 0},
@@ -575,7 +617,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
         )
         figure.add_trace(
             go.Scatter(
-                x=ordered["step_index"],
+                x=ordered["acquisition_number"],
                 y=ordered["q75"],
                 mode="lines",
                 line={"color": color, "width": 0},
@@ -588,7 +630,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
         )
         figure.add_trace(
             go.Scatter(
-                x=ordered["step_index"],
+                x=ordered["acquisition_number"],
                 y=ordered["median"],
                 mode="lines+markers",
                 line={"color": color},
@@ -596,7 +638,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
                 legendgroup=str(group_value),
                 customdata=custom,
                 hovertemplate=(
-                    f"{group_field}={group_value}<br>step=%{{x}}<br>median=%{{y:.4g}}"
+                    f"{group_field}={group_value}<br>acquisition=%{{x}}<br>persisted step=%{{customdata[6]:.0f}}<br>median=%{{y:.4g}}"
                     "<br>finite=%{customdata[0]:.0f} / %{customdata[1]:.0f}"
                     "<br>missing=%{customdata[2]:.1%}<br>mean=%{customdata[3]:.4g}"
                     "<br>min=%{customdata[4]:.4g}<br>max=%{customdata[5]:.4g}<extra></extra>"
@@ -605,7 +647,7 @@ def _temporal_summary_figure(summary: pd.DataFrame, *, group_field: str, metric_
         )
     figure.update_layout(
         title=f"{metric_label}: median and interquartile range by rollout depth",
-        xaxis_title="rollout step_index",
+        xaxis_title="acquisition number (1 = first selected view; persisted step_index + 1)",
         yaxis_title=current_scientific_label(str(summary["metric"].iloc[0]), surface="plain"),
         hovermode="x unified",
     )
@@ -702,19 +744,24 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
     """Restore selection, fanout, and family-provenance plots from the prior inspector."""
 
     with st.expander("Branching, selection confidence, and sampled families", expanded=True):
+        display_steps = steps.assign(acquisition_number=pd.to_numeric(steps["step_index"], errors="coerce") + 1)
         probability_cols = [
             name for name in ("selected_probability", "selected_entropy") if name in steps and steps[name].notna().any()
         ]
         if probability_cols:
-            long = steps.melt(
-                id_vars=[name for name in ("rollout_row_id", "policy", "step_index") if name in steps],
+            long = display_steps.melt(
+                id_vars=[
+                    name
+                    for name in ("rollout_row_id", "policy", "step_index", "acquisition_number")
+                    if name in display_steps
+                ],
                 value_vars=probability_cols,
                 var_name="metric",
                 value_name="value",
             ).dropna(subset=["value"])
             fig = px.line(
                 long,
-                x="step_index",
+                x="acquisition_number",
                 y="value",
                 color="policy" if "policy" in long else "rollout_row_id",
                 facet_row="metric",
@@ -753,6 +800,7 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                     ),
                     evidence_role=_temporal_evidence_role("selected_probability"),
                     source_fields=("steps/selected_probability", "steps/selected_entropy"),
+                    theory=_temporal_theory("selected_probability"),
                 ),
             )
 
@@ -760,15 +808,19 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
             name for name in ("num_valid_candidates", "invalid_fraction") if name in steps and steps[name].notna().any()
         ]
         if fanout_cols:
-            long = steps.melt(
-                id_vars=[name for name in ("rollout_row_id", "policy", "step_index") if name in steps],
+            long = display_steps.melt(
+                id_vars=[
+                    name
+                    for name in ("rollout_row_id", "policy", "step_index", "acquisition_number")
+                    if name in display_steps
+                ],
                 value_vars=fanout_cols,
                 var_name="metric",
                 value_name="value",
             ).dropna(subset=["value"])
             fig = px.line(
                 long,
-                x="step_index",
+                x="acquisition_number",
                 y="value",
                 color="policy" if "policy" in long else "rollout_row_id",
                 facet_row="metric",
@@ -805,6 +857,7 @@ def _render_branching_evidence(steps: pd.DataFrame, tree: pd.DataFrame) -> None:
                     ),
                     evidence_role="actor-visible",
                     source_fields=("steps/num_valid_candidates", "steps/invalid_fraction"),
+                    theory=_temporal_theory("valid_fanout"),
                 ),
             )
 

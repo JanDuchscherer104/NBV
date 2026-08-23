@@ -168,6 +168,73 @@ def test_candidate_population_owner_census_keeps_selection_domain_surface() -> N
     assert set(bundle["selection_dynamics"]) == {"position", "strategy", "mixture", "position_strategy"}
 
 
+def _candidate_choice_rows_for_parity() -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for step_index, family, selected, gain in (
+        (0, "forward", 1, 0.2),
+        (1, "side", 1, 0.4),
+    ):
+        rows.append(
+            {
+                "group_by": "position_strategy",
+                "generation_cohort_id": "cohort-a",
+                "generation_cohort": "temperature",
+                "scene": "scene-a",
+                "rollout_row_id": 7,
+                "step_row_id": 10 + step_index,
+                "step_index": step_index,
+                "family": family,
+                "family_selected_count": selected,
+                "family_candidate_count": 3,
+                "candidate_count": 6,
+                "family_actor_valid_count": 2,
+                "actor_valid_count": 4,
+                "policy_mass": None if step_index == 1 else 0.6,
+                "policy": "temperature_softmax",
+                "temperature": 2.0,
+                "horizon": 2,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "cumulative_target_root_gain": gain,
+            }
+        )
+    return rows
+
+
+def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_sequences() -> None:
+    rows = _candidate_choice_rows_for_parity()
+
+    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
+    sequences = candidate_selection_sequence_rows(rows)
+    returns = candidate_sequence_return_summary_rows(sequences)
+
+    transition = next(row for row in transitions if row["next_family"] == "side")
+    assert transition["previous_family"] == "forward"
+    assert sequences[0]["sequence"] == "forward → side"
+    assert returns[0]["sequence"] == "forward → side"
+
+
+def test_pooled_selection_materializes_families_absent_from_a_temperature_cohort() -> None:
+    rows = _candidate_choice_rows_for_parity()
+    rows[0] = {**rows[0], "family": "forward"}
+    rows[1] = {**rows[1], "family": "side"}
+
+    pooled = candidate_selection_pooled_summary_rows(rows, metric="allocation_share")
+
+    assert {row["family"] for row in pooled} == {"forward", "side"}
+    assert all(row["state_count"] == 1 for row in pooled)
+
+
+def test_candidate_selection_probability_failure_closes_policy_mass_only() -> None:
+    rows = _candidate_choice_rows_for_parity()
+
+    transitions = candidate_selection_transition_rows(rows, pool_temperatures=True)
+
+    transition = next(row for row in transitions if row["next_family"] == "side")
+    assert transition["expected_missing_count"] == 1
+    assert transition["realized_rate"] == pytest.approx(1.0)
+
+
 def test_candidate_group_summary_rejects_unsupported_field() -> None:
     with pytest.raises(ValueError, match="Unsupported candidate group field"):
         candidate_group_summary_rows(cast(Any, object()), group_by=cast(Any, "not-supported"))
