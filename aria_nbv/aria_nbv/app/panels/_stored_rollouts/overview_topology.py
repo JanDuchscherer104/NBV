@@ -148,13 +148,20 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
             None,
         )
         if metric is not None:
+            endpoint_rows = summary.endpoints.copy()
+            if {"contract", "contract_id"}.issubset(endpoint_rows.columns):
+                endpoint_rows["contract_facet"] = (
+                    endpoint_rows["contract"].astype(str) + " · id=" + endpoint_rows["contract_id"].astype(str)
+                )
+            else:
+                endpoint_rows["contract_facet"] = endpoint_rows.get("contract", "corpus")
             fig = px.box(
-                summary.endpoints,
-                x="contract",
+                endpoint_rows,
+                x="contract_facet",
                 y=metric,
                 color="policy",
                 facet_col="horizon",
-                hover_data=["store_id", "profile"],
+                hover_data=[name for name in ("store_id", "profile", "contract_id") if name in endpoint_rows],
                 title="Store-qualified factual endpoint distributions",
             )
             _render_plot(
