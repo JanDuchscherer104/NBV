@@ -1,0 +1,493 @@
+{
+  "actual_path": {
+    "actor_state_contract_hash": "da77923ae50e0c34",
+    "batch_candidate_width": 60,
+    "batch_fields": [
+      "actor",
+      "supervision",
+      "keys",
+      "audits"
+    ],
+    "batch_root_evl_present": true,
+    "batch_size": 1,
+    "batch_steps": 8,
+    "batch_type": "QhBatch",
+    "chain_steps": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "dataset_len": 4,
+    "learning_contract_hash": "92f6e90a9653da11",
+    "rollout_contract_hash": "d69826480eb9dd29",
+    "trainable_selected_rows": 32
+  },
+  "blockers": [
+    "G007 identity field 'batch_fields' differs: expected ['actor', 'audits', 'keys', 'supervision'], actual ['actor', 'supervision', 'keys', 'audits'].",
+    "G007 identity field 'batch_steps' differs: expected 12, actual 8.",
+    "G007 identity field 'trainable_selected_rows' differs: expected 8, actual 32."
+  ],
+  "commands": {
+    "construction": "build_qh_corpus_readiness + preview_qh_batch + _build_qh_data_module (batch_size=1, num_workers=0, seed=0)",
+    "script": "verify_v10_qh_path.py"
+  },
+  "contract_hashes": {
+    "actor_state": "da77923ae50e0c34",
+    "learning": "92f6e90a9653da11",
+    "rollout_data": "d69826480eb9dd29"
+  },
+  "determinism": {
+    "changed_seed_contract_identity_identical": true,
+    "changed_seed_preview": {
+      "different": true,
+      "seed_0": {
+        "action_count": 204,
+        "batch_chain_keys": [
+          {
+            "rollout_row_id": 1,
+            "scene_id": "81286",
+            "source_sample_index": 23,
+            "store_index": 0,
+            "target_row_id": 0
+          }
+        ],
+        "batch_step_counts": [
+          8
+        ],
+        "candidate_padding_count": 0,
+        "dtypes": {
+          "action_mask": "torch.bool",
+          "candidate_mask": "torch.bool",
+          "candidate_pose_relative_root": "torch.float32",
+          "candidate_reward": "torch.float32",
+          "horizon_remaining": "torch.int64",
+          "label_mask": "torch.bool",
+          "step_mask": "torch.bool"
+        },
+        "selected_chain_index": 0,
+        "selected_chain_key": {
+          "rollout_row_id": 0,
+          "scene_id": "81286",
+          "source_sample_index": 23,
+          "store_index": 0,
+          "target_row_id": 0
+        },
+        "selected_chain_steps": 8,
+        "shapes": {
+          "action_mask": [
+            1,
+            8,
+            60
+          ],
+          "candidate_mask": [
+            1,
+            8,
+            60
+          ],
+          "candidate_pose_relative_root": [
+            1,
+            8,
+            60,
+            12
+          ],
+          "candidate_reward": [
+            1,
+            8,
+            60
+          ],
+          "horizon_remaining": [
+            1,
+            8
+          ],
+          "label_mask": [
+            1,
+            8,
+            60
+          ],
+          "step_mask": [
+            1,
+            8
+          ]
+        },
+        "stage": "train",
+        "step_padding_count": 0,
+        "trainable_candidate_count": 204
+      },
+      "seed_1": {
+        "action_count": 204,
+        "batch_chain_keys": [
+          {
+            "rollout_row_id": 0,
+            "scene_id": "81286",
+            "source_sample_index": 23,
+            "store_index": 0,
+            "target_row_id": 0
+          }
+        ],
+        "batch_step_counts": [
+          8
+        ],
+        "candidate_padding_count": 0,
+        "dtypes": {
+          "action_mask": "torch.bool",
+          "candidate_mask": "torch.bool",
+          "candidate_pose_relative_root": "torch.float32",
+          "candidate_reward": "torch.float32",
+          "horizon_remaining": "torch.int64",
+          "label_mask": "torch.bool",
+          "step_mask": "torch.bool"
+        },
+        "selected_chain_index": 0,
+        "selected_chain_key": {
+          "rollout_row_id": 0,
+          "scene_id": "81286",
+          "source_sample_index": 23,
+          "store_index": 0,
+          "target_row_id": 0
+        },
+        "selected_chain_steps": 8,
+        "shapes": {
+          "action_mask": [
+            1,
+            8,
+            60
+          ],
+          "candidate_mask": [
+            1,
+            8,
+            60
+          ],
+          "candidate_pose_relative_root": [
+            1,
+            8,
+            60,
+            12
+          ],
+          "candidate_reward": [
+            1,
+            8,
+            60
+          ],
+          "horizon_remaining": [
+            1,
+            8
+          ],
+          "label_mask": [
+            1,
+            8,
+            60
+          ],
+          "step_mask": [
+            1,
+            8
+          ]
+        },
+        "stage": "train",
+        "step_padding_count": 0,
+        "trainable_candidate_count": 204
+      }
+    },
+    "same_seed_contract_identity_identical": true,
+    "same_seed_preview_identical": true
+  },
+  "field_comparison": {
+    "actor_state_contract_hash": {
+      "actual": "da77923ae50e0c34",
+      "expected": "da77923ae50e0c34",
+      "match": true
+    },
+    "batch_candidate_width": {
+      "actual": 60,
+      "expected": 60,
+      "match": true
+    },
+    "batch_fields": {
+      "actual": [
+        "actor",
+        "supervision",
+        "keys",
+        "audits"
+      ],
+      "expected": [
+        "actor",
+        "audits",
+        "keys",
+        "supervision"
+      ],
+      "match": false
+    },
+    "batch_root_evl_present": {
+      "actual": true,
+      "expected": true,
+      "match": true
+    },
+    "batch_size": {
+      "actual": 1,
+      "expected": 1,
+      "match": true
+    },
+    "batch_steps": {
+      "actual": 8,
+      "expected": 12,
+      "match": false
+    },
+    "batch_type": {
+      "actual": "QhBatch",
+      "expected": "QhBatch",
+      "match": true
+    },
+    "dataset_len": {
+      "actual": 4,
+      "expected": 4,
+      "match": true
+    },
+    "learning_contract_hash": {
+      "actual": "92f6e90a9653da11",
+      "expected": "92f6e90a9653da11",
+      "match": true
+    },
+    "trainable_selected_rows": {
+      "actual": 32,
+      "expected": 8,
+      "match": false
+    }
+  },
+  "g007_identity": {
+    "actor_state_contract": {
+      "actor_manifest_hash": "605453ba11869e40",
+      "experiment_profile": "qh_cf0_v1",
+      "free_input_provenance": "derived_observed_complement_occ_input_v1",
+      "root_evl_profile": "evl_v1"
+    },
+    "actor_state_contract_hash": "da77923ae50e0c34",
+    "batch_candidate_width": 60,
+    "batch_fields": [
+      "actor",
+      "audits",
+      "keys",
+      "supervision"
+    ],
+    "batch_root_evl_present": true,
+    "batch_size": 1,
+    "batch_steps": 12,
+    "batch_type": "QhBatch",
+    "dataset_len": 4,
+    "learning_contract_hash": "92f6e90a9653da11",
+    "provenance": {
+      "actor": {
+        "manifest_hash": "605453ba11869e40",
+        "row_count": 100,
+        "split": "train",
+        "store_path": "/home/jd/repos/ARIA-NBV/.data/offline_cache/vin_offline_rollout_campaign100_v10_rebuilt",
+        "store_version": "10"
+      },
+      "rollout": {
+        "contract": "QhDataContract(schema_version='2.0-target-rollout-provenance', target_protocol='v1_observed', reward_metric='target_root_gain', return_semantics='cumulative_target_root_gain', td_semantics='selected_transition_only', discount_gamma=1.0, reason_code_version='rollout-invalidity-v1', actor_store_version='10', candidate_config_hashes=('4425e495ed9cb49c',), rollout_config_hashes=('47842fb45e1ca06c', '9404d34c2d1d65c5', 'dd8368cefe73701d', 'ef688666a06b6901'), selection_policies=('temperature_softmax',), selected_depth_enabled=False, selected_depth_role=None, selected_depth_renderer=None, selected_depth_image_size_hw=None, selected_depth_dtype=None, selected_depth_units=None, selected_depth_znear_m=None, selected_depth_zfar_m=None, selected_depth_source_resolution=None, selected_depth_projection_model=None, selected_depth_value_semantics=None, selected_depth_pixel_convention=None, selected_depth_camera_axes=None, selected_depth_pose_convention=None, selected_depth_geometry=None)",
+        "stores": [
+          {
+            "manifest_sha256": "d9f1c01ac613ce6e457c5f155ce4912f36022c1d374198b8decde2745fc90744",
+            "path": "/home/jd/.codex/worktrees/aria-streamlit-session-cache-plan/.omx/evidence/streamlit-qh/g007/runtime-proof/final-a0b80ae8dc/cuda-rollouts-v1-g007-v10-one-unit/shards/a4cff23e3ebca79b",
+            "state_count": 32
+          }
+        ]
+      }
+    },
+    "scenes": 1,
+    "trainable_selected_rows": 8
+  },
+  "product_head": "76faa47ea674616bae938aad648a9bffaa8c9ceb",
+  "readiness": {
+    "actor_contract": {
+      "actor_manifest_hash": "da77923ae50e0c34",
+      "experiment_profile": "qh_cf0_v1",
+      "root_evl_profile": "evl_v1",
+      "selected_observation_protocol": "none"
+    },
+    "blockers": [],
+    "contract": {
+      "actor_store_version": "10",
+      "candidate_config_hashes": [
+        "4425e495ed9cb49c"
+      ],
+      "discount_gamma": 1.0,
+      "reason_code_version": "rollout-invalidity-v1",
+      "return_semantics": "cumulative_target_root_gain",
+      "reward_metric": "target_root_gain",
+      "rollout_config_hashes": [
+        "47842fb45e1ca06c",
+        "9404d34c2d1d65c5",
+        "dd8368cefe73701d",
+        "ef688666a06b6901"
+      ],
+      "schema_version": "2.0-target-rollout-provenance",
+      "selected_depth_camera_axes": null,
+      "selected_depth_dtype": null,
+      "selected_depth_enabled": false,
+      "selected_depth_geometry": null,
+      "selected_depth_image_size_hw": null,
+      "selected_depth_pixel_convention": null,
+      "selected_depth_pose_convention": null,
+      "selected_depth_projection_model": null,
+      "selected_depth_renderer": null,
+      "selected_depth_role": null,
+      "selected_depth_source_resolution": null,
+      "selected_depth_units": null,
+      "selected_depth_value_semantics": null,
+      "selected_depth_zfar_m": null,
+      "selected_depth_znear_m": null,
+      "selection_policies": [
+        "temperature_softmax"
+      ],
+      "target_protocol": "v1_observed",
+      "td_semantics": "selected_transition_only"
+    },
+    "loader_settings": {
+      "batch_size": 1,
+      "num_workers": 0,
+      "persistent_workers": false,
+      "pin_memory": false,
+      "seed": 0
+    },
+    "scene_disjoint": true,
+    "selection": {
+      "rollout_stores": [
+        "/home/jd/.codex/worktrees/aria-streamlit-session-cache-plan/.omx/evidence/streamlit-qh/g007/runtime-proof/final-a0b80ae8dc/cuda-rollouts-v1-g007-v10-one-unit/shards/a4cff23e3ebca79b"
+      ],
+      "root_store": "/home/jd/repos/ARIA-NBV/.data/offline_cache/vin_offline_rollout_campaign100_v10_rebuilt"
+    },
+    "stages": [
+      {
+        "chain_count": 4,
+        "included": true,
+        "max_horizon": 8,
+        "provenance": {
+          "actor": {
+            "manifest_hash": "605453ba11869e40",
+            "row_count": 100,
+            "split": "train",
+            "store_path": "/home/jd/repos/ARIA-NBV/.data/offline_cache/vin_offline_rollout_campaign100_v10_rebuilt",
+            "store_version": "10"
+          },
+          "rollout": {
+            "contract": {
+              "actor_store_version": "10",
+              "candidate_config_hashes": [
+                "4425e495ed9cb49c"
+              ],
+              "discount_gamma": 1.0,
+              "reason_code_version": "rollout-invalidity-v1",
+              "return_semantics": "cumulative_target_root_gain",
+              "reward_metric": "target_root_gain",
+              "rollout_config_hashes": [
+                "47842fb45e1ca06c",
+                "9404d34c2d1d65c5",
+                "dd8368cefe73701d",
+                "ef688666a06b6901"
+              ],
+              "schema_version": "2.0-target-rollout-provenance",
+              "selected_depth_camera_axes": null,
+              "selected_depth_dtype": null,
+              "selected_depth_enabled": false,
+              "selected_depth_geometry": null,
+              "selected_depth_image_size_hw": null,
+              "selected_depth_pixel_convention": null,
+              "selected_depth_pose_convention": null,
+              "selected_depth_projection_model": null,
+              "selected_depth_renderer": null,
+              "selected_depth_role": null,
+              "selected_depth_source_resolution": null,
+              "selected_depth_units": null,
+              "selected_depth_value_semantics": null,
+              "selected_depth_zfar_m": null,
+              "selected_depth_znear_m": null,
+              "selection_policies": [
+                "temperature_softmax"
+              ],
+              "target_protocol": "v1_observed",
+              "td_semantics": "selected_transition_only"
+            },
+            "stores": [
+              {
+                "manifest_sha256": "d9f1c01ac613ce6e457c5f155ce4912f36022c1d374198b8decde2745fc90744",
+                "path": "/home/jd/.codex/worktrees/aria-streamlit-session-cache-plan/.omx/evidence/streamlit-qh/g007/runtime-proof/final-a0b80ae8dc/cuda-rollouts-v1-g007-v10-one-unit/shards/a4cff23e3ebca79b",
+                "state_count": 32
+              }
+            ]
+          }
+        },
+        "scene_ids": [
+          "81286"
+        ],
+        "stage": "train",
+        "state_count": 32,
+        "trainable_candidate_count": 798
+      },
+      {
+        "chain_count": 0,
+        "included": false,
+        "max_horizon": 0,
+        "provenance": {},
+        "scene_ids": [],
+        "stage": "val",
+        "state_count": 0,
+        "trainable_candidate_count": 0
+      },
+      {
+        "chain_count": 0,
+        "included": false,
+        "max_horizon": 0,
+        "provenance": {},
+        "scene_ids": [],
+        "stage": "test",
+        "state_count": 0,
+        "trainable_candidate_count": 0
+      }
+    ],
+    "storage": [
+      {
+        "denominator": 100,
+        "name": "root_bytes_per_sample",
+        "numerator_bytes": null,
+        "reason": "storage_bytes_unavailable",
+        "unit": "bytes / physical sample",
+        "value": null
+      },
+      {
+        "denominator": 4,
+        "name": "rollout_bytes_per_chain",
+        "numerator_bytes": null,
+        "reason": "storage_bytes_unavailable",
+        "unit": "bytes / factual Q_H chain",
+        "value": null
+      },
+      {
+        "denominator": 32,
+        "name": "rollout_bytes_per_state",
+        "numerator_bytes": null,
+        "reason": "storage_bytes_unavailable",
+        "unit": "bytes / factual Q_H state",
+        "value": null
+      },
+      {
+        "denominator": 798,
+        "name": "rollout_bytes_per_trainable_candidate",
+        "numerator_bytes": null,
+        "reason": "storage_bytes_unavailable",
+        "unit": "bytes / trainable Q_H candidate",
+        "value": null
+      }
+    ],
+    "verdict": "Ready"
+  },
+  "schema_version": "streamlit-qh-g005-v10-readiness-v1",
+  "selection": {
+    "profile": "qh_cf0_v1",
+    "rollout_store": "/home/jd/.codex/worktrees/aria-streamlit-session-cache-plan/aria_nbv/../.omx/evidence/streamlit-qh/g007/runtime-proof/final-a0b80ae8dc/cuda-rollouts-v1-g007-v10-one-unit/shards/a4cff23e3ebca79b",
+    "root_evl_profile": "evl_v1",
+    "root_store": "/home/jd/repos/ARIA-NBV/.data/offline_cache/vin_offline_rollout_campaign100_v10_rebuilt",
+    "selected_observation_protocol": "none",
+    "split": "train"
+  },
+  "verification_status": "blocked"
+}
