@@ -101,6 +101,21 @@ def test_named_session_operations_have_no_generic_projection_dispatcher() -> Non
     assert hasattr(session, "_cached_candidates")
 
 
+def test_refresh_rollout_caches_clears_each_page_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The shared refresh action invalidates Training Dataset lazily as well."""
+
+    calls: list[str] = []
+    monkeypatch.setattr(session, "_clear_stored_rollout_caches", lambda: calls.append("rollouts"))
+    monkeypatch.setattr(
+        "aria_nbv.app.panels.training_dataset._clear_training_dataset_caches",
+        lambda: calls.append("training"),
+    )
+
+    session.clear_rollout_page_caches()
+
+    assert calls == ["rollouts", "training"]
+
+
 def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytest.MonkeyPatch) -> None:
     """Invalid or tampered stores keep diagnostics but never render coverage projections."""
 

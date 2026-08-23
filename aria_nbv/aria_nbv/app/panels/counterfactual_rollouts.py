@@ -1948,11 +1948,19 @@ def _render_live_rollout_metric_dashboard(
 
     chart_col1, chart_col2 = st.columns(2)
     with chart_col1:
-        _info_popover("selected target return", _LIVE_SELECTED_RETURN_INFO)
-        st.plotly_chart(rri_fig, width="stretch")
+        _render_live_quality_plot(
+            rri_fig,
+            label="selected target return",
+            context=_LIVE_SELECTED_RETURN_INFO,
+            log_y_key="live-selected-target-return",
+        )
     with chart_col2:
-        _info_popover("valid candidate return band", _LIVE_FANOUT_BAND_INFO)
-        st.plotly_chart(fanout_fig, width="stretch")
+        _render_live_quality_plot(
+            fanout_fig,
+            label="valid candidate return band",
+            context=_LIVE_FANOUT_BAND_INFO,
+            log_y_key="live-valid-candidate-band",
+        )
         st.caption(
             "Band shows the empirical 2.5-97.5 percentile range of valid candidate target root gain when "
             "available, falling back to target RRI; the selected line shows the action actually taken."
@@ -1986,8 +1994,12 @@ def _render_live_rollout_metric_dashboard(
             xaxis_title="rollout step",
             yaxis_title="target root gain / target RRI",
         )
-        _info_popover("top-k candidate headroom", _LIVE_TOPK_CANDIDATE_INFO)
-        st.plotly_chart(top_fig, width="stretch")
+        _render_live_quality_plot(
+            top_fig,
+            label="top-k candidate headroom",
+            context=_LIVE_TOPK_CANDIDATE_INFO,
+            log_y_key="live-top-k-headroom",
+        )
 
     if rows_df["J_endpoint"].notna().any() or rows_df["log_gain"].notna().any():
         endpoint_fig = go.Figure()
@@ -1999,8 +2011,12 @@ def _render_live_rollout_metric_dashboard(
             yaxis_title="gain",
             barmode="group",
         )
-        _info_popover("endpoint target-quality metrics", _LIVE_ENDPOINT_METRIC_INFO)
-        st.plotly_chart(endpoint_fig, width="stretch")
+        _render_live_quality_plot(
+            endpoint_fig,
+            label="endpoint target-quality metrics",
+            context=_LIVE_ENDPOINT_METRIC_INFO,
+            log_y_key="live-endpoint-quality",
+        )
     else:
         _info_popover("endpoint target-quality metrics", _LIVE_ENDPOINT_METRIC_INFO)
         st.caption(
