@@ -836,6 +836,40 @@ def test_candidate_direction_evidence_uses_complete_equal_area_bins_and_state_sc
     assert evidence["cap_rows"] and evidence["angular_support_rows"]
 
 
+def test_candidate_direction_evidence_uses_luf_forward_left_up_axes() -> None:
+    """Equal-area bins use LUF azimuth atan2(left, forward) and up elevation."""
+
+    from aria_nbv.rollouts.inspection import candidate_direction_evidence
+
+    vectors = {
+        "forward": (0.0, 0.0, 1.0),
+        "left": (1.0, 0.0, 0.0),
+        "up": (0.0, 1.0, 0.0),
+    }
+    rows = []
+    for index, (name, vector) in enumerate(vectors.items()):
+        rows.append(
+            {
+                **_direction_fixture_rows()[0],
+                "rollout_row_id": index,
+                "step_row_id": index,
+                "decision_relative_x_m": vector[0],
+                "decision_relative_y_m": vector[1],
+                "decision_relative_z_m": vector[2],
+                "direction_name": name,
+            }
+        )
+
+    density = candidate_direction_evidence(rows)["density_rows"]
+
+    occupied = {
+        (row["rollout_row_id"], row["azimuth_bin"], row["sin_elevation_bin"])
+        for row in density
+        if row["aggregation_level"] == "state" and row["population"] == "all" and row["count"] == 1
+    }
+    assert occupied == {("0", 6, 3), ("1", 9, 3), ("2", 6, 5)}
+
+
 def test_candidate_direction_evidence_excludes_zero_length_and_missing_directions_from_denominator() -> None:
     """Invalid direction vectors remain explicit missingness, never zero directions."""
 
@@ -861,8 +895,8 @@ def test_candidate_spatial_support_preserves_zero_radius_and_signed_height() -> 
             {
                 **_direction_fixture_rows()[0],
                 "root_relative_x_m": 0.0,
-                "root_relative_y_m": 0.0,
-                "root_relative_z_m": -0.25,
+                "root_relative_y_m": -0.25,
+                "root_relative_z_m": 0.0,
                 "root_radius_m": 0.0,
             },
             {
@@ -881,13 +915,39 @@ def test_candidate_spatial_support_preserves_zero_radius_and_signed_height() -> 
     state_rows = [row for row in evidence if row["aggregation_level"] == "state"]
     origin = next(row for row in state_rows if row["rollout_row_id"] == "0")
     offset = next(row for row in state_rows if row["rollout_row_id"] == "1")
-    height = next(row for row in evidence if row["metric"] == "root_height" and row["rollout_row_id"] == "0")
+    height = next(row for row in evidence if row["metric"] == "decision_height_m" and row["rollout_row_id"] == "0")
     assert origin["available"] is True
     assert origin["mean"] == pytest.approx(0.0)
     assert origin["zero_radius_policy"] == "included"
-    assert offset["mean"] == pytest.approx(0.5)
+    assert offset["mean"] == pytest.approx(np.hypot(0.5, 0.5))
     assert height["mean"] == pytest.approx(-0.25)
     assert height["units"] == "m"
+
+
+def test_candidate_spatial_support_uses_luf_horizontal_plane_and_truthful_names() -> None:
+    """Decision-local horizontal support uses left/forward while height uses up."""
+
+    from aria_nbv.rollouts.inspection import candidate_spatial_support_evidence
+
+    row = {
+        **_direction_fixture_rows()[0],
+        "decision_relative_x_m": 3.0,
+        "decision_relative_y_m": 4.0,
+        "decision_relative_z_m": 12.0,
+    }
+
+    state_rows = [
+        item
+        for item in candidate_spatial_support_evidence([row])
+        if item["aggregation_level"] == "state" and item["population"] == "all"
+    ]
+    metrics = {item["metric"]: item for item in state_rows}
+    assert set(metrics) == {"decision_horizontal_radius_m", "decision_distance_m", "decision_height_m"}
+    assert metrics["decision_horizontal_radius_m"]["mean"] == pytest.approx(np.hypot(3.0, 12.0))
+    assert metrics["decision_distance_m"]["mean"] == pytest.approx(13.0)
+    assert metrics["decision_height_m"]["mean"] == pytest.approx(4.0)
+    assert all(item["position_family"] == "forward_local" for item in state_rows)
+    assert all("declared_shell" not in item for item in state_rows)
 
 
 def test_candidate_target_view_evidence_keeps_unpersisted_visibility_explicit() -> None:
@@ -961,6 +1021,220 @@ def test_candidate_population_scientific_support_is_complete_and_sample_size_ind
     assert complete["sample"]["display_count"] == 4
     assert bounded["spatial"] == complete["spatial"]
     assert bounded["direction"] == complete["direction"]
+
+
+def test_candidate_population_returns_macro_only_scientific_support_by_default() -> None:
+    """Complete-store cached evidence cardinality depends on facets, not factual state count."""
+
+    import tracemalloc
+
+    from aria_nbv.rollouts.inspection import candidate_population_evidence
+
+    def project(state_count: int) -> dict[str, object]:
+        rows = [
+            {
+                **_direction_fixture_rows()[0],
+                "candidate_row_id": index,
+                "rollout_row_id": index,
+                "step_row_id": index,
+                "decision_relative_x_m": 0.0,
+                "decision_relative_y_m": 0.0,
+                "decision_relative_z_m": 1.0,
+                "target_distance_m": 1.0,
+            }
+            for index in range(state_count)
+        ]
+        return candidate_population_evidence(
+            object(),
+            audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+        )
+
+    small = project(2)
+    tracemalloc.start()
+    large = project(128)
+    _current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    for key in ("spatial", "target_view", "motion"):
+        assert not any(row["aggregation_level"] == "state" for row in large[key])
+        assert len(large[key]) == len(small[key])
+    for key in ("density_rows", "cap_rows", "angular_support_rows"):
+        assert not any(row["aggregation_level"] == "state" for row in large["direction"][key])
+        assert len(large["direction"][key]) == len(small["direction"][key])
+    assert peak_bytes < 8 * 1024 * 1024
+
+
+def test_candidate_population_streaming_macros_match_direct_reducer_statistics() -> None:
+    """Online scene/cohort sufficient statistics preserve the direct reducer estimand."""
+
+    from aria_nbv.rollouts.inspection import (
+        candidate_direction_evidence,
+        candidate_motion_support_evidence,
+        candidate_population_evidence,
+        candidate_spatial_support_evidence,
+        candidate_target_view_evidence,
+    )
+
+    rows = []
+    for index, (scene, vector, actor_action) in enumerate(
+        (
+            ("scene-a", (1.0, 0.0, 0.0), True),
+            ("scene-a", (0.0, 1.0, 0.0), False),
+            ("scene-b", (0.0, 0.0, 1.0), True),
+            ("scene-b", (0.0, 0.0, 0.0), False),
+        )
+    ):
+        rows.append(
+            {
+                **_direction_fixture_rows()[0],
+                "candidate_row_id": index,
+                "scene": scene,
+                "rollout_row_id": index,
+                "step_row_id": index,
+                "step_index": 0,
+                "actor_action": actor_action,
+                "selected": True,
+                "sampler_probability": 1.0,
+                "decision_relative_x_m": vector[0],
+                "decision_relative_y_m": vector[1],
+                "decision_relative_z_m": vector[2],
+                "target_distance_m": 1.0,
+                "path_collision_applicable": True,
+                "path_collision_evaluated": True,
+                "path_collision": False,
+                "path_min_clearance_m": 1.0,
+                "target_evidence_role": "actor-visible",
+            }
+        )
+
+    projected = candidate_population_evidence(
+        object(),
+        sample_size=0,
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+
+    def assert_statistics(
+        actual_rows: list[dict[str, object]],
+        expected_rows: list[dict[str, object]],
+        *,
+        key_fields: tuple[str, ...],
+        value_fields: tuple[str, ...],
+    ) -> None:
+        actual = {tuple(row.get(field) for field in key_fields): row for row in actual_rows}
+        expected = {
+            tuple(row.get(field) for field in key_fields): row
+            for row in expected_rows
+            if row["aggregation_level"] != "state"
+        }
+        assert actual.keys() == expected.keys()
+        for key, expected_row in expected.items():
+            for field in value_fields:
+                expected_value = expected_row.get(field)
+                actual_value = actual[key].get(field)
+                if isinstance(expected_value, float):
+                    assert actual_value == pytest.approx(expected_value)
+                else:
+                    assert actual_value == expected_value
+
+    direction = candidate_direction_evidence(rows)
+    common = ("aggregation_level", "generation_cohort_id", "scene", "population")
+    assert_statistics(
+        projected["direction"]["density_rows"],
+        direction["density_rows"],
+        key_fields=(*common, "azimuth_bin", "sin_elevation_bin"),
+        value_fields=("mean_state_fraction", "count", "total_count", "finite_count", "missing_count"),
+    )
+    assert_statistics(
+        projected["direction"]["cap_rows"],
+        direction["cap_rows"],
+        key_fields=(*common, "radius_deg"),
+        value_fields=("discrepancy", "total_count", "finite_count", "missing_count"),
+    )
+    assert_statistics(
+        projected["direction"]["angular_support_rows"],
+        direction["angular_support_rows"],
+        key_fields=(*common, "evidence"),
+        value_fields=("nearest_neighbor_deg", "covering_radius_deg", "total_count", "finite_count"),
+    )
+    for name, reducer, facets, values in (
+        (
+            "spatial",
+            candidate_spatial_support_evidence,
+            (*common, "position_family", "metric"),
+            ("mean", "total_count", "finite_count", "missing_count"),
+        ),
+        (
+            "target_view",
+            candidate_target_view_evidence,
+            (*common, "evidence"),
+            ("mean", "total_count", "finite_count", "missing_count"),
+        ),
+        (
+            "motion",
+            candidate_motion_support_evidence,
+            (*common, "metric"),
+            ("mean", "collision_rate", "total_count", "finite_count", "missing_count"),
+        ),
+    ):
+        assert_statistics(projected[name], reducer(rows), key_fields=facets, value_fields=values)
+
+
+def test_candidate_population_can_skip_unused_scientific_reducers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Report-style projections never invoke direction/spatial/target-view/motion reducers."""
+
+    import aria_nbv.rollouts.inspection as inspection
+
+    def poison(*_args, **_kwargs):
+        raise AssertionError("unused scientific reducer was invoked")
+
+    for name in (
+        "candidate_direction_evidence",
+        "candidate_spatial_support_evidence",
+        "candidate_target_view_evidence",
+        "candidate_motion_support_evidence",
+    ):
+        monkeypatch.setattr(inspection, name, poison)
+    rows = [{**_direction_fixture_rows()[0], "candidate_row_id": 0}]
+
+    evidence = inspection.candidate_population_evidence(
+        object(),
+        scientific_support=False,
+        audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
+    )
+
+    assert evidence["direction"] == {"density_rows": [], "cap_rows": [], "angular_support_rows": []}
+    assert evidence["spatial"] == []
+    assert evidence["target_view"] == []
+    assert evidence["motion"] == []
+    assert evidence["population_count"] == 1
+
+
+def test_candidate_population_assigns_evidence_roles_per_metric_family() -> None:
+    """Actor-visible support and privileged evaluator evidence are never conflated."""
+
+    from aria_nbv.rollouts.inspection import candidate_population_evidence
+
+    row = {
+        **_direction_fixture_rows()[0],
+        "candidate_row_id": 0,
+        "target_evidence_role": "actor-visible",
+    }
+    evidence = candidate_population_evidence(
+        object(),
+        scientific_support=False,
+        audit_reader=lambda _reader, *, row_callback: row_callback(row),
+    )
+
+    assert evidence["evidence_roles"] == {
+        "direction": "actor-visible",
+        "spatial": "actor-visible",
+        "motion": "actor-visible",
+        "collision": "oracle/evaluation",
+        "clearance": "oracle/evaluation",
+        "target_view": "actor-visible",
+        "geometry": "actor-visible",
+        "selection": "actor-visible",
+        "sequence_return": "oracle/evaluation",
+    }
 
 
 def test_candidate_direction_evidence_preserves_cohorts_and_all_actor_valid_populations() -> None:
@@ -1102,10 +1376,14 @@ def test_candidate_spatial_support_reports_3d_distance_shell_and_macro_levels() 
         },
     ]
     evidence = candidate_spatial_support_evidence(rows)
-    assert {row["metric"] for row in evidence} >= {"root_xy_radius", "root_3d_distance", "root_height"}
+    assert {row["metric"] for row in evidence} >= {
+        "decision_horizontal_radius_m",
+        "decision_distance_m",
+        "decision_height_m",
+    }
     assert {row["aggregation_level"] for row in evidence} >= {"state", "scene_macro", "cohort_macro"}
-    assert {row["declared_shell"] for row in evidence} >= {"forward_local", "backtrack"}
-    assert any(row["metric"] == "root_3d_distance" and row["units"] == "m" for row in evidence)
+    assert {row["position_family"] for row in evidence} >= {"forward_local", "backtrack"}
+    assert any(row["metric"] == "decision_distance_m" and row["units"] == "m" for row in evidence)
 
 
 def test_candidate_target_view_exposes_unavailable_fov_and_pixel_evidence() -> None:
@@ -1183,7 +1461,7 @@ def test_direction_macros_exclude_unavailable_states_instead_of_zero_filling() -
         for row in density
         if row["aggregation_level"] == "state"
         and row["rollout_row_id"] == "0"
-        and row["azimuth_bin"] == 6
+        and row["azimuth_bin"] == 9
         and row["sin_elevation_bin"] == 3
     )
     assert valid_state["available"] is True
@@ -1192,7 +1470,7 @@ def test_direction_macros_exclude_unavailable_states_instead_of_zero_filling() -
         for row in density
         if row["aggregation_level"] == "cohort_macro"
         and row["population"] == "all"
-        and row["azimuth_bin"] == 6
+        and row["azimuth_bin"] == 9
         and row["sin_elevation_bin"] == 3
     )
     assert macro["mean_state_fraction"] == pytest.approx(1.0)
@@ -1277,7 +1555,7 @@ def test_spatial_macros_preserve_shell_and_population_facets() -> None:
     ]
     evidence = candidate_spatial_support_evidence(rows)
     macro = [row for row in evidence if row["aggregation_level"] in {"scene_macro", "cohort_macro"}]
-    assert {row["declared_shell"] for row in macro} >= {"forward_local", "backtrack"}
+    assert {row["position_family"] for row in macro} >= {"forward_local", "backtrack"}
     assert {row["population"] for row in macro} >= {"all", "actor_valid"}
     assert all(row["generation_cohort_id"] == "cohort-a" for row in macro)
 
@@ -1320,7 +1598,7 @@ def test_direction_and_spatial_cohort_macros_weight_scenes_equally() -> None:
         for row in direction
         if row["aggregation_level"] == "cohort_macro"
         and row["population"] == "all"
-        and row["azimuth_bin"] == 6
+        and row["azimuth_bin"] == 9
         and row["sin_elevation_bin"] == 3
     )
     assert x_cell["mean_state_fraction"] == pytest.approx(0.5)
@@ -1340,7 +1618,7 @@ def test_direction_and_spatial_cohort_macros_weight_scenes_equally() -> None:
         row
         for row in spatial
         if row["aggregation_level"] == "cohort_macro"
-        and row["metric"] == "root_xy_radius"
+        and row["metric"] == "decision_horizontal_radius_m"
         and row["population"] == "all"
     )
     assert distance["mean"] == pytest.approx(0.55)
@@ -1367,7 +1645,7 @@ def test_direction_macro_state_dedup_includes_scene_identity() -> None:
         for row in density
         if row["aggregation_level"] == "cohort_macro"
         and row["population"] == "all"
-        and row["azimuth_bin"] == 6
+        and row["azimuth_bin"] == 9
         and row["sin_elevation_bin"] == 3
     )
     assert macro["state_count"] == 2
@@ -1422,7 +1700,7 @@ def test_support_macros_expose_candidate_and_macro_denominators_without_pooling(
         for row in candidate_spatial_support_evidence(rows)
         if row["aggregation_level"] == "cohort_macro"
         and row["population"] == "all"
-        and row["metric"] == "root_xy_radius"
+        and row["metric"] == "decision_horizontal_radius_m"
     )
     assert spatial["state_count"] == 2
     assert spatial["scene_count"] == 2
@@ -1498,7 +1776,7 @@ def test_spatial_and_target_cohort_macros_count_two_states_in_one_scene() -> Non
         for row in candidate_spatial_support_evidence(rows)
         if row["aggregation_level"] == "cohort_macro"
         and row["population"] == "all"
-        and row["metric"] == "root_xy_radius"
+        and row["metric"] == "decision_horizontal_radius_m"
     )
     target = next(
         row
@@ -1564,7 +1842,7 @@ def test_support_counts_remain_explicit_when_one_candidate_is_missing_in_one_sta
         for row in candidate_spatial_support_evidence(rows)
         if row["aggregation_level"] == "cohort_macro"
         and row["population"] == "all"
-        and row["metric"] == "root_xy_radius"
+        and row["metric"] == "decision_horizontal_radius_m"
     )
     target = next(
         row

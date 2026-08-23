@@ -79,8 +79,14 @@ class AdmissionEvidenceSummary:
         return sum(row.row_kind == "zero_observation_sample" for row in self.rows)
 
     @property
-    def zero_observation_scene_count(self) -> int:
+    def scenes_with_zero_observation_sample_count(self) -> int:
         return len({row.scene_id for row in self.rows if row.row_kind == "zero_observation_sample"})
+
+    @property
+    def zero_only_scene_count(self) -> int:
+        observed_scenes = {row.scene_id for row in self.rows if row.row_kind == "observed_target"}
+        zero_scenes = {row.scene_id for row in self.rows if row.row_kind == "zero_observation_sample"}
+        return len(zero_scenes - observed_scenes)
 
     @property
     def admitted_count(self) -> int:
@@ -120,7 +126,8 @@ class AdmissionEvidenceSummary:
                 "ambiguous": self.ambiguous_count,
                 "duplicate_gt_groups": len(self.duplicate_gt_rows),
                 "zero_observation_samples": self.zero_observation_sample_count,
-                "zero_observation_scenes": self.zero_observation_scene_count,
+                "scenes_with_zero_observation_samples": self.scenes_with_zero_observation_sample_count,
+                "zero_only_scenes": self.zero_only_scene_count,
             },
             "reason_rows": list(self.reason_rows),
             "iou_rows": list(self.iou_rows),
@@ -222,6 +229,8 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
             raise ValueError(f"admission audit row {index} zero-observation sentinel has wrong reason")
     elif observed_count != 1:
         raise ValueError(f"admission audit row {index} observed-target row must describe exactly one target")
+    elif not target_id:
+        raise ValueError(f"admission audit row {index} observed-target target_id must be non-empty")
     iou = raw.get("oriented_iou")
     if iou is not None:
         if type(iou) not in (int, float) or isinstance(iou, bool) or not math.isfinite(float(iou)):
@@ -233,7 +242,11 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
         raise ValueError(f"admission audit row {index} admitted/reason mismatch")
     if admitted and iou is None:
         raise ValueError(f"admission audit row {index} admitted row has no IoU")
-    qualified = raw.get("qualified_gt_match_count", raw.get("gt_match_count", 0))
+    qualified_raw = raw.get("qualified_gt_match_count")
+    legacy_qualified = raw.get("gt_match_count")
+    if qualified_raw is not None and legacy_qualified is not None and qualified_raw != legacy_qualified:
+        raise ValueError(f"admission audit row {index} match count fields disagree")
+    qualified = qualified_raw if qualified_raw is not None else legacy_qualified if legacy_qualified is not None else 0
     if type(qualified) is not int or qualified < 0:
         raise ValueError(f"admission audit row {index} qualified match count must be non-negative integer")
     if admitted and qualified != 1:
@@ -254,6 +267,27 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
         or source_row is not None
     ):
         raise ValueError(f"admission audit row {index} zero-observation sentinel contains GT evidence")
+    if row_kind == "observed_target":
+        if source_row is None:
+            raise ValueError(f"admission audit row {index} observed-target detected source row is required")
+        matched_reasons = {"admitted", "below_iou_threshold", "ambiguous_match"}
+        unmatched_reasons = {"wrong_class", "invalid_geometry", "no_match"}
+        if reason not in matched_reasons | unmatched_reasons:
+            raise ValueError(f"admission audit row {index} observed-target reason is unsupported")
+        if reason in matched_reasons and gt_match_id is None:
+            raise ValueError(f"admission audit row {index} {reason} row requires a GT match id")
+        if reason in matched_reasons and iou is None:
+            raise ValueError(f"admission audit row {index} {reason} row requires finite IoU")
+        if reason == "below_iou_threshold" and (qualified != 0 or iou is None or iou > STRICT_GT_IOU_THRESHOLD):
+            raise ValueError(
+                f"admission audit row {index} below-threshold row requires zero qualified matches and IoU at or below {STRICT_GT_IOU_THRESHOLD:.2f}"
+            )
+        if reason == "ambiguous_match" and (qualified <= 1 or iou is None or iou <= STRICT_GT_IOU_THRESHOLD):
+            raise ValueError(
+                f"admission audit row {index} ambiguous row requires more than one strict-threshold GT match"
+            )
+        if reason in unmatched_reasons and (iou is not None or qualified != 0 or gt_match_id is not None):
+            raise ValueError(f"admission audit row {index} {reason} row must not contain GT match evidence")
     return AdmissionAuditRow(
         sample_key,
         scene_id,
@@ -293,15 +327,19 @@ def _summarize(
         for row in target_rows
         if row.oriented_iou is not None
     )
-    scene_acc: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    for row in target_rows:
-        scene_acc[row.scene_id][0] += 1
-        scene_acc[row.scene_id][1] += int(row.admitted)
+    scene_acc: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
+    for row in rows:
+        if row.row_kind == "zero_observation_sample":
+            scene_acc[row.scene_id][2] += 1
+        else:
+            scene_acc[row.scene_id][0] += row.observed_target_count
+            scene_acc[row.scene_id][1] += int(row.admitted)
     scene_rows = tuple(
         {
             "scene_id": scene,
             "observed_count": values[0],
             "admitted_count": values[1],
+            "zero_observation_sample_count": values[2],
             "admission_rate": values[1] / values[0] if values[0] else None,
         }
         for scene, values in sorted(scene_acc.items())

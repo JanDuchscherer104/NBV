@@ -149,14 +149,24 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
     """Render validated admission evidence as metrics and plot-first diagnostics."""
 
     counts = payload["counts"]
-    columns = st.columns(6)
-    for column, label, key in zip(
-        columns,
-        ("Observed targets", "Admitted", "Rejected", "Ambiguous", "Same-class overlap scored", "Duplicate GT groups"),
-        ("observed", "admitted", "rejected", "ambiguous", "same_class_scored", "duplicate_gt_groups"),
-        strict=True,
-    ):
-        column.metric(label, f"{int(counts.get(key, 0)):,}")
+    metric_groups = (
+        (
+            ("Observed targets", "observed"),
+            ("Admitted", "admitted"),
+            ("Rejected", "rejected"),
+            ("Same-class overlap scored", "same_class_scored"),
+        ),
+        (
+            ("Zero-target samples", "zero_observation_samples"),
+            ("Scenes containing zero-target samples", "scenes_with_zero_observation_samples"),
+            ("Zero-only scenes", "zero_only_scenes"),
+            ("Ambiguous", "ambiguous"),
+            ("Duplicate GT groups", "duplicate_gt_groups"),
+        ),
+    )
+    for group in metric_groups:
+        for column, (label, key) in zip(st.columns(len(group)), group, strict=True):
+            column.metric(label, f"{int(counts.get(key, 0)):,}")
     reason_frame = pd.DataFrame(payload.get("reason_rows", []))
     if not reason_frame.empty:
         _render_admission_figure(
@@ -180,9 +190,14 @@ def _render_admission_audit(payload: dict[str, Any], *, threshold: float) -> Non
             "iou",
         )
     scene_frame = pd.DataFrame(payload.get("scene_rows", []))
-    if not scene_frame.empty:
+    observed_scene_frame = scene_frame.dropna(subset=["admission_rate"])
+    if not observed_scene_frame.empty:
         _render_admission_figure(
-            px.histogram(scene_frame, x="admission_rate", title="Admission-rate distribution across scenes"),
+            px.histogram(
+                observed_scene_frame,
+                x="admission_rate",
+                title="Admission-rate distribution across scenes with observed targets",
+            ),
             _admission_explanation("scenes", threshold=threshold),
             "scenes",
         )

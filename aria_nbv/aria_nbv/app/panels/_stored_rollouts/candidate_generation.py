@@ -320,13 +320,13 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
     collision = pd.DataFrame(population["collision"])
     sample = population["sample"]
 
-    evidence_role = _candidate_population_role(population)
-    if evidence_role is None:
+    evidence_roles = _candidate_evidence_roles(population)
+    if evidence_roles["target_view"] == "provenance":
         st.warning(
             "Normalized target-view evidence is withheld: complete-store target provenance is mixed, unknown, "
             "or unclassified. The bounded display sample is never used to infer provenance."
         )
-    _render_complete_candidate_support(population, evidence_role=evidence_role or "provenance")
+    _render_complete_candidate_support(population, evidence_roles=evidence_roles)
 
     selection_dynamics = population.get("selection_dynamics", {})
     if isinstance(selection_dynamics, dict):
@@ -382,7 +382,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                         "Choice mass changes smoothly without unexplained family monopolies or missing depths.",
                         "Abrupt changes or absent families can indicate generator, policy, or state-frame issues.",
                         "inspection.candidate_population_evidence.selection_dynamics",
-                        evidence_role or "provenance",
+                        evidence_roles["selection"],
                     ),
                 )
                 transitions = pd.DataFrame(
@@ -407,7 +407,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                             "Expected and realized transitions broadly agree where context support is substantial.",
                             "Sparse or divergent cells are diagnostics of support and policy/state effects, not causal proof.",
                             "inspection.candidate_population_evidence.selection_transitions",
-                            evidence_role or "provenance",
+                            evidence_roles["selection"],
                         ),
                     )
                 with st.expander("Candidate-choice rows and CSV", expanded=False):
@@ -448,7 +448,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                             "Repeated sequences should show descriptive spread rather than a fabricated continuous path.",
                             "Small counts or wide IQRs require raw sequence inspection and are not causal policy effects.",
                             "inspection.candidate_population_evidence.sequence_returns",
-                            evidence_role or "provenance",
+                            evidence_roles["sequence_return"],
                         ),
                     )
                 with st.expander("Selected-family sequence rows and CSV", expanded=False):
@@ -481,20 +481,25 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
         st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
-def _candidate_population_role(population: dict[str, object]) -> str | None:
-    """Return one complete-store target-evidence role, never infer it from samples."""
+def _candidate_evidence_roles(population: dict[str, object]) -> dict[str, str]:
+    """Return the typed metric-family evidence roles from the domain projection."""
 
-    rows = population.get("target_evidence_roles", [])
-    if not isinstance(rows, list):
-        return None
-    roles = {
-        str(row.get("target_evidence_role"))
-        for row in rows
-        if isinstance(row, dict) and int(row.get("candidate_count", 0)) > 0
+    expected = {
+        "direction",
+        "spatial",
+        "motion",
+        "collision",
+        "clearance",
+        "target_view",
+        "geometry",
+        "selection",
+        "sequence_return",
     }
-    return (
-        next(iter(roles)) if len(roles) == 1 and next(iter(roles)) in {"actor-visible", "oracle/evaluation"} else None
-    )
+    raw = population.get("evidence_roles")
+    if not isinstance(raw, dict) or set(raw) != expected:
+        return dict.fromkeys(expected, "provenance")
+    allowed = {"actor-visible", "oracle/evaluation", "derived training data", "provenance"}
+    return {name: str(raw[name]) if str(raw[name]) in allowed else "provenance" for name in expected}
 
 
 _CANDIDATE_POPULATION_ANSWERS = {
@@ -584,7 +589,7 @@ def _require_family_cohort_columns(frame: pd.DataFrame, label: str) -> pd.DataFr
     return frame
 
 
-def _render_complete_candidate_support(population: dict[str, object], *, evidence_role: str) -> None:
+def _render_complete_candidate_support(population: dict[str, object], *, evidence_roles: dict[str, str]) -> None:
     """Render PR101 support facets through the decomposed candidate owner."""
 
     direction = population.get("direction", {})
@@ -614,7 +619,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                         "Support is broad rather than concentrated in unexplained angular bands.",
                         "Spikes or missing direction rows indicate support or pose-frame issues.",
                         "inspection.candidate_direction_evidence",
-                        evidence_role,
+                        evidence_roles["direction"],
                         TheoryReferences(
                             equation_ids=("action.angle_cap_transform",),
                             term_ids=("finite-candidate-action-set",),
@@ -646,7 +651,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "A small value means closer descriptive agreement with the isotropic reference at that scale.",
                     "A large value is anisotropy evidence, not proof of generator collapse.",
                     "inspection.candidate_direction_evidence.cap_rows",
-                    evidence_role,
+                    evidence_roles["direction"],
                 ),
             )
         angular = pd.DataFrame(direction.get("angular_support_rows", []))
@@ -677,14 +682,25 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                             "Small nearest-neighbor gaps and bounded covering radius indicate broad angular support.",
                             "Large gaps or unavailable values expose sparse direction generation or missing geometry.",
                             "inspection.candidate_direction_evidence.angular_support_rows",
-                            evidence_role,
+                            evidence_roles["direction"],
                         ),
                     )
 
-    for key, title in (("spatial", "Spatial candidate support"), ("motion", "Motion and collision support")):
+    for key, title in (("spatial", "Spatial candidate support"), ("motion", "Actor-visible motion support")):
         frame = pd.DataFrame(population.get(key, []))
         if frame.empty:
             continue
+        if key == "motion" and "metric" in frame:
+            frame = frame.loc[
+                frame["metric"].isin(
+                    {
+                        "motion_step_length_m",
+                        "motion_height_delta_m",
+                        "motion_backward_step_m",
+                        "motion_yaw_delta_deg",
+                    }
+                )
+            ]
         value = "mean" if "mean" in frame else "count"
         if "metric" not in frame or value not in frame:
             continue
@@ -698,7 +714,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
             x="metric",
             y=value,
             color="population" if "population" in selected else None,
-            facet_row="declared_shell" if key == "spatial" and "declared_shell" in selected else None,
+            facet_row="position_family" if key == "spatial" and "position_family" in selected else None,
             barmode="group",
             title=title,
         )
@@ -712,7 +728,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                 "Configured spatial and motion support remains represented across compatible cohorts.",
                 "Concentration, clipping, or missingness indicates a component or evaluator coverage issue.",
                 f"inspection.candidate_{key}_support_evidence",
-                evidence_role,
+                evidence_roles[key],
             ),
         )
         with st.expander(f"{title} rows and CSV"):
@@ -748,7 +764,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "The two estimates agree when candidate fan-out is balanced across states.",
                     "A zero rate is a valid result; missing evaluation is not silently treated as no collision.",
                     "inspection.candidate_motion_support_evidence.collision",
-                    evidence_role,
+                    evidence_roles["collision"],
                     external_references=(
                         (
                             "Candidate inspection contract",
@@ -782,7 +798,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "Positive clearance indicates separation from the evaluated obstacle boundary.",
                     "Missing clearance means unavailable evaluation, not zero clearance.",
                     "inspection.candidate_motion_support_evidence.collision",
-                    evidence_role,
+                    evidence_roles["clearance"],
                     external_references=(
                         (
                             "Candidate inspection contract",
@@ -822,7 +838,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "Evaluated and finite-clearance counts make the scientific rates auditable.",
                     "A small denominator limits interpretation even when the observed collision count is zero.",
                     "inspection.candidate_motion_support_evidence.collision",
-                    evidence_role,
+                    evidence_roles["collision"],
                     external_references=(
                         (
                             "Candidate inspection contract",
@@ -838,7 +854,12 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                 )
 
     target_view = pd.DataFrame(population.get("target_view", []))
-    if evidence_role in {"actor-visible", "oracle/evaluation"} and not target_view.empty and "evidence" in target_view:
+    target_view_role = evidence_roles["target_view"]
+    if (
+        target_view_role in {"actor-visible", "oracle/evaluation"}
+        and not target_view.empty
+        and "evidence" in target_view
+    ):
         target_view = _select_support_facet(target_view, "Target-view support")
         _support_count_caption(target_view)
         distance = target_view.loc[target_view["evidence"].eq("target_distance")].copy()
@@ -861,7 +882,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     "Target distance describes geometric scale, not visibility or admission quality.",
                     "Large missingness or absent optical evidence indicates evaluator coverage gaps.",
                     "inspection.candidate_target_view_evidence",
-                    evidence_role,
+                    target_view_role,
                     TheoryReferences(term_ids=("target-of-interest",)),
                 ),
             )
@@ -895,7 +916,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                         "Unavailable FOV, pixel, or line-of-sight rows remain explicit rather than becoming zeros.",
                         "Missing optical evidence limits interpretation of visibility, not geometric target distance.",
                         "inspection.candidate_target_view_evidence",
-                        evidence_role,
+                        target_view_role,
                     ),
                 )
         with st.expander("Target-view evidence rows and CSV", expanded=False):

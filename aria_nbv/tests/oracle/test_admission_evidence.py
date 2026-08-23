@@ -46,7 +46,6 @@ def test_read_admission_evidence_returns_deterministic_additive_rows(tmp_path: P
             admitted=False,
             oriented_iou=0.2,
             qualified_gt_match_count=0,
-            gt_match_id=None,
         ),
         _row(
             target_id="target-3",
@@ -77,8 +76,20 @@ def test_read_admission_evidence_returns_deterministic_additive_rows(tmp_path: P
         {"admitted": False, "count": 1, "reason": "wrong_class"},
     )
     assert evidence.scene_rows == (
-        {"scene_id": "scene-1", "observed_count": 2, "admitted_count": 1, "admission_rate": 0.5},
-        {"scene_id": "scene-2", "observed_count": 1, "admitted_count": 0, "admission_rate": 0.0},
+        {
+            "scene_id": "scene-1",
+            "observed_count": 2,
+            "admitted_count": 1,
+            "admission_rate": 0.5,
+            "zero_observation_sample_count": 0,
+        },
+        {
+            "scene_id": "scene-2",
+            "observed_count": 1,
+            "admitted_count": 0,
+            "admission_rate": 0.0,
+            "zero_observation_sample_count": 0,
+        },
     )
 
 
@@ -116,7 +127,8 @@ def test_legacy_v1_audit_remains_readable_and_exportable() -> None:
         "ambiguous": 0,
         "duplicate_gt_groups": 0,
         "zero_observation_samples": 0,
-        "zero_observation_scenes": 0,
+        "scenes_with_zero_observation_samples": 0,
+        "zero_only_scenes": 0,
     }
     assert exported["rows"][0]["target_id"] == "target-1"
 
@@ -160,8 +172,16 @@ def test_zero_observation_sample_sentinel_is_not_an_observed_target() -> None:
     evidence = read_campaign_admission_evidence(_payload([_row(), sentinel]))
     assert evidence.observed_count == 1
     assert evidence.zero_observation_sample_count == 1
-    assert evidence.zero_observation_scene_count == 1
-    assert all(row["scene_id"] != "scene-empty" for row in evidence.scene_rows)
+    assert evidence.scenes_with_zero_observation_sample_count == 1
+    assert evidence.zero_only_scene_count == 1
+    zero_only = next(row for row in evidence.scene_rows if row["scene_id"] == "scene-empty")
+    assert zero_only == {
+        "scene_id": "scene-empty",
+        "observed_count": 0,
+        "admitted_count": 0,
+        "zero_observation_sample_count": 1,
+        "admission_rate": None,
+    }
 
 
 def test_writer_shaped_legacy_zero_observation_sentinel_is_inferred() -> None:
@@ -231,3 +251,51 @@ def test_admitted_rows_require_strict_iou_above_point_two(iou: float) -> None:
 
     with pytest.raises(ValueError, match="strictly greater than 0.20"):
         read_campaign_admission_evidence(payload)
+
+
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        ({"target_id": ""}, "target_id"),
+        ({"detected_source_row": None}, "detected source row"),
+        ({"gt_match_id": None}, "GT match id"),
+        ({"gt_match_count": 2}, "match count fields disagree"),
+        ({"reason": "below_iou_threshold", "admitted": False, "oriented_iou": None}, "requires finite IoU"),
+        (
+            {
+                "reason": "below_iou_threshold",
+                "admitted": False,
+                "oriented_iou": 0.3,
+                "qualified_gt_match_count": 0,
+            },
+            "at or below",
+        ),
+        (
+            {
+                "reason": "ambiguous_match",
+                "admitted": False,
+                "qualified_gt_match_count": 1,
+            },
+            "more than one",
+        ),
+        (
+            {
+                "reason": "wrong_class",
+                "admitted": False,
+                "oriented_iou": 0.1,
+                "qualified_gt_match_count": 0,
+                "gt_match_id": None,
+            },
+            "must not contain GT match evidence",
+        ),
+    ],
+)
+def test_observed_target_rows_fail_closed_on_identity_and_reason_invariants(
+    updates: dict[str, object], message: str
+) -> None:
+    row = _row(**updates)
+    if "gt_match_count" not in row:
+        row["gt_match_count"] = row["qualified_gt_match_count"]
+
+    with pytest.raises(ValueError, match=message):
+        read_campaign_admission_evidence(_payload([row]))

@@ -632,18 +632,25 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     padded = np.full((34,), -1.0, dtype=np.float32)
     nonfinite = valid.copy()
     nonfinite[0] = np.nan
+    finite_nonpositive_geometry = valid.copy()
+    finite_nonpositive_geometry[1] = 0.0
 
     class _Reader:
         def __init__(self, _config: object) -> None:
             pass
 
         def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
-            return np.stack([valid, padded if record.sample_index == 0 else nonfinite])
+            return np.stack(
+                [
+                    valid if record.sample_index == 0 else finite_nonpositive_geometry,
+                    padded if record.sample_index == 0 else nonfinite,
+                ]
+            )
 
         def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> object | None:
             return None
 
-    monkeypatch.setattr("aria_nbv.data_handling.vin_store.target_inventory.VinOfflineStoreReader", _Reader)
+    monkeypatch.setattr("aria_nbv.dataset_bundle.VinOfflineStoreReader", _Reader)
     scan = scan_root_gt_obb_target_opportunities(root)
 
     assert scan["available"] is True
@@ -651,6 +658,7 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     assert scan["scene_counts"] == {"scene-a": 1, "scene-b": 1}
     assert scan["split_counts"] == {"train": 1, "val": 1}
     assert scan["semantic_role"] == "gt_obb_label_evaluation_target_opportunities"
+    assert scan["per_sample"][1]["gt_obb_target_opportunities"] == 1
 
 
 def test_root_gt_obb_scan_does_not_fall_back_when_blocks_are_absent(tmp_path: Path) -> None:

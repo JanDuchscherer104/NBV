@@ -328,7 +328,20 @@ def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypat
         lambda _label, options, **_kwargs: list(options)[0],
     )
 
-    candidate_generation._render_complete_candidate_support({"target_view": rows}, evidence_role="actor-visible")
+    candidate_generation._render_complete_candidate_support(
+        {"target_view": rows},
+        evidence_roles={
+            "direction": "actor-visible",
+            "spatial": "actor-visible",
+            "motion": "actor-visible",
+            "collision": "oracle/evaluation",
+            "clearance": "oracle/evaluation",
+            "target_view": "actor-visible",
+            "geometry": "actor-visible",
+            "selection": "actor-visible",
+            "sequence_return": "oracle/evaluation",
+        },
+    )
 
     availability = next(
         figure for figure in plots if figure.layout.title.text == "Target-view availability and missingness"

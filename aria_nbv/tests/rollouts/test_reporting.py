@@ -143,6 +143,26 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
     assert frames["steps"]["generation_cohort"].notna().all()
 
 
+def test_report_export_requests_only_candidate_facets_it_serializes(tmp_path, monkeypatch) -> None:
+    """Reporting never pays for discarded scientific candidate-support reducers."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=112)[:1]
+    )
+    original = reporting.candidate_population_evidence
+    calls: list[bool] = []
+
+    def candidate_population(reader, **kwargs):
+        calls.append(bool(kwargs.get("scientific_support", True)))
+        return original(reader, **kwargs)
+
+    monkeypatch.setattr(reporting, "candidate_population_evidence", candidate_population)
+
+    build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+
+    assert calls == [False]
+
+
 def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -> None:
     common = {
         "contract": "contract",

@@ -1795,7 +1795,11 @@ def _append_store_rows(
         }
         for failure in suspicious_rollout_rows(reader)
     )
-    candidate_evidence = candidate_population_evidence(reader, audit_reader=candidate_audit_rows)
+    candidate_evidence = candidate_population_evidence(
+        reader,
+        scientific_support=False,
+        audit_reader=candidate_audit_rows,
+    )
     for group_by in CANDIDATE_GROUP_FIELDS:
         rows["candidate_composition"].extend(_with_store_id(store_id, candidate_evidence["composition"][group_by]))
         rows["candidate_calibration"].extend(_with_store_id(store_id, candidate_evidence["calibration"][group_by]))

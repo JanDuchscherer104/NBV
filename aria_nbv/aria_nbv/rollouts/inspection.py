@@ -810,6 +810,7 @@ def candidate_population_evidence(
     *,
     group_by: CandidateGroupField | None = None,
     sample_size: int = 500,
+    scientific_support: bool = True,
     audit_reader: Callable[..., object] = candidate_audit_rows,
 ) -> dict[str, object]:
     """Collect candidate evidence once and expose bounded public projections.
@@ -828,11 +829,12 @@ def candidate_population_evidence(
     # a second in-memory copy of every candidate row.  The spool stays in RAM
     # for small stores and transparently moves to a temporary file for large
     # stores; the display sample remains the only retained candidate subset.
-    spooled_rows = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024, mode="w+b")
+    spooled_rows = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024, mode="w+b") if scientific_support else None
 
     def consume(row: Mapping[str, object]) -> None:
         accumulator.consume(row)
-        pickle.dump(dict(row), spooled_rows, protocol=pickle.HIGHEST_PROTOCOL)
+        if spooled_rows is not None:
+            pickle.dump(dict(row), spooled_rows, protocol=pickle.HIGHEST_PROTOCOL)
 
     signature = inspect.signature(audit_reader)
     callback_parameter = signature.parameters.get("row_callback")
@@ -848,9 +850,12 @@ def candidate_population_evidence(
     else:
         for row in audit_reader(reader):  # type: ignore[operator]
             consume(row)
-    spooled_rows.seek(0)
+    if spooled_rows is not None:
+        spooled_rows.seek(0)
 
     def replay_rows() -> Iterable[dict[str, object]]:
+        if spooled_rows is None:
+            return
         spooled_rows.seek(0)
         while True:
             try:
@@ -882,12 +887,39 @@ def candidate_population_evidence(
             for selection_group in CANDIDATE_SELECTION_GROUP_FIELDS
         }
         sample_rows = list(sample["rows"])
+        target_roles = accumulator.target_evidence_roles()
+        observed_roles = {
+            str(row.get("target_evidence_role")) for row in target_roles if int(row.get("candidate_count", 0)) > 0
+        }
+        target_role = (
+            next(iter(observed_roles))
+            if len(observed_roles) == 1 and next(iter(observed_roles)) in {"actor-visible", "oracle/evaluation"}
+            else "provenance"
+        )
+        if scientific_support:
+            direction, spatial, target_view, motion = _candidate_scientific_macro_evidence(replay_rows())
+        else:
+            direction = {"density_rows": [], "cap_rows": [], "angular_support_rows": []}
+            spatial = []
+            target_view = []
+            motion = []
         return {
             "composition": compositions,
             "calibration": calibrations,
             "collision": collision,
             "groups": groups,
-            "target_evidence_roles": accumulator.target_evidence_roles(),
+            "target_evidence_roles": target_roles,
+            "evidence_roles": {
+                "direction": "actor-visible",
+                "spatial": "actor-visible",
+                "motion": "actor-visible",
+                "collision": "oracle/evaluation",
+                "clearance": "oracle/evaluation",
+                "target_view": target_role,
+                "geometry": target_role,
+                "selection": "actor-visible",
+                "sequence_return": "oracle/evaluation",
+            },
             "selection_dynamics": selection_dynamics,
             "selection_transitions": selection_transitions,
             "selection_sequences": selection_sequences,
@@ -898,13 +930,14 @@ def candidate_population_evidence(
             "sample": sample,
             "population_count": accumulator.population_count,
             "geometry": candidate_geometry_evidence_rows(sample_rows),
-            "direction": candidate_direction_evidence(replay_rows()),
-            "spatial": candidate_spatial_support_evidence(replay_rows()),
-            "target_view": candidate_target_view_evidence(replay_rows()),
-            "motion": candidate_motion_support_evidence(replay_rows()),
+            "direction": direction,
+            "spatial": spatial,
+            "target_view": target_view,
+            "motion": motion,
         }
     finally:
-        spooled_rows.close()
+        if spooled_rows is not None:
+            spooled_rows.close()
 
 
 def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -1022,14 +1055,14 @@ def _sort_candidate_summary_rows(rows: list[dict[str, object]]) -> list[dict[str
             row["candidate_direction_count"] = row["candidate_total_count"]
         normalized.append(row)
     level_order = {"state": 0, "scene_macro": 1, "cohort_macro": 2}
-    metric_order = {"root_xy_radius": 0, "root_3d_distance": 1, "root_height": 2}
+    metric_order = {"decision_horizontal_radius_m": 0, "decision_distance_m": 1, "decision_height_m": 2}
     fields = (
         "generation_cohort_id",
         "scene",
         "rollout_row_id",
         "step_row_id",
         "population",
-        "position",
+        "position_family",
         "evidence",
         "radius_deg",
         "azimuth_bin",
@@ -1082,8 +1115,9 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 continue
             vector /= radius
             vectors.append(vector)
-            azimuth = float(np.arctan2(vector[1], vector[0]))
-            sin_elevation = float(np.clip(vector[2], -1.0, 1.0))
+            # EFM/ARIA camera-local coordinates are Left-Up-Forward (LUF).
+            azimuth = float(np.arctan2(vector[0], vector[2]))
+            sin_elevation = float(np.clip(vector[1], -1.0, 1.0))
             ai = min(azimuth_bins - 1, int(((azimuth + np.pi) / (2 * np.pi)) * azimuth_bins))
             ei = min(elevation_bins - 1, int(((sin_elevation + 1.0) / 2.0) * elevation_bins))
             counts[ai, ei] += 1
@@ -1389,18 +1423,18 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
     for key, grouped in _iter_candidate_state_groups(rows, extra_fields=("position",)):
         cohort, scene, rollout_id, step_id, shell, population = key
         values = {
-            "root_xy_radius": [
+            "decision_horizontal_radius_m": [
                 float(
                     np.hypot(
                         r.get("decision_relative_x_m", r.get("root_relative_x_m")),
-                        r.get("decision_relative_y_m", r.get("root_relative_y_m")),
+                        r.get("decision_relative_z_m", r.get("root_relative_z_m")),
                     )
                 )
                 for r in grouped
                 if _finite_or_none(r.get("decision_relative_x_m", r.get("root_relative_x_m"))) is not None
-                and _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m"))) is not None
+                and _finite_or_none(r.get("decision_relative_z_m", r.get("root_relative_z_m"))) is not None
             ],
-            "root_3d_distance": [
+            "decision_distance_m": [
                 float(
                     np.linalg.norm(
                         [
@@ -1420,10 +1454,10 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     )
                 )
             ],
-            "root_height": [
-                float(r.get("decision_relative_z_m", r.get("root_relative_z_m")))
+            "decision_height_m": [
+                float(r.get("decision_relative_y_m", r.get("root_relative_y_m")))
                 for r in grouped
-                if _finite_or_none(r.get("decision_relative_z_m", r.get("root_relative_z_m"))) is not None
+                if _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m"))) is not None
             ],
         }
         for metric, vals in values.items():
@@ -1435,7 +1469,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "scene": scene,
                     "rollout_row_id": rollout_id,
                     "step_row_id": step_id,
-                    "declared_shell": shell,
+                    "position_family": shell,
                     "population": population,
                     "count": len(grouped),
                     "total_count": len(grouped),
@@ -1463,7 +1497,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 (
                     str(row["generation_cohort_id"]),
                     scene,
-                    str(row["declared_shell"]),
+                    str(row["position_family"]),
                     str(row["population"]),
                     str(row["metric"]),
                 ),
@@ -1747,6 +1781,187 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                 base.update(mean=None if not values else float(np.mean(values)), available=bool(values))
             result.append(base)
     return _sort_candidate_summary_rows(result)
+
+
+_CANDIDATE_MACRO_MEAN_FIELDS = (
+    "mean_state_fraction",
+    "value",
+    "discrepancy",
+    "nearest_neighbor_deg",
+    "covering_radius_deg",
+    "probe_covering_radius_deg",
+    "mean",
+    "collision_rate",
+)
+_CANDIDATE_MACRO_SUM_FIELDS = (
+    "count",
+    "total_count",
+    "finite_count",
+    "missing_count",
+    "valid_count",
+    "candidate_direction_count",
+    "candidate_total_count",
+    "candidate_finite_count",
+    "candidate_missing_count",
+    "state_count",
+    "defined_state_count",
+    "applicable_count",
+    "evaluated_count",
+    "collision_count",
+    "not_applicable_count",
+    "applicable_unevaluated_count",
+)
+
+
+class _CandidateMacroAccumulator:
+    """Reduce state summaries online into scene-then-cohort sufficient statistics."""
+
+    def __init__(self, *, facet_fields: tuple[str, ...]) -> None:
+        self._facet_fields = facet_fields
+        self._scene_groups: dict[tuple[object, ...], dict[str, object]] = {}
+
+    def consume(self, row: Mapping[str, object]) -> None:
+        """Consume one state-level summary without retaining that state row."""
+
+        if row.get("aggregation_level") != "state":
+            return
+        key = (
+            row.get("generation_cohort_id"),
+            row.get("scene"),
+            *(row.get(field) for field in self._facet_fields),
+        )
+        self._update(self._scene_groups, key, row)
+
+    @staticmethod
+    def _update(
+        groups: dict[tuple[object, ...], dict[str, object]],
+        key: tuple[object, ...],
+        row: Mapping[str, object],
+    ) -> None:
+        stats = groups.setdefault(
+            key,
+            {
+                "prototype": dict(row),
+                "member_count": 0,
+                "mean_sums": Counter(),
+                "mean_counts": Counter(),
+                "sums": Counter(),
+            },
+        )
+        stats["member_count"] = int(stats["member_count"]) + 1
+        mean_sums = stats["mean_sums"]
+        mean_counts = stats["mean_counts"]
+        sums = stats["sums"]
+        assert isinstance(mean_sums, Counter)
+        assert isinstance(mean_counts, Counter)
+        assert isinstance(sums, Counter)
+        for field in _CANDIDATE_MACRO_MEAN_FIELDS:
+            value = _finite_or_none(row.get(field))
+            if value is not None:
+                mean_sums[field] += value
+                mean_counts[field] += 1
+        for field in _CANDIDATE_MACRO_SUM_FIELDS:
+            value = row.get(field)
+            if isinstance(value, (int, np.integer)) and not isinstance(value, bool):
+                sums[field] += int(value)
+
+    def rows(self) -> list[dict[str, object]]:
+        """Return deterministic scene and equal-scene cohort macro rows."""
+
+        scene_rows = [
+            self._finalize(stats, level="scene_macro", scene=key[1])
+            for key, stats in sorted(self._scene_groups.items(), key=lambda item: tuple(map(str, item[0])))
+        ]
+        cohort_groups: dict[tuple[object, ...], dict[str, object]] = {}
+        for row in scene_rows:
+            key = (row.get("generation_cohort_id"), *(row.get(field) for field in self._facet_fields))
+            self._update(cohort_groups, key, row)
+        cohort_rows = [
+            self._finalize(stats, level="cohort_macro", scene="all")
+            for _key, stats in sorted(cohort_groups.items(), key=lambda item: tuple(map(str, item[0])))
+        ]
+        return _sort_candidate_summary_rows([*scene_rows, *cohort_rows])
+
+    @staticmethod
+    def _finalize(stats: Mapping[str, object], *, level: str, scene: object) -> dict[str, object]:
+        prototype = stats["prototype"]
+        mean_sums = stats["mean_sums"]
+        mean_counts = stats["mean_counts"]
+        sums = stats["sums"]
+        assert isinstance(prototype, dict)
+        assert isinstance(mean_sums, Counter)
+        assert isinstance(mean_counts, Counter)
+        assert isinstance(sums, Counter)
+        row = {
+            **prototype,
+            "aggregation_level": level,
+            "rollout_row_id": "all",
+            "step_row_id": "all",
+            "scene": scene,
+        }
+        for field in _CANDIDATE_MACRO_MEAN_FIELDS:
+            if field in prototype or mean_counts[field]:
+                row[field] = None if not mean_counts[field] else float(mean_sums[field] / mean_counts[field])
+        for field in _CANDIDATE_MACRO_SUM_FIELDS:
+            if field in prototype or sums[field]:
+                row[field] = int(sums[field])
+        if "candidate_total_count" in row:
+            row["total_count"] = row["candidate_total_count"]
+        if "candidate_finite_count" in row:
+            row["finite_count"] = row["candidate_finite_count"]
+        if "candidate_missing_count" in row:
+            row["missing_count"] = row["candidate_missing_count"]
+        if "state_count" not in row:
+            row["state_count"] = int(stats["member_count"])
+        row["scene_count"] = 1 if level == "scene_macro" else int(stats["member_count"])
+        row["available"] = any(mean_counts[field] > 0 for field in _CANDIDATE_MACRO_MEAN_FIELDS)
+        if "nearest_neighbor_available" in prototype:
+            row["nearest_neighbor_available"] = mean_counts["nearest_neighbor_deg"] > 0
+            row["nearest_neighbor_reason"] = (
+                None if row["nearest_neighbor_available"] else "undefined for the selected state population"
+            )
+        return row
+
+
+def _candidate_scientific_macro_evidence(
+    rows: Iterable[Mapping[str, object]],
+) -> tuple[dict[str, object], list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+    """Stream complete candidates into scene/cohort evidence without cached state rows."""
+
+    direction_density = _CandidateMacroAccumulator(facet_fields=("population", "azimuth_bin", "sin_elevation_bin"))
+    direction_cap = _CandidateMacroAccumulator(facet_fields=("population", "radius_deg"))
+    direction_angular = _CandidateMacroAccumulator(facet_fields=("population", "evidence"))
+    spatial = _CandidateMacroAccumulator(facet_fields=("position_family", "population", "metric"))
+    target_view = _CandidateMacroAccumulator(facet_fields=("population", "evidence"))
+    motion = _CandidateMacroAccumulator(facet_fields=("population", "metric"))
+    for chunk in _iter_candidate_state_chunks(rows):
+        direction = candidate_direction_evidence(chunk)
+        for row in direction["density_rows"]:
+            direction_density.consume(row)
+        for row in direction["cap_rows"]:
+            direction_cap.consume(row)
+        for row in direction["angular_support_rows"]:
+            direction_angular.consume(row)
+        for row in candidate_spatial_support_evidence(chunk):
+            spatial.consume(row)
+        for row in candidate_target_view_evidence(chunk):
+            target_view.consume(row)
+        for row in candidate_motion_support_evidence(chunk):
+            motion.consume(row)
+    direction = {
+        "density_rows": direction_density.rows(),
+        "cap_rows": direction_cap.rows(),
+        "angular_support_rows": direction_angular.rows(),
+    }
+    for evidence_rows in direction.values():
+        for row in evidence_rows:
+            row["cohort_macro_population"] = row["population"]
+    return (
+        direction,
+        spatial.rows(),
+        target_view.rows(),
+        motion.rows(),
+    )
 
 
 def _probability_state_error(state: Mapping[str, object]) -> str | None:

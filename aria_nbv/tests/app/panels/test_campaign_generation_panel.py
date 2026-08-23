@@ -285,8 +285,11 @@ def test_admission_audit_renders_all_three_figures(monkeypatch) -> None:
 
     figures = []
     monkeypatch.setattr(panel, "_render_plot", lambda figure, *_args, **_kwargs: figures.append(figure))
+    metrics: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        panel.st, "columns", lambda count: [SimpleNamespace(metric=lambda *_args, **_kwargs: None)] * count
+        panel.st,
+        "columns",
+        lambda count: [SimpleNamespace(metric=lambda label, value: metrics.append((label, value)))] * count,
     )
     monkeypatch.setattr(panel.st, "expander", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(panel.st, "dataframe", lambda *_args, **_kwargs: None)
@@ -294,7 +297,11 @@ def test_admission_audit_renders_all_three_figures(monkeypatch) -> None:
 
     panel._render_admission_audit(
         {
-            "counts": {},
+            "counts": {
+                "zero_observation_samples": 3,
+                "scenes_with_zero_observation_samples": 2,
+                "zero_only_scenes": 1,
+            },
             "reason_rows": [{"reason": "admitted", "count": 1, "admitted": True}],
             "iou_rows": [{"oriented_iou": 0.4, "reason": "admitted"}],
             "scene_rows": [{"admission_rate": 1.0}],
@@ -304,6 +311,10 @@ def test_admission_audit_renders_all_three_figures(monkeypatch) -> None:
     )
 
     assert len(figures) == 3
+    assert ("Zero-target samples", "3") in metrics
+    assert ("Scenes containing zero-target samples", "2") in metrics
+    assert ("Zero-only scenes", "1") in metrics
+    assert "with observed targets" in str(figures[-1].layout.title.text)
 
 
 class _FakeColumn:
