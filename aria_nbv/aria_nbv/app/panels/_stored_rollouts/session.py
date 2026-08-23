@@ -73,7 +73,12 @@ def _cached_store_bundle_cached(
 def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
     """Open one store through a cache key that changes when its manifest is replaced."""
 
-    return _cached_store_bundle_cached(store_path, store_identity=_store_projection_identity(store_path))
+    identity = _store_projection_identity(store_path)
+    reader, validation, manifest = _cached_store_bundle_cached(store_path, store_identity=identity)
+    _assert_current_identity(store_path, identity)
+    if reader.store_dir.resolve() != Path(store_path).expanduser().resolve():
+        raise RuntimeError("stored-rollout reader resolved to a different canonical path")
+    return reader, validation, manifest
 
 
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
@@ -126,6 +131,14 @@ def _store_projection_identity(store_path: str) -> str:
     return identity
 
 
+def _assert_current_identity(store_path: str, expected_identity: str) -> None:
+    """Fail closed when a selected store changed during a projection."""
+
+    current = _store_projection_identity(store_path)
+    if current != expected_identity:
+        raise RuntimeError("selected rollout store changed during inspection; reopen it before reading")
+
+
 def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
     """Cache one named projection against fixed metadata identity."""
 
@@ -150,13 +163,17 @@ def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
 
     @wraps(function)
     def wrapper(store_path: str, *args: Any, **kwargs: Any) -> Any:
-        return cached(
+        identity = _store_projection_identity(store_path)
+        _assert_current_identity(store_path, identity)
+        result = cached(
             store_path,
             args,
             tuple(sorted(kwargs.items())),
-            _store_projection_identity(store_path),
+            identity,
             function.__qualname__,
         )
+        _assert_current_identity(store_path, identity)
+        return result
 
     wrapper.clear = cached.clear  # type: ignore[attr-defined]
     return wrapper
@@ -338,13 +355,17 @@ def _cached_topology(
 ) -> Any:
     """Resolve topology through a cache key bound to the selected store identity."""
 
-    return _cached_topology_cached(
+    identity = _store_projection_identity(store_path)
+    _assert_current_identity(store_path, identity)
+    result = _cached_topology_cached(
         store_path,
         vin_store_dirs,
         paths,
         selected_source_row_id,
-        store_identity=_store_projection_identity(store_path),
+        store_identity=identity,
     )
+    _assert_current_identity(store_path, identity)
+    return result
 
 
 @st.cache_data(show_spinner="Evaluating failure predicates…", max_entries=32)
@@ -376,13 +397,17 @@ def _cached_failures(
 ) -> list[dict[str, object]]:
     """Evaluate failure triage through a cache key bound to the selected store identity."""
 
-    return _cached_failures_cached(
+    identity = _store_projection_identity(store_path)
+    _assert_current_identity(store_path, identity)
+    result = _cached_failures_cached(
         store_path,
         min_valid_candidates,
         dominant_invalid_fraction,
         max_step_distance_m,
-        store_identity=_store_projection_identity(store_path),
+        store_identity=identity,
     )
+    _assert_current_identity(store_path, identity)
+    return result
 
 
 @st.cache_data(show_spinner="Building deterministic evidence bundle…", max_entries=16)
@@ -397,11 +422,15 @@ def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, sto
 def _cached_evidence_bundle(store_path: str, evidence_status: str) -> bytes:
     """Build a report bundle through the replacement-sensitive store cache key."""
 
-    return _cached_evidence_bundle_cached(
+    identity = _store_projection_identity(store_path)
+    _assert_current_identity(store_path, identity)
+    result = _cached_evidence_bundle_cached(
         store_path,
         evidence_status,
-        store_identity=_store_projection_identity(store_path),
+        store_identity=identity,
     )
+    _assert_current_identity(store_path, identity)
+    return result
 
 
 def _clear_stored_rollout_caches() -> None:
@@ -453,5 +482,11 @@ def _cached_corpus_summary(
 ) -> RolloutCorpusSummary:
     """Build an explicit corpus summary bound to ordered store identities."""
 
-    del store_identities
-    return build_rollout_corpus_summary(Path(path) for path in store_paths)
+    if len(store_paths) != len(store_identities):
+        raise ValueError("corpus store paths and identities must have equal length")
+    for path, identity in zip(store_paths, store_identities, strict=True):
+        _assert_current_identity(path, identity)
+    result = build_rollout_corpus_summary(Path(path) for path in store_paths)
+    for path, identity in zip(store_paths, store_identities, strict=True):
+        _assert_current_identity(path, identity)
+    return result

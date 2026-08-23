@@ -83,6 +83,7 @@ def test_corpus_summary_cache_delegates_only_after_explicit_dispatch_and_preserv
         return expected
 
     monkeypatch.setattr(session, "build_rollout_corpus_summary", build)
+    monkeypatch.setattr(session, "_assert_current_identity", lambda *_args: None)
 
     result = session._cached_corpus_summary.__wrapped__(("/b.zarr", "/a.zarr"), ("b-id", "a-id"))
 
