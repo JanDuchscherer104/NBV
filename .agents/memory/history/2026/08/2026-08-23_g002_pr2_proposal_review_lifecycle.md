@@ -27,7 +27,7 @@ touched_owner_paths:
   - scripts/validate_agent_memory.py
 codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
 repo_object_format: sha1
-repo_head: a285097dfe5ed30fe02fd30563cee7b7bccfd2e9
+repo_head: 31d484d45e22bf946cc57091618c3aae7795bde1
 repo_branch: "codex/scaffold-intent-pr2"
 worktree_kind: linked
 ---
@@ -46,8 +46,8 @@ implementation owners.
   retained rather than deleted.
 - Preserved the current bytes of `issue-025` and `refactor-016`; neither record
   had a missing planned disposition requiring an edit.
-- Recorded the native debrief against the intentional pre-debrief
-  implementation anchor `a285097dfe5ed30fe02fd30563cee7b7bccfd2e9` and
+- Recorded the native debrief against the final pre-debrief
+  implementation/review-fix anchor `31d484d45e22bf946cc57091618c3aae7795bde1` and
   regenerated the derived debrief index after this source edit. The debrief and
   index-only commits `46cae9f2f81b41fe63b13dad357d748405abb3f8` and
   `2b35f323d46f20d96f43c7a8db782141bb56d45c` remain excluded from the evidence
@@ -80,6 +80,9 @@ implementation owners.
   corrected rerun.
 - `todo-044` is resolved with the proof note below; `issue-025` remains open;
   `refactor-016` remains `in_progress`.
+- Final review found that `todo-044`'s resolution note conflated historical
+  old-rubric `1/4→4/4` evidence with corrected authenticated `4/4→4/4`
+  matched receipts; commit `31d484d` corrected the distinction.
 - The proposal route is evidence-backed and proposal-only: helpers identify
   and validate candidate owner updates, while ordinary repository edits and
   explicit review dispositions are required for durable policy changes.
@@ -103,8 +106,8 @@ implementation owners.
   tests; Agents DB validation passed.
 - The full G002 work changed Python, guidance, memory, tests, and Agents DB
   owners; only the earlier closeout commit had no Python changes.
-- The pre-debrief implementation was committed at
-  `a285097dfe5ed30fe02fd30563cee7b7bccfd2e9`; after that commit, only this
+- The final pre-debrief implementation/review fix was committed at
+  `31d484d45e22bf946cc57091618c3aae7795bde1`; after that commit, only this
   debrief source and its derived index remain modified.
 
 ## Canonical-State Impact
@@ -138,3 +141,4 @@ completed lifecycle history.
 - [a3cd5e7b0987a0c14d5174cd00ca680ab15e9a5c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a3cd5e7b0987a0c14d5174cd00ca680ab15e9a5c) — review fix: harden routing trial evidence
 - [bd50eba153b91ba2d371cc5691baa0184f3090cc](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bd50eba153b91ba2d371cc5691baa0184f3090cc) — review fix: authenticate routing trial receipts
 - [a285097dfe5ed30fe02fd30563cee7b7bccfd2e9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a285097dfe5ed30fe02fd30563cee7b7bccfd2e9) — review fix: retain complete routing evidence
+- [31d484d45e22bf946cc57091618c3aae7795bde1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/31d484d45e22bf946cc57091618c3aae7795bde1) — review fix: distinguish corrected routing receipts
