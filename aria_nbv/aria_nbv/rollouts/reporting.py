@@ -21,17 +21,20 @@ import pandas as pd
 
 from .inspection import (
     CANDIDATE_GROUP_FIELDS,
+    SchemaValidation,
+    build_compact_statistics,
+    build_effective_streamlit_trust,
+    build_manifest_facts,
+    build_promotion_evidence,
     candidate_audit_rows,  # noqa: F401 - retained for direct consumer compatibility
     candidate_population_evidence,
     discounted_rollout_return_rows,
     oracle_headroom_evidence,
-    promoted_store_validation_error,
     q_h_evidence_rows,
     reconstruction_endpoint_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
     rollout_header_summary,
-    rollout_statistics,
     rollout_step_objective_rows,
     rollout_tree_summary_rows,
     runtime_storage_statistics,
@@ -41,6 +44,23 @@ from .inspection import (
     validity_waterfall_rows,
 )
 from .zarr_store import RolloutZarrStoreReader
+
+
+class _ManifestSnapshotReader:
+    """Reader view that reuses one already-read manifest snapshot."""
+
+    def __init__(self, reader: RolloutZarrStoreReader, manifest_payload: dict[str, object]) -> None:
+        self._reader = reader
+        self._manifest_payload = manifest_payload
+
+    def manifest(self) -> dict[str, object]:
+        """Return the fixed manifest snapshot for this report projection."""
+
+        return self._manifest_payload
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._reader, name)
+
 
 THESIS_REPORT_BUNDLE_VERSION = "aria-nbv-thesis-report-v1"
 """Schema version for compact thesis-report JSON bundles."""
@@ -1078,9 +1098,20 @@ def _append_store_rows(
     if not validation.ok:
         detail = "; ".join(validation.errors[:3]) or "unknown validation error"
         raise ValueError(f"Rollout store {store_path} failed validation: {detail}")
-    manifest_payload = reader.manifest()
-    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
-        raise ValueError(f"Rollout store {store_path} failed promotion validation: {promotion_error}")
+    schema = SchemaValidation(
+        ok=bool(validation.ok),
+        num_rollouts=int(validation.num_rollouts),
+        num_steps=int(validation.num_steps),
+        num_candidates=int(validation.num_candidates),
+        errors=tuple(str(error) for error in validation.errors),
+    )
+    manifest_payload = build_manifest_facts(reader).payload
+    promotion = build_promotion_evidence(reader, manifest_payload=manifest_payload)
+    trust = build_effective_streamlit_trust(schema, promotion)
+    if not trust.ok:
+        detail = "; ".join(trust.errors[:3]) or "unknown promotion error"
+        raise ValueError(f"Rollout store {store_path} failed promotion validation: {detail}")
+    reader = _ManifestSnapshotReader(reader, manifest_payload)  # type: ignore[assignment]
     manifest = manifest_payload.get("manifest", {})
     root_attrs = manifest_payload.get("root_attrs", {})
     manifest_sha256 = str(root_attrs["manifest_sha256"])
@@ -1125,7 +1156,7 @@ def _append_store_rows(
         "root_attrs": parameter_root_attrs,
     }
     rows["parameters"].extend(_typed_leaf_rows("store_id", store_id, parameter_payload))
-    stats = rollout_statistics(reader, manifest_payload=manifest_payload)
+    stats = build_compact_statistics(reader, manifest_payload=manifest_payload).payload
     rows["statistics"].extend(_typed_leaf_rows("store_id", store_id, stats))
     rows["facts"].extend(_fact_rows(store_id, stats, evidence_status=evidence_status))
     rows["source_coverage"].extend(_source_coverage_rows(store_id, stats.get("source_coverage", {})))
