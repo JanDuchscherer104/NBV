@@ -308,6 +308,29 @@ def test_qh_readiness_rejects_bundle_binding_before_dataset_construction(
     assert any("manifest hash" in blocker for blocker in readiness.blockers)
 
 
+def test_qh_readiness_rejects_incomplete_promotion_evidence_before_dataset_construction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A promotion marker without its paired typed evidence is never admitted."""
+
+    root, source_hash = _write_root_store(tmp_path)
+    rollout = _write_rollout_store(tmp_path, name="tampered-promoted.zarr", source_hash=source_hash)
+    (rollout / "_SUCCESS.json").write_text("{}", encoding="utf-8")
+    called = False
+
+    def unexpected(_config: QhDatasetConfig) -> None:
+        nonlocal called
+        called = True
+        raise AssertionError("dataset construction must not run")
+
+    monkeypatch.setattr(QhDatasetConfig, "setup_target", unexpected)
+    readiness = build_qh_corpus_readiness(DatasetBundleSelection(root, (rollout,)), contract=_QH_READINESS_CONTRACT)
+
+    assert readiness.verdict == "Blocked"
+    assert not called
+    assert any("trust" in blocker or "promotion" in blocker for blocker in readiness.blockers)
+
+
 def _write_root_store(root: Path) -> tuple[Path, str]:
     store = root / "vin"
     store.mkdir()

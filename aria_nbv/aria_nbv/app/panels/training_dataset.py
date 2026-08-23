@@ -44,37 +44,50 @@ _QH_BATCH_SIZE_KEY = "training_dataset_qh_batch_size"
 _QH_SEED_KEY = "training_dataset_qh_seed"
 _QH_READINESS_CONTRACT = QhReadinessContract("qh_cf0_v1", "evl_v1", "none")
 
+ArtifactEntryIdentity = tuple[str, int, int, int, int]
 QhReadinessIdentity = tuple[tuple[Any, ...], int, int]
 QhPreviewIdentity = tuple[tuple[Any, ...], str, int, int, int]
 
 
-def _artifact_identity(path: Path) -> tuple[tuple[str, int, int], ...]:
+def _artifact_identity(path: Path) -> tuple[ArtifactEntryIdentity, ...]:
     """Return a bounded cache key for persisted artifact metadata.
 
     Immutable payload chunks are intentionally excluded: the lightweight page
-    keys manifests, root Zarr metadata, and split indexes without recursively
-    statting every store file. Metadata that disappears during this cache-key
-    snapshot is omitted; the subsequent evidence read still reports an
-    unreadable or incomplete store explicitly.
+    keys manifests, promotion sidecars, root Zarr metadata, and split indexes
+    without recursively statting every store file. Directory and metadata
+    entries use ``lstat`` identity (including inode and ctime), so an atomic
+    same-path replacement invalidates cached readiness even when replacement
+    bytes happen to have the same size and mtime. Metadata that disappears
+    during this cache-key snapshot is omitted; the subsequent evidence read
+    still reports an unreadable or incomplete store explicitly.
     """
 
     resolved = path.expanduser().resolve()
     if resolved.is_file():
         candidates = (resolved,)
     elif resolved.exists():
-        metadata_names = ("manifest.json", "sample_index.jsonl", ".zattrs", ".zgroup", ".zarray", "zarr.json")
+        metadata_names = (
+            "manifest.json",
+            "_SUCCESS.json",
+            "_owner.json",
+            "sample_index.jsonl",
+            ".zattrs",
+            ".zgroup",
+            ".zarray",
+            "zarr.json",
+        )
         direct = [resolved / name for name in metadata_names]
         split_metadata = list((resolved / "splits").glob("*.npy"))
-        candidates = tuple(child for child in (*direct, *split_metadata) if child.is_file())
+        candidates = (resolved, *[child for child in (*direct, *split_metadata) if child.is_file()])
     else:
         candidates = ()
-    rows: list[tuple[str, int, int]] = []
+    rows: list[ArtifactEntryIdentity] = []
     for child in sorted(candidates, key=lambda item: item.as_posix()):
         try:
-            stat = child.stat()
+            stat = child.lstat()
         except OSError:
             continue
-        rows.append((child.as_posix(), stat.st_mtime_ns, stat.st_size))
+        rows.append((child.as_posix(), stat.st_mtime_ns, stat.st_size, stat.st_ctime_ns, stat.st_ino))
     return tuple(rows)
 
 

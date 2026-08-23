@@ -270,7 +270,25 @@ def test_artifact_identity_uses_bounded_metadata_and_ignores_payload_chunks(tmp_
 
     identity = _artifact_identity(store)
 
-    assert identity == ((manifest.as_posix(), manifest.stat().st_mtime_ns, manifest.stat().st_size),)
+    assert [row[0] for row in identity] == [store.as_posix(), manifest.as_posix()]
+    assert all(len(row) == 5 for row in identity)
+
+
+def test_artifact_identity_includes_promotion_sidecars_and_detects_same_path_replacement(tmp_path: Path) -> None:
+    store = tmp_path / "store.zarr"
+    store.mkdir()
+    for name in ("manifest.json", "_SUCCESS.json", "_owner.json"):
+        (store / name).write_text("{}", encoding="utf-8")
+
+    before = _artifact_identity(store)
+    owner = store / "_owner.json"
+    owner.unlink()
+    owner.write_text("{}", encoding="utf-8")
+
+    after = _artifact_identity(store)
+
+    assert {Path(row[0]).name for row in before} == {"store.zarr", "manifest.json", "_SUCCESS.json", "_owner.json"}
+    assert before != after
 
 
 def test_artifact_identity_tolerates_metadata_disappearing_during_stat(
@@ -281,20 +299,20 @@ def test_artifact_identity_tolerates_metadata_disappearing_during_stat(
     store.mkdir()
     manifest = store / "manifest.json"
     manifest.write_text("{}", encoding="utf-8")
-    original_stat = Path.stat
+    original_lstat = Path.lstat
     manifest_stat_calls = 0
 
-    def _stat(path: Path, *args: object, **kwargs: object):
+    def _lstat(path: Path, *args: object, **kwargs: object):
         nonlocal manifest_stat_calls
         if path == manifest:
             manifest_stat_calls += 1
-            if manifest_stat_calls > 1:
+            if manifest_stat_calls >= 1:
                 raise FileNotFoundError(path)
-        return original_stat(path, *args, **kwargs)
+        return original_lstat(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "stat", _stat)
+    monkeypatch.setattr(Path, "lstat", _lstat)
 
-    assert _artifact_identity(store) == ()
+    assert all(row[0] != manifest.as_posix() for row in _artifact_identity(store))
 
 
 def test_deep_metric_value_marks_partial_counts_and_unavailable_failures() -> None:

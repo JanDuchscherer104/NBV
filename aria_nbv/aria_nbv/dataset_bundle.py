@@ -29,6 +29,12 @@ from .data_handling.qh_data.views import (
 from .data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineManifest
 from .data_handling.vin_store.store import OFFLINE_DATASET_VERSION, VinOfflineStoreConfig
 from .data_handling.vin_store.target_inventory import TargetInventory, inspect_target_inventory
+from .rollouts.inspection import (
+    build_effective_streamlit_trust,
+    build_manifest_facts,
+    build_promotion_evidence,
+    build_schema_validation,
+)
 from .rollouts.manifest import read_rollout_store_manifest
 from .rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, RolloutZarrStoreReader
 from .utils import Stage
@@ -367,6 +373,10 @@ def build_qh_corpus_readiness(
     if not selection.rollout_stores:
         return _blocked_qh_readiness(selection, loader_settings, "Select at least one rollout store.")
 
+    promotion_blockers = _qh_promotion_blockers(selection)
+    if promotion_blockers:
+        return _blocked_qh_readiness(selection, loader_settings, *promotion_blockers)
+
     try:
         datasets, data_module = _build_qh_data_module(selection, contract=contract, batch_size=batch_size, seed=seed)
         stage_rows = tuple(_qh_stage_readiness(stage, datasets.get(stage)) for stage in _QH_STAGES)
@@ -394,6 +404,44 @@ def build_qh_corpus_readiness(
         scene_disjoint=True,
         storage=storage,
     )
+
+
+def _qh_promotion_blockers(selection: DatasetBundleSelection) -> tuple[str, ...]:
+    """Return fail-closed trust errors for promoted rollout stores.
+
+    Legacy V0 stores without promotion markers remain compatible with the
+    existing Q_H contract. Once a store advertises promotion through either
+    marker, however, both typed promotion evidence and canonical schema
+    validation must agree before dataset construction is admitted. Root and
+    rollout provenance remain validated independently by the lightweight
+    bundle summary above.
+    """
+
+    blockers: list[str] = []
+    for store in selection.rollout_stores:
+        marker_present = (store / "_SUCCESS.json").exists() or (store / "_owner.json").exists()
+        if not marker_present:
+            # V0/non-promoted stores intentionally have no promotion trust
+            # contract; their existing lineage/provenance checks above remain
+            # the compatibility boundary.
+            continue
+        try:
+            reader = RolloutZarrStoreReader(store)
+            manifest_facts = build_manifest_facts(reader)
+            promotion = build_promotion_evidence(reader, manifest_payload=manifest_facts.payload)
+        except Exception as exc:
+            blockers.append(f"Q_H rollout trust could not be evaluated for {store.name}: {type(exc).__name__}: {exc}")
+            continue
+        try:
+            schema = build_schema_validation(reader)
+            trust = build_effective_streamlit_trust(schema, promotion)
+        except Exception as exc:
+            blockers.append(f"Q_H promoted rollout validation failed for {store.name}: {type(exc).__name__}: {exc}")
+            continue
+        if not trust.ok:
+            detail = "; ".join(trust.errors[:3]) or "unknown trust error"
+            blockers.append(f"Q_H promoted rollout {store.name} is not trusted: {detail}")
+    return tuple(blockers)
 
 
 def preview_qh_batch(
