@@ -248,6 +248,14 @@ def _parse_row(raw: Any, *, index: int) -> AdmissionAuditRow:
     source_row = raw.get("detected_source_row")
     if source_row is not None and (type(source_row) is not int or source_row < 0):
         raise ValueError(f"admission audit row {index} detected source row is invalid")
+    if row_kind == "zero_observation_sample" and (
+        iou is not None
+        or qualified != 0
+        or raw.get("gt_match_count", 0) != 0
+        or gt_match_id is not None
+        or source_row is not None
+    ):
+        raise ValueError(f"admission audit row {index} zero-observation sentinel contains GT evidence")
     return AdmissionAuditRow(
         sample_key,
         scene_id,

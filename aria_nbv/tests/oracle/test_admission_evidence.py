@@ -189,14 +189,19 @@ def test_writer_shaped_legacy_zero_observation_sentinel_is_inferred() -> None:
 
 
 @pytest.mark.parametrize(
-    "change",
+    ("field", "value"),
     [
-        lambda row: row.update(target_id="target-1"),
-        lambda row: row.update(admitted=True),
-        lambda row: row.update(reason="wrong_class"),
+        ("oriented_iou", 0.2),
+        ("qualified_gt_match_count", 1),
+        ("gt_match_count", 1),
+        ("gt_match_id", "gt-1"),
+        ("detected_source_row", 0),
     ],
 )
-def test_partial_legacy_zero_observation_sentinel_fails_closed(change) -> None:
+@pytest.mark.parametrize("explicit_kind", [False, True])
+def test_zero_observation_sentinel_rejects_contradictory_gt_evidence(
+    field: str, value: object, explicit_kind: bool
+) -> None:
     row = {
         "sample_key": "sample-empty",
         "scene_id": "scene-empty",
@@ -209,7 +214,9 @@ def test_partial_legacy_zero_observation_sentinel_fails_closed(change) -> None:
         "detected_source_row": None,
         "observed_target_count": 0,
     }
-    change(row)
+    row[field] = value
+    if explicit_kind:
+        row["row_kind"] = "zero_observation_sample"
     with pytest.raises(ValueError):
         read_campaign_admission_evidence(_payload([row]))
 
