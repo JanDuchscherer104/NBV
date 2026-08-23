@@ -90,7 +90,7 @@ def test_config_factory_has_one_non_competing_lifecycle_owner() -> None:
     conventions = _normalized(
         _read(".agents/skills/python-standards/references/general_conventions.md")
     )
-    assert "Construct config targets only at owning composition roots" in package
+    assert "Before deciding where any `.setup_target()` call belongs" in package
     assert "general_conventions.md#config-as-factory-and-lifecycle" in package
     for phrase in (
         "once per owning lifecycle",

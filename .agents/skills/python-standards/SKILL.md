@@ -1,6 +1,6 @@
 ---
 name: python-standards
-description: Apply ARIA-NBV Python conventions and write concise, contract-focused docstrings for modules, public classes, functions, methods, protocols, config models, DTOs, wrappers, and streaming or session APIs; use for typing, configuration, DTO, docstring, shape, lifecycle, cross-reference, and Python API-contract work.
+description: Apply ARIA-NBV Python conventions and write contract-focused docstrings; use for typing, configuration, helper ownership, DTOs, shapes, lifecycles, cross-references, and Python API contracts.
 ---
 
 # Python Standards
@@ -14,9 +14,10 @@ package-wide correctness.
 ## General Python Conventions
 
 Read [references/general_conventions.md](./references/general_conventions.md) for
-typing, paths, config-as-factory behavior, runtime setup, logging, and project
-wrapper conventions. Executable requirements remain owned by source, tests,
-formatter, linter, and type configuration; domain semantics remain with the package owner.
+typing, paths, config-as-factory behavior, runtime setup, helper locality,
+logging, and project wrapper conventions. Executable requirements remain owned
+by source, tests, formatter, linter, and type configuration; domain semantics
+remain with the package owner.
 
 For current external dependency API or version uncertainty, route through
 [`aria-nbv-context`](../aria-nbv-context/SKILL.md) and its

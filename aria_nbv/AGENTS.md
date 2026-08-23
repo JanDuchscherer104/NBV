@@ -24,11 +24,11 @@ being changed.
 
 ## Procedure And Proof
 
-- Construct config targets only at owning composition roots and inject the
-  resulting dependencies into hot paths. Read the lifecycle and framework-hook
-  exceptions in
+- Before deciding where any `.setup_target()` call belongs, read
   [Python conventions](../.agents/skills/python-standards/references/general_conventions.md#config-as-factory-and-lifecycle);
-  do not substitute raw dictionaries or revive retired cache/training APIs.
+  construct only at owning composition roots and inject the resulting
+  dependencies into hot paths. Do not substitute raw dictionaries or revive
+  retired cache/training APIs.
 - Every behavior change adds a targeted regression at the narrowest public
   interface. For risky changes, start with one failing tracer-bullet test and
   the minimal fix; prefer real-data or integration seams when feasible.
