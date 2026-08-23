@@ -83,20 +83,10 @@ def _hidden_pass(case: TrialCase) -> dict[str, str]:
 def _finding(case: TrialCase) -> dict[str, Any]:
     prompt, rubric = cast(tuple[dict[str, str], dict[str, Any]], case.context)
     candidate = prompt["candidate"]
-    needle = {
-        "seminar-uncontrolled-ablation": "changed the data split and camera budget together",
-        "actor-oracle-leakage": "oracle target labels during action selection",
-        "invalidity-as-utility": "Invalid candidates receive utility 0",
-        "pilot-escalation": "demonstrating held-out generalization and confirmatory superiority",
-        "pseudoreplication": "each frame and view as an independent scene-level replicate",
-        "missing-uncertainty": "a decisive improvement",
-        "planned-tense-drift": "evaluate the learned policy",
-    }[case.trial_id]
-    start = candidate.index(needle)
     return {
         "category": rubric["expected_category"],
         "severity": rubric["severity_min"],
-        "evidence": {"start": start, "end": start + len(needle), "text": needle},
+        "evidence": {"line_start": 1, "line_end": 1, "text": candidate},
         "reason": "The candidate crosses the stated evidence boundary.",
         "impact": "The conclusion is not supported by the described design.",
         "action": "Bound the claim and report the missing design evidence.",
@@ -158,6 +148,25 @@ def test_fixture_sets_cover_controls_and_corrections() -> None:
             )
 
 
+def test_live_negative_candidates_isolate_requested_semantics() -> None:
+    prompts = trials.load_prompts()
+    seminar = prompts["seminar-uncontrolled-ablation"]
+    assert "confounding" in seminar["task"]
+    assert "superiority" not in seminar["candidate"]
+    uncertainty = prompts["missing-uncertainty"]
+    assert "only for missing uncertainty" in uncertainty["task"]
+    assert "estimand" not in uncertainty["task"]
+    assert all(
+        token in uncertainty["candidate"]
+        for token in (
+            "held-out scenes",
+            "mean target reward",
+            "normalized reward units",
+        )
+    )
+    assert "decisive" not in uncertainty["candidate"]
+
+
 def test_trial_prompt_attests_exact_trial_and_candidate_identity() -> None:
     case = _case("missing-uncertainty")
     prompt, _ = cast(tuple[dict[str, str], dict[str, Any]], case.context)
@@ -167,6 +176,9 @@ def test_trial_prompt_attests_exact_trial_and_candidate_identity() -> None:
         f"exact candidate SHA-256 is {trials.candidate_sha256(prompt['candidate'])}"
         in rendered
     )
+    assert "candidate-relative 1-based inclusive line span" in rendered
+    assert "at most one finding" in rendered
+    assert "single most material issue requested by the task" in rendered
 
 
 def test_prompt_loader_fails_closed_for_malformed_and_duplicate_ids() -> None:
@@ -246,11 +258,14 @@ def test_positive_controls_are_clear(trial_id: str) -> None:
 def test_wording_variants_preserve_original_category(trial_id: str) -> None:
     case = _case(trial_id)
     _, variant_rubric = cast(tuple[dict[str, str], dict[str, Any]], case.context)
-    finding = _finding(_case(variant_rubric["wording_variant_of"]))
-    prompt, rubric = cast(tuple[dict[str, str], dict[str, Any]], case.context)
-    candidate = prompt["candidate"]
-    finding["evidence"] = {"start": 0, "end": len(candidate), "text": candidate}
-    finding["category"] = rubric["expected_category"]
+    finding = _finding(case)
+    original_rubric = trials.load_rubric()[variant_rubric["wording_variant_of"]]
+    assert finding["category"] == original_rubric["expected_category"]
+    assert finding["evidence"] == {
+        "line_start": 1,
+        "line_end": 1,
+        "text": trials.load_prompts()[trial_id]["candidate"],
+    }
     valid, reason = trials.validate_verdict(
         _verdict(case, findings=[finding]), case=case, report=_report(case)
     )
@@ -283,6 +298,8 @@ def test_corrected_cases_are_clear_new_artifacts(trial_id: str) -> None:
 
 def test_verdict_fails_closed_for_hash_category_and_span_errors() -> None:
     case = _case("missing-uncertainty")
+    prompt, _ = cast(tuple[dict[str, str], dict[str, Any]], case.context)
+    candidate = prompt["candidate"]
     verdict = _verdict(case, findings=[_finding(case)])
     verdict["candidate_sha256"] = "0" * 64
     assert not trials.validate_verdict(verdict, case=case, report=_report(case))[0]
@@ -293,12 +310,60 @@ def test_verdict_fails_closed_for_hash_category_and_span_errors() -> None:
     assert not trials.validate_verdict(
         _verdict(case, findings=[finding]), case=case, report=_report(case)
     )[0]
+    for malformed in (
+        {"line_start": True, "line_end": 1, "text": candidate},
+        {"line_start": 0, "line_end": 1, "text": candidate},
+        {"line_start": 1, "line_end": 2, "text": candidate},
+    ):
+        finding = {**_finding(case), "evidence": malformed}
+        assert not trials.validate_verdict(
+            _verdict(case, findings=[finding]), case=case, report=_report(case)
+        )[0]
     duplicate = _finding(case)
     duplicate["reason"] = "A different reason."
     assert not trials.validate_verdict(
         _verdict(case, findings=[_finding(case), duplicate]),
         case=case,
         report=_report(case),
+    )[0]
+
+
+def test_verdict_joins_exact_inclusive_candidate_lines() -> None:
+    original = _case("missing-uncertainty")
+    _, rubric = cast(tuple[dict[str, str], dict[str, Any]], original.context)
+    candidate = (
+        "Metric context is stated.\nVariability is omitted.\nA limitation follows."
+    )
+    prompt = {
+        "id": "multiline-uncertainty",
+        "author_id": "author-multiline",
+        "task": f"Review only missing uncertainty.\n\nCANDIDATE:\n{candidate}",
+        "candidate": candidate,
+    }
+    case = TrialCase(
+        "multiline-uncertainty",
+        (prompt, rubric),
+        trials._candidate_provenance(
+            candidate=candidate,
+            author_id=prompt["author_id"],
+            trial_id=prompt["id"],
+        ),
+    )
+    finding = {
+        **_finding(case),
+        "evidence": {
+            "line_start": 2,
+            "line_end": 3,
+            "text": "Variability is omitted.\nA limitation follows.",
+        },
+    }
+    valid, reason = trials.validate_verdict(
+        _verdict(case, findings=[finding]), case=case, report=_report(case)
+    )
+    assert valid, reason
+    finding["evidence"]["text"] = "Variability is omitted.A limitation follows."
+    assert not trials.validate_verdict(
+        _verdict(case, findings=[finding]), case=case, report=_report(case)
     )[0]
 
 
@@ -564,6 +629,12 @@ def test_schema_is_strict_and_has_no_release_or_mutation_state() -> None:
     assert set(schema["properties"]) == {"trial_id", "candidate_sha256", "outcome"}
     assert "uniqueItems" not in json.dumps(schema)
     # Structured-output schemas omit uniqueness; validate_verdict enforces it.
+    evidence = schema["properties"]["outcome"]["properties"]["findings"]["items"][
+        "properties"
+    ]["evidence"]
+    assert evidence["additionalProperties"] is False
+    assert set(evidence["required"]) == {"line_start", "line_end", "text"}
+    assert set(evidence["properties"]) == {"line_start", "line_end", "text"}
     serialized = json.dumps(schema).lower()
     for forbidden in ("maturity", "release", "approval", "mutation", "finding_id"):
         assert forbidden not in serialized

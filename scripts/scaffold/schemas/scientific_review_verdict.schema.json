@@ -18,7 +18,7 @@
             "properties":{
               "category":{"enum":["confounding","actor_oracle_leakage","invalidity_utility","claim_escalation","experimental_units","uncertainty","implementation_status"]},
               "severity":{"enum":["low","medium","high","critical"]},
-              "evidence":{"type":"object","additionalProperties":false,"required":["start","end","text"],"properties":{"start":{"type":"integer","minimum":0},"end":{"type":"integer","minimum":1},"text":{"type":"string","minLength":1,"maxLength":512}}},
+              "evidence":{"type":"object","additionalProperties":false,"required":["line_start","line_end","text"],"properties":{"line_start":{"type":"integer","minimum":1},"line_end":{"type":"integer","minimum":1},"text":{"type":"string","minLength":1,"maxLength":512}}},
               "reason":{"type":"string","minLength":1,"maxLength":1024},
               "impact":{"type":"string","minLength":1,"maxLength":1024},
               "action":{"type":"string","minLength":1,"maxLength":1024}

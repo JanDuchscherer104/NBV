@@ -6,10 +6,12 @@ Read this reference for a scientific red-team. Keep the candidate unchanged.
 2. Choose only applicable validity checks; inspect exact code, data,
    configuration, source, and report owners rather than trusting summaries.
 3. Record each finding as a closed `category`, `severity`, exact candidate-relative
-   `evidence` span, `reason`, `impact`, and `action`. Preserve the exact
-   candidate SHA-256 and host-generated reviewer provenance; author and reviewer
-   identities must remain distinct. Judge severity within the evaluator's
-   attested closed lower and upper bounds.
+   1-based inclusive `evidence` line span (`line_start`, `line_end`, `text`),
+   `reason`, `impact`, and `action`. The evidence text is the exact selected
+   candidate lines joined by `\n`. Preserve the exact candidate SHA-256 and
+   host-generated reviewer provenance; author and reviewer identities must
+   remain distinct. Judge severity within the evaluator's attested closed lower
+   and upper bounds.
    Distinguish a confirmed defect, evidence gap, and question for the author.
    Do not convert an advisory finding into a release state.
 4. Return findings with reviewer provenance and candidate identity. The owning

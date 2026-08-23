@@ -252,7 +252,10 @@ def build_trial_prompt(case: TrialCase) -> str:
     return (
         f"{prompt['task']}\n\nThe schema trial_id must be exactly {case.trial_id!r}. "
         "The exact candidate SHA-256 is "
-        f"{candidate_sha256(prompt['candidate'])}. Return only the strict schema."
+        f"{candidate_sha256(prompt['candidate'])}. Cite evidence with an exact "
+        "candidate-relative 1-based inclusive line span. Return at most one finding: "
+        "the single most material issue requested by the task. Return only the "
+        "strict schema; return clear when no requested issue applies."
     )
 
 
@@ -319,23 +322,33 @@ def validate_verdict(
         return False, "finding categories must be unique"
     for finding in findings:
         evidence = finding.get("evidence")
-        if not isinstance(evidence, dict) or set(evidence) != {"start", "end", "text"}:
+        if not isinstance(evidence, dict) or set(evidence) != {
+            "line_start",
+            "line_end",
+            "text",
+        }:
             return False, "finding evidence span is malformed"
-        start, end, text = evidence["start"], evidence["end"], evidence["text"]
+        line_start = evidence["line_start"]
+        line_end = evidence["line_end"]
+        text = evidence["text"]
         if (
-            not isinstance(start, int)
-            or isinstance(start, bool)
-            or not isinstance(end, int)
-            or isinstance(end, bool)
+            not isinstance(line_start, int)
+            or isinstance(line_start, bool)
+            or not isinstance(line_end, int)
+            or isinstance(line_end, bool)
         ):
-            return False, "finding span offsets are malformed"
+            return False, "finding line bounds are malformed"
+        candidate_lines = prompt["candidate"].splitlines()
         if (
-            start < 0
-            or end <= start
-            or end > len(prompt["candidate"])
-            or text != prompt["candidate"][start:end]
+            line_start < 1
+            or line_end < line_start
+            or line_end > len(candidate_lines)
+            or text != "\n".join(candidate_lines[line_start - 1 : line_end])
         ):
-            return False, "finding evidence is not an exact candidate-relative span"
+            return (
+                False,
+                "finding evidence is not an exact candidate-relative line span",
+            )
         for field in ("reason", "impact", "action"):
             if not isinstance(finding.get(field), str) or not finding[field].strip():
                 return False, f"finding {field} is missing"
