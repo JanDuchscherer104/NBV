@@ -491,6 +491,8 @@ def test_schema_is_strict_and_has_no_release_or_mutation_state() -> None:
     schema = json.loads(trials.VERDICT_SCHEMA.read_text(encoding="utf-8"))
     assert schema["additionalProperties"] is False
     assert set(schema["properties"]) == {"trial_id", "candidate_sha256", "outcome"}
+    assert "uniqueItems" not in json.dumps(schema)
+    # Structured-output schemas omit uniqueness; validate_verdict enforces it.
     serialized = json.dumps(schema).lower()
     for forbidden in ("maturity", "release", "approval", "mutation", "finding_id"):
         assert forbidden not in serialized

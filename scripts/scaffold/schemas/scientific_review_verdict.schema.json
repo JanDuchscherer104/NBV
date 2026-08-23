@@ -11,7 +11,7 @@
       "properties":{
         "clear":{"type":"boolean"},
         "findings":{
-          "type":"array","maxItems":16,"uniqueItems":true,
+          "type":"array","maxItems":16,
           "items":{
             "type":"object","additionalProperties":false,
             "required":["category","severity","evidence","reason","impact","action"],
