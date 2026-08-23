@@ -12,8 +12,9 @@ import json
 import pickle
 import tempfile
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Iterable, Mapping
+from dataclasses import asdict, dataclass
+from enum import StrEnum
 from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Any, Literal
@@ -5545,7 +5546,519 @@ def _safe_fraction(numerator: int, denominator: int) -> float | None:
     return float(numerator) / float(denominator)
 
 
+_HEADROOM_TREATMENT_FIELDS = ("policy", "branch_schedule", "branch_factor", "beam_width", "rollout_recipe")
+_GEOMETRY_EPSILON = 1e-8
+
+
+class ProposalAlignment(StrEnum):
+    """Yaw-only frame used to compare per-step candidate proposal support."""
+
+    TARGET_ALIGNED_Z_UP = "target_aligned_z_up"
+    RIG_FORWARD_Z_UP = "rig_forward_z_up"
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryFrame:
+    """One normalized Z-up frame used by a geometry projection."""
+
+    frame_id: str
+    rollout_row_id: int
+    step_row_id: int | None
+    step_index: int | None
+    origin_kind: Literal["expansion_pose", "rollout_root"]
+    expansion_pose_source: Literal["root", "previous_selected", "initial_root"]
+    scale_kind: Literal["current_target_distance", "initial_target_distance"]
+    alignment: str
+    scale_m: float
+    initial_scale_m: float
+    target_x: float
+    target_y: float
+    target_z: float
+    reference_axis_x: tuple[float, float, float]
+    reference_axis_y: tuple[float, float, float]
+    reference_axis_z: tuple[float, float, float]
+    target_axis_x: tuple[float, float, float]
+    target_axis_y: tuple[float, float, float]
+    target_axis_z: tuple[float, float, float]
+    rig_target_yaw_error_deg: float | None = None
+    target_elevation_deg: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryPoint:
+    """One candidate or factual trajectory point in a normalized frame."""
+
+    frame_id: str
+    role: Literal["candidate", "root", "selected_action"]
+    rollout_row_id: int
+    step_row_id: int | None
+    step_index: int | None
+    candidate_row_id: int | None
+    path_order: int | None
+    actor_action: bool | None
+    selected: bool
+    position: str | None
+    strategy: str | None
+    mixture: str | None
+    x: float
+    y: float
+    z: float
+    displacement_m: float
+    normalization_distance_m: float
+    initial_target_distance_m: float
+    normalized_radius: float = 0.0
+    target_facing_error_deg: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryIssue:
+    """Explicit exclusion or truncation affecting a geometry projection."""
+
+    code: str
+    message: str
+    rollout_row_id: int | None = None
+    step_row_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryProjection:
+    """Presentation-free candidate geometry with auditable frames and issues."""
+
+    view: Literal["proposal_support", "rollout_trajectory"]
+    points: tuple[GeometryPoint, ...]
+    frames: tuple[GeometryFrame, ...]
+    issues: tuple[GeometryIssue, ...]
+    truncated: bool = False
+
+    def point_rows(self) -> list[dict[str, object]]:
+        """Return serializable point mappings for reporting and plotting clients."""
+
+        return [asdict(point) for point in self.points]
+
+    def frame_rows(self) -> list[dict[str, object]]:
+        """Return serializable frame mappings for anchor rendering clients."""
+
+        return [asdict(frame) for frame in self.frames]
+
+
+def proposal_support_geometry(
+    reader: RolloutZarrStoreReader,
+    *,
+    alignment: ProposalAlignment = ProposalAlignment.TARGET_ALIGNED_Z_UP,
+    rollout_row_ids: Collection[int] | None = None,
+    max_candidates: int | None = 50_000,
+) -> GeometryProjection:
+    r"""Project complete candidate shells around their factual expansion poses.
+
+    Step zero uses the persisted rollout root; later steps use the preceding
+    factual selected pose. Coordinates are divided by that expansion pose's
+    current 3D target distance, then yaw-aligned while preserving world Z-up.
+    """
+
+    requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
+    if max_candidates is not None and max_candidates <= 0:
+        raise ValueError("max_candidates must be positive when provided.")
+    targets = {target.target_row_id: target for target in target_rows(reader)}
+    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    frames: list[GeometryFrame] = []
+    points: list[GeometryPoint] = []
+    issues: list[GeometryIssue] = []
+    truncated = False
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
+            continue
+        target = targets.get(rollout.target_row_id)
+        if target is None:
+            issues.append(
+                GeometryIssue(
+                    "missing_target",
+                    "Rollout has no persisted observed-target geometry.",
+                    rollout_row_id=rollout.rollout_row_id,
+                )
+            )
+            continue
+        root_pose = _geometry_pose(rollout.root_pose_world, role="rollout root")
+        target_pose = _geometry_pose(target.pose_world_object, role="observed target")
+        target_center = target_pose[9:12]
+        initial_scale = _positive_distance(target_center - root_pose[9:12])
+        if initial_scale is None:
+            issues.append(
+                GeometryIssue(
+                    "invalid_initial_target_distance",
+                    "Initial root-to-target distance is missing, non-finite, or zero.",
+                    rollout_row_id=rollout.rollout_row_id,
+                )
+            )
+            continue
+        steps = rollout_steps(reader, rollout)
+        _validate_factual_steps(rollout.rollout_row_id, steps)
+        reference_pose = root_pose
+        for expected_index, step in enumerate(steps):
+            selected_pose = _selected_pose(step)
+            shell_size = len(step.candidate_row_ids)
+            if max_candidates is not None and points and len(points) + shell_size > max_candidates:
+                truncated = True
+                issues.append(
+                    GeometryIssue(
+                        "candidate_limit_reached",
+                        f"Stopped before a {shell_size}-row shell to preserve complete factual shells.",
+                        rollout_row_id=rollout.rollout_row_id,
+                        step_row_id=step.step_row_id,
+                    )
+                )
+                return GeometryProjection("proposal_support", tuple(points), tuple(frames), tuple(issues), True)
+            reference_center = reference_pose[9:12]
+            scale = _positive_distance(target_center - reference_center)
+            if scale is None:
+                issues.append(
+                    GeometryIssue(
+                        "invalid_current_target_distance",
+                        "Expansion-pose-to-target distance is missing, non-finite, or zero.",
+                        rollout_row_id=rollout.rollout_row_id,
+                        step_row_id=step.step_row_id,
+                    )
+                )
+                reference_pose = selected_pose
+                continue
+            basis = _proposal_basis(reference_pose, target_center, alignment)
+            if basis is None:
+                issues.append(
+                    GeometryIssue(
+                        "degenerate_alignment",
+                        f"{alignment.value} has no finite horizontal direction at this step.",
+                        rollout_row_id=rollout.rollout_row_id,
+                        step_row_id=step.step_row_id,
+                    )
+                )
+                reference_pose = selected_pose
+                continue
+            frame_id = f"proposal:{rollout.rollout_row_id}:{step.step_row_id}:{alignment.value}"
+            target_normalized = basis.T @ (target_center - reference_center) / scale
+            frames.append(
+                _geometry_frame(
+                    frame_id=frame_id,
+                    rollout_row_id=rollout.rollout_row_id,
+                    step_row_id=step.step_row_id,
+                    step_index=expected_index,
+                    origin_kind="expansion_pose",
+                    expansion_pose_source="root" if expected_index == 0 else "previous_selected",
+                    scale_kind="current_target_distance",
+                    alignment=alignment.value,
+                    scale=scale,
+                    initial_scale=initial_scale,
+                    target_normalized=target_normalized,
+                    reference_rotation=reference_pose[:9].reshape(3, 3),
+                    target_rotation=target_pose[:9].reshape(3, 3),
+                    basis=basis,
+                )
+            )
+            for local, candidate_row_id in enumerate(step.candidate_row_ids.tolist()):
+                candidate_pose = _geometry_pose(
+                    step.pose_world_cam[local],
+                    role=f"step {step.step_row_id} candidate {int(candidate_row_id)} pose",
+                )
+                candidate_center = candidate_pose[9:12]
+                displacement = candidate_center - reference_center
+                normalized = basis.T @ displacement / scale
+                points.append(
+                    GeometryPoint(
+                        frame_id=frame_id,
+                        role="candidate",
+                        rollout_row_id=rollout.rollout_row_id,
+                        step_row_id=step.step_row_id,
+                        step_index=step.step_index,
+                        candidate_row_id=int(candidate_row_id),
+                        path_order=None,
+                        actor_action=bool(step.actor_action_mask[local]),
+                        selected=bool(step.selected_mask[local]),
+                        position=str(step.position_names[local]),
+                        strategy=decode_strategy_id(int(strategy_ids[int(step.candidate_row_positions[local])])),
+                        mixture=str(step.mixture_names[local]),
+                        x=float(normalized[0]),
+                        y=float(normalized[1]),
+                        z=float(normalized[2]),
+                        displacement_m=float(np.linalg.norm(displacement)),
+                        normalization_distance_m=scale,
+                        initial_target_distance_m=initial_scale,
+                        normalized_radius=float(np.linalg.norm(normalized)),
+                        target_facing_error_deg=_target_facing_error_deg(candidate_pose, target_center),
+                    )
+                )
+            reference_pose = selected_pose
+    return GeometryProjection("proposal_support", tuple(points), tuple(frames), tuple(issues), truncated)
+
+
+def rollout_trajectory_geometry(
+    reader: RolloutZarrStoreReader,
+    *,
+    rollout_row_ids: Collection[int] | None = None,
+) -> GeometryProjection:
+    r"""Project factual selected trajectories in one initial target-aligned frame."""
+
+    requested_ids = None if rollout_row_ids is None else {int(value) for value in rollout_row_ids}
+    targets = {target.target_row_id: target for target in target_rows(reader)}
+    strategy_ids = np.asarray(reader.array("candidates/strategy_id"), dtype=np.int64).reshape(-1)
+    frames: list[GeometryFrame] = []
+    points: list[GeometryPoint] = []
+    issues: list[GeometryIssue] = []
+    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+    for rollout_position in range(rollout_count):
+        rollout = rollout_at(reader, rollout_position)
+        if requested_ids is not None and rollout.rollout_row_id not in requested_ids:
+            continue
+        target = targets.get(rollout.target_row_id)
+        if target is None:
+            issues.append(
+                GeometryIssue(
+                    "missing_target",
+                    "Rollout has no persisted observed-target geometry.",
+                    rollout_row_id=rollout.rollout_row_id,
+                )
+            )
+            continue
+        root_pose = _geometry_pose(rollout.root_pose_world, role="rollout root")
+        target_pose = _geometry_pose(target.pose_world_object, role="observed target")
+        target_center = target_pose[9:12]
+        root_center = root_pose[9:12]
+        scale = _positive_distance(target_center - root_center)
+        basis = _target_aligned_basis(target_center - root_center)
+        if scale is None or basis is None:
+            issues.append(
+                GeometryIssue(
+                    "invalid_initial_target_frame",
+                    "Initial target distance or horizontal target bearing is degenerate.",
+                    rollout_row_id=rollout.rollout_row_id,
+                )
+            )
+            continue
+        steps = rollout_steps(reader, rollout)
+        _validate_factual_steps(rollout.rollout_row_id, steps)
+        frame_id = f"trajectory:{rollout.rollout_row_id}:target_aligned_z_up"
+        target_normalized = basis.T @ (target_center - root_center) / scale
+        frames.append(
+            _geometry_frame(
+                frame_id=frame_id,
+                rollout_row_id=rollout.rollout_row_id,
+                step_row_id=None,
+                step_index=None,
+                origin_kind="rollout_root",
+                expansion_pose_source="initial_root",
+                scale_kind="initial_target_distance",
+                alignment=ProposalAlignment.TARGET_ALIGNED_Z_UP.value,
+                scale=scale,
+                initial_scale=scale,
+                target_normalized=target_normalized,
+                reference_rotation=root_pose[:9].reshape(3, 3),
+                target_rotation=target_pose[:9].reshape(3, 3),
+                basis=basis,
+            )
+        )
+        points.append(
+            GeometryPoint(
+                frame_id=frame_id,
+                role="root",
+                rollout_row_id=rollout.rollout_row_id,
+                step_row_id=None,
+                step_index=None,
+                candidate_row_id=None,
+                path_order=0,
+                actor_action=None,
+                selected=False,
+                position=None,
+                strategy=None,
+                mixture=None,
+                x=0.0,
+                y=0.0,
+                z=0.0,
+                displacement_m=0.0,
+                normalization_distance_m=scale,
+                initial_target_distance_m=scale,
+                normalized_radius=0.0,
+                target_facing_error_deg=None,
+            )
+        )
+        for path_order, step in enumerate(steps, start=1):
+            selected_pose = _selected_pose(step)
+            selected = step.selected_local_index
+            displacement = selected_pose[9:12] - root_center
+            normalized = basis.T @ displacement / scale
+            candidate_position = int(step.candidate_row_positions[selected])
+            points.append(
+                GeometryPoint(
+                    frame_id=frame_id,
+                    role="selected_action",
+                    rollout_row_id=rollout.rollout_row_id,
+                    step_row_id=step.step_row_id,
+                    step_index=step.step_index,
+                    candidate_row_id=int(step.selected_candidate_row_id),
+                    path_order=path_order,
+                    actor_action=bool(step.actor_action_mask[selected]),
+                    selected=True,
+                    position=str(step.position_names[selected]),
+                    strategy=decode_strategy_id(int(strategy_ids[candidate_position])),
+                    mixture=str(step.mixture_names[selected]),
+                    x=float(normalized[0]),
+                    y=float(normalized[1]),
+                    z=float(normalized[2]),
+                    displacement_m=float(np.linalg.norm(displacement)),
+                    normalization_distance_m=scale,
+                    initial_target_distance_m=scale,
+                    normalized_radius=float(np.linalg.norm(normalized)),
+                    target_facing_error_deg=_target_facing_error_deg(selected_pose, target_center),
+                )
+            )
+    return GeometryProjection("rollout_trajectory", tuple(points), tuple(frames), tuple(issues))
+
+
+def _validate_factual_steps(rollout_row_id: int, steps: tuple[Any, ...]) -> None:
+    indices = [int(step.step_index) for step in steps]
+    if indices != list(range(len(indices))):
+        raise ValueError(f"Rollout row {rollout_row_id} has non-contiguous factual step indices: {indices}.")
+    for step in steps:
+        _selected_pose(step)
+
+
+def _selected_pose(step: Any) -> np.ndarray:
+    matches = np.flatnonzero(np.asarray(step.selected_mask, dtype=np.bool_))
+    if matches.size != 1:
+        raise ValueError(f"Step row {step.step_row_id} must have exactly one selected candidate; found {matches.size}.")
+    selected = int(matches[0])
+    if int(step.candidate_row_ids[selected]) != int(step.selected_candidate_row_id):
+        raise ValueError(f"Step row {step.step_row_id} selected mask disagrees with selected_candidate_row_id.")
+    return _geometry_pose(step.pose_world_cam[selected], role=f"step {step.step_row_id} selected pose")
+
+
+def _geometry_pose(pose: Any, *, role: str) -> np.ndarray:
+    value = np.asarray(pose, dtype=np.float64).reshape(12)
+    if not np.isfinite(value).all():
+        raise ValueError(f"{role} contains non-finite pose values.")
+    rotation = value[:9].reshape(3, 3)
+    if not np.allclose(rotation.T @ rotation, np.eye(3), rtol=0.0, atol=1e-4) or not np.isclose(
+        np.linalg.det(rotation),
+        1.0,
+        rtol=0.0,
+        atol=1e-4,
+    ):
+        raise ValueError(f"{role} contains an invalid rotation matrix.")
+    return value
+
+
+def _positive_distance(delta: np.ndarray) -> float | None:
+    distance = float(np.linalg.norm(np.asarray(delta, dtype=np.float64)))
+    return distance if np.isfinite(distance) and distance > _GEOMETRY_EPSILON else None
+
+
+def _target_facing_error_deg(pose: np.ndarray, target_center: np.ndarray) -> float | None:
+    """Return the unsigned 3D angle from LUF camera forward to the target."""
+
+    target_direction = np.asarray(target_center, dtype=np.float64) - pose[9:12]
+    target_distance = _positive_distance(target_direction)
+    if target_distance is None:
+        return None
+    forward = pose[:9].reshape(3, 3)[:, 2]
+    cosine = float(np.dot(forward, target_direction / target_distance))
+    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+
+
+def _horizontal_angle_deg(left: np.ndarray, right: np.ndarray) -> float | None:
+    """Return the unsigned angle between two horizontal directions."""
+
+    left_xy = np.asarray(left, dtype=np.float64).reshape(3)[:2]
+    right_xy = np.asarray(right, dtype=np.float64).reshape(3)[:2]
+    left_norm = float(np.linalg.norm(left_xy))
+    right_norm = float(np.linalg.norm(right_xy))
+    if min(left_norm, right_norm) <= _GEOMETRY_EPSILON:
+        return None
+    cosine = float(np.dot(left_xy / left_norm, right_xy / right_norm))
+    return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+
+
+def _proposal_basis(
+    reference_pose: np.ndarray, target_center: np.ndarray, alignment: ProposalAlignment
+) -> np.ndarray | None:
+    if alignment is ProposalAlignment.TARGET_ALIGNED_Z_UP:
+        return _target_aligned_basis(target_center - reference_pose[9:12])
+    if alignment is ProposalAlignment.RIG_FORWARD_Z_UP:
+        return _z_up_basis(reference_pose[:9].reshape(3, 3)[:, 2])
+    raise ValueError(f"Unsupported proposal alignment: {alignment!r}.")
+
+
+def _target_aligned_basis(target_delta: np.ndarray) -> np.ndarray | None:
+    return _z_up_basis(target_delta)
+
+
+def _z_up_basis(forward_world: np.ndarray) -> np.ndarray | None:
+    forward = np.asarray(forward_world, dtype=np.float64).reshape(3).copy()
+    forward[2] = 0.0
+    norm = float(np.linalg.norm(forward))
+    if not np.isfinite(norm) or norm <= _GEOMETRY_EPSILON:
+        return None
+    forward /= norm
+    up = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+    left = np.cross(up, forward)
+    return np.column_stack((forward, left, up))
+
+
+def _geometry_frame(
+    *,
+    frame_id: str,
+    rollout_row_id: int,
+    step_row_id: int | None,
+    step_index: int | None,
+    origin_kind: Literal["expansion_pose", "rollout_root"],
+    expansion_pose_source: Literal["root", "previous_selected", "initial_root"],
+    scale_kind: Literal["current_target_distance", "initial_target_distance"],
+    alignment: str,
+    scale: float,
+    initial_scale: float,
+    target_normalized: np.ndarray,
+    reference_rotation: np.ndarray,
+    target_rotation: np.ndarray,
+    basis: np.ndarray,
+) -> GeometryFrame:
+    local_reference = basis.T @ reference_rotation
+    local_target = basis.T @ target_rotation
+    target_delta_local = np.asarray(target_normalized, dtype=np.float64)
+    target_horizontal = float(np.linalg.norm(target_delta_local[:2]))
+    target_elevation = float(np.degrees(np.arctan2(target_delta_local[2], target_horizontal)))
+    rig_target_yaw_error = _horizontal_angle_deg(reference_rotation[:, 2], basis @ target_delta_local)
+
+    def axis(rotation: np.ndarray, index: int) -> tuple[float, float, float]:
+        return tuple(float(value) for value in rotation[:, index])
+
+    return GeometryFrame(
+        frame_id=frame_id,
+        rollout_row_id=rollout_row_id,
+        step_row_id=step_row_id,
+        step_index=step_index,
+        origin_kind=origin_kind,
+        expansion_pose_source=expansion_pose_source,
+        scale_kind=scale_kind,
+        alignment=alignment,
+        scale_m=scale,
+        initial_scale_m=initial_scale,
+        target_x=float(target_normalized[0]),
+        target_y=float(target_normalized[1]),
+        target_z=float(target_normalized[2]),
+        reference_axis_x=axis(local_reference, 0),
+        reference_axis_y=axis(local_reference, 1),
+        reference_axis_z=axis(local_reference, 2),
+        target_axis_x=axis(local_target, 0),
+        target_axis_y=axis(local_target, 1),
+        target_axis_z=axis(local_target, 2),
+        rig_target_yaw_error_deg=rig_target_yaw_error,
+        target_elevation_deg=target_elevation,
+    )
+
+
 __all__ = [
+    "GeometryFrame",
+    "GeometryIssue",
+    "GeometryPoint",
+    "GeometryProjection",
+    "ProposalAlignment",
     "RolloutSuspiciousQueryConfig",
     "candidate_audit_rows",
     "candidate_flow_rows",
@@ -5563,6 +6076,7 @@ __all__ = [
     "discover_rollout_store_paths",
     "mask_combination_rows",
     "paired_policy_comparison_rows",
+    "proposal_support_geometry",
     "promoted_store_validation_error",
     "root_relative_candidate_rows",
     "rollout_store_inventory_rows",
@@ -5570,6 +6084,7 @@ __all__ = [
     "q_h_evidence_rows",
     "runtime_storage_statistics",
     "rollout_step_objective_rows",
+    "rollout_trajectory_geometry",
     "rollout_endpoint_metric_summary",
     "selected_candidate_rank_rows",
     "selected_depth_preview",
