@@ -32,6 +32,10 @@ class ExplanationSection:
     title: str
     body: str
 
+    def __post_init__(self) -> None:
+        if not self.title.strip() or not self.body.strip():
+            raise ValueError("Explanation sections require nonempty titles and bodies.")
+
 
 @dataclass(frozen=True, slots=True)
 class ScientificExplanation:
@@ -48,8 +52,10 @@ class ScientificExplanation:
     def __post_init__(self) -> None:
         if not self.question.strip() or not self.answer.strip() or not self.source_fields:
             raise ValueError("Scientific explanations require a question, answer, and source fields.")
-        if any(not section.title.strip() or not section.body.strip() for section in self.sections):
-            raise ValueError("Scientific explanations require ordered nonempty narrative sections.")
+        if any(not field.strip() for field in self.source_fields):
+            raise ValueError("Scientific explanations require nonempty source fields.")
+        if any(not label.strip() or not url.strip() for label, url in self.external_references):
+            raise ValueError("External theory references require nonempty labels and URLs.")
 
 
 def render_stale_store_boundary(
@@ -82,8 +88,7 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         unsafe_allow_html=True,
     )
     st.markdown(f"**Answer:** {explanation.answer}")
-    with col_info.popover("Interpret this plot", icon="ℹ️"):
-        _render_interpretation_guide(explanation, log_y_key=log_y_key)
+    render_explanation_popover("Interpret this plot", explanation, log_y_key=log_y_key, container=col_info)
     rendered = fig
     if log_y_key is not None:
         with columns[2]:
@@ -91,7 +96,21 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
     st.plotly_chart(rendered, width="stretch")
 
 
-def _render_interpretation_guide(explanation: ScientificExplanation, *, log_y_key: str | None) -> None:
+def render_explanation_popover(
+    label: str,
+    explanation: ScientificExplanation,
+    *,
+    log_y_key: str | None = None,
+    container: Any | None = None,
+) -> None:
+    """Render one reusable scientific explanation popover in a Streamlit container."""
+
+    owner = st if container is None else container
+    with owner.popover(label, icon="ℹ️"):
+        _render_scientific_guide(explanation, log_y_key=log_y_key)
+
+
+def _render_scientific_guide(explanation: ScientificExplanation, *, log_y_key: str | None) -> None:
     """Render the reusable interpretation guide inside a plot popover."""
 
     explanation_item("Answer", explanation.answer)
