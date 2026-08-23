@@ -1,0 +1,739 @@
+{
+  "build_commands": {
+    "development": "typst compile --root docs docs/typst/thesis/main.typ docs/typst/thesis/main.pdf",
+    "submission": "typst compile --root docs docs/typst/thesis/main.typ <submission-output.pdf> --input aria-thesis-mode=submission"
+  },
+  "material_sources": [
+    {
+      "path": "docs/ieee.csl",
+      "sha256": "842a7b3f0266f92e28199104fc72fec64336564373c3a318260a43dbe2eb2a19"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-BCQ/example_paper.bib",
+      "sha256": "1c541bfb48fbb9c45d3a44cff0b71946ccd2db026fa73414ea3cf3c31421af95"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-CQL/main.bib",
+      "sha256": "d7217097689ab08d6f6ad62c3be12177a93b5d63b3e88933e21af3ff5d5ef85f"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Decision-Transformer/reference.bib",
+      "sha256": "9e2aaddf0f5f88ccf0ef1a0fa512fe5aa6ccef2e957b449e8af21342920e8741"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Deja-View/main.bib",
+      "sha256": "e9ed47faf16f7ec48c4c2303b5c0c305786a98e0a54981dcf38a1d1c5c6e74be"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Dynamic-3DGS/references.bib",
+      "sha256": "32d56faf79172a6591780aa9e05dfb92f335c7e5878739cad4302c84721127be"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-EFM3D/main.bib",
+      "sha256": "278b096559e0183f4d58f45dc06e18037426a1cdba82a89723e94c4d91edfca6"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-EGNN/E(n) Equivariant Graph Neural Networks _ ICML 2021/example_paper.bib",
+      "sha256": "9673406bede5b59d43db06095e18028e9b9471ad2c6fe380dc884a1389e1e69c"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-EGNN/example_paper.bib",
+      "sha256": "9673406bede5b59d43db06095e18028e9b9471ad2c6fe380dc884a1389e1e69c"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-FisherRF/main.bib",
+      "sha256": "675e2e1e62167dfb51393ca0b93344b14286ac173a68f6502e94b03e1a59c507"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Geometric-Deep-Learning/references.bib",
+      "sha256": "dd62282bf72e7b7244cd11ae3e38382657f7914a304865cb7da94bce2ef6d988"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Habitat/biblio.bib",
+      "sha256": "8ac877a949a0797e4b5374ae64f637efec59ac2d1a95167a01ae209c19c334fe"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Hestia/main.bib",
+      "sha256": "30cbc28a175d267eccfb97c41ed3910ad205d88e9ef68580f9a8247328b29f09"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Instance-NBV/references.bib",
+      "sha256": "e61c8ce2821264b4ac62f4baf1ddac92024d77f53aa6d66bf6faf4a0ec69aa53"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Instance-NBV/string-short.bib",
+      "sha256": "e488df22ee4beb9988035c32bdac7a8e8b5df29d73b4e301eb658d694429bb69"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-KPConv/egbib.bib",
+      "sha256": "7d4aeec91c91b41b4dcd1e309d4f564cf8ac11d8969b98cc05c01648669b4c33"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-MACARONS/arxiv.bib",
+      "sha256": "5d1cdf7317c5495a423c64aa6456606b31489a7c9c26f6cf5080394a0de590ed"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Next-Best-Sense/ms.bib",
+      "sha256": "c84734c60fa6e80381a5889cde61ea92d572895b053fb6c6d70b7ea941590f7e"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-PB-NBV/jzzpb.bib",
+      "sha256": "ef6314b31c3a1b96b027f9ac7a43b372cdc0c1d3e629095aa227e91340fb0d38"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Point-Transformer/paper.bib",
+      "sha256": "42cc5234b327dda8032068923bf7c3a488611a5934d037e073aa79dce0a0c132"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-ProcTHOR/egbib.bib",
+      "sha256": "c64e704a65ee94bae437462a5fe0f0f8fb7e1ff1b29b6b38d949bac5308dda2a"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-QCNet/egbib.bib",
+      "sha256": "d38625f93fd10149f68d497544c601144f520f5e01cc9cbbd119637f171071ce"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-SCONE/camera_ready.bib",
+      "sha256": "08031897d8fd2186665f3b95d41bee5418b3c001914efefc6535b337f4bee157"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-SE3-Transformer/example_paper.bib",
+      "sha256": "1e040ac62b7d7f15af242d6b3b5a332b636fb0028031404984a3b2fa01503cce"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-Trajectory-Transformer/ms.bib",
+      "sha256": "0caf731e3f828cae3eb30f23a0bc31f835205d29495999d4ba6fdd469a06087f"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-VIN-NBV/main.bib",
+      "sha256": "64d81ec2943c704832379e1c01eb49730b78f2169c3b1125bb8edccf7517d2ae"
+    },
+    {
+      "path": "docs/literature/tex-src/arXiv-scene-script/main.bib",
+      "sha256": "817d64cfcf1a01e4df30d1ade8ced13a850fcd089a1b00ddc869b15813e25d13"
+    },
+    {
+      "path": "docs/references-qh.bib",
+      "sha256": "1ef9153c9d807f12e89ee2f924e31ea1912c4aba8ccece00871dc1c76dfaa781"
+    },
+    {
+      "path": "docs/references.bib",
+      "sha256": "813490008843162a5961b397ba5e4586e7e8796cb7fb7cc5a968e70ebb0751ca"
+    },
+    {
+      "path": "docs/typst/shared/data-layout-trees.typ",
+      "sha256": "8522f811a442f2f1d40176ced08315ea5dec0692a882b9f332aef2fcd2bb0598"
+    },
+    {
+      "path": "docs/typst/shared/data/paper_figures_oracle_labeler.toml",
+      "sha256": "e12db444bdb790c0bbeab3c3a1dc4a24ae02c511a8dcb33d1463a3fb29ef57b4"
+    },
+    {
+      "path": "docs/typst/shared/data/vin_offline_store_stats.json",
+      "sha256": "fb57d90603512e74a123c192b5c691c9da2af5bb8cca0938ff5419422f04ee92"
+    },
+    {
+      "path": "docs/typst/shared/data/vin_v3_01_vs_t41_summary.json",
+      "sha256": "ceab6ebdfb61bd23b8a310c990d3813542df2079cd68ca1eba8462f258b6d78a"
+    },
+    {
+      "path": "docs/typst/shared/data/wandb_rtjvfyyp_dynamics.json",
+      "sha256": "75a29e8ef9f26dc26e870b9aefc82a77615721e6a28db57ccdcd2c98c5e4987d"
+    },
+    {
+      "path": "docs/typst/shared/data/wandb_rtjvfyyp_summary.json",
+      "sha256": "f812499a8c3669bf4a17b114368b5f799af1eaee071c13f6afe20525dd87313f"
+    },
+    {
+      "path": "docs/typst/shared/data/wandb_top2_improvements.json",
+      "sha256": "c3dcc82dd4248c529ca12c3add2b3e975079442ba17d55b3de2e75c723f93df6"
+    },
+    {
+      "path": "docs/typst/shared/equations.typ",
+      "sha256": "5b113bbb74b014e0a7ba9cf614146294976b9333f06a5ae29ad2ac7f1b409147"
+    },
+    {
+      "path": "docs/typst/shared/equations/action.typ",
+      "sha256": "6e892105e6ea619bac931789201741d52829b1e3309306ac1d4170e81c80e5b6"
+    },
+    {
+      "path": "docs/typst/shared/equations/binning.typ",
+      "sha256": "6e43744fd993e6da681d96cc7df19b52e5d710189ee1eaf7d65f5f03900b32e5"
+    },
+    {
+      "path": "docs/typst/shared/equations/coral.typ",
+      "sha256": "8c15d760a2fac1e78105860c30d159d5a9fa81313efe132eafc48ecf02418b53"
+    },
+    {
+      "path": "docs/typst/shared/equations/coverage.typ",
+      "sha256": "3503b9f97037aeb6090b766a6322c4d168974c5d931976c47688032d714432b0"
+    },
+    {
+      "path": "docs/typst/shared/equations/entity.typ",
+      "sha256": "adf94672485e5b22f1a67b7ee0515a660a03bb1868fcfade2b4e928b6faaa89b"
+    },
+    {
+      "path": "docs/typst/shared/equations/features.typ",
+      "sha256": "6fcf17dcacc07a79cd4e3b3bd74f85635f3d0cf586526e5742d76e9f25ef860e"
+    },
+    {
+      "path": "docs/typst/shared/equations/metrics.typ",
+      "sha256": "28b6a144daabefce49a86b201a141b3cb6494ba3c772b0e62db30a44e9aa21ca"
+    },
+    {
+      "path": "docs/typst/shared/equations/model.typ",
+      "sha256": "f7c42ccafefac2efc36992f0dbe3191015d690314ede33e0d99539dd0990e23c"
+    },
+    {
+      "path": "docs/typst/shared/equations/rl.typ",
+      "sha256": "20c30f068d43c347e3c6c5cd1278d73ebc3ba06bf9749a7c5506de4a8af5f1ae"
+    },
+    {
+      "path": "docs/typst/shared/equations/rri.typ",
+      "sha256": "dedb87fd789d00d4b8d38d0c22343492fa943f4188bea303e122ae6ef47a66a9"
+    },
+    {
+      "path": "docs/typst/shared/equations/scene.typ",
+      "sha256": "dfe5d3dfdaf49a0893d87ee6b04cbd9a700a5436259b890e308df75084aa7552"
+    },
+    {
+      "path": "docs/typst/shared/equations/spatial.typ",
+      "sha256": "b3f5a83e6b02c9b038b421c432411eb1a9b01e0dff33bd72dde2ea324ce15bf7"
+    },
+    {
+      "path": "docs/typst/shared/equations/vin.typ",
+      "sha256": "262dc38e8903c16100f281c42df73c6b22294f310eb490d84d6cd80233e813a5"
+    },
+    {
+      "path": "docs/typst/shared/glossary.generated.typ",
+      "sha256": "b9182c3eafe6bc29ddb9051bd3e80626ec767bb46f5898b6e1cd0f321ec8b765"
+    },
+    {
+      "path": "docs/typst/shared/glossary.typ",
+      "sha256": "43522cec0cfdcdd6484c410fb681bbc4b79c75e34c5b6c82ad259f4a7aec1d44"
+    },
+    {
+      "path": "docs/typst/shared/macros.typ",
+      "sha256": "c072ab377b3e54df43f8ed1bc9aa14b6e4ff48d529731a9cff536859a0e8bddf"
+    },
+    {
+      "path": "docs/typst/shared/math.typ",
+      "sha256": "37f16fd0009ecbce0cb95efcf3a48fbdf6fc48cb06fb0695abc140a7bff5454e"
+    },
+    {
+      "path": "docs/typst/shared/notation.generated.typ",
+      "sha256": "680c14d8b091ae602ddce0119c1ad2ba17f1763b545221a9e764bb1c992d1d28"
+    },
+    {
+      "path": "docs/typst/shared/notation.typ",
+      "sha256": "24b2d4b033ecbb38dd775c6502bd6e53185d87ed6238867c03e2fa452d8481c7"
+    },
+    {
+      "path": "docs/typst/shared/slide-template.typ",
+      "sha256": "0cb570d98c78a27948bdd784648b91eff0770234d483b8561b5abded1182576b"
+    },
+    {
+      "path": "docs/typst/shared/style.typ",
+      "sha256": "b713b9447d83bc6e2479c97ab2fe21d9d64d7bcc3602e18c8927f6b94dc44ff1"
+    },
+    {
+      "path": "docs/typst/shared/symbols.typ",
+      "sha256": "a0f9a8bae22360810a720e13b2ab226e657feff42e7a9746def3dcd16616288e"
+    },
+    {
+      "path": "docs/typst/shared/symbols/ase.typ",
+      "sha256": "ed356aac475cb4d90b18d4374ecaf567fd6df8c834a9adf469871deb04f4bfe5"
+    },
+    {
+      "path": "docs/typst/shared/symbols/entity.typ",
+      "sha256": "eb30fb40b7df4712835971285839af40dc3f564e7c9a36e2cc297dfd1712dc94"
+    },
+    {
+      "path": "docs/typst/shared/symbols/frame.typ",
+      "sha256": "125855cc13aad9d7ff658edbced42147c00799371dbb375273557518148dfaf9"
+    },
+    {
+      "path": "docs/typst/shared/symbols/model.typ",
+      "sha256": "ad747c59fba3d3c8da38a3b55f2b687bee9e70bc83cc2cc6e7b5269f9f581f3e"
+    },
+    {
+      "path": "docs/typst/shared/symbols/obs.typ",
+      "sha256": "e69ae91bf806d64e56c5e0676d87871fdad2924ae404290b5bedb065b3e4b4dc"
+    },
+    {
+      "path": "docs/typst/shared/symbols/oracle.typ",
+      "sha256": "db69463795caf5d29fc3f5c6030d13cc329457199e3f6b8817f2fc18df2259a6"
+    },
+    {
+      "path": "docs/typst/shared/symbols/rl.typ",
+      "sha256": "3a90e6fb9eb469b2ec34b6fbe375c461be2c2da06a82a41d9404a2f2652fef43"
+    },
+    {
+      "path": "docs/typst/shared/symbols/scene.typ",
+      "sha256": "32c639db0659691079c54f799b2b4e64125a91e84f022ed7bd6149fc3b04affc"
+    },
+    {
+      "path": "docs/typst/shared/symbols/shape.typ",
+      "sha256": "cb20b97a2286bd5c860cfc992ac416ddc4b899bd864ff327c3d5a2bbf254bd96"
+    },
+    {
+      "path": "docs/typst/shared/symbols/spatial.typ",
+      "sha256": "b84ada93b66db21ed633737b8fa9a8997d0f74352eb5995c42db3406c9a5ab67"
+    },
+    {
+      "path": "docs/typst/shared/symbols/vin.typ",
+      "sha256": "6432589e450faec36b417c120dbede171cdef05721c3e0f4e526eed45b545481"
+    },
+    {
+      "path": "docs/typst/shared/terms.typ",
+      "sha256": "9a2c51038827d924b76d4ae93722389e31f42e1f9a010b8b592d4675e2086480"
+    },
+    {
+      "path": "docs/typst/thesis/appendix/index.typ",
+      "sha256": "f05f58d7a3705650c2ef5d82ef9033fc41a60818ed44830de0596e084e7622ba"
+    },
+    {
+      "path": "docs/typst/thesis/data/principal-claims.toml",
+      "sha256": "b0a6f15c0d7dd9f710a2df676af81f0fe2628ab728cf991a7c2567805b180dde"
+    },
+    {
+      "path": "docs/typst/thesis/data/report-bundle-fixture.json",
+      "sha256": "90776c455ce44da843ec502aa6acd227940a2c9418e41735f2e68b959a9be3fe"
+    },
+    {
+      "path": "docs/typst/thesis/data/report-bundle-invalid-missing-facts.json",
+      "sha256": "d7bb7ff28dfbaf1488627b2d0d49a0caded44d73ceca73e7eac7e40483e7ec98"
+    },
+    {
+      "path": "docs/typst/thesis/development/m1-contract-report.typ",
+      "sha256": "8b0e9d6077cc8f9779d9cc4ff67ef9910f5596d4ad36a60c3942802d7c399bd7"
+    },
+    {
+      "path": "docs/typst/thesis/development/roadmap.typ",
+      "sha256": "bf362b1af6a71f708b6cca90ed894562a4d20e9cbf67d9cd1b803fd8956f285b"
+    },
+    {
+      "path": "docs/typst/thesis/draft_markers.typ",
+      "sha256": "5e3e4a38d8dbae2aa62f30e20cf6692b86926a053b09fda2a79b0e67b5553d03"
+    },
+    {
+      "path": "docs/typst/thesis/experiment_data.typ",
+      "sha256": "8a19d476fc20e6015a65fff920b5aed5221d8ca6877696e7bc2b6757dbd2bee6"
+    },
+    {
+      "path": "docs/typst/thesis/figures/actor_oracle_boundary.typ",
+      "sha256": "de18fc434797437af85dc6eee07ed01221e9e64f17bc5e76215053e5125fcf08"
+    },
+    {
+      "path": "docs/typst/thesis/figures/candidate_generation_geometry.typ",
+      "sha256": "79062f53b70bb5f107cf810baf9d8f2dbceff79b51291fbfbff3c35462629033"
+    },
+    {
+      "path": "docs/typst/thesis/figures/candidate_scene_primitives.typ",
+      "sha256": "244a1213d28b0f32148b6bffda9d71294ea20e3b0158b8947c02400e48cf7598"
+    },
+    {
+      "path": "docs/typst/thesis/figures/data/candidate_scene_81286_000035.json",
+      "sha256": "bd1fb9c4792f25f0efbc385a7c3297953d0bdf146027c663f23af0b56a8b57ff"
+    },
+    {
+      "path": "docs/typst/thesis/figures/data/directional_memory_81286_000024_inst128.json",
+      "sha256": "42fecb6486ce41620f423e4a52a436f32333377a052fe8f316c9e4d641bb06b1"
+    },
+    {
+      "path": "docs/typst/thesis/figures/data/point_mesh_metric_fixture.json",
+      "sha256": "e03ec47f48931a07448dac67df4407450c3aa508cecebc34f0f577bbc7f03021"
+    },
+    {
+      "path": "docs/typst/thesis/figures/directional_memory_view_novelty.typ",
+      "sha256": "988649487161599ff171fabf3a969b29ae5cd485dd5b84ee661a9c9cba5a6719"
+    },
+    {
+      "path": "docs/typst/thesis/figures/feature_bank_query_pools.typ",
+      "sha256": "16bca2a4ab299673facb67b880bd5e8adfd5eceffe1fbd1a6d8128d7c979092a"
+    },
+    {
+      "path": "docs/typst/thesis/figures/oracle_lookahead_tree.typ",
+      "sha256": "ef148096a3c6689acc6d4ce746a08f6c537b98a181ae57441b0ba8fb89d053ec"
+    },
+    {
+      "path": "docs/typst/thesis/figures/oracle_target_task_sampler_contract.mmd",
+      "sha256": "d5c469a59be5aa8695315941f81cf38d86c2db37e60b88eebe7c91a4496d7c78"
+    },
+    {
+      "path": "docs/typst/thesis/figures/proposal_system_flow.mmd",
+      "sha256": "bb9531d5150e31650bb85c5ab531532324c0c218a3617543a79b5fedb6ebca1c"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.mmd",
+      "sha256": "189b527e09afa6c25c9b19ce2a1f6dd8ab45d53a0d65af822a949e6b156aa762"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_candidate_query_architecture.typ",
+      "sha256": "a87d0660767ecad282f5264090813c1f7b53ef9a5afadce3aa166a1de5d136d8"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_directional_memory.mmd",
+      "sha256": "838babe6210babf9d3d2c52ddfe7223c8eef1975014841344db14877fb337ff2"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_learning_evidence_loop.typ",
+      "sha256": "136a74196de30b98dc63710c31fa17b2a55ef09e495f1567b50d393d004996b7"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.mmd",
+      "sha256": "4a0ebec8c6c442596c83d165525f379c17f8fdb56e8cbe192ddb519b91c5cc49"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_symmetry_acceptance_contract.typ",
+      "sha256": "e7d1359ae4186ff17e60c7259a474f0850e84c969d50ded8bdf60c4aee257bc9"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_symmetry_contract.mmd",
+      "sha256": "99a3dac381b73cff61bb544f63ee2f70994ddb1df4523f3536d69d25be7e886c"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.mmd",
+      "sha256": "4481cfe7b4518eb3ad5226303e3de64e5b7809685f2334728c87a56c66018a66"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd",
+      "sha256": "2faebb760c476bae2233c89a8571dc6d0bb3a5178cd3dad81fac18e5267ffe43"
+    },
+    {
+      "path": "docs/typst/thesis/figures/replay_lineage_relations.typ",
+      "sha256": "b295742ce7439155ffa07503912b5cb23fba813dce443f1802c03177a1cc8c60"
+    },
+    {
+      "path": "docs/typst/thesis/figures/rollout_replay_doubleq_process.typ",
+      "sha256": "03ce299372268e1d22f8ececa789f0cd30d2c277e74828640e5dbd72f1610dff"
+    },
+    {
+      "path": "docs/typst/thesis/figures/scripts/export_candidate_scene_geometry.py",
+      "sha256": "2126c592bedc1957b52a089c5f2400196d051ea90c5320ed769ea9f39299f020"
+    },
+    {
+      "path": "docs/typst/thesis/figures/scripts/export_directional_memory_geometry.py",
+      "sha256": "91de7ac4965ba9a6801a013b556bcf9287a83e96661fdac328bde2d521303d60"
+    },
+    {
+      "path": "docs/typst/thesis/figures/scripts/export_point_mesh_metric_fixture.py",
+      "sha256": "7eb9adf02a8568849ad35090e7fd1c9305316f6694e057715abb9fa7e3e5a79d"
+    },
+    {
+      "path": "docs/typst/thesis/figures/target_rri_point_mesh_geometry.typ",
+      "sha256": "f47e5392e5f50e850a1ed0b78aa5ea0859808ba603717a2c264c15fcfab5b426"
+    },
+    {
+      "path": "docs/typst/thesis/figures/target_task_sampler_contract.typ",
+      "sha256": "a5c5a4c4fb8c353a4790afb529625cf7bb3211fdc27371be07de3e21dfc162b4"
+    },
+    {
+      "path": "docs/typst/thesis/glossary-overrides.typ",
+      "sha256": "c690a2f2345ecfba07515963ac20cbccf2e75efd95b687c951bdbd9b06cbc1dd"
+    },
+    {
+      "path": "docs/typst/thesis/main.typ",
+      "sha256": "5bf47c2b3764879f7696cb8ccc17c42a030448e79178bc9244d3f59ec2dcd37a"
+    },
+    {
+      "path": "docs/typst/thesis/metadata.typ",
+      "sha256": "0532b3b077464e205f9b89979db548ae66f68b29a5362853d95af66d543330a8"
+    },
+    {
+      "path": "docs/typst/thesis/sections/01-introduction.typ",
+      "sha256": "869fd67c7d5ffe9b80fc52d2abd24040860c57a534b9d2aa2d8e75235d1b9acc"
+    },
+    {
+      "path": "docs/typst/thesis/sections/01-research-questions.typ",
+      "sha256": "a65b15253f91497f6594bd22a6f5c411421f83558855e2df4341b70dd932c584"
+    },
+    {
+      "path": "docs/typst/thesis/sections/02-foundations/02-01-related-work.typ",
+      "sha256": "ab08469355ded0218611fbde0aac30ff2c2d0c4db13369bfd96e0fd210319957"
+    },
+    {
+      "path": "docs/typst/thesis/sections/02-foundations/02-02-geometric-learning.typ",
+      "sha256": "a57cba6aaf994df9dc294256ec97f1fb87aedf830d1a394ec07eabb1219a27b6"
+    },
+    {
+      "path": "docs/typst/thesis/sections/02-foundations/index.typ",
+      "sha256": "0fa9aaf281206999b62d6924eb6dcd874c9c520b3b4a5e31a597e127b823f2af"
+    },
+    {
+      "path": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-01-state-and-visibility.typ",
+      "sha256": "8b68daabae6daca61efd5bb2af1b412c13aa6fff91c7bab4dbde198bf6124e76"
+    },
+    {
+      "path": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-02-target-task-and-rri-labels.typ",
+      "sha256": "b9998f40cea812ee4a45e4010d3e24ed35df39707ca5cdcb37b89b83f925039c"
+    },
+    {
+      "path": "docs/typst/thesis/sections/03-oracle-and-data-generation/03-03-replay-stores-and-diagnostics.typ",
+      "sha256": "60bfaeac2f81dd0026013bbbeb468d6c4e89867f8279de85aa6bb202297a08ab"
+    },
+    {
+      "path": "docs/typst/thesis/sections/03-oracle-and-data-generation/index.typ",
+      "sha256": "519e058695485af537d20e19af3ff8f4775892f8b50bf3d6950cbc92ddff9126"
+    },
+    {
+      "path": "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ",
+      "sha256": "c1bce01d5e8fe3d1a469264848fde8162391dadadb6eccbf92a02c3f49956d04"
+    },
+    {
+      "path": "docs/typst/thesis/sections/04-method/04-02-descriptor-and-encoding-plan.typ",
+      "sha256": "3d05f6c28d8ebc0d8c826916fa5674a310586f4773e78d5bd72f37ddaf0eada8"
+    },
+    {
+      "path": "docs/typst/thesis/sections/04-method/04-03-candidate-and-replay-contract.typ",
+      "sha256": "618db93311f427f4e004277833fb4c601fd1b3f042f1b0e385cea3164316f26e"
+    },
+    {
+      "path": "docs/typst/thesis/sections/04-method/04-04-architecture-contract.typ",
+      "sha256": "f18b1dd58c6c5dc31b11ee3eab746a64b9822da3607e85338bb13c9fb9fedf82"
+    },
+    {
+      "path": "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ",
+      "sha256": "9f9382abcbfd19a061d5fd9a9a2679350912e736fa820a9d4d26befd6ef173a9"
+    },
+    {
+      "path": "docs/typst/thesis/sections/04-method/index.typ",
+      "sha256": "73ef443a4b310cd4bd86a2db145c1c9995e24c7083413bd53ed58ca027a5c049"
+    },
+    {
+      "path": "docs/typst/thesis/sections/05-experimental-design/05-01-objectives-and-hypotheses.typ",
+      "sha256": "20d2a5e614cfc97e95ed9c0bbaebd7c8ab7f69782c2227d6793bfb2a004bae90"
+    },
+    {
+      "path": "docs/typst/thesis/sections/05-experimental-design/05-02-learning-objective-and-replay-evidence.typ",
+      "sha256": "74b7d80fdd64ab4353c9643176dea70394d00dbacc985286ff63bc1ade752bb4"
+    },
+    {
+      "path": "docs/typst/thesis/sections/05-experimental-design/05-03-policy-comparison-and-failure-interpretation.typ",
+      "sha256": "bdb9d2d853f32c0785f143ebebdb137be46b8d721756057a7f6dafeb29f0f578"
+    },
+    {
+      "path": "docs/typst/thesis/sections/05-experimental-design/index.typ",
+      "sha256": "febb828ce4a52d61b140b54682e2ed4cd50f6c8e94766801c05694f0091e7468"
+    },
+    {
+      "path": "docs/typst/thesis/sections/06-draft-open-work.typ",
+      "sha256": "c7b45f6e04fa10cd2f01609078b0647e96fab929789aed8104a51e4c87a2f858"
+    },
+    {
+      "path": "docs/typst/thesis/sections/06-results.typ",
+      "sha256": "f322c1e79bdfeab4e8c64fe20e962d97f41e19bb827dfef80cca2a3eb780251f"
+    },
+    {
+      "path": "docs/typst/thesis/sections/07-discussion.typ",
+      "sha256": "923f0b409a0e724b8a917ab64c780db62ff82ec043cd2be98dd8963772b88923"
+    },
+    {
+      "path": "docs/typst/thesis/sections/08-conclusion.typ",
+      "sha256": "9d8bd8ecbbbfd737eb5b50a3febd39772f163a835be895378306beca7b220305"
+    },
+    {
+      "path": "docs/typst/thesis/sections/thesis-questions.md",
+      "sha256": "330448f037bcd3b989faa5186f8685809b51c3a4f6b65a8d84668888bc8019f1"
+    },
+    {
+      "path": "docs/typst/thesis/template/LICENSE",
+      "sha256": "902bddf79bcde1dbfcb52516744ccaf29cd5296e7fda0805cd049372d3e6eb23"
+    },
+    {
+      "path": "docs/typst/thesis/template/UPSTREAM.md",
+      "sha256": "32d169ccbbf006cc21fc6015ddd123c553d72158fd80504ee3f877f6d1c21c8b"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/abstract.typ",
+      "sha256": "9dc6f735b543432e9bfbfa479b77b8d70a5729b79a52107236581065d67c8564"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/acknowledgement.typ",
+      "sha256": "4f99a50818d68f3dfee0128e030ac3d282f8873e1d4bd3329bcf6fdf67824109"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/appendix.typ",
+      "sha256": "fd7c316685b3f6630a42e3b7598c462547404bf743649325c3f8816be235b54a"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/branding.typ",
+      "sha256": "7a9e267bc57fceb98f22f9bf40afc4e26ecd8cfea528a94d65edc86dc69bf5af"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/cover.typ",
+      "sha256": "95f39df5f23ef1a44f2a7de45bfef9494d74840c10383831bc8c55d4ef789f06"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/disclaimer.typ",
+      "sha256": "c8f120b12b9cd2aa13d46d3ecc81dab3e7800379c785ac0133631705ece3c507"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/fonts.typ",
+      "sha256": "a6e4514da63f3f167293006881c506e51f44a533951a59ad4c335d688afcb39d"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/proposal_template.typ",
+      "sha256": "5ffd5b078e00a89c5a467fe7c361611558e25467baec794f699d287d5b76450a"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/thesis_template.typ",
+      "sha256": "4cd4b8ef627f3d74e5f8da2a39c62ea7da5eb0489c2fcb92467a2378cef41874"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/titlepage.typ",
+      "sha256": "eb8a58f1d73d132faf7412edc2c13c29ff8c5c10b036c4abbf04c2288b2eb9dd"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/titlepage_table.typ",
+      "sha256": "1c758a53f4bf715e2028e2fd6bba34598876f9cee6f2f508c694b321f24bd311"
+    },
+    {
+      "path": "docs/typst/thesis/template/layout/transparency_ai_tools.typ",
+      "sha256": "9313d5fa5bb8c7795a37e6b3a6dd9328d0bb14b19d5dad458374ed090dd55345"
+    },
+    {
+      "path": "docs/typst/thesis/template/utils/diagram.typ",
+      "sha256": "e97c16fd67d5217a8a20fdaf9cef8dff699a157e3b93d73e8bd726075a6da75e"
+    },
+    {
+      "path": "docs/typst/thesis/template/utils/fr_qa_c.typ",
+      "sha256": "5d7add34ba8844e8e6be57441abd0946debb76d14616bc22ab3b29ad75a132ce"
+    },
+    {
+      "path": "docs/typst/thesis/template/utils/print_page_break.typ",
+      "sha256": "ec509934a5e1b73c419b5fb30d42dd92f7da60d773c198749fc151ac4f08aa0f"
+    },
+    {
+      "path": "docs/typst/thesis/tests/marker-development.typ",
+      "sha256": "98b5c469cf5465417768c428d721839e5465edeb712e9ffaac0a812022509eff"
+    },
+    {
+      "path": "docs/typst/thesis/tests/marker-submission.typ",
+      "sha256": "1dbf2ad0f1a970db00104881c87093e1ffd32bb1522162879ced3a9bf0c4500b"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-empty-disposition.typ",
+      "sha256": "58958bbf253241465eb73181406d448c17345a08252244c72c4e6945b259b523"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-empty-gate.typ",
+      "sha256": "2da46bb7c52bc69cb45ef83bb42ff2d9d6128f5c6765e3a0e39c1baf691dbb46"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-empty-summary.typ",
+      "sha256": "a8d800c703315c6caa5385ff184e032015a1fda61223b9819c4175153aa6b448"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-empty-target.typ",
+      "sha256": "3934eb0035510c436980344fe0e7c8b8b687129c3e35edf5d8d7bc941ec522e7"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-empty.typ",
+      "sha256": "0bfd9f8a4781b1791a9c3c947b8bcffecf894fb07b4c5baa7608887357a4547d"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-missing.typ",
+      "sha256": "e66dcf8b5f994062acbc0cb446bbba41bda0444c76eddcd708112c17e64de0d8"
+    },
+    {
+      "path": "docs/typst/thesis/tests/promotion-invalid-unknown.typ",
+      "sha256": "e5b8cbb0c7f2aeff281264e2e44facbf8bbe7d3bbda4006a9d9d3e711177e80d"
+    },
+    {
+      "path": "docs/typst/thesis/tests/release-development.typ",
+      "sha256": "fc20a8d3e1b064d778ed56e37b4e8ce4c97f86f5d0de4b291645fa8838420446"
+    },
+    {
+      "path": "docs/typst/thesis/tests/report_data_smoke.typ",
+      "sha256": "a0f8fe74dc871507b3acd423842246debc968809b9d2440f44d755e187340e3a"
+    },
+    {
+      "path": "docs/typst/thesis/tests/status-marker-submission.typ",
+      "sha256": "15afb0d6cddb5974546a2badb21e725979c8205ec36febbdaaba33707d911936"
+    },
+    {
+      "path": "docs/typst/thesis/tests/todo-marker-development.typ",
+      "sha256": "11126953f00714211e743b946835859682acd6e2c962abd1656ce74e345e18b8"
+    },
+    {
+      "path": "docs/typst/thesis/tests/todo-marker-submission.typ",
+      "sha256": "8becb87189708955c223629f1c76b0a3b26d246c5dee40807e9a88d6f3ac9588"
+    }
+  ],
+  "report_schema_version": "aria-nbv-thesis-report-v2",
+  "schema_version": "thesis-toolchain-lock-v1",
+  "source_revision": "273e64e2fe22b139da582ccd56bf49a343b31c5a",
+  "toolchain": {
+    "compiler": {
+      "executable": "/home/jd/.local/bin/typst",
+      "version": "typst 0.14.2 (b33de9de)"
+    },
+    "csl": {
+      "path": "docs/ieee.csl",
+      "sha256": "842a7b3f0266f92e28199104fc72fec64336564373c3a318260a43dbe2eb2a19"
+    },
+    "fonts": [
+      {
+        "family": "DejaVu Sans Mono",
+        "installed_variants": [
+          "DejaVu Sans Mono|Bold Oblique|/usr/share/fonts/truetype/dejavu/DejaVuSansMono-BoldOblique.ttf",
+          "DejaVu Sans Mono|Bold|/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+          "DejaVu Sans Mono|Book|/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+          "DejaVu Sans Mono|Oblique|/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Oblique.ttf"
+        ],
+        "selected": "DejaVu Sans Mono|Book|/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+      },
+      {
+        "family": "New Computer Modern",
+        "installed_variants": [],
+        "selected": "Noto Sans|Regular|/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"
+      }
+    ],
+    "packages": [
+      {
+        "identity": "@preview/booktabs:0.0.4"
+      },
+      {
+        "identity": "@preview/cetz:0.5.2"
+      },
+      {
+        "identity": "@preview/codly:1.3.0"
+      },
+      {
+        "identity": "@preview/dashy-todo:0.1.3"
+      },
+      {
+        "identity": "@preview/definitely-not-isec-slides:1.0.1"
+      },
+      {
+        "identity": "@preview/fletcher:0.5.8"
+      },
+      {
+        "identity": "@preview/glossarium:0.5.10"
+      },
+      {
+        "identity": "@preview/muchpdf:0.1.1"
+      },
+      {
+        "identity": "@preview/scenery:0.1.0"
+      },
+      {
+        "identity": "@preview/tableau-icons:0.331.0"
+      },
+      {
+        "identity": "@preview/tdtr:0.5.0"
+      },
+      {
+        "identity": "@preview/tdtr:0.5.5"
+      }
+    ],
+    "rasterizer": {
+      "backend": "typst png",
+      "ppi": 300,
+      "render_script": ".agents/skills/typst-authoring/scripts/render_png.sh",
+      "render_script_sha256": "af14cebcd1e9c375595bdf97b46622cdaff96e3b64a0a1d0de3fe1f90223c3ed",
+      "version": "typst 0.14.2 (b33de9de)"
+    }
+  }
+}

@@ -10,11 +10,11 @@ date_checked = "2026-08-23"
 
 [toolchain_lock]
 path = "docs/typst/thesis/toolchain-lock.json"
-sha256 = "PENDING_GENERATED_AFTER_IMPLEMENTATION_COMMIT"
-sha256_state = "pending"
-required_state = "replace_pending_placeholder_before_final_release_verification"
-current_state = "pending_generation"
-blocker_rationale = "The final lock is generated after this implementation slice; final release verification must replace this placeholder with the generated lock SHA-256."
+sha256 = "f7d5873501efa44609fa14f64a3aebce8426a93525e2a6f924d8d1e2056d05e6"
+sha256_state = "verified"
+required_state = "generated_lock_sha256_and_compiler_identity_verified"
+current_state = "verified_against_test_only_implementation_commit"
+blocker_rationale = "The generated lock matches the clean implementation commit, its material-input inventory, tracked IEEE CSL, and resolved Typst compiler identity."
 
 [submission]
 required_state = "human_and_confirmatory_evidence_required"
