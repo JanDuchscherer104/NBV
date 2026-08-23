@@ -79,6 +79,7 @@ HISTORICAL_PREFIXES = (
     ".agents/archive/",
     ".agents/memory/history/",
     ".agents/memory/transcripts/",
+    ".agents/work/routing-trials/",
     ".omx/",
     "docs/typst/thesis_slides/",
 )
@@ -318,6 +319,9 @@ def test_active_sources_do_not_reference_retired_paths() -> None:
 
 def test_only_debrief_index_is_derived_historical_evidence() -> None:
     assert _is_historical_evidence_path(".agents/memory/index/debriefs.jsonl")
+    assert _is_historical_evidence_path(
+        ".agents/work/routing-trials/example/events.jsonl"
+    )
     assert not _is_historical_evidence_path(".agents/memory/index/owners.jsonl")
 
 
