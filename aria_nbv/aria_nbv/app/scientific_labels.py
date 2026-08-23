@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 
@@ -35,24 +37,26 @@ SCIENTIFIC_LABELS: dict[str, ScientificLabel] = {
     "rri": ScientificLabel("rri", "Reconstruction improvement", "oracle.rri", "fraction"),
     "oracle_rri": ScientificLabel("oracle_rri", "Oracle RRI", "oracle.rri", "fraction"),
     "target_rri": ScientificLabel("target_rri", "Target RRI", "entity.rri_e", "fraction"),
-    "selected_target_rri": ScientificLabel("selected_target_rri", "Selected target RRI", "entity.rri_e", "fraction"),
+    "selected_target_rri": ScientificLabel(
+        "selected_target_rri", "Selected target RRI", "entity.target_rri_marginal", "fraction"
+    ),
     "cumulative_target_rri": ScientificLabel(
-        "cumulative_target_rri", "Cumulative target RRI", "entity.rri_e", "fraction"
+        "cumulative_target_rri", "Cumulative target RRI", "entity.target_rri_cumulative", "fraction"
     ),
     "selected_target_root_gain": ScientificLabel(
-        "selected_target_root_gain", "Selected one-step target root gain", "rl.reward_target", "fraction"
+        "selected_target_root_gain", "Selected one-step target root gain", "entity.target_reward", "fraction"
     ),
     "target_root_gain": ScientificLabel(
-        "target_root_gain", "One-step target root gain", "rl.reward_target", "fraction"
+        "target_root_gain", "One-step target root gain", "entity.target_reward", "fraction"
     ),
     "cumulative_target_root_gain": ScientificLabel(
-        "cumulative_target_root_gain", "Cumulative target root gain", None, "fraction"
+        "cumulative_target_root_gain", "Cumulative target root gain", "entity.target_root_gain_cumulative", "fraction"
     ),
     "endpoint_gain": ScientificLabel("endpoint_gain", "Endpoint gain", "entity.endpoint_gain", "fraction"),
     "log_gain": ScientificLabel("log_gain", "Log endpoint gain", "entity.log_gain"),
     "q_h": ScientificLabel("q_h", "Finite-horizon action value", "rl.qh"),
     "qh": ScientificLabel("qh", "Finite-horizon action value", "rl.qh"),
-    "return_h": ScientificLabel("return_h", "Finite-horizon return", "rl.return_h"),
+    "return_h": ScientificLabel("return_h", "Finite-horizon return", "entity.return_h"),
     "discount_gamma": ScientificLabel("discount_gamma", "Discount factor", "rl.gamma"),
     "horizon": ScientificLabel("horizon", "Rollout horizon", "rl.H", "steps"),
     "candidate_table": ScientificLabel("candidate_table", "Candidate set", "rl.candidate_table"),
@@ -113,14 +117,14 @@ def resolve_theory(references: TheoryReferences, *, root: Path | None = None) ->
     root = (root or PathConfig().root).expanduser().resolve()
     notation_path = root / "docs" / "notation.yml"
     terms_path = root / "docs" / "glossary" / "terms.yml"
-    try:
-        notation = yaml.safe_load(notation_path.read_text(encoding="utf-8")) or {}
-        terms = yaml.safe_load(terms_path.read_text(encoding="utf-8")) or []
-    except (OSError, yaml.YAMLError) as exc:
-        raise TheoryResolutionError(f"canonical theory registry unavailable: {exc}") from exc
+    notation, term_map = _load_registry(
+        notation_path.as_posix(),
+        *_file_identity(notation_path),
+        terms_path.as_posix(),
+        *_file_identity(terms_path),
+    )
     equations = notation.get("equations", {})
     symbols = notation.get("symbols", {})
-    term_map = {str(row.get("id")): row for row in terms if isinstance(row, dict)}
     return ResolvedTheory(
         equations=tuple(
             _notation_row(equations, identifier, "equation", root) for identifier in references.equation_ids
@@ -244,3 +248,51 @@ def _term_row(registry: dict[str, dict[str, object]], identifier: str, root: Pat
         definition=str(row.get("definition_long") or row.get("definition_short") or ""),
         source_url=f"{_GITHUB_SOURCE_ROOT}/docs/typst/shared/glossary.typ",
     )
+
+
+def _file_identity(path: Path) -> tuple[int, int, str]:
+    """Return metadata and content identity for cache invalidation."""
+
+    try:
+        stat = path.stat()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise TheoryResolutionError(f"canonical theory file is unavailable: {path}") from exc
+    return stat.st_mtime_ns, stat.st_size, digest
+
+
+@lru_cache(maxsize=8)
+def _load_registry(
+    notation_path_raw: str,
+    _notation_mtime_ns: int,
+    _notation_size: int,
+    _notation_sha256: str,
+    terms_path_raw: str,
+    _terms_mtime_ns: int,
+    _terms_size: int,
+    _terms_sha256: str,
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """Load both registries once per content identity."""
+
+    notation = _load_yaml(Path(notation_path_raw))
+    raw_terms = _load_yaml(Path(terms_path_raw))
+    if not isinstance(notation, dict):
+        raise TheoryResolutionError(f"canonical theory registry must be a mapping: {notation_path_raw}")
+    if not isinstance(raw_terms, list):
+        raise TheoryResolutionError(f"canonical theory glossary must be a list: {terms_path_raw}")
+    terms: dict[str, dict[str, Any]] = {}
+    for row in raw_terms:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+            raise TheoryResolutionError(f"canonical theory glossary contains an invalid term row: {terms_path_raw}")
+        identifier = row["id"]
+        if identifier in terms:
+            raise TheoryResolutionError(f"canonical theory glossary repeats term {identifier!r}")
+        terms[identifier] = row
+    return notation, terms
+
+
+def _load_yaml(path: Path) -> object:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise TheoryResolutionError(f"cannot load canonical theory metadata from {path}: {exc}") from exc

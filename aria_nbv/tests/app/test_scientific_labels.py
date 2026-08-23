@@ -37,6 +37,15 @@ def test_resolve_theory_uses_current_typst_registries() -> None:
     )
 
 
+def test_persisted_metric_labels_use_current_entity_symbol_owners() -> None:
+    assert SCIENTIFIC_LABELS["selected_target_rri"].symbol_key == "entity.target_rri_marginal"
+    assert SCIENTIFIC_LABELS["cumulative_target_rri"].symbol_key == "entity.target_rri_cumulative"
+    assert SCIENTIFIC_LABELS["selected_target_root_gain"].symbol_key == "entity.target_reward"
+    assert SCIENTIFIC_LABELS["target_root_gain"].symbol_key == "entity.target_reward"
+    assert SCIENTIFIC_LABELS["cumulative_target_root_gain"].symbol_key == "entity.target_root_gain_cumulative"
+    assert SCIENTIFIC_LABELS["return_h"].symbol_key == "entity.return_h"
+
+
 def test_scientific_label_modes_resolve_at_the_presentation_boundary(tmp_path) -> None:
     docs = tmp_path / "docs"
     (docs / "glossary").mkdir(parents=True)
@@ -64,7 +73,32 @@ def test_unknown_scientific_label_fails_closed(tmp_path) -> None:
     (docs / "glossary" / "terms.yml").write_text("[]\n", encoding="utf-8")
     with pytest.raises(TheoryResolutionError):
         symbol_label("missing", root=tmp_path)
-    assert SCIENTIFIC_LABELS["cumulative_target_root_gain"].symbol_key is None
+
+
+def test_theory_registry_cache_invalidates_on_content_replacement(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "glossary").mkdir(parents=True)
+    notation = docs / "notation.yml"
+    notation.write_text(
+        "symbols:\n  demo.value:\n    tex: 'x'\n    typst: '#symb.demo.value'\nequations: {}\n",
+        encoding="utf-8",
+    )
+    (docs / "glossary" / "terms.yml").write_text("[]\n", encoding="utf-8")
+    assert symbol_label("demo.value", mode="Symbols", root=tmp_path) == "$x$"
+    notation.write_text(
+        "symbols:\n  demo.value:\n    tex: 'y'\n    typst: '#symb.demo.value'\nequations: {}\n",
+        encoding="utf-8",
+    )
+    assert symbol_label("demo.value", mode="Symbols", root=tmp_path) == "$y$"
+
+
+def test_invalid_utf8_theory_registry_fails_closed(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "glossary").mkdir(parents=True)
+    (docs / "notation.yml").write_bytes(b"symbols: \xff\nequations: {}\n")
+    (docs / "glossary" / "terms.yml").write_text("[]\n", encoding="utf-8")
+    with pytest.raises(TheoryResolutionError):
+        symbol_label("missing", root=tmp_path)
 
 
 def test_narrative_explanation_requires_ordered_content() -> None:
