@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from aria_nbv.app.panels._stored_rollouts import shared
+from aria_nbv.app.panels._stored_rollouts import reconstruction_return, shared
 from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from aria_nbv.app.scientific_labels import TheoryReferences, TheoryResolutionError, resolve_theory
 
@@ -113,3 +113,13 @@ def test_render_plot_keeps_answer_visible_and_guide_reusable() -> None:
     assert "render_explanation_popover(" in source
     assert "_render_scientific_guide(explanation" in source
     assert "_render_theory(explanation.theory)" in source
+
+
+def test_corpus_selection_diagnostics_are_probability_entropy_only_and_theory_backed() -> None:
+    assert reconstruction_return._SELECTION_DIAGNOSTIC_METRICS == ("selected_probability", "selected_entropy")
+    assert "selected_target_rri" not in reconstruction_return._SELECTION_DIAGNOSTIC_METRICS
+    for metric in reconstruction_return._SELECTION_DIAGNOSTIC_METRICS:
+        explanation = reconstruction_return._selection_diagnostic_explanation(metric)
+        assert explanation.theory == reconstruction_return._temporal_theory(metric)
+        assert explanation.theory is not None
+        assert explanation.theory.equation_ids == ("action.robust_temperature_softmax",)

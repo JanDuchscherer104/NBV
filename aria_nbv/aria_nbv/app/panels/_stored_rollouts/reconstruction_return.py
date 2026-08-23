@@ -62,6 +62,7 @@ _REWARD_TEMPORAL_METRICS = frozenset(
         "marginal_target_rri",
     }
 )
+_SELECTION_DIAGNOSTIC_METRICS = ("selected_probability", "selected_entropy")
 _TEMPORAL_THEORY: dict[str, TheoryReferences | None] = {
     "cumulative_target_root_gain": TheoryReferences(
         equation_ids=("rl.cumulative_target_root_gain",),
@@ -103,6 +104,44 @@ def _temporal_theory(metric: str) -> TheoryReferences | None:
         return _TEMPORAL_THEORY[metric]
     except KeyError as exc:
         raise ValueError(f"Temporal metric {metric!r} has no theory mapping.") from exc
+
+
+def _selection_diagnostic_explanation(metric: str) -> ScientificExplanation:
+    """Explain one persisted selection diagnostic with its own denominator."""
+
+    if metric == "selected_probability":
+        question = "How much probability mass does the persisted policy assign to the selected action?"
+        answer = "The selected-action probability is the policy mass of the action that was actually executed."
+        metric_text = "Selected-action probability is a dimensionless fraction in [0, 1]."
+    elif metric == "selected_entropy":
+        question = "How concentrated is the persisted action distribution at each acquisition?"
+        answer = "Entropy summarizes uncertainty over the finite candidate action set before the selected action is executed."
+        metric_text = "Selected-action entropy is dimensionless; its scale depends on the finite candidate-set size."
+    else:
+        raise ValueError(f"Selection diagnostic {metric!r} is not supported.")
+    return ScientificExplanation(
+        question=question,
+        answer=answer,
+        sections=(
+            ExplanationSection("population", "Validated factual selected-step rows from compatible corpus contexts."),
+            ExplanationSection("metric / units", metric_text),
+            ExplanationSection(
+                "denominator / masks",
+                "Only finite persisted diagnostic values contribute at each acquisition; missing values are not zero-filled.",
+            ),
+            ExplanationSection(
+                "intuition",
+                "High selected probability means the policy concentrated mass on the executed action; lower entropy means a more concentrated distribution.",
+            ),
+            ExplanationSection(
+                "failure interpretation",
+                "Sparse or abruptly changing diagnostics can indicate candidate-support, temperature, or policy-state differences and require denominator inspection.",
+            ),
+        ),
+        evidence_role="actor-visible",
+        source_fields=("steps/selected_probability", "steps/selected_entropy", "rollout contract"),
+        theory=_temporal_theory(metric),
+    )
 
 
 def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> None:
@@ -152,14 +191,34 @@ def _render_corpus_temporal_evidence(summary: RolloutCorpusSummary | None) -> No
             st.dataframe(rows, hide_index=True, width="stretch")
             _download_frame("Download temporal rows CSV", f"corpus-{metric}.csv", rows)
 
-    diagnostics = temporal.loc[
-        temporal["metric"].isin(sorted(_REWARD_TEMPORAL_METRICS - {metric for metric, _ in reward_metrics}))
-    ]
+    diagnostics = temporal.loc[temporal["metric"].isin(_SELECTION_DIAGNOSTIC_METRICS)]
     if not diagnostics.empty:
         with st.expander("Selection diagnostics (optional)", expanded=False):
-            st.caption("These descriptive selection metrics are kept separate from reward and reconstruction plots.")
-            st.dataframe(diagnostics, hide_index=True, width="stretch")
-            _download_frame("Download selection diagnostics CSV", "corpus-selection-diagnostics.csv", diagnostics)
+            st.caption(
+                "Probability and entropy are descriptive policy diagnostics, kept separate from reward and reconstruction."
+            )
+            for diagnostic in _SELECTION_DIAGNOSTIC_METRICS:
+                rows = diagnostics.loc[diagnostics["metric"].eq(diagnostic)].copy()
+                if rows.empty:
+                    continue
+                label = current_scientific_label(diagnostic)
+                _render_plot(
+                    _corpus_temporal_figure(rows, metric_label=label),
+                    _selection_diagnostic_explanation(diagnostic),
+                    log_y_key=_plot_control_key("corpus-temporal-diagnostic", diagnostic),
+                )
+                with st.expander(f"{label} rows and CSV", expanded=False):
+                    st.dataframe(rows, hide_index=True, width="stretch")
+                    _download_frame("Download selection diagnostic CSV", f"corpus-{diagnostic}.csv", rows)
+
+    target_rri_diagnostics = temporal.loc[temporal["metric"].isin(("selected_target_rri", "marginal_target_rri"))]
+    if not target_rri_diagnostics.empty:
+        with st.expander("Target-RRI diagnostics (optional)", expanded=False):
+            st.caption("Target-RRI rows are oracle/evaluation diagnostics, not policy selection diagnostics.")
+            st.dataframe(target_rri_diagnostics, hide_index=True, width="stretch")
+            _download_frame(
+                "Download target-RRI diagnostics CSV", "corpus-target-rri-diagnostics.csv", target_rri_diagnostics
+            )
 
 
 def _corpus_temporal_group_fields(rows: pd.DataFrame) -> list[str]:
