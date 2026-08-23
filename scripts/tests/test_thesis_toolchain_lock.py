@@ -34,7 +34,8 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
         (tmp_path / relative).mkdir(parents=True)
     (tmp_path / "docs/typst/thesis/main.typ").write_text(
         '#import "../shared/shared.typ"\n'
-        '#show: bibliography(style: "/ieee.csl")\n'
+        '#show: bibliography(("/references.bib", "/references-qh.bib"), '
+        'style: "/ieee.csl")\n'
         '#set text(font: "System Test")\n',
         encoding="utf-8",
     )
@@ -45,7 +46,7 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
     )
     (tmp_path / "docs/typst/thesis/inactive.typ").write_text(
         '#import "@preview/fake-package:9.9.9": thing\n'
-        '#show: bibliography(style: "/fake.csl")\n'
+        '#show: bibliography("/unrelated.bib", style: "/fake.csl")\n'
         '#set text(font: "Fake Font")\n',
         encoding="utf-8",
     )
@@ -62,6 +63,11 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
     )
     (tmp_path / "docs/ieee.csl").write_text("csl\n", encoding="utf-8")
     (tmp_path / "docs/fake.csl").write_text("fake csl\n", encoding="utf-8")
+    (tmp_path / "docs/references.bib").write_text("active bib\n", encoding="utf-8")
+    (tmp_path / "docs/references-qh.bib").write_text(
+        "active qh bib\n", encoding="utf-8"
+    )
+    (tmp_path / "docs/unrelated.bib").write_text("unrelated bib\n", encoding="utf-8")
     render = tmp_path / ".agents/skills/typst-authoring/scripts/render_png.sh"
     render.write_text("#!/bin/sh\necho render\n", encoding="utf-8")
     render.chmod(0o755)
@@ -145,6 +151,11 @@ def test_generation_records_closure_and_path_independent_identities(fixture) -> 
     assert "docs/typst/thesis/figure.PNG" not in paths
     assert "docs/typst/shared/diagram.svg" not in paths
     assert "docs/figures/unrelated.svg" not in paths
+    assert "docs/ieee.csl" in paths
+    assert "docs/references.bib" in paths
+    assert "docs/references-qh.bib" in paths
+    assert "docs/fake.csl" not in paths
+    assert "docs/unrelated.bib" not in paths
     assert payload["toolchain"]["compiler"]["command"] == "typst"
     assert "executable" not in payload["toolchain"]["compiler"]
     assert len(payload["toolchain"]["compiler"]["binary_sha256"]) == 64
@@ -170,6 +181,23 @@ def test_inactive_typst_source_does_not_define_identities_or_drift(fixture) -> N
     inactive.write_text(inactive.read_text() + '#set text(font: "Another Fake Font")\n')
     passed = _run(root, output, "check")
     assert passed.returncode == 0, passed.stderr
+
+    (root / "docs/fake.csl").write_text("edited fake csl\n", encoding="utf-8")
+    (root / "docs/unrelated.bib").write_text("edited unrelated bib\n", encoding="utf-8")
+    passed = _run(root, output, "check")
+    assert passed.returncode == 0, passed.stderr
+
+
+def test_submission_command_matches_builder_input_contract(fixture) -> None:
+    root, output, revision = fixture
+    payload = _generate(root, output, revision)
+    assert payload["build_commands"]["submission"] == (
+        "typst compile --root docs docs/typst/thesis/main.typ "
+        "<submission-output.pdf> --input aria-thesis-mode=submission "
+        "--input aria-thesis-data=<report-bundle-path> "
+        "--input aria-thesis-evidence-status=confirmatory "
+        "--input aria-code-ref=<source-revision>"
+    )
 
 
 def test_exact_generated_outputs_are_excluded_but_other_assets_are_material(

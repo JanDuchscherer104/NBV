@@ -29,6 +29,7 @@ LOCAL_SOURCE_RE = re.compile(r"#(?:import|include)\s+\"([^\"]+)\"")
 ASSET_PATH_RE = re.compile(
     r"\"([^\"]+\.(?:svg|png|jpe?g|webp|gif|pdf))\"", re.IGNORECASE
 )
+BIBLIOGRAPHY_OPERAND_RE = re.compile(r"\"([^\"]+\.(?:bib|csl))\"", re.IGNORECASE)
 FONT_RE = re.compile(r"(?:font\s*:\s*|body:\s*|sans:\s*)\"([^\"]+)\"")
 FONT_VARIANT_RE = re.compile(
     r"^- Style: (?P<style>[^,]+), Weight: (?P<weight>\d+), "
@@ -92,6 +93,17 @@ def _local_path(root: Path, source: Path, reference: str) -> Path | None:
     return None
 
 
+def _docs_relative_path(root: Path, source: Path, reference: str) -> str | None:
+    if reference.startswith("@"):
+        return None
+    base = root / "docs" if reference.startswith("/") else source.parent
+    candidate = (base / reference.lstrip("/")).resolve()
+    try:
+        return candidate.relative_to(root).as_posix()
+    except ValueError:
+        return None
+
+
 def _git_files(root: Path, revision: str | None = None) -> dict[str, str]:
     args = (
         ["git", "ls-files", "-s"]
@@ -147,6 +159,14 @@ def _source_closure(
             child = _local_path(root, source, reference)
             if child is not None:
                 pending.append(child)
+        for reference in BIBLIOGRAPHY_OPERAND_RE.findall(text):
+            operand = _docs_relative_path(root, source, reference)
+            if operand is not None:
+                if operand not in all_files:
+                    raise LockError(
+                        f"active bibliography operand is not tracked: {operand}"
+                    )
+                assets.add(operand)
         for reference in ASSET_PATH_RE.findall(text):
             asset = _local_path(root, source, reference)
             if asset is not None:
@@ -162,13 +182,7 @@ def _source_closure(
 
 def _material_paths(root: Path, revision: str | None = None) -> set[str]:
     sources, assets = _source_closure(root, revision=revision)
-    all_files = _git_files(root, revision)
     paths = sources | assets
-    paths |= {
-        path
-        for path in all_files
-        if path.startswith("docs/") and path.endswith((".bib", ".csl"))
-    }
     return {path for path in paths if _material_path(path)}
 
 
@@ -420,7 +434,7 @@ def _build(
         "report_schema_version": report_match.group(1),
         "build_commands": {
             "development": "typst compile --root docs docs/typst/thesis/main.typ docs/typst/thesis/main.pdf",
-            "submission": "typst compile --root docs docs/typst/thesis/main.typ <submission-output.pdf> --input aria-thesis-mode=submission",
+            "submission": "typst compile --root docs docs/typst/thesis/main.typ <submission-output.pdf> --input aria-thesis-mode=submission --input aria-thesis-data=<report-bundle-path> --input aria-thesis-evidence-status=confirmatory --input aria-code-ref=<source-revision>",
         },
     }
 

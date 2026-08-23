@@ -542,8 +542,71 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
         assert row["status"] == "pilot"
         assert row["source"].startswith("analysis/paired_policy.json|sidecar:")
     assert frames["sidecars"].iloc[0]["name"] == "paired-policy-analysis"
-    assert frames["sidecars"].iloc[0]["path"] == "paired-policy-analysis"
+    assert frames["sidecars"].iloc[0]["path"] == "analysis.json"
     assert set(frames["sidecar_values"]["sidecar_id"]) == {frames["sidecars"].iloc[0]["sidecar_id"]}
+
+
+def test_analysis_sidecar_logical_name_round_trips_with_all_promoted_rows(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=8630)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    sidecar = sidecar.rename(tmp_path / "analysis.json")
+    (tmp_path / "analysis" / "artifact.txt").rename(tmp_path / "artifact.txt")
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload["logical_name"] = "paired-policy-analysis"
+    payload["facts"] = [
+        {
+            "store_id": result.manifest_sha256,
+            "key": "policy.paired_scene_endpoint.effect",
+            "value": 0.12,
+            "unit": "fraction",
+            "n": 5,
+            "aggregation": "paired_mean",
+            "provenance": "analysis/paired_policy.json",
+        }
+    ]
+    sidecar.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    serialized = serialize_thesis_report_bundle(frames)
+    rebuilt = deserialize_thesis_report_bundle(serialized)
+    validated = validate_thesis_report_provenance(rebuilt, evidence_root=sidecar.parent)
+
+    sidecar_row = validated["sidecars"].iloc[0]
+    assert sidecar_row["path"] == "analysis.json"
+    assert sidecar_row["name"] == "paired-policy-analysis"
+    assert validated["facts"].query("key == 'policy.paired_scene_endpoint.effect'")["value"].tolist() == [0.12]
+    assert not validated["sidecar_values"].empty
+    assert validated["empirical_results"].iloc[0]["artifact_path"] == "artifact.txt"
+    assert serialize_thesis_report_bundle(validated) == serialized
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("path", "paired-policy-analysis", "does not exist"),
+        ("name", "other-logical-name", "logical_name"),
+        ("sidecar_id", "0" * 64, "sidecar_id"),
+    ],
+)
+def test_report_provenance_rejects_sidecar_path_name_and_id_conflation(
+    tmp_path: Path, field: str, value: str, message: str
+) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=8631)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result).rename(tmp_path / "analysis.json")
+    (tmp_path / "analysis" / "artifact.txt").rename(tmp_path / "artifact.txt")
+    payload = json.loads(
+        serialize_thesis_report_bundle(
+            build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+        )
+    )
+    payload["tables"]["sidecars"]["rows"][0][field] = value
+
+    with pytest.raises(ValueError, match=message):
+        validate_thesis_report_provenance(payload, evidence_root=tmp_path)
 
 
 def test_empirical_result_round_trips_strict_identity_and_missingness(tmp_path: Path) -> None:

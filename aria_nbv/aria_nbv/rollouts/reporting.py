@@ -715,7 +715,7 @@ def validate_thesis_report_provenance(
 ) -> dict[str, pd.DataFrame]:
     """Validate a report bundle and revalidate its immutable evidence files.
 
-    ``evidence_root`` contains the portable logical paths serialized for
+    ``evidence_root`` contains the portable evidence paths serialized for
     sidecars.  Empirical artifacts are resolved relative to each sidecar's
     parent directory.  The returned frames are the validated report owner
     representation suitable for release or thesis consumption.
@@ -752,15 +752,13 @@ def validate_thesis_report_provenance(
     }
     for index, row in frames["sidecars"].iterrows():
         logical_path = _portable_relative_path(row["path"], field=f"sidecars row {index} path")
-        if row["name"] != row["path"]:
-            raise ValueError(f"sidecars row {index} path and name must match.")
         sidecar_file = (root / logical_path).resolve()
         if not sidecar_file.is_relative_to(root) or not sidecar_file.is_file():
             raise ValueError(f"sidecar evidence does not exist under evidence_root: {row['path']!r}.")
         digest = hashlib.sha256(sidecar_file.read_bytes()).hexdigest()
         if digest != row["sha256"]:
             raise ValueError(f"sidecar row {index} sha256 does not match immutable evidence.")
-        expected_id = hashlib.sha256(f"{row['path']}\0{row['sha256']}".encode()).hexdigest()
+        expected_id = _sidecar_id(str(row["path"]), str(row["sha256"]))
         if row["sidecar_id"] != expected_id or row["sidecar_id"] in sidecar_files:
             raise ValueError(f"sidecar row {index} sidecar_id relationship is invalid.")
         sidecar_files[str(row["sidecar_id"])] = sidecar_file
@@ -773,6 +771,9 @@ def validate_thesis_report_provenance(
                 raise ValueError(f"sidecar row {index} format is unsupported.")
         except json.JSONDecodeError as error:
             raise ValueError(f"sidecar row {index} evidence is not valid {row['format']}.") from error
+        logical_name = _sidecar_logical_name(sidecar_payload, fallback=sidecar_file.name)
+        if row["name"] != logical_name:
+            raise ValueError(f"sidecars row {index} name does not match evidence logical_name.")
         promoted, empirical = _analysis_fact_rows(
             sidecar_payload,
             sidecar_id=str(row["sidecar_id"]),
@@ -1074,8 +1075,9 @@ def _append_sidecar_rows(
     else:
         raise ValueError(f"Unsupported report sidecar format for {sidecar_path}; expected .json or .jsonl.")
     digest = hashlib.sha256(data).hexdigest()
-    logical_name = _sidecar_logical_name(payload, fallback=sidecar_path.name)
-    sidecar_id = hashlib.sha256(f"{logical_name}\0{digest}".encode()).hexdigest()
+    evidence_path = sidecar_path.name
+    logical_name = _sidecar_logical_name(payload, fallback=evidence_path)
+    sidecar_id = _sidecar_id(evidence_path, digest)
     if any(row["sidecar_id"] == sidecar_id for row in rows["sidecars"]):
         return
     promoted, empirical = _analysis_fact_rows(
@@ -1103,7 +1105,7 @@ def _append_sidecar_rows(
     rows["sidecars"].append(
         {
             "sidecar_id": sidecar_id,
-            "path": logical_name,
+            "path": evidence_path,
             "name": logical_name,
             "sha256": digest,
             "format": format_name,
@@ -1124,6 +1126,12 @@ def _sidecar_logical_name(payload: object, *, fallback: str) -> str:
     if logical_name != Path(logical_name).name or "\\" in logical_name:
         raise ValueError("Analysis sidecar logical_name must not contain a directory path.")
     return logical_name
+
+
+def _sidecar_id(path: str, digest: str) -> str:
+    """Return the stable identity for one serialized evidence path and digest."""
+
+    return hashlib.sha256(f"{path}\0{digest}".encode()).hexdigest()
 
 
 def _analysis_fact_rows(
