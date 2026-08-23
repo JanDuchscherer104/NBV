@@ -1,28 +1,31 @@
 #import "../../shared/symbols.typ": symb
-#import "../draft_markers.typ": thesis_status, research_todo, prune_todo
+#import "../draft_markers.typ": development_only, thesis_status, research_todo, prune_todo
 
 = Discussion <sec:thesis-discussion>
 
-#prune_todo(
-  [Rewrite the discussion after confirmatory results exist. The present implementation-readiness narrative and architecture bridge registry are development material; the final chapter must interpret measured answers, alternative explanations, scope, limitations, and failure modes.],
-  source: [@sec:thesis-results and the frozen analysis plan],
-  gate: [every interpretation points to a reported result or is explicitly bounded as a limitation],
-)
+#development_only(() => [
+  #prune_todo(
+    [Rewrite the discussion after confirmatory results exist. The present implementation-readiness narrative and architecture bridge registry are development material; the final chapter must interpret measured answers, alternative explanations, scope, limitations, and failure modes.],
+    source: [@sec:thesis-results and the frozen analysis plan],
+    gate: [every interpretation points to a reported result or is explicitly bounded as a limitation],
+  )
+])
 
-The current evidence supports a narrow implementation conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This establishes that the proposed experiment can be represented and audited; it does not establish that one candidate family, rollout policy, representation, or learned model performs better than another.
+The current evidence supports a narrow substrate conclusion. ARIA-NBV has an executable finite-candidate path that separates actor-visible policy inputs from oracle-only target geometry, applies invalidity as a hard decision constraint, evaluates target-specific reconstruction change offline, and exposes the resulting store through one typed reporting seam. This implementation is evidence toward the planned pc-c1-auditable-experiment-contract, but it does not establish pc-c1 or show that one candidate family, rollout policy, representation, or learned model performs better than another.
 
-// - repo:docs/typst/thesis/sections/07-discussion.typ:12-12
+// - repo:docs/typst/thesis/sections/07-discussion.typ:14-14
 // evidence:
 // claims: pc-c1-auditable-experiment-contract
 
 The rollout attempts also expose a systems limitation. Counterfactual scoring repeatedly renders a large mesh for a candidate set, so renderer memory and latency constrain feasible branch factor and rollout volume before statistical efficiency becomes relevant. An out-of-memory observation is evidence for batching and resource measurement, not for or against the candidate distribution or planning objective. Completed validated stores are required before throughput, storage, or failure rates are generalized.
 
-The scientific limitations are more restrictive. Current attempts use training sources, no held-out paired policy table supports the endpoint estimand, metric repeatability and meaningful oracle-lookahead headroom remain unestablished, and the target-conditioned finite-horizon comparison has not yet been demonstrated. The present evidence therefore cannot distinguish negligible non-myopic structure from inadequate candidate support, target observability, replay coverage, representation support, or model failure.
+The scientific limitations are more restrictive. Current attempts use training sources; no held-out paired policy table supports the endpoint estimand; metric repeatability and meaningful oracle-lookahead headroom remain unestablished; and no target-conditioned finite-horizon policy comparison has been demonstrated. The present evidence therefore cannot distinguish negligible non-myopic structure from inadequate candidate support, target observability, replay coverage, representation support, or model failure.
 
-// - repo:docs/typst/thesis/sections/07-discussion.typ:20-20
+// - repo:docs/typst/thesis/sections/07-discussion.typ:22-22
 // evidence:
 // claims: pc-r0-no-confirmatory-policy-result
 
+#development_only(() => [
 == Evidence-conditioned architecture bridges
 
 #thesis_status(
@@ -30,7 +33,7 @@ The scientific limitations are more restrictive. Current attempts use training s
   evidence: "pending",
   source: [@tab:thesis-scene-representation-design-space; @tab:geometric-learning-ladder],
   gate: [a measured limitation that the proposed bridge directly tests],
-)[Alternative representations and policies remain part of the thesis design registry, but they are promoted only as responses to diagnosed bottlenecks.]
+)[Alternative representations and policies remain development hypotheses, but they are promoted only as responses to diagnosed bottlenecks.]
 
 If the local EFM3D field is the limiting variable, broad semidense memory, sparse occupied/free/unknown state, target-centred re-lifting, or logged appearance features provide progressively stronger representation tests. If compact descriptors lose relevant spatial structure, point, sparse, or equivariant encoders become justified. If independent candidate queries leave errors correlated with the valid candidate set, DeepSets or masked candidate interaction becomes relevant. If selected-view history fails specifically by approach direction, signed first- plus second-moment memory, followed only if needed by spherical harmonics, becomes the targeted ablation. A renderable 3DGS state is appropriate only when candidate rendering or soft instance membership is itself the measured missing capability.
 
@@ -45,3 +48,4 @@ Sequence or recurrent models are similarly conditional. They become scientifical
 )
 
 The next evidential step remains procedural: complete validated stores under resolved manifests, freeze the eligible population and exclusions, establish oracle stability and headroom, train the matched controls, and only then interpret architectural differences. The registry above preserves concrete follow-up hypotheses without presenting them as validated conclusions.
+])

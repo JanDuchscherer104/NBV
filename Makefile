@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-authoring-routing-self-test thesis-authoring-routing-trials scientific-review-self-test scientific-review-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance thesis-method-sync thesis-authoring-routing-self-test thesis-authoring-routing-trials scientific-review-self-test scientific-review-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -136,6 +136,24 @@ QH_CI_TESTS := \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/test_config_field_constraints.py \
 	../scripts/tests/test_quartodoc_expand_config.py
+THESIS_METHOD_SYNC_TESTS := \
+	tests/data_handling/test_qh.py::test_named_profile_batch_and_module_admission_preserve_actor_allowlist \
+	tests/data_handling/test_qh.py::test_qh_pose_fields_preserve_frame_aware_public_types \
+	tests/data_handling/test_qh.py::test_qh_batch_transfer_constructs_owned_dtos_without_reflective_traversal \
+	tests/data_handling/test_qh.py::test_collate_mixed_horizons_and_widths_preserves_five_masks_and_causal_history \
+	tests/data_handling/test_qh.py::test_masks_distinguish_materialized_invalid_actions_from_padding \
+	tests/data_handling/test_qh.py::test_derived_selected_and_successor_masks_share_exact_support \
+	tests/lightning/test_qh_module.py::test_terminal_rows_do_not_bootstrap \
+	tests/lightning/test_qh_module.py::test_nonterminal_row_with_actor_successor_but_no_label_support_is_excluded \
+	tests/lightning/test_qh_module.py::test_nonterminal_row_without_actor_successor_keeps_immediate_reward_target \
+	tests/lightning/test_qh_module.py::test_all_unsupported_batch_is_exact_optimizer_noop_with_diagnostic \
+	tests/lightning/test_qh_datamodule.py::test_datamodule_rejects_different_replay_support_identity \
+	tests/rri_metrics/test_rollout_metrics.py::test_selected_target_return_prefers_root_normalized_gain \
+	tests/rri_metrics/test_rollout_metrics.py::test_undiscounted_root_normalized_return_equals_endpoint_gain_without_epsilon_stabilization \
+	tests/rri_metrics/test_rollout_metrics.py::test_endpoint_and_additive_root_gain_use_distinct_epsilon_denominators \
+	tests/rri_metrics/test_rollout_metrics.py::test_selected_target_return_uses_target_rri_with_discount \
+	tests/oracle/test_target_selection.py::test_oracle_target_task_sampler_selects_seeded_uniform_cap \
+	tests/oracle/test_target_selection.py::test_oracle_target_task_contains_only_domain_fields
 QH_CI_PYTHON ?= uv run --extra dev python
 PYTEST_WORKERS ?= auto
 PYTEST_WORKERS_FLAG = $(if $(filter auto,$(PYTEST_WORKERS)),-n auto,$(if $(filter 0,$(PYTEST_WORKERS)),,$(error PYTEST_WORKERS must be auto or 0)))
@@ -740,7 +758,39 @@ thesis-marker-contract: _check_python ## Verify Typst development/submission mar
 typst-authoring-contract: _check_python ## Enforce shared-equation, notation, label, and prose hygiene
 	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py --scan docs/typst/thesis
 
-thesis-authoring-routing-self-test: _check_python typst-authoring-contract ## Verify thesis-authoring routing and Typst hygiene contracts
+thesis-literature-provenance: _check_python ## Verify Related Work conceptual and source-locator contracts
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_literature_provenance.py
+
+thesis-method-sync: _check_python typst-authoring-contract ## Verify Method/Experimental Design implementation synchronization
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_method_sync.py
+	@cd $(PKG_DIR) && PYTHONPATH=.. $(QH_CI_PYTHON) -m pytest --import-mode=importlib $(THESIS_METHOD_SYNC_TESTS)
+	@$(PYTHON_INTERPRETER) scripts/check_thesis_claims.py
+	@set -eu; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	$(PYTHON_INTERPRETER) scripts/glossary_build.py all \
+		--compat-yaml-out "$$tmp_dir/terms.yml" \
+		--qmd-out "$$tmp_dir/glossary.qmd" \
+		--typst-out "$$tmp_dir/glossary.generated.typ" \
+		--jsonl-out "$$tmp_dir/glossary.jsonl" \
+		--shortcode-lua-out "$$tmp_dir/glossary_terms.generated.lua" \
+		--notation-yaml-out "$$tmp_dir/notation.yml" \
+		--notation-lua-out "$$tmp_dir/notation.generated.lua" \
+		--notation-typst-out "$$tmp_dir/notation.generated.typ"; \
+	for mapping in \
+		"docs/glossary/terms.yml terms.yml" \
+		"docs/contents/glossary.qmd glossary.qmd" \
+		"docs/typst/shared/glossary.generated.typ glossary.generated.typ" \
+		"docs/_generated/context/glossary.jsonl glossary.jsonl" \
+		"docs/_extensions/aria-glossary/glossary_terms.generated.lua glossary_terms.generated.lua" \
+		"docs/notation.yml notation.yml" \
+		"docs/_extensions/aria-glossary/notation.generated.lua notation.generated.lua" \
+		"docs/typst/shared/notation.generated.typ notation.generated.typ"; do \
+		set -- $$mapping; \
+		cmp -s "$$1" "$$tmp_dir/$$2" || { echo "stale generated adapter: $$1" >&2; exit 1; }; \
+	done
+
+thesis-authoring-routing-self-test: _check_python typst-authoring-contract thesis-literature-provenance thesis-method-sync ## Verify thesis-authoring routing and Typst hygiene contracts
 	@$(PYTHON_INTERPRETER) -m pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_typst_authoring_hygiene.py
 
 thesis-authoring-routing-trials: _check_python ## Run the four bounded thesis-authoring routing trials at ROUTING_HEAD
@@ -754,7 +804,7 @@ scientific-review-trials: _check_python ## Run the frozen scientific-review case
 	@test -n "$(strip $(REVIEW_HEAD))" || { echo "REVIEW_HEAD is required" >&2; exit 2; }
 	@$(PYTHON_INTERPRETER) scripts/scaffold/run_scientific_review_trials.py --head "$(REVIEW_HEAD)" --id seminar-uncontrolled-ablation --id actor-oracle-leakage --id invalidity-as-utility --id pilot-escalation --id pseudoreplication --id missing-uncertainty --id planned-tense-drift --id restrained-abstract --id hard-mask-semantics --id actor-oracle-separation --id bounded-pilot --id seminar-uncontrolled-ablation-variant --id actor-oracle-leakage-variant --id invalidity-as-utility-variant --id pilot-escalation-variant --id pseudoreplication-variant --id missing-uncertainty-variant --id planned-tense-drift-variant --id seminar-uncontrolled-ablation-corrected --id actor-oracle-leakage-corrected --id invalidity-as-utility-corrected --id pilot-escalation-corrected --id pseudoreplication-corrected --id missing-uncertainty-corrected --id planned-tense-drift-corrected --jobs 4 --timeout 600
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci typst-authoring-contract thesis-marker-contract ## Render the core docs surfaces used by root CI
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci typst-authoring-contract thesis-marker-contract thesis-literature-provenance thesis-method-sync ## Render the core docs surfaces used by root CI
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)

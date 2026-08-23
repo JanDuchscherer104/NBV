@@ -1,71 +1,54 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": thesis_status
+#import "../../draft_markers.typ": development_only
 
 == Finite Candidate and Replay Contract
 
-#thesis_status(
-  implementation: "implemented",
-  evidence: "pending",
-  source: "aria_nbv/aria_nbv/rollouts/replay/types.py; aria_nbv/aria_nbv/rollouts/replay/engine.py; aria_nbv/aria_nbv/rollouts/zarr_store.py; aria_nbv/aria_nbv/rollouts/qh_reader.py; aria_nbv/tests/rollouts/test_qh_reader.py",
-  gate: [preserve deterministic shell identity, source roles, and selected-transition validation],
-)[Finite candidate tables, hard masks, lineage, selected transitions, selected-depth persistence, and the derived `q_h/` view are implemented and schema-tested. Frozen scientific store evidence remains pending.]
+=== Implemented finite action and replay substrate
 
-At step $t$, candidate generation returns a finite full-shell table #symb.rl.candidate_table with a hard-valid mask $bold(m)_t$ and versioned invalid-reason bitsets. Scores are stored compactly only for hard-valid rows and are bound back to stable shell indices before selection. The admissible action set is
+// evidence:
+// - aria_nbv/aria_nbv/rollouts/zarr_store.py:545-546,970-985,1450-1504 -> hard action/q-training validation and cross-table mask invariants.
+// - aria_nbv/aria_nbv/rollouts/qh_reader.py:932-935 -> aligned padded read-model masks and labels.
+// - aria_nbv/tests/rollouts/test_zarr_store.py:182-206 and aria_nbv/tests/rollouts/test_qh_reader.py:548-558 -> stored return semantics, padding identity, and q_train subset checks.
+
+At step $t$, candidate generation returns a finite table #symb.rl.candidate_table with stable row identity, hard validity, and versioned invalid reasons:
 
 $
   #eqs.rl.finite_action_set
 $
 
-Invalid rows remain available for diagnostics and dense replay, but cannot be selected. A row enters the training mask only when it is actor-selectable and has a finite oracle target. Invalid rows have false masks and undefined labels; scene RRI is never substituted for a missing target-specific label. `valid_action_mask`, `q_train_mask`, padding, and any deployable feasibility estimate are distinct fields with distinct owners.
+Three masks remain separate: the valid-action mask selects physically admitted rows; `q_train_mask` is stricter and additionally requires finite oracle labels; padding marks absent rows in the materialized rectangular view. Invalid rows cannot enter selection, loss, or bootstrap. They remain available for diagnostics. An all-invalid successor has no utility value: it sets no-bootstrap support explicitly rather than becoming a zero or an imputed target.
 
-=== Implemented replay transition
-
-Rollout expansion records the full candidate table, selected valid and shell indices, policy scores and probabilities, selection policy, and random seed. The implemented transition is
+The implemented replay transition is:
 
 $
   #eqs.rl.replay_transition
 $
 
-where $x_t$ is the current reference pose, $bold(H)_t$ the selected-pose history, $b_t$ the remaining budget, and $xi_t$ the deterministic generation context. The next candidate table is regenerated around the selected pose under the same target task, history constraints, and versioned generator configuration.
+It updates pose, factual selected-pose history, remaining budget, lineage, and regenerated candidate support. It does not imply a new RGB observation, a recomputed EVL field, or a fused selected-depth scene state. A pose/history chain is therefore an `S0-pose` replay state, not a task-sufficient visual successor.
 
-This transition is deliberately a replay-control transition, not yet a complete reconstruction-state update. It changes pose, selected-pose history, budget, lineage, and action support. It does not imply that the actor has received a new RGB observation, recomputed EFM3D field, or fused the selected depth into a spatial memory. Any implementation that consumes only these fields must be labelled `S0-pose`.
+=== Selected observations and oracle roles
 
-The persisted factual tables retain source and target identity, lineage hashes, step order, selected rows, masks, reasons, sampler provenance, rewards, selected-depth calibration, and support diagnostics. The derived `q_h/` view right-pads states, stores one-step and target-root-gain labels, and exposes only the factual selected transition needed for a temporal-difference backup. It does not create counterfactual labels for unselected actions or make privileged selected depth actor-visible.
+// evidence:
+// - aria_nbv/aria_nbv/data_handling/qh_data/views.py:229-257 -> supervision labels, selected transition, discount, and terminal fields are outside actor tensors.
+// - aria_nbv/aria_nbv/data_handling/qh_data/batching.py:84-136 -> successor support and explicit bootstrap mask; no-label successors are not silently bootstrapped.
+// - aria_nbv/tests/data_handling/test_qh.py:583-622 -> root-only and privileged selected-observation profile admission.
 
-=== Selected observation and planned scene-state transition
+Selected depth is a typed observation with calibration, validity, pose, and source role. The `CF-GT` source is privileged and belongs only to `qh_cfplus_gt_depth_v1`. It is not an ordinary actor input and cannot be silently mixed with `qh_cf0_v1`. Unselected candidate renders never enter the actor state.
 
-#thesis_status(
-  implementation: "planned",
-  evidence: "pending",
-  citation: [@GenNBV-chen2024 @Hestia-lu2026],
-  source: "docs/contents/theory/efm3d_scene_embeddings.qmd; aria_nbv/aria_nbv/oracle/evidence.py; aria_nbv/aria_nbv/rollouts/zarr_store.py",
-  gate: [typed selected-observation reader, deterministic fusion, source masks, and no-future-observation tests],
-)[A task-sufficient successor state must update only evidence produced by the selected observation. Current GT-mesh selected depth is privileged counterfactual evidence and requires an explicit `CF-GT` state protocol.]
+The current replay carrier does not update a visual successor state. Missing source or modality evidence is therefore not replaced with a fabricated descriptor; selected depth remains typed metadata and is admitted to actor tensors only under the explicit privileged CF+ protocol.
 
-A selected observation is a typed tuple containing depth, validity mask,
-calibration, root-relative camera pose, and an explicit source role. The
-geometry successor state consumes this selected evidence:
+#development_only(() => [
+  === Development and future evidence
 
-#eqs.rl.s_cf_geom
+  The planned causal update is expressed by the shared equation:
 
-The source role distinguishes privileged mesh depth, declared sensor-like
-simulation, and an actor-visible sensor observation. Unselected candidate
-renders at step $t$ are never elements of the student state.
+  $
+    #eqs.scene.ray_memory_update
+  $
 
-The existing geometry-level counterfactual uses a set union of retained points,
+  Only selected evidence may update a future successor state. Missing source or modality evidence is represented by masks, not fabricated descriptors.
 
-$
-  #eqs.rl.counterfactual_transition
-$
-
-but a planning memory must additionally preserve whether space is observed occupied, observed free, or still unknown. The proposed sparse update is
-
-$
-  #eqs.scene.ray_memory_update
-$
-
-Here both evidence terms are indexed by the selected action $a_t$; no unselected candidate render enters the successor state. The update may add selected surface evidence, carve observed free space, update support and uncertainty, and refresh target-local directional memory. It must not attach RGB, DINO, detector, or EVL descriptors to counterfactual geometry unless a corresponding actor-visible observation exists. Counterfactual-only cells instead carry explicit source and missing-modality masks.
-
-Raw selected depth is an input to the state builder, not necessarily a permanent model token. The reader may emit either the typed selected-observation prefix or a deterministically derived `DynamicSceneState`, but those two representations must not be mixed silently. This split prevents two common errors: treating pose-only replay as complete visual simulation, and treating privileged selected-depth geometry as a deployable sensor stream.
+  Exact $H=2$ targets, recursive targets beyond the supported chain, requested-horizon queries, and Monte Carlo behavior returns are separate development controls. They require their own admitted transition/support evidence and cannot turn sparse replay into dense long-horizon support.
+])

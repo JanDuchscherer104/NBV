@@ -1,22 +1,24 @@
-#import "../draft_markers.typ": validation_todo
+#import "../draft_markers.typ": development_only, validation_todo
 
 = Conclusion <sec:thesis-conclusion>
 
-#validation_todo(
-  [Rewrite the conclusion as direct, evidence-calibrated answers to RQ1--RQ4. The current conditional outcome tree is useful development guidance but is not a final scientific conclusion.],
-  source: [@sec:thesis-results; @sec:thesis-discussion],
-  gate: [confirmatory results and discussion support one concise answer per research question],
-)
+#development_only(() => [
+  #validation_todo(
+    [Rewrite the conclusion as direct, evidence-calibrated answers to RQ1--RQ4. The current conditional outcome tree is useful development guidance but is not a final scientific conclusion.],
+    source: [@sec:thesis-results; @sec:thesis-discussion],
+    gate: [confirmatory results and discussion support one concise answer per research question],
+  )
+])
 
-This thesis defines a leakage-auditable experiment for target-conditioned finite-candidate next-best-view planning. Its present contribution is the separation of actor-visible state from oracle supervision, the target-specific reconstruction objective, hard validity and replay contracts, and an artifact-driven reporting seam that keeps provenance and missingness attached to later results.
+This thesis documents a leakage-auditable experiment substrate for target-conditioned finite-candidate next-best-view planning. The current implementation is evidence toward the planned pc-c1-auditable-experiment-contract: it covers the separation of actor-visible state from oracle supervision, the target-specific reconstruction objective, hard validity and replay contracts, and an artifact-driven reporting seam that keeps provenance and missingness attached to later results. It does not establish pc-c1; that contribution remains unreviewed and withheld until the downstream evidence gates are met.
 
-// - repo:docs/typst/thesis/sections/08-conclusion.typ:11-11
+// - repo:docs/typst/thesis/sections/08-conclusion.typ:13-13
 // evidence:
 // claims: pc-c1-auditable-experiment-contract
 
-The available evidence does not answer whether bounded oracle lookahead improves fixed-budget target reconstruction or whether a learned finite-horizon policy recovers such headroom. The current training-source rollout attempts establish pipeline reachability and reveal a renderer resource gate; the development report fixture establishes the data contract only. Neither supports a held-out policy claim, a population-level effect, or a scale estimate.
+The available evidence does not answer whether bounded oracle lookahead improves fixed-budget target reconstruction or whether a learned finite-horizon policy recovers such headroom. The current training-source rollout attempts provide evidence of pipeline reachability and reveal a renderer resource gate; the development report fixture documents the data contract only. Neither supports a held-out policy claim, a population-level effect, or a scale estimate.
 
-// - repo:docs/typst/thesis/sections/08-conclusion.typ:17-17
+// - repo:docs/typst/thesis/sections/08-conclusion.typ:19-19
 // evidence:
 // claims: pc-r0-no-confirmatory-policy-result
 

@@ -1,55 +1,69 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
-#import "../../draft_markers.typ": validation_todo
 #import "@preview/booktabs:0.0.4": *
 
 == Study Population and Evidence Gates
 
-#validation_todo(
-  [Preregister the eligible population, exclusions, primary estimands, aggregation unit, number of independent runs, uncertainty interval, minimum meaningful effect, and multiplicity policy before inspecting confirmatory results.],
-  source: [experiment manifest and analysis specification],
-  gate: [immutable analysis plan plus matched held-out policy table],
-)
+The study population is split by scene into train, validation, and held-out test manifests. The implemented generator samples oracle target tasks from geometry-valid GT rows; this establishes oracle-task coverage, not observed-target matching or deployable target support. GT target geometry, candidate renders, and target-RRI labels remain oracle assets.
 
-The source population comprises ASE/ATEK snippet windows from scenes for which the configured @ground-truth:short mesh and object-box table resolve. A frozen manifest assigns entire scenes to train, validation, or test before model selection; no scene may cross these boundaries through another snippet. Each reported run records the manifest hash and the exact counts of scenes, snippets, admitted target tasks, rollout chains, transitions, and retained candidate rows. A capped train-only pilot is therefore a throughput and support probe, not a sample from which held-out policy performance can be estimated.
+=== Current generator evidence
 
-The present data generator defines oracle target tasks by seeded sampling from geometry-valid @ground-truth:short OBB rows. Its task-coverage report therefore describes the available GT pool, sampled tasks, classes, scenes, and later oracle-evaluation failures. It does not measure proposal matching, IoU ambiguity, projected visibility, or actor-observation support. Those quantities belong to a future observed-target selector required for deployable-input claims. Until that selector exists, @ground-truth:short target geometry may define labels and bounded oracle references but cannot be presented as actor-visible input. The privileged-supervision boundary in @fig:qh-actor-oracle-contract applies equally to render-derived evidence: dense @ground-truth:short candidate depth may produce labels, returns, or explicitly named privileged ablations, but it is not a legal actor input. A separate teacher policy, distillation path, or current-belief renderer remains a hypothesis until implemented and evaluated, so none is promoted to a main-text process figure.
+// evidence:
+// - aria_nbv/aria_nbv/oracle/target_selection.py:321-397 -> GT-OBB sampler configuration, geometry-valid task-pool construction, and seeded capped selection.
+// - aria_nbv/aria_nbv/oracle/pipelines/rollout_dataset.py:420-492,789-848 -> writer configuration and generator consumption of selected oracle tasks.
+// - aria_nbv/tests/oracle/test_target_selection.py:142-170 -> selection controls, uniform cap, deterministic seed, and GT-task identities.
 
-The first policy gate is an actor-visible myopic scorer over the same finite candidate table intended for #symb.rl.qh. The scorer must expose one value per candidate, respect the hard action mask, and be assessed by candidate ranking, calibration, and oracle-rescored selected actions. The existing scene-level VIN scorer is historical substrate; it is not a target-conditioned control until the observed target descriptor is wired into the model and evaluated on a frozen held-out split.
+The current data generator constructs its task pool from non-padded GT OBB rows, retains only finite positive geometry for first-pass eligibility, and applies a seeded uniform cap (three tasks per snippet by default). The writer consumes the selected oracle rows for rollout labeling. This behavior measures oracle-task coverage; it does not provide observed-target matching or deployable target support. The separate source-audit path can match actor-visible descriptors to GT rows, but that audit does not change the generator's oracle-task source.
 
-The second policy gate estimates whether bounded oracle lookahead has headroom over one-step oracle greedy:
+The primary evaluation direction is a fixed acquisition budget and bounded finite candidate support. First, an actor-visible myopic control must be admitted and calibrated on the same candidate table. Then bounded oracle lookahead establishes whether the candidate setup contains non-myopic headroom:
 
 $
   #eqs.entity.lookahead_headroom
 $
 
-Only if the preregistered analysis classifies this headroom as meaningful is #symb.rl.qh evaluated for recovery from offline rollout traces:
+Only after meaningful preregistered headroom is present is the planned finite-H scorer evaluated for recovery:
 
 $
   #eqs.entity.q_recovery
 $
 
-Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not recover it, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
+Success is a matched held-out endpoint oracle evaluation, not a training loss or predicted value. The endpoint metric is:
+
+$
+  #eqs.entity.endpoint_gain
+$
+
+Its denominator is the root target error plus $epsilon$. The primary estimand is the equal-weight per-scene mean of paired endpoint differences, with the within-scene denominator equal to the number of paired, valid endpoint tasks in that scene and the scene-level denominator equal to the number of scenes with at least one such pair. The additive replay metric is the target-root gain, whose transition denominator is the maximum of the root target error and $epsilon$:
+
+$
+  #eqs.rl.target_root_gain_reward
+$
+
+These are distinct metrics. The endpoint gain is an endpoint comparison with $(Delta_0^e + epsilon)$, whereas additive target-root gain uses $max(Delta_0^e, epsilon)$; no shared-denominator or exact-equivalence claim is made. Its cumulative form is the additive trajectory diagnostic:
+
+$
+  #eqs.rl.cumulative_target_root_gain
+$
+
+State-relative RRI recomputes a state-specific denominator and remains a non-additive diagnostic. Secondary cumulative gain, state-relative RRI diagnostics, invalid-action rate, runtime, path length, and support coverage explain mechanism and feasibility.
+
+No-root-action tasks, early-terminated trajectories, and no-supported-successor cases have no fixed-budget endpoint and are excluded from that endpoint denominator, never imputed as zero; each remains in the prespecified failure/support strata, while any realized cumulative diagnostic is reported only through its last valid state. An oracle-evaluation failure likewise contributes no endpoint or label and is counted separately. These are missing endpoint observations and support evidence, not confirmatory policy results.
+
+No confirmatory policy result is currently established. A missing target selector, unsupported endpoint artifact, insufficient candidate support, or mismatched source/profile contract blocks the downstream policy claim rather than becoming a zero result.
 
 #figure(
   table(
-    columns: (0.82fr, 1.18fr, 1.52fr),
+    columns: (0.85fr, 1.25fr, 1.35fr),
     toprule(),
-    table.header([*Claim*], [*Primary evidence*], [*Decision rule*]),
+    table.header([*Gate*], [*Evidence*], [*Interpretation*]),
     midrule(),
-    [Population],
-    [scene-split manifest and coverage bundle],
-    [Inference is restricted to the frozen held-out scene population.],
-    [Task protocol],
-    [GT pool, sampled tasks, classes, and oracle failures],
-    [Current evidence is oracle-task coverage, not observed-target matching.],
-    [Myopic control],
-    [ranking, calibration, and oracle-rescored selections],
-    [Actor-visible target conditioning must be implemented before comparison.],
-    [Planning headroom],
-    [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
-    [#symb.rl.qh is evaluated only after a meaningful-headroom gate.], bottomrule(),
+    [Population], [scene-split manifest and immutable counts], [held-out inference population],
+    [Oracle task], [GT task pool, sampled tasks, and failures], [coverage evidence, not observed-target support],
+    [Myopic control], [actor-visible ranking, calibration, and oracle re-evaluation], [required control before planning],
+    [Planning headroom], [bounded oracle lookahead versus one-step oracle greedy], [finite-support opportunity gate],
+    [Finite-H policy], [matched endpoint oracle artifact], [planned recovery claim only after completion],
+    bottomrule(),
   ),
-  caption: [Objective-to-evidence matrix.],
+  caption: [Objective-to-evidence gates.]
 ) <tab:thesis-objective-evidence>

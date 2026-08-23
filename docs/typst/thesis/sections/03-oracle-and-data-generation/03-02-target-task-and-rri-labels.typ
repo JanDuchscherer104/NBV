@@ -190,6 +190,7 @@ The target source defines the supervised task, the candidate mixture defines lea
 // - aria_nbv/aria_nbv/oracle/evidence.py:93-101,343-381 -> ASE GT-depth is the thesis evaluation source; MPS semi-dense points are a legacy diagnostic source.
 // - aria_nbv/aria_nbv/oracle/_scoring.py:94-163 -> candidate depth is backprojected, fused with the root cloud, and scored against the target mesh.
 // - aria_nbv/aria_nbv/rri_metrics/point_mesh.py:31-141 -> the selected error uses squared point-to-face accuracy and equal-face face-to-point completeness.
+// - aria_nbv/tests/rri_metrics/test_rollout_metrics.py:54-72 -> endpoint gain and additive root gain use distinct epsilon denominators.
 
 Let $C_e (#symb.obs.points_t)$ denote the oracle-only crop of accumulated evaluation points to the selected target region. In the thesis protocol, its root points are reconstructed from the observed prefix of ASE @ground-truth:short depth; a candidate contributes renderer-derived depth that is backprojected and fused with the same root cloud. MPS semi-dense points remain actor-visible representation input and a legacy diagnostic source, not the current oracle evaluation cloud.
 
@@ -267,7 +268,7 @@ This thesis therefore treats the metric as an operational estimand over a frozen
 
 === Target-Specific @relative-reconstruction-improvement:short
 
-The thesis objective is not the absolute point--mesh error alone, but its normalized reduction after a fixed acquisition budget. Root normalization makes gains dimensionless and keeps every step on one rollout-specific denominator, so equal-horizon returns telescope to the endpoint change when the discount is unity.
+The thesis distinguishes three related quantities rather than treating them as aliases: state-relative RRI is a current-state diagnostic, target-root gain is the additive learning reward, and endpoint gain is the fixed-budget evaluation metric. All are normalized reductions of the same target-cropped error, but their denominators and roles differ.
 
 The state-relative marginal target RRI remains the VIN-compatible candidate diagnostic:
 
@@ -287,7 +288,7 @@ $
   #eqs.rl.target_root_gain_reward
 $
 
-Its undiscounted selected-chain sum does telescope under the frozen sequential error pipeline:
+Under matched sequential states and unit discount, the shared cumulative-root equation records the additive reward sum as a root-normalized endpoint difference:
 
 $
   #eqs.rl.cumulative_target_root_gain
@@ -311,4 +312,4 @@ $
   #eqs.entity.log_gain
 $
 
-#symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. Root-normalized gains telescope to endpoint gain when the discount is unity and geometry, horizon, and acquisition budget are matched. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.
+#symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. The endpoint equation uses $Delta_0^e + epsilon$, whereas the additive root-gain equation uses $max(Delta_0^e, epsilon)$; the two canonical metrics are therefore not exactly equivalent, even when horizon, geometry, and acquisition budget match. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.
