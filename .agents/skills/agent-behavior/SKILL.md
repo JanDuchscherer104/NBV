@@ -49,9 +49,10 @@ explicit.
    owner and use stable owner-defined pointers elsewhere. Do not introduce a
    second source of truth.
 
-When a material choice is not settled by current exact owners, or scaffold/tool
-policy is changing, read [`references/intent-and-follow-up.md`](references/intent-and-follow-up.md)
-before choosing. Do not load reviewed intent for a settled exact-owner task.
+When the current exact owner leaves a material policy choice unsettled, read
+[`references/reviewed-intent.md`](references/reviewed-intent.md) and follow its
+scoped-specification precedence before consulting general reviewed intent. Do
+not load reviewed intent for a settled exact-owner task.
 
 ## Conditional branches
 

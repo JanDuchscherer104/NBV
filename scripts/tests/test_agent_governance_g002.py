@@ -745,21 +745,23 @@ def test_capture_and_routing_contracts() -> None:
         "references/durable-capture.md",
         "references/execution-branches.md",
         "references/external-actions.md",
-        "references/intent-and-follow-up.md",
+        "references/reviewed-intent.md",
     }
     for reference_path in reference_paths:
         assert (agent_behavior_path.parent / reference_path).is_file()
 
     intent_reference = _read(
-        agent_behavior_path.parent / "references" / "intent-and-follow-up.md"
+        agent_behavior_path.parent / "references" / "reviewed-intent.md"
     )
-    assert "material choice is not settled" in intent_reference
+    assert "exact owner leaves a material policy" in intent_reference
     assert ".agents/references/human_owner_intent.md" in intent_reference
+    assert (
+        ".omx/specs/deep-interview-aria-nbv-agent-scaffold-target-state.md"
+        in intent_reference
+    )
     assert "Open Choices" in intent_reference
     assert "durable-capture.md" in intent_reference
-    assert "../../../memory/README.md" in intent_reference
-    assert "../../agents-db/SKILL.md" in intent_reference
-    assert "does\nnot activate those future lifecycle workflows" in intent_reference
+    assert "accepted plan only for sequencing" in intent_reference
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
@@ -830,8 +832,8 @@ def test_pr1_reviewed_intent_fixture_contracts() -> None:
     )
     fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
     expected = {
-        "reviewed-intent-underdetermined-choice",
-        "reviewed-intent-known-owner-near-miss",
+        "reviewed-intent-unsettled-external-skill",
+        "scoped-spec-settles-graphify-bundle",
         "thesis-code-shared-contract",
         "helper-lowest-shared-domain-owner",
     }
@@ -843,7 +845,7 @@ def test_pr1_reviewed_intent_fixture_contracts() -> None:
         assert fixture["forbidden_outcomes"]
     assert any(
         "Open Choices" in value
-        for value in fixtures["reviewed-intent-underdetermined-choice"][
+        for value in fixtures["reviewed-intent-unsettled-external-skill"][
             "forbidden_outcomes"
         ]
     )

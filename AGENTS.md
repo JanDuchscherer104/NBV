@@ -13,10 +13,6 @@ tests, configuration, and Typst own behavior and scientific claims.
 
 - For non-trivial coding, docs, scaffold, research, or memory edits, apply
   `agent-behavior` first.
-- When a material choice is not settled by exact owners or scaffold/tool policy
-  is changing, `agent-behavior` conditionally opens
-  `.agents/skills/agent-behavior/references/intent-and-follow-up.md`; settled
-  exact-owner work does not load reviewed intent.
 - Package work reads `aria_nbv/AGENTS.md`, then the one nested guide that owns
   the touched contract. Docs, bibliography, Typst, and Quarto work starts at
   `docs/AGENTS.md`.
