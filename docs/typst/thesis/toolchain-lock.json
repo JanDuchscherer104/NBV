@@ -355,7 +355,7 @@
   ],
   "report_schema_version": "aria-nbv-thesis-report-v2",
   "schema_version": "thesis-toolchain-lock-v1",
-  "source_revision": "dc94eaad863b9b1dd71f16bf66b80a972578c30e",
+  "source_revision": "97b9c1abe4319a08199ca6f1b530decb3d9ae7ad",
   "toolchain": {
     "compiler": {
       "binary_sha256": "3ac6b84150c50a694d44134dc201624fbdc44f705b9992124a13474ddf8c6413",
