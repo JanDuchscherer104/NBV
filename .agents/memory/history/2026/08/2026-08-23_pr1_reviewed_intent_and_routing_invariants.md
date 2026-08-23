@@ -74,7 +74,6 @@ ledger.
 - [a815f5bb03ded6d7215a5a88f49e5cd7e9026cf0](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a815f5bb03ded6d7215a5a88f49e5cd7e9026cf0) — WP1: freeze the original routing fixtures
 - [2f25b770440b559e7f86b2f7a5e81bd4d671f8f3](https://github.com/JanDuchscherer104/ARIA-NBV/commit/2f25b770440b559e7f86b2f7a5e81bd4d671f8f3) — WP2: add reviewed intent and universal invariants
 - [a9ca7a3be964860a26402630ab87d53d519a6f02](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a9ca7a3be964860a26402630ab87d53d519a6f02) — WP3: add the original exact-head evaluator
-- [38718e0add565d674ae25c6715f3d9042c2544ca](https://github.com/JanDuchscherer104/ARIA-NBV/commit/38718e0add565d674ae25c6715f3d9042c2544ca) — WP4: control reviewed-intent trials
 - [f9ccb74ceb718d92f8d7c5e235416804903e7cdb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f9ccb74ceb718d92f8d7c5e235416804903e7cdb) — WP5: isolate source-order evaluation
 - [91e7913f16ea1df878f0f2f8d3743237d63daf1a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/91e7913f16ea1df878f0f2f8d3743237d63daf1a) — WP6: reject evaluator contamination
 - [794e8e754f155260f053968d141d78439cd06cce](https://github.com/JanDuchscherer104/ARIA-NBV/commit/794e8e754f155260f053968d141d78439cd06cce) — WP7: exclude plan artifacts
