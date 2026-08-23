@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,151 @@ ALL = set(FAMILIES)
 
 
 class SelectionTests(unittest.TestCase):
+    def test_graphify_projection_fixture_boundary_cleans_git_routing(self) -> None:
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        clean_match = re.search(
+            r"^GIT_ENV_CLEAN := (?P<command>.+)$", makefile, re.MULTILINE
+        )
+        self.assertIsNotNone(clean_match)
+        assert clean_match is not None
+        for variable in (
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_COMMON_DIR",
+            "GIT_INDEX_FILE",
+        ):
+            with self.subTest(variable=variable):
+                self.assertIn(f"-u {variable}", clean_match.group("command"))
+
+        expected_recipes = {
+            "graphify-projection-self-test": (
+                "@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) "
+                "scripts/tests/test_build_graphify_projection.py"
+            ),
+            "scaffold-audit-self-test": (
+                "@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) "
+                "scripts/tests/test_agent_governance_g002.py"
+            ),
+            "ci-impact-self-test": (
+                "@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) "
+                "scripts/tests/test_ci_impact.py"
+            ),
+            "ownership-consolidation-contract": (
+                "@$(GIT_ENV_CLEAN) $(PYTHON_INTERPRETER) -m pytest "
+                "--import-mode=importlib scripts/tests/test_ownership_consolidation_contract.py "
+                "scripts/tests/test_validate_agent_memory_retired.py"
+            ),
+        }
+        for target_name, expected_recipe in expected_recipes.items():
+            with self.subTest(target=target_name):
+                target = re.search(
+                    rf"^{re.escape(target_name)}:.*\n(?P<body>(?:\t.*\n)+)",
+                    makefile,
+                    re.MULTILINE,
+                )
+                self.assertIsNotNone(target)
+                assert target is not None
+                self.assertIn(expected_recipe, target.group("body"))
+
+    def test_ci_target_cannot_mutate_an_isolated_guard_repo(self) -> None:
+        clean_env = os.environ.copy()
+        for variable in (
+            "GIT_DIR",
+            "GIT_WORK_TREE",
+            "GIT_COMMON_DIR",
+            "GIT_INDEX_FILE",
+        ):
+            clean_env.pop(variable, None)
+
+        with tempfile.TemporaryDirectory(prefix="ci-impact-git-guard-") as tmp:
+            guard = Path(tmp) / "guard"
+            subprocess.run(
+                ["git", "init", "-q", "-b", "guard", str(guard)],
+                check=True,
+                env=clean_env,
+            )
+            for key, value in (
+                ("core.bare", "true"),
+                ("user.name", "Guard Owner"),
+                ("user.email", "guard@example.invalid"),
+            ):
+                subprocess.run(
+                    ["git", "-C", str(guard), "config", "--local", key, value],
+                    check=True,
+                    env=clean_env,
+                )
+
+            poisoned_env = clean_env | {
+                "GIT_DIR": str(guard / ".git"),
+                "GIT_WORK_TREE": str(guard),
+                "GIT_COMMON_DIR": str(guard / ".git"),
+                "GIT_INDEX_FILE": str(guard / "poisoned-index"),
+            }
+            makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+            clean_match = re.search(
+                r"^GIT_ENV_CLEAN := (?P<command>.+)$", makefile, re.MULTILINE
+            )
+            self.assertIsNotNone(clean_match)
+            assert clean_match is not None
+            child = Path(tmp) / "child"
+            child.mkdir()
+            probe = (
+                "from pathlib import Path\n"
+                "import subprocess, sys\n"
+                "root = Path(sys.argv[1])\n"
+                "subprocess.run(['git', 'init', '-q', '-b', 'probe'], cwd=root, check=True)\n"
+                "subprocess.run(['git', 'config', '--local', 'user.name', 'Nested Probe'], "
+                "cwd=root, check=True)\n"
+                "subprocess.run(['git', 'config', '--local', 'user.email', "
+                "'nested@example.invalid'], cwd=root, check=True)\n"
+                "print(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], "
+                "cwd=root, text=True).strip())\n"
+            )
+            result = subprocess.run(
+                [
+                    *shlex.split(clean_match.group("command")),
+                    sys.executable,
+                    "-c",
+                    probe,
+                    str(child),
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=poisoned_env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+            self.assertEqual(Path(result.stdout.strip()).resolve(), child.resolve())
+
+            for key, expected in (
+                ("core.bare", "false"),
+                ("user.name", "Nested Probe"),
+                ("user.email", "nested@example.invalid"),
+            ):
+                actual = subprocess.run(
+                    ["git", "-C", str(child), "config", "--local", "--get", key],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=clean_env,
+                ).stdout.strip()
+                self.assertEqual(actual, expected, key)
+
+            for key, expected in (
+                ("core.bare", "true"),
+                ("user.name", "Guard Owner"),
+                ("user.email", "guard@example.invalid"),
+            ):
+                actual = subprocess.run(
+                    ["git", "-C", str(guard), "config", "--local", "--get", key],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=clean_env,
+                ).stdout.strip()
+                self.assertEqual(actual, expected, key)
+
     def test_g006_hardening_inputs_select_scaffold_validation(self) -> None:
         self.assertEqual(
             select_families(
