@@ -122,12 +122,56 @@ def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytes
     messages: list[str] = []
     monkeypatch.setattr(overview_topology.st, "info", messages.append)
     monkeypatch.setattr(
-        overview_topology, "_render_store_header_summary", lambda _path: pytest.fail("header was rendered")
+        overview_topology, "_render_store_header_summary", lambda _handle: pytest.fail("header was rendered")
     )
 
-    overview_topology._render_validated_store_header("/tampered.zarr", validation_ok=False)
+    overview_topology._render_validated_store_header(object(), validation_ok=False)
 
     assert messages == ["Coverage and physical-cost projections are withheld until store validation succeeds."]
+
+
+def test_store_bundle_composes_one_manifest_schema_and_promotion_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fixed-generation cache returns immutable typed trust without mutating validation."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "typed-trust.zarr", build_rollout_records(horizon=1, num_samples=6, seed=907)[:1]
+    )
+    calls = {"manifest": 0, "schema": 0, "promotion": 0, "trust": 0}
+    original_manifest = session.build_manifest_facts
+    original_schema = session.build_schema_validation
+    original_promotion = session.build_promotion_evidence
+    original_trust = session.build_effective_streamlit_trust
+
+    def manifest(*args, **kwargs):
+        calls["manifest"] += 1
+        return original_manifest(*args, **kwargs)
+
+    def schema(*args, **kwargs):
+        calls["schema"] += 1
+        return original_schema(*args, **kwargs)
+
+    def promotion(*args, **kwargs):
+        calls["promotion"] += 1
+        return original_promotion(*args, **kwargs)
+
+    def trust(*args, **kwargs):
+        calls["trust"] += 1
+        return original_trust(*args, **kwargs)
+
+    monkeypatch.setattr(session, "build_manifest_facts", manifest)
+    monkeypatch.setattr(session, "build_schema_validation", schema)
+    monkeypatch.setattr(session, "build_promotion_evidence", promotion)
+    monkeypatch.setattr(session, "build_effective_streamlit_trust", trust)
+    _, effective, manifest_payload = session._cached_store_bundle_cached.__wrapped__(
+        result.store_dir.as_posix(), store_identity="typed-trust"
+    )
+
+    assert calls == {"manifest": 1, "schema": 1, "promotion": 1, "trust": 1}
+    assert effective.ok
+    assert isinstance(effective.errors, tuple)
+    assert manifest_payload["root_attrs"]["schema_version"]
 
 
 def test_named_cache_identity_changes_for_same_path_replacement(tmp_path: Path) -> None:

@@ -14,6 +14,8 @@ import zarr
 from pandas.testing import assert_frame_equal
 from typer.testing import CliRunner
 
+import aria_nbv.rollouts.reporting as reporting
+
 pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
@@ -44,6 +46,47 @@ from aria_nbv.rollouts.reporting import (
 )
 from aria_nbv.rollouts.zarr_store import RolloutZarrStoreReader, write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def test_report_export_preserves_one_manifest_validation_promotion_and_statistics_call_per_store(
+    tmp_path, monkeypatch
+) -> None:
+    """Report export composes each demanded inspection facet exactly once."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=102)[:1]
+    )
+    calls = {"manifest": 0, "validation": 0, "promotion": 0, "statistics": 0}
+    original_manifest = RolloutZarrStoreReader.manifest
+    original_validate = RolloutZarrStoreReader.validate
+    original_promotion = reporting.build_promotion_evidence
+    original_statistics = reporting.build_compact_statistics
+
+    def manifest(reader):
+        calls["manifest"] += 1
+        return original_manifest(reader)
+
+    def validate(reader):
+        calls["validation"] += 1
+        return original_validate(reader)
+
+    def promotion(reader, *, manifest_payload=None):
+        calls["promotion"] += 1
+        return original_promotion(reader, manifest_payload=manifest_payload)
+
+    def statistics(reader, *, manifest_payload=None):
+        calls["statistics"] += 1
+        return original_statistics(reader, manifest_payload=manifest_payload)
+
+    monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
+    monkeypatch.setattr(reporting, "build_promotion_evidence", promotion)
+    monkeypatch.setattr(reporting, "build_compact_statistics", statistics)
+
+    frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
+
+    assert calls == {"manifest": 1, "validation": 1, "promotion": 1, "statistics": 1}
+    assert len(frames["stores"]) == 1
 
 
 def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -> None:

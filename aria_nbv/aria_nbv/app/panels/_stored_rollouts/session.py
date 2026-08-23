@@ -17,6 +17,10 @@ from ....dataset_topology import build_dataset_topology
 from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
+    build_effective_streamlit_trust,
+    build_manifest_facts,
+    build_promotion_evidence,
+    build_schema_validation,
     candidate_audit_rows,
     candidate_flow_rows,
     candidate_population_evidence,
@@ -26,15 +30,14 @@ from ....rollouts.inspection import (
     mask_combination_rows,
     oracle_headroom_evidence,
     paired_policy_comparison_rows,
-    promoted_store_validation_error,
     proposal_support_geometry,
-    rollout_trajectory_geometry,
     q_h_evidence_rows,
     reconstruction_endpoint_summary_rows,
     reconstruction_metric_summary_rows,
     rollout_header_summary,
     rollout_step_objective_rows,
     rollout_store_inventory_rows,
+    rollout_trajectory_geometry,
     rollout_tree_summary_rows,
     selected_candidate_rank_rows,
     selected_depth_summary_rows,
@@ -60,11 +63,11 @@ def _cached_store_bundle_cached(
     """Open and validate one replacement-sensitive rollout store identity."""
 
     reader = RolloutZarrStoreReader(Path(store_path))
-    validation = reader.validate()
-    manifest_payload = reader.manifest()
-    if promotion_error := promoted_store_validation_error(reader, manifest_payload=manifest_payload):
-        validation.errors.append(promotion_error)
-    return reader, validation, manifest_payload
+    manifest_payload = build_manifest_facts(reader).payload
+    schema = build_schema_validation(reader)
+    promotion = build_promotion_evidence(reader, manifest_payload=manifest_payload)
+    trust = build_effective_streamlit_trust(schema, promotion)
+    return reader, trust, manifest_payload
 
 
 @wraps(_cached_store_bundle_cached.__wrapped__)
