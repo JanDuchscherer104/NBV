@@ -25,6 +25,8 @@ Inspected the exact failed GitHub Actions steps, restored the upstream writing
 reference required by the scaffold governance contract, and separated portable
 release behavior tests from the environment-locked release audit. The scaffold
 repair is commit [bc27949a79](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bc27949a79a225da54f60081aaa7ae657c8e450c).
+The portable release-gate correction and this debrief are commit
+[9c50a326ae](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9c50a326ae4439fff4d5d6c7d110a6b42b3126ba).
 
 ## Findings
 Hosted Ubuntu CI cannot satisfy `docs/typst/thesis/toolchain-lock.json` merely by
