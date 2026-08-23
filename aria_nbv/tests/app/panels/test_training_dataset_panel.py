@@ -19,6 +19,7 @@ from aria_nbv.app.panels.training_dataset import (
     _qh_preview_identity,
     _qh_readiness_for_identity,
     _qh_readiness_identity,
+    _target_inventory_explanation,
     _target_inventory_frames,
 )
 from aria_nbv.configs import PathConfig
@@ -329,3 +330,7 @@ def test_target_inventory_frames_preserve_zero_samples_and_class_scene_support()
     assert int((samples["count"] == 0).sum()) == 1
     assert targets["class_name"].value_counts().to_dict() == {"chair": 2}
     assert targets["scene_id"].nunique() == 2
+    assert (
+        "aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py"
+        in _target_inventory_explanation("detected").external_references[0][1]
+    )

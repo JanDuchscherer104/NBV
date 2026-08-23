@@ -412,7 +412,7 @@ def _target_inventory_explanation(kind: str) -> ScientificExplanation:
         external_references=(
             (
                 "Target inventory implementation",
-                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/data_handling/vin_store/target_inventory.py",
+                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py",
             ),
         ),
     )

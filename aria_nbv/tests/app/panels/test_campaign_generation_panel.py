@@ -245,7 +245,7 @@ class _FakeCampaign:
 
     def load_plan(self, path: Path):
         assert path.exists()
-        return object()
+        return SimpleNamespace(source_manifest_hash="source-test", admission_audit_hash="audit-test")
 
     def smoke_evidence(self, plan):
         if self.error:
@@ -426,6 +426,60 @@ def test_page_disables_launch_for_invalid_operational_control(monkeypatch, tmp_p
     panel.render_campaign_generation_page()
     assert fake_st.messages == []
     assert any("within their displayed bounds" in warning for warning in fake_st.warnings)
+
+
+def test_page_does_not_read_admission_audit_until_explicit_load(monkeypatch, tmp_path: Path) -> None:
+    campaign, _, _ = _patch_fake_page(monkeypatch, tmp_path)
+    (campaign.config.output_root / "admission-audit.json").write_text("{}", encoding="utf-8")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        panel,
+        "_cached_admission_evidence",
+        lambda path, *_args, **_kwargs: calls.append(path) or {},
+    )
+
+    panel.render_campaign_generation_page()
+
+    assert calls == []
+
+
+def test_page_loads_and_renders_identity_bound_admission_evidence(monkeypatch, tmp_path: Path) -> None:
+    campaign, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Load admission audit"})
+    audit_path = campaign.config.output_root / "admission-audit.json"
+    audit_path.write_text("{}", encoding="utf-8")
+    payload = {"counts": {"observed": 1}}
+    calls: list[tuple[str, dict[str, object]]] = []
+    rendered: list[tuple[dict[str, object], float]] = []
+
+    def load(path: str, _identity: object, **kwargs: object) -> dict[str, object]:
+        calls.append((path, kwargs))
+        return payload
+
+    monkeypatch.setattr(panel, "_cached_admission_evidence", load)
+    monkeypatch.setattr(
+        panel,
+        "_render_admission_audit",
+        lambda value, *, threshold: rendered.append((value, threshold)),
+    )
+
+    panel.render_campaign_generation_page()
+
+    assert calls == [
+        (
+            audit_path.as_posix(),
+            {
+                "campaign_id": "cuda-campaign",
+                "source_manifest_hash": "source-test",
+                "admission_audit_hash": "audit-test",
+            },
+        )
+    ]
+    assert rendered == [(payload, 0.2)]
+    assert panel._ADMISSION_STATE_KEY in fake_st.session_state
+    assert (
+        "aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py"
+        in panel._admission_explanation("reasons", threshold=0.2).external_references[0][1]
+    )
 
 
 def test_page_warns_and_disables_launch_below_free_disk_floor(monkeypatch, tmp_path: Path) -> None:

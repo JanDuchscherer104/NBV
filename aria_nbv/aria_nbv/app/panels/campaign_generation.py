@@ -135,7 +135,7 @@ def _admission_explanation(kind: str, *, threshold: float) -> ScientificExplanat
         external_references=(
             (
                 "Admission evidence contract",
-                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/oracle/pipelines/admission_evidence.py",
+                "https://github.com/JanDuchscherer104/ARIA-NBV/blob/main/aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py",
             ),
         ),
     )
