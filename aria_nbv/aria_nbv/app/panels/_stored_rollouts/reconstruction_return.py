@@ -70,17 +70,17 @@ _TEMPORAL_THEORY: dict[str, TheoryReferences | None] = {
     ),
     "selected_target_root_gain": TheoryReferences(
         equation_ids=("rl.target_root_gain_reward",),
-        symbol_ids=("rl.reward_target",),
+        symbol_ids=("entity.target_reward",),
         term_ids=("target-root-gain-reward",),
     ),
     "selected_target_rri": TheoryReferences(
         equation_ids=("rl.marginal_target_rri",),
-        symbol_ids=("entity.rri_e",),
+        symbol_ids=("entity.target_rri_marginal",),
         term_ids=("relative-reconstruction-improvement",),
     ),
     "marginal_target_rri": TheoryReferences(
         equation_ids=("rl.marginal_target_rri",),
-        symbol_ids=("entity.rri_e",),
+        symbol_ids=("entity.target_rri_marginal",),
         term_ids=("relative-reconstruction-improvement",),
     ),
     "selected_probability": TheoryReferences(
@@ -249,7 +249,7 @@ def _corpus_temporal_explanation(metric: str) -> ScientificExplanation:
     cumulative = metric == "cumulative_target_root_gain"
     label = "cumulative target root gain" if cumulative else "selected one-step target root gain"
     equation = "rl.cumulative_target_root_gain" if cumulative else "rl.target_root_gain_reward"
-    symbol = "entity.target_root_gain_cumulative" if cumulative else "rl.reward_target"
+    symbol = "entity.target_root_gain_cumulative" if cumulative else "entity.target_reward"
     term = "target-root-gain-reward"
     return ScientificExplanation(
         question=f"How does {label} evolve across the selected compatible shards?",

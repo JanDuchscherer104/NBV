@@ -4,11 +4,13 @@
 
 from __future__ import annotations
 
+import inspect
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return
 from aria_nbv.rollouts.inspection import _materialize_selection_family_union
 
 
@@ -237,3 +239,17 @@ def test_candidate_support_explanation_keeps_theory_and_inspection_owner() -> No
     assert explanation.theory.equation_ids == ("action.angle_cap_transform",)
     assert explanation.theory.term_ids == ("finite-candidate-action-set",)
     assert explanation.external_references[0][1].endswith("aria_nbv/aria_nbv/rollouts/inspection.py")
+
+
+def test_rollout_scientific_reference_owners_and_count_units_are_current() -> None:
+    sources = {
+        "candidate_generation": inspect.getsource(candidate_generation),
+        "overview_topology": inspect.getsource(overview_topology),
+        "reconstruction_return": inspect.getsource(reconstruction_return),
+    }
+    combined = "\n".join(sources.values())
+    assert "entity.target_reward" in combined
+    assert "entity.target_rri_marginal" in combined
+    assert "entity.rri_e" not in combined
+    assert "rl.reward_target" not in combined
+    assert "candidate evidence rows [count]" in sources["candidate_generation"]

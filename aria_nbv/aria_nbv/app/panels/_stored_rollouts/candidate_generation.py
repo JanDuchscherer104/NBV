@@ -811,12 +811,12 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                     x="metric",
                     y="count",
                     title="Collision and clearance applicability denominators",
-                    labels={"count": "candidate states [count]"},
+                    labels={"count": "candidate evidence rows [count]"},
                 ),
                 _candidate_population_explanation(
                     "How much of the candidate shell is represented by collision and clearance evidence?",
                     "Only explicit applicability, evaluation, collision, and finite-clearance denominator counts are shown.",
-                    "Counts of candidate states; zero collision is a valid measured count, while unavailable evidence remains separate.",
+                    "Counts of additive candidate evidence rows; zero collision is a valid measured count, while unavailable evidence remains separate.",
                     "The eight displayed fields are additive denominators or outcomes and are never inferred from status flags.",
                     "Evaluated and finite-clearance counts make the scientific rates auditable.",
                     "A small denominator limits interpretation even when the observed collision count is zero.",
@@ -881,7 +881,7 @@ def _render_complete_candidate_support(population: dict[str, object], *, evidenc
                         color="availability_count",
                         barmode="group",
                         title="Target-view availability and missingness",
-                        labels={"count": "candidate states [count]"},
+                        labels={"count": "candidate evidence rows [count]"},
                     ),
                     _candidate_population_explanation(
                         "Which optical and visibility measurements are actually persisted?",
@@ -2149,7 +2149,7 @@ def _render_candidate_geometry_diagnostics(
                         ),
                         theory=TheoryReferences(
                             equation_ids=("rl.target_root_gain_reward",),
-                            symbol_ids=("rl.reward_target",),
+                            symbol_ids=("entity.target_reward",),
                             term_ids=("target-root-gain-reward",),
                         ),
                     ),

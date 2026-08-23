@@ -167,7 +167,7 @@ def _render_corpus_evidence(summary: RolloutCorpusSummary | None) -> None:
             endpoint_theory = {
                 "endpoint_gain": TheoryReferences(equation_ids=("entity.endpoint_gain",)),
                 "target_rri": TheoryReferences(
-                    symbol_ids=("entity.rri_e",), term_ids=("relative-reconstruction-improvement",)
+                    symbol_ids=("entity.target_rri_marginal",), term_ids=("relative-reconstruction-improvement",)
                 ),
                 "cumulative_target_root_gain": TheoryReferences(
                     equation_ids=("rl.cumulative_target_root_gain",),
