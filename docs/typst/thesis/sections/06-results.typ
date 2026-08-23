@@ -98,6 +98,7 @@ The thesis report bundle is loaded through the strict schema checked in `experim
 ] else [
   The available artifacts show that the finite-candidate rollout path reaches mesh rendering, target-specific oracle scoring, and selected-action replay on training sources. They therefore support an implementation-readiness claim only. A CUDA out-of-memory failure in an unbatched candidate render and later memory-bounded attempts identify rendering as a scale gate; neither establishes rollout throughput, storage cost, candidate-family support, or policy quality for the intended study population.
 ]
+<claim-owner:pc-no-confirmatory-result>
 
 == Target-Task Coverage
 
@@ -106,6 +107,7 @@ The thesis report bundle is loaded through the strict schema checked in `experim
 ] else [
   The implemented pipeline samples geometry-valid GT target tasks and records target and validity fields in the rollout schema. The loaded bundle does not contain a validated population and exclusion table for the study. Scene coverage, eligible-target coverage, invalid-reason frequencies, and their denominators are consequently unavailable as results.
 ]
+<claim-falsifier:pc-no-confirmatory-result>
 
 == Policy Comparison
 
@@ -114,6 +116,7 @@ The thesis report bundle is loaded through the strict schema checked in `experim
 ] else [
   The primary estimand is not estimable from the current evidence because no validated held-out bundle contains the matched policy outcomes and aggregation inputs. Oracle repeatability, oracle-lookahead headroom, learned one-step performance, finite-horizon recovery, uncertainty intervals, and sensitivity analyses are therefore not reported.
 ]
+<claim-limitation:pc-no-confirmatory-result>
 
 == Runtime and Storage Gate
 

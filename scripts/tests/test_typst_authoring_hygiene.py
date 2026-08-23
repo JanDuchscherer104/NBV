@@ -26,12 +26,12 @@ LABEL_SCOPE = {
     Path("docs/typst/thesis/development/m1-contract-report.typ"): "development",
 }
 EXPECTED_LABEL_COUNTS = {
-    Path("docs/typst/thesis/sections/01-introduction.typ"): 2,
-    Path("docs/typst/thesis/sections/01-research-questions.typ"): 9,
+    Path("docs/typst/thesis/sections/01-introduction.typ"): 5,
+    Path("docs/typst/thesis/sections/01-research-questions.typ"): 12,
     Path("docs/typst/thesis/development/roadmap.typ"): 10,
     Path("docs/typst/thesis/development/m1-contract-report.typ"): 4,
 }
-LABEL_PREFIXES = ("ch:", "fig:", "tab:", "sec:", "ssec:")
+LABEL_PREFIXES = ("ch:", "fig:", "tab:", "sec:", "ssec:", "claim-")
 METADATA_LABELS = {"outcome"}
 PREEXISTING_LABELS = {"sec:thesis-research-questions"}
 LABEL_RE = re.compile(r"<([A-Za-z][A-Za-z0-9_:-]*)>")
@@ -248,7 +248,7 @@ class HygieneTests(unittest.TestCase):
             ]
             self.assertEqual(len(labels), expected, relative)
             totals[LABEL_SCOPE[relative]] += len(labels)
-        self.assertEqual(totals, {"submission": 11, "development": 14})
+        self.assertEqual(totals, {"submission": 17, "development": 14})
 
 
 def main(argv: list[str] | None = None) -> int:

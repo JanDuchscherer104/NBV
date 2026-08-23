@@ -18,6 +18,10 @@ horizon, branch factor, target protocol, and held-out split.
 
 *Problem statement.* Given a GT-defined target task, actor-visible reconstruction evidence, a finite candidate table with hard validity constraints, and a fixed acquisition budget, determine whether bounded oracle lookahead improves endpoint target reconstruction over one-step oracle-greedy selection and, only if such headroom exists, whether a learned policy using non-privileged inputs recovers a meaningful fraction of it under the same oracle evaluation.
 
-The thesis separates supervision from decision-time information. Ground-truth geometry defines current target tasks, target crops, oracle labels, and evaluation; it is not an ordinary actor input. Invalid candidates are outside the admissible action set rather than examples with low utility. One-step oracle greedy is an immediate-reward comparator over the evaluated valid candidate table, while oracle lookahead is an upper reference only within the fixed candidate generator, horizon, branch factor, target pool, and validity regime. These restrictions make negative results interpretable without turning a bounded experiment into a universal statement about view planning.
+The thesis separates supervision from decision-time information. Ground-truth geometry defines current target tasks, target crops, oracle labels, and evaluation; it is not an ordinary actor input. Invalid candidates are outside the admissible action set rather than examples with low utility. One-step oracle greedy is an immediate-reward comparator over the evaluated valid candidate table, while oracle lookahead is an upper reference only within the fixed candidate generator, horizon, branch factor, target pool, and validity regime. These restrictions make negative results interpretable without turning a bounded experiment into a universal statement about view planning. <claim-owner:pc-core-evaluation-contract>
+
+The bounded candidate support and matched evaluation regime provide the falsifiable boundary for the current evaluation contract. <claim-falsifier:pc-core-evaluation-contract>
+
+Population-level policy performance remains outside the current evidence boundary. <claim-limitation:pc-core-evaluation-contract>
 
 #include "01-research-questions.typ"

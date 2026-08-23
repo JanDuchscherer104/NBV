@@ -75,6 +75,7 @@ class FreshnessTests(unittest.TestCase):
     """Use Graphify's own manifest writer; tests never reproduce its hashes."""
 
     OWNER = "docs/thesis/main.md"
+    CLAIM_OWNER = "docs/typst/thesis/data/principal-claims.toml"
 
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory(prefix="aria-freshness-")
@@ -91,6 +92,7 @@ class FreshnessTests(unittest.TestCase):
         )
         for relative, content in {
             self.OWNER: "owner\n",
+            self.CLAIM_OWNER: 'schema = "fixture"\n',
             "src/example.py": "def example(): return 1\n",
             "seed.md": "seed\n",
         }.items():
@@ -115,14 +117,18 @@ class FreshnessTests(unittest.TestCase):
     def _write_projection(self) -> None:
         owner = self.root / self.OWNER
         digest = hashlib.sha256(owner.read_bytes()).hexdigest()
+        claim_owner = self.root / self.CLAIM_OWNER
+        claim_digest = hashlib.sha256(claim_owner.read_bytes()).hexdigest()
         index = self.root / "graphify-input/index.md"
         index.parent.mkdir(parents=True, exist_ok=True)
         index.write_text(
             "---\nowner: generated\n---\n# graphify-projection:index\n"
             f"source_revision: {self.head}\n"
             "owner_worktree_state: clean\n\n"
+            "claim_extension_status: current\n"
             "## Owner digests\n\n"
-            f"- {self.OWNER}: sha256:{digest}\n\n## Families\n",
+            f"- {self.OWNER}: sha256:{digest}\n"
+            f"- {self.CLAIM_OWNER}: sha256:{claim_digest}\n\n## Families\n",
             encoding="utf-8",
         )
 
@@ -203,6 +209,12 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.payload()["state"], "fresh")
         self.assertEqual(_graphify_out_bytes(self.root), before)
+
+    def test_missing_claim_ledger_owner_makes_projection_unusable(self) -> None:
+        (self.root / self.CLAIM_OWNER).unlink()
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("projection owner is unavailable", " ".join(payload["reasons"]))
 
     def test_ast_and_semantic_drift_use_their_respective_upstream_hashes(self) -> None:
         code = self.root / "src/example.py"

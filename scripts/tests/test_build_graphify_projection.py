@@ -887,6 +887,21 @@ class ProjectionTests(unittest.TestCase):
         for family in ("thesis", "code", "citations", "literature", "assets"):
             self.assertRegex(clean_index, rf"\[{family}\]\([^)]+\): \d+")
         self.assertIn("owner_worktree_state: clean", clean_index)
+        self.assertIn("claim_extension_status: missing", clean_index)
+        self.assertNotRegex(clean_index, r"\[claims\]\([^)]+\)")
+
+        ledger = self.fixture.root / "docs/typst/thesis/data/principal-claims.toml"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text("not = [valid\n", encoding="utf-8")
+        invalid_index = self.build().files["index.md"]
+        self.assertIn("claim_extension_status: invalid", invalid_index)
+        self.assertIn("claim_extension_errors: 1", invalid_index)
+        self.assertIn("owner_worktree_state: dirty", invalid_index)
+        self.assertRegex(
+            invalid_index,
+            r"docs/typst/thesis/data/principal-claims\.toml: sha256:[0-9a-f]{64}",
+        )
+        ledger.unlink()
 
         bibliography = self.fixture.root / "docs/references.bib"
         bibliography.write_text(

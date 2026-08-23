@@ -167,7 +167,13 @@ mixture, hard action mask, target protocol, horizon, and oracle re-evaluation of
 RQ1--RQ4. It is attempted only when offline headroom and replay support are
 positive; it is not required to establish the finite-candidate thesis result.
 Online training must not silently expand the action space, change the target
-protocol, or treat GT renders as actor evidence.
+protocol, or treat GT renders as actor evidence. <claim-owner:pc-rq5-online-discrete-bridge>
+
+The bridge is falsified if it changes the finite-candidate contract or cannot
+preserve the actor-visible and oracle-only boundary. <claim-falsifier:pc-rq5-online-discrete-bridge>
+
+It remains conditional and is not required for the finite-candidate thesis
+result. <claim-limitation:pc-rq5-online-discrete-bridge>
 
 === RQ6 — Lower-priority continuous and simulator escalation <ssec:rq6>
 

@@ -21,6 +21,7 @@ INTERPRETER = Path("graphify-out/.graphify_python")
 ROOT_MARKER = Path("graphify-out/.graphify_root")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
 INDEX_PATH = "graphify-input/index.md"
+CLAIM_LEDGER_PATH = "docs/typst/thesis/data/principal-claims.toml"
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 MAX_STALE_SOURCES = 128
 GIT_OBJECT_REPAIR_COMMAND = "git fetch --all --prune"
@@ -492,6 +493,21 @@ def _detector_stale_sources(
             values = result.get(key)
             if not isinstance(values, list):
                 raise ValueError(f"Graphify detector has invalid {key}")
+            if key == "unclassified":
+                claim_owner = (root / CLAIM_LEDGER_PATH).resolve()
+                def is_claim_owner(value: object) -> bool:
+                    if not isinstance(value, str):
+                        return False
+                    candidate = Path(value)
+                    if not candidate.is_absolute():
+                        candidate = root / candidate
+                    return candidate.resolve() == claim_owner
+
+                values = [
+                    value
+                    for value in values
+                    if not is_claim_owner(value)
+                ]
             if values:
                 raise ValueError(f"Graphify detector reported {key}")
         files = result.get("new_files")

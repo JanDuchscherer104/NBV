@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-claim-contract graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke qh-ci replay-oracle-golden docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -756,7 +756,11 @@ thesis-watch: ## Watch and recompile the DEVELOPMENT/DRAFT thesis PDF
 thesis-marker-contract: _check_python ## Verify Typst development/submission marker fixtures
 	@$(PYTHON_INTERPRETER) scripts/tests/test_thesis_marker_contract.py
 
-typst-authoring-contract: _check_python ## Enforce shared-equation, notation, label, and prose hygiene
+thesis-claim-contract: _check_python ## Validate the typed thesis claim ledger and anchored prose
+	@$(PYTHON_INTERPRETER) scripts/check_thesis_claims.py
+	@$(PYTHON_INTERPRETER) -m pytest scripts/tests/test_check_thesis_claims.py scripts/tests/test_thesis_method_sync.py
+
+typst-authoring-contract: _check_python thesis-claim-contract ## Enforce shared-equation, notation, label, and prose hygiene
 	@$(PYTHON_INTERPRETER) scripts/tests/test_typst_authoring_hygiene.py --scan docs/typst/thesis
 
 docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci typst-authoring-contract thesis-marker-contract ## Render the core docs surfaces used by root CI

@@ -1,0 +1,53 @@
+schema = "aria-nbv-principal-claims-v2"
+receipts = []
+
+[[claims]]
+id = "pc-core-evaluation-contract"
+class = "contribution"
+rqs = ["rq1", "rq2", "rq3", "rq4"]
+release_applicability = "required"
+maturity = "planned"
+outcome = "missing"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "typst:docs/typst/thesis/sections/01-introduction.typ#claim-owner:pc-core-evaluation-contract"
+falsifier = "typst:docs/typst/thesis/sections/01-introduction.typ#claim-falsifier:pc-core-evaluation-contract"
+limitations = ["typst:docs/typst/thesis/sections/01-introduction.typ#claim-limitation:pc-core-evaluation-contract"]
+
+[[claims.evidence]]
+role = "implementation"
+locator = "code:aria_nbv/aria_nbv/rollouts/reporting.py"
+
+[[claims]]
+id = "pc-rq5-online-discrete-bridge"
+class = "rq"
+rqs = ["rq5"]
+release_applicability = "conditional"
+maturity = "planned"
+outcome = "conditional"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "typst:docs/typst/thesis/sections/01-research-questions.typ#claim-owner:pc-rq5-online-discrete-bridge"
+falsifier = "typst:docs/typst/thesis/sections/01-research-questions.typ#claim-falsifier:pc-rq5-online-discrete-bridge"
+limitations = ["typst:docs/typst/thesis/sections/01-research-questions.typ#claim-limitation:pc-rq5-online-discrete-bridge"]
+
+[[claims.evidence]]
+role = "implementation"
+locator = "code:aria_nbv/aria_nbv/vin/candidate_scorer.py"
+
+[[claims]]
+id = "pc-no-confirmatory-result"
+class = "result"
+rqs = []
+release_applicability = "non-release"
+maturity = "planned"
+outcome = "missing"
+review_state = "unreviewed"
+release_state = "withheld"
+owner = "typst:docs/typst/thesis/sections/06-results.typ#claim-owner:pc-no-confirmatory-result"
+falsifier = "typst:docs/typst/thesis/sections/06-results.typ#claim-falsifier:pc-no-confirmatory-result"
+limitations = ["typst:docs/typst/thesis/sections/06-results.typ#claim-limitation:pc-no-confirmatory-result"]
+
+[[claims.evidence]]
+role = "implementation"
+locator = "code:aria_nbv/aria_nbv/rollouts/reporting.py"

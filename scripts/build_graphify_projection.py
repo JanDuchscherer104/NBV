@@ -16,9 +16,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from typing import Callable, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit, urlunsplit
 
+from check_thesis_claims import (
+    ClaimValidationError,
+    PrincipalClaims,
+    read_principal_claims,
+)
 from glossary_build import (
     GlossaryError,
     normalize_and_validate_metadata,
@@ -53,6 +59,7 @@ class ProjectionConfig:
     output_path: Path = Path("graphify-input")
     aria_code_ref: str = "main"
     aria_code_ref_source: str = "default"
+    claim_ledger_path: Path = Path("docs/typst/thesis/data/principal-claims.toml")
 
 
 @dataclass(frozen=True)
@@ -129,6 +136,9 @@ class _RenderData:
     notation: Mapping[str, Mapping[str, Mapping[str, object]]]
     notation_owners: Mapping[tuple[str, str], Path]
     usage_by_source: Mapping[Path, Mapping[str, Counter[str]]]
+    claims: PrincipalClaims | None
+    claim_extension_status: str
+    claim_extension_error: str | None
 
 
 @dataclass
@@ -142,6 +152,7 @@ class _Pages:
     terms: dict[str, _Page]
     symbols: dict[str, _Page]
     equations: dict[str, _Page]
+    claims: dict[str, _Page]
 
     def all(self) -> list[_Page]:
         return [
@@ -153,6 +164,7 @@ class _Pages:
             *self.terms.values(),
             *self.symbols.values(),
             *self.equations.values(),
+            *self.claims.values(),
         ]
 
 
@@ -1067,6 +1079,11 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
     equations = {
         key: _Page(f"equation:{key}", "equations") for key in data.notation["equations"]
     }
+    claims = (
+        {claim.id: _Page(f"principal-claim:{claim.id}", "claims") for claim in data.claims.claims}
+        if data.claims is not None
+        else {}
+    )
     for row in data.manifest:
         for kind, root, field_name in (
             ("tex-root", config.tex_root, "tex_dir"),
@@ -1091,6 +1108,7 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
         terms=terms,
         symbols=symbols,
         equations=equations,
+        claims=claims,
     )
 
 
@@ -1151,6 +1169,33 @@ def _populate_thesis_pages(
             ):
                 if key in relation:
                     page.lines.append(f"  {key}: {relation[key]}")
+
+
+def _populate_claim_pages(
+    data: _RenderData, pages: _Pages, paths: Mapping[str, str]
+) -> None:
+    """Project validated claim state and links; never derive or mutate it."""
+    if data.claims is None:
+        return
+    for claim in data.claims.claims:
+        page = pages.claims[claim.id]
+        page.lines.extend(
+            [
+                f"claim_id: {claim.id}",
+                f"class: {claim.claim_class}",
+                f"release_applicability: {claim.release_applicability}",
+                f"maturity: {claim.maturity}",
+                f"outcome: {claim.outcome}",
+                f"review_state: {claim.review_state}",
+                f"release_state: {claim.release_state}",
+                f"owner: {claim.owner.raw}",
+                f"falsifier: {claim.falsifier.raw}",
+            ]
+        )
+        page.lines.extend(f"limitation: {locator.raw}" for locator in claim.limitations)
+        page.lines.extend(
+            f"evidence: {evidence.role} {evidence.locator.raw}" for evidence in claim.evidence
+        )
 
 
 def _populate_citation_pages(
@@ -1356,6 +1401,7 @@ def _owner_paths(config: ProjectionConfig, closure: Sequence[Path]) -> list[Path
         config.glossary_path,
         config.symbols_path,
         config.equations_path,
+        config.claim_ledger_path,
     ]
 
 
@@ -1385,8 +1431,19 @@ def _render_index(
     owner_paths = [*_owner_paths(config, data.closure), *data.notation_owners.values()]
     owner_rows = []
     for owner in sorted(set(owner_paths), key=lambda path: path.as_posix()):
+        target = config.repo_root / owner
+        if not target.is_file() or target.is_symlink():
+            continue
         digest = hashlib.sha256(_owner_path(config, owner).read_bytes()).hexdigest()
         owner_rows.append(f"- {owner.as_posix()}: sha256:{digest}")
+    claim_error_rows = (
+        [
+            "claim_extension_error: "
+            + json.dumps(data.claim_extension_error, ensure_ascii=False)
+        ]
+        if data.claim_extension_error
+        else []
+    )
     index = [
         "# graphify-projection:index",
         "",
@@ -1400,6 +1457,9 @@ def _render_index(
         f"aria_code_ref_pin_kind: {data.aria_code_pin_kind}",
         f"aria_code_ref_resolved_oid: {data.aria_code_oid}",
         f"owner_worktree_state: {'dirty' if _owners_dirty(config, runner, owner_paths) else 'clean'}",
+        f"claim_extension_status: {data.claim_extension_status}",
+        f"claim_extension_errors: {1 if data.claim_extension_error else 0}",
+        *claim_error_rows,
         "asset_presence_scope: environment-local",
         f"asset_inventory_sha256: {_asset_inventory_digest(pages)}",
         "heading_source_attribution: unavailable",
@@ -1425,6 +1485,7 @@ def _render_index(
         "glossary",
         "symbols",
         "equations",
+        "claims",
     ):
         if families[family]:
             candidates = sorted(
@@ -1454,6 +1515,7 @@ def _render_pages(
     _populate_literature_pages(config, data, pages, paths)
     _populate_fact_pages(data, pages, paths)
     _populate_entity_pages(config, data, pages, paths)
+    _populate_claim_pages(data, pages, paths)
     files: dict[str, str] = {}
     for page in sorted(pages.all(), key=lambda item: item.identity):
         path = paths[page.identity]
@@ -1581,6 +1643,7 @@ def build_projection(
         config.glossary_path,
         config.symbols_path,
         config.equations_path,
+        config.claim_ledger_path,
     )
     bib = _bib_entries(config)
     terms = _glossary_terms(config, runner, bib)
@@ -1589,6 +1652,17 @@ def build_projection(
     except GlossaryError as error:
         raise ProjectionError(f"notation metadata invalid: {error}") from error
     notation_owners = _notation_owners(config, notation)
+    claim_path = config.repo_root / config.claim_ledger_path
+    claims: PrincipalClaims | None = None
+    claim_extension_status = "missing"
+    claim_extension_error: str | None = None
+    if claim_path.is_file():
+        try:
+            claims = read_principal_claims(claim_path, config.repo_root)
+            claim_extension_status = "current"
+        except (ClaimValidationError, OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+            claim_extension_status = "invalid"
+            claim_extension_error = str(error)
     output, temporary, backup = _validate_output(
         config, (*owner_paths, *notation_owners.values())
     )
@@ -1675,6 +1749,9 @@ def build_projection(
             notation=notation,
             notation_owners=notation_owners,
             usage_by_source=usage_by_source,
+            claims=claims,
+            claim_extension_status=claim_extension_status,
+            claim_extension_error=claim_extension_error,
         ),
     )
     if not check:
