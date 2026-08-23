@@ -27,9 +27,15 @@ blueprints, camera/depth evidence, and viewer behavior.
 
 ## Interaction Contract
 
-- Lead with the answer, readiness verdict, essential metrics, and primary plot.
-- Keep exact tables and exports collapsed directly beneath the view they
-  explain.
+- Lead with plot/metric interpretation—what it means—then the answer, readiness
+  verdict, essential metrics, and primary plot.
+- For a scientific plot or metric that needs explanation, state its definition,
+  units, assumptions, formula or computational transform when relevant,
+  normalization/denominator, intuition, and failure modes; include exact
+  notation and links to canonical equation, symbol, glossary, and source owners.
+- Keep raw/exact tables and exports subordinate to the interpretation and
+  collapsed directly beneath it.
+- Keep operational counts and provenance as concise narrative; do not invent equations for them.
 - Separate reward/reconstruction evidence from admission/feasibility evidence.
 - Aggregate compatible shards by their persisted contract. Keep invalid or
   incompatible stores visible and unpooled.
@@ -41,9 +47,6 @@ blueprints, camera/depth evidence, and viewer behavior.
   the complete intended population.
 - Use human-readable storage units and one-based acquisition numbering in the
   presentation layer.
-- Scientific explanations link canonical equations, symbols, and glossary
-  owners when those concepts are relevant. Operational counts and provenance
-  remain concise narrative when an equation would add no value.
 
 ## State And Cache Contract
 

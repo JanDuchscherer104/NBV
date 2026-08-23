@@ -42,6 +42,9 @@ chain through a second index. Convert weak plain reference-name inventories into
 concise Markdown pointers where practical. Put branch-specific commands, lookup
 tables, examples, version details, and longer procedures in those references.
 Do not create a registry that mirrors the skill set or source ownership.
+Make pointer preservation a completion condition: complete a progressive-
+disclosure edit only when an existing or replacement pointer names the branch
+and target strongly enough to load the moved detail.
 
 Use the repository's current owner paths for implementation and scientific
 claims. A pointer identifies where to look; it does not make the pointer's
@@ -65,10 +68,12 @@ references only when their branch condition is active.
 
 ## Upstream skills
 
-Byte-identical, separately pinned upstream bundles keep their upstream
-frontmatter and bytes. Put ARIA-specific activation, source-order, safety, and
-verification in the nearest ARIA companion skill; preserve the upstream
-integrity contract separately.
+For every upstream-derived bundle, preserve its upstream frontmatter, exact
+upstream body, and all upstream bytes. The pinned release/commit reference and
+bounded refresh/check procedure belong, with ARIA-specific activation,
+source-order, safety, and verification, in an ARIA-owned companion or
+maintenance surface outside the bundle, while the upstream bundle remains
+byte-identical.
 
 ## Review
 
