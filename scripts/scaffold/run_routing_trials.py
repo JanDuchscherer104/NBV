@@ -60,13 +60,9 @@ TRIAL_EXECUTION_PROTOCOL = (
     "demonstrate the route with focused, bounded evidence. Inspect the named real "
     "contract and its exact owner or owners; do not substitute an invented example. "
     "Describe the precise scoped decision and run or name a bounded read-only proof. "
-    "Do not mutate the checkout; leave it clean. A bounded mixed-source Graphify "
-    "graph was provisioned from the same evaluator-free production snapshot. "
-    "When a task needs non-obvious "
-    "consumer or relationship discovery, run graphify query, graphify path, or "
-    "graphify explain against that graph before exact-source verification. Do "
-    "not run ARIA repository freshness or bootstrap in this isolated snapshot. "
-    "Graph output is navigation only, never authority. The "
+    "Do not mutate the checkout; leave it clean. This source-order suite does "
+    "not provision optional navigation artifacts; exact production sources are "
+    "the only admissible evidence. The "
     "task below is the only task-specific input; do not infer evaluator guidance "
     "or candidate changes from it."
 )
@@ -311,7 +307,7 @@ def materialize_trial_snapshot(
 
 
 def provision_trial_graph(checkout: Path) -> dict[str, str]:
-    """Build and attest mixed-source navigation for a trial snapshot."""
+    """Optionally attest mixed-source Graphify; the source-order suite does not call it."""
     remaining_fixtures = [
         path.as_posix()
         for path in EVALUATOR_FIXTURE_PATHS
@@ -322,22 +318,10 @@ def provision_trial_graph(checkout: Path) -> dict[str, str]:
             "evaluator fixture remains in trial snapshot: "
             + ", ".join(remaining_fixtures)
         )
-
-    command = [
-        "graphify",
-        "extract",
-        ".",
-        "--no-cluster",
-        "--out",
-        ".",
-    ]
+    command = ["graphify", "extract", ".", "--no-cluster", "--out", "."]
     try:
         result = subprocess.run(
-            command,
-            cwd=checkout,
-            check=False,
-            capture_output=True,
-            text=True,
+            command, cwd=checkout, check=False, capture_output=True, text=True
         )
     except OSError as error:
         raise ValueError("cannot run local Graphify extraction") from error
@@ -345,7 +329,6 @@ def provision_trial_graph(checkout: Path) -> dict[str, str]:
         raise ValueError(
             f"Graphify extraction failed with exit code {result.returncode}"
         )
-
     graph_path = checkout / "graphify-out" / "graph.json"
     if graph_path.is_symlink() or not graph_path.is_file():
         raise ValueError("Graphify graph must be a regular non-symlink file")
@@ -359,7 +342,6 @@ def provision_trial_graph(checkout: Path) -> dict[str, str]:
         or not graph["nodes"]
     ):
         raise ValueError("Graphify graph must be a JSON object with nonempty nodes")
-
     graph_text = graph_path.read_text(encoding="utf-8")
     required_sources = (
         ".agents/skills/agent-behavior/SKILL.md",
@@ -371,7 +353,6 @@ def provision_trial_graph(checkout: Path) -> dict[str, str]:
         raise ValueError(
             "Graphify graph lacks required source provenance: " + ", ".join(missing)
         )
-
     if run_git("status", "--porcelain", "--untracked-files=no", cwd=checkout):
         raise ValueError("Graphify provisioning dirtied the trial snapshot")
     return {
@@ -1027,7 +1008,6 @@ def run_trial(
     timeout_seconds: int,
     run_id: str | None = None,
     checkout_digest_expected: str,
-    graph: dict[str, str],
 ) -> dict[str, Any]:
     trial_dir = output_dir / (run_id or trial_id)
     trial_dir.mkdir(parents=True, exist_ok=False)
@@ -1074,7 +1054,6 @@ def run_trial(
         "requested_model": model,
         "requested_effort": effort,
         "command_flags": command[1:-1],
-        "graphify_version": graph["version"],
     }
     report = {
         "trial_id": trial_id,
@@ -1092,7 +1071,6 @@ def run_trial(
         "checkout_digest_expected": checkout_digest_expected,
         "checkout_digest_before": digest_before,
         "checkout_digest_after": digest_after,
-        "graph_sha256": graph["graph_sha256"],
         "artifacts": {
             "events": events_path.name,
             "stderr": stderr_path.name,
@@ -1166,8 +1144,6 @@ def main() -> int:
         raise SystemExit("--jobs must be 1; every trial owns an isolated snapshot")
     if args.repetitions < 1:
         raise SystemExit("--repetitions must be positive")
-    if args.baseline_index and args.repetitions < 3:
-        raise SystemExit("comparative runs require at least three repetitions")
     if run_git("status", "--porcelain"):
         raise SystemExit("commit the candidate before routing trials")
 
@@ -1185,13 +1161,9 @@ def main() -> int:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    graphify_version = subprocess.run(
-        ["graphify", "--version"], check=True, capture_output=True, text=True
-    ).stdout.strip()
     runner_sha256 = _sha256_file(ROOT / "scripts/scaffold/run_routing_trials.py")
     evaluation_config = {
         "codex_version": codex_version,
-        "graphify_version": graphify_version,
         "model": args.model,
         "effort": args.effort,
         "timeout_seconds": args.timeout,
@@ -1211,7 +1183,6 @@ def main() -> int:
     }
     reports: list[dict[str, Any]] = []
     corpus_manifest: dict[str, str] | None = None
-    graph_digests: list[str] = []
     for repetition in range(1, args.repetitions + 1):
         for trial_id in selected:
             with tempfile.TemporaryDirectory(
@@ -1226,8 +1197,6 @@ def main() -> int:
                     corpus_manifest = current_manifest
                 elif corpus_manifest != current_manifest:
                     raise SystemExit("isolated trial corpus manifests differ")
-                graph = provision_trial_graph(checkout)
-                graph_digests.append(graph["graph_sha256"])
                 checkout_digest_expected = _checkout_digest(checkout)
                 run_id = f"{trial_id}__r{repetition}"
                 report = run_trial(
@@ -1238,7 +1207,6 @@ def main() -> int:
                     rubric_commit=rubric_commit,
                     checkout=checkout,
                     checkout_digest_expected=checkout_digest_expected,
-                    graph=graph,
                     output_dir=output_dir,
                     codex_version=codex_version,
                     model=args.model,
@@ -1270,7 +1238,6 @@ def main() -> int:
         "evaluation_config": evaluation_config,
         "corpus_manifest": corpus_manifest or {},
         "corpus_manifest_sha256": _manifest_sha256(corpus_manifest or {}),
-        "graph_sha256": sorted(set(graph_digests)),
         "trial_ids": list(selected),
         "reports": [
             {
@@ -1284,6 +1251,22 @@ def main() -> int:
             }
             for position, report in enumerate(reports)
         ],
+        "statistics": {
+            trial_id: {
+                "repetitions": args.repetitions,
+                "passes": sum(
+                    trial_passed(report)
+                    for report in reports
+                    if report["trial_id"] == trial_id
+                ),
+                "uncertainty": (
+                    "single unseeded trajectory; no stability claim"
+                    if args.repetitions == 1
+                    else "unseeded repeated trajectories; report empirical pass rate"
+                ),
+            }
+            for trial_id in selected
+        },
     }
     if args.baseline_index:
         baseline = json.loads(args.baseline_index.read_text(encoding="utf-8"))
@@ -1311,8 +1294,6 @@ def main() -> int:
             "changed_paths": changed_paths,
             "baseline_corpus_manifest_sha256": baseline.get("corpus_manifest_sha256"),
             "candidate_corpus_manifest_sha256": index["corpus_manifest_sha256"],
-            "baseline_graph_sha256": baseline.get("graph_sha256"),
-            "candidate_graph_sha256": index["graph_sha256"],
         }
     (output_dir / "index.json").write_text(
         json.dumps(index, indent=2, sort_keys=True) + "\n",

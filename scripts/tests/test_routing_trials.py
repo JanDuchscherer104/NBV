@@ -150,14 +150,8 @@ def test_trial_prompt_has_generic_protocol_and_only_fixture_task_is_specific() -
     assert "bounded read-only proof" in prompt
     assert "Do not mutate the checkout" in prompt
     assert "invented example" in prompt
-    assert "mixed-source Graphify" in prompt
-    assert "evaluator-free production snapshot" in prompt
-    assert "graphify query" in prompt
-    assert "graphify path" in prompt
-    assert "graphify explain" in prompt
-    assert "before exact-source verification" in prompt
-    assert "Do not run ARIA repository freshness or bootstrap" in prompt
-    assert "navigation only, never authority" in prompt
+    assert "does not provision optional navigation artifacts" in prompt
+    assert "exact production sources" in prompt
     assert prompt.endswith("Task:\nChoose the owner.")
     for leaked_term in (
         "expected_owner_paths",
@@ -575,11 +569,8 @@ def test_provision_trial_graph_rejects_evaluator_fixture_before_command(
 def test_main_provisions_graph_after_snapshot_before_trials() -> None:
     source = inspect.getsource(trials.main)
 
-    assert (
-        source.index("materialize_trial_snapshot(")
-        < source.index("provision_trial_graph(")
-        < source.index("run_trial(")
-    )
+    assert source.index("materialize_trial_snapshot(") < source.index("run_trial(")
+    assert "provision_trial_graph(" not in source
 
 
 def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
@@ -1062,7 +1053,6 @@ def test_run_trial_hashes_the_protocol_augmented_prompt(tmp_path: Path) -> None:
             effort=None,
             timeout_seconds=1,
             checkout_digest_expected=trials._checkout_digest(tmp_path / "checkout"),
-            graph={"version": "graphify test", "graph_sha256": "0" * 64},
         )
 
     executed_prompt = captured["input"]
