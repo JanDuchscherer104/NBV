@@ -298,11 +298,11 @@
     },
     {
       "path": "docs/typst/thesis/data/report-bundle-fixture.json",
-      "sha256": "90776c455ce44da843ec502aa6acd227940a2c9418e41735f2e68b959a9be3fe"
+      "sha256": "bab1bcd3ec2cc7700aa9b6e2e506cf5a3bfe5146974264057ef18b0fd13594bd"
     },
     {
       "path": "docs/typst/thesis/data/report-bundle-invalid-missing-facts.json",
-      "sha256": "d7bb7ff28dfbaf1488627b2d0d49a0caded44d73ceca73e7eac7e40483e7ec98"
+      "sha256": "c26f3401482a3b509d48265b16b3b09853862c05b0d0a199c607675e7bd82a64"
     },
     {
       "path": "docs/typst/thesis/development/m1-contract-report.typ",
@@ -321,8 +321,16 @@
       "sha256": "8a19d476fc20e6015a65fff920b5aed5221d8ca6877696e7bc2b6757dbd2bee6"
     },
     {
+      "path": "docs/typst/thesis/figures/actor_oracle_boundary.pdf",
+      "sha256": "38ff11167158e85aa0ced7bf31960b437a4874b874a07679f6137a9256f839da"
+    },
+    {
       "path": "docs/typst/thesis/figures/actor_oracle_boundary.typ",
       "sha256": "de18fc434797437af85dc6eee07ed01221e9e64f17bc5e76215053e5125fcf08"
+    },
+    {
+      "path": "docs/typst/thesis/figures/candidate_generation_geometry.pdf",
+      "sha256": "3d5d19b638bda84a770e1d633914393070d2b4eea6641ef42e190b88384c1e2c"
     },
     {
       "path": "docs/typst/thesis/figures/candidate_generation_geometry.typ",
@@ -337,6 +345,14 @@
       "sha256": "bd1fb9c4792f25f0efbc385a7c3297953d0bdf146027c663f23af0b56a8b57ff"
     },
     {
+      "path": "docs/typst/thesis/figures/data/candidate_scene_81286_000035_oblique.png",
+      "sha256": "142c3f5c4b305e548dc0846430808bccc9220384d04ebb6c6b0c99e257289c86"
+    },
+    {
+      "path": "docs/typst/thesis/figures/data/candidate_scene_81286_000035_top.png",
+      "sha256": "55e14ca34f337bc08bc5bcb2a4dfe26b4d6199e26b534aa337caa30d25c2149c"
+    },
+    {
       "path": "docs/typst/thesis/figures/data/directional_memory_81286_000024_inst128.json",
       "sha256": "42fecb6486ce41620f423e4a52a436f32333377a052fe8f316c9e4d641bb06b1"
     },
@@ -345,12 +361,24 @@
       "sha256": "e03ec47f48931a07448dac67df4407450c3aa508cecebc34f0f577bbc7f03021"
     },
     {
+      "path": "docs/typst/thesis/figures/directional_memory_view_novelty.pdf",
+      "sha256": "37ca931d1f63285238366b32010db57dd91b15ff3cedde9a2acc2ab210a9b230"
+    },
+    {
       "path": "docs/typst/thesis/figures/directional_memory_view_novelty.typ",
       "sha256": "988649487161599ff171fabf3a969b29ae5cd485dd5b84ee661a9c9cba5a6719"
     },
     {
+      "path": "docs/typst/thesis/figures/feature_bank_query_pools.pdf",
+      "sha256": "ae08eb65e4ae6d93f55835092ad72e647260e032ef84f5ad32b7989a393e0ff0"
+    },
+    {
       "path": "docs/typst/thesis/figures/feature_bank_query_pools.typ",
       "sha256": "16bca2a4ab299673facb67b880bd5e8adfd5eceffe1fbd1a6d8128d7c979092a"
+    },
+    {
+      "path": "docs/typst/thesis/figures/oracle_lookahead_tree.pdf",
+      "sha256": "3948b512bf710b9a178fb438a2515cf659b85a78e8c0f44310a7e1ef30a06471"
     },
     {
       "path": "docs/typst/thesis/figures/oracle_lookahead_tree.typ",
@@ -361,12 +389,44 @@
       "sha256": "d5c469a59be5aa8695315941f81cf38d86c2db37e60b88eebe7c91a4496d7c78"
     },
     {
+      "path": "docs/typst/thesis/figures/oracle_target_task_sampler_contract.pdf",
+      "sha256": "e63b7ee5412c446eb192aa0df3560d19d215045f7c72e3522a426c9a05bf8daa"
+    },
+    {
+      "path": "docs/typst/thesis/figures/oracle_target_task_sampler_contract.svg",
+      "sha256": "396218665059d5c3a2c10d7a82b368947a2db40e444eda05f92bcc2e21c23f19"
+    },
+    {
       "path": "docs/typst/thesis/figures/proposal_system_flow.mmd",
       "sha256": "bb9531d5150e31650bb85c5ab531532324c0c218a3617543a79b5fedb6ebca1c"
     },
     {
+      "path": "docs/typst/thesis/figures/proposal_system_flow.pdf",
+      "sha256": "dc5496c70909c1538a7b445ccd59eab8c3f6de97d30562ef3fd5bafd4da5b6d5"
+    },
+    {
+      "path": "docs/typst/thesis/figures/proposal_system_flow.png",
+      "sha256": "68a9a7a2a9173786811a1979634b27dd4a3998a372b153715ddc9754b30093b3"
+    },
+    {
+      "path": "docs/typst/thesis/figures/proposal_system_flow.svg",
+      "sha256": "922f0d12ed119f78420c867c72f5ef5b03843fe588b66c875b5b68ef2252ec42"
+    },
+    {
       "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.mmd",
       "sha256": "189b527e09afa6c25c9b19ce2a1f6dd8ab45d53a0d65af822a949e6b156aa762"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.pdf",
+      "sha256": "c77078128e3d60a31cdbfa964f91bc9a12cdb3755903369eeccadb5cdc48cdc8"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_actor_oracle_contract.svg",
+      "sha256": "bb951460058b60287c90453c04f28f08f2e8e115e9a4c1d77c90954fe5e4c5d3"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_candidate_query_architecture.pdf",
+      "sha256": "d73e978df84c81e57b8ebd83b7f528738eed2c47e97315a216c4d8cc8e171008"
     },
     {
       "path": "docs/typst/thesis/figures/qh_candidate_query_architecture.typ",
@@ -377,12 +437,36 @@
       "sha256": "838babe6210babf9d3d2c52ddfe7223c8eef1975014841344db14877fb337ff2"
     },
     {
+      "path": "docs/typst/thesis/figures/qh_directional_memory.pdf",
+      "sha256": "c10a98756f4a8706e690fa52117401aaf7a28ae689b0f0e10158640c8d93c74b"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_directional_memory.svg",
+      "sha256": "307b28b21507b769b543dc30a8c61712e6df65be6f7ce1a4a616e91836307ba9"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_learning_evidence_loop.pdf",
+      "sha256": "58c57c27c4dbd7b22c8f4542a9a47ae580f0fa56b3453b88243a881c7183d675"
+    },
+    {
       "path": "docs/typst/thesis/figures/qh_learning_evidence_loop.typ",
       "sha256": "136a74196de30b98dc63710c31fa17b2a55ef09e495f1567b50d393d004996b7"
     },
     {
       "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.mmd",
       "sha256": "4a0ebec8c6c442596c83d165525f379c17f8fdb56e8cbe192ddb519b91c5cc49"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.pdf",
+      "sha256": "7d90589a2dd3b8b7cd73151cfbe892b7600437bf70be4ad88ac3445dcdd32c4e"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_rollout_replay_doubleq.svg",
+      "sha256": "681cb17a48bd1108aec1022b094e0c1c6f1f071bd3a75236cbc18120105b15a5"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_symmetry_acceptance_contract.pdf",
+      "sha256": "6fd1a97608d4d34fd185233b568cab4595791732f337284848e77bf985d197b4"
     },
     {
       "path": "docs/typst/thesis/figures/qh_symmetry_acceptance_contract.typ",
@@ -393,16 +477,52 @@
       "sha256": "99a3dac381b73cff61bb544f63ee2f70994ddb1df4523f3536d69d25be7e886c"
     },
     {
+      "path": "docs/typst/thesis/figures/qh_symmetry_contract.pdf",
+      "sha256": "d88fbe092b06abb227d1d8b9d2e40e814b1156ae0a749c412d257df28794e591"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_symmetry_contract.png",
+      "sha256": "9f6b06764de0095ae0031af3402ad8908844dc421584d2aad7904fc904fb750e"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_symmetry_contract.svg",
+      "sha256": "77ffce9ac5cd0b5fe1e9127f2ccd80d2df96b6dc66f0a86087681e2ba1f99024"
+    },
+    {
       "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.mmd",
       "sha256": "4481cfe7b4518eb3ad5226303e3de64e5b7809685f2334728c87a56c66018a66"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.pdf",
+      "sha256": "f40b6cc2bdfcfc4cdd195b7ddf7e729802b6e4cff6270b8c47417ffad58405db"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_teacher_student_render_path.svg",
+      "sha256": "69e6f9915f1409ab102324007bc238964eadb20e48a09c56687d41ffec730252"
     },
     {
       "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.mmd",
       "sha256": "2faebb760c476bae2233c89a8571dc6d0bb3a5178cd3dad81fac18e5267ffe43"
     },
     {
+      "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.pdf",
+      "sha256": "253c709459f2514eb3c332f34776220bf912160e8778d6ed7bf7fdf8df45158c"
+    },
+    {
+      "path": "docs/typst/thesis/figures/qh_vin_gnn_architecture.svg",
+      "sha256": "d386eae85a35b329007c8e928ae2e46be9db64289c8154b58dadbaf67ac46f7a"
+    },
+    {
+      "path": "docs/typst/thesis/figures/replay_lineage_relations.pdf",
+      "sha256": "bab8b7c51fcec4e004f20e3fc8278c790af2f8d98f2238ce7f62dcaa88a29629"
+    },
+    {
       "path": "docs/typst/thesis/figures/replay_lineage_relations.typ",
       "sha256": "b295742ce7439155ffa07503912b5cb23fba813dce443f1802c03177a1cc8c60"
+    },
+    {
+      "path": "docs/typst/thesis/figures/rollout_replay_doubleq_process.pdf",
+      "sha256": "85d4ed10de14e2bf3e1413c328c38721a5b63d0f3070a9aa3c05a89e3e660a20"
     },
     {
       "path": "docs/typst/thesis/figures/rollout_replay_doubleq_process.typ",
@@ -421,8 +541,16 @@
       "sha256": "7eb9adf02a8568849ad35090e7fd1c9305316f6694e057715abb9fa7e3e5a79d"
     },
     {
+      "path": "docs/typst/thesis/figures/target_rri_point_mesh_geometry.pdf",
+      "sha256": "4396055a68f1bf4a3825ea7bbf50dacc2c8973c26dd312ff339ea846d334d6a7"
+    },
+    {
       "path": "docs/typst/thesis/figures/target_rri_point_mesh_geometry.typ",
       "sha256": "f47e5392e5f50e850a1ed0b78aa5ea0859808ba603717a2c264c15fcfab5b426"
+    },
+    {
+      "path": "docs/typst/thesis/figures/target_task_sampler_contract.pdf",
+      "sha256": "9d8962304776f7269913765ffa8fdedeb9f355796d4561678d27cfaad8886b36"
     },
     {
       "path": "docs/typst/thesis/figures/target_task_sampler_contract.typ",
@@ -663,10 +791,11 @@
   ],
   "report_schema_version": "aria-nbv-thesis-report-v2",
   "schema_version": "thesis-toolchain-lock-v1",
-  "source_revision": "273e64e2fe22b139da582ccd56bf49a343b31c5a",
+  "source_revision": "d52e9532eab4c6e077ecd95afeb4af72829b8ec1",
   "toolchain": {
     "compiler": {
-      "executable": "/home/jd/.local/bin/typst",
+      "binary_sha256": "3ac6b84150c50a694d44134dc201624fbdc44f705b9992124a13474ddf8c6413",
+      "command": "typst",
       "version": "typst 0.14.2 (b33de9de)"
     },
     "csl": {
@@ -676,18 +805,78 @@
     "fonts": [
       {
         "family": "DejaVu Sans Mono",
-        "installed_variants": [
-          "DejaVu Sans Mono|Bold Oblique|/usr/share/fonts/truetype/dejavu/DejaVuSansMono-BoldOblique.ttf",
-          "DejaVu Sans Mono|Bold|/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
-          "DejaVu Sans Mono|Book|/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-          "DejaVu Sans Mono|Oblique|/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Oblique.ttf"
+        "source": "system",
+        "system_files": [
+          {
+            "basename": "DejaVuSansMono-Bold.ttf",
+            "sha256": "2d67eed9b325ee2e69f906ce4f3f6264d5105230a13352c8494daad4f17b12c8"
+          },
+          {
+            "basename": "DejaVuSansMono-BoldOblique.ttf",
+            "sha256": "3e19ce950e77f59d5d3607c4a4ed6a5152933f88937a4e0e7586ee5d5319aa5c"
+          },
+          {
+            "basename": "DejaVuSansMono-Oblique.ttf",
+            "sha256": "a033f17e7e42934146337ab2858f7bae5e10c59708d810f1fca0bc81dd543cae"
+          },
+          {
+            "basename": "DejaVuSansMono.ttf",
+            "sha256": "a54dca07c76d6289e717e75e0a58c0128f6d7269ef3faf76417c9d7d3bba37ab"
+          }
         ],
-        "selected": "DejaVu Sans Mono|Book|/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+        "variants": [
+          {
+            "stretch": 1000,
+            "style": "Italic",
+            "weight": 400
+          },
+          {
+            "stretch": 1000,
+            "style": "Italic",
+            "weight": 700
+          },
+          {
+            "stretch": 1000,
+            "style": "Normal",
+            "weight": 400
+          },
+          {
+            "stretch": 1000,
+            "style": "Normal",
+            "weight": 700
+          }
+        ]
       },
       {
+        "compiler_binding": {
+          "binary_sha256": "3ac6b84150c50a694d44134dc201624fbdc44f705b9992124a13474ddf8c6413",
+          "version": "typst 0.14.2 (b33de9de)"
+        },
         "family": "New Computer Modern",
-        "installed_variants": [],
-        "selected": "Noto Sans|Regular|/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"
+        "source": "embedded_in_compiler",
+        "system_files": [],
+        "variants": [
+          {
+            "stretch": 1000,
+            "style": "Italic",
+            "weight": 400
+          },
+          {
+            "stretch": 1000,
+            "style": "Italic",
+            "weight": 700
+          },
+          {
+            "stretch": 1000,
+            "style": "Normal",
+            "weight": 400
+          },
+          {
+            "stretch": 1000,
+            "style": "Normal",
+            "weight": 700
+          }
+        ]
       }
     ],
     "packages": [
