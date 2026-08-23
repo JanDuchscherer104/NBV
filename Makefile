@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-authoring-routing-self-test thesis-authoring-routing-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-authoring-routing-self-test thesis-authoring-routing-trials scientific-review-self-test scientific-review-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -746,6 +746,13 @@ thesis-authoring-routing-self-test: _check_python typst-authoring-contract ## Ve
 thesis-authoring-routing-trials: _check_python ## Run the four bounded thesis-authoring routing trials at ROUTING_HEAD
 	@test -n "$(strip $(ROUTING_HEAD))" || { echo "ROUTING_HEAD is required" >&2; exit 2; }
 	@$(PYTHON_INTERPRETER) scripts/scaffold/run_routing_trials.py --head "$(ROUTING_HEAD)" --id academic-writing-related-work-synthesis --id typst-authoring-accepted-content-render --id scientific-review-empirical-validity --id rollout-report-owner-not-writing-skill --jobs 4 --timeout 600
+
+scientific-review-self-test: _check_python ## Run the local scientific-review contract tests without Codex
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_scientific_review_trials.py
+
+scientific-review-trials: _check_python ## Run the frozen scientific-review cases at REVIEW_HEAD
+	@test -n "$(strip $(REVIEW_HEAD))" || { echo "REVIEW_HEAD is required" >&2; exit 2; }
+	@$(PYTHON_INTERPRETER) scripts/scaffold/run_scientific_review_trials.py --head "$(REVIEW_HEAD)" --id seminar-uncontrolled-ablation --id actor-oracle-leakage --id invalidity-as-utility --id pilot-escalation --id pseudoreplication --id missing-uncertainty --id planned-tense-drift --id restrained-abstract --id hard-mask-semantics --id actor-oracle-separation --id bounded-pilot --id seminar-uncontrolled-ablation-variant --id actor-oracle-leakage-variant --id invalidity-as-utility-variant --id pilot-escalation-variant --id pseudoreplication-variant --id missing-uncertainty-variant --id planned-tense-drift-variant --id seminar-uncontrolled-ablation-corrected --id actor-oracle-leakage-corrected --id invalidity-as-utility-corrected --id pilot-escalation-corrected --id pseudoreplication-corrected --id missing-uncertainty-corrected --id planned-tense-drift-corrected --jobs 4 --timeout 600
 
 docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci typst-authoring-contract thesis-marker-contract ## Render the core docs surfaces used by root CI
 

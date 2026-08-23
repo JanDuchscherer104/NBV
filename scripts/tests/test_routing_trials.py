@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "scaffold"))
 
 import run_routing_trials as trials  # noqa: E402
+import trial_harness as harness  # noqa: E402
 
 TEST_RUBRIC = {
     "id": "trial",
@@ -21,6 +23,8 @@ TEST_RUBRIC = {
     "required_outcomes": ["owner path"],
     "forbidden_outcomes": ["loaded path"],
 }
+EvidenceMutation = Callable[[dict[str, object]], object]
+EvaluationMutation = Callable[[list[dict[str, object]]], object]
 
 
 def _evaluation(
@@ -43,9 +47,15 @@ def _rubric_evaluations(
     *, required_status: str = "satisfied", forbidden_status: str = "not_observed"
 ) -> list[dict[str, object]]:
     return [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("required_outcome", "owner path", required_status, "trial_response", []),
-        _evaluation("forbidden_outcome", "loaded path", forbidden_status, "trial_response", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "required_outcome", "owner path", required_status, "trial_response", []
+        ),
+        _evaluation(
+            "forbidden_outcome", "loaded path", forbidden_status, "trial_response", []
+        ),
     ]
 
 
@@ -120,21 +130,10 @@ def _validate_verdict(
         rubric=rubric,
         event_evidence=event_evidence,
         trial_response=(
-            trial_response if trial_response is not None else trials.bound_trial_response({"outcome": "bounded"})
+            trial_response
+            if trial_response is not None
+            else trials.bound_trial_response({"outcome": "bounded"})
         ),
-    )
-
-
-def _run_verifier(report: dict[str, object], checkout: Path, trial_dir: Path) -> dict[str, Any]:
-    return trials.run_verifier(
-        report=report,
-        rubric={"trial": TEST_RUBRIC},
-        rubric_commit="rubric",
-        checkout=checkout,
-        trial_dir=trial_dir,
-        model=None,
-        effort=None,
-        timeout_seconds=1,
     )
 
 
@@ -179,8 +178,13 @@ def test_thesis_authoring_fixtures_are_exclusive_and_bound_unloaded_paths() -> N
         forbidden = fixture["forbidden_outcomes"]
         assert f"exactly one exclusive leading owner: {owner}" in required
         assert any(" leads " in outcome for outcome in forbidden)
-        assert any("non-applicable path is loaded: " in outcome for outcome in forbidden)
-        assert all(key not in fixture for key in ("exclusive_leading_owner", "required_unloaded_paths"))
+        assert any(
+            "non-applicable path is loaded: " in outcome for outcome in forbidden
+        )
+        assert all(
+            key not in fixture
+            for key in ("exclusive_leading_owner", "required_unloaded_paths")
+        )
 
 
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
@@ -209,7 +213,9 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
     verdict_schema = json.loads(trials.VERIFIER_SCHEMA.read_text(encoding="utf-8"))
     assert set(verdict_schema["required"]) == set(verdict_schema["properties"])
     evidence_item = verdict_schema["properties"]["evidence"]["items"]
-    assert verdict_schema["properties"]["evidence"]["maxItems"] == trials.VERDICT_MAX_ITEMS
+    assert (
+        verdict_schema["properties"]["evidence"]["maxItems"] == trials.VERDICT_MAX_ITEMS
+    )
     assert evidence_item["additionalProperties"] is False
     assert set(evidence_item["required"]) == {
         "event_index",
@@ -219,7 +225,9 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
     }
     for field in ("missing_requirements", "forbidden_observations"):
         items = verdict_schema["properties"][field]["items"]
-        assert verdict_schema["properties"][field]["maxItems"] == trials.VERDICT_MAX_ITEMS
+        assert (
+            verdict_schema["properties"][field]["maxItems"] == trials.VERDICT_MAX_ITEMS
+        )
         assert items["maxLength"] == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
     evaluations = verdict_schema["properties"]["rubric_evaluations"]
     assert evaluations["minItems"] == 1
@@ -241,7 +249,10 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
         "required_outcome",
         "forbidden_outcome",
     }
-    assert evaluation_item["properties"]["evidence_event_indices"]["maxItems"] == trials.VERDICT_MAX_ITEMS
+    assert (
+        evaluation_item["properties"]["evidence_event_indices"]["maxItems"]
+        == trials.VERDICT_MAX_ITEMS
+    )
 
     pending: list[object] = [verdict_schema]
     while pending:
@@ -425,7 +436,7 @@ def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
     assert mixed_evidence["invalid_items"] == 1
     assert not trials.validate_event_evidence(mixed_evidence)[0]
     assert not _validate_verdict(_verdict(), mixed_evidence)[0]
-    assert not trials.trial_passed(
+    assert trials.trial_passed(
         {
             "returncode": 0,
             "checkout_clean_after": True,
@@ -482,7 +493,12 @@ def test_event_evidence_retains_started_execution_and_ignores_chatter(
     assert forbidden_path in evidence["items"][0]["arguments"]
     assert evidence["items"][1]["path"] == forbidden_path
     assert trials.validate_event_evidence(evidence)[0] is True
-    assert trials._matching_event_indices(evidence["items"], kind="expected_owner_path", subject=forbidden_path) == []
+    assert (
+        trials._matching_event_indices(
+            evidence["items"], kind="expected_owner_path", subject=forbidden_path
+        )
+        == []
+    )
 
 
 def test_empty_started_web_search_placeholder_is_ignorable(tmp_path: Path) -> None:
@@ -509,7 +525,9 @@ def test_empty_started_web_search_placeholder_is_ignorable(tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize("item_type", ["function_call", "tool_call"])
-def test_identityless_started_executable_call_remains_invalid(tmp_path: Path, item_type: str) -> None:
+def test_identityless_started_executable_call_remains_invalid(
+    tmp_path: Path, item_type: str
+) -> None:
     events = tmp_path / f"{item_type}.jsonl"
     events.write_text(
         json.dumps(
@@ -660,6 +678,46 @@ def test_event_evidence_rejects_oversized_raw_stream(tmp_path: Path) -> None:
     assert trials.validate_event_evidence(evidence)[0] is False
 
 
+def test_harness_evidence_policy_allows_only_bounded_empty_execution_evidence(
+    tmp_path: Path,
+) -> None:
+    empty_events = tmp_path / "empty.jsonl"
+    empty_events.write_bytes(b"")
+    empty_evidence = harness.extract_event_evidence(empty_events)
+
+    assert empty_evidence["items"] == []
+    assert empty_evidence["payload_chars"] == 2
+    assert harness.validate_event_evidence(empty_evidence)[0] is False
+    assert harness.validate_event_evidence(
+        empty_evidence, require_execution_evidence=False
+    ) == (True, "complete raw event evidence with no execution items")
+
+    malformed_events = tmp_path / "malformed.jsonl"
+    malformed_events.write_bytes(b"{not-json}\n")
+    malformed_evidence = harness.extract_event_evidence(malformed_events)
+    assert malformed_evidence["items"] == []
+    assert malformed_evidence["malformed_lines"] == 1
+    assert (
+        harness.validate_event_evidence(
+            malformed_evidence, require_execution_evidence=False
+        )[0]
+        is False
+    )
+
+    truncated_events = tmp_path / "truncated.jsonl"
+    truncated_events.write_bytes(b"x" * (harness.EVENT_EVIDENCE_MAX_RAW_BYTES + 1))
+    truncated_evidence = harness.extract_event_evidence(truncated_events)
+    assert truncated_evidence["items"] == []
+    assert truncated_evidence["dropped_items"] == 1
+    assert truncated_evidence["truncated"] is True
+    assert (
+        harness.validate_event_evidence(
+            truncated_evidence, require_execution_evidence=False
+        )[0]
+        is False
+    )
+
+
 def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
     claimed = "claimed_tool_call" * trials.TRIAL_RESPONSE_MAX_CHARS
     trial_response = trials.bound_trial_response({"tool_calls": [claimed]})
@@ -747,7 +805,9 @@ def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
         evidence,
     )[0]
     assert not _validate_verdict(
-        _verdict(forbidden_observations=["x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS + 1)]),
+        _verdict(
+            forbidden_observations=["x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS + 1)]
+        ),
         evidence,
     )[0]
 
@@ -769,8 +829,10 @@ def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
         (lambda evidence: {**evidence, "read_error": True}, "incomplete"),
     ],
 )
-def test_pass_rejects_incomplete_raw_evidence(mutation: object, reason: str) -> None:
-    evidence = mutation(_complete_event_evidence())  # type: ignore[operator]
+def test_pass_rejects_incomplete_raw_evidence(
+    mutation: EvidenceMutation, reason: str
+) -> None:
+    evidence = mutation(_complete_event_evidence())
     valid, actual_reason = _validate_verdict(_verdict(), evidence)
     assert valid is False
     assert reason in actual_reason
@@ -787,7 +849,9 @@ def test_pass_rejects_incomplete_raw_evidence(mutation: object, reason: str) -> 
     ],
 )
 def test_verdict_rejects_invalid_event_references(reference: object) -> None:
-    assert not _validate_verdict(_verdict(evidence=[reference]), _complete_event_evidence())[0]
+    assert not _validate_verdict(
+        _verdict(evidence=[reference]), _complete_event_evidence()
+    )[0]
 
 
 def test_verdict_accepts_repeated_event_index_for_distinct_grounded_claims() -> None:
@@ -795,7 +859,9 @@ def test_verdict_accepts_repeated_event_index_for_distinct_grounded_claims() -> 
         _event_reference(claim="The trial read the owner guidance."),
         _event_reference(claim="The same command established the owner path."),
     ]
-    assert _validate_verdict(_verdict(evidence=evidence), _complete_event_evidence()) == (True, "pass")
+    assert _validate_verdict(
+        _verdict(evidence=evidence), _complete_event_evidence()
+    ) == (True, "pass")
 
 
 def test_verdict_validation_rejects_malformed_payload() -> None:
@@ -821,7 +887,10 @@ def test_rubric_evaluations_fail_closed_for_omitted_and_observed_constraints() -
 @pytest.mark.parametrize(
     "mutation",
     [
-        lambda evaluations: evaluations[:1] + [{**evaluations[1], "subject": "other path"}, evaluations[2]],
+        lambda evaluations: (
+            evaluations[:1]
+            + [{**evaluations[1], "subject": "other path"}, evaluations[2]]
+        ),
         lambda evaluations: [evaluations[0], evaluations[0], evaluations[2]],
         lambda evaluations: [
             {**evaluations[0], "evidence_event_indices": []},
@@ -846,10 +915,12 @@ def test_rubric_evaluations_fail_closed_for_omitted_and_observed_constraints() -
     ],
 )
 def test_rubric_evaluations_reject_bad_identity_status_or_bounds(
-    mutation: object,
+    mutation: EvaluationMutation,
 ) -> None:
-    evaluations = mutation(_rubric_evaluations())  # type: ignore[operator]
-    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), _complete_event_evidence())[0]
+    evaluations = mutation(_rubric_evaluations())
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), _complete_event_evidence()
+    )[0]
 
 
 def test_forbidden_tool_ref_cannot_be_ignored() -> None:
@@ -871,8 +942,12 @@ def test_forbidden_tool_ref_cannot_be_ignored() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("forbidden_tool_ref", tool_ref, "not_observed", "event_evidence", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "forbidden_tool_ref", tool_ref, "not_observed", "event_evidence", []
+        ),
         *_rubric_evaluations()[1:],
     ]
     verdict = _verdict(rubric_evaluations=evaluations)
@@ -908,12 +983,16 @@ def test_tool_constraint_accepts_representative_matching_citation() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
         _evaluation("expected_tool_ref", tool_ref, "satisfied", "event_evidence", [2]),
         *_rubric_evaluations()[1:],
     ]
 
-    assert _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric) == (True, "pass")
+    assert _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    ) == (True, "pass")
 
 
 @pytest.mark.parametrize("indices", [[], [0, 2]])
@@ -941,12 +1020,18 @@ def test_tool_constraint_rejects_empty_or_unrelated_observed_citation(
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("expected_tool_ref", tool_ref, "satisfied", "event_evidence", indices),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "expected_tool_ref", tool_ref, "satisfied", "event_evidence", indices
+        ),
         *_rubric_evaluations()[1:],
     ]
 
-    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric)[0]
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    )[0]
 
 
 def test_absent_tool_constraint_requires_empty_citation() -> None:
@@ -954,7 +1039,9 @@ def test_absent_tool_constraint_requires_empty_citation() -> None:
     rubric = {**TEST_RUBRIC, "expected_tool_refs": [tool_ref]}
     evaluations = [
         *_rubric_evaluations()[:1],
-        _evaluation("expected_tool_ref", tool_ref, "not_satisfied", "event_evidence", []),
+        _evaluation(
+            "expected_tool_ref", tool_ref, "not_satisfied", "event_evidence", []
+        ),
         *_rubric_evaluations()[1:],
     ]
     verdict = _verdict(
@@ -993,12 +1080,18 @@ def test_started_path_bearing_forbidden_tool_cannot_be_adjudicated_absent() -> N
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("forbidden_tool_ref", tool_ref, "not_observed", "event_evidence", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "forbidden_tool_ref", tool_ref, "not_observed", "event_evidence", []
+        ),
         *_rubric_evaluations()[1:],
     ]
 
-    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric)[0]
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    )[0]
 
 
 @pytest.mark.parametrize("omitted_kind", ["expected_owner_path", "expected_tool_ref"])
@@ -1029,12 +1122,16 @@ def test_expected_owner_and_tool_constraints_cannot_be_omitted(
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
         _evaluation("expected_tool_ref", tool_ref, "satisfied", "event_evidence", [1]),
         *_rubric_evaluations()[1:],
     ]
     evaluations = [item for item in evaluations if item["kind"] != omitted_kind]
-    assert not _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric)[0]
+    assert not _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    )[0]
 
 
 def test_expected_owner_path_rejects_suffix_collision() -> None:
@@ -1156,7 +1253,9 @@ def test_path_evidence_accepts_started_and_completed_exact_mentions() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]),
+        _evaluation(
+            "expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]
+        ),
         *_rubric_evaluations()[1:],
     ]
 
@@ -1198,7 +1297,9 @@ def test_path_evidence_accepts_omitted_duplicate_success() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]),
+        _evaluation(
+            "expected_owner_path", owner_path, "satisfied", "event_evidence", [0, 1]
+        ),
         *_rubric_evaluations()[1:],
     ]
 
@@ -1243,7 +1344,9 @@ def test_path_evidence_rejects_unrelated_extra_or_omitted_success(
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", owner_path, "satisfied", "event_evidence", indices),
+        _evaluation(
+            "expected_owner_path", owner_path, "satisfied", "event_evidence", indices
+        ),
         *_rubric_evaluations()[1:],
     ]
 
@@ -1286,8 +1389,12 @@ def test_canonical_forbidden_path_accepts_started_and_completed_mentions() -> No
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "required_outcome", "owner path", "satisfied", "trial_response", []
+        ),
         _evaluation("forbidden_outcome", subject, "observed", "event_evidence", [1, 2]),
     ]
 
@@ -1321,8 +1428,12 @@ def test_loaded_forbidden_path_cannot_use_trial_response_basis() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "required_outcome", "owner path", "satisfied", "trial_response", []
+        ),
         _evaluation("forbidden_outcome", subject, "not_observed", "trial_response", []),
     ]
     verdict = _verdict(rubric_evaluations=evaluations)
@@ -1345,11 +1456,17 @@ def test_forbidden_path_rejects_suffix_collision() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "required_outcome", "owner path", "satisfied", "trial_response", []
+        ),
         _evaluation("forbidden_outcome", subject, "not_observed", "event_evidence", []),
     ]
-    assert _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric) == (True, "pass")
+    assert _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    ) == (True, "pass")
 
 
 def test_forbidden_path_rejects_failed_exact_read() -> None:
@@ -1376,11 +1493,17 @@ def test_forbidden_path_rejects_failed_exact_read() -> None:
         ]
     )
     evaluations = [
-        _evaluation("expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]),
-        _evaluation("required_outcome", "owner path", "satisfied", "trial_response", []),
+        _evaluation(
+            "expected_owner_path", "AGENTS.md", "satisfied", "event_evidence", [0]
+        ),
+        _evaluation(
+            "required_outcome", "owner path", "satisfied", "trial_response", []
+        ),
         _evaluation("forbidden_outcome", subject, "not_observed", "event_evidence", []),
     ]
-    assert _validate_verdict(_verdict(rubric_evaluations=evaluations), events, rubric) == (True, "pass")
+    assert _validate_verdict(
+        _verdict(rubric_evaluations=evaluations), events, rubric
+    ) == (True, "pass")
 
 
 def test_exact_semantic_outcomes_allow_bounded_trial_response_without_indices() -> None:
@@ -1392,7 +1515,7 @@ def test_exact_semantic_outcomes_allow_bounded_trial_response_without_indices() 
     ) == (True, "pass")
 
 
-def test_aggregate_rejects_clean_trial_with_failing_adjudication() -> None:
+def test_routing_trial_passed_is_domain_adjudication_only() -> None:
     report = {
         "returncode": 0,
         "checkout_clean_after": True,
@@ -1400,90 +1523,472 @@ def test_aggregate_rejects_clean_trial_with_failing_adjudication() -> None:
     }
     assert trials.trial_passed(report) is False
     report["adjudication"] = {"passed": True, "reason": "pass"}
-    assert trials.trial_passed(report) is False
+    assert trials.trial_passed(report) is True
 
 
-def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) -> None:
-    report = _trial_report()
-    checkout = tmp_path / "checkout"
-    trial_dir = tmp_path / "trial"
-    checkout.mkdir()
-    trial_dir.mkdir()
-
-    def write_verdict(verdict: dict[str, object]) -> object:
-        (trial_dir / "verifier-report.json").write_text(json.dumps(verdict), encoding="utf-8")
-        return type("Result", (), {"returncode": 0})()
-
-    with patch.object(
-        trials.subprocess,
-        "run",
-        side_effect=lambda *args, **kwargs: write_verdict(_verdict()),
-    ):
-        passed = _run_verifier(report, checkout, trial_dir)
-    assert passed["passed"] is True
-
-    failing_verdict = _verdict(
-        verdict="fail",
-        rubric_evaluations=_rubric_evaluations(required_status="not_satisfied"),
-        missing_requirements=["owner path"],
+def _run_bounded_verifier(
+    report_path: Path,
+    trial_dir: Path,
+    validator: Callable[[object], tuple[bool, str]],
+) -> dict[str, Any]:
+    return harness.run_bounded_verifier(
+        command=["codex", "-"],
+        prompt="bounded prompt",
+        report_path=report_path,
+        events_path=trial_dir / "events.jsonl",
+        stderr_path=trial_dir / "stderr.txt",
+        timeout_seconds=1,
+        validator=validator,
     )
-    with patch.object(
-        trials.subprocess,
-        "run",
-        side_effect=lambda *args, **kwargs: write_verdict(failing_verdict),
-    ):
-        failed = _run_verifier(report, checkout, trial_dir)
-    assert failed["passed"] is False
-    assert failed["reason"] == "semantic fail"
 
 
-def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
+def test_bounded_verifier_delegates_semantics_and_fails_closed(
     tmp_path: Path,
 ) -> None:
-    report = _trial_report()
-    checkout = tmp_path / "checkout"
     trial_dir = tmp_path / "trial"
-    checkout.mkdir()
     trial_dir.mkdir()
+    report_path = trial_dir / "verifier-report.json"
+    verdict = _verdict()
 
-    def write_invalid(*args: object, **kwargs: object) -> object:
-        (trial_dir / "verifier-report.json").write_bytes(b"\xff")
-        return type("Result", (), {"returncode": 0})()
+    def write_report(
+        *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        report_path.write_text(json.dumps(verdict), encoding="utf-8")
+        return subprocess.CompletedProcess(["codex"], 0)
 
-    with patch.object(trials.subprocess, "run", side_effect=write_invalid):
-        invalid_utf8 = _run_verifier(report, checkout, trial_dir)
+    with patch("trial_harness.subprocess.run", side_effect=write_report):
+        passed = _run_bounded_verifier(
+            report_path,
+            trial_dir,
+            lambda payload: (payload == verdict, "adapter decision"),
+        )
+    assert passed["passed"] is True
+    assert passed["reason"] == "adapter decision"
+
+    report_path.write_bytes(b"\xff")
+    with patch(
+        "trial_harness.subprocess.run",
+        return_value=subprocess.CompletedProcess(["codex"], 0),
+    ):
+        invalid_utf8 = _run_bounded_verifier(
+            report_path, trial_dir, lambda payload: (True, "must not be used")
+        )
     assert invalid_utf8["passed"] is False
     assert "unreadable" in invalid_utf8["reason"]
 
-    def write_oversized(*args: object, **kwargs: object) -> object:
-        (trial_dir / "verifier-report.json").write_bytes(b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1))
-        return type("Result", (), {"returncode": 0})()
-
-    with patch.object(trials.subprocess, "run", side_effect=write_oversized):
-        oversized = _run_verifier(report, checkout, trial_dir)
+    report_path.write_bytes(b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1))
+    with patch(
+        "trial_harness.subprocess.run",
+        return_value=subprocess.CompletedProcess(["codex"], 0),
+    ):
+        oversized = _run_bounded_verifier(
+            report_path, trial_dir, lambda payload: (True, "must not be used")
+        )
     assert oversized["passed"] is False
     assert "byte bound" in oversized["reason"]
 
-
-def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:
-    report = _trial_report()
-    checkout = tmp_path / "checkout"
-    checkout.mkdir()
-
-    missing_dir = tmp_path / "missing"
-    missing_dir.mkdir()
-    result = type("Result", (), {"returncode": 0})()
-    with patch.object(trials.subprocess, "run", return_value=result):
-        missing = _run_verifier(report, checkout, missing_dir)
+    report_path.unlink()
+    with patch(
+        "trial_harness.subprocess.run",
+        return_value=subprocess.CompletedProcess(["codex"], 0),
+    ):
+        missing = _run_bounded_verifier(
+            report_path, trial_dir, lambda payload: (True, "must not be used")
+        )
     assert missing["passed"] is False
 
-    timeout_dir = tmp_path / "timeout"
-    timeout_dir.mkdir()
-    with patch.object(
-        trials.subprocess,
-        "run",
-        side_effect=trials.subprocess.TimeoutExpired("codex", 1),
+    with patch(
+        "trial_harness.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(["codex"], 1),
     ):
-        timeout = _run_verifier(report, checkout, timeout_dir)
+        timeout = _run_bounded_verifier(
+            report_path, trial_dir, lambda payload: (True, "must not be used")
+        )
     assert timeout["passed"] is False
     assert timeout["timed_out"] is True
+
+
+def test_shared_harness_fixture_attestation_and_detached_cleanup(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "harness@example.invalid"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Harness Test"], cwd=repo, check=True)
+    fixture = Path("fixture.json")
+    (repo / fixture).write_bytes(b'{"value":1}\n')
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "rubric"], cwd=repo, check=True)
+    rubric_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (repo / "candidate").write_text("candidate\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "candidate"], cwd=repo, check=True)
+    tested_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert (
+        harness.attest_evaluator_fixtures(
+            (fixture,),
+            tested_commit=tested_commit,
+            rubric_commit=rubric_commit,
+            root=repo,
+        )[fixture]
+        == b'{"value":1}\n'
+    )
+    with pytest.raises(RuntimeError):
+        with harness.detached_worktree(tested_commit, root=repo) as checkout:
+            assert "Not currently on any branch" in harness.run_git(
+                "status", "--branch", cwd=checkout
+            )
+            raise RuntimeError("exercise finally")
+    assert "checkout" not in harness.run_git("worktree", "list", cwd=repo)
+
+
+def test_run_suite_owns_lifecycle_persistence_and_exit_aggregation(
+    tmp_path: Path,
+) -> None:
+    class Adapter:
+        def load_fixtures(self, fixture_bytes: Mapping[Path, bytes]) -> object:
+            return None
+
+        def select_cases(
+            self, fixtures: object, *, selected_ids: tuple[str, ...], all_cases: bool
+        ) -> tuple[harness.TrialCase, ...]:
+            return (
+                harness.TrialCase(
+                    "case",
+                    None,
+                    candidate=harness.CandidateProvenance(
+                        candidate_bytes=b"fixture\n",
+                        author=harness.PrincipalIdentity("fixture-author", "author"),
+                        expected_sha256=hashlib.sha256(b"fixture\n").hexdigest(),
+                        source_locator="fixture.json",
+                    ),
+                    adapter_metadata={"category": "synthetic"},
+                ),
+            )
+
+        def build_trial_prompt(self, case: harness.TrialCase) -> str:
+            return "bounded prompt"
+
+        def build_verifier_prompt(
+            self,
+            case: harness.TrialCase,
+            report: Mapping[str, Any],
+            rubric_commit: str,
+        ) -> str:
+            return "bounded verifier prompt"
+
+        def validate_verdict(
+            self,
+            case: harness.TrialCase,
+            payload: object,
+            report: Mapping[str, Any],
+            rubric_commit: str,
+        ) -> tuple[bool, str]:
+            return False, "semantic fail"
+
+        def trial_passed(self, report: Mapping[str, Any]) -> bool:
+            return True
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "harness@example.invalid"], cwd=root, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Harness Test"], cwd=root, check=True)
+    fixture = root / "fixture.json"
+    fixture.write_text('{"candidate":"fixture"}\n', encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    output_root = tmp_path / "outputs"
+    spec = harness.SuiteSpec(
+        tested_ref=commit,
+        rubric_ref=commit,
+        identity=harness.SuiteIdentity(
+            name="test",
+            dirty_root_message="dirty",
+            worktree_prefix="test-",
+        ),
+        fixture_paths=(Path("fixture.json"),),
+        output_root=output_root,
+        trial_schema=tmp_path / "trial-schema.json",
+        verifier_schema=tmp_path / "verifier-schema.json",
+        require_execution_evidence=False,
+        require_candidate_provenance=True,
+        root=root,
+    )
+    spec.trial_schema.write_text("{}", encoding="utf-8")
+    spec.verifier_schema.write_text("{}", encoding="utf-8")
+    codex_result = type("Result", (), {"returncode": 0, "stdout": "codex test\n"})()
+
+    def fake_git(*args: str, cwd: Path) -> str:
+        return commit if args[:2] == ("rev-parse", commit) else ""
+
+    with (
+        patch.object(harness, "run_git", side_effect=fake_git),
+        patch("trial_harness.subprocess.run", return_value=codex_result),
+    ):
+        result = harness.run_suite(spec, Adapter())
+    assert result.exit_code == 1
+    assert result.output_dir is not None
+    assert (result.output_dir / "case" / "report.json").is_file()
+    assert (result.output_dir / "index.json").is_file()
+    report = json.loads(
+        (result.output_dir / "case" / "report.json").read_text(encoding="utf-8")
+    )
+    assert len(report["prompt_sha256"]) == 64
+    assert "raw event evidence" not in report["adjudication"]["reason"]
+    assert (
+        report["candidate"]["candidate_sha256"]
+        == hashlib.sha256(b"fixture\n").hexdigest()
+    )
+    assert report["candidate"]["source_locator"] == "fixture.json"
+    assert report["candidate"]["author"]["canonical"] == "fixture-author:author"
+    assert report["adapter_metadata"] == {"category": "synthetic"}
+    assert "candidate_bytes" not in json.dumps(report)
+    index = json.loads((result.output_dir / "index.json").read_text(encoding="utf-8"))
+    assert index["reviewer"]["canonical"].startswith("host-user:")
+    assert (
+        index["reports"][0]["candidate"]["candidate_sha256"]
+        == report["candidate"]["candidate_sha256"]
+    )
+    assert index["reports"][0]["adapter_metadata"] == {"category": "synthetic"}
+    assert "candidate_bytes" not in json.dumps(index)
+    assert report["runtime"]["reviewer_host"]
+    with (
+        patch.object(harness, "run_git", side_effect=fake_git),
+        pytest.raises(ValueError, match="already exists"),
+    ):
+        harness.run_suite(spec, Adapter())
+    assert "checkout" not in harness.run_git("worktree", "list", cwd=root)
+
+
+def test_suite_rejects_duplicate_ids_before_output_creation(tmp_path: Path) -> None:
+    class DuplicateAdapter:
+        def load_fixtures(self, fixture_bytes: Mapping[Path, bytes]) -> object:
+            return None
+
+        def select_cases(
+            self, fixtures: object, *, selected_ids: tuple[str, ...], all_cases: bool
+        ) -> tuple[harness.TrialCase, ...]:
+            return (
+                harness.TrialCase("duplicate", None),
+                harness.TrialCase("duplicate", None),
+            )
+
+        def build_trial_prompt(self, case: harness.TrialCase) -> str:
+            return ""
+
+        def build_verifier_prompt(
+            self, case: harness.TrialCase, report: Mapping[str, Any], rubric_commit: str
+        ) -> str:
+            return ""
+
+        def validate_verdict(
+            self,
+            case: harness.TrialCase,
+            payload: object,
+            report: Mapping[str, Any],
+            rubric_commit: str,
+        ) -> tuple[bool, str]:
+            return False, ""
+
+        def trial_passed(self, report: Mapping[str, Any]) -> bool:
+            return False
+
+    spec = harness.SuiteSpec(
+        tested_ref="HEAD",
+        rubric_ref="HEAD",
+        identity=harness.SuiteIdentity("duplicate", "dirty", "duplicate-"),
+        fixture_paths=(),
+        output_root=tmp_path / "outputs",
+        trial_schema=tmp_path / "trial.json",
+        verifier_schema=tmp_path / "verifier.json",
+        root=tmp_path,
+    )
+    with (
+        patch.object(harness, "run_git", return_value="commit"),
+        patch.object(harness, "attest_evaluator_fixtures", return_value={}),
+        pytest.raises(ValueError, match="trial IDs must be unique"),
+    ):
+        harness.run_suite(spec, DuplicateAdapter())
+    assert not spec.output_root.exists()
+
+
+def test_candidate_provenance_rejects_malformed_sha_and_identity(
+    tmp_path: Path,
+) -> None:
+    candidate_bytes = b"candidate"
+    reviewer = harness.ReviewerProvenance(
+        harness.PrincipalIdentity("host-user", "reviewer@host"), "host", 0.0
+    )
+    with pytest.raises(ValueError, match="SHA-256 is malformed"):
+        harness._candidate_report(
+            harness.CandidateProvenance(
+                candidate_bytes,
+                harness.PrincipalIdentity("fixture-author", "author"),
+                expected_sha256="bad",
+            ),
+            reviewer=reviewer,
+        )
+    with pytest.raises(ValueError, match="identity is malformed"):
+        harness._candidate_report(
+            harness.CandidateProvenance(
+                candidate_bytes,
+                harness.PrincipalIdentity("host-user", "reviewer@host"),
+            ),
+            reviewer=reviewer,
+        )
+    with pytest.raises(ValueError, match="does not match exact bytes"):
+        harness._candidate_report(
+            harness.CandidateProvenance(
+                candidate_bytes,
+                harness.PrincipalIdentity("fixture-author", "author"),
+                expected_sha256="0" * 64,
+            ),
+            reviewer=reviewer,
+        )
+    with pytest.raises(ValueError, match="empty or malformed"):
+        harness._candidate_report(
+            harness.CandidateProvenance(
+                b"", harness.PrincipalIdentity("fixture-author", "author")
+            ),
+            reviewer=reviewer,
+        )
+
+    with pytest.raises(ValueError, match="must retain host"):
+        harness._candidate_report(
+            harness.CandidateProvenance(
+                candidate_bytes,
+                harness.PrincipalIdentity("host-user", "reviewer"),
+            ),
+            reviewer=reviewer,
+        )
+    distinct_author = harness._candidate_report(
+        harness.CandidateProvenance(
+            candidate_bytes,
+            harness.PrincipalIdentity("fixture-author", "reviewer"),
+        ),
+        reviewer=reviewer,
+    )
+    assert distinct_author is not None
+    assert distinct_author["author"]["canonical"] == "fixture-author:reviewer"
+
+
+def test_adapter_metadata_is_bounded_json_safe_and_namespaced() -> None:
+    with pytest.raises(ValueError, match="reserved key"):
+        harness._validate_adapter_metadata({"returncode": 0})
+    with pytest.raises(ValueError, match="not JSON-safe"):
+        harness._validate_adapter_metadata({"value": object()})
+    with pytest.raises(ValueError, match="too many keys"):
+        harness._validate_adapter_metadata(
+            {
+                f"key-{index}": index
+                for index in range(harness.ADAPTER_METADATA_MAX_KEYS + 1)
+            }
+        )
+    with pytest.raises(ValueError, match="byte bound"):
+        harness._validate_adapter_metadata(
+            {"value": "x" * harness.ADAPTER_METADATA_MAX_BYTES}
+        )
+    with pytest.raises(ValueError, match="depth bound"):
+        harness._validate_adapter_metadata(
+            {"level": {"level": {"level": {"level": {"level": "too deep"}}}}}
+        )
+
+
+def test_suite_mechanical_gates_cannot_be_rescued_by_domain_adapter(
+    tmp_path: Path,
+) -> None:
+    spec = harness.SuiteSpec(
+        tested_ref="HEAD",
+        rubric_ref="HEAD",
+        identity=harness.SuiteIdentity("mechanical", "dirty", "mechanical-"),
+        fixture_paths=(),
+        output_root=tmp_path / "outputs",
+        trial_schema=tmp_path / "trial.json",
+        verifier_schema=tmp_path / "verifier.json",
+    )
+    base: dict[str, Any] = {
+        "returncode": 0,
+        "timed_out": False,
+        "checkout_clean_before": True,
+        "checkout_clean_after": True,
+        "event_evidence": _complete_event_evidence(),
+        "adjudication": {"passed": True, "returncode": 0, "timed_out": False},
+    }
+    assert harness._mechanically_passed(base, spec=spec) is True
+    invalid_reports = [
+        {**base, "returncode": 1},
+        {**base, "checkout_clean_before": False},
+        {**base, "timed_out": True},
+        {**base, "event_evidence": {"malformed": True}},
+        {
+            **base,
+            "adjudication": {"passed": False, "returncode": 0, "timed_out": False},
+        },
+    ]
+
+    def adapter_trial_passed(report: Mapping[str, Any]) -> bool:
+        return True
+
+    assert all(
+        not (
+            harness._mechanically_passed(report, spec=spec)
+            and adapter_trial_passed(report)
+        )
+        for report in invalid_reports
+    )
+
+
+def test_routing_main_delegates_lifecycle_to_run_suite() -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "head": "candidate",
+            "ids": ["case"],
+            "all": False,
+            "list": False,
+            "model": "model",
+            "effort": "high",
+            "jobs": 2,
+            "timeout": 3,
+        },
+    )()
+    expected = harness.SuiteResult(exit_code=7)
+    with (
+        patch.object(trials, "parse_args", return_value=args),
+        patch.object(trials, "run_suite", return_value=expected) as run,
+    ):
+        assert trials.main() == 7
+    spec = run.call_args.args[0]
+    assert isinstance(spec, harness.SuiteSpec)
+    assert spec.tested_ref == "candidate"
+    assert spec.jobs == 2
+    assert spec.require_execution_evidence is True
+    assert run.call_args.args[1].__class__ is trials.RoutingAdapter
