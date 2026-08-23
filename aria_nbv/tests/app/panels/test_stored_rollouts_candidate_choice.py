@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import inspect
 from contextlib import nullcontext
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -166,6 +167,43 @@ def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch
     assert controls == {"contract_id": "contract-a"}
     assert selected["temperature"].tolist() == [0.5]
     assert selected["generation_cohort_id"].tolist() == ["cohort-0.5"]
+
+
+def test_candidate_choice_vocabulary_help_describes_compatible_pooling(monkeypatch) -> None:
+    help_text: dict[str, str] = {}
+    rows = [
+        {
+            **_pooled_row(family="forward", step_index=0, fraction=1.0),
+            "contract_id": "contract-a",
+            "contract": "frozen",
+            "profile": "rich",
+            "temperature": 0.5,
+            "generation_cohort_id": "cohort-a",
+        }
+    ]
+
+    def selectbox(label, options, **kwargs):
+        if "help" in kwargs:
+            help_text[label] = kwargs["help"]
+        return "position_strategy" if label == "Candidate evidence grouping" else list(options)[0]
+
+    monkeypatch.setattr(candidate_generation.st, "selectbox", selectbox)
+    monkeypatch.setattr(candidate_generation, "_render_complete_candidate_support", lambda *args, **kwargs: None)
+    monkeypatch.setattr(candidate_generation, "candidate_selection_pooled_summary_rows", lambda *args, **kwargs: [])
+
+    population = {
+        "composition": {"position_strategy": []},
+        "calibration": {"position_strategy": []},
+        "collision": [],
+        "sample": {"rows": [], "display_count": 0, "population_count": 0},
+        "selection_dynamics": {"position_strategy": rows},
+    }
+    candidate_generation._render_candidate_population_evidence(SimpleNamespace(candidate_population=lambda: population))
+
+    assert help_text["Candidate-choice vocabulary"] == (
+        "Exact contract/profile/policy/H/B/beam controls stay fixed; compatible "
+        "temperature/generation cohorts are pooled for the population view."
+    )
 
 
 def test_complete_candidate_choice_surface_is_explicit_and_names_all_quantities() -> None:

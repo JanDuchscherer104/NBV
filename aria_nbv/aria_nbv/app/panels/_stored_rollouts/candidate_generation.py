@@ -340,7 +340,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                 options=available_groups,
                 index=available_groups.index("position_strategy") if "position_strategy" in available_groups else 0,
                 key="candidate-choice-group-vocabulary",
-                help="Select the exact persisted family vocabulary; policies, temperatures, and rollout contracts are not pooled.",
+                help="Exact contract/profile/policy/H/B/beam controls stay fixed; compatible temperature/generation cohorts are pooled for the population view.",
             )
             dynamics = pd.DataFrame(selection_dynamics[group_by])
             dynamics, selected_controls = _select_candidate_choice_controls(dynamics, group_by=group_by)
