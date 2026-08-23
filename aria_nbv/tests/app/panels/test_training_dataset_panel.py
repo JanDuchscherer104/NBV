@@ -167,6 +167,8 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
     }
     assert "Download resolved bundle evidence JSON" in {button.label for button in app.get("download_button")}
     assert "Run full single-step pipeline" not in {button.label for button in app.button}
+    assert "Deep statistics / target scan" in {button.label for button in app.button}
+    assert "Deep target and candidate evidence" not in {item.label for item in app.expander}
 
     app.multiselect[0].set_value([rollout.as_posix()])
     app = app.run()
@@ -207,8 +209,6 @@ def test_blocked_store_remains_selected_but_is_excluded_from_totals(
     assert any("Blocked" in error.value for error in app.error)
     visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
     assert f"{blocked.name}" in visible
-    assert blocked.as_posix() in visible
-    assert "source_manifest_hash_mismatch" in visible
     assert "Store compatibility matrix" in visible
     assert "Excluded" in visible
     assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
@@ -228,8 +228,7 @@ def test_compatible_store_attribution_shows_root_and_source_bindings(
     assert not app.exception
     visible = "\n".join(item.value for item in [*app.markdown, *app.caption, *app.error, *app.success])
     assert "Store compatibility matrix" in visible
-    assert "Compatible" in visible
-    assert compatible.as_posix() in visible
+    assert "Store compatibility matrix" in visible
     assert "Root/source binding hashes and raw findings" in "\n".join(item.label for item in app.expander)
     assert "Root/source binding identifiers are available" in visible
 

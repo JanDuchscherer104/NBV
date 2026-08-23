@@ -585,7 +585,6 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
                 "status": status,
                 "validation": validation,
                 "reason": reason or ("included in totals" if included else "compatibility check failed"),
-                "full path": path,
             }
         )
         binding_rows.append(
@@ -603,15 +602,14 @@ def _render_store_attribution(evidence: DatasetBundleEvidence) -> None:
             }
         )
     st.dataframe(pd.DataFrame(status_rows), hide_index=True, width="stretch")
-    st.caption(
-        "Store compatibility matrix (full paths are included above): "
-        + "; ".join(f"{row['status']} {row['full path']}" for row in status_rows)
-    )
     excluded = [row for row in status_rows if row["status"] == "Excluded"]
+    st.caption(
+        f"Store compatibility matrix: {len(status_rows)} selected, {len(excluded)} excluded. "
+        "Full paths and binding identifiers are available in the collapsed disclosure below."
+    )
     if excluded:
         st.error(
-            "Excluded stores remain selected but contribute no totals: "
-            + "; ".join(f"{row['store']} — {row['reason']}" for row in excluded)
+            "Excluded stores remain selected but contribute no totals: " + ", ".join(row["store"] for row in excluded)
         )
     with st.expander("Root/source binding hashes and raw findings", expanded=False):
         st.caption("VIN root manifest, source manifest, split manifest, source splits, and raw finding details.")
@@ -955,55 +953,54 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     width="stretch",
                 )
     with details_tab:
-        with st.expander("Deep target and candidate evidence"):
-            if st.button("Deep statistics / target scan", width="stretch"):
-                deep = _cached_deep_statistics(root_text, rollout_texts, identity)
-                st.session_state[_DEEP_STATE_KEY] = (identity, deep)
-            if deep is None:
-                st.info("Run the deep scan to materialize target and candidate denominators.")
-            root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
-            if deep is not None:
-                deep_aggregate = deep.get("aggregate", {})
-                inventory = deep.get("root_target_inventory", {})
-                detected = inventory.get("detected", {})
-                gt = inventory.get("gt", {})
-                deep_columns = st.columns(5)
-                deep_columns[0].metric(
-                    "Root target opportunities",
-                    "Unavailable"
-                    if not bool(root_target_scan.get("available"))
-                    else _metric_value(root_target_scan.get("target_opportunity_count")),
-                )
-                deep_columns[1].metric(
-                    "Unique persisted target tasks",
-                    _deep_metric_value(deep_aggregate, "persisted_rollout_unique_target_tasks", deep_available=True),
-                )
-                deep_columns[2].metric(
-                    "Q_H trainable candidates",
-                    _deep_metric_value(deep_aggregate, "q_h_trainable_candidates", deep_available=True),
-                )
-                deep_columns[3].metric(
-                    "Detected targets",
-                    _metric_value(detected.get("row_count")) if detected.get("available") else "Unavailable",
-                )
-                deep_columns[4].metric(
-                    "GT targets",
-                    _metric_value(gt.get("row_count")) if gt.get("available") else "Unavailable",
-                )
-                if detected.get("available") or gt.get("available"):
-                    _render_target_inventory(inventory)
-                with st.expander("Raw deep evidence JSON", expanded=False):
-                    st.json(deep)
-            if not bool(root_target_scan.get("available")):
-                reason = root_target_scan.get("reason", "deep scan not run")
-                st.warning(
-                    "Root target opportunities are counted only from persisted GT-OBB labels and are never inferred "
-                    f"from rollout rows. Current status: {reason}."
-                )
-            st.caption(
-                "Use Root Observation Store for source distributions and Rollout Supervision for scientific, "
-                "failure, query, depth, and Rerun inspection."
+        if st.button("Deep statistics / target scan", width="stretch"):
+            deep = _cached_deep_statistics(root_text, rollout_texts, identity)
+            st.session_state[_DEEP_STATE_KEY] = (identity, deep)
+        if deep is None:
+            st.info("Run the deep scan to materialize target and candidate denominators.")
+        root_target_scan = deep.get("root_gt_obb_target_opportunities", {}) if deep is not None else {}
+        if deep is not None:
+            deep_aggregate = deep.get("aggregate", {})
+            inventory = deep.get("root_target_inventory", {})
+            detected = inventory.get("detected", {})
+            gt = inventory.get("gt", {})
+            deep_columns = st.columns(5)
+            deep_columns[0].metric(
+                "Root target opportunities",
+                "Unavailable"
+                if not bool(root_target_scan.get("available"))
+                else _metric_value(root_target_scan.get("target_opportunity_count")),
             )
+            deep_columns[1].metric(
+                "Unique persisted target tasks",
+                _deep_metric_value(deep_aggregate, "persisted_rollout_unique_target_tasks", deep_available=True),
+            )
+            deep_columns[2].metric(
+                "Q_H trainable candidates",
+                _deep_metric_value(deep_aggregate, "q_h_trainable_candidates", deep_available=True),
+            )
+            deep_columns[3].metric(
+                "Detected targets",
+                _metric_value(detected.get("row_count")) if detected.get("available") else "Unavailable",
+            )
+            deep_columns[4].metric(
+                "GT targets",
+                _metric_value(gt.get("row_count")) if gt.get("available") else "Unavailable",
+            )
+            if detected.get("available") or gt.get("available"):
+                _render_target_inventory(inventory)
+            with st.expander("Raw deep evidence JSON", expanded=False):
+                st.json(deep)
+        if not bool(root_target_scan.get("available")):
+            reason = root_target_scan.get("reason", "deep scan not run")
+            st.warning(
+                "Root target opportunities are counted only from persisted GT-OBB labels and are never inferred "
+                f"from rollout rows. Current status: {reason}."
+            )
+        st.caption(
+            "Use Root Observation Store for source distributions and Rollout Supervision for scientific, "
+            "failure, query, depth, and Rerun inspection."
+        )
 
     st.download_button(
         "Download resolved bundle evidence JSON",
