@@ -1325,13 +1325,17 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
 
 def _render_candidate_geometry_diagnostics(
     candidates: pd.DataFrame,
-    root_geometry: pd.DataFrame,
+    root_geometry: pd.DataFrame | dict[str, object],
     trajectory_geometry: dict[str, object] | None = None,
     *,
     total_candidates: int,
 ) -> None:
     """Restore bounded candidate plots in scientifically valid root-relative coordinates."""
 
+    proposal_frames = pd.DataFrame()
+    if isinstance(root_geometry, dict):
+        proposal_frames = pd.DataFrame(root_geometry.get("frames", []))
+        root_geometry = pd.DataFrame(root_geometry.get("points", []))
     if candidates.empty:
         return
     with st.expander("Candidate geometry, motion, angles, and reward support", expanded=True):
@@ -1473,9 +1477,7 @@ def _render_candidate_geometry_diagnostics(
                     symbol="selected" if "selected" in root_geometry else None,
                     title="Candidate centers in target-normalized 3D support",
                 )
-                frame_rows = (
-                    pd.DataFrame(trajectory_geometry.get("frames", [])) if trajectory_geometry else pd.DataFrame()
-                )
+                frame_rows = proposal_frames
                 configure_3d_scene(
                     figure_3d,
                     axis_titles=("target-forward / d", "target-lateral / d", "up / d"),

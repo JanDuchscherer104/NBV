@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import asdict, replace
 
 import numpy as np
@@ -129,3 +130,36 @@ def test_orientation_diagnostics_keep_frame_and_selected_populations_explicit() 
 
     figure = candidate_generation._orientation_diagnostic_figure(rows)
     assert sum(len(trace.y) for trace in figure.data) == len(rows)
+
+
+def test_geometry_renderer_keeps_proposal_and_trajectory_frames_projection_local(monkeypatch) -> None:
+    """Proposal anchors never reuse factual trajectory frames."""
+
+    captured_axis_frames: list[pd.DataFrame] = []
+    captured_trajectory_frames: list[pd.DataFrame] = []
+    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(candidate_generation, "_render_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        candidate_generation,
+        "_add_geometry_anchors",
+        lambda _figure, _frames, *, axis_frames, **_kwargs: captured_axis_frames.append(axis_frames.copy()),
+    )
+    monkeypatch.setattr(
+        candidate_generation,
+        "_trajectory_figure",
+        lambda _points, frames: captured_trajectory_frames.append(frames.copy()) or candidate_generation.go.Figure(),
+    )
+    candidates = pd.DataFrame([{"candidate_row_id": 1}])
+    proposal_frames = pd.DataFrame([{"frame_id": "proposal-frame"}])
+    trajectory_frames = pd.DataFrame([{"frame_id": "trajectory-frame"}])
+    proposal = {"points": [{"x": 1.0, "y": 2.0, "z": 3.0}], "frames": proposal_frames.to_dict("records")}
+    trajectory = {
+        "points": [{"x": 0.0, "y": 0.0, "z": 0.0, "path_order": 0}],
+        "frames": trajectory_frames.to_dict("records"),
+    }
+
+    candidate_generation._render_candidate_geometry_diagnostics(candidates, proposal, trajectory, total_candidates=1)
+
+    assert [frame["frame_id"].tolist() for frame in captured_axis_frames] == [["proposal-frame"]]
+    assert [frame["frame_id"].tolist() for frame in captured_trajectory_frames] == [["trajectory-frame"]]

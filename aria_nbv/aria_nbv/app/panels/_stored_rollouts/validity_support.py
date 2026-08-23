@@ -152,7 +152,7 @@ def _render_targets_and_support(session_handle: object) -> None:
         proposal = session_handle.proposal_geometry(limit=candidate_plot_limit)
         _render_candidate_geometry_diagnostics(
             pd.DataFrame(candidate_rows),
-            pd.DataFrame(proposal.get("points", [])),
+            proposal,
             session_handle.trajectory_geometry(),
             total_candidates=int(session_handle.validation.num_candidates),
         )

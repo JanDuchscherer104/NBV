@@ -670,23 +670,25 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         summary_columns[4].metric(
             "Candidates", _metric_value(sum(int(count.get("candidates", 0)) for count in rollout_counts))
         )
-        st.subheader("Root splits")
-        split_rows = [
-            {"split": split, "samples": count} for split, count in sorted(evidence.root.get("split_counts", {}).items())
-        ]
-        st.dataframe(pd.DataFrame(split_rows), hide_index=True, width="stretch")
-        st.subheader("Selected rollout stores")
-        rollout_rows = _rollout_rows(evidence)
-        if rollout_rows:
-            st.dataframe(pd.DataFrame(rollout_rows), hide_index=True, width="stretch")
-        else:
-            st.info("No rollout supervision store is selected.")
+        with st.expander("Root splits and selected-store details", expanded=False):
+            st.subheader("Root splits")
+            split_rows = [
+                {"split": split, "samples": count}
+                for split, count in sorted(evidence.root.get("split_counts", {}).items())
+            ]
+            st.dataframe(pd.DataFrame(split_rows), hide_index=True, width="stretch")
+            st.subheader("Selected rollout stores")
+            rollout_rows = _rollout_rows(evidence)
+            if rollout_rows:
+                st.dataframe(pd.DataFrame(rollout_rows), hide_index=True, width="stretch")
+            else:
+                st.info("No rollout supervision store is selected.")
         finding_rows = [finding.to_jsonable() for finding in evidence.findings]
-        if finding_rows:
-            st.subheader("Blockers and pending evidence")
-            st.dataframe(pd.DataFrame(finding_rows), hide_index=True, width="stretch")
-        else:
-            st.success("No readiness findings.")
+        with st.expander("Blockers and pending evidence", expanded=bool(finding_rows)):
+            if finding_rows:
+                st.dataframe(pd.DataFrame(finding_rows), hide_index=True, width="stretch")
+            else:
+                st.success("No readiness findings.")
     with qh_tab:
         st.subheader("Q_H dataset and collation readiness")
         st.caption(
@@ -733,6 +735,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
         else:
             renderer = st.success if qh_readiness.verdict == "Ready" else st.error
             renderer(f"Q_H corpus: {qh_readiness.verdict}")
+            _render_summary_metrics(qh_readiness)
             if qh_readiness.blockers:
                 st.dataframe(pd.DataFrame({"blocking_reason": qh_readiness.blockers}), hide_index=True, width="stretch")
             if qh_readiness.stages:
@@ -748,7 +751,8 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     }
                     for row in qh_readiness.stages
                 ]
-                st.dataframe(pd.DataFrame(stage_rows), hide_index=True, width="stretch")
+                with st.expander("Stage inclusion and factual counts", expanded=False):
+                    st.dataframe(pd.DataFrame(stage_rows), hide_index=True, width="stretch")
                 storage_rows = [
                     {
                         "metric": metric.name,
@@ -760,7 +764,8 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     }
                     for metric in qh_readiness.storage
                 ]
-                st.dataframe(pd.DataFrame(storage_rows), hide_index=True, width="stretch")
+                with st.expander("Normalized storage metrics", expanded=False):
+                    st.dataframe(pd.DataFrame(storage_rows), hide_index=True, width="stretch")
             if qh_readiness.verdict == "Ready":
                 included_stages = [row.stage.value for row in qh_readiness.stages if row.included]
                 preview_controls = st.columns(3)
@@ -809,7 +814,6 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                     hide_index=True,
                     width="stretch",
                 )
-    _render_summary_metrics(qh_readiness)
     with details_tab:
         with st.expander("Deep target and candidate evidence"):
             if st.button("Deep statistics / target scan", width="stretch"):
