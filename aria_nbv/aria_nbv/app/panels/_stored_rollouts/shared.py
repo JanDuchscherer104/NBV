@@ -87,7 +87,6 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         f"{html.escape(explanation.evidence_role)}</span>",
         unsafe_allow_html=True,
     )
-    st.markdown(f"**Answer:** {explanation.answer}")
     render_explanation_popover("Interpret this plot", explanation, log_y_key=log_y_key, container=col_info)
     rendered = fig
     if log_y_key is not None:

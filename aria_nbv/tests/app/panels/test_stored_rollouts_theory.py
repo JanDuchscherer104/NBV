@@ -107,9 +107,10 @@ def test_invalid_theory_warns_and_allows_remaining_guide(monkeypatch: pytest.Mon
     assert "https://example.com/reference" in rendered_text
 
 
-def test_render_plot_keeps_answer_visible_and_guide_reusable() -> None:
+def test_render_plot_delegates_answer_to_one_guide_owner() -> None:
     source = Path(shared.__file__).read_text(encoding="utf-8")
-    assert 'st.markdown(f"**Answer:** {explanation.answer}")' in source
+    assert 'st.markdown(f"**Answer:** {explanation.answer}")' not in source
+    assert source.count('explanation_item("Answer", explanation.answer)') == 1
     assert "render_explanation_popover(" in source
     assert "_render_scientific_guide(explanation" in source
     assert "_render_theory(explanation.theory)" in source
