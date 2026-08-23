@@ -1482,7 +1482,11 @@ def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
     assert fig.layout.title.text == "Valid-candidate empirical central 95% range"
     assert "CI" not in fig.layout.title.text
     assert any(trace.fill == "tonexty" for trace in fig.data)
-    assert any("selected target_root_gain" in str(trace.name) for trace in fig.data)
+    assert any(
+        f"selected {panel_common.current_scientific_label('selected_target_rri')}" in str(trace.name)
+        for trace in fig.data
+    )
+    assert not any("Selected one-step target root gain" in str(trace.name) for trace in fig.data)
     assert not any("candidate min" in str(trace.name) for trace in fig.data)
     assert not any("candidate mean" in str(trace.name) for trace in fig.data)
     assert not any("candidate max" in str(trace.name) for trace in fig.data)
