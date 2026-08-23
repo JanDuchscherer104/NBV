@@ -1,7 +1,7 @@
 {
   "build_commands": {
     "development": "typst compile --root docs docs/typst/thesis/main.typ docs/typst/thesis/main.pdf",
-    "submission": "typst compile --root docs docs/typst/thesis/main.typ <submission-output.pdf> --input aria-thesis-mode=submission"
+    "submission": "typst compile --root docs docs/typst/thesis/main.typ <submission-output.pdf> --input aria-thesis-mode=submission --input aria-thesis-data=<report-bundle-path> --input aria-thesis-evidence-status=confirmatory --input aria-code-ref=<source-revision>"
   },
   "material_sources": [
     {
@@ -11,110 +11,6 @@
     {
       "path": "docs/ieee.csl",
       "sha256": "842a7b3f0266f92e28199104fc72fec64336564373c3a318260a43dbe2eb2a19"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-BCQ/example_paper.bib",
-      "sha256": "1c541bfb48fbb9c45d3a44cff0b71946ccd2db026fa73414ea3cf3c31421af95"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-CQL/main.bib",
-      "sha256": "d7217097689ab08d6f6ad62c3be12177a93b5d63b3e88933e21af3ff5d5ef85f"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Decision-Transformer/reference.bib",
-      "sha256": "9e2aaddf0f5f88ccf0ef1a0fa512fe5aa6ccef2e957b449e8af21342920e8741"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Deja-View/main.bib",
-      "sha256": "e9ed47faf16f7ec48c4c2303b5c0c305786a98e0a54981dcf38a1d1c5c6e74be"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Dynamic-3DGS/references.bib",
-      "sha256": "32d56faf79172a6591780aa9e05dfb92f335c7e5878739cad4302c84721127be"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-EFM3D/main.bib",
-      "sha256": "278b096559e0183f4d58f45dc06e18037426a1cdba82a89723e94c4d91edfca6"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-EGNN/E(n) Equivariant Graph Neural Networks _ ICML 2021/example_paper.bib",
-      "sha256": "9673406bede5b59d43db06095e18028e9b9471ad2c6fe380dc884a1389e1e69c"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-EGNN/example_paper.bib",
-      "sha256": "9673406bede5b59d43db06095e18028e9b9471ad2c6fe380dc884a1389e1e69c"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-FisherRF/main.bib",
-      "sha256": "675e2e1e62167dfb51393ca0b93344b14286ac173a68f6502e94b03e1a59c507"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Geometric-Deep-Learning/references.bib",
-      "sha256": "dd62282bf72e7b7244cd11ae3e38382657f7914a304865cb7da94bce2ef6d988"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Habitat/biblio.bib",
-      "sha256": "8ac877a949a0797e4b5374ae64f637efec59ac2d1a95167a01ae209c19c334fe"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Hestia/main.bib",
-      "sha256": "30cbc28a175d267eccfb97c41ed3910ad205d88e9ef68580f9a8247328b29f09"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Instance-NBV/references.bib",
-      "sha256": "e61c8ce2821264b4ac62f4baf1ddac92024d77f53aa6d66bf6faf4a0ec69aa53"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Instance-NBV/string-short.bib",
-      "sha256": "e488df22ee4beb9988035c32bdac7a8e8b5df29d73b4e301eb658d694429bb69"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-KPConv/egbib.bib",
-      "sha256": "7d4aeec91c91b41b4dcd1e309d4f564cf8ac11d8969b98cc05c01648669b4c33"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-MACARONS/arxiv.bib",
-      "sha256": "5d1cdf7317c5495a423c64aa6456606b31489a7c9c26f6cf5080394a0de590ed"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Next-Best-Sense/ms.bib",
-      "sha256": "c84734c60fa6e80381a5889cde61ea92d572895b053fb6c6d70b7ea941590f7e"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-PB-NBV/jzzpb.bib",
-      "sha256": "ef6314b31c3a1b96b027f9ac7a43b372cdc0c1d3e629095aa227e91340fb0d38"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Point-Transformer/paper.bib",
-      "sha256": "42cc5234b327dda8032068923bf7c3a488611a5934d037e073aa79dce0a0c132"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-ProcTHOR/egbib.bib",
-      "sha256": "c64e704a65ee94bae437462a5fe0f0f8fb7e1ff1b29b6b38d949bac5308dda2a"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-QCNet/egbib.bib",
-      "sha256": "d38625f93fd10149f68d497544c601144f520f5e01cc9cbbd119637f171071ce"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-SCONE/camera_ready.bib",
-      "sha256": "08031897d8fd2186665f3b95d41bee5418b3c001914efefc6535b337f4bee157"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-SE3-Transformer/example_paper.bib",
-      "sha256": "1e040ac62b7d7f15af242d6b3b5a332b636fb0028031404984a3b2fa01503cce"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-Trajectory-Transformer/ms.bib",
-      "sha256": "0caf731e3f828cae3eb30f23a0bc31f835205d29495999d4ba6fdd469a06087f"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-VIN-NBV/main.bib",
-      "sha256": "64d81ec2943c704832379e1c01eb49730b78f2169c3b1125bb8edccf7517d2ae"
-    },
-    {
-      "path": "docs/literature/tex-src/arXiv-scene-script/main.bib",
-      "sha256": "817d64cfcf1a01e4df30d1ade8ced13a850fcd089a1b00ddc869b15813e25d13"
     },
     {
       "path": "docs/references-qh.bib",
@@ -459,7 +355,7 @@
   ],
   "report_schema_version": "aria-nbv-thesis-report-v2",
   "schema_version": "thesis-toolchain-lock-v1",
-  "source_revision": "91dc6c328779a7ce4a6f3b5902a6643423761ea0",
+  "source_revision": "dc94eaad863b9b1dd71f16bf66b80a972578c30e",
   "toolchain": {
     "compiler": {
       "binary_sha256": "3ac6b84150c50a694d44134dc201624fbdc44f705b9992124a13474ddf8c6413",
