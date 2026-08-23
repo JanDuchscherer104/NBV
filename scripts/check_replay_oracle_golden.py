@@ -35,7 +35,7 @@ def _json_array(value: Any) -> Any:
 
 
 def _array_digest(value: Any) -> str:
-    """Hash canonical JSON rows after the fixture's field-specific float rounding."""
+    """Hash canonical JSON rows for discrete arrays."""
 
     payload = json.dumps(_json_array(value), sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
@@ -80,12 +80,10 @@ def _snapshot() -> dict[str, Any]:
                     "candidate_pose_world": _json_array(step.candidates.shell_poses.tensor().detach().cpu()),
                     "selected_valid_index": step.selected_valid_index,
                     "selected_shell_index": step.selected_shell_index,
-                    "selection_scores_sha256": _array_digest(step.selection_scores.detach().cpu()),
+                    "selection_scores": _json_array(step.selection_scores.detach().cpu()),
                     "selection_score_label": step.selection_score_label,
-                    "target_rri_sha256": _array_digest(
-                        evaluated.evaluation.labels.metrics["target_rri"].detach().cpu()
-                    ),
-                    "target_root_gain_sha256": _array_digest(
+                    "target_rri": _json_array(evaluated.evaluation.labels.metrics["target_rri"].detach().cpu()),
+                    "target_root_gain": _json_array(
                         evaluated.evaluation.labels.metrics["target_root_gain"].detach().cpu()
                     ),
                 }
@@ -124,17 +122,17 @@ def _snapshot() -> dict[str, Any]:
             "rollout_ids_sha256": _array_digest(reader.array("rollouts/rollout_id")),
             "termination_reason_sha256": _array_digest(reader.array("rollouts/termination_reason")),
             "step_row_ids_sha256": _array_digest(reader.array("steps/step_row_id")),
-            "selected_shell_indices": _json_array(reader.array("steps/selected_shell_index")),
+            "selected_shell_indices_sha256": _array_digest(reader.array("steps/selected_shell_index")),
             "actor_action_mask_sha256": _array_digest(reader.array("candidates/actor_action_mask")),
             "oracle_label_mask_sha256": _array_digest(reader.array("candidates/oracle_label_mask")),
             "selected_mask_sha256": _array_digest(reader.array("candidates/selected_mask")),
             "shell_indices_sha256": _array_digest(reader.array("candidates/shell_index")),
-            "target_rri_sha256": _array_digest(reader.array("candidates/target_rri")),
-            "target_root_gain_sha256": _array_digest(reader.array("candidates/target_root_gain")),
+            "target_rri": _json_array(reader.array("candidates/target_rri")),
+            "target_root_gain": _json_array(reader.array("candidates/target_root_gain")),
             "qh_state_step_row_ids_sha256": _array_digest(reader.array("q_h/state_step_row_id")),
             "qh_valid_action_mask_sha256": _array_digest(reader.array("q_h/valid_action_mask")),
-            "qh_selected_candidate_index": _json_array(reader.array("q_h/selected_candidate_index")),
-            "qh_td_reward_sha256": _array_digest(reader.array("q_h/td_reward")),
+            "qh_selected_candidate_index_sha256": _array_digest(reader.array("q_h/selected_candidate_index")),
+            "qh_td_reward": _json_array(reader.array("q_h/td_reward")),
             "qh_td_terminal_mask_sha256": _array_digest(reader.array("q_h/td_terminal_mask")),
         }
     fixture_config = {"device": "cpu", "horizon": 2, "num_samples": 6, "seed": 23}
@@ -185,14 +183,15 @@ def _mismatches(expected: Any, actual: Any, *, rtol: float, atol: float, path: s
         for index, (expected_item, actual_item) in enumerate(zip(expected, actual, strict=True)):
             errors.extend(_mismatches(expected_item, actual_item, rtol=rtol, atol=atol, path=f"{path}[{index}]"))
         return errors
-    if (
-        isinstance(expected, (int, float))
-        and not isinstance(expected, bool)
-        and isinstance(actual, (int, float))
-        and not isinstance(actual, bool)
-    ):
-        return [] if math.isclose(float(expected), float(actual), rel_tol=rtol, abs_tol=atol) else [f"{path}: differs"]
-    return [] if expected == actual else [f"{path}: differs"]
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        return [] if type(expected) is type(actual) and expected == actual else [f"{path}: differs"]
+    if isinstance(expected, float) or isinstance(actual, float):
+        if type(expected) is not float or type(actual) is not float:
+            return [f"{path}: numeric types differ ({type(expected).__name__} != {type(actual).__name__})"]
+        return [] if math.isclose(expected, actual, rel_tol=rtol, abs_tol=atol) else [f"{path}: differs"]
+    if isinstance(expected, int) or isinstance(actual, int):
+        return [] if type(expected) is type(actual) and expected == actual else [f"{path}: differs"]
+    return [] if type(expected) is type(actual) and expected == actual else [f"{path}: differs"]
 
 
 def main() -> int:

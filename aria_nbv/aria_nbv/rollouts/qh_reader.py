@@ -153,6 +153,9 @@ class QhDataContract:
     selected_depth_geometry: QhGeometryContract | None = None
     """Complete validated geometry facts for selected depth, when enabled."""
 
+    action_mask_semantics: str = "oracle_action_mask_v1"
+    """Meaning of actor-valid support; current generated stores use Oracle hard-valid masks."""
+
 
 @dataclass(frozen=True, slots=True)
 class _StoreFacts:
@@ -469,6 +472,15 @@ def _read_contract(root: zarr.Group, *, include_selected_depth: bool) -> QhDataC
         discount_gamma=float(root.attrs["discount_gamma"]),
         reason_code_version=str(root.attrs["reason_code_version"]),
         actor_store_version=str(root.attrs["source_offline_store_version"]),
+        action_mask_semantics=_closed_contract_value(
+            root.attrs.get("action_mask_semantics", "oracle_action_mask_v1"),
+            allowed=(
+                "oracle_action_mask_v1",
+                "actor_observed_action_mask_v1",
+                "learned_feasibility_v1",
+            ),
+            name="action_mask_semantics",
+        ),
         candidate_config_hashes=_decode_referenced_dictionary_values(
             root, group_name="lineage", array_name="candidate_config_id", dictionary_name="config"
         ),

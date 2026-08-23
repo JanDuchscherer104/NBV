@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import torch
+from efm3d.aria.pose import PoseTW
 from pydantic import Field, model_validator
 from torch import Tensor, nn
 
@@ -34,6 +35,9 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
         "cent_pr",
     )
     """Ordered compact root-EVL fields pooled into the state token."""
+
+    representation_semantics: Literal["root_moments_v1"] = "root_moments_v1"
+    """Versioned meaning of the scene token: root-frame moments plus support."""
 
     attention_heads: int = Field(default=4, gt=0)
     """Heads in candidate-to-state attention."""
@@ -81,7 +85,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         self.pose_encoder: R6dLffPoseEncoder = config.pose_encoder.setup_target()
         pose_dim = self.pose_encoder.out_dim
         hidden_dim = int(config.hidden_dim)
-        scene_dim = 4 * len(config.scene_channels) + 6
+        scene_dim = 4 * len(config.scene_channels) + 8
 
         self.candidate_projection = nn.Sequential(
             nn.Linear(pose_dim, hidden_dim),
@@ -137,16 +141,30 @@ class TargetFiniteHorizonScorer(nn.Module):
         action_mask = actor.action_mask & actor.step_mask.unsqueeze(-1)
         batch_size, steps, width = action_mask.shape
 
-        candidate_features = self.pose_encoder.encode(actor.candidate_pose_relative_root).pose_enc
+        candidate_active = action_mask
+        candidate_pose = self._sanitize_pose(
+            actor.candidate_pose_relative_root,
+            candidate_active,
+            name="candidate",
+        )
+        history_mask = actor.history_mask & actor.step_mask.unsqueeze(-1)
+        history_pose = self._sanitize_pose(actor.history_pose_relative_root, history_mask, name="history")
+        target_active = actor.step_mask.any(dim=-1)
+        target_pose = self._sanitize_pose(actor.target_pose_relative_root, target_active, name="target")
+        if bool((target_active.unsqueeze(-1) & ~torch.isfinite(actor.target_extents)).any()):
+            raise ValueError("Q_H active target extents must be finite.")
+
+        candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
         candidate_tokens = self.candidate_projection(candidate_features)
         candidate_tokens = torch.where(action_mask.unsqueeze(-1), candidate_tokens, torch.zeros_like(candidate_tokens))
 
-        target_features = self.pose_encoder.encode(actor.target_pose_relative_root).pose_enc
+        target_features = self.pose_encoder.encode(target_pose).pose_enc
         target_token = self.target_projection(torch.cat((target_features, actor.target_extents.float()), dim=-1))
 
-        history_features = self.pose_encoder.encode(actor.history_pose_relative_root).pose_enc
-        history_mask = actor.history_mask & actor.step_mask.unsqueeze(-1)
-        history_sum = (history_features * history_mask.unsqueeze(-1)).sum(dim=-2)
+        history_features = self.pose_encoder.encode(history_pose).pose_enc
+        history_sum = torch.where(history_mask.unsqueeze(-1), history_features, torch.zeros_like(history_features)).sum(
+            dim=-2
+        )
         history_count = history_mask.sum(dim=-1, keepdim=True).clamp_min(1)
         history_token = self.history_projection(history_sum / history_count)
 
@@ -185,15 +203,34 @@ class TargetFiniteHorizonScorer(nn.Module):
         if points.ndim != 3:
             raise ValueError(f"Q_H batched semidense points must have shape (B,P,C), got {tuple(points.shape)}.")
         lengths = actor.vin_snippet.lengths.reshape(points.shape[0], -1)[:, 0].long()
+        if bool((lengths < 0).any() or (lengths > points.shape[1]).any()):
+            raise ValueError(f"Q_H semidense lengths must be in [0,{points.shape[1]}].")
         point_mask = torch.arange(points.shape[1], device=points.device).unsqueeze(0) < lengths.unsqueeze(1)
         finite = torch.isfinite(points).all(dim=-1)
         point_mask &= finite
-        safe_points = torch.where(point_mask.unsqueeze(-1), points, torch.zeros_like(points))
-        count = point_mask.sum(dim=1, keepdim=True).clamp_min(1)
+        root_active = actor.step_mask.any(dim=-1)
+        root_from_world = self._sanitize_pose(actor.root_pose_world, root_active, name="root").inverse()
+        points_root = root_from_world.transform(points)
+        safe_points = torch.where(point_mask.unsqueeze(-1), points_root, torch.zeros_like(points_root))
+        valid_count = point_mask.sum(dim=1, keepdim=True)
+        count = valid_count.clamp_min(1)
         mean = safe_points.sum(dim=1) / count
-        centered = torch.where(point_mask.unsqueeze(-1), points - mean.unsqueeze(1), torch.zeros_like(points))
+        centered = torch.where(point_mask.unsqueeze(-1), points_root - mean.unsqueeze(1), torch.zeros_like(points_root))
         std = (centered.square().sum(dim=1) / count).sqrt()
-        return torch.cat((*pooled, mean, std), dim=-1)
+        support = (valid_count.float() / max(points.shape[1], 1)).clamp(0.0, 1.0)
+        present = valid_count.gt(0).float()
+        return torch.cat((*pooled, mean, std, present, support), dim=-1)
+
+    @staticmethod
+    def _sanitize_pose(pose: PoseTW, active: Tensor, *, name: str) -> PoseTW:
+        """Reject active non-finite poses and replace inactive rows by identity."""
+
+        values = pose.tensor()
+        finite = torch.isfinite(values).all(dim=-1)
+        if bool((active & ~finite).any()):
+            raise ValueError(f"Q_H active {name} poses must be finite.")
+        identity = PoseTW().tensor().to(device=values.device, dtype=values.dtype).expand_as(values)
+        return PoseTW(torch.where(active.unsqueeze(-1), values, identity))
 
     @staticmethod
     def _pool_channel(value: Tensor | None) -> Tensor:

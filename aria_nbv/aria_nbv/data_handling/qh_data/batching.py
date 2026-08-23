@@ -155,7 +155,14 @@ class QhBatch:
             New batch with aligned actor and supervision tensors on ``device``.
         """
 
-        return _transform_batch(self, lambda value: value.to(device=device, non_blocking=non_blocking))
+        return QhBatch(
+            actor=move_qh_actor_tensors(self.actor, device, non_blocking=non_blocking),
+            supervision=_transform_supervision(
+                self.supervision, lambda value: value.to(device=device, non_blocking=non_blocking)
+            ),
+            keys=self.keys,
+            audits=self.audits,
+        )
 
 
 def collate_qh_chains(
@@ -396,41 +403,63 @@ def _transform_batch(batch: QhBatch, transform: Callable[[Tensor], Tensor]) -> Q
         its transformed storage tensor, and ``keys`` preserved by identity.
     """
 
-    actor = batch.actor
-    snippet = actor.vin_snippet
     supervision = batch.supervision
+    return QhBatch(
+        actor=_transform_actor_tensors(batch.actor, transform),
+        supervision=_transform_supervision(supervision, transform),
+        keys=batch.keys,
+        audits=batch.audits,
+    )
+
+
+def move_qh_actor_tensors(
+    actor: QhActorTensors,
+    device: str | torch.device,
+    *,
+    non_blocking: bool = True,
+) -> QhActorTensors:
+    """Move every nested actor tensor while retaining typed pose containers."""
+
+    return _transform_actor_tensors(actor, lambda value: value.to(device=device, non_blocking=non_blocking))
+
+
+def _transform_actor_tensors(actor: QhActorTensors, transform: Callable[[Tensor], Tensor]) -> QhActorTensors:
+    """Apply one tensor transform recursively to the canonical actor DTO."""
+
+    snippet = actor.vin_snippet
     transformed_snippet = VinSnippetView(
         points_world=transform(snippet.points_world),
         lengths=transform(snippet.lengths),
         t_world_rig=PoseTW(transform(snippet.t_world_rig.tensor())),
         t_world_snippet=PoseTW(transform(snippet.t_world_snippet.tensor())),
     )
-    return QhBatch(
-        actor=QhActorTensors(
-            vin_snippet=transformed_snippet,
-            root_pose_world=PoseTW(transform(actor.root_pose_world.tensor())),
-            target_pose_relative_root=PoseTW(transform(actor.target_pose_relative_root.tensor())),
-            target_extents=transform(actor.target_extents),
-            candidate_pose_relative_root=PoseTW(transform(actor.candidate_pose_relative_root.tensor())),
-            candidate_mask=transform(actor.candidate_mask),
-            action_mask=transform(actor.action_mask),
-            history_pose_relative_root=PoseTW(transform(actor.history_pose_relative_root.tensor())),
-            history_mask=transform(actor.history_mask),
-            horizon_remaining=transform(actor.horizon_remaining),
-            step_mask=transform(actor.step_mask),
-            static_context=_transform_static_context(actor.static_context, transformed_snippet, transform),
-            selected_observation_prefix=_transform_selected_prefix(actor.selected_observation_prefix, transform),
-        ),
-        supervision=QhSupervision(
-            label_mask=transform(supervision.label_mask),
-            candidate_reward=transform(supervision.candidate_reward),
-            one_step_target_rri=transform(supervision.one_step_target_rri),
-            selected_index=transform(supervision.selected_index),
-            discount=transform(supervision.discount),
-            terminal=transform(supervision.terminal),
-        ),
-        keys=batch.keys,
-        audits=batch.audits,
+    return QhActorTensors(
+        vin_snippet=transformed_snippet,
+        root_pose_world=PoseTW(transform(actor.root_pose_world.tensor())),
+        target_pose_relative_root=PoseTW(transform(actor.target_pose_relative_root.tensor())),
+        target_extents=transform(actor.target_extents),
+        candidate_pose_relative_root=PoseTW(transform(actor.candidate_pose_relative_root.tensor())),
+        candidate_mask=transform(actor.candidate_mask),
+        action_mask=transform(actor.action_mask),
+        history_pose_relative_root=PoseTW(transform(actor.history_pose_relative_root.tensor())),
+        history_mask=transform(actor.history_mask),
+        horizon_remaining=transform(actor.horizon_remaining),
+        step_mask=transform(actor.step_mask),
+        static_context=_transform_static_context(actor.static_context, transformed_snippet, transform),
+        selected_observation_prefix=_transform_selected_prefix(actor.selected_observation_prefix, transform),
+    )
+
+
+def _transform_supervision(supervision: QhSupervision, transform: Callable[[Tensor], Tensor]) -> QhSupervision:
+    """Apply one tensor transform to supervision without exposing it to actors."""
+
+    return QhSupervision(
+        label_mask=transform(supervision.label_mask),
+        candidate_reward=transform(supervision.candidate_reward),
+        one_step_target_rri=transform(supervision.one_step_target_rri),
+        selected_index=transform(supervision.selected_index),
+        discount=transform(supervision.discount),
+        terminal=transform(supervision.terminal),
     )
 
 
@@ -497,4 +526,4 @@ def _transform_optional_pose(value: PoseTW | None, transform: Callable[[Tensor],
     return None if value is None else PoseTW(transform(value.tensor()))
 
 
-__all__ = ["QhBatch", "collate_qh_chains"]
+__all__ = ["QhBatch", "collate_qh_chains", "move_qh_actor_tensors"]

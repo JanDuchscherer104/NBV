@@ -23,7 +23,7 @@ from aria_nbv.data_handling.qh_data import (
     QhDatasetConfig,
     collate_qh_chains,
 )
-from aria_nbv.data_handling.qh_data.batching import _gather_candidates
+from aria_nbv.data_handling.qh_data.batching import _gather_candidates, move_qh_actor_tensors
 from aria_nbv.data_handling.qh_data.dataset import _require_named_profile_store
 from aria_nbv.data_handling.qh_data.materialization import _tensor_chain
 from aria_nbv.data_handling.qh_data.views import (
@@ -226,6 +226,15 @@ def test_qh_batch_transfer_constructs_owned_dtos_without_reflective_traversal() 
 
     assert not any(isinstance(call.func, ast.Name) and call.func.id in {"fields", "getattr"} for call in calls)
     assert not any(keyword.arg is None for call in calls for keyword in call.keywords)
+
+
+def test_move_qh_actor_tensors_transforms_nested_actor_fields() -> None:
+    actor = collate_qh_chains([_chain(steps=2, width=3)]).actor
+    moved = move_qh_actor_tensors(actor, "cpu")
+    assert moved is not actor
+    assert torch.equal(moved.action_mask, actor.action_mask)
+    assert torch.equal(moved.vin_snippet.points_world, actor.vin_snippet.points_world)
+    assert torch.equal(moved.candidate_pose_relative_root.tensor(), actor.candidate_pose_relative_root.tensor())
 
 
 def _snippet(points: int = 2) -> VinSnippetView:

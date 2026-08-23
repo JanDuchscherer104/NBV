@@ -8,6 +8,7 @@ import ast
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
 import torch
 from efm3d.aria.pose import PoseTW
 
@@ -97,6 +98,80 @@ def test_qh_scorer_invalid_rows_are_isolated() -> None:
 
     assert torch.allclose(changed[action_mask], baseline[action_mask], atol=1e-6, rtol=1e-6)
     assert torch.equal(changed[~action_mask], torch.zeros_like(changed[~action_mask]))
+
+
+def test_qh_scorer_sanitizes_inactive_nonfinite_pose_rows() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    baseline = scorer(actor)
+    candidate = actor.candidate_pose_relative_root.tensor().clone()
+    candidate[~actor.action_mask] = float("nan")
+    history = actor.history_pose_relative_root.tensor().clone()
+    history[~actor.history_mask] = float("inf")
+
+    actual = scorer(
+        replace(
+            actor,
+            candidate_pose_relative_root=PoseTW(candidate),
+            history_pose_relative_root=PoseTW(history),
+        )
+    )
+    assert torch.allclose(actual, baseline, atol=1e-6, rtol=1e-6)
+    assert torch.isfinite(actual).all()
+
+
+def test_qh_scorer_rejects_nonfinite_active_pose_rows() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    candidate = actor.candidate_pose_relative_root.tensor().clone()
+    first = tuple(int(value) for value in torch.nonzero(actor.action_mask, as_tuple=False)[0])
+    candidate[first] = float("nan")
+    with pytest.raises(ValueError, match="active candidate poses"):
+        scorer(replace(actor, candidate_pose_relative_root=PoseTW(candidate)))
+
+    target = actor.target_pose_relative_root.tensor().clone()
+    target[..., 0] = float("inf")
+    with pytest.raises(ValueError, match="active target poses"):
+        scorer(replace(actor, target_pose_relative_root=PoseTW(target)))
+
+    root = actor.root_pose_world.tensor().clone()
+    root[..., 0] = float("nan")
+    with pytest.raises(ValueError, match="active root poses"):
+        scorer(replace(actor, root_pose_world=PoseTW(root)))
+
+    extents = actor.target_extents.clone()
+    extents[..., 0] = float("inf")
+    with pytest.raises(ValueError, match="active target extents"):
+        scorer(replace(actor, target_extents=extents))
+
+
+def test_qh_scene_summary_is_root_frame_invariant_and_tracks_raw_support() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    points = actor.vin_snippet.points_world.clone()
+    root = actor.root_pose_world.tensor().clone()
+    root[0, -3:] = torch.tensor([2.0, -1.0, 0.5])
+    shifted = replace(
+        actor,
+        root_pose_world=PoseTW(root),
+        vin_snippet=replace(actor.vin_snippet, points_world=points + root[:, -3:]),
+    )
+    assert torch.allclose(scorer._scene_summary(actor), scorer._scene_summary(shifted))
+
+    empty = replace(actor, vin_snippet=replace(actor.vin_snippet, lengths=torch.tensor([0])))
+    zero = replace(actor, vin_snippet=replace(actor.vin_snippet, points_world=torch.zeros_like(points)))
+    empty_summary = scorer._scene_summary(empty)
+    zero_summary = scorer._scene_summary(zero)
+    assert empty_summary[0, -2:].tolist() == [0.0, 0.0]
+    assert zero_summary[0, -2:].tolist() == [1.0, 1.0]
+
+
+def test_qh_scene_summary_rejects_out_of_range_point_lengths() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    invalid = replace(actor, vin_snippet=replace(actor.vin_snippet, lengths=torch.tensor([99])))
+    with pytest.raises(ValueError, match=r"lengths must be in \[0,"):
+        scorer._scene_summary(invalid)
 
 
 def test_qh_scorer_uses_target_history_and_budget_without_future_history() -> None:

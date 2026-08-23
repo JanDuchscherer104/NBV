@@ -10,14 +10,21 @@ allowed_dispositions:
   - compatible
   - needs_issue_amendment
   - needs_follow_up_issue
+issue_revisions:
+  - issue: 74
+    timestamp: 2026-08-19T09:37:13Z
+    body_sha256: 1f91070808154c7ea2e0547359d1fda3172898f6b70144557bd40d4ee1c14f04
+  - issue: 75
+    timestamp: 2026-08-19T09:38:02Z
+    body_sha256: ac0fab167f5a891aa9657e17ce8d57ab12f6c139bcde02d5da304461101825ef
 ---
 
 # Online oracle MVP issue-acceptance handoff
 
 This is the concrete WP0a handoff schema and current planning snapshot for
-GitHub issues #74 and #75. Execution must refresh every row from the live issue
-before implementation. A work package may not close an issue while any row is
-`needs_issue_amendment` or `needs_follow_up_issue`.
+GitHub issues #74 and #75. The issue revisions recorded in frontmatter are the
+source snapshot used for this handoff. A work package may not close an issue
+while any row is `needs_issue_amendment` or `needs_follow_up_issue`.
 
 Required row fields are `issue`, `acceptance_key`, `source_acceptance`,
 `mvp_contract`, `disposition`, `evidence_owner`, and `closure_rule`. The three
@@ -37,6 +44,6 @@ frontmatter dispositions are the complete vocabulary.
 | #75 | broader-policy-gradient | score-function update under nondifferentiable reward | deferred training-mode learner recomputes log probability from stored actor/action | needs_follow_up_issue | #77 or a new objective-specific issue | separate objective, manifest, tests, and scientific gate exist |
 | #75 | matched-hard-oracle | compare under matched candidate and oracle contracts | fixed hard oracle and matched candidate/query/acquisition/endpoint budgets | compatible | WP3/WP5 held-out reports | paired held-out contract report passes |
 
-WP0a must replace `proposed` with a live-reviewed status, attach the exact issue
-revision/time, and record any accepted issue edits or follow-up issue URLs. This
-artifact is planning evidence; it does not itself modify or close GitHub issues.
+WP0a must replace `proposed` with a live-reviewed status and record any accepted
+issue edits or follow-up issue URLs. This artifact is planning evidence; it does
+not itself modify or close GitHub issues.

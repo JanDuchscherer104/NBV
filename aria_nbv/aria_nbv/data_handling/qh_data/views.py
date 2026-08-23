@@ -38,6 +38,12 @@ if TYPE_CHECKING:
 QhRootEvlProfile = Literal["none", "evl_v1"]
 QhSelectedObservationProtocol = Literal["none", "cf_gt"]
 QhExperimentProfile = Literal["qh_cf0_v1", "qh_cfplus_gt_depth_v1"]
+QhActionMaskSemantics = Literal[
+    "oracle_action_mask_v1",
+    "actor_observed_action_mask_v1",
+    "learned_feasibility_v1",
+]
+QhRepresentationSemantics = Literal["root_moments_v1"]
 
 
 def validate_experiment_profile(
@@ -305,10 +311,12 @@ class QhChain:
 
 
 __all__ = [
+    "QhActionMaskSemantics",
     "QhActorTensors",
     "QhAudit",
     "QhChain",
     "QhChainKey",
+    "QhRepresentationSemantics",
     "QhSelectedObservationPrefix",
     "QhStaticContext",
     "QhSupervision",

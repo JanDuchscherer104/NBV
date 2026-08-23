@@ -256,6 +256,7 @@ def test_module_rejects_every_learning_contract_field_mutation() -> None:
         "discount_gamma": 0.5,
         "reason_code_version": "other-reasons",
         "actor_store_version": "other-actor-store",
+        "action_mask_semantics": "actor_observed_action_mask_v1",
         "candidate_config_hashes": ("other-candidate-config",),
         "rollout_config_hashes": ("other-rollout-config",),
         "selection_policies": ("other-policy",),

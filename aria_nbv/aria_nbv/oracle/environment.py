@@ -13,13 +13,85 @@ import torch
 from efm3d.aria.pose import PoseTW
 
 from ..data_handling.qh_data import QhActorTensors
+from ..data_handling.qh_data.views import QhActionMaskSemantics, QhRepresentationSemantics
 from ..pose_generation.types import CandidateSamplingResult
 from ..rollouts.replay.state import CounterfactualTrajectory
+from ..targets.protocol import (
+    TargetDescriptorProvenance,
+    TargetInputProtocol,
+    validate_target_protocol_admission,
+)
 from ..utils import BaseConfig
 
 
 class StaleOracleDecisionContextError(ValueError):
     """Raised before scoring when a bound decision payload changed in place."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhDecisionInputContract:
+    """Content identities and causal semantics admitted for one Q_H decision."""
+
+    actor_state_contract_hash: str
+    """Exact hash of the actor-state schema and immutable source contract."""
+
+    learning_contract_hash: str
+    """Exact hash of the replay support and fitted-Q learning semantics."""
+
+    target_protocol: TargetInputProtocol | str
+    """Target-input protocol carried by this decision."""
+
+    target_source: str | None
+    """Source that selected the target task."""
+
+    descriptor_source: str | None
+    """Source block that constructed the actor-visible target descriptor."""
+
+    descriptor_provenance: TargetDescriptorProvenance | str | None
+    """Construction class of the target descriptor."""
+
+    descriptor_hash: str
+    """Content digest of the exact target descriptor supplied to the actor."""
+
+    candidate_config_hash: str
+    """Candidate-generation configuration identity for the bound shell."""
+
+    action_mask_semantics: QhActionMaskSemantics
+    """Causal meaning of the action support supplied to the scorer."""
+
+    cohort: Literal["oracle_upper_bound_v1", "deployment_v1"]
+    """Explicit evaluation cohort; privileged inputs are confined to the Oracle upper bound."""
+
+    representation_semantics: QhRepresentationSemantics = "root_moments_v1"
+    """Closed scorer representation constructed from root-frame evidence."""
+
+    def __post_init__(self) -> None:
+        if (
+            not self.actor_state_contract_hash
+            or not self.learning_contract_hash
+            or not self.descriptor_hash
+            or not self.candidate_config_hash
+        ):
+            raise ValueError("Q_H decision input contracts require non-empty content identities.")
+        protocol = validate_target_protocol_admission(
+            self.target_protocol,
+            target_source=self.target_source,
+            descriptor_source=self.descriptor_source,
+            descriptor_provenance=self.descriptor_provenance,
+        )
+        object.__setattr__(self, "target_protocol", protocol)
+        if self.representation_semantics != "root_moments_v1":
+            raise ValueError("Q_H decisions require representation_semantics='root_moments_v1'.")
+        if self.cohort == "deployment_v1":
+            if protocol is not TargetInputProtocol.V1_OBSERVED:
+                raise ValueError("Deployment Q_H decisions require target_protocol='v1_observed'.")
+            if self.action_mask_semantics == "oracle_action_mask_v1":
+                raise ValueError("Deployment Q_H decisions reject Oracle-derived action masks.")
+        elif self.cohort == "oracle_upper_bound_v1":
+            if self.action_mask_semantics != "oracle_action_mask_v1":
+                raise ValueError("Oracle upper-bound Q_H decisions require Oracle action-mask semantics.")
+        else:
+            raise ValueError(f"Unsupported Q_H decision cohort {self.cohort!r}.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +124,9 @@ class OracleDecisionContext:
     actor: QhActorTensors
     """Batched actor-only chain prefix consumed by the finite-horizon scorer."""
 
+    input_contract: QhDecisionInputContract
+    """Explicit target, candidate, mask, representation, and cohort provenance."""
+
     actor_profile: str = "qh_cf0_v1"
     """Closed actor projection identity included in :attr:`actor_hash`."""
 
@@ -63,6 +138,7 @@ class OracleDecisionContext:
         trajectory: CounterfactualTrajectory,
         candidates: CandidateSamplingResult,
         actor: QhActorTensors,
+        input_contract: QhDecisionInputContract,
         actor_profile: str = "qh_cf0_v1",
     ) -> "OracleDecisionContext":
         """Validate candidate alignment and create canonical detached hashes."""
@@ -72,7 +148,7 @@ class OracleDecisionContext:
         _validate_actor_candidate_alignment(actor, candidates)
         state_hash = _canonical_hash((episode_id, trajectory))
         table_hash = _canonical_hash((state_hash, candidates))
-        actor_hash = _canonical_hash((actor_profile, actor))
+        actor_hash = _canonical_hash((actor_profile, input_contract, actor))
         return cls(
             episode_id=episode_id,
             state_hash=state_hash,
@@ -81,6 +157,7 @@ class OracleDecisionContext:
             trajectory=trajectory,
             candidates=candidates,
             actor=actor,
+            input_contract=input_contract,
             actor_profile=actor_profile,
         )
 
@@ -93,10 +170,15 @@ class OracleDecisionContext:
     def validate_integrity(self) -> None:
         """Reject nested state, table, or actor mutation before any scoring work."""
 
-        _validate_actor_candidate_alignment(self.actor, self.candidates)
+        try:
+            _validate_actor_candidate_alignment(self.actor, self.candidates)
+        except ValueError as error:
+            raise StaleOracleDecisionContextError(
+                "Oracle decision context candidate alignment changed after binding."
+            ) from error
         actual_state = _canonical_hash((self.episode_id, self.trajectory))
         actual_table = _canonical_hash((actual_state, self.candidates))
-        actual_actor = _canonical_hash((self.actor_profile, self.actor))
+        actual_actor = _canonical_hash((self.actor_profile, self.input_contract, self.actor))
         mismatches = [
             name
             for name, expected, actual in (
@@ -275,5 +357,6 @@ __all__ = [
     "OracleDecisionContext",
     "OracleEndpointEvaluation",
     "OracleQuery",
+    "QhDecisionInputContract",
     "StaleOracleDecisionContextError",
 ]

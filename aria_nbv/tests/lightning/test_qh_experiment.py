@@ -22,6 +22,7 @@ from aria_nbv.lightning.qh_experiment import (
     QhExperiment,
     QhExperimentConfig,
     QhFitRequest,
+    QhHeldOutEvaluationRequest,
     QhInferenceBundleRef,
     _manifest_hash,
 )
@@ -94,10 +95,12 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
         manifest_sha256=manifest["manifest_sha256"],
     )
 
-    loaded = QhExperiment.load_for_inference(ref, device="cpu")
-    actual = loaded(actor)
+    runtime = QhExperiment.load_for_inference(ref, device="cpu")
+    actual = runtime.scorer(actor)
 
-    assert loaded.training is False
+    assert runtime.scorer.training is False
+    assert runtime.scorer_state_sha256 == manifest["artifacts"]["scorer-state.pt"]["sha256"]
+    assert runtime.representation_semantics == "root_moments_v1"
     assert torch.equal(actual, expected)
     assert torch.equal(actual.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1), expected_rank)
 
@@ -110,7 +113,8 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
                 "from aria_nbv.lightning.qh_experiment import QhExperiment, QhInferenceBundleRef; "
                 "from tests.vin.test_target_finite_horizon import _actor; "
                 f"ref=QhInferenceBundleRef(Path({str(bundle_dir)!r}), {ref.schema_version!r}, {ref.manifest_sha256!r}); "
-                "actor=_actor(); values=QhExperiment.load_for_inference(ref, device='cpu')(actor); "
+                "actor=_actor(); runtime=QhExperiment.load_for_inference(ref, device='cpu'); "
+                "values=runtime.scorer(actor); "
                 "print(values.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1).tolist())"
             ),
         ],
@@ -138,7 +142,7 @@ def test_qh_bundle_detects_manifest_and_state_mutation(tmp_path) -> None:
 
 def test_qh_bundle_rejects_missing_required_artifact(tmp_path) -> None:
     _experiment_instance, ref = _bundle(tmp_path)
-    (ref.bundle_path / "resume.ckpt").unlink()
+    (ref.bundle_path / "training-receipt.json").unlink()
 
     with pytest.raises(ValueError, match="Cannot hash required Q_H bundle artifact"):
         QhExperiment.load_for_inference(ref, device="cpu")
@@ -168,6 +172,8 @@ def test_qh_bundle_strict_load_rejects_missing_state_key(tmp_path) -> None:
         ("dependency_drift", "dependency identity"),
         ("implementation_drift", "implementation identity"),
         ("missing_seed", "identity fields"),
+        ("action_mask_drift", "action-mask semantics"),
+        ("representation_drift", "representation semantics"),
     ],
 )
 def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, message: str) -> None:
@@ -179,7 +185,11 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
     elif mutation == "dependency_drift":
         manifest["dependencies"]["torch"] = "other"
     elif mutation == "implementation_drift":
-        manifest["implementation"]["scorer_source_sha256"] = "0" * 64
+        manifest["implementation"]["package_tree_sha256"] = "0" * 64
+    elif mutation == "action_mask_drift":
+        manifest["identity"]["action_mask_semantics"] = "actor_observed_action_mask_v1"
+    elif mutation == "representation_drift":
+        manifest["identity"]["representation_semantics"] = "other"
     else:
         del manifest["identity"]["seed"]
     manifest["manifest_sha256"] = _manifest_hash(manifest)
@@ -335,16 +345,17 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
         "dataset_provenance": stages,
         "ordered_store_manifests": {"train": [], "validation": [], "test": []},
         "ordered_store_paths": {"train": [], "validation": [], "test": []},
-        "resume_bundle_manifest_sha256": None,
+        "warm_start_parent_manifest_sha256": None,
+        "action_mask_semantics": dataset.contract.action_mask_semantics,
+        "representation_semantics": experiment.config.scorer.representation_semantics,
         "seed": 0,
     }
 
 
 def _stub_artifacts(bundle_dir: Path) -> dict[str, str]:
     payloads = {
-        "resume.ckpt": b"test-only-resume",
         "training-receipt.json": b'{"schema_version":"test"}\n',
-        "held-out-selection-receipt.json": b'{"schema_version":"test"}\n',
+        "checkpoint-selection-receipt.json": b'{"schema_version":"test"}\n',
     }
     hashes: dict[str, str] = {}
     for name, payload in payloads.items():
@@ -372,22 +383,44 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
         train=_DatasetConfig(tmp_path / "train.zarr", _dense_dataset("train", 0)),  # type: ignore[arg-type]
         validation=_DatasetConfig(tmp_path / "val.zarr", _dense_dataset("val", 20)),  # type: ignore[arg-type]
         test=_DatasetConfig(tmp_path / "test.zarr", _dense_dataset("test", 40)),  # type: ignore[arg-type]
-        resume_from=None,
+        warm_start_from=None,
         checkpoint_selection=QhCheckpointSelectionSpec(),
         seed=23,
         output_bundle_dir=tmp_path / "published",
     )
 
     result = experiment.fit(request)
-    loaded = QhExperiment.load_for_inference(result.bundle, device="cpu")
+    runtime = QhExperiment.load_for_inference(result.bundle, device="cpu")
 
     assert result.bundle.bundle_path == (tmp_path / "published").resolve()
     assert result.training_receipt_path.is_file()
-    assert result.held_out_selection_receipt_path.is_file()
-    assert (result.bundle.bundle_path / "resume.ckpt").is_file()
-    assert loaded.training is False
+    assert result.checkpoint_selection_receipt_path.is_file()
+    assert not (result.bundle.bundle_path / "resume.ckpt").exists()
+    assert runtime.scorer.training is False
+    training_receipt = json.loads(result.training_receipt_path.read_text(encoding="utf-8"))
+    assert training_receipt["warm_start_parent_manifest_sha256"] is None
+    assert "test_loss" not in training_receipt
+
+    held_out = experiment.evaluate_held_out(
+        QhHeldOutEvaluationRequest(
+            bundle=result.bundle,
+            test=request.test,
+            output_receipt_path=tmp_path / "held-out.json",
+        )
+    )
+    held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
+    assert held_out_receipt["diagnostic_only"] is True
+    assert held_out_receipt["endpoint_policy_evidence"] is False
     with pytest.raises(FileExistsError, match="already exists"):
         experiment.fit(request)
 
-    repeated = experiment.fit(replace(request, output_bundle_dir=tmp_path / "published-again"))
-    assert repeated.bundle.manifest_sha256 == result.bundle.manifest_sha256
+    repeated = experiment.fit(
+        replace(
+            request,
+            warm_start_from=result.bundle,
+            output_bundle_dir=tmp_path / "published-again",
+        )
+    )
+    repeated_receipt = json.loads(repeated.training_receipt_path.read_text(encoding="utf-8"))
+    assert repeated_receipt["warm_start_parent_manifest_sha256"] == result.bundle.manifest_sha256
+    assert repeated_receipt["optimizer_updates"] == training_receipt["optimizer_updates"]

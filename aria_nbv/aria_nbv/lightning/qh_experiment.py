@@ -24,10 +24,9 @@ from ..rollouts.qh_reader import QhDataContract
 from ..utils import BaseConfig, TargetConfig
 from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ..vin.models.target_finite_horizon import (
-    TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
 )
-from ..vin.qh_bundle import QH_INFERENCE_BUNDLE_SCHEMA_VERSION, QhInferenceBundleRef
+from ..vin.qh_bundle import QH_INFERENCE_BUNDLE_SCHEMA_VERSION, QhInferenceBundleRef, QhInferenceRuntime
 from .lit_trainer_callbacks import TrainerCallbacksConfig
 from .lit_trainer_factory import TrainerFactoryConfig
 from .qh_datamodule import QhDataModule, QhLearningContract
@@ -35,9 +34,8 @@ from .qh_module import QhLightningModule, QhLightningModuleConfig
 
 _MANIFEST_FILENAME = "manifest.json"
 _SCORER_STATE_FILENAME = "scorer-state.pt"
-_RESUME_CHECKPOINT_FILENAME = "resume.ckpt"
 _TRAINING_RECEIPT_FILENAME = "training-receipt.json"
-_SELECTION_RECEIPT_FILENAME = "held-out-selection-receipt.json"
+_SELECTION_RECEIPT_FILENAME = "checkpoint-selection-receipt.json"
 _IDENTITY_FIELDS = {
     "actor_state_contract",
     "actor_state_contract_hash",
@@ -48,7 +46,9 @@ _IDENTITY_FIELDS = {
     "dataset_provenance",
     "ordered_store_manifests",
     "ordered_store_paths",
-    "resume_bundle_manifest_sha256",
+    "warm_start_parent_manifest_sha256",
+    "action_mask_semantics",
+    "representation_semantics",
     "seed",
 }
 
@@ -88,8 +88,8 @@ class QhFitRequest:
     test: QhDatasetConfig
     """Untouched scene-disjoint held-out dataset used after fitting."""
 
-    resume_from: QhInferenceBundleRef | None
-    """Verified prior bundle whose internal checkpoint may resume optimizer state."""
+    warm_start_from: QhInferenceBundleRef | None
+    """Verified prior bundle providing scorer weights only; optimizer state is never restored."""
 
     checkpoint_selection: QhCheckpointSelectionSpec
     """Closed validation monitor, direction, and tie-break identity."""
@@ -109,16 +109,41 @@ class QhFitResult:
     """Verified reference to the published inference bundle."""
 
     training_receipt_path: Path
-    """JSON receipt for trainer inputs, updates, and held-out execution."""
+    """JSON receipt for trainer inputs, warm-start lineage, and optimizer updates."""
 
     training_receipt_sha256: str
     """Content digest of :attr:`training_receipt_path`."""
 
-    held_out_selection_receipt_path: Path
+    checkpoint_selection_receipt_path: Path
     """JSON receipt for the selected validation checkpoint."""
 
-    held_out_selection_receipt_sha256: str
-    """Content digest of :attr:`held_out_selection_receipt_path`."""
+    checkpoint_selection_receipt_sha256: str
+    """Content digest of :attr:`checkpoint_selection_receipt_path`."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhHeldOutEvaluationRequest:
+    """Immutable request for one explicit diagnostic held-out evaluation."""
+
+    bundle: QhInferenceBundleRef
+    """Verified bundle whose scorer and frozen test identity are evaluated."""
+
+    test: QhDatasetConfig
+    """Exact test population configuration bound to the bundle manifest."""
+
+    output_receipt_path: Path
+    """New receipt destination; an existing path is rejected."""
+
+
+@dataclass(frozen=True, slots=True)
+class QhHeldOutEvaluationResult:
+    """Immutable result of an explicit diagnostic held-out evaluation."""
+
+    receipt_path: Path
+    """Receipt containing diagnostic fitted-Q aggregates."""
+
+    receipt_sha256: str
+    """Digest of :attr:`receipt_path`."""
 
 
 def _default_qh_trainer() -> TrainerFactoryConfig:
@@ -223,19 +248,22 @@ class QhExperiment:
             )
             scorer = self.config.scorer.setup_target()
             module = QhLightningModule(module_config, scorer=scorer)
-            resume_checkpoint = self._resume_checkpoint(
-                request.resume_from,
+            warm_start_parent = self._warm_start_weights(
+                request.warm_start_from,
+                scorer=module.online_scorer,
                 scorer_config=self.config.scorer,
                 module_config=module_config,
                 actor_state_contract_hash=data.actor_state_contract_hash,
-                learning_contract_hash=data.learning_contract_hash,
+                target_protocol=data.learning_contract.data_contract.target_protocol,
+                action_mask_semantics=data.learning_contract.data_contract.action_mask_semantics,
                 geometry_contract_hash=data.geometry_contract_hash,
             )
+            if warm_start_parent is not None:
+                module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
+                module._freeze_target()  # noqa: SLF001 - warm starts intentionally reset target state
             trainer_config = self._trainer_config(temporary, request.checkpoint_selection)
             trainer = trainer_config.setup_target()
-            trainer.fit(
-                module, datamodule=data, ckpt_path=None if resume_checkpoint is None else str(resume_checkpoint)
-            )
+            trainer.fit(module, datamodule=data)
             selected_checkpoint, selected_validation_loss, selected_optimizer_updates = self._selected_checkpoint(
                 temporary
             )
@@ -246,17 +274,14 @@ class QhExperiment:
             module.load_state_dict(selected_state, strict=True)
             if int(module.optimizer_updates.item()) != selected_optimizer_updates:
                 raise ValueError("Selected Q_H checkpoint optimizer-update identity is inconsistent.")
-            validation_metrics = _jsonable(dict(trainer.callback_metrics))
-            resume_path = temporary / _RESUME_CHECKPOINT_FILENAME
-            _write_canonical_checkpoint(selected_payload, resume_path)
-            trainer.test(module, datamodule=data, ckpt_path=None)
             selection_receipt = {
-                "schema_version": "qh-held-out-selection-receipt-v1",
+                "schema_version": "qh-checkpoint-selection-receipt-v1",
                 "selection": asdict(request.checkpoint_selection),
-                "selected_checkpoint_sha256": _sha256_file(resume_path),
+                "selected_checkpoint_sha256": _sha256_file(selected_checkpoint),
+                "validation_loss_sum": float(torch.as_tensor(selected_state["validation_loss_sum"]).item()),
+                "validation_row_count": int(torch.as_tensor(selected_state["validation_row_count"]).item()),
                 "selected_validation_loss": selected_validation_loss,
                 "optimizer_updates": selected_optimizer_updates,
-                "validation_metrics": validation_metrics,
             }
             selection_path = temporary / _SELECTION_RECEIPT_FILENAME
             _write_json(selection_path, selection_receipt)
@@ -264,8 +289,8 @@ class QhExperiment:
             training_receipt = {
                 "schema_version": "qh-training-receipt-v1",
                 "seed": int(request.seed),
-                "resume_bundle_manifest_sha256": (
-                    None if request.resume_from is None else request.resume_from.manifest_sha256
+                "warm_start_parent_manifest_sha256": (
+                    None if warm_start_parent is None else warm_start_parent.manifest_sha256
                 ),
                 "optimizer_updates": int(module.optimizer_updates.item()),
                 "train_provenance": _jsonable(train.provenance),
@@ -307,13 +332,18 @@ class QhExperiment:
                         "validation": request.validation.rollout_store_dirs,
                         "test": request.test.rollout_store_dirs,
                     },
-                    "resume_bundle_manifest_sha256": (
-                        None if request.resume_from is None else request.resume_from.manifest_sha256
+                    "warm_start_parent_manifest_sha256": (
+                        None if warm_start_parent is None else warm_start_parent.manifest_sha256
+                    ),
+                    "action_mask_semantics": str(
+                        getattr(data.learning_contract.data_contract, "action_mask_semantics", "oracle_action_mask_v1")
+                    ),
+                    "representation_semantics": str(
+                        getattr(self.config.scorer, "representation_semantics", "root_moments_v1")
                     ),
                     "seed": int(request.seed),
                 },
                 artifact_hashes={
-                    _RESUME_CHECKPOINT_FILENAME: _sha256_file(temporary / _RESUME_CHECKPOINT_FILENAME),
                     _TRAINING_RECEIPT_FILENAME: _sha256_file(training_path),
                     _SELECTION_RECEIPT_FILENAME: _sha256_file(selection_path),
                 },
@@ -332,9 +362,68 @@ class QhExperiment:
             bundle=bundle,
             training_receipt_path=output / _TRAINING_RECEIPT_FILENAME,
             training_receipt_sha256=_sha256_file(output / _TRAINING_RECEIPT_FILENAME),
-            held_out_selection_receipt_path=output / _SELECTION_RECEIPT_FILENAME,
-            held_out_selection_receipt_sha256=_sha256_file(output / _SELECTION_RECEIPT_FILENAME),
+            checkpoint_selection_receipt_path=output / _SELECTION_RECEIPT_FILENAME,
+            checkpoint_selection_receipt_sha256=_sha256_file(output / _SELECTION_RECEIPT_FILENAME),
         )
+
+    def evaluate_held_out(self, request: QhHeldOutEvaluationRequest) -> QhHeldOutEvaluationResult:
+        """Run explicit diagnostic fitted-Q evaluation on a bundle's frozen test population.
+
+        This operation is intentionally separate from :meth:`fit` and does not
+        provide endpoint-policy evidence; endpoint evaluation remains owned by
+        the online oracle contract.
+        """
+
+        output = request.output_receipt_path.expanduser().resolve()
+        if output.exists():
+            raise FileExistsError(f"Q_H held-out diagnostic receipt already exists: {output}.")
+        manifest = self._read_verified_manifest(request.bundle)
+        expected_test = manifest["identity"]["datasets"]["test"]
+        actual_test = _jsonable(request.test)
+        if expected_test != actual_test:
+            raise ValueError("Q_H held-out diagnostic population does not match the frozen bundle test identity.")
+        test = request.test.setup_target()
+        runtime = self.load_for_inference(request.bundle, device="cpu")
+        module_config = QhLightningModuleConfig.model_validate(manifest["module_config"])
+        module = QhLightningModule(module_config, scorer=runtime.scorer)
+        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
+        data = QhDataModule(
+            train=test,
+            batch_size=int(self.config.batch_size),
+            num_workers=int(self.config.num_workers),
+            pin_memory=bool(self.config.pin_memory),
+            persistent_workers=bool(self.config.persistent_workers),
+            seed=int(manifest["identity"]["seed"]),
+            experiment_profile=module_config.experiment_profile,
+            objective_profile=self.config.objective_profile,
+        )
+        data.test_dataset = test
+        trainer_config = self.config.trainer.model_copy(
+            deep=True,
+            update={
+                "enable_validation": False,
+                "use_wandb": False,
+                "callbacks": TrainerCallbacksConfig(
+                    use_model_checkpoint=False,
+                    use_lr_monitor=False,
+                    use_tqdm_progress_bar=False,
+                    use_rich_model_summary=False,
+                ),
+            },
+        )
+        trainer_config.setup_target().test(module, datamodule=data)
+        receipt = {
+            "schema_version": "qh-held-out-diagnostic-receipt-v1",
+            "diagnostic_only": True,
+            "endpoint_policy_evidence": False,
+            "bundle_manifest_sha256": request.bundle.manifest_sha256,
+            "test_population_sha256": _json_payload_hash(request.test),
+            "test_loss_sum": float(module.test_loss_sum.item()),
+            "test_row_count": int(module.test_row_count.item()),
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(output, receipt)
+        return QhHeldOutEvaluationResult(output, _sha256_file(output))
 
     @classmethod
     def load_for_inference(
@@ -342,8 +431,8 @@ class QhExperiment:
         ref: QhInferenceBundleRef,
         *,
         device: torch.device | str,
-    ) -> TargetFiniteHorizonScorer:
-        """Verify a bundle, reconstruct its scorer, and strict-load weights."""
+    ) -> QhInferenceRuntime:
+        """Verify a bundle and return its scorer with manifest-derived identities."""
 
         manifest = cls._read_verified_manifest(ref)
         config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])
@@ -356,7 +445,24 @@ class QhExperiment:
         scorer.load_state_dict(state, strict=True)
         scorer.to(device=device)
         scorer.eval()
-        return scorer
+        identity = manifest["identity"]
+        learning = identity["learning_contract"]["data_contract"]
+        implementation = manifest["implementation"]
+        return QhInferenceRuntime(
+            scorer=scorer,
+            bundle_manifest_sha256=str(manifest["manifest_sha256"]),
+            scorer_state_sha256=expected_state_hash,
+            scorer_config_hash=str(manifest["scorer_config_hash"]),
+            implementation_sha256=str(implementation["package_tree_sha256"]),
+            actor_state_contract_hash=str(identity["actor_state_contract_hash"]),
+            learning_contract_hash=str(identity["learning_contract_hash"]),
+            target_protocol=str(learning["target_protocol"]),
+            candidate_config_hashes=tuple(str(item) for item in learning.get("candidate_config_hashes", [])),
+            action_mask_semantics=str(identity["action_mask_semantics"]),
+            representation_semantics=str(
+                manifest["scorer_config"].get("representation_semantics", identity["representation_semantics"])
+            ),
+        )
 
     def _publish_bundle(
         self,
@@ -451,42 +557,49 @@ class QhExperiment:
         return manifest
 
     @classmethod
-    def _resume_checkpoint(
+    def _warm_start_weights(
         cls,
         ref: QhInferenceBundleRef | None,
         *,
+        scorer: torch.nn.Module,
         scorer_config: TargetFiniteHorizonScorerConfig,
         module_config: QhLightningModuleConfig,
         actor_state_contract_hash: str,
-        learning_contract_hash: str,
+        target_protocol: str,
+        action_mask_semantics: str,
         geometry_contract_hash: str | None,
-    ) -> Path | None:
+    ) -> QhInferenceBundleRef | None:
         if ref is None:
             return None
         manifest = cls._read_verified_manifest(ref)
         identity = manifest["identity"]
         expected = {
             "scorer_config_hash": stable_config_hash(scorer_config, length=64),
-            "module_config": module_config.model_dump_jsonable(),
             "actor_state_contract_hash": actor_state_contract_hash,
-            "learning_contract_hash": learning_contract_hash,
+            "target_protocol": target_protocol,
+            "action_mask_semantics": action_mask_semantics,
+            "root_evl_profile": module_config.root_evl_profile,
+            "selected_observation_protocol": module_config.selected_observation_protocol,
+            "experiment_profile": module_config.experiment_profile,
             "geometry_contract_hash": geometry_contract_hash,
         }
         actual = {
             "scorer_config_hash": manifest["scorer_config_hash"],
-            "module_config": manifest["module_config"],
             "actor_state_contract_hash": identity["actor_state_contract_hash"],
-            "learning_contract_hash": identity["learning_contract_hash"],
+            "target_protocol": identity["learning_contract"]["data_contract"]["target_protocol"],
+            "action_mask_semantics": identity["action_mask_semantics"],
+            "root_evl_profile": manifest["module_config"]["root_evl_profile"],
+            "selected_observation_protocol": manifest["module_config"]["selected_observation_protocol"],
+            "experiment_profile": manifest["module_config"]["experiment_profile"],
             "geometry_contract_hash": identity["geometry_contract_hash"],
         }
         mismatches = [name for name in expected if expected[name] != actual[name]]
         if mismatches:
-            raise ValueError(f"Q_H resume bundle is incompatible with the current fit: {', '.join(mismatches)}.")
-        path = _verified_artifact_path(ref.bundle_path, manifest, _RESUME_CHECKPOINT_FILENAME)
-        artifact = manifest["artifacts"][_RESUME_CHECKPOINT_FILENAME]
-        if _sha256_file(path) != str(artifact.get("sha256", "")):
-            raise ValueError("Q_H internal resume checkpoint hash does not match the bundle manifest.")
-        return path
+            raise ValueError(f"Q_H warm-start bundle is incompatible with the current fit: {', '.join(mismatches)}.")
+        state_path = _verified_artifact_path(ref.bundle_path, manifest, _SCORER_STATE_FILENAME)
+        state = torch.load(state_path, map_location="cpu", weights_only=True)
+        scorer.load_state_dict(state, strict=True)
+        return QhInferenceBundleRef(ref.bundle_path, ref.schema_version, ref.manifest_sha256)
 
     @staticmethod
     def _selected_checkpoint(output: Path) -> tuple[Path, float, int]:
@@ -616,12 +729,24 @@ class QhExperiment:
             raise ValueError("Q_H bundle dataset provenance stages are incomplete.")
         if isinstance(identity["seed"], bool) or not isinstance(identity["seed"], int):
             raise ValueError("Q_H bundle seed identity must be one integer.")
-        resume_identity = identity["resume_bundle_manifest_sha256"]
-        if resume_identity is not None and (not isinstance(resume_identity, str) or not resume_identity):
-            raise ValueError("Q_H bundle resume identity must be absent or one non-empty manifest hash.")
+        warm_start_identity = identity["warm_start_parent_manifest_sha256"]
+        if warm_start_identity is not None and (not isinstance(warm_start_identity, str) or not warm_start_identity):
+            raise ValueError("Q_H warm-start parent identity must be absent or one non-empty manifest hash.")
+        for field in ("action_mask_semantics", "representation_semantics"):
+            if not isinstance(identity[field], str) or not identity[field]:
+                raise ValueError(f"Q_H bundle {field} must be one non-empty string.")
+        if identity["action_mask_semantics"] != data_contract.action_mask_semantics:
+            raise ValueError("Q_H bundle action-mask semantics do not match the learning contract.")
+        if identity["action_mask_semantics"] not in {
+            "oracle_action_mask_v1",
+            "actor_observed_action_mask_v1",
+            "learned_feasibility_v1",
+        }:
+            raise ValueError("Q_H bundle action-mask semantics are unsupported.")
+        if identity["representation_semantics"] != scorer.representation_semantics:
+            raise ValueError("Q_H bundle representation semantics do not match the scorer configuration.")
         required_artifacts = {
             _SCORER_STATE_FILENAME,
-            _RESUME_CHECKPOINT_FILENAME,
             _TRAINING_RECEIPT_FILENAME,
             _SELECTION_RECEIPT_FILENAME,
         }
@@ -674,14 +799,6 @@ def _ordered_store_manifest_hashes(provenance: dict[str, object]) -> list[str]:
     return hashes
 
 
-def _write_canonical_checkpoint(payload: dict[str, Any], path: Path) -> None:
-    """Persist resume state without output-path-dependent callback metadata."""
-
-    canonical = dict(payload)
-    canonical.pop("callbacks", None)
-    torch.save(canonical, path)
-
-
 def _validate_artifact_name(name: str, raw_path: object) -> str:
     if not isinstance(raw_path, str) or not raw_path:
         raise ValueError(f"Q_H bundle artifact {name!r} has no relative payload path.")
@@ -726,20 +843,38 @@ def _bundle_dependencies() -> dict[str, str]:
 
 
 def _bundle_implementation() -> dict[str, str]:
-    """Return source fingerprints for the bundle's training and inference owners."""
+    """Return one deterministic digest over the importable ``aria_nbv`` tree."""
 
     package = Path(__file__).resolve().parents[1]
-    return {
-        "experiment_source_sha256": _sha256_file(Path(__file__)),
-        "module_source_sha256": _sha256_file(package / "lightning" / "qh_module.py"),
-        "scorer_source_sha256": _sha256_file(package / "vin" / "models" / "target_finite_horizon.py"),
-        "bundle_ref_source_sha256": _sha256_file(package / "vin" / "qh_bundle.py"),
-    }
+    return {"package_tree_sha256": _package_tree_digest(package)}
+
+
+def _package_tree_digest(package: Path) -> str:
+    """Hash sorted Python paths and raw bytes below one package root."""
+
+    digest = hashlib.sha256()
+    for path in sorted(package.rglob("*.py")):
+        relative = path.relative_to(package).as_posix().encode("utf-8")
+        digest.update(relative)
+        digest.update(b"\0")
+        try:
+            digest.update(path.read_bytes())
+        except OSError as error:
+            raise ValueError(f"Cannot hash implementation source {path}.") from error
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _manifest_hash(manifest: dict[str, Any]) -> str:
     payload = {key: value for key, value in manifest.items() if key != "manifest_sha256"}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _json_payload_hash(value: Any) -> str:
+    """Hash one JSON-safe contract payload with canonical ordering."""
+
+    encoded = json.dumps(_jsonable(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -765,5 +900,8 @@ __all__ = [
     "QhExperimentConfig",
     "QhFitRequest",
     "QhFitResult",
+    "QhHeldOutEvaluationRequest",
+    "QhHeldOutEvaluationResult",
     "QhInferenceBundleRef",
+    "QhInferenceRuntime",
 ]

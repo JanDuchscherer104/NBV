@@ -130,6 +130,7 @@ QH_CI_RUFF_PATHS := \
 	tests/vin/test_target_finite_horizon.py \
 	tests/test_config_field_constraints.py \
 	../scripts/check_replay_oracle_golden.py \
+	../scripts/tests/test_check_replay_oracle_golden.py \
 	../scripts/tests/test_quartodoc_expand_config.py
 QH_CI_TESTS := \
 	tests/rollouts/test_qh_reader.py \
@@ -148,6 +149,7 @@ QH_CI_TESTS := \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/vin/test_models_namespace.py \
+	../scripts/tests/test_check_replay_oracle_golden.py \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/vin/test_target_finite_horizon.py \

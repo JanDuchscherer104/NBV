@@ -25,7 +25,7 @@ worktree_kind: linked
 ---
 
 ## Task
-Implement the receipt-authorized, gate-safe foundation of the online-oracle MVP
+Implement the direct-user-authorized, gate-safe foundation of the online-oracle MVP
 plan and publish it for review without claiming downstream scientific gates.
 
 ## Method
