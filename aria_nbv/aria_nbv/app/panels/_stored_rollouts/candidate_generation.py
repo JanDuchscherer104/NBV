@@ -81,7 +81,12 @@ def _add_geometry_anchors(
     if three_dimensional:
         figure.add_trace(
             go.Scatter3d(
-                x=[0], y=[0], z=[0], mode="markers", name="Reference pose (all at origin)", marker={"symbol": "cross", "color": "white"}
+                x=[0],
+                y=[0],
+                z=[0],
+                mode="markers",
+                name="Reference pose (all at origin)",
+                marker={"symbol": "cross", "color": "white"},
             )
         )
         target_x = frames.get("target_x", pd.Series(dtype=float)).dropna()
@@ -324,6 +329,44 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                 with st.expander("Candidate-choice rows and CSV", expanded=False):
                     st.dataframe(pooled, hide_index=True, width="stretch")
                     _download_frame("Download candidate-choice CSV", "candidate-choice-dynamics.csv", pooled)
+
+            sequence_rows = pd.DataFrame(population.get("selection_sequences", {}).get(group_by, []))
+            return_rows = pd.DataFrame(population.get("sequence_returns", {}).get(group_by, []))
+            if not sequence_rows.empty and not return_rows.empty:
+                st.markdown("#### Selected-family sequences and terminal returns")
+                st.caption(
+                    "Sequences preserve factual rollout order. Terminal returns are descriptive root-normalized gains;"
+                    " incomplete horizons remain visible and are not zero-filled."
+                )
+                finite_returns = return_rows.dropna(subset=["terminal_return_median"])
+                if not finite_returns.empty:
+                    _render_plot(
+                        px.bar(
+                            finite_returns,
+                            x="sequence",
+                            y="terminal_return_median",
+                            error_y=(finite_returns["terminal_return_q75"] - finite_returns["terminal_return_median"]),
+                            error_y_minus=(
+                                finite_returns["terminal_return_median"] - finite_returns["terminal_return_q25"]
+                            ),
+                            title="Terminal target-root gain by selected-family sequence",
+                        ),
+                        _candidate_population_explanation(
+                            "Which selected-family sequences produce the observed terminal return distribution?",
+                            "One factual selected-family sequence per rollout in the exact compatible facet.",
+                            "Median terminal target-root gain with interquartile range; units are fraction.",
+                            "Finite terminal gains only; incomplete horizons remain counted separately.",
+                            "Repeated sequences should show descriptive spread rather than a fabricated continuous path.",
+                            "Small counts or wide IQRs require raw sequence inspection and are not causal policy effects.",
+                            "inspection.candidate_population_evidence.sequence_returns",
+                            evidence_role or "provenance",
+                        ),
+                    )
+                with st.expander("Selected-family sequence rows and CSV", expanded=False):
+                    st.dataframe(return_rows, hide_index=True, width="stretch")
+                    _download_frame(
+                        "Download selected-family sequence CSV", "selected-family-sequences.csv", sequence_rows
+                    )
 
     st.markdown("#### Candidate composition")
     st.caption("Rates use state-then-scene macro aggregation within exact persisted generation cohorts.")
@@ -1397,7 +1440,9 @@ def _render_candidate_geometry_diagnostics(
                     symbol="selected" if "selected" in root_geometry else None,
                     title="Candidate centers in target-normalized 3D support",
                 )
-                frame_rows = pd.DataFrame(trajectory_geometry.get("frames", [])) if trajectory_geometry else pd.DataFrame()
+                frame_rows = (
+                    pd.DataFrame(trajectory_geometry.get("frames", [])) if trajectory_geometry else pd.DataFrame()
+                )
                 configure_3d_scene(
                     figure_3d,
                     axis_titles=("target-forward / d", "target-lateral / d", "up / d"),
@@ -1410,12 +1455,28 @@ def _render_candidate_geometry_diagnostics(
                         question="Where do candidate poses lie relative to the root and observed target?",
                         answer="The 3D view keeps the candidate shell and factual anchors in one target-aligned frame.",
                         sections=(
-                            ExplanationSection("population", "Bounded candidate shell rows with persisted root/target anchors."),
-                            ExplanationSection("metric", "Coordinates are dimensionless displacements divided by the target-distance scale."),
-                            ExplanationSection("denominator masks", "Only finite pose rows are plotted; missing geometry remains unavailable."),
-                            ExplanationSection("comparability", "Compare only matching pose conventions and generation contracts."),
-                            ExplanationSection("expected pattern", "Candidate support surrounds the root without unexplained frame rotation or scale."),
-                            ExplanationSection("failure interpretation", "Offset anchors or collapsed axes indicate pose decoding or target association defects."),
+                            ExplanationSection(
+                                "population", "Bounded candidate shell rows with persisted root/target anchors."
+                            ),
+                            ExplanationSection(
+                                "metric",
+                                "Coordinates are dimensionless displacements divided by the target-distance scale.",
+                            ),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Only finite pose rows are plotted; missing geometry remains unavailable.",
+                            ),
+                            ExplanationSection(
+                                "comparability", "Compare only matching pose conventions and generation contracts."
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "Candidate support surrounds the root without unexplained frame rotation or scale.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Offset anchors or collapsed axes indicate pose decoding or target association defects.",
+                            ),
                         ),
                         evidence_role="actor-visible",
                         source_fields=("inspection.proposal_support_geometry",),
@@ -1433,11 +1494,25 @@ def _render_candidate_geometry_diagnostics(
                         answer="Only persisted root and selected actions are shown; candidate alternatives are excluded from this path.",
                         sections=(
                             ExplanationSection("population", "Factual selected steps plus the root for each rollout."),
-                            ExplanationSection("metric", "Target-aligned displacement normalized by initial root-to-target distance."),
-                            ExplanationSection("denominator masks", "Early termination is retained as a shorter factual path; no missing steps are fabricated."),
-                            ExplanationSection("comparability", "Compare only stores with matching target-alignment and rollout contracts."),
-                            ExplanationSection("expected pattern", "The path remains physically coherent and its target anchor stays fixed."),
-                            ExplanationSection("failure interpretation", "Jumps or anchor inconsistencies expose pose/frame or persisted-step defects."),
+                            ExplanationSection(
+                                "metric", "Target-aligned displacement normalized by initial root-to-target distance."
+                            ),
+                            ExplanationSection(
+                                "denominator masks",
+                                "Early termination is retained as a shorter factual path; no missing steps are fabricated.",
+                            ),
+                            ExplanationSection(
+                                "comparability",
+                                "Compare only stores with matching target-alignment and rollout contracts.",
+                            ),
+                            ExplanationSection(
+                                "expected pattern",
+                                "The path remains physically coherent and its target anchor stays fixed.",
+                            ),
+                            ExplanationSection(
+                                "failure interpretation",
+                                "Jumps or anchor inconsistencies expose pose/frame or persisted-step defects.",
+                            ),
                         ),
                         evidence_role="actor-visible",
                         source_fields=("inspection.rollout_trajectory_geometry",),

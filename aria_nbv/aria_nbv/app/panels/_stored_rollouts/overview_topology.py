@@ -82,14 +82,30 @@ def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_co
         st.info(f"{selected_count} store(s) selected. Build the summary to validate and aggregate them.")
         return
     totals = summary.totals
-    cols = st.columns(6)
-    cols[0].metric("Included stores", totals["included_store_count"])
-    cols[1].metric("Excluded stores", totals["excluded_store_count"])
-    cols[2].metric("Q_H chains", _format_count(totals["q_h_chain_count"]))
-    cols[3].metric("Q_H states", _format_count(totals["q_h_state_count"]))
-    cols[4].metric("Trainable candidates", _format_count(totals["q_h_trainable_count"]))
-    cols[5].metric("Storage", _format_bytes(totals["storage_bytes"]))
-    st.caption(f"Corpus verdict: {summary.verdict}. Counts are additive; scientific macro estimates are not pooled.")
+    cols = st.columns(3)
+    cols[0].metric("Selected stores (operational)", totals["selected_store_count"])
+    cols[1].metric("Included stores (operational)", totals["included_store_count"])
+    cols[2].metric("Excluded stores (operational)", totals["excluded_store_count"])
+    st.caption(
+        f"Corpus verdict: {summary.verdict}. Operational selection counts span the request; scientific totals below stay separated by exact persisted contract."
+    )
+    contract_totals = getattr(summary, "contract_totals", pd.DataFrame())
+    if contract_totals.empty:
+        st.info("No compatible contract facet has validated scientific totals yet.")
+    else:
+        st.markdown("#### Validated scientific totals by exact contract")
+        for row in contract_totals.to_dict("records"):
+            label = f"{row['contract']} · {row['profile']} · {row['contract_id']}"
+            st.caption(label)
+            facet = st.columns(5)
+            facet[0].metric("Stores", row["store_count"])
+            facet[1].metric("Rollouts / steps", f"{row['rollout_count']} / {row['step_count']}")
+            facet[2].metric("Candidates", _format_count(row["candidate_count"]))
+            facet[3].metric(
+                "Q_H states / trainable",
+                f"{_format_count(row['q_h_state_count'])} / {_format_count(row['q_h_trainable_count'])}",
+            )
+            facet[4].metric("Storage", _format_bytes(row["storage_bytes"]))
     if summary.excluded_stores:
         st.dataframe(pd.DataFrame(summary.excluded_stores), hide_index=True, width="stretch")
 
