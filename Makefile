@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance thesis-method-sync thesis-authoring-routing-self-test thesis-authoring-routing-trials scientific-review-self-test scientific-review-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract thesis-toolchain-lock thesis-toolchain-lock-check thesis-release-audit thesis-submission-build qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
+.PHONY: help ci ci-impact-self-test ownership-consolidation-contract typst-authoring-contract thesis-literature-provenance thesis-method-sync thesis-authoring-routing-self-test thesis-authoring-routing-trials scientific-review-self-test scientific-review-trials graphify-skill-upstream-self-test graphify-projection-self-test graphify-projection-live-check graphify-usable-check graphify-state-check scaffold-check agents-db-validate package-smoke thesis-report-contract thesis-release-contract thesis-toolchain-lock thesis-toolchain-lock-check thesis-release-audit thesis-submission-build qh-ci docs-render-core quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-marker-contract ruff-full ruff-targeted mypy-contract mypy-full mypy-targeted coverage-targeted agent-status
 .PHONY: api-docs-self-test
 .PHONY: context-qmd-tree qmd-frontmatter-check
 .PHONY: context-index context-get context-contracts context-modules context-classes context-functions
@@ -756,6 +756,9 @@ thesis-toolchain-lock: ## Refresh the generated thesis toolchain lock
 thesis-toolchain-lock-check: ## Check thesis toolchain lock schema and material-input drift
 	@$(PYTHON_INTERPRETER) scripts/thesis_toolchain_lock.py check --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"
 
+thesis-release-contract: _check_python ## Verify release and toolchain-lock behavior without requiring the locked release environment
+	@$(PYTHON_INTERPRETER) -m pytest --import-mode=importlib scripts/tests/test_thesis_toolchain_lock.py scripts/tests/test_thesis_release_requirements.py
+
 thesis-release-audit: _check_python ## Run the final thesis release audit after verifying the toolchain lock
 	@$(PYTHON_INTERPRETER) scripts/thesis_release.py audit --final --typst-bin "$(TYPST)" --pdftoppm-bin "$(PDFTOPPM)"
 
@@ -819,7 +822,7 @@ scientific-review-trials: _check_python ## Run the frozen scientific-review case
 	@test -n "$(strip $(REVIEW_HEAD))" || { echo "REVIEW_HEAD is required" >&2; exit 2; }
 	@$(PYTHON_INTERPRETER) scripts/scaffold/run_scientific_review_trials.py --head "$(REVIEW_HEAD)" --id seminar-uncontrolled-ablation --id actor-oracle-leakage --id invalidity-as-utility --id pilot-escalation --id pseudoreplication --id missing-uncertainty --id planned-tense-drift --id restrained-abstract --id hard-mask-semantics --id actor-oracle-separation --id bounded-pilot --id seminar-uncontrolled-ablation-variant --id actor-oracle-leakage-variant --id invalidity-as-utility-variant --id pilot-escalation-variant --id pseudoreplication-variant --id missing-uncertainty-variant --id planned-tense-drift-variant --id seminar-uncontrolled-ablation-corrected --id actor-oracle-leakage-corrected --id invalidity-as-utility-corrected --id pilot-escalation-corrected --id pseudoreplication-corrected --id missing-uncertainty-corrected --id planned-tense-drift-corrected --jobs 4 --timeout 600
 
-docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-release-audit typst-authoring-contract thesis-marker-contract thesis-literature-provenance thesis-method-sync ## Render the core docs surfaces and run the final thesis release audit
+docs-render-core: graphify-projection-self-test graphify-projection-live-check quarto-docs-ci typst-paper-ci thesis-pdf-ci thesis-release-contract typst-authoring-contract thesis-marker-contract thesis-literature-provenance thesis-method-sync ## Render core docs and verify portable thesis release contracts
 
 qh-ci: ## Run the focused CPU-only Q_H training and distributed contracts
 	@cd $(PKG_DIR) && $(QH_CI_PYTHON) -m ruff format --check $(QH_CI_RUFF_PATHS)
