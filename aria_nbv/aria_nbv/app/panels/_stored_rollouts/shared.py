@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from ...scientific_labels import TheoryReferences, resolve_theory
+from ...scientific_labels import TheoryReferences, TheoryResolutionError, resolve_theory
 from ..common import _plot_with_y_axis_control
 
 _ROLE_COLORS = {
@@ -98,7 +98,7 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
         f"{html.escape(explanation.evidence_role)}</span>",
         unsafe_allow_html=True,
     )
-    with col_info.popover("How to read this", icon="ℹ️"):
+    with col_info.popover("Interpret this plot", icon="ℹ️"):
         if explanation.answer:
             explanation_item("Answer", explanation.answer)
             for section in explanation.sections:
@@ -122,15 +122,25 @@ def render_plot(fig: go.Figure, explanation: ScientificExplanation, *, log_y_key
             try:
                 resolved = resolve_theory(explanation.theory)
                 if resolved.equations:
-                    explanation_item(
-                        "Canonical equations",
-                        "\n\n".join(f"{item.identifier}: ${item.tex}$" for item in resolved.equations),
-                    )
+                    st.markdown("**Canonical equations**")
+                    for item in resolved.equations:
+                        st.caption(item.identifier)
+                        st.latex(item.tex)
+                        if item.description:
+                            st.markdown(item.description)
+                        st.markdown(f"[Notation source]({item.source_url})")
                 if resolved.symbols:
-                    explanation_item("Symbols", ", ".join(item.identifier for item in resolved.symbols))
+                    st.markdown("**Symbols**")
+                    for item in resolved.symbols:
+                        description = f" — {item.description}" if item.description else ""
+                        st.markdown(f"`${item.identifier}`: ${item.tex}${description}")
+                        st.markdown(f"[Symbol source]({item.source_url})")
                 if resolved.terms:
-                    explanation_item("Glossary", ", ".join(item.label for item in resolved.terms))
-            except Exception as exc:
+                    st.markdown("**Glossary**")
+                    for item in resolved.terms:
+                        st.markdown(f"**{item.label}** — {item.definition}")
+                        st.markdown(f"[Glossary source]({item.source_url})")
+            except TheoryResolutionError as exc:
                 st.warning(f"Canonical theory unavailable: {type(exc).__name__}: {exc}")
         if explanation.external_references:
             explanation_item(

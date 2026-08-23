@@ -296,6 +296,27 @@ class NbvStreamlitApp:
         store_state(state)
         render_rri_page(sample, depths, point_clouds, rri)
 
+    @staticmethod
+    def _render_label_display_control() -> None:
+        """Render the single app-wide scientific-label preference."""
+
+        segmented_control = getattr(st, "segmented_control", None)
+        if not callable(segmented_control):
+            return
+        from aria_nbv.app.scientific_labels import LABEL_DISPLAY_MODES
+        from aria_nbv.app.state import get_label_display_mode, set_label_display_mode
+
+        current = get_label_display_mode()
+        selected = segmented_control(
+            "Scientific labels",
+            options=LABEL_DISPLAY_MODES,
+            default=current,
+            key="nbv_scientific_label_display",
+            help="Choose canonical symbols, readable descriptions, or both where a surface supports mathematics.",
+        )
+        if selected is not None and selected != current:
+            set_label_display_mode(str(selected))
+
     def _render(self) -> None:  # pragma: no cover - Streamlit UI
         """Configure the frame and run only the currently selected page."""
 
@@ -323,6 +344,7 @@ class NbvStreamlitApp:
                 st.Page(self._page_single_step_rri, title="Single-step Oracle RRI"),
             ],
         }
+        self._render_label_display_control()
         st.navigation(pages, position="top").run()
 
 
