@@ -27,7 +27,7 @@ touched_owner_paths:
   - scripts/validate_agent_memory.py
 codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
 repo_object_format: sha1
-repo_head: bfcb295a51cfb3aad84e39c87dc6b06b2b01a2b8
+repo_head: 96b01d7679b33a668a3f37827f533585afa9338d
 repo_branch: "codex/scaffold-intent-pr2"
 worktree_kind: linked
 ---
@@ -46,18 +46,21 @@ implementation owners.
   retained rather than deleted.
 - Preserved the current bytes of `issue-025` and `refactor-016`; neither record
   had a missing planned disposition requiring an edit.
-- Recorded the native debrief at the exact requested linked-worktree head and
-  regenerated the derived debrief index.
+- Recorded the native debrief against the intentional pre-debrief
+  workpackage/evidence anchor `96b01d7679b33a668a3f37827f533585afa9338d` and
+  regenerated the derived debrief index. The later debrief/index correction
+  commit is intentionally excluded from the evidence links below.
 
 ## Findings
 
-- The baseline routing snapshot
-  `.agents/work/routing-trials/dae2171918b9-dae2171918b9/index.json` was
-  `0/4` adjudicated passes.
-- The final snapshot
-  `.agents/work/routing-trials/bfcb295a51cf-bfcb295a51cf/index.json` exited
-  zero with `4/4` adjudicated passes, exact tested/rubric SHA
-  `bfcb295a51cfb3aad84e39c87dc6b06b2b01a2b8`, and clean trial checkouts.
+- The controlled baseline routing snapshot
+  `.agents/work/routing-trials/dae2171918b9-96b01d7679b3/index.json` exited
+  one with `1/4` passes.
+- The controlled candidate snapshot
+  `.agents/work/routing-trials/96b01d7679b3-96b01d7679b3/index.json` exited
+  zero with `4/4` passes. Its comparison has `matched=true`, runner revision
+  `76d14c60b57a7e0757e7b99aeadd8a5104fe03e1`, identical per-ID prompt hashes,
+  no caps or timeouts, and clean trial checkouts.
 - `todo-044` is resolved with the proof note below; `issue-025` remains open;
   `refactor-016` remains `in_progress`.
 - The proposal route is evidence-backed and proposal-only: helpers identify
@@ -69,17 +72,20 @@ implementation owners.
 
 - `make check-agent-memory` passed after index regeneration.
 - `make agents-db AGENTS_ARGS='validate'` passed.
-- `python3 -m pytest scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py scripts/tests/test_agent_governance_g002.py -q` passed.
-- No Python files changed, so no Ruff run was applicable.
+- `aria_nbv/.venv/bin/python -m pytest scripts/tests/test_debrief_index.py scripts/tests/test_routing_trials.py scripts/tests/test_agent_governance_g002.py -q` passed.
+- The full G002 work changed Python, guidance, memory, tests, and Agents DB
+  owners; only the earlier closeout commit had no Python changes.
 - Final diff inspection showed only the requested todo/resolved lifecycle,
   native debrief, and derived index paths; the implementation records remained
   unchanged.
 
 ## Canonical-State Impact
 
-No implementation or policy owner was updated; `canonical_updates_needed` is
-empty. The debrief and index are episodic/derived navigation evidence, and the
-resolved todo retains the completed lifecycle history.
+The full G002 work changed Python, guidance, memory, tests, and Agents DB
+owners, but this closeout records no additional canonical update;
+`canonical_updates_needed` remains empty. The debrief and index are
+episodic/derived navigation evidence, and the resolved todo retains the
+completed lifecycle history.
 
 ## Commits
 
@@ -96,3 +102,6 @@ resolved todo retains the completed lifecycle history.
 - [e17d8a87fc57a706c8f7420aa9bbbd315b2798ca](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e17d8a87fc57a706c8f7420aa9bbbd315b2798ca) — WP11: cover total event evidence bounds
 - [fc9e59c3b906f1806ee7030650de334643c74dd6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/fc9e59c3b906f1806ee7030650de334643c74dd6) — WP12: allow repeated routing evidence citations
 - [bfcb295a51cfb3aad84e39c87dc6b06b2b01a2b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bfcb295a51cfb3aad84e39c87dc6b06b2b01a2b8) — WP13: harden the abstract proposal review protocol
+- [8acb111155c7632f2314ae0050cf13e1e2fc24f9](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8acb111155c7632f2314ae0050cf13e1e2fc24f9) — WP14: repair debrief template and proposal-review SSOT
+- [86ef395e0a56a52278a2f3493b9a005f92830fae](https://github.com/JanDuchscherer104/ARIA-NBV/commit/86ef395e0a56a52278a2f3493b9a005f92830fae) — WP15: freeze/compare prompts and bound subprocess output
+- [96b01d7679b33a668a3f37827f533585afa9338d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/96b01d7679b33a668a3f37827f533585afa9338d) — WP16: strengthen residual triage
