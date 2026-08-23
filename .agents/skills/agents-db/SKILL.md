@@ -47,7 +47,12 @@ scientific truth stays with its smallest source owner.
 When `agent-behavior` reaches verified actionable residual work or a reviewed
 intent-promotion review, activate this skill as the leaf maintenance owner.
 Use the existing triage, to-issues, proposal-review, and resolution modes.
-The `proposal-review` mode owns dispositions: accept/narrow require an
+Before proposal review or resolution, read
+[`agent-behavior` external-actions](../agent-behavior/references/external-actions.md):
+an agent must not select a disposition without explicit current-user authority
+or already-reviewed policy; route the choice to a human reviewer and keep the
+proposal active/deferred when that authority is absent. The `proposal-review`
+mode owns dispositions: accept/narrow require an
 ordinary edit to the smallest policy owner; reject resolves the existing
 record with a reason while policy bytes stay unchanged; defer leaves policy
 unchanged and keeps the record active. TOML records the lifecycle but never

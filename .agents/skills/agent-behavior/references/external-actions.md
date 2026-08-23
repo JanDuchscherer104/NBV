@@ -49,9 +49,12 @@ Publication lifecycle:
 
 Proposal review or resolution also opens this reference. Apply exactly one
 disposition only when explicit current-user authority or already-reviewed
-policy evidence selects it; an agent cannot self-accept a proposal, and the
-route is not a simulation. Installation and its proof precede resolution. If
-no authority selects a disposition, defer and keep the record active.
+policy evidence selects it; an agent cannot self-accept a proposal or choose
+accept, reject, narrow, or defer on its own. Route the disposition to a human
+reviewer when that authority is absent; this route is not a simulation.
+Installation and its proof precede resolution. Without a human disposition,
+leave the proposal active. If authority is absent, defer and keep the record active.
+Do not mark it resolved without that authority.
 
 ## Completion
 

@@ -41,5 +41,5 @@ debrief evidence, Agents-DB follow-up, reviewed-intent proposal, or none. Route
 verified actionable residual work to the [agents-db skill](../../agents-db/SKILL.md)
 only after executing and retaining the exact current-owner proof. Search
 existing records and amend an independently actionable one before creating a
-new follow-up. A described future proof is not verified, and this reference
-does not mutate policy or records.
+new follow-up rather than inventing a duplicate. A described future proof is
+not verified, and this reference does not mutate policy or records.
