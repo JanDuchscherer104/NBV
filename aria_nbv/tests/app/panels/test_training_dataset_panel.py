@@ -11,8 +11,10 @@ import numpy as np
 import pytest
 from streamlit.testing.v1 import AppTest
 
+import aria_nbv.app.panels.training_dataset as training_dataset_panel
 from aria_nbv.app.panels.training_dataset import (
     _artifact_identity,
+    _clear_qh_results_for_control_change,
     _deep_metric_value,
     _download_payload,
     _qh_preview_for_identity,
@@ -237,6 +239,18 @@ def test_qh_readiness_hides_stale_preflight_after_loader_control_changes() -> No
     assert _qh_readiness_for_identity(state, baseline) is evidence
     assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=8, seed=7)) is None
     assert _qh_readiness_for_identity(state, _qh_readiness_identity(selection, batch_size=4, seed=8)) is None
+
+
+def test_qh_control_change_clears_displayed_readiness_and_preview(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "training_dataset_qh_readiness": ("old-controls", object()),
+        "training_dataset_qh_preview": ("old-controls", object()),
+    }
+    monkeypatch.setattr(training_dataset_panel.st, "session_state", state)
+
+    _clear_qh_results_for_control_change()
+
+    assert state == {}
 
 
 def test_download_payload_is_deterministic_and_keeps_denominators_distinct(tmp_path: Path) -> None:

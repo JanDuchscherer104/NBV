@@ -254,6 +254,13 @@ def _clear_training_dataset_caches() -> None:
         st.session_state.pop(key, None)
 
 
+def _clear_qh_results_for_control_change() -> None:
+    """Drop displayed Q_H evidence before rerunning with new loader controls."""
+
+    st.session_state.pop(_QH_READINESS_STATE_KEY, None)
+    st.session_state.pop(_QH_PREVIEW_STATE_KEY, None)
+
+
 def _manual_paths(value: str) -> tuple[Path, ...]:
     """Parse newline-separated manual paths without fabricating artifacts."""
 
@@ -731,6 +738,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 value=1,
                 step=1,
                 key=_QH_BATCH_SIZE_KEY,
+                on_change=_clear_qh_results_for_control_change,
             )
         )
         seed = int(
@@ -740,6 +748,7 @@ def render_training_dataset_page() -> None:  # pragma: no cover - Streamlit UI
                 value=0,
                 step=1,
                 key=_QH_SEED_KEY,
+                on_change=_clear_qh_results_for_control_change,
             )
         )
         readiness_identity = _qh_readiness_identity(identity, batch_size=batch_size, seed=seed)
