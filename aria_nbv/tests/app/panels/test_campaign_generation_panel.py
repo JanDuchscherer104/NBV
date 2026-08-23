@@ -320,6 +320,7 @@ class _FakeStreamlit:
         self.buttons = buttons or set()
         self.controls = controls or {}
         self.number_inputs: dict[str, dict[str, object]] = {}
+        self.selectboxes: dict[str, tuple[object, ...]] = {}
         self.json_payloads: list[object] = []
         self.messages: list[str] = []
         self.warnings: list[str] = []
@@ -330,7 +331,9 @@ class _FakeStreamlit:
         pass
 
     def selectbox(self, label, options, **kwargs):
-        return options[0]
+        key = kwargs.get("key", label)
+        self.selectboxes[key] = tuple(options)
+        return self.controls.get(key, options[0])
 
     def text_input(self, label, value="", **kwargs):
         return value
@@ -414,6 +417,48 @@ def test_page_exposes_bounded_operational_controls(monkeypatch, tmp_path: Path) 
     assert fake_st.number_inputs["campaign_max_units"]["max_value"] == 100
     assert fake_st.number_inputs["campaign_time_budget"]["max_value"] == 1440
     assert fake_st.number_inputs["campaign_free_disk_floor"]["max_value"] == 1024
+
+
+def test_page_exposes_only_explicitly_reviewed_configs_with_default_unchanged(monkeypatch, tmp_path: Path) -> None:
+    _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path)
+    panel.render_campaign_generation_page()
+    assert fake_st.selectboxes["campaign_config_path"] == panel._REVIEWED_CONFIGS
+    assert fake_st.selectboxes["campaign_config_path"][0] == panel._DEFAULT_CONFIG
+
+
+def test_selected_reviewed_config_drives_admission_audit_without_launch(monkeypatch, tmp_path: Path) -> None:
+    selected = panel._REVIEWED_CONFIGS[1]
+    campaign, fake_st, _ = _patch_fake_page(
+        monkeypatch,
+        tmp_path,
+        controls={"campaign_config_path": selected},
+        buttons={"Load admission audit"},
+    )
+    selected_config = tmp_path / "pilot-corrected-v10.toml"
+    audit_path = campaign.config.output_root / "admission-audit.json"
+    audit_path.write_text("{}", encoding="utf-8")
+    plan_path = campaign.config.output_root / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    resolved: list[str] = []
+    monkeypatch.setattr(
+        panel,
+        "resolve_config_toml_path",
+        lambda value: resolved.append(value) or selected_config,
+    )
+    loaded: list[str] = []
+    monkeypatch.setattr(
+        panel,
+        "_cached_admission_evidence",
+        lambda path, *_args, **_kwargs: loaded.append(path) or {"counts": {"observed": 1}},
+    )
+    monkeypatch.setattr(panel, "_render_admission_audit", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(panel, "build_campaign_argv", lambda *args, **kwargs: ["not", "invoked"])
+
+    panel.render_campaign_generation_page()
+
+    assert resolved == [selected]
+    assert loaded == [audit_path.as_posix()]
+    assert not any("not invoked" in code for code in fake_st.codes)
 
 
 def test_page_disables_launch_for_invalid_operational_control(monkeypatch, tmp_path: Path) -> None:
