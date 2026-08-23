@@ -1310,11 +1310,12 @@ def test_verdict_rejects_invalid_event_references(reference: object) -> None:
     )[0]
 
 
-def test_verdict_rejects_duplicate_event_references() -> None:
+def test_verdict_admits_duplicate_event_references_for_distinct_claims() -> None:
     reference = _event_reference()
-    assert not _validate_verdict(
-        _verdict(evidence=[reference, reference]), _complete_event_evidence()
-    )[0]
+    duplicate = _event_reference(claim="The trial cited the exact owner contract.")
+    assert _validate_verdict(
+        _verdict(evidence=[reference, duplicate]), _complete_event_evidence()
+    ) == (True, "pass")
 
 
 def test_verdict_validation_rejects_malformed_payload() -> None:

@@ -494,7 +494,6 @@ def validate_verdict(
         or len(verdict_evidence) > VERDICT_MAX_ITEMS
     ):
         return False, "verdict evidence must be a non-empty list"
-    seen_indices: set[int] = set()
     events = event_evidence["items"]
     required_reference_fields = {"event_index", "event_type", "item_type", "claim"}
     for reference in verdict_evidence:
@@ -508,9 +507,6 @@ def validate_verdict(
             return False, "event index must be an integer"
         if event_index < 0 or event_index >= len(events):
             return False, "event index is out of range"
-        if event_index in seen_indices:
-            return False, "event indices must be unique"
-        seen_indices.add(event_index)
         event = events[event_index]
         if reference["event_type"] != event["event_type"]:
             return False, "event type does not match referenced evidence"
