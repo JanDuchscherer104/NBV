@@ -131,11 +131,16 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
         "generation_cohort": "cohort",
         "store_id": "store",
     }
+
+    def payload(contract_id: str) -> str:
+        return json.dumps({"contract_id": contract_id}, sort_keys=True, separators=(",", ":"))
+
     candidate = pd.DataFrame(
         [
             {
                 **common,
                 "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
                 "group_by": "mixture",
                 "family": "local",
                 "allocated_count": 2,
@@ -152,6 +157,7 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
             {
                 **common,
                 "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
                 "target_valid": True,
                 "gt_label_valid": True,
                 "gt_match_status": "matched",
@@ -165,6 +171,7 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
             {
                 **common,
                 "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
                 "candidate_count": 2,
                 "collision_evaluated_count": 2,
                 "collision_count": 1,
@@ -176,7 +183,14 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
     )
     failures = pd.DataFrame(
         [
-            {**common, "contract_id": contract_id, "kind": "timeout", "severity": "error", "message": "failed"}
+            {
+                **common,
+                "contract_id": contract_id,
+                "contract_payload_json": payload(contract_id),
+                "kind": "timeout",
+                "severity": "error",
+                "message": "failed",
+            }
             for contract_id in ("a", "b")
         ]
     )
@@ -189,6 +203,10 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
     for frame in (support, admission, safe, failure_counts):
         assert set(frame["contract_id"]) == {"a", "b"}
         assert list(frame["contract_id"]) == ["a", "b"]
+        assert dict(zip(frame["contract_id"], frame["contract_payload_json"], strict=True)) == {
+            "a": payload("a"),
+            "b": payload("b"),
+        }
     assert list(support["allocated_count"]) == [2, 2]
     assert list(admission["count"]) == [1, 1]
     assert list(safe["collision_count"]) == [1, 1]
@@ -253,7 +271,15 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
     assert pooled.iloc[0]["finite_count"] == 2
     assert summary.totals["included_store_count"] == 3
     assert summary.totals["q_h_state_count"] is not None
-    for frame in (summary.candidate_support, summary.temporal_summary, summary.target_admission, summary.feasibility, summary.failure_counts, summary.endpoints, summary.contract_totals):
+    for frame in (
+        summary.candidate_support,
+        summary.temporal_summary,
+        summary.target_admission,
+        summary.feasibility,
+        summary.failure_counts,
+        summary.endpoints,
+        summary.contract_totals,
+    ):
         if not frame.empty:
             assert "contract_payload_json" in frame.columns
 
