@@ -697,6 +697,7 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
 
     monkeypatch.setattr(stored_rollout_session, "_cached_ranks_cached", fake_ranks)
     monkeypatch.setattr(stored_rollout_session, "_cached_root_geometry_cached", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(stored_rollout_session, "_store_projection_identity", lambda _path: "fixture")
     monkeypatch.setattr(stored_rollouts_page, "_render_plot", capture_plot)
     monkeypatch.setattr(stored_rollouts_page, "_download_frame", lambda *_args, **_kwargs: None)
 
@@ -1192,6 +1193,7 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
         return []
 
     monkeypatch.setattr(stored_rollout_session, "_cached_candidates_cached", fake_candidates)
+    monkeypatch.setattr(stored_rollout_session, "_store_projection_identity", lambda _path: "fixture")
     handle = stored_rollout_session.StoredRolloutSession(Path("/store.zarr"), "fixture", object(), object(), {}, None)
     kwargs = {
         "stored_session": handle,
