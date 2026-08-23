@@ -34,3 +34,10 @@ ordinary edit to the smallest policy owner. Reject resolves the existing
 record with a reason while policy bytes stay unchanged. Defer leaves policy
 unchanged and keeps the record active. TOML records the lifecycle but never
 installs policy automatically.
+
+A real disposition requires an exact current-user instruction selecting that
+branch in the current task. Existing review, policy, or conversation evidence
+does not supply authority; without it, record no disposition and leave the
+proposal active and unresolved. An abstract simulation may model one branch
+for analysis, but it is non-authoritative and must never mutate policy or
+TOML.

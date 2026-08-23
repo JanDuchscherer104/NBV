@@ -834,6 +834,24 @@ def test_capture_and_routing_contracts() -> None:
     memory_readme = _read(ROOT / ".agents" / "memory" / "README.md")
     assert "Current Policy" in memory_readme
     assert "The proposal is only evidence until" in memory_readme
+    modes = _read(ROOT / ".agents" / "skills" / "agents-db" / "references" / "modes.md")
+    agents_db_skill = _read(ROOT / ".agents" / "skills" / "agents-db" / "SKILL.md")
+    lifecycle_terms = ("accept", "reject", "narrow", "defer")
+    proposal_review = modes.split("## proposal-review", 1)[1]
+    assert all(term in proposal_review for term in lifecycle_terms)
+    assert "exact current-user instruction" in proposal_review
+    assert "abstract simulation" in proposal_review
+    assert "never mutate policy or" in proposal_review
+    assert "the exact lifecycle contract" in agents_db_skill
+    assert all(
+        f"{term} require" not in memory_readme and f"{term} leaves" not in memory_readme
+        for term in lifecycle_terms
+    )
+    assert all(
+        f"{term} require" not in agents_db_skill
+        and f"{term} leaves" not in agents_db_skill
+        for term in lifecycle_terms
+    )
     assert "proposal, debrief, or none" in agent_behavior
     assert "negative or already-owned" in agent_behavior
     assert ".agents/memory/README.md" in agent_behavior

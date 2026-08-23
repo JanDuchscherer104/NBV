@@ -110,11 +110,10 @@ jq -r 'select(.canonical_update_paths | index(".agents/references/human_owner_in
 ```
 
 The proposal is only evidence until the `agents-db` `proposal-review` mode
-assigns exactly one disposition. That mode owns the lifecycle: `accept` and
-`narrow` require an ordinary edit to the smallest policy owner; `reject`
-resolves the existing record with a reason while policy bytes stay unchanged;
-`defer` leaves policy unchanged and keeps the record active. TOML records the
-lifecycle but never installs policy automatically.
+assigns a disposition. The five fields above are the proposal evidence shape;
+the exact review lifecycle is defined in
+`.agents/skills/agents-db/references/modes.md`. TOML records lifecycle
+metadata but never installs policy automatically.
 The JSONL file at `index/debriefs.jsonl` is a derived navigation index only.
 It contains no findings, rankings, authority scores, or current-truth claims.
 Every row exposes `touched_owner_paths` and `codex_thread`. Older

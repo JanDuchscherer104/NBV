@@ -125,7 +125,7 @@ worktree_kind: {provenance["worktree_kind"]}
 <list exact Typst/Python/configuration/test/setup/guidance owner updates, or say "none" explicitly>
 
 ## Commits
-- [<full commit OID>](https://github.com/JanDuchscherer104/ARIA-NBV/commit/<full commit OID>) — <workpackage>: <outcome>
+- none — no repository commit (not yet recorded)
 
 ## Human Intent Proposal
 - Proposed statement: <reusable statement, or none>

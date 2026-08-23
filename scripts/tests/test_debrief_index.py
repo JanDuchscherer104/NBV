@@ -582,10 +582,29 @@ def test_title_round_trips_generator_and_canonical_parser(
     assert path.name == f"2026-08-22_{expected_slug}.md"
     payload = body.split("\n---\n", 1)[0].removeprefix("---\n")
     assert yaml.safe_load(payload)["title"] == title
-    assert "## Commits\n- [<full commit OID>]" in body
+    assert "## Commits\n- none — no repository commit (not yet recorded)" in body
     source = tmp_path / "record.md"
     source.write_text(body, encoding="utf-8")
     assert validator.parse_frontmatter(source)["title"] == title
+
+
+def test_fresh_native_debrief_is_validator_valid_before_manual_filling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    history_root = root / ".agents/memory/history"
+    monkeypatch.setattr(new_debrief, "REPO_ROOT", root)
+    monkeypatch.setattr(new_debrief, "HISTORY_ROOT", history_root)
+    monkeypatch.setattr(validator, "REPO_ROOT", root)
+    monkeypatch.setattr(validator, "HISTORY_ROOT", history_root)
+
+    provenance = new_debrief.git_provenance()
+    path, body = new_debrief.render(
+        date(2026, 8, 23), "Fresh native debrief", THREAD_ID, provenance
+    )
+    path.write_text(body, encoding="utf-8")
+
+    assert validator.check_history_records() == []
 
 
 @pytest.mark.parametrize(
