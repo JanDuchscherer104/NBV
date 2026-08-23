@@ -815,6 +815,45 @@ def test_contract_additive_totals_fail_closed_for_mixed_qh_completeness() -> Non
     assert row["q_h_chain_unavailable_reason"] == "truncated_q_h"
 
 
+@pytest.mark.parametrize("field,value", [("state_count", None), ("trainable_count", 1.5), ("padding_count", -1)])
+def test_contract_additive_totals_require_complete_nonnegative_qh_counts(field: str, value: object) -> None:
+    """Deep Q_H status is unavailable unless every additive count is valid."""
+
+    bundle = {
+        "stores": pd.DataFrame([{"rollouts": 1, "steps": 2, "candidates": 10, "targets": 1, "sources": 1}]),
+        "runtime_storage": pd.DataFrame([{"total_bytes": 100}]),
+    }
+    included = [
+        {
+            "path": "/incomplete-counts",
+            "store_id": "store",
+            "contract_id": "contract",
+            "contract": "C",
+            "profile": "p",
+        }
+    ]
+    q_h = {
+        "path": "/incomplete-counts",
+        "store_id": "store",
+        "available": True,
+        "deep_count": True,
+        "truncated": False,
+        "state_count": 2,
+        "trainable_count": 1,
+        "padding_count": 0,
+    }
+    q_h[field] = value
+
+    row = _contract_additive_totals([bundle], included, [q_h]).iloc[0]
+
+    assert bool(row["q_h_chain_available"]) is False
+    assert pd.isna(row["q_h_chain_count"])
+    assert pd.isna(row["q_h_state_count"])
+    assert pd.isna(row["q_h_trainable_count"])
+    assert pd.isna(row["q_h_padding_count"])
+    assert row["q_h_chain_unavailable_reason"] == "Q_H evidence unavailable or incomplete"
+
+
 def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=71)

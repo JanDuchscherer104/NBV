@@ -1185,8 +1185,14 @@ def _contract_additive_totals(
             ),
             next((row for row in q_h_rows if row["store_id"] == store["store_id"]), {}),
         )
+        q_h_counts_available = all(
+            _is_nonnegative_int(q_h.get(field)) for field in ("state_count", "trainable_count", "padding_count")
+        )
         q_h_chain_available = (
-            bool(q_h.get("available")) and bool(q_h.get("deep_count")) and not bool(q_h.get("truncated"))
+            bool(q_h.get("available"))
+            and bool(q_h.get("deep_count"))
+            and not bool(q_h.get("truncated"))
+            and q_h_counts_available
         )
         rows.append(
             {
