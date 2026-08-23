@@ -21,6 +21,21 @@ from tests.rollout_fixtures import build_rollout_records
 from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
 
 
+def test_contract_overview_label_is_compact_and_keeps_exact_identity() -> None:
+    """Overview labels show the profile once while preserving the full contract ID."""
+
+    label = overview_topology._contract_overview_label(
+        {
+            "profile": "rich-60",
+            "contract": "rich-60 · candidate abcdef123456",
+            "contract_id": "0123456789abcdef",
+        }
+    )
+
+    assert label == "rich-60 · candidate abcdef123456 · contract_id=0123456789abcdef"
+    assert label.count("rich-60") == 1
+
+
 def test_corpus_overview_defers_per_store_qh_rows_to_drill_down(monkeypatch: pytest.MonkeyPatch) -> None:
     """Overview stays aggregate-only while drill-down retains store-qualified evidence."""
 

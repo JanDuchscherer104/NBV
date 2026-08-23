@@ -106,8 +106,7 @@ def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_co
     else:
         st.markdown("#### Validated scientific totals by exact contract")
         for row in contract_totals.to_dict("records"):
-            label = f"{row['contract']} · {row['profile']} · {row['contract_id']}"
-            st.caption(label)
+            st.caption(_contract_overview_label(row))
             facet = st.columns(5)
             facet[0].metric("Stores", row["store_count"])
             facet[1].metric("Rollouts / steps", f"{row['rollout_count']} / {row['step_count']}")
@@ -119,6 +118,18 @@ def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_co
             facet[4].metric("Storage", _format_bytes(row["storage_bytes"]))
     if summary.excluded_stores:
         st.dataframe(pd.DataFrame(summary.excluded_stores), hide_index=True, width="stretch")
+
+
+def _contract_overview_label(row: dict[str, object]) -> str:
+    """Format one compact contract label without repeating its profile."""
+
+    profile = str(row.get("profile", "unknown"))
+    contract = str(row.get("contract", "unknown"))
+    prefix = f"{profile} · "
+    if contract.startswith(prefix):
+        contract = contract[len(prefix) :]
+    contract_id = str(row.get("contract_id", "unknown"))
+    return f"{profile} · {contract} · contract_id={contract_id}"
 
 
 def _render_corpus_details(summary: RolloutCorpusSummary | None) -> None:
