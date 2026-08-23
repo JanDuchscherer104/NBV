@@ -621,7 +621,6 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
                 "profile": profile,
                 "contract_id": contract["id"],
                 "contract": contract["label"],
-                "contract_payload": contract["payload"],
                 "contract_payload_json": json.dumps(contract["payload"], sort_keys=True, separators=(",", ":")),
             }
         )
@@ -633,7 +632,6 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
                 "contract_id": contract["id"],
                 "contract": contract["label"],
                 "profile": contract["profile"],
-                "contract_payload": contract["payload"],
                 "contract_payload_json": json.dumps(contract["payload"], sort_keys=True, separators=(",", ":")),
                 **q_h_row,
             }
@@ -657,6 +655,7 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
                 "store_id",
                 "contract_id",
                 "contract",
+                "contract_payload_json",
                 "profile",
                 "available",
                 "blocking_reason",

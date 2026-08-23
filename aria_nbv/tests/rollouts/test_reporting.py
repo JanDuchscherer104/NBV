@@ -271,6 +271,18 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
     assert pooled.iloc[0]["finite_count"] == 2
     assert summary.totals["included_store_count"] == 3
     assert summary.totals["q_h_state_count"] is not None
+    pyarrow = pytest.importorskip("pyarrow")
+    for frame in (
+        summary.candidate_support,
+        summary.endpoints,
+        summary.failure_counts,
+        summary.q_h_stores,
+        summary.temporal_summary,
+        summary.target_admission,
+        summary.feasibility,
+        summary.contract_totals,
+    ):
+        pyarrow.Table.from_pandas(frame, preserve_index=False)
     for frame in (
         summary.candidate_support,
         summary.temporal_summary,
