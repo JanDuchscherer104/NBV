@@ -14,7 +14,6 @@ import streamlit as st
 
 from ....configs import PathConfig
 from ....rerun_inspector import RolloutLayerName, RolloutLayerPreset
-from ....rollouts.inspection import selected_depth_preview
 from ...rerun_launch import (
     RerunLaunchMode,
     build_rerun_rollout_command,
@@ -360,7 +359,6 @@ def _render_inspect_export_rerun(
     paths: PathConfig,
 ) -> None:
     st.subheader("Drill-down")
-    reader = session_handle.reader
     store_identity = _canonical_query_store_identity(store_path)
     _activate_query_store(st.session_state, store_identity)
     scope_key = f"stored_query:{store_identity}:scope"
@@ -373,7 +371,7 @@ def _render_inspect_export_rerun(
     )
     namespace = _query_namespace(store_identity, scope, candidate_population)
 
-    rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1).tolist()
+    rollout_ids = session_handle.rollout_ids()
     if not rollout_ids:
         st.warning("This store has no rollout rows to inspect or query.")
         return
@@ -470,7 +468,7 @@ def _render_inspect_export_rerun(
             st.info("No selected-depth row exists for this step.")
         else:
             st.dataframe(selected_depth, hide_index=True, width="stretch")
-            preview = selected_depth_preview(session_handle.reader, step_row_id=step_id)
+            preview = session_handle.selected_depth_preview(step_row_id=step_id)
             if bool(preview.get("available")):
                 array = preview["depth_m"]
                 fig = px.imshow(

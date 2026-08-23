@@ -10,6 +10,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import streamlit as st
 
 from ....configs import PathConfig
@@ -40,6 +41,7 @@ from ....rollouts.inspection import (
     rollout_trajectory_geometry,
     rollout_tree_summary_rows,
     selected_candidate_rank_rows,
+    selected_depth_preview,
     selected_depth_summary_rows,
     store_invariant_rows,
     suspicious_rollout_rows,
@@ -273,6 +275,43 @@ class StoredRolloutSession:
 
     def q_h(self, deep_count: bool = False) -> Any:
         return _cached_q_h(self._projection_path(), deep_count, store_identity=self.store_identity)
+
+    def q_h_progressive(
+        self,
+        *,
+        chunk_size: int,
+        state_row_limit: int | None,
+        progress_callback: Callable[[int, int], bool] | None,
+    ) -> Any:
+        """Read progressive Q_H evidence while guarding the fixed generation."""
+
+        self._assert_current_identity()
+        result = q_h_evidence_rows(
+            self._reader,
+            deep_count=True,
+            chunk_size=chunk_size,
+            state_row_limit=state_row_limit,
+            progress_callback=progress_callback,
+            validation_result=self.validation,
+        )
+        self._assert_current_identity()
+        return result
+
+    def selected_depth_preview(self, step_row_id: int) -> Any:
+        """Preview one selected-depth artifact while guarding the fixed generation."""
+
+        self._assert_current_identity()
+        result = selected_depth_preview(self._reader, step_row_id=step_row_id)
+        self._assert_current_identity()
+        return result
+
+    def rollout_ids(self) -> list[int]:
+        """Return persisted rollout ids from this fixed-generation reader."""
+
+        self._assert_current_identity()
+        result = np.asarray(self._reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1).tolist()
+        self._assert_current_identity()
+        return [int(value) for value in result]
 
     def tree(self) -> Any:
         return _cached_tree(self._projection_path(), store_identity=self.store_identity)

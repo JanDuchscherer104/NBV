@@ -8,7 +8,6 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from ....rollouts.inspection import q_h_evidence_rows
 from .shared import download_frame as _download_frame
 
 
@@ -54,8 +53,6 @@ def _render_q_h_evidence(session_handle: object) -> None:
         )
         progress = st.progress(0.0, text="Preparing bounded Q_H count…")
         status = st.empty()
-        reader = session_handle.reader
-        validation = session_handle.validation
 
         def update_progress(completed: int, total: int) -> bool:
             fraction = 1.0 if total <= 0 else min(1.0, float(completed) / float(total))
@@ -65,13 +62,10 @@ def _render_q_h_evidence(session_handle: object) -> None:
             )
             return not stop_requested
 
-        evidence_rows = q_h_evidence_rows(
-            reader,
-            deep_count=True,
+        evidence_rows = session_handle.q_h_progressive(
             chunk_size=chunk_size,
             state_row_limit=state_limit,
             progress_callback=update_progress,
-            validation_result=validation,
         )
         evidence = evidence_rows[0] if evidence_rows else {}
         if str(evidence.get("count_reason", "")).startswith("cancelled"):

@@ -294,7 +294,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
     handle = Handle()
     callback_results: list[bool] = []
 
-    def q_h(_reader, **kwargs):
+    def q_h(**kwargs):
         callback = kwargs["progress_callback"]
         callback_results.append(callback(2, 4))
         return [
@@ -306,7 +306,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
             }
         ]
 
-    monkeypatch.setattr(qh_admission, "q_h_evidence_rows", q_h)
+    handle.q_h_progressive = q_h  # type: ignore[method-assign]
     qh_admission._render_q_h_evidence(handle)
 
     assert callback_results == [False]
@@ -822,6 +822,32 @@ def test_stored_rollout_session_topology_preserves_structured_cache_arguments(mo
     paths = PathConfig()
     handle.topology(("/vin-a", "/vin-b"), paths, 7)
     assert calls and calls[0][0][1:4] == (("/vin-a", "/vin-b"), paths, 7)
+
+
+def test_stored_rollout_session_progressive_qh_rejects_mid_domain_call_swap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Progressive Q_H evidence cannot return rows from a replaced generation."""
+
+    identities = iter(("first", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    monkeypatch.setattr(session, "q_h_evidence_rows", lambda *_args, **_kwargs: [{"generation": "first"}])
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+    with pytest.raises(RuntimeError, match="store changed"):
+        handle.q_h_progressive(chunk_size=1, state_row_limit=None, progress_callback=None)
+
+
+def test_stored_rollout_session_selected_depth_rejects_mid_domain_call_swap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Selected-depth preview cannot return a stale artifact after replacement."""
+
+    identities = iter(("first", "second"))
+    monkeypatch.setattr(session, "_store_projection_identity", lambda _path: next(identities))
+    monkeypatch.setattr(session, "selected_depth_preview", lambda *_args, **_kwargs: {"generation": "first"})
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
+    with pytest.raises(RuntimeError, match="store changed"):
+        handle.selected_depth_preview(step_row_id=1)
 
 
 def _owner_stub(result: object) -> Callable[..., object]:
