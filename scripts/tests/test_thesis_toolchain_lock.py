@@ -29,6 +29,7 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
         "scripts/scaffold/schemas",
         ".agents/skills/typst-authoring/scripts",
         "bin",
+        "docs/figures/branding",
     ):
         (tmp_path / relative).mkdir(parents=True)
     (tmp_path / "docs/typst/thesis/main.typ").write_text(
@@ -38,13 +39,21 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, str]:
         encoding="utf-8",
     )
     (tmp_path / "docs/typst/shared/shared.typ").write_text(
-        '#import "@preview/example:1.2.3": thing\n', encoding="utf-8"
+        '#import "@preview/example:1.2.3": thing\n'
+        '#let logo: "/figures/branding/hm-logo.svg"\n',
+        encoding="utf-8",
     )
     (tmp_path / "docs/typst/thesis/experiment_data.typ").write_text(
         '#let report-schema-version = "report-v2"\n', encoding="utf-8"
     )
     (tmp_path / "docs/typst/thesis/figure.PNG").write_bytes(b"before")
     (tmp_path / "docs/typst/shared/diagram.svg").write_text("svg\n", encoding="utf-8")
+    (tmp_path / "docs/figures/branding/hm-logo.svg").write_text(
+        "logo\n", encoding="utf-8"
+    )
+    (tmp_path / "docs/figures/unrelated.svg").write_text(
+        "unrelated\n", encoding="utf-8"
+    )
     (tmp_path / "docs/ieee.csl").write_text("csl\n", encoding="utf-8")
     render = tmp_path / ".agents/skills/typst-authoring/scripts/render_png.sh"
     render.write_text("#!/bin/sh\necho render\n", encoding="utf-8")
@@ -99,6 +108,7 @@ def _run(
             *extra,
         ],
         cwd=root,
+        check=False,
         text=True,
         capture_output=True,
         env=env,
@@ -115,8 +125,12 @@ def test_generation_records_closure_and_path_independent_identities(fixture) -> 
     root, output, revision = fixture
     payload = _generate(root, output, revision)
     paths = {entry["path"] for entry in payload["material_sources"]}
-    assert "docs/typst/thesis/figure.PNG" in paths
-    assert "docs/typst/shared/diagram.svg" in paths
+    assert "docs/typst/thesis/main.typ" in paths
+    assert "docs/typst/shared/shared.typ" in paths
+    assert "docs/figures/branding/hm-logo.svg" in paths
+    assert "docs/typst/thesis/figure.PNG" not in paths
+    assert "docs/typst/shared/diagram.svg" not in paths
+    assert "docs/figures/unrelated.svg" not in paths
     assert payload["toolchain"]["compiler"]["command"] == "typst"
     assert "executable" not in payload["toolchain"]["compiler"]
     assert len(payload["toolchain"]["compiler"]["binary_sha256"]) == 64
@@ -146,22 +160,25 @@ def test_exact_generated_outputs_are_excluded_but_other_assets_are_material(
     )
 
 
-def test_untracked_and_changed_visual_assets_fail(fixture) -> None:
+def test_referenced_asset_byte_drift_fails(fixture) -> None:
     root, output, revision = fixture
     _generate(root, output, revision)
-    (root / "docs/typst/thesis/new.jpg").write_bytes(b"new")
-    failed = _run(root, output, "check")
-    assert failed.returncode == 1
-    assert "untracked material thesis inputs" in failed.stderr
-    (root / "docs/typst/thesis/new.jpg").unlink()
-    (root / "docs/typst/thesis/figure.PNG").write_bytes(b"after")
+    (root / "docs/figures/branding/hm-logo.svg").write_bytes(b"after")
     failed = _run(root, output, "check")
     assert failed.returncode == 1
     assert "material build inputs" in failed.stderr
 
 
-def test_missing_font_and_fallback_family_are_rejected(fixture) -> None:
+def test_untracked_unreferenced_visual_does_not_fail(fixture) -> None:
     root, output, revision = fixture
+    _generate(root, output, revision)
+    (root / "docs/figures/new.jpg").write_bytes(b"new")
+    passed = _run(root, output, "check")
+    assert passed.returncode == 0, passed.stderr
+
+
+def test_missing_font_and_fallback_family_are_rejected(fixture) -> None:
+    root, output, _revision = fixture
     source = root / "docs/typst/thesis/main.typ"
     source.write_text(source.read_text().replace("System Test", "Missing Test"))
     _git(root, "add", ".")

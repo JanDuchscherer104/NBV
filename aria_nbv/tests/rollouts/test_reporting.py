@@ -668,6 +668,75 @@ def test_report_provenance_rejects_changed_evidence_and_relabelled_paths(tmp_pat
         validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
 
 
+def test_report_provenance_rejects_tampered_promoted_sidecar_values(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=863)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    payload = json.loads(serialize_thesis_report_bundle(frames))
+    sidecar_row = payload["tables"]["sidecars"]["rows"][0]
+    value_row = next(
+        row for row in payload["tables"]["sidecar_values"]["rows"] if row["key"] == "empirical_results[0].estimate"
+    )
+    value_row["value_float"] = 99.0
+
+    with pytest.raises(ValueError, match="sidecar_values"):
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
+    assert sidecar_row["sha256"] == hashlib.sha256(sidecar.read_bytes()).hexdigest()
+
+
+def test_report_provenance_rejects_tampered_promoted_empirical_result(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=864)[:1]
+    )
+    sidecar = _empirical_sidecar(tmp_path, result)
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    payload = json.loads(serialize_thesis_report_bundle(frames))
+    payload["tables"]["empirical_results"]["rows"][0]["estimate"] = 99.0
+
+    with pytest.raises(ValueError, match="empirical_results"):
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
+
+
+def test_report_provenance_rejects_tampered_promoted_fact(tmp_path: Path) -> None:
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=865)[:1]
+    )
+    sidecar = tmp_path / "analysis.json"
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema_version": ANALYSIS_FACT_SIDECAR_VERSION,
+                "bundle_role": "analysis_facts",
+                "status": "pilot",
+                "facts": [
+                    {
+                        "store_id": result.manifest_sha256,
+                        "key": "runtime.measured_wall_time_s",
+                        "value": 12.5,
+                        "unit": "s",
+                        "n": 1,
+                        "aggregation": "total",
+                        "provenance": "analysis.json",
+                    }
+                ],
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    frames = build_thesis_report_frames([result.store_dir], sidecar_paths=[sidecar], evidence_status="pilot")
+    payload = json.loads(serialize_thesis_report_bundle(frames))
+    sidecar_sha256 = payload["tables"]["sidecars"]["rows"][0]["sha256"]
+    promoted = next(row for row in payload["tables"]["facts"]["rows"] if "|sidecar:" in row["source"])
+    promoted["value"] = 99.0
+
+    with pytest.raises(ValueError, match="facts"):
+        validate_thesis_report_provenance(payload, evidence_root=sidecar.parent)
+    assert sidecar_sha256 == hashlib.sha256(sidecar.read_bytes()).hexdigest()
+
+
 def _empirical_sidecar(tmp_path: Path, result: RolloutZarrWriteResult, **patch: object) -> Path:
     sidecar = tmp_path / "analysis" / f"result-{len(patch)}.json"
     artifact = sidecar.parent / "artifact.txt"

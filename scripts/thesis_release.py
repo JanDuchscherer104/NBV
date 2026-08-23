@@ -515,6 +515,11 @@ def build_submission(
     subprocess.run(command, cwd=root, check=True)
 
 
+def _resolve_cli_path(root: Path, path: Path) -> Path:
+    """Resolve relative CLI paths within the selected checkout."""
+    return (path if path.is_absolute() else root / path).resolve()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -545,8 +550,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             build_submission(
                 root=root,
-                report=args.report.resolve(),
-                output=args.output.resolve(),
+                report=_resolve_cli_path(root, args.report),
+                output=_resolve_cli_path(root, args.output),
                 typst_bin=args.typst_bin,
             )
             print(f"submission build: {args.output}")

@@ -290,6 +290,67 @@ def test_submission_checks_full_toolchain_lock_before_typst(
     assert "--typst-bin" in calls[0] and "alternate-typst" in calls[0]
 
 
+def test_submission_cli_resolves_relative_paths_against_alternate_root_before_typst(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[str]] = []
+    submission_args: list[tuple[Path, Path, Path]] = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        RELEASE,
+        "validate_release_requirements",
+        lambda *args, **kwargs: {"source_revision": "a" * 40},
+    )
+    monkeypatch.setattr(RELEASE, "validate_confirmatory_claims", lambda _model: None)
+    monkeypatch.setattr(RELEASE, "_claims_model", lambda _root: object())
+
+    monkeypatch.setattr(RELEASE, "load_report", lambda *args, **kwargs: {})
+
+    original_build_submission = RELEASE.build_submission
+
+    def capture_submission(*, root, report, output, typst_bin):
+        submission_args.append((root, report, output))
+        original_build_submission(
+            root=root, report=report, output=output, typst_bin=typst_bin
+        )
+
+    monkeypatch.setattr(RELEASE, "build_submission", capture_submission)
+
+    def fail_before_typst(command, **kwargs):
+        calls.append(command)
+        raise subprocess.CalledProcessError(1, command, stderr="lock drift")
+
+    monkeypatch.setattr(RELEASE.subprocess, "run", fail_before_typst)
+    alternate_root = ROOT.resolve()
+    assert (
+        RELEASE.main(
+            [
+                "submission-build",
+                "--root",
+                str(alternate_root),
+                "--report",
+                "docs/typst/thesis/data/report.json",
+                "--output",
+                "build/submission.pdf",
+                "--typst-bin",
+                "alternate-typst",
+            ]
+        )
+        == 1
+    )
+    assert len(calls) == 1
+    assert calls[0][0] == RELEASE.sys.executable
+    assert calls[0][1].endswith("scripts/thesis_toolchain_lock.py")
+    assert str(alternate_root) in calls[0]
+    assert submission_args == [
+        (
+            alternate_root,
+            alternate_root / "docs/typst/thesis/data/report.json",
+            alternate_root / "build/submission.pdf",
+        )
+    ]
+
+
 def test_development_compile_passes_and_submission_fixture_fails() -> None:
     with tempfile.TemporaryDirectory(prefix="aria-thesis-release-") as directory:
         output = Path(directory)

@@ -740,6 +740,16 @@ def validate_thesis_report_provenance(
 
     root = Path(evidence_root).expanduser().resolve()
     sidecar_files: dict[str, Path] = {}
+    canonical_promoted_facts: list[dict[str, object]] = []
+    canonical_sidecar_values: list[dict[str, object]] = []
+    canonical_empirical_results: list[dict[str, object]] = []
+    store_identities = {
+        str(row.store_id): (
+            _canonical_store_identity(row.source_offline_store_version, "source_offline_store_version"),
+            _canonical_store_identity(row.split_manifest_hash, "split_manifest_hash"),
+        )
+        for row in frames["stores"].itertuples(index=False)
+    }
     for index, row in frames["sidecars"].iterrows():
         logical_path = _portable_relative_path(row["path"], field=f"sidecars row {index} path")
         if row["name"] != row["path"]:
@@ -754,6 +764,25 @@ def validate_thesis_report_provenance(
         if row["sidecar_id"] != expected_id or row["sidecar_id"] in sidecar_files:
             raise ValueError(f"sidecar row {index} sidecar_id relationship is invalid.")
         sidecar_files[str(row["sidecar_id"])] = sidecar_file
+        try:
+            if row["format"] == "json":
+                sidecar_payload: object = json.loads(sidecar_file.read_bytes())
+            elif row["format"] == "jsonl":
+                sidecar_payload = [json.loads(line) for line in sidecar_file.read_bytes().splitlines() if line.strip()]
+            else:
+                raise ValueError(f"sidecar row {index} format is unsupported.")
+        except json.JSONDecodeError as error:
+            raise ValueError(f"sidecar row {index} evidence is not valid {row['format']}.") from error
+        promoted, empirical = _analysis_fact_rows(
+            sidecar_payload,
+            sidecar_id=str(row["sidecar_id"]),
+            evidence_status=cast(Literal["exploratory", "pilot", "confirmatory"], row["status"]),
+            store_identities=store_identities,
+            sidecar_path=sidecar_file,
+        )
+        canonical_promoted_facts.extend(promoted)
+        canonical_sidecar_values.extend(_typed_leaf_rows("sidecar_id", str(row["sidecar_id"]), sidecar_payload))
+        canonical_empirical_results.extend(empirical)
 
     for index, row in frames["empirical_results"].iterrows():
         artifact_parent = sidecar_files.get(str(row["sidecar_id"]))
@@ -765,7 +794,57 @@ def validate_thesis_report_provenance(
             raise ValueError(f"empirical result row {index} artifact does not exist.")
         if hashlib.sha256(artifact_file.read_bytes()).hexdigest() != row["artifact_sha256"]:
             raise ValueError(f"empirical result row {index} artifact_sha256 does not match immutable evidence.")
+    serialized_promoted_facts: list[dict[str, object]] = []
+    for index, row in frames["facts"].iterrows():
+        source = row["source"]
+        if not isinstance(source, str) or "|sidecar:" not in source:
+            continue
+        provenance, _, sidecar_id = source.rpartition("|sidecar:")
+        if not provenance or sidecar_id not in sidecar_files:
+            raise ValueError(f"facts row {index} sidecar provenance is invalid.")
+        serialized_promoted_facts.append(dict(row))
+    _validate_canonical_promoted_rows(
+        frames,
+        "facts",
+        canonical_promoted_facts,
+        actual_rows=serialized_promoted_facts,
+    )
+    _validate_canonical_promoted_rows(
+        frames,
+        "sidecar_values",
+        canonical_sidecar_values,
+    )
+    _validate_canonical_promoted_rows(
+        frames,
+        "empirical_results",
+        canonical_empirical_results,
+    )
     return frames
+
+
+def _validate_canonical_promoted_rows(
+    frames: Mapping[str, pd.DataFrame],
+    table_name: Literal["facts", "sidecar_values", "empirical_results"],
+    expected_rows: list[dict[str, object]],
+    *,
+    actual_rows: list[dict[str, object]] | None = None,
+) -> None:
+    columns = THESIS_REPORT_TABLE_COLUMNS[table_name]
+    expected = _frame(table_name, expected_rows)
+    actual = _frame(
+        table_name,
+        frames[table_name].to_dict(orient="records") if actual_rows is None else actual_rows,
+    )
+    expected_values = [
+        tuple(_json_scalar(value, table=table_name, column=column) for column, value in zip(columns, row, strict=True))
+        for row in expected.itertuples(index=False, name=None)
+    ]
+    actual_values = [
+        tuple(_json_scalar(value, table=table_name, column=column) for column, value in zip(columns, row, strict=True))
+        for row in actual.itertuples(index=False, name=None)
+    ]
+    if actual_values != expected_values:
+        raise ValueError(f"Serialized {table_name} do not match canonical sidecar evidence.")
 
 
 def write_thesis_report_bundle(path: Path | str, frames: Mapping[str, pd.DataFrame]) -> str:

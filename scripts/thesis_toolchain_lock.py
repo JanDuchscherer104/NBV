@@ -25,6 +25,10 @@ EXCLUDED_PATHS = {
 }
 REPORT_SCHEMA_RE = re.compile(r"report-schema-version\s*=\s*\"([^\"]+)\"")
 IMPORT_RE = re.compile(r"#import\s+\"(@preview/[^\"]+)\"")
+LOCAL_SOURCE_RE = re.compile(r"#(?:import|include)\s+\"([^\"]+)\"")
+ASSET_PATH_RE = re.compile(
+    r"\"([^\"]+\.(?:svg|png|jpe?g|webp|gif|pdf))\"", re.IGNORECASE
+)
 FONT_RE = re.compile(r"(?:font\s*:\s*|body:\s*|sans:\s*)\"([^\"]+)\"")
 FONT_VARIANT_RE = re.compile(
     r"^- Style: (?P<style>[^,]+), Weight: (?P<weight>\d+), "
@@ -58,9 +62,23 @@ def _sha256(path: Path) -> str:
 def _material_path(path: str) -> bool:
     if path in EXCLUDED_PATHS:
         return False
-    if path.startswith(("docs/typst/thesis/", "docs/typst/shared/")):
-        return True
-    return path.startswith("docs/") and path.endswith((".bib", ".csl"))
+    return path.startswith("docs/")
+
+
+def _local_path(root: Path, source: Path, reference: str) -> Path | None:
+    if reference.startswith("@"):
+        return None
+    base = root / "docs" if reference.startswith("/") else source.parent
+    candidate = (base / reference.lstrip("/")).resolve()
+    try:
+        candidate.relative_to(root / "docs")
+    except ValueError:
+        return None
+    if candidate.is_file():
+        return candidate
+    if candidate.suffix == "" and candidate.with_suffix(".typ").is_file():
+        return candidate.with_suffix(".typ")
+    return None
 
 
 def _git_files(root: Path, revision: str | None = None) -> dict[str, str]:
@@ -78,9 +96,69 @@ def _git_files(root: Path, revision: str | None = None) -> dict[str, str]:
                 continue
         else:
             _mode, _kind, oid, path = line.split(maxsplit=3)
-        if _material_path(path):
-            files[path] = oid
+        files[path] = oid
     return files
+
+
+def _source_closure(
+    root: Path, *, revision: str | None = None
+) -> tuple[set[str], set[str]]:
+    all_files = _git_files(root, revision)
+    pending = [root / "docs/typst/thesis/main.typ"]
+    sources: set[str] = set()
+    assets: set[str] = set()
+    while pending:
+        source = pending.pop()
+        relative = source.relative_to(root).as_posix()
+        if relative in sources:
+            continue
+        if relative not in all_files:
+            raise LockError(f"active thesis source is not tracked: {relative}")
+        if revision is None:
+            if not source.is_file():
+                raise LockError(f"active thesis source is missing: {relative}")
+            text = source.read_text(encoding="utf-8")
+        else:
+            try:
+                text = subprocess.run(
+                    ["git", "show", f"{revision}:{relative}"],
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+            except (OSError, subprocess.CalledProcessError) as exc:
+                raise LockError(
+                    f"cannot read active thesis source: {relative}"
+                ) from exc
+        sources.add(relative)
+        for reference in LOCAL_SOURCE_RE.findall(text):
+            child = _local_path(root, source, reference)
+            if child is not None:
+                pending.append(child)
+        for reference in ASSET_PATH_RE.findall(text):
+            asset = _local_path(root, source, reference)
+            if asset is not None:
+                assets.add(asset.relative_to(root).as_posix())
+            elif reference.startswith(("/", "../", "./")):
+                resolved = (root / "docs" / reference.lstrip("/")).resolve()
+                try:
+                    assets.add(resolved.relative_to(root).as_posix())
+                except ValueError:
+                    raise LockError(f"active thesis asset is outside docs: {reference}")
+    return sources, assets
+
+
+def _material_paths(root: Path, revision: str | None = None) -> set[str]:
+    sources, assets = _source_closure(root, revision=revision)
+    all_files = _git_files(root, revision)
+    paths = sources | assets
+    paths |= {
+        path
+        for path in all_files
+        if path.startswith("docs/") and path.endswith((".bib", ".csl"))
+    }
+    return {path for path in paths if _material_path(path)}
 
 
 def _current_material(root: Path) -> dict[str, str]:
@@ -89,11 +167,11 @@ def _current_material(root: Path) -> dict[str, str]:
         for path in _run(
             ["git", "ls-files", "--others", "--exclude-standard"], cwd=root
         ).splitlines()
-        if _material_path(path)
+        if path in _material_paths(root)
     )
     if untracked:
         raise LockError("untracked material thesis inputs: " + ", ".join(untracked))
-    tracked = _git_files(root)
+    tracked = _material_paths(root)
     current: dict[str, str] = {}
     for path in tracked:
         full = root / path
@@ -104,7 +182,7 @@ def _current_material(root: Path) -> dict[str, str]:
 
 
 def _revision_material(root: Path, revision: str) -> dict[str, str]:
-    entries = _git_files(root, revision)
+    entries = _material_paths(root, revision)
     result: dict[str, str] = {}
     for path in entries:
         try:
