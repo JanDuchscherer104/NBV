@@ -9,7 +9,7 @@
     {
       "current_owner": "aria_nbv/aria_nbv/rollouts/qh_reader.py",
       "feature": "Q_H factual chain, candidate identity, homogeneous contracts, bounded selected-depth preflight",
-      "proof": "PR90 reader/data tests; G007 V10 identity; final qh-ci pending",
+      "proof": "PR90 reader/data tests; G007 V10 identity; exact-head product suite 389 passed; canonical qh-ci remains G005/G006 gate",
       "source_owner": "PR90 qh_reader.py",
       "status": "retained"
     },
@@ -23,7 +23,7 @@
     {
       "current_owner": "aria_nbv/aria_nbv/lightning/{qh_datamodule.py,qh_module.py}",
       "feature": "Learning-contract hash, checkpoint identity, fit/validate/test/predict admission",
-      "proof": "PR90 lifecycle tests; final qh-ci pending",
+      "proof": "PR90 lifecycle tests; exact-head product suite 389 passed; canonical qh-ci remains G005/G006 gate",
       "source_owner": "PR90 qh_datamodule/qh_module",
       "status": "retained"
     },
@@ -44,7 +44,7 @@
     {
       "current_owner": "aria_nbv/aria_nbv/app/panels/_stored_rollouts/session.py",
       "feature": "Replacement-sensitive identity, bounded caches, cross-page refresh, corpus laziness",
-      "proof": "b461f2c902 session parity; final exact-head review pending",
+      "proof": "b461f2c902 session parity plus 008aceb5e6 watcher and aca6246199 content-SHA cache repair; exact-head product suite 389 passed",
       "source_owner": "PR95 session plus PR101 session fixes",
       "status": "adapted"
     },
@@ -58,9 +58,9 @@
     {
       "current_owner": "training_dataset.py / dataset_bundle.py",
       "feature": "Q_H corpus readiness and one-real-batch preview",
-      "proof": "5bad8d0d08 named contract; G007 V10 identity; browser proof pending",
+      "proof": "5bad8d0d08 named contract; G007 V10 identity; exact-head product suite 389 passed; browser proof remains G005",
       "source_owner": "PR95 Training Dataset",
-      "status": "retained_and_hardened"
+      "status": "retained"
     },
     {
       "current_owner": "aria_nbv/aria_nbv/data_handling/vin_store/target_inventory.py plus training_dataset.py",
@@ -72,56 +72,56 @@
     {
       "current_owner": "aria_nbv/aria_nbv/oracle/pipelines/admission_evidence.py and campaign_generation.py",
       "feature": "Campaign admission evidence with strict oriented-IoU > threshold, provenance, failure reasons",
-      "proof": "14bee9e41c plot repair and admission tests; browser proof pending",
+      "proof": "14bee9e41c plot repair and admission tests; strict-IoU tests and exact-head product suite 389 passed; browser proof remains G005",
       "source_owner": "PR101 admission_evidence",
       "status": "adapted"
     },
     {
       "current_owner": "aria_nbv/aria_nbv/rollouts/inspection.py and stored-rollouts validity/candidate modules",
       "feature": "Candidate support direction/spatial/target-view/motion/collision/clearance with truthful zero states and bounded reads",
-      "proof": "547d138dee bounded reads; 98421c53 angular/collision; focused tests pending final receipt",
+      "proof": "547d138dee bounded reads; 98421c53 angular/collision; f6ce789198 spatial support repair; exact-head product suite 389 passed",
       "source_owner": "PR101 inspection",
       "status": "adapted"
     },
     {
       "current_owner": "aria_nbv/aria_nbv/rollouts/inspection.py and candidate_generation.py",
       "feature": "Candidate-choice dynamics and selected-family trajectories across temperature cohorts",
-      "proof": "864613a726 and b3477ff426; family fixture parity pending final gate",
+      "proof": "864613a726 and b3477ff426; f24d9baded probability/entropy diagnostics; exact-head product suite 389 passed",
       "source_owner": "PR95 inspection/presentation",
-      "status": "retained_and_repaired"
+      "status": "retained"
     },
     {
       "current_owner": "aria_nbv/aria_nbv/rollouts/reporting.py",
       "feature": "Corpus-first reporting, compatible-shard pooling, exact contract separation",
-      "proof": "31b2a515 contract-qualified aggregates and 3fad4c2 temporal facets",
+      "proof": "31b2a515 contract-qualified aggregates and 3fad4c2 temporal facets; exact-head product suite 389 passed",
       "source_owner": "PR95/PR101 reporting",
       "status": "adapted"
     },
     {
       "current_owner": "_stored_rollouts/reconstruction_return.py, overview_topology.py, failure_triage.py, shared.py",
       "feature": "Reward/reconstruction, primary metrics, topology, failure triage, exact rows/downloads",
-      "proof": "54ac9158 reward plots; 32977b0d collapse/blocked diagnostics; browser proof pending",
+      "proof": "54ac9158 reward plots; 32977b0d collapse/blocked diagnostics; f277cc2775 shared scientific guide; exact-head product suite 389 passed; browser proof remains G005",
       "source_owner": "PR95 decomposed modules",
       "status": "retained"
     },
     {
       "current_owner": "_stored_rollouts/inspect_rerun.py and rollouts/inspection.py",
       "feature": "Read-only Rerun drill-down and selected-depth preview",
-      "proof": "read-only owner and bounded preview tests; real browser/Rerun proof G005 pending",
+      "proof": "read-only owner and bounded preview tests; exact-head product suite 389 passed; real browser/Rerun proof remains G005",
       "source_owner": "PR95 inspect module",
       "status": "retained"
     },
     {
       "current_owner": "aria_nbv/aria_nbv/app/scientific_labels.py and shared theory registry",
       "feature": "Canonical scientific labels, theory, Typst-derived notation",
-      "proof": "670799214 and 679c5e15 scientific label/narrative tests; browser proof pending",
+      "proof": "670799214 and 679c5e15 scientific label/narrative tests; ba13cdc8e0 generated target-reward notation; f277cc2775 explanation guide; exact-head product suite 389 passed; browser proof remains G005",
       "source_owner": "PR95 labels plus merged Typst owners",
       "status": "adapted"
     },
     {
       "current_owner": "aria_nbv/aria_nbv/streamlit_app.py and app/app.py",
       "feature": "Streamlit file-watcher and entrypoint behavior",
-      "proof": "entrypoint tests; hosted/browser gate pending",
+      "proof": "008aceb5e6 watcher defaults and entrypoint tests; exact-head product suite 389 passed; hosted/browser gate remains G005/G006",
       "source_owner": "PR95 entrypoint plus PR92 baseline",
       "status": "retained"
     }
