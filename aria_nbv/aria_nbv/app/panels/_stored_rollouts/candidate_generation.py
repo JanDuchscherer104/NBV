@@ -148,6 +148,44 @@ def _orientation_diagnostic_figure(rows: pd.DataFrame) -> go.Figure:
     return figure
 
 
+def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> dict[str, object]:
+    """Prepare pair-local finite Pearson evidence, including auditable support counts."""
+
+    numeric = frame.loc[:, columns].apply(pd.to_numeric, errors="coerce")
+    correlation = pd.DataFrame(np.nan, index=columns, columns=columns, dtype=float)
+    counts = pd.DataFrame(0, index=columns, columns=columns, dtype=int)
+    reasons: dict[tuple[str, str], str] = {}
+    has_finite_off_diagonal = False
+    for left in columns:
+        for right in columns:
+            values = numeric.loc[:, [left, right]].to_numpy(dtype=float)
+            finite_values = values[np.isfinite(values).all(axis=1)]
+            n = len(finite_values)
+            counts.loc[left, right] = n
+            if n < 2:
+                reasons[(left, right)] = f"insufficient finite paired rows (n={n}; need n>=2)"
+                continue
+            left_values, right_values = finite_values[:, 0], finite_values[:, 1]
+            if np.unique(left_values).size == 1 or np.unique(right_values).size == 1:
+                reasons[(left, right)] = "constant pair value (zero variance)"
+                continue
+            value = float(pd.Series(left_values).corr(pd.Series(right_values)))
+            if not np.isfinite(value):
+                reasons[(left, right)] = "non-finite Pearson correlation after finite pair filtering"
+                continue
+            correlation.loc[left, right] = value
+            if left != right:
+                has_finite_off_diagonal = True
+                if n == 2:
+                    reasons[(left, right)] = "n=2 is algebraically degenerate: |r|=1 is not substantive evidence"
+    return {
+        "correlation": correlation,
+        "counts": counts,
+        "reasons": reasons,
+        "has_finite_off_diagonal": has_finite_off_diagonal,
+    }
+
+
 def _render_candidate_population_evidence(store_path: str) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
@@ -865,35 +903,44 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
             if name in targets and targets[name].notna().any()
         ]
         if len(component_cols) >= 3:
-            corr = targets[component_cols].apply(pd.to_numeric, errors="coerce").corr(min_periods=2)
-            fig = go.Figure(
-                go.Heatmap(
-                    z=corr.to_numpy(),
-                    x=corr.columns.tolist(),
-                    y=corr.index.tolist(),
-                    zmin=-1,
-                    zmax=1,
-                    colorscale="RdBu",
-                    reversescale=True,
-                    text=np.round(corr.to_numpy(), 2),
-                    texttemplate="%{text}",
+            prepared = _prepare_pairwise_correlation(targets, component_cols)
+            corr = prepared["correlation"]
+            if prepared["has_finite_off_diagonal"]:
+                counts = prepared["counts"]
+                fig = go.Figure(
+                    go.Heatmap(
+                        z=corr.to_numpy(),
+                        x=corr.columns.tolist(),
+                        y=corr.index.tolist(),
+                        zmin=-1,
+                        zmax=1,
+                        colorscale="RdBu",
+                        reversescale=True,
+                        text=np.round(corr.to_numpy(), 2),
+                        texttemplate="%{text}",
+                        customdata=counts.to_numpy(),
+                        hovertemplate="x=%{x}<br>y=%{y}<br>r=%{z:.3f}<br>pair n=%{customdata}<extra></extra>",
+                    )
                 )
-            )
-            fig.update_layout(title="Target score-component correlation", height=440)
-            _render_plot(
-                fig,
-                ScientificExplanation(
-                    question="Which target-score components are redundant, opposed, or unexpectedly disconnected?",
-                    population="Pairwise-complete target proposals for each component pair.",
-                    metric="Pearson correlation coefficient, dimensionless in [-1, 1].",
-                    denominator_masks="Finite pairwise component values; pairwise denominators may differ.",
-                    comparability="Only compare matrices from identical score definitions and target protocols.",
-                    expected_pattern="Components reflect their intended roles without perfect accidental duplication.",
-                    failure_interpretation="Near-perfect correlations suggest redundancy; unexpected signs can expose score wiring errors.",
-                    evidence_role="oracle/evaluation",
-                    source_fields=tuple(f"targets/{name}" for name in component_cols),
-                ),
-            )
+                fig.update_layout(title="Target score-component correlation", height=440)
+                _render_plot(
+                    fig,
+                    ScientificExplanation(
+                        question="Which target-score components are redundant, opposed, or unexpectedly disconnected?",
+                        population="Pairwise-complete target proposals; each heatmap cell reports its own finite pair count.",
+                        metric="Pearson correlation coefficient, dimensionless in [-1, 1]; hover shows pair-local n.",
+                        denominator_masks="Only rows finite for both components enter that pair; ±inf and missing values are excluded.",
+                        comparability="Only compare matrices from identical score definitions and target protocols.",
+                        expected_pattern="Components reflect their intended roles without perfect accidental duplication.",
+                        failure_interpretation="Near-perfect n=2 correlations are algebraically degenerate; sparse or unexpected signs need more evidence.",
+                        evidence_role="oracle/evaluation",
+                        source_fields=tuple(f"targets/{name}" for name in component_cols),
+                    ),
+                )
+            else:
+                st.info(
+                    "Correlation heatmap unavailable: no component pair has at least two finite, non-constant rows."
+                )
 
 
 def _render_candidate_geometry_diagnostics(
