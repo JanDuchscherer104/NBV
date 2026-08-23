@@ -753,6 +753,10 @@ def _corpus_temporal_summary(
         "contract_payload_json",
         "profile",
         "generation_cohort_id",
+        "generation_series_id",
+        "generation_series",
+        "generation_cohort_ids_json",
+        "generation_cohort_payloads_json",
         "policy",
         "temperature",
         "horizon",
@@ -790,6 +794,27 @@ def _corpus_temporal_summary(
         # richer frames retain candidate/rollout lineage explicitly.
         if "generation_cohort_id" not in steps:
             steps["generation_cohort_id"] = contract["id"]
+        if "generation_cohort" not in steps:
+            steps["generation_cohort"] = steps["generation_cohort_id"].map(str)
+        series_by_cohort: dict[str, tuple[str, str]] = {}
+        for cohort_id, cohort_rows in steps.groupby("generation_cohort_id", dropna=False, sort=False):
+            cohort_id = str(_temporal_group_scalar(cohort_id))
+            cohort_json = cohort_rows.get("generation_cohort", pd.Series(dtype=object)).dropna()
+            series_by_cohort[cohort_id] = _scientific_temporal_series_identity(
+                bundle,
+                store_id=str(store["store_id"]),
+                contract=contract,
+                cohort_id=cohort_id,
+                cohort_payload=None if cohort_json.empty else str(cohort_json.iloc[0]),
+            )
+
+        def series_identity(
+            value: object, index: int, mapping: Mapping[str, tuple[str, str]] = series_by_cohort
+        ) -> str:
+            return mapping[str(_temporal_group_scalar(value))][index]
+
+        steps["generation_series_id"] = steps["generation_cohort_id"].map(lambda value: series_identity(value, 0))
+        steps["generation_series"] = steps["generation_cohort_id"].map(lambda value: series_identity(value, 1))
         annotated.append(steps)
     if not annotated:
         return pd.DataFrame(columns=columns)
@@ -802,7 +827,7 @@ def _corpus_temporal_summary(
         "contract",
         "contract_payload_json",
         "profile",
-        "generation_cohort_id",
+        "generation_series_id",
         "policy",
         "temperature",
         "horizon",
@@ -811,7 +836,14 @@ def _corpus_temporal_summary(
     )
     for group_field in groups:
         source[group_field] = source[group_field].map(_temporal_group_scalar)
-    outer_groups = ("contract_id", "contract", "contract_payload_json", "profile", "generation_cohort_id")
+    outer_groups = (
+        "contract_id",
+        "contract",
+        "contract_payload_json",
+        "profile",
+        "generation_series_id",
+        "generation_series",
+    )
     inner_groups = (
         "policy",
         "temperature",
@@ -823,6 +855,11 @@ def _corpus_temporal_summary(
     for outer_key, partition in source.groupby(list(outer_groups), dropna=False, sort=True):
         outer_values = dict(zip(outer_groups, outer_key if isinstance(outer_key, tuple) else (outer_key,), strict=True))
         partition_records = partition.to_dict("records")
+        cohort_ids = sorted({str(value) for value in partition["generation_cohort_id"].dropna()})
+        cohort_payloads = {
+            str(row["generation_cohort_id"]): row.get("generation_cohort")
+            for row in partition[["generation_cohort_id", "generation_cohort"]].drop_duplicates().to_dict("records")
+        }
         store_counts = (
             partition.groupby([*inner_groups, "step_index"], dropna=False, sort=True)["corpus_store_path"]
             .nunique()
@@ -849,6 +886,11 @@ def _corpus_temporal_summary(
             )
             for outer_field, value in outer_values.items():
                 frame[outer_field] = value
+            frame["generation_cohort_id"] = cohort_ids[0] if len(cohort_ids) == 1 else "multiple"
+            frame["generation_cohort_ids_json"] = json.dumps(cohort_ids, separators=(",", ":"))
+            frame["generation_cohort_payloads_json"] = json.dumps(
+                cohort_payloads, sort_keys=True, separators=(",", ":"), default=str
+            )
             frame["store_count"] = frame["store_count"].astype(np.int64)
             frame["iqr_width"] = frame["q75"] - frame["q25"]
             summaries.append(frame.loc[:, columns])
@@ -857,11 +899,83 @@ def _corpus_temporal_summary(
     return (
         pd.concat(summaries, ignore_index=True)
         .sort_values(
-            ["metric", "contract_id", "generation_cohort_id", "policy", "temperature", "horizon", "step_index"],
+            ["metric", "contract_id", "generation_series_id", "policy", "temperature", "horizon", "step_index"],
             kind="stable",
         )
         .reset_index(drop=True)
     )
+
+
+def _scientific_temporal_series_identity(
+    frames: Mapping[str, pd.DataFrame],
+    *,
+    store_id: str,
+    contract: Mapping[str, object],
+    cohort_id: str,
+    cohort_payload: str | None,
+) -> tuple[str, str]:
+    """Build a temporal-series identity while retaining stochastic provenance.
+
+    ``generation_cohort_id`` is deliberately a full provenance identity and
+    may differ for every work-unit seed.  Temporal statistics may pool those
+    cohorts only when the persisted recipe payload is available and agrees
+    after stochastic fields are removed.  Missing recipe evidence therefore
+    fails closed to the full cohort rather than silently pooling unknown
+    configurations.
+    """
+
+    parameters = frames.get("parameters", pd.DataFrame())
+    recipe_rows = parameters[
+        (parameters.get("store_id", pd.Series(dtype=object)) == store_id)
+        & parameters.get("key", pd.Series(dtype=str)).astype(str).str.startswith("writer_config.recipes[")
+    ]
+
+    def scalar(row: pd.Series) -> object:
+        for value_field in ("value_text", "value_float", "value_int", "value_bool"):
+            value = row.get(value_field)
+            if pd.notna(value):
+                return value.item() if isinstance(value, np.generic) else value
+        return None
+
+    def semantic_key(key: str) -> str | None:
+        # Seeds, RNG/work-unit identifiers, and execution-only controls are
+        # provenance, not scientific recipe choices.
+        leaf = key.rsplit(".", 1)[-1].lower()
+        volatile = ("seed", "rng", "random", "work_unit", "sample_key", "store_dir", "path")
+        return None if any(token in leaf for token in volatile) else key
+
+    recipe_payload = {
+        str(row["key"]): scalar(row) for _, row in recipe_rows.iterrows() if semantic_key(str(row["key"])) is not None
+    }
+    cohort_fields: dict[str, object]
+    try:
+        parsed = json.loads(cohort_payload) if cohort_payload else None
+    except (TypeError, json.JSONDecodeError):
+        parsed = None
+    if not recipe_payload or not isinstance(parsed, dict):
+        # Full cohort fallback is the conservative behavior for legacy or
+        # incomplete stores.
+        payload = {"generation_cohort_id": cohort_id, "reason": "recipe_payload_unavailable"}
+    else:
+        cohort_fields = {
+            key: parsed.get(key)
+            for key in (
+                "policy",
+                "horizon",
+                "branch_factor",
+                "beam_width",
+                "temperature",
+                "candidate_config",
+                "branch_schedule",
+            )
+        }
+        payload = {
+            "contract": contract.get("payload", {}),
+            "cohort": cohort_fields,
+            "recipe": recipe_payload,
+        }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16], encoded
 
 
 def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, object]:

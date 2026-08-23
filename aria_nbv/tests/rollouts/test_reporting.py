@@ -414,6 +414,148 @@ def test_corpus_temporal_summary_preserves_generation_cohort_facets(monkeypatch)
     assert set(summary["store_count"]) == {1}
 
 
+def test_corpus_temporal_summary_pools_seed_only_cohorts_and_retains_provenance(monkeypatch) -> None:
+    """Seed-only work units form one statistical series with nonzero IQR."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {
+            "id": "contract",
+            "label": "contract",
+            "profile": profile,
+            "payload": {"profile": profile},
+        },
+    )
+    base = {
+        "step_index": 0,
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "cumulative_target_root_gain": 0.1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+    }
+
+    def bundle(cohort: str, gain: float, seed: int) -> dict[str, pd.DataFrame]:
+        row = {
+            **base,
+            "cumulative_target_root_gain": gain,
+            "generation_cohort_id": cohort,
+            "generation_cohort": json.dumps(
+                {
+                    "policy": "temperature_softmax",
+                    "horizon": 1,
+                    "branch_factor": 1,
+                    "beam_width": 1,
+                    "temperature": 1.0,
+                    "candidate_config": "candidate",
+                    "branch_schedule": "branch",
+                },
+                sort_keys=True,
+            ),
+        }
+        parameters = pd.DataFrame(
+            [
+                {
+                    "store_id": cohort,
+                    "key": "writer_config.recipes[0].policy.seed",
+                    "value_text": str(seed),
+                    "value_float": np.nan,
+                    "value_int": np.nan,
+                    "value_bool": np.nan,
+                },
+                {
+                    "store_id": cohort,
+                    "key": "writer_config.recipes[0].policy.horizon",
+                    "value_text": np.nan,
+                    "value_float": np.nan,
+                    "value_int": 1,
+                    "value_bool": np.nan,
+                },
+            ]
+        )
+        return {"steps": pd.DataFrame([row]), "parameters": parameters}
+
+    summary = reporting._corpus_temporal_summary(
+        [bundle("cohort-a", 0.1, 11), bundle("cohort-b", 0.3, 22)],
+        [
+            {"path": "/a", "store_id": "cohort-a", "profile": "profile"},
+            {"path": "/b", "store_id": "cohort-b", "profile": "profile"},
+        ],
+    )
+
+    gain = summary.loc[summary["metric"] == "cumulative_target_root_gain"].iloc[0]
+    assert gain["generation_cohort_ids_json"] == '["cohort-a","cohort-b"]'
+    assert gain["finite_count"] == 2
+    assert gain["q25"] < gain["q75"]
+    assert gain["generation_series_id"] == summary["generation_series_id"].iloc[0]
+
+
+def test_corpus_temporal_summary_separates_candidate_or_branch_changes(monkeypatch) -> None:
+    """Scientific candidate and branch controls never pool into one series."""
+
+    monkeypatch.setattr(
+        "aria_nbv.rollouts.reporting._persisted_rollout_contract",
+        lambda _frames, _store_id, profile: {"id": "contract", "label": "contract", "profile": profile, "payload": {}},
+    )
+    row = {
+        "step_index": 0,
+        "policy": "temperature_softmax",
+        "temperature": 1.0,
+        "horizon": 1,
+        "branch_factor": 1,
+        "beam_width": 1,
+        "cumulative_target_root_gain": 0.1,
+        "selected_target_root_gain": 0.1,
+        "selected_probability": 1.0,
+        "selected_entropy": 0.0,
+        "cumulative_target_rri": 0.1,
+        "num_valid_candidates": 10,
+        "invalid_fraction": 0.0,
+    }
+
+    def bundle(cohort: str, candidate: str) -> dict[str, pd.DataFrame]:
+        payload = json.dumps(
+            {
+                "policy": "temperature_softmax",
+                "horizon": 1,
+                "branch_factor": 1,
+                "beam_width": 1,
+                "temperature": 1.0,
+                "candidate_config": candidate,
+                "branch_schedule": "branch",
+            },
+            sort_keys=True,
+        )
+        return {
+            "steps": pd.DataFrame([{**row, "generation_cohort_id": cohort, "generation_cohort": payload}]),
+            "parameters": pd.DataFrame(
+                [
+                    {
+                        "store_id": cohort,
+                        "key": "writer_config.recipes[0].policy.horizon",
+                        "value_text": np.nan,
+                        "value_float": np.nan,
+                        "value_int": 1,
+                        "value_bool": np.nan,
+                    }
+                ]
+            ),
+        }
+
+    summary = reporting._corpus_temporal_summary(
+        [bundle("a", "candidate-a"), bundle("b", "candidate-b")],
+        [{"path": "/a", "store_id": "a", "profile": "profile"}, {"path": "/b", "store_id": "b", "profile": "profile"}],
+    )
+    assert summary["generation_series_id"].nunique() == 2
+
+
 def test_contract_additive_totals_match_single_store_baselines() -> None:
     def bundle(rollouts: int, steps: int, candidates: int, bytes_: int) -> dict[str, pd.DataFrame]:
         return {
