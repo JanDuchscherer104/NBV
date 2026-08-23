@@ -211,6 +211,31 @@ def _initial_selection(
     return tuple(initial_ids)
 
 
+def _resolve_selection(
+    *,
+    prompts: Mapping[str, Mapping[str, str]],
+    rubric: Mapping[str, Mapping[str, Any]],
+    selected_ids: tuple[str, ...] | None,
+    all_cases: bool,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """Validate CLI selection and return selected, initial, and corrected IDs."""
+    selected = tuple(prompts) if all_cases else tuple(selected_ids or ())
+    if not selected:
+        raise ValueError("scientific-review selection resolved to zero trial cases")
+    if len(set(selected)) != len(selected):
+        raise ValueError("scientific-review trial IDs must be unique")
+    unknown = sorted(set(selected) - set(prompts))
+    if unknown:
+        raise ValueError(f"unknown scientific-review trial IDs: {unknown}")
+    correction_ids = tuple(
+        trial_id
+        for trial_id in selected
+        if rubric[trial_id]["case_kind"] == "corrected"
+    )
+    initial_ids = _initial_selection(selected, rubric)
+    return selected, initial_ids, correction_ids
+
+
 def validate_scientific_event_evidence(evidence: Any) -> tuple[bool, str]:
     """Use the shared bounded validator with execution evidence optional."""
     return harness.validate_event_evidence(evidence, require_execution_evidence=False)
@@ -652,25 +677,30 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    selected = tuple(args.ids or DEFAULT_TRIAL_IDS)
-    if args.list:
-        print("\n".join(selected))
-        return 0
-    identity = SuiteIdentity(
-        name="scientific-review",
-        dirty_root_message="commit the candidate before scientific-review trials",
-        worktree_prefix="aria-scientific-review-",
-    )
-    rubric = load_rubric()
-    correction_ids = tuple(
-        trial_id
-        for trial_id in selected
-        if rubric.get(trial_id, {}).get("case_kind") == "corrected"
-    )
-    initial_ids = _initial_selection(selected, rubric)
-    if not correction_ids:
-        initial_ids = selected
     try:
+        prompts = load_prompts()
+        rubric = load_rubric()
+        ScientificReviewAdapter().load_fixtures(
+            {
+                PROMPTS_RELATIVE: PROMPTS_PATH.read_bytes(),
+                RUBRIC_RELATIVE: RUBRIC_PATH.read_bytes(),
+            }
+        )
+        requested_ids = tuple(args.ids) if args.ids is not None else DEFAULT_TRIAL_IDS
+        selected, initial_ids, correction_ids = _resolve_selection(
+            prompts=prompts,
+            rubric=rubric,
+            selected_ids=requested_ids,
+            all_cases=args.all,
+        )
+        if args.list:
+            print("\n".join((*initial_ids, *correction_ids)))
+            return 0
+        identity = SuiteIdentity(
+            name="scientific-review",
+            dirty_root_message="commit the candidate before scientific-review trials",
+            worktree_prefix="aria-scientific-review-",
+        )
         output_root = ROOT / ".agents" / "work" / "scientific-review-trials"
         initial = run_suite(
             SuiteSpec(
@@ -706,7 +736,7 @@ def main() -> int:
                 raise ValueError(f"missing persisted original report for {original_id}")
             original_hash = hashlib.sha256(original_report.read_bytes()).hexdigest()
             original_report_hashes[original_id] = original_hash
-            prompt = load_prompts()[original_id]
+            prompt = prompts[original_id]
             links[corrected_id] = resolution_link(
                 original_trial_id=original_id,
                 candidate_hash=candidate_sha256(prompt["candidate"]),

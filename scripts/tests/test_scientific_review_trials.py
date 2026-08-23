@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import sys
 import subprocess
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -38,7 +38,7 @@ def _fixtures() -> tuple[dict[str, dict[str, str]], dict[str, dict[str, Any]]]:
         "resolution_of": None,
         "related_ids": ["finding-corrected"],
     }
-    corrected_rubric = {
+    corrected_rubric: dict[str, Any] = {
         "id": "finding-corrected",
         "case_kind": "corrected",
         "source_id": "finding",
@@ -81,7 +81,7 @@ def test_explicit_zero_match_selection_fails_closed(
     )
 
     with pytest.raises(ValueError, match="resolved to zero trial cases"):
-        harness.run_suite(spec, _EmptyAdapter())
+        harness.run_suite(spec, cast(harness.SuiteAdapter, _EmptyAdapter()))
 
 
 def test_repository_scientific_review_fixtures_load() -> None:
@@ -143,4 +143,35 @@ def test_scientific_review_cli_list_only_is_executable() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "seminar-uncontrolled-ablation-corrected"
+    assert result.stdout.splitlines() == [
+        "seminar-uncontrolled-ablation",
+        "seminar-uncontrolled-ablation-corrected",
+    ]
+
+
+def _run_cli(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "scaffold" / "run_scientific_review_trials.py"),
+            *arguments,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_scientific_review_cli_all_lists_every_fixture() -> None:
+    result = _run_cli("--all", "--list")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == list(trials.DEFAULT_TRIAL_IDS)
+
+
+def test_scientific_review_cli_unknown_id_fails_before_listing() -> None:
+    result = _run_cli("--list", "--id", "not-a-scientific-review-trial")
+
+    assert result.returncode != 0
+    assert "unknown scientific-review trial IDs" in result.stderr
