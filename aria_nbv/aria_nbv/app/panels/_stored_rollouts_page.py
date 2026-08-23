@@ -20,6 +20,29 @@ _SECTIONS = ("Overview", "Reward & reconstruction", "Admission & feasibility", "
 _SECTION_KEY = "stored_rollouts_section"
 
 
+def _render_active_store_scope_boundary(store_path: Path, *, surface: str) -> None:
+    """Make the corpus-to-drill-down scope change explicit before active plots."""
+
+    st.markdown(f"#### Active-store drill-down · {surface}")
+    st.info(
+        "The corpus evidence above aggregates the explicitly selected compatible stores. "
+        f"Everything below is computed only from the active store **{store_path.name}**. "
+        "It is not a corpus aggregate; change the active store selector to inspect another shard."
+    )
+    st.caption(f"Active store full path: `{store_path}`")
+
+
+def _render_target_quality_handoff() -> None:
+    """Point target-quality interpretation to its scientific owner."""
+
+    st.info(
+        "Target-quality scope: this page reports support and outcomes for targets admitted into the stored rollout. "
+        "The immutable admission decision—same-class oriented IoU **strictly > 0.20** with **exactly one** qualifying "
+        "ground-truth match—is owned by Campaign Generation. Use that page for the admission IoU distribution and "
+        "threshold-margin diagnostics; do not interpret stored support as a second admission test."
+    )
+
+
 def render_stored_rollouts_page() -> None:
     """Render corpus summaries and one active-store inspection workflow."""
 
@@ -107,7 +130,9 @@ def render_stored_rollouts_page() -> None:
     if tabs[2].open:
         with tabs[2]:
             overview._render_corpus_admission(corpus_summary)
+            _render_active_store_scope_boundary(store_path, surface="Admission & feasibility")
             if current:
+                _render_target_quality_handoff()
                 validity_support._render_targets_and_support(active_session)
             else:
                 render_stale_store_boundary(
@@ -116,6 +141,7 @@ def render_stored_rollouts_page() -> None:
     if tabs[3].open:
         with tabs[3]:
             overview._render_corpus_failures(corpus_summary)
+            _render_active_store_scope_boundary(store_path, surface="Failures")
             if current:
                 failure_triage._render_failure_triage(active_session)
             else:

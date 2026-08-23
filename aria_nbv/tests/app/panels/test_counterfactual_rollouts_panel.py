@@ -466,6 +466,9 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     app = _set_stored_rollout_workspace(app, "Admission & feasibility")
     assert not app.exception
     assert "Targets and action support" in [subheader.value for subheader in app.subheader]
+    assert any("Active-store drill-down · Admission & feasibility" in item.value for item in app.markdown)
+    assert any("Active store full path:" in item.value for item in app.caption)
+    assert any("strictly > 0.20" in item.value and "exactly one" in item.value for item in app.info)
     assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
     assert "Download mask combinations CSV" in {button.label for button in app.get("download_button")}
     assert any(toggle.label == "Load complete candidate aggregate breakdowns" for toggle in app.toggle)
@@ -474,6 +477,8 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     app = _set_stored_rollout_workspace(app, "Failures")
     assert not app.exception
     assert "Active-store failure detail" in [subheader.value for subheader in app.subheader]
+    assert any("Active-store drill-down · Failures" in item.value for item in app.markdown)
+    assert any("It is not a corpus aggregate" in item.value for item in app.info)
     assert "Minimum valid fanout" in {item.label for item in app.number_input}
     assert "Dominant invalidity fraction" in {item.label for item in app.slider}
 
