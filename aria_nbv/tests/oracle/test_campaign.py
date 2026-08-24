@@ -26,6 +26,7 @@ from aria_nbv.oracle.pipelines.campaign import (
     CudaRolloutCampaign,
     CudaRolloutCampaignConfig,
     GenerationRevision,
+    bounded_scene_stratified_plan,
 )
 from aria_nbv.oracle.pipelines.rollout_dataset import (
     RolloutDatasetWriter,
@@ -404,6 +405,15 @@ def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineag
     assert entry.source_manifest_hash == "canonical-source"
     assert entry.rows[0].source_shard_id == unit.source_row_payload["source_shard_id"]
     assert entry.rows[0].source_shard_row == unit.source_row_payload["source_shard_row"]
+
+    bounded = bounded_scene_stratified_plan(plan, scenes_per_split=1)
+    repeated = bounded_scene_stratified_plan(plan, scenes_per_split=1)
+    assert bounded.to_jsonable() == repeated.to_jsonable()
+    assert len(bounded.work_units) == 3
+    assert [unit.campaign_split for unit in bounded.work_units] == ["train", "validation", "test"]
+    assert len({unit.source_row_payload["scene_id"] for unit in bounded.work_units}) == 3
+    assert bounded.plan_hash != plan.plan_hash
+    assert CudaRolloutCampaign.load_plan(campaign.write_plan(bounded, tmp_path / "bounded-plan.json")) == bounded
 
 
 def test_corrected_v10_pilot_has_fresh_identity_and_unchanged_paired_contract():
