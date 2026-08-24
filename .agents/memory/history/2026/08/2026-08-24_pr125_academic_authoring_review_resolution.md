@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 8f74f1183dbb09b00900cf66bd6225dba6039959
+repo_head: 3e61fb34c2c17083a58c3c44d68d2d53ab0fd790
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -70,6 +70,8 @@ duplicating it in all three skills.
   its blocking, advisory, or clear finding gate.
 - Subject cleanup removes only the exact linked-worktree registry entry; a
   sibling-worktree regression proves unrelated registrations survive.
+- Baseline evidence includes ignored files, and proof compares every rendered
+  PNG page identity with Poppler's bounded PDF page count.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -79,6 +81,7 @@ duplicating it in all three skills.
 - [6f7d170b9b88607a333a4de00bccb58c3abb06d1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6f7d170b9b88607a333a4de00bccb58c3abb06d1) — implementation: enforce authoring routing evidence
 - [a76cef4590579f46dff29e59c398529ab9443765](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a76cef4590579f46dff29e59c398529ab9443765) — implementation: close routing review gaps
 - [8f74f1183dbb09b00900cf66bd6225dba6039959](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8f74f1183dbb09b00900cf66bd6225dba6039959) — implementation: preserve sibling worktree registrations
+- [3e61fb34c2c17083a58c3c44d68d2d53ab0fd790](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3e61fb34c2c17083a58c3c44d68d2d53ab0fd790) — implementation: close routing evidence escapes
 
 ## Verification
 
