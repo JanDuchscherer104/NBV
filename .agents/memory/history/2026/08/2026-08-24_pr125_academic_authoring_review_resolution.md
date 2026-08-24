@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 6393da2cae8f4e911f8f86bf5a2d851b67d0bf25
+repo_head: 9f08d5586d8455642dfdc51bfdf8445203e533cb
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -77,6 +77,12 @@ duplicating it in all three skills.
   evaluator's absolute fixture path cannot be read.
 - The sandbox builder accepts an injected test auth file, keeping its
   production auth requirement while allowing credential-free CI validation.
+- Bubblewrap execution probes are conditional on a host Bubblewrap binary;
+  every environment still checks the immutable-schema sandbox command shape.
+- The trial report schema is mounted read-only outside the model-writable
+  receipt, trial receipts are checked against that canonical schema before
+  adjudication, and verifier stdout/stderr now have the same bounded capture
+  and fail-closed overflow behavior as subject execution.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -89,6 +95,7 @@ duplicating it in all three skills.
 - [3e61fb34c2c17083a58c3c44d68d2d53ab0fd790](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3e61fb34c2c17083a58c3c44d68d2d53ab0fd790) — implementation: close routing evidence escapes
 - [e2348b3091932c882e7d8c55b447e86c5db78388](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e2348b3091932c882e7d8c55b447e86c5db78388) — implementation: isolate routing trial subjects
 - [6393da2cae8f4e911f8f86bf5a2d851b67d0bf25](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6393da2cae8f4e911f8f86bf5a2d851b67d0bf25) — test: make routing isolation portable
+- [9f08d5586d8455642dfdc51bfdf8445203e533cb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9f08d5586d8455642dfdc51bfdf8445203e533cb) — implementation: bound and validate routing receipts
 
 ## Verification
 
@@ -98,6 +105,8 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py scripts/tests/test_agent_governance_g002.py scripts/tests/test_scientific_review_trials.py` — 90 passed, 51 subtests passed.
 - The three modified skills passed the skill validator.
 - `git diff --check` and routing fixture JSON/JSONL parsing passed.
+- `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 47 passed, including real local Bubblewrap probes.
+- CI-equivalent scaffold verification with pytest supplied by `uv` — 92 passed; agent-status, governance, Graphify, and worktree setup checks passed.
 
 ## Canonical Owner Impact
 
