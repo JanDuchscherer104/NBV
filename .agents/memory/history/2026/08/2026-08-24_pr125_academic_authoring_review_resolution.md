@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 3e61fb34c2c17083a58c3c44d68d2d53ab0fd790
+repo_head: e2348b3091932c882e7d8c55b447e86c5db78388
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -72,6 +72,9 @@ duplicating it in all three skills.
   sibling-worktree regression proves unrelated registrations survive.
 - Baseline evidence includes ignored files, and proof compares every rendered
   PNG page identity with Poppler's bounded PDF page count.
+- Bubblewrap mounts only the sanitized subject, a separate receipt directory,
+  system runtime files, and the Codex auth file; its regression proves the
+  evaluator's absolute fixture path cannot be read.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -82,6 +85,7 @@ duplicating it in all three skills.
 - [a76cef4590579f46dff29e59c398529ab9443765](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a76cef4590579f46dff29e59c398529ab9443765) — implementation: close routing review gaps
 - [8f74f1183dbb09b00900cf66bd6225dba6039959](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8f74f1183dbb09b00900cf66bd6225dba6039959) — implementation: preserve sibling worktree registrations
 - [3e61fb34c2c17083a58c3c44d68d2d53ab0fd790](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3e61fb34c2c17083a58c3c44d68d2d53ab0fd790) — implementation: close routing evidence escapes
+- [e2348b3091932c882e7d8c55b447e86c5db78388](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e2348b3091932c882e7d8c55b447e86c5db78388) — implementation: isolate routing trial subjects
 
 ## Verification
 
