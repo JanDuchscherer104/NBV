@@ -1066,10 +1066,10 @@ equations:
     description: ''
     thesis_list: false
     order: 9999
-  model.qh_candidate_state_cross_attention:
-    tex: '\boldsymbol{u}_{t,i}=\operatorname{CrossAttn}_{\theta}(\boldsymbol{x}_{t,i},\{\boldsymbol{h}_e^{\mathrm{tgt}},\boldsymbol{\Phi}_t^{\mathrm{scene}},\boldsymbol{H}_t,\operatorname{Emb}(t),\operatorname{Emb}(H),\boldsymbol{b}_t\})'
-    typst: '#eqs.model.qh_candidate_state_cross_attention'
-    description: ''
+  model.qh_state_fusion_controls:
+    tex: '\boldsymbol{Z}_t=(\boldsymbol{\Phi}_t^{\mathrm{scene}},\boldsymbol{h}_e^{\mathrm{tgt}},\boldsymbol{h}_t^{\mathrm{hist}},\operatorname{Emb}(b_t/H_{\max}),\operatorname{Emb}(h/H_{\max})),\quad \boldsymbol{c}_{t,i}^{\mathrm{A0}}=\operatorname{MLP}_{\mathrm{A0}}([\boldsymbol{x}_{t,i};\operatorname{vec}(\boldsymbol{Z}_t)]),\quad \boldsymbol{c}_{t,i}^{\mathrm{A1}}=\operatorname{CrossAttn}_{\mathrm{A1}}(\boldsymbol{x}_{t,i},\boldsymbol{Z}_t,\boldsymbol{Z}_t)'
+    typst: '#eqs.model.qh_state_fusion_controls'
+    description: 'Feature-matched independent-row MLP and candidate-to-state attention controls.'
     thesis_list: false
     order: 9999
   rl.candidate_mask_isolation:

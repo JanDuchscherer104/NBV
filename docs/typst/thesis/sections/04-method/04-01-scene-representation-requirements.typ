@@ -57,7 +57,7 @@ The selected-pose history $bold(H)_t$ remains explicit unless a promoted memory 
     toprule(),
     table.header([*State protocol*], [*Dynamic evidence*], [*Interpretation*]),
     midrule(),
-    [`S0-pose`], [selected poses only], [Implemented A1 root-moments control over replay tensors; not a complete reconstruction state.],
+    [`S0-pose`], [selected poses only], [Implemented feature-matched A0/A1 root-moments controls over replay tensors; not a complete reconstruction state.],
     [`S1-points`], [causally fused selected surface points], [Minimum geometry-updated counterfactual state; does not distinguish observed free from unknown space.],
     [`S2-ray`], [surface, free, unknown, support, recency], [Canonical planned dynamic state for candidate-frustum and target-support queries.],
     [Privileged / sensor-like / actor-visible], [source tag on selected observations], [Orthogonal information protocol: privileged mesh depth, declared sensor-like simulation, or actor-visible observation.],

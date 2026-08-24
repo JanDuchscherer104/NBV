@@ -78,19 +78,31 @@
       bold(m)_t
     )
   $,
-  qh_candidate_state_cross_attention: $
-    bold(u)_(t,i)
-    =
-    op("CrossAttn")_theta (
+  qh_state_fusion_controls: $
+    bold(Z)_t
+    &=
+    (
+      #symb.scene.scene_memory_t,
+      #symb.model.target_token,
+      bold(h)_t^"hist",
+      op("Emb") (#symb.rl.budget / #symb.rl.H_max),
+      op("Emb") (#symb.rl.requested_horizon / #symb.rl.H_max)
+    ) \
+    bold(c)_(t,i)^"A0"
+    &=
+    op("MLP")_"A0" (
+      op("concat") (#symb.model.candidate_row, op("vec")(bold(Z)_t))
+    ) \
+    bold(c)_(t,i)^"A1"
+    &=
+    op("CrossAttn")_"A1" (#symb.model.candidate_row, bold(Z)_t, bold(Z)_t) \
+    #symb.rl.candidate_token^"Ak"
+    &=
+    op("concat") (
       #symb.model.candidate_row,
-      {
-        #symb.model.target_token,
-        #symb.scene.scene_memory_t,
-        bold(H)_t,
-        op("Emb") (t),
-        op("Emb") (#symb.rl.H),
-        bold(b)_t
-      }
-    )
+      bold(c)_(t,i)^"Ak",
+      #symb.model.candidate_row dot bold(c)_(t,i)^"Ak"
+    ),
+    quad "Ak" in {"A0", "A1"}
   $,
 )
