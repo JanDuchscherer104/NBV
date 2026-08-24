@@ -219,6 +219,29 @@ class QhCoralValueDecoder(nn.Module):
         self.register_buffer("bin_edges", torch.tensor(config.bin_edges, dtype=torch.float32), persistent=True)
         self.register_buffer("bin_values", torch.tensor(config.bin_values, dtype=torch.float32), persistent=True)
 
+    def validate_configured_support(self) -> None:
+        """Reject persisted ordinal support that disagrees with configuration.
+
+        ``bin_edges`` and ``bin_values`` are persistent buffers because they
+        helped define the training labels and the scalar decode, respectively.
+        Loading a same-shaped state dictionary can otherwise overwrite support
+        constructed from the manifest without a PyTorch shape error. Bundle
+        publication, warm start, and inference therefore call this method
+        after reconstruction or state loading so the manifest-advertised
+        ordinal experiment remains identical to the executable decoder.
+        """
+
+        expected_edges = torch.tensor(self.config.bin_edges, dtype=self.bin_edges.dtype, device=self.bin_edges.device)
+        expected_values = torch.tensor(
+            self.config.bin_values,
+            dtype=self.bin_values.dtype,
+            device=self.bin_values.device,
+        )
+        if not torch.equal(self.bin_edges, expected_edges):
+            raise ValueError("Persisted CORAL Q bin edges do not match the scorer configuration.")
+        if not torch.equal(self.bin_values, expected_values):
+            raise ValueError("Persisted CORAL Q bin values do not match the scorer configuration.")
+
     def forward(self, features: Tensor) -> QhDecodedValue:
         r"""Return ordinal logits and their continuous conditional-Q expectation.
 

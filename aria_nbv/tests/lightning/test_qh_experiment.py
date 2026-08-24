@@ -149,6 +149,7 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
         ],
         check=True,
         capture_output=True,
+        cwd=Path(__file__).parents[2],
         text=True,
     )
     assert probe.stdout.strip() == str(expected_rank.tolist())
@@ -195,6 +196,48 @@ def test_qh_coral_bundle_round_trip_preserves_support_thresholds_and_ranking(tmp
         actual.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1),
         expected_rank,
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "message"),
+    [
+        ("bin_edges", [-0.25, 0.75], "bin edges"),
+        ("bin_values", [-2.0, 0.0, 2.0], "bin values"),
+    ],
+)
+def test_qh_coral_bundle_rejects_manifest_support_drift_with_unchanged_state(
+    tmp_path,
+    field: str,
+    replacement: list[float],
+    message: str,
+) -> None:
+    experiment = _coral_experiment()
+    module_config, identity = _publish_contracts(experiment)
+    bundle_dir = tmp_path / "coral-bundle"
+    bundle_dir.mkdir()
+    manifest = experiment._publish_bundle(  # noqa: SLF001
+        bundle_dir,
+        experiment.config.scorer.setup_target(),
+        module_config=module_config,
+        identity=identity,
+        artifact_hashes=_stub_artifacts(bundle_dir),
+    )
+    manifest["scorer_config"]["value_decoder"][field] = replacement
+    scorer_config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])
+    manifest["scorer_config_hash"] = stable_config_hash(scorer_config, length=64)
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    (bundle_dir / "manifest.json").write_text(
+        json.dumps(manifest, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    tampered_ref = QhInferenceBundleRef(
+        bundle_path=bundle_dir,
+        schema_version=QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
+        manifest_sha256=manifest["manifest_sha256"],
+    )
+
+    with pytest.raises(ValueError, match=message):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
 def test_qh_bundle_detects_manifest_and_state_mutation(tmp_path) -> None:

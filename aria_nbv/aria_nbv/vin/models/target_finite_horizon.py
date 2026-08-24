@@ -49,6 +49,7 @@ from ...utils import TargetConfig
 from ..encoders import R6dLffPoseEncoder, R6dLffPoseEncoderConfig
 from ..modules.qh_value_decoders import (
     QhCoralAuxiliary,
+    QhCoralValueDecoder,
     QhRegressionValueDecoderConfig,
     QhValueDecoderConfig,
 )
@@ -258,6 +259,20 @@ class TargetFiniteHorizonScorer(nn.Module):
             hidden_dim=hidden_dim,
             dropout=float(config.dropout),
         )
+
+    def validate_value_decoder_state(self) -> None:
+        """Validate non-learned decoder state against scorer configuration.
+
+        Learned weights may vary while the scorer configuration stays fixed,
+        but CORAL edges and representatives are experiment identity: they
+        determine supervision labels and convert ordinal mass back into the
+        continuous units used by Bellman backup and policy ranking. This hook
+        gives bundle owners one decoder-agnostic validation seam and leaves
+        direct regression as the no-extra-state baseline.
+        """
+
+        if isinstance(self.value_decoder, QhCoralValueDecoder):
+            self.value_decoder.validate_configured_support()
 
     def forward(
         self,
