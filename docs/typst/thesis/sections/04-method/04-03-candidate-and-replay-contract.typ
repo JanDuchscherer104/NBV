@@ -52,6 +52,15 @@ $
 
 where $x_t$ is the current reference pose, $bold(H)_t$ the selected-pose history, $b_t$ the remaining budget, and $xi_t$ the deterministic generation context. The next candidate table is regenerated around the selected pose under the same target task, history constraints, and versioned generator configuration.
 
+Proposal and action-selection randomness use separate deterministic streams.
+The proposal stream is keyed by the campaign proposal root, the ordered
+full-shell indices of previously selected actions, and an explicit proposal
+replica. It excludes transient frontier and beam indices. Consequently,
+reordering retained trajectories does not change the candidate table for the
+same replay state, while changing the replica yields an independent shell
+without perturbing action-selection randomness. Selection uses a distinct
+recipe seed keyed by the same selected-action history.
+
 This transition is deliberately a replay-control transition, not yet a complete reconstruction-state update. It changes pose, selected-pose history, budget, lineage, and action support. It does not imply that the actor has received a new RGB observation, recomputed EFM3D field, or fused the selected depth into a spatial memory. Any implementation that consumes only these fields must be labelled `S0-pose`.
 
 The persisted factual tables retain source and target identity, lineage hashes, step order, selected rows, masks, reasons, sampler provenance, rewards, selected-depth calibration, and support diagnostics. The derived `q_h/` view right-pads states, stores one-step and target-root-gain labels, and exposes only the factual selected transition needed for a temporal-difference backup. It does not create counterfactual labels for unselected actions or make privileged selected depth actor-visible.

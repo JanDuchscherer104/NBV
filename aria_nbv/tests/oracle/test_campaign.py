@@ -110,7 +110,7 @@ def test_campaign_plan_persists_split_and_seed_lineage(tmp_path):
     unit = plan.work_units[0]
     assert plan.to_jsonable()["schema_version"] == CAMPAIGN_PLAN_SCHEMA_VERSION
     assert unit.campaign_split == unit.scene_split == "train"
-    assert unit.seed_lineage and set(unit.seed_lineage) == {"unit", "recipe"}
+    assert unit.seed_lineage and set(unit.seed_lineage) == {"unit", "proposal", "recipe"}
 
 
 def test_reviewed_profile_components_and_worker_json(tmp_path):
@@ -2217,6 +2217,8 @@ def test_pilot_adaptation_emits_four_ordered_myopic_recipes(tmp_path):
         profile_hash=plan.work_units[0].profile_hash,
     )
     assert [recipe.policy.selection_temperature for recipe in adapted.recipes] == [0.5, 1.0, 2.0, 4.0]
+    assert {recipe.policy.proposal_seed for recipe in adapted.recipes} == {plan.work_units[0].seed_lineage["proposal"]}
+    assert {recipe.policy.seed for recipe in adapted.recipes} == {plan.work_units[0].seed_lineage["recipe"]}
     assert [
         (recipe.policy.horizon, recipe.policy.branch_factor, recipe.policy.beam_width) for recipe in adapted.recipes
     ] == [

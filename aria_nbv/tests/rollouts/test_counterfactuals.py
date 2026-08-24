@@ -64,7 +64,11 @@ from aria_nbv.rollouts import (
     CounterfactualTrajectory,
     RolloutPolicySpec,
 )
-from aria_nbv.rollouts.replay.policy import CounterfactualSelectionPolicy
+from aria_nbv.rollouts.replay.policy import (
+    CounterfactualSelectionPolicy,
+    derive_candidate_seed,
+    derive_selection_seed,
+)
 from aria_nbv.rollouts.trace import PolicyLineage, RolloutLineage, SourceLineage
 from aria_nbv.targets import TargetDescriptor
 from aria_nbv.utils.data_plotting import get_frustum_segments
@@ -77,6 +81,17 @@ def _identity_pose(device: torch.device | str = "cpu") -> PoseTW:
             device=device,
         )
     )
+
+
+def test_proposal_and_selection_streams_are_state_keyed_and_independent() -> None:
+    state_path = (7, 3)
+
+    proposal = derive_candidate_seed(11, state_path, proposal_replica=0)
+
+    assert proposal == derive_candidate_seed(11, state_path, proposal_replica=0)
+    assert proposal != derive_candidate_seed(11, state_path, proposal_replica=1)
+    assert proposal != derive_candidate_seed(11, (3, 7), proposal_replica=0)
+    assert proposal != derive_selection_seed(11, state_path)
 
 
 def _dummy_camera(device: torch.device | str = "cpu") -> CameraTW:
@@ -712,6 +727,14 @@ def test_rollout_engine_accepts_minimal_candidate_scores() -> None:
 
     assert rollouts.score_label == "minimal_scores"
     assert all(trajectory.steps[0].selection_score_label == "minimal_scores" for trajectory in rollouts.trajectories)
+    candidates = rollouts.trajectories[0].steps[0].candidates
+    assert torch.equal(
+        candidates.extras["proposal_sequence_index"],
+        torch.arange(candidates.mask_valid.numel(), dtype=torch.int64, device=candidates.mask_valid.device),
+    )
+    assert torch.equal(
+        candidates.extras["proposal_replica"], torch.zeros_like(candidates.mask_valid, dtype=torch.int64)
+    )
 
 
 def _expected_frustum_trace(cam: CameraTW, pose: PoseTW, *, scale: float) -> np.ndarray:

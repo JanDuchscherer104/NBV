@@ -17,7 +17,7 @@ from pydantic_settings import SettingsConfigDict
 
 from ...utils import BaseConfig
 
-SEED_DERIVATION_RULE = "sha256-json-v1"
+SEED_DERIVATION_RULE = "sha256-json-v2-state-streams"
 
 
 def derive_rollout_seed(*parts: object) -> int:
@@ -38,16 +38,28 @@ def derive_recipe_seed(campaign_id: str, work_unit_hash: str, recipe_name: str, 
     return derive_rollout_seed("recipe", campaign_id, work_unit_hash, recipe_name, float(temperature))
 
 
-def derive_candidate_seed(recipe_seed: int, step_index: int, branch_path: tuple[int, ...] = ()) -> int:
-    """Derive candidate-generation seed for one replay node."""
+def derive_candidate_seed(
+    proposal_seed: int,
+    state_path: tuple[int, ...] = (),
+    *,
+    proposal_replica: int = 0,
+) -> int:
+    """Derive a proposal seed from physical selected-shell history.
 
-    return derive_rollout_seed("candidate", int(recipe_seed), int(step_index), tuple(branch_path))
+    ``state_path`` contains selected full-shell indices from the root to the
+    node. It intentionally excludes frontier or beam indices, so reordering
+    retained trajectories cannot change the candidate table for a state.
+    ``proposal_replica`` requests an independent, reproducible shell for the
+    same state without changing action-selection randomness.
+    """
+
+    return derive_rollout_seed("proposal", int(proposal_seed), tuple(state_path), int(proposal_replica))
 
 
-def derive_selection_seed(recipe_seed: int, step_index: int, branch_path: tuple[int, ...] = ()) -> int:
-    """Derive selection seed for one replay node."""
+def derive_selection_seed(selection_seed: int, state_path: tuple[int, ...] = ()) -> int:
+    """Derive action-selection randomness independently of proposal draws."""
 
-    return derive_rollout_seed("selection", int(recipe_seed), int(step_index), tuple(branch_path))
+    return derive_rollout_seed("selection", int(selection_seed), tuple(state_path))
 
 
 def derive_component_seed(node_seed: int, component_identity: str) -> int:
@@ -115,7 +127,13 @@ class RolloutPolicySpec(BaseConfig):
     """Prefer distinct candidate strategy families among sibling branches."""
 
     seed: int | None = Field(default=0, ge=0)
-    """Seed used once for deterministic policy sampling; ``None`` is unseeded."""
+    """Root seed for action selection; ``None`` uses zero for deterministic replay."""
+
+    proposal_seed: int | None = Field(default=None, ge=0)
+    """Independent proposal-stream root; ``None`` falls back to ``seed`` for compatibility."""
+
+    proposal_replica: int = Field(default=0, ge=0)
+    """Independent candidate-shell replica for the same physical rollout state."""
 
     @model_validator(mode="after")
     def _validate_branch_controls(self) -> "RolloutPolicySpec":
