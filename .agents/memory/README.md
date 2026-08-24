@@ -22,10 +22,10 @@ metadata; it is not a narrative owner.
 - Eligible tasks should leave a debrief in `history/YYYY/MM/`.
 - If a task changes current truth, update its exact canonical owner selected by
   `.agents/skills/aria-nbv-context/SKILL.md#owner-hierarchy`.
-- Architect and critic review outputs remain session-local. Capture only their
-  accepted durable decisions in the relevant Typst, code/config/test, setup, or
-  guidance owner; put actionable work in the agents DB and a bounded task
-  summary in `history/`.
+- Raw session-local review outputs belong under the ignored `.omx/reviews/`
+  runtime root. Capture only their accepted durable decisions in the relevant
+  Typst, code/config/test, setup, or guidance owner; put actionable work in the
+  agents DB and a bounded task summary in `history/`.
 - If a task does not change current truth, say so explicitly in the debrief instead of silently relying on chat history.
 
 ## Debrief Contract
