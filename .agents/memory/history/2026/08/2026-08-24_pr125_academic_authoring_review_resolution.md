@@ -29,7 +29,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 6f7d170b9b1f5349553f4041c65ecb1a113a58b8
+repo_head: 6f7d170b9b88607a333a4de00bccb58c3abb06d1
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -66,8 +66,8 @@ duplicating it in all three skills.
 
 ## Commits
 
-- [6c1669ac1d78f76a959966c74e2b6bf54d6862b5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6c1669ac1d78f76a959966c74e2b6bf54d6862b5) — implementation: compose academic authoring phases
-- [6f7d170b9b1f5349553f4041c65ecb1a113a58b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6f7d170b9b1f5349553f4041c65ecb1a113a58b8) — implementation: enforce authoring routing evidence
+- [6c1669ac1d4c7367148a481fcbf88b625135d903](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6c1669ac1d4c7367148a481fcbf88b625135d903) — implementation: compose academic authoring phases
+- [6f7d170b9b88607a333a4de00bccb58c3abb06d1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6f7d170b9b88607a333a4de00bccb58c3abb06d1) — implementation: enforce authoring routing evidence
 
 ## Verification
 
