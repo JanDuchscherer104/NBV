@@ -156,6 +156,7 @@ def _trial_report() -> dict[str, object]:
             "baseline_head": "baseline",
             "head_after": "baseline",
             "required_changed_path_prefixes": [],
+            "required_changed_paths": [],
             "typst_proof": None,
             "changed_paths": [],
         },
@@ -364,7 +365,6 @@ def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) ->
     command = trials._build_codex_command(
         checkout=tmp_path,
         output_schema=trials.REPORT_SCHEMA,
-        output_report=tmp_path / "model.json",
         model="test-model",
         effort="high",
         proxy_url=ROUTING_PROXY_URL,
@@ -439,15 +439,12 @@ def test_broker_socket_relay_fails_closed_without_socat(
 
 def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> None:
     checkout = tmp_path / "checkout"
-    receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
-    receipt_dir.mkdir()
     command = trials._sandboxed_codex_command(
         # This is a portable command-shape test.  The Codex runtime mount has
         # its own Bubblewrap integration coverage below when both tools exist.
         codex_command=["/usr/bin/true"],
         checkout=checkout,
-        receipt_dir=receipt_dir,
         broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
@@ -455,21 +452,18 @@ def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> Non
 
     assert str(trials.REPORT_SCHEMA) in command
     assert "/schema/routing_trial_report.schema.json" in command
-    assert str(receipt_dir / trials.REPORT_SCHEMA.name) not in command
+    assert "/receipt" not in command
     assert "/codex-home/auth.json" not in command
 
 
 @pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
 def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
     checkout = tmp_path / "checkout"
-    receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
-    receipt_dir.mkdir()
     evaluator_fixture = ROOT / trials.RUBRIC_RELATIVE
     command = trials._sandboxed_codex_command(
         codex_command=["/usr/bin/test", "!", "-e", str(evaluator_fixture)],
         checkout=checkout,
-        receipt_dir=receipt_dir,
         broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
@@ -489,13 +483,10 @@ def test_subject_sandbox_mounts_each_schema_at_its_declared_path(
     tmp_path: Path, schema_path: Path, sandbox_path: str
 ) -> None:
     checkout = tmp_path / "checkout"
-    receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
-    receipt_dir.mkdir()
     command = trials._sandboxed_codex_command(
         codex_command=["/usr/bin/test", "-f", sandbox_path],
         checkout=checkout,
-        receipt_dir=receipt_dir,
         broker_socket=tmp_path / "proxy.sock",
         schema_path=schema_path,
         sandbox=trials.READ_ONLY_SANDBOX,
@@ -507,13 +498,10 @@ def test_subject_sandbox_mounts_each_schema_at_its_declared_path(
 @pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
 def test_subject_sandbox_does_not_expose_codex_auth(tmp_path: Path) -> None:
     checkout = tmp_path / "checkout"
-    receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
-    receipt_dir.mkdir()
     command = trials._sandboxed_codex_command(
         codex_command=["/usr/bin/test", "!", "-e", "/codex-home/auth.json"],
         checkout=checkout,
-        receipt_dir=receipt_dir,
         broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
@@ -525,13 +513,10 @@ def test_subject_sandbox_does_not_expose_codex_auth(tmp_path: Path) -> None:
 @pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
 def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
     checkout = tmp_path / "checkout"
-    receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
-    receipt_dir.mkdir()
     command = trials._sandboxed_codex_command(
         codex_command=["codex", "--version"],
         checkout=checkout,
-        receipt_dir=receipt_dir,
         broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
@@ -550,11 +535,12 @@ def test_workspace_write_contract_requires_source_change_and_typst_proof() -> No
         {
             "execution_mode": trials.WORKSPACE_WRITE_SANDBOX,
             "required_changed_path_prefixes": ["docs/typst/thesis/"],
+            "required_changed_paths": ["docs/typst/thesis/main.typ"],
             "typst_proof": True,
         }
     )
     assert contract["sandbox"] == trials.WORKSPACE_WRITE_SANDBOX
-    with pytest.raises(ValueError, match="require a source path and Typst proof"):
+    with pytest.raises(ValueError, match="require exact source paths and Typst proof"):
         trials.execution_contract({"execution_mode": trials.WORKSPACE_WRITE_SANDBOX})
 
 
@@ -690,7 +676,8 @@ def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
         "baseline_head": "baseline",
         "head_after": "baseline",
         "required_changed_path_prefixes": ["docs/typst/thesis/"],
-        "changed_paths": ["docs/typst/thesis/sections/01-research-questions.typ"],
+        "required_changed_paths": ["docs/typst/thesis/main.typ"],
+        "changed_paths": ["docs/typst/thesis/main.typ"],
         "typst_proof": {"passed": True},
     }
     report["adjudication"] = {"passed": True}
@@ -706,7 +693,8 @@ def test_trial_rejects_committed_or_out_of_scope_workspace_changes() -> None:
         "baseline_head": "baseline",
         "head_after": "baseline",
         "required_changed_path_prefixes": ["docs/typst/thesis/"],
-        "changed_paths": ["docs/typst/thesis/sections/01-research-questions.typ"],
+        "required_changed_paths": ["docs/typst/thesis/main.typ"],
+        "changed_paths": ["docs/typst/thesis/main.typ"],
         "typst_proof": {"passed": True},
     }
     report["adjudication"] = {"passed": True}
@@ -1134,26 +1122,43 @@ def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
     assert payload["rubric_commit"] == "rubric"
 
 
-def test_read_trial_response_bounds_and_marks_invalid_schema(tmp_path: Path) -> None:
-    response_path = tmp_path / "trial-response.json"
-    response_path.write_bytes(b'{"outcome":"kept"}')
-    response, valid = trials.read_trial_response(response_path)
+def test_event_receipt_requires_a_terminal_turn(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {"type": "item.completed", "item": {"type": "agent_message", "text": "{}"}}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
-    assert response["content"] == '{"outcome":"kept"}'
-    assert response["truncated"] is False
-    assert valid is False
+    assert trials.read_last_agent_message(events) == (None, False)
 
 
-def test_trial_response_reader_rejects_a_symlink(tmp_path: Path) -> None:
-    outside = tmp_path / "outside.json"
-    outside.write_text('{"untrusted":"outside"}', encoding="utf-8")
-    response_path = tmp_path / "trial-response.json"
-    response_path.symlink_to(outside)
+def test_event_receipt_rejects_tool_activity_after_final_message(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "item.completed",
+                    "item": {"type": "agent_message", "text": "{}"},
+                },
+                {
+                    "type": "item.completed",
+                    "item": {"type": "command_execution", "command": "touch later"},
+                },
+                {"type": "turn.completed"},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
-    response, valid = trials.read_trial_response(response_path)
-
-    assert response["content"] != outside.read_text(encoding="utf-8")
-    assert valid is False
+    assert trials.read_last_agent_message(events) == (None, False)
 
 
 def test_trial_response_validation_requires_the_canonical_schema() -> None:
@@ -1315,6 +1320,8 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
                         "item": {"type": "agent_message", "text": json.dumps(verdict)},
                     }
                 )
+                + "\n"
+                + json.dumps({"type": "turn.completed"})
                 + "\n",
                 encoding="utf-8",
             )
@@ -1371,7 +1378,9 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
                         "text": "x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1),
                     },
                 }
-            ),
+            )
+            + "\n"
+            + json.dumps({"type": "turn.completed"}),
             encoding="utf-8",
         )
         return _bounded_process_result()

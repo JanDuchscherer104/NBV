@@ -403,7 +403,6 @@ def _build_codex_command(
     *,
     checkout: Path,
     output_schema: Path,
-    output_report: Path | None,
     model: str | None,
     effort: str | None,
     proxy_url: str,
@@ -433,11 +432,6 @@ def _build_codex_command(
             "requires_openai_auth=false}"
         ),
     ]
-    if output_report is not None:
-        command[command.index("-C") : command.index("-C")] = [
-            "--output-last-message",
-            str(output_report),
-        ]
     if model:
         command.extend(["--model", model])
     if effort:
@@ -540,7 +534,6 @@ def _sandboxed_codex_command(
     *,
     codex_command: list[str],
     checkout: Path,
-    receipt_dir: Path | None,
     broker_socket: Path,
     schema_path: Path,
     sandbox: str,
@@ -571,9 +564,6 @@ def _sandboxed_codex_command(
             str(runtime_root),
             "/opt/codex",
         ]
-    receipt_mount = (
-        ["--bind", str(receipt_dir), "/receipt"] if receipt_dir is not None else []
-    )
     relay_command = [
         "/bin/sh",
         "-ec",
@@ -642,7 +632,6 @@ def _sandboxed_codex_command(
         subject_bind,
         str(checkout),
         "/workspace",
-        *receipt_mount,
         "--chdir",
         "/workspace",
         *relay_command,
@@ -655,22 +644,30 @@ def execution_contract(rubric: dict[str, Any]) -> dict[str, Any]:
     if sandbox not in _EXECUTION_MODES:
         raise ValueError(f"unsupported routing execution mode: {sandbox!r}")
     prefixes = rubric.get("required_changed_path_prefixes", [])
+    required_paths = rubric.get("required_changed_paths", [])
     if not isinstance(prefixes, list) or not all(
         isinstance(prefix, str) and prefix for prefix in prefixes
     ):
         raise ValueError("routing changed-path prefixes must be non-empty strings")
+    if not isinstance(required_paths, list) or not all(
+        isinstance(path, str) and path for path in required_paths
+    ):
+        raise ValueError("routing changed paths must be non-empty strings")
     typst_proof = rubric.get("typst_proof", False)
     if not isinstance(typst_proof, bool):
         raise TypeError("routing typst_proof must be boolean")
-    if sandbox == WORKSPACE_WRITE_SANDBOX and (not prefixes or not typst_proof):
+    if sandbox == WORKSPACE_WRITE_SANDBOX and (
+        not prefixes or not required_paths or not typst_proof
+    ):
         raise ValueError(
-            "workspace-write routing trials require a source path and Typst proof"
+            "workspace-write routing trials require exact source paths and Typst proof"
         )
-    if sandbox == READ_ONLY_SANDBOX and (prefixes or typst_proof):
+    if sandbox == READ_ONLY_SANDBOX and (prefixes or required_paths or typst_proof):
         raise ValueError("read-only routing trials cannot require edit proof")
     return {
         "sandbox": sandbox,
         "required_changed_path_prefixes": prefixes,
+        "required_changed_paths": required_paths,
         "typst_proof": typst_proof,
     }
 
@@ -1096,7 +1093,6 @@ def run_verifier(
     command = _build_codex_command(
         checkout=Path("/workspace"),
         output_schema=Path("/schema/routing_verdict.schema.json"),
-        output_report=None,
         model=model,
         effort=effort,
         proxy_url=SANDBOX_PROXY_URL,
@@ -1110,7 +1106,6 @@ def run_verifier(
         command = _sandboxed_codex_command(
             codex_command=command,
             checkout=evaluator_checkout,
-            receipt_dir=None,
             broker_socket=broker_socket,
             schema_path=VERIFIER_SCHEMA,
             sandbox=READ_ONLY_SANDBOX,
@@ -1180,6 +1175,7 @@ def trial_passed(report: dict[str, Any]) -> bool:
     head_after = execution.get("head_after")
     changed_paths = execution.get("changed_paths")
     prefixes = execution.get("required_changed_path_prefixes")
+    required_paths = execution.get("required_changed_paths")
     proof = execution.get("typst_proof")
     if (
         sandbox not in _EXECUTION_MODES
@@ -1191,6 +1187,8 @@ def trial_passed(report: dict[str, Any]) -> bool:
         or not all(isinstance(path, str) for path in changed_paths)
         or not isinstance(prefixes, list)
         or not all(isinstance(prefix, str) for prefix in prefixes)
+        or not isinstance(required_paths, list)
+        or not all(isinstance(path, str) for path in required_paths)
     ):
         return False
     if sandbox == READ_ONLY_SANDBOX:
@@ -1198,12 +1196,14 @@ def trial_passed(report: dict[str, Any]) -> bool:
             report.get("checkout_clean_after")
             and head_after == baseline_head
             and not prefixes
+            and not required_paths
             and proof is None
             and not changed_paths
         )
     else:
         execution_valid = (
             bool(prefixes)
+            and bool(required_paths)
             and head_after == baseline_head
             and all(
                 any(path.startswith(prefix) for path in changed_paths)
@@ -1213,6 +1213,7 @@ def trial_passed(report: dict[str, Any]) -> bool:
                 any(path.startswith(prefix) for prefix in prefixes)
                 for path in changed_paths
             )
+            and all(path in changed_paths for path in required_paths)
             and isinstance(proof, dict)
             and proof.get("passed") is True
         )
@@ -1482,24 +1483,6 @@ def bound_trial_response(
     }
 
 
-def read_trial_response(path: Path) -> tuple[dict[str, Any], bool]:
-    """Read one bounded model receipt and say whether it matches its schema."""
-    raw = _read_bounded_regular_file(path, maximum_bytes=TRIAL_RESPONSE_MAX_CHARS)
-    if raw is None:
-        return bound_trial_response({"unavailable": True}), False
-    force_truncated = len(raw) > TRIAL_RESPONSE_MAX_CHARS
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeError:
-        return bound_trial_response({"unavailable": True}), False
-    try:
-        value: Any = json.loads(text)
-    except json.JSONDecodeError:
-        return bound_trial_response(text, force_truncated=force_truncated), False
-    response = bound_trial_response(value, force_truncated=force_truncated)
-    return response, validate_trial_response(value, truncated=force_truncated)
-
-
 def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
     """Return the bounded terminal agent message from host-captured JSONL."""
     raw = _read_bounded_regular_file(
@@ -1512,10 +1495,31 @@ def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
         lines = raw.decode("utf-8").splitlines()
     except UnicodeError:
         return None, stream_truncated
-    for line in reversed(lines):
+    terminal_index = len(lines) - 1
+    while terminal_index >= 0 and not lines[terminal_index].strip():
+        terminal_index -= 1
+    if terminal_index < 0:
+        return None, stream_truncated
+    try:
+        terminal_event = json.loads(lines[terminal_index])
+    except json.JSONDecodeError:
+        return None, stream_truncated
+    if (
+        not isinstance(terminal_event, dict)
+        or terminal_event.get("type") != "turn.completed"
+    ):
+        return None, stream_truncated
+    parsed_events: list[dict[str, Any] | None] = []
+    for line in lines[:terminal_index]:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            parsed_events.append(None)
+            continue
+        parsed_events.append(event if isinstance(event, dict) else None)
+    for index in range(terminal_index - 1, -1, -1):
+        event = parsed_events[index]
+        if event is None:
             continue
         item = event.get("item") if isinstance(event, dict) else None
         if (
@@ -1523,6 +1527,15 @@ def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
             and item.get("type") == "agent_message"
             and isinstance(item.get("text"), str)
         ):
+            trailing = parsed_events[index + 1 :]
+            if any(
+                isinstance(trailing_event, dict)
+                and isinstance(trailing_event.get("item"), dict)
+                and trailing_event["item"].get("type")
+                in {"command_execution", "function_call", "mcp_tool_call", "tool_call"}
+                for trailing_event in trailing
+            ):
+                return None, stream_truncated
             return item["text"], stream_truncated
     return None, stream_truncated
 
@@ -1614,7 +1627,6 @@ def run_trial(
     codex_command = _build_codex_command(
         checkout=Path("/workspace"),
         output_schema=Path("/schema/routing_trial_report.schema.json"),
-        output_report=None,
         model=model,
         effort=effort,
         proxy_url=SANDBOX_PROXY_URL,
@@ -1627,7 +1639,6 @@ def run_trial(
         command = _sandboxed_codex_command(
             codex_command=codex_command,
             checkout=checkout,
-            receipt_dir=None,
             broker_socket=broker_socket,
             schema_path=REPORT_SCHEMA,
             sandbox=contract["sandbox"],
@@ -1647,7 +1658,7 @@ def run_trial(
         expected_change = all(
             any(path.startswith(prefix) for path in changed_after)
             for prefix in contract["required_changed_path_prefixes"]
-        )
+        ) and all(path in changed_after for path in contract["required_changed_paths"])
         proof = (
             _typst_proof(checkout, trial_dir)
             if (
