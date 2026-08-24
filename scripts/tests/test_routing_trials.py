@@ -304,6 +304,48 @@ def test_bounded_process_kills_a_term_resistant_process_group(
     assert time.monotonic() - started < 2
 
 
+def test_bounded_process_stops_a_child_when_stdin_setup_fails(
+    tmp_path: Path,
+) -> None:
+    class BrokenStdin(BytesIO):
+        def write(self, data: bytes) -> int:
+            raise BrokenPipeError
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdin = BrokenStdin()
+            self.stdout = BytesIO()
+            self.stderr = BytesIO()
+            self.pid = 999_999
+            self.returncode: int | None = None
+            self.terminated = False
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.returncode = 125
+
+        def wait(self, timeout: int | None = None) -> int:
+            assert self.returncode is not None
+            return self.returncode
+
+    process = FakeProcess()
+    with patch.object(trials.subprocess, "Popen", return_value=process):
+        result = trials._run_bounded_process(
+            command=["codex", "exec"],
+            prompt="route",
+            cwd=tmp_path,
+            events_path=tmp_path / "events.jsonl",
+            stderr_path=tmp_path / "stderr.txt",
+            timeout_seconds=1,
+        )
+
+    assert result["launch_error"] is True
+    assert process.terminated is True
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,
@@ -335,6 +377,7 @@ def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) ->
         "http://localhost:43123/v1",
         "http://127.0.0.1:43123/v1?token=unsafe",
         "http://127.0.0.1/v1",
+        'http://127.0.0.1:43123/v1"\nmodel_provider="unsafe',
     ),
 )
 def test_routing_trial_proxy_rejects_nonlocal_or_credential_urls(
@@ -398,6 +441,32 @@ def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
     )
+    subprocess.run(command, check=True)
+
+
+@pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
+@pytest.mark.parametrize(
+    ("schema_path", "sandbox_path"),
+    (
+        (trials.REPORT_SCHEMA, "/schema/routing_trial_report.schema.json"),
+        (trials.VERIFIER_SCHEMA, "/schema/routing_verdict.schema.json"),
+    ),
+)
+def test_subject_sandbox_mounts_each_schema_at_its_declared_path(
+    tmp_path: Path, schema_path: Path, sandbox_path: str
+) -> None:
+    checkout = tmp_path / "checkout"
+    receipt_dir = tmp_path / "receipt"
+    checkout.mkdir()
+    receipt_dir.mkdir()
+    command = trials._sandboxed_codex_command(
+        codex_command=["/usr/bin/test", "-f", sandbox_path],
+        checkout=checkout,
+        receipt_dir=receipt_dir,
+        schema_path=schema_path,
+        sandbox=trials.READ_ONLY_SANDBOX,
+    )
+
     subprocess.run(command, check=True)
 
 
@@ -622,12 +691,12 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if command[0] == "typst":
-            Path(command[3]).write_bytes(b"pdf")
+        if command[0] == "bwrap" and "typst" in command:
+            (trial_dir / "thesis.pdf").write_bytes(b"pdf")
         elif command[0] == "pdfinfo":
             return subprocess.CompletedProcess(command, 0, stdout="Pages: 2\n")
         else:
-            pages = Path(command[command.index("-o") + 1])
+            pages = trial_dir / "thesis-pages"
             pages.mkdir()
             (pages / "01.png").write_bytes(b"png")
             (pages / "02.png").write_bytes(b"png")
@@ -640,6 +709,9 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
     assert proof["artifacts"]["page_count"] == 2
     assert proof["artifacts"]["rendered_pages"] == ("01.png", "02.png")
     assert "--pages" not in calls[1]
+    assert calls[0][0] == "bwrap"
+    assert "--unshare-all" in calls[0]
+    assert "--share-net" not in calls[0]
 
 
 def test_stream_capture_requires_per_stream_bounded_receipts() -> None:
@@ -994,6 +1066,18 @@ def test_read_trial_response_bounds_and_marks_invalid_schema(tmp_path: Path) -> 
 
     assert response["content"] == '{"outcome":"kept"}'
     assert response["truncated"] is False
+    assert valid is False
+
+
+def test_trial_response_reader_rejects_a_symlink(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"untrusted":"outside"}', encoding="utf-8")
+    response_path = tmp_path / "trial-response.json"
+    response_path.symlink_to(outside)
+
+    response, valid = trials.read_trial_response(response_path)
+
+    assert response["content"] != outside.read_text(encoding="utf-8")
     assert valid is False
 
 

@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -157,6 +158,27 @@ def _copy_bounded_stream(
                 return
 
 
+def _stop_process_group(process: Any) -> None:
+    """Terminate one started process group without allowing cleanup to hang."""
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except (AttributeError, ProcessLookupError, PermissionError):
+        process.terminate()
+    try:
+        process.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (AttributeError, ProcessLookupError, PermissionError):
+            process.kill()
+        try:
+            process.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+
+
 def _run_bounded_process(
     *,
     command: list[str],
@@ -176,6 +198,7 @@ def _run_bounded_process(
     returncode = 125
     timed_out = False
     launch_error = False
+    process: Any | None = None
     with events_path.open("wb") as events, stderr_path.open("wb") as stderr:
         try:
             process = subprocess.Popen(
@@ -200,17 +223,7 @@ def _run_bounded_process(
                     process.terminate()
 
             def stop_process() -> None:
-                if process.poll() is not None:
-                    return
-                signal_process_group(signal.SIGTERM)
-                try:
-                    process.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
-                except subprocess.TimeoutExpired:
-                    signal_process_group(signal.SIGKILL)
-                    try:
-                        process.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
-                    except subprocess.TimeoutExpired:
-                        pass
+                _stop_process_group(process)
 
             def terminate_for(overflow: Event) -> None:
                 overflow.set()
@@ -261,10 +274,14 @@ def _run_bounded_process(
                 for copy in copies:
                     copy.result(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
         except subprocess.TimeoutExpired:
+            if process is not None:
+                _stop_process_group(process)
             launch_error = True
             timed_out = True
             returncode = 124
         except OSError:
+            if process is not None:
+                _stop_process_group(process)
             launch_error = True
             returncode = 125
     return {
@@ -408,7 +425,7 @@ def _build_codex_command(
         (
             f"model_providers.{ROUTING_TRIAL_PROXY_PROVIDER}="
             '{name="ARIA-NBV routing-trial proxy",'
-            f'base_url="{proxy_url}",wire_api="responses",'
+            f'base_url={json.dumps(proxy_url)},wire_api="responses",'
             "requires_openai_auth=false}"
         ),
     ]
@@ -418,6 +435,28 @@ def _build_codex_command(
         command.extend(["-c", f'model_reasoning_effort="{effort}"'])
     command.append("-")
     return command
+
+
+def _read_bounded_regular_file(path: Path, *, maximum_bytes: int) -> bytes | None:
+    """Read one bounded regular receipt without following a model-created link."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        is_regular = stat.S_ISREG(os.fstat(descriptor).st_mode)
+    except OSError:
+        os.close(descriptor)
+        return None
+    if not is_regular:
+        os.close(descriptor)
+        return None
+    try:
+        with os.fdopen(descriptor, "rb", closefd=True) as stream:
+            return stream.read(maximum_bytes + 1)
+    except OSError:
+        return None
 
 
 def routing_trial_proxy_url() -> str:
@@ -442,6 +481,7 @@ def routing_trial_proxy_url() -> str:
         or parsed.params
         or parsed.query
         or parsed.fragment
+        or any(character.isspace() or character in {'"', "\\"} for character in value)
     ):
         raise ValueError(
             "routing trial proxy URL must be an unauthenticated http URL bound "
@@ -534,7 +574,7 @@ def _sandboxed_codex_command(
         *codex_mount,
         "--ro-bind",
         str(schema_path),
-        "/schema/routing_trial_report.schema.json",
+        str(Path("/schema") / schema_path.name),
         subject_bind,
         str(checkout),
         "/workspace",
@@ -617,20 +657,83 @@ def _pdf_page_count(pdf: Path) -> int | None:
     return None
 
 
+def _typst_proof_sandbox_command(
+    *, checkout: Path, proof_dir: Path, command: list[str]
+) -> list[str]:
+    """Run trusted proof tooling against candidate Typst only inside Bubblewrap."""
+    docs_root = checkout / "docs"
+    return [
+        "bwrap",
+        "--unshare-all",
+        "--die-with-parent",
+        "--clearenv",
+        "--setenv",
+        "PATH",
+        "/usr/bin:/bin",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/etc",
+        "/etc",
+        "--symlink",
+        "usr/bin",
+        "/bin",
+        "--symlink",
+        "usr/sbin",
+        "/sbin",
+        "--symlink",
+        "usr/lib",
+        "/lib",
+        "--symlink",
+        "usr/lib64",
+        "/lib64",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--dir",
+        "/project",
+        "--ro-bind",
+        str(docs_root),
+        "/project/docs",
+        "--dir",
+        "/trusted",
+        "--ro-bind",
+        str(TRUSTED_RENDER_SCRIPT),
+        "/trusted/render_png.sh",
+        "--bind",
+        str(proof_dir),
+        "/receipt",
+        "--chdir",
+        "/project",
+        *command,
+    ]
+
+
 def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
-    """Compile and render the edited active thesis into the isolated trial receipt."""
+    """Compile and render the edited thesis in a network-isolated proof sandbox."""
     pdf = trial_dir / "thesis.pdf"
     pages = trial_dir / "thesis-pages"
     commands = (
-        ["typst", "compile", "docs/typst/thesis/main.typ", str(pdf), "--root", "docs"],
         [
-            str(TRUSTED_RENDER_SCRIPT),
+            "typst",
+            "compile",
+            "docs/typst/thesis/main.typ",
+            "/receipt/thesis.pdf",
+            "--root",
+            "/project/docs",
+        ],
+        [
+            "/trusted/render_png.sh",
             "-i",
             "docs/typst/thesis/main.typ",
             "-o",
-            str(pages),
+            "/receipt/thesis-pages",
             "--root",
-            "docs",
+            "/project/docs",
             "--ppi",
             "150",
         ],
@@ -639,7 +742,9 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
     for command in commands:
         try:
             result = subprocess.run(
-                command,
+                _typst_proof_sandbox_command(
+                    checkout=checkout, proof_dir=trial_dir, command=command
+                ),
                 cwd=checkout,
                 check=False,
                 stdout=subprocess.DEVNULL,
@@ -904,16 +1009,19 @@ def run_verifier(
     returncode = process_result["returncode"]
     payload: Any = None
     verdict_read_error: str | None = None
-    if not timed_out and verifier_report.is_file():
-        try:
-            with verifier_report.open("rb") as stream:
-                raw_verdict = stream.read(VERIFIER_REPORT_MAX_BYTES + 1)
-            if len(raw_verdict) > VERIFIER_REPORT_MAX_BYTES:
-                verdict_read_error = "verifier report exceeds the byte bound"
-            else:
-                payload = json.loads(raw_verdict.decode("utf-8"))
-        except (json.JSONDecodeError, OSError, UnicodeError):
+    if not timed_out:
+        raw_verdict = _read_bounded_regular_file(
+            verifier_report, maximum_bytes=VERIFIER_REPORT_MAX_BYTES
+        )
+        if raw_verdict is None:
             verdict_read_error = "verifier report is unreadable or malformed"
+        elif len(raw_verdict) > VERIFIER_REPORT_MAX_BYTES:
+            verdict_read_error = "verifier report exceeds the byte bound"
+        else:
+            try:
+                payload = json.loads(raw_verdict.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeError):
+                verdict_read_error = "verifier report is unreadable or malformed"
     if process_result["output_overflow"]:
         valid, reason = False, "verifier output exceeded its byte bound"
     elif returncode != 0 or timed_out:
@@ -1256,10 +1364,8 @@ def bound_trial_response(
 
 def read_trial_response(path: Path) -> tuple[dict[str, Any], bool]:
     """Read one bounded model receipt and say whether it matches its schema."""
-    try:
-        with path.open("rb") as stream:
-            raw = stream.read(TRIAL_RESPONSE_MAX_CHARS + 1)
-    except OSError:
+    raw = _read_bounded_regular_file(path, maximum_bytes=TRIAL_RESPONSE_MAX_CHARS)
+    if raw is None:
         return bound_trial_response({"unavailable": True}), False
     force_truncated = len(raw) > TRIAL_RESPONSE_MAX_CHARS
     try:
@@ -1383,7 +1489,15 @@ def run_trial(
             for prefix in contract["required_changed_path_prefixes"]
         )
         proof = (
-            _typst_proof(checkout, trial_dir) if expected_change else {"passed": False}
+            _typst_proof(checkout, trial_dir)
+            if (
+                expected_change
+                and process_result["returncode"] == 0
+                and not process_result["timed_out"]
+                and not process_result["output_overflow"]
+                and not process_result["launch_error"]
+            )
+            else {"passed": False}
         )
     runtime = {
         "codex_version": codex_version,
