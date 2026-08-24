@@ -66,7 +66,10 @@ EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES = 4_194_304
 TRIAL_STDERR_MAX_BYTES = 1_048_576
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
-SUBMISSION_GATE_DIAGNOSTIC = b"submission mode requires explicit aria-thesis-data"
+SUBMISSION_GATE_DIAGNOSTIC = (
+    "error: assertion failed: submission mode requires explicit aria-thesis-data"
+)
+SUBMISSION_GATE_SOURCE = "typst/thesis/experiment_data.typ:"
 PROCESS_TERMINATE_GRACE_SECONDS = 5
 VERDICT_MAX_ITEMS = 64
 READ_ONLY_SANDBOX = "read-only"
@@ -874,6 +877,19 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
         gate_diagnostic = _read_bounded_regular_file(
             gate_stderr, maximum_bytes=TRIAL_STDERR_MAX_BYTES
         )
+        expected_diagnostic = False
+        if gate_diagnostic is not None:
+            try:
+                diagnostic_lines = gate_diagnostic.decode("utf-8").splitlines()
+            except UnicodeDecodeError:
+                diagnostic_lines = []
+            for index, line in enumerate(diagnostic_lines):
+                if line == SUBMISSION_GATE_DIAGNOSTIC and any(
+                    SUBMISSION_GATE_SOURCE in context
+                    for context in diagnostic_lines[index + 1 : index + 4]
+                ):
+                    expected_diagnostic = True
+                    break
         submission_gate = {
             "executed": not (
                 gate_result["timed_out"]
@@ -881,10 +897,7 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
                 or gate_result["output_overflow"]
             ),
             "returncode": gate_result["returncode"],
-            "expected_diagnostic": (
-                gate_diagnostic is not None
-                and SUBMISSION_GATE_DIAGNOSTIC in gate_diagnostic
-            ),
+            "expected_diagnostic": expected_diagnostic,
         }
     page_count = _pdf_page_count(pdf) if pdf.is_file() else None
     rendered_pages = tuple(sorted(path.name for path in pages.glob("*.png")))

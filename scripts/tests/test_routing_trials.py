@@ -22,6 +22,13 @@ sys.path.insert(0, str(ROOT / "scripts" / "scaffold"))
 trials = importlib.import_module("run_routing_trials")
 
 
+def _submission_gate_diagnostic() -> bytes:
+    return (
+        f"{trials.SUBMISSION_GATE_DIAGNOSTIC}\n"
+        f"   ┌─ {trials.SUBMISSION_GATE_SOURCE}45:4\n"
+    ).encode()
+
+
 def _complete_event_evidence() -> dict[str, object]:
     items = [
         {
@@ -776,7 +783,7 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
         assert isinstance(command, list)
         assert isinstance(stderr_path, Path)
         calls.append(command)
-        stderr_path.write_bytes(trials.SUBMISSION_GATE_DIAGNOSTIC)
+        stderr_path.write_bytes(_submission_gate_diagnostic())
         return {
             "returncode": 1,
             "timed_out": False,
@@ -835,7 +842,7 @@ def test_typst_proof_does_not_render_when_compilation_fails(tmp_path: Path) -> N
                 "output_overflow": False,
                 "launch_error": False,
             },
-            trials.SUBMISSION_GATE_DIAGNOSTIC,
+            _submission_gate_diagnostic(),
         ),
         (
             {
@@ -844,7 +851,19 @@ def test_typst_proof_does_not_render_when_compilation_fails(tmp_path: Path) -> N
                 "output_overflow": False,
                 "launch_error": False,
             },
-            b"unrelated candidate failure",
+            (
+                b"unrelated candidate failure: "
+                + trials.SUBMISSION_GATE_DIAGNOSTIC.encode("utf-8")
+            ),
+        ),
+        (
+            {
+                "returncode": 1,
+                "timed_out": False,
+                "output_overflow": False,
+                "launch_error": False,
+            },
+            b"\xff" + _submission_gate_diagnostic(),
         ),
     ),
 )
