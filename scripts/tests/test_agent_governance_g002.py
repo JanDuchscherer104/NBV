@@ -920,9 +920,25 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ".omx/specs/nested/accepted-peer-review/report.md"
     )
 
+    active_handoff = _read(ROOT / ".omx/plans/ralplan-handoff-online-oracle-mvp.md")
+    assert (
+        "ralplan_architect_review: "
+        ".omx/reviews/ralplan-architect-review-online-oracle-mvp-iteration-6.md"
+    ) in active_handoff
+    assert (
+        "ralplan_critic_review: "
+        ".omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md"
+    ) in active_handoff
+    assert ".omx/plans/ralplan-architect-review-online-oracle-mvp-iteration-6.md" not in active_handoff
+    assert ".omx/plans/ralplan-critic-review-online-oracle-mvp-iteration-3.md" not in active_handoff
+
     ignored = _read(ROOT / ".gitignore")
     assert ".omx/reviews/" in ignored.splitlines()
     assert ".omx/specs/**" not in ignored.splitlines()
+    assert not any(
+        "architect" in line.lower() or "critic" in line.lower()
+        for line in ignored.splitlines()
+    )
     ignored_role_reviews = subprocess.run(
         [
             "git",
