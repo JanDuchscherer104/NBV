@@ -88,6 +88,14 @@ DEFAULT_TRIAL_IDS = (
     "zarr-offline-vin-storage-api",
 )
 
+ACADEMIC_AUTHORING_TRIAL_IDS = (
+    "academic-writing-related-work-synthesis",
+    "academic-writing-handoff-to-typst",
+    "typst-authoring-accepted-content-render",
+    "scientific-review-empirical-validity",
+    "rollout-report-owner-not-writing-skill",
+)
+
 
 def run_git(*args: str, cwd: Path = ROOT) -> str:
     result = subprocess.run(

@@ -122,6 +122,18 @@ def test_prompt_and_rubric_ids_match_without_prompt_leakage() -> None:
         assert "mcp__" not in task
 
 
+def test_academic_authoring_trial_selection_is_a_small_disjoint_suite() -> None:
+    assert trials.ACADEMIC_AUTHORING_TRIAL_IDS == (
+        "academic-writing-related-work-synthesis",
+        "academic-writing-handoff-to-typst",
+        "typst-authoring-accepted-content-render",
+        "scientific-review-empirical-validity",
+        "rollout-report-owner-not-writing-skill",
+    )
+    rubric = trials.load_rubric()
+    assert set(trials.ACADEMIC_AUTHORING_TRIAL_IDS) <= set(rubric)
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,
