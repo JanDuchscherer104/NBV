@@ -1319,7 +1319,6 @@ def trial_passed(report: dict[str, Any]) -> bool:
     else:
         execution_valid = (
             bool(prefixes)
-            and bool(required_paths)
             and head_after == baseline_head
             and all(
                 any(path.startswith(prefix) for path in changed_paths)
@@ -1329,6 +1328,7 @@ def trial_passed(report: dict[str, Any]) -> bool:
                 any(path.startswith(prefix) for prefix in prefixes)
                 for path in changed_paths
             )
+            and all(path in changed_paths for path in required_paths)
             and isinstance(proof, dict)
             and proof.get("passed") is True
             and isinstance(final_diff, dict)

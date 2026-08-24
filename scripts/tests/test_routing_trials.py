@@ -758,8 +758,8 @@ def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
         "baseline_head": "baseline",
         "head_after": "baseline",
         "required_changed_path_prefixes": ["docs/typst/thesis/"],
-        "required_changed_paths": ["docs/typst/thesis/main.typ"],
-        "changed_paths": ["docs/typst/thesis/main.typ"],
+        "required_changed_paths": [],
+        "changed_paths": ["docs/typst/thesis/section.typ"],
         "final_diff": {"valid": True, "content": "diff --git a/main.typ b/main.typ"},
         "typst_proof": {"passed": True},
     }
@@ -767,6 +767,54 @@ def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
     assert trials.trial_passed(report)
     report["execution"]["typst_proof"] = {"passed": False}  # type: ignore[index]
     assert not trials.trial_passed(report)
+
+
+def test_editable_trial_requires_each_declared_exact_changed_path() -> None:
+    report = _trial_report()
+    report["execution"] = {
+        "sandbox": trials.WORKSPACE_WRITE_SANDBOX,
+        "baseline_head": "baseline",
+        "head_after": "baseline",
+        "required_changed_path_prefixes": ["docs/typst/thesis/"],
+        "required_changed_paths": ["docs/typst/thesis/main.typ"],
+        "changed_paths": ["docs/typst/thesis/section.typ"],
+        "final_diff": {"valid": True, "content": "diff --git a/main.typ b/main.typ"},
+        "typst_proof": {"passed": True},
+    }
+    report["adjudication"] = {"passed": True}
+
+    assert not trials.trial_passed(report)
+    report["execution"]["changed_paths"].append(  # type: ignore[index]
+        "docs/typst/thesis/main.typ"
+    )
+    assert trials.trial_passed(report)
+
+
+def test_every_workspace_write_fixture_can_satisfy_its_terminal_contract() -> None:
+    for trial_id, rubric in trials.load_rubric().items():
+        contract = trials.execution_contract(rubric)
+        if contract["sandbox"] != trials.WORKSPACE_WRITE_SANDBOX:
+            continue
+        changed_paths = {
+            f"{prefix}fixture.typ"
+            for prefix in contract["required_changed_path_prefixes"]
+        }
+        changed_paths.update(contract["required_changed_paths"])
+        report = _trial_report()
+        report["execution"] = {
+            **contract,
+            "baseline_head": "baseline",
+            "head_after": "baseline",
+            "changed_paths": sorted(changed_paths),
+            "final_diff": {
+                "valid": True,
+                "content": "diff --git a/fixture.typ b/fixture.typ",
+            },
+            "typst_proof": {"passed": True},
+        }
+        report["adjudication"] = {"passed": True}
+
+        assert trials.trial_passed(report), trial_id
 
 
 def test_final_diff_evidence_is_host_generated_and_bounded(tmp_path: Path) -> None:
