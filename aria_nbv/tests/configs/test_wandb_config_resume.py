@@ -31,3 +31,21 @@ def test_wandb_config_resume_and_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert logger.kwargs["id"] == "1wz4g6ex"
     assert logger.kwargs["resume"] == "allow"
+
+
+def test_wandb_config_init_kwargs_excludes_lightning_only_options() -> None:
+    cfg = wandb_config.WandbConfig(
+        project="aria-performance",
+        run_id="result-1",
+        group="goal-a",
+        job_type="performance-goal",
+        offline=True,
+        log_model=True,
+        prefix="train",
+    )
+
+    assert cfg.init_kwargs()["mode"] == "offline"
+    assert cfg.init_kwargs()["id"] == "result-1"
+    assert cfg.init_kwargs()["group"] == "goal-a"
+    assert "log_model" not in cfg.init_kwargs()
+    assert "prefix" not in cfg.init_kwargs()

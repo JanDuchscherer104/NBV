@@ -78,6 +78,31 @@ class WandbConfig(TargetConfig[WandbLogger]):
     prefix: str | None = Field(default=None, description="Namespace prefix for metric keys.")
     """Optional namespace prepended to logged metric keys."""
 
+    def init_kwargs(self) -> dict[str, Any]:
+        """Return the shared W&B run-identity arguments for non-Lightning reporters.
+
+        Lightning-only checkpoint and metric-prefix options deliberately remain
+        exclusive to :meth:`setup_target`.  This keeps small reporting tools on
+        the same project, identity, grouping, and offline-mode contract without
+        pretending that they are Lightning loggers.
+        """
+        kwargs: dict[str, Any] = {
+            "name": self.name,
+            "project": self.project,
+            "entity": self.entity,
+            "dir": PathConfig().wandb.as_posix(),
+            "id": self.run_id,
+            "mode": "offline" if self.offline else "online",
+            "tags": self.tags,
+            "group": self.group,
+            "job_type": self.job_type,
+        }
+        if self.resume is not None:
+            kwargs["resume"] = self.resume
+        if self.anonymous is not None:
+            kwargs["anonymous"] = self.anonymous
+        return kwargs
+
     def setup_target(self, **kwargs: Any) -> WandbLogger:
         """Instantiate a logger rooted in :class:`PathConfig`'s W&B directory."""
         wandb_dir = PathConfig().wandb.as_posix()
