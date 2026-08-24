@@ -17,11 +17,18 @@ import subprocess
 import sys
 import tempfile
 from typing import Callable, Iterable, Mapping, Sequence
-from urllib.parse import urlsplit, urlunsplit
 
 from glossary_build import (
     GlossaryError,
     normalize_and_validate_metadata,
+)
+from literature_catalog import (
+    BibliographyEntry,
+    LiteratureCatalog,
+    LiteratureCatalogConfig,
+    LiteratureCatalogError,
+    ManifestEntry,
+    load_literature_catalog,
 )
 
 
@@ -43,13 +50,10 @@ class ProjectionConfig:
     glossary_path: Path = Path("docs/typst/shared/glossary.typ")
     symbols_path: Path = Path("docs/typst/shared/symbols.typ")
     equations_path: Path = Path("docs/typst/shared/equations.typ")
-    bibliography_paths: tuple[Path, ...] = (
-        Path("docs/references.bib"),
-        Path("docs/references-qh.bib"),
-    )
-    manifest_path: Path = Path("docs/literature/sources.jsonl")
-    tex_root: Path = Path("docs/literature/tex-src")
-    pdf_root: Path = Path("docs/literature/pdf")
+    bibliography_paths: tuple[Path, ...] = LiteratureCatalogConfig.bibliography_paths
+    manifest_path: Path = LiteratureCatalogConfig.manifest_path
+    tex_root: Path = LiteratureCatalogConfig.tex_root
+    pdf_root: Path = LiteratureCatalogConfig.pdf_root
     output_path: Path = Path("graphify-input")
     aria_code_ref: str = "main"
     aria_code_ref_source: str = "default"
@@ -61,26 +65,6 @@ class ProjectionResult:
 
     files: Mapping[str, str]
     warnings: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class _BibEntry:
-    key: str
-    owner: Path
-    locator: str
-    arxiv: str | None = None
-    doi: str | None = None
-    url: str | None = None
-
-
-@dataclass(frozen=True)
-class _ManifestEntry:
-    line: int
-    data: Mapping[str, object]
-    identity: str
-    arxiv: str | None
-    doi: str | None
-    url: str | None
 
 
 @dataclass(frozen=True)
@@ -118,9 +102,9 @@ class _RenderData:
     aria_code_pin_kind: str
     closure: Sequence[Path]
     citations_by_source: Mapping[Path, Counter[str]]
-    bib: Mapping[str, _BibEntry]
-    joined: Mapping[str, _ManifestEntry]
-    manifest: Sequence[_ManifestEntry]
+    bib: Mapping[str, BibliographyEntry]
+    joined: Mapping[str, ManifestEntry]
+    manifest: Sequence[ManifestEntry]
     targets: Mapping[str, Mapping[str, str]]
     relations: Sequence[Mapping[str, object]]
     headings: Sequence[_Heading]
@@ -283,30 +267,17 @@ def _source_closure(config: ProjectionConfig) -> tuple[Path, ...]:
 def _lexical_sources(
     config: ProjectionConfig,
     closure: Iterable[Path],
-    citation_keys: Iterable[str],
+    catalog: LiteratureCatalog,
 ) -> tuple[dict[Path, Counter[str]], list[_Macro]]:
     citations_by_source: dict[Path, Counter[str]] = {}
     macros: list[_Macro] = []
     macro_re = re.compile(r"#(gh-symbol|gh-wip|gh)\s*\(([^\n)]*)\)")
-    citation_alternation = "|".join(
-        re.escape(key)
-        for key in sorted(citation_keys, key=lambda key: (-len(key), key))
-    )
-    citation_re = (
-        re.compile(rf"(?<![\w])@({citation_alternation})(?![A-Za-z0-9_+-])")
-        if citation_alternation
-        else None
-    )
     for relative in closure:
-        citations: Counter[str] = Counter()
         clean = _strip_typst_noncode(
             _owner_path(config, relative).read_text(encoding="utf-8")
         )
         citation_text = re.sub(r'#(?:include|import)\s+"[^"]+"[^\n]*', "", clean)
-        if citation_re is not None:
-            for token in citation_re.findall(citation_text):
-                citations[token] += 1
-        citations_by_source[relative] = citations
+        citations_by_source[relative] = catalog.citations(citation_text)
         for match in macro_re.finditer(clean):
             kind, body = match.groups()
             first = re.match(r'\s*"([^"]+)"', body)
@@ -405,7 +376,7 @@ def _notation_metadata(
 
 
 def _glossary_terms(
-    config: ProjectionConfig, runner: Runner, bib: Mapping[str, _BibEntry]
+    config: ProjectionConfig, runner: Runner, bib: Mapping[str, BibliographyEntry]
 ) -> dict[str, Mapping[str, object]]:
     """Query the canonical Glossarium rows through the injected Typst runner."""
 
@@ -494,7 +465,7 @@ def _section_usage(
     closure: Iterable[Path],
     terms: Mapping[str, Mapping[str, object]],
     notation: Mapping[str, Mapping[str, Mapping[str, object]]],
-    bib: Mapping[str, _BibEntry],
+    bib: Mapping[str, BibliographyEntry],
 ) -> dict[Path, dict[str, Counter[str]]]:
     """Return delimiter-safe lexical references from active thesis sections only."""
 
@@ -658,215 +629,6 @@ def _typst_context(config: ProjectionConfig) -> tuple[Path, str]:
         return config.repo_root, thesis_root.as_posix()
     owner_root = config.repo_root / thesis_root.parts[0]
     return owner_root, PurePosixPath(*thesis_root.parts[1:]).as_posix()
-
-
-def _normalize_arxiv(value: object) -> str | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    result = value.strip().casefold()
-    result = re.sub(r"^(?:arxiv:|https?://arxiv\.org/(?:abs|pdf)/)", "", result)
-    result = re.sub(r"\.pdf$", "", result)
-    return re.sub(r"v\d+$", "", result)
-
-
-def _normalize_doi(value: object) -> str | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    return re.sub(
-        r"^(?:doi:|https?://doi\.org/)", "", value.strip(), flags=re.I
-    ).casefold()
-
-
-def _normalize_url(value: object) -> str | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    parsed = urlsplit(value.strip())
-    if not parsed.scheme or not parsed.netloc:
-        return value.strip()
-    path = parsed.path or "/"
-    if path != "/":
-        path = path.rstrip("/")
-    return urlunsplit(
-        (
-            parsed.scheme.casefold(),
-            parsed.netloc.casefold(),
-            path,
-            parsed.query,
-            parsed.fragment,
-        )
-    )
-
-
-def _bib_entry_end(text: str, owner: Path, body_start: int, opener: str) -> int:
-    closer = "}" if opener == "{" else ")"
-    depth = 1
-    cursor = body_start
-    while cursor < len(text) and depth:
-        if text[cursor] == opener:
-            depth += 1
-        elif text[cursor] == closer:
-            depth -= 1
-        cursor += 1
-    if depth:
-        raise ProjectionError(f"{owner.as_posix()}: malformed BibTeX entry")
-    return cursor
-
-
-def _bib_fields(body: str) -> dict[str, str]:
-    fields: dict[str, str] = {}
-    for name in ("eprint", "arxiv", "doi", "url"):
-        match = re.search(rf'(?is)\b{name}\s*=\s*(?:{{([^{{}}]*)}}|"([^"]*)")', body)
-        if match:
-            fields[name] = (match.group(1) or match.group(2)).strip()
-    return fields
-
-
-def _bib_entries(config: ProjectionConfig) -> dict[str, _BibEntry]:
-    entries: dict[str, _BibEntry] = {}
-    for owner in config.bibliography_paths:
-        text = _owner_path(config, owner).read_text(encoding="utf-8")
-        index = 0
-        while True:
-            start = re.search(r"@[A-Za-z]+\s*[{(]\s*([^,\s]+)\s*,", text[index:])
-            if start is None:
-                break
-            absolute = index + start.start()
-            body_start = index + start.end()
-            opener = "{" if "{" in start.group(0) else "("
-            cursor = _bib_entry_end(text, owner, body_start, opener)
-            key = start.group(1)
-            if key in entries:
-                raise ProjectionError(f"duplicate bibliography key {key}")
-            body = text[body_start : cursor - 1]
-            fields = _bib_fields(body)
-            line = text.count("\n", 0, absolute) + 1
-            entries[key] = _BibEntry(
-                key=key,
-                owner=owner,
-                locator=f"{owner.as_posix()}:{line}",
-                arxiv=_normalize_arxiv(fields.get("eprint") or fields.get("arxiv")),
-                doi=_normalize_doi(fields.get("doi")),
-                url=_normalize_url(fields.get("url")),
-            )
-            index = cursor
-    return entries
-
-
-def _asset_relative(root: Path, value: object, *, line: int) -> Path | None:
-    if value is None or value == "":
-        return None
-    if not isinstance(value, str):
-        raise ProjectionError(f"manifest line {line}: asset path must be a string")
-    path = Path(value)
-    if path.is_absolute() or ".." in path.parts:
-        raise ProjectionError(
-            f"manifest line {line}: asset path escapes its root: {value}"
-        )
-    return Path(PurePosixPath((root / path).as_posix()))
-
-
-def _manifest_explicit_id(data: Mapping[str, object], *, line: int) -> str | None:
-    values = [data[key] for key in ("stable_id", "id") if key in data]
-    if not values:
-        return None
-    if not all(isinstance(value, str) and value.strip() for value in values):
-        raise ProjectionError(
-            f"manifest line {line}: explicit ID must be non-empty text"
-        )
-    normalized = {str(value).strip() for value in values}
-    if len(normalized) != 1:
-        raise ProjectionError(f"manifest line {line}: conflicting explicit IDs")
-    explicit_id = normalized.pop()
-    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", explicit_id) is None:
-        raise ProjectionError(
-            f"manifest line {line}: explicit ID must use letters, digits, '.', '_', or '-'"
-        )
-    return explicit_id
-
-
-def _manifest_content_digest(data: Mapping[str, object]) -> str:
-    canonical = json.dumps(
-        data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    )
-    return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-def _manifest_entries(config: ProjectionConfig) -> list[_ManifestEntry]:
-    result: list[_ManifestEntry] = []
-    text = _owner_path(config, config.manifest_path).read_text(encoding="utf-8")
-    for line, raw in enumerate(text.splitlines(), 1):
-        if not raw.strip():
-            continue
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as error:
-            raise ProjectionError(
-                f"{config.manifest_path.as_posix()}:{line}: invalid JSON"
-            ) from error
-        if not isinstance(data, dict):
-            raise ProjectionError(
-                f"{config.manifest_path.as_posix()}:{line}: expected object"
-            )
-        arxiv = _normalize_arxiv(data.get("arxiv_id") or data.get("arxiv"))
-        doi = _normalize_doi(data.get("doi"))
-        url = _normalize_url(data.get("url"))
-        if arxiv:
-            identity = f"literature:arxiv:{arxiv}"
-        elif doi:
-            identity = f"literature:doi:{doi}"
-        elif url:
-            identity = f"literature:url:{url}"
-        else:
-            explicit_id = _manifest_explicit_id(data, line=line)
-            identity = (
-                f"literature:id:{explicit_id}"
-                if explicit_id is not None
-                else f"literature:metadata-sha256:{_manifest_content_digest(data)}"
-            )
-        _asset_relative(config.tex_root, data.get("tex_dir"), line=line)
-        _asset_relative(config.pdf_root, data.get("pdf_file"), line=line)
-        result.append(_ManifestEntry(line, data, identity, arxiv, doi, url))
-    identities = [entry.identity for entry in result]
-    if len(identities) != len(set(identities)):
-        raise ProjectionError("duplicate or colliding manifest generated identity")
-    return result
-
-
-def _join_bibliography(
-    bib: Mapping[str, _BibEntry], manifest: Sequence[_ManifestEntry]
-) -> dict[str, _ManifestEntry]:
-    indexes: dict[str, dict[str, list[_ManifestEntry]]] = {
-        "arxiv": defaultdict(list),
-        "doi": defaultdict(list),
-        "url": defaultdict(list),
-    }
-    for row in manifest:
-        for field_name in indexes:
-            value = getattr(row, field_name)
-            if value:
-                indexes[field_name][value].append(row)
-    joined: dict[str, _ManifestEntry] = {}
-    for key, entry in bib.items():
-        signal_matches: list[tuple[str, list[_ManifestEntry]]] = []
-        for field_name in ("arxiv", "doi", "url"):
-            value = getattr(entry, field_name)
-            matches = indexes[field_name].get(value, []) if value else []
-            if len(matches) > 1:
-                raise ProjectionError(
-                    f"ambiguous {field_name} join for bibliography key {key}"
-                )
-            if matches:
-                signal_matches.append((field_name, matches))
-        distinct = {
-            match.identity for _, matches in signal_matches for match in matches
-        }
-        if len(distinct) > 1:
-            raise ProjectionError(
-                f"conflicting identity signals for bibliography key {key}"
-            )
-        if signal_matches:
-            joined[key] = signal_matches[0][1][0]
-    return joined
 
 
 def _repository(config: ProjectionConfig) -> str:
@@ -1068,11 +830,10 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
         key: _Page(f"equation:{key}", "equations") for key in data.notation["equations"]
     }
     for row in data.manifest:
-        for kind, root, field_name in (
-            ("tex-root", config.tex_root, "tex_dir"),
-            ("pdf", config.pdf_root, "pdf_file"),
+        for kind, relative in (
+            ("tex-root", row.tex_path),
+            ("pdf", row.pdf_path),
         ):
-            relative = _asset_relative(root, row.data.get(field_name), line=row.line)
             if relative is None:
                 continue
             identity = f"{kind}:{relative.as_posix()}"
@@ -1172,7 +933,7 @@ def _populate_citation_pages(
 
 
 def _manifest_text_field(
-    row: _ManifestEntry, field_name: str, *, required: bool = False
+    row: ManifestEntry, field_name: str, *, required: bool = False
 ) -> str | None:
     value = row.data.get(field_name)
     if value is None and not required:
@@ -1186,7 +947,7 @@ def _manifest_text_field(
     return value
 
 
-def _literature_metadata_lines(row: _ManifestEntry) -> list[str]:
+def _literature_metadata_lines(row: ManifestEntry) -> list[str]:
     """Render only the factual catalogue fields admitted by the projection."""
 
     lines = [f"title: {_manifest_text_field(row, 'title', required=True)}"]
@@ -1249,11 +1010,10 @@ def _populate_literature_pages(
             page.lines.append(
                 f"citation: {_link(source_path, paths[f'citation:{key}'], f'citation:{key}')}"
             )
-        for kind, root, field_name in (
-            ("tex-root", config.tex_root, "tex_dir"),
-            ("pdf", config.pdf_root, "pdf_file"),
+        for kind, relative in (
+            ("tex-root", row.tex_path),
+            ("pdf", row.pdf_path),
         ):
-            relative = _asset_relative(root, row.data.get(field_name), line=row.line)
             if relative:
                 identity = f"{kind}:{relative.as_posix()}"
                 page.lines.append(
@@ -1582,7 +1342,19 @@ def build_projection(
         config.symbols_path,
         config.equations_path,
     )
-    bib = _bib_entries(config)
+    try:
+        catalog = load_literature_catalog(
+            LiteratureCatalogConfig(
+                repo_root=config.repo_root,
+                bibliography_paths=config.bibliography_paths,
+                manifest_path=config.manifest_path,
+                tex_root=config.tex_root,
+                pdf_root=config.pdf_root,
+            )
+        )
+    except LiteratureCatalogError as error:
+        raise ProjectionError(str(error)) from error
+    bib = catalog.bibliography
     terms = _glossary_terms(config, runner, bib)
     try:
         notation = _notation_metadata(config, runner)
@@ -1598,7 +1370,7 @@ def build_projection(
         if _lexists(path)
     )
     usage_by_source = _section_usage(config, closure, terms, notation, bib)
-    citations_by_source, macros = _lexical_sources(config, closure, bib)
+    citations_by_source, macros = _lexical_sources(config, closure, catalog)
     lexical_citations: Counter[str] = Counter()
     for citations in citations_by_source.values():
         lexical_citations.update(citations)
@@ -1626,8 +1398,8 @@ def build_projection(
         raise ProjectionError(
             f"compiled/lexical citation multiplicity mismatch: {differences}"
         )
-    manifest = _manifest_entries(config)
-    joined = _join_bibliography(bib, manifest)
+    manifest = catalog.manifest
+    joined = catalog.joined
     repository = _repository(config)
     link_values = [
         value

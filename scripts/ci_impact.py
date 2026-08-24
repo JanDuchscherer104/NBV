@@ -53,7 +53,9 @@ DOCS_PATHS = {
     "README.md",
     "SETUP.md",
     "scripts/build_graphify_projection.py",
+    "scripts/literature_catalog.py",
     "scripts/tests/test_build_graphify_projection.py",
+    "scripts/tests/test_thesis_literature_provenance.py",
     "scripts/tests/test_quarto_generate_api_docs.sh",
     "scripts/validate_qmd_frontmatter.py",
 }
@@ -69,9 +71,11 @@ def select_families(paths: list[str]) -> set[str]:
             return set(FAMILIES)
 
         matched = False
-        if path.startswith(".agents/") and not path.startswith(
-            ".agents/skills/typst-authoring/"
-        ) or path in SCAFFOLD_PATHS:
+        if (
+            path.startswith(".agents/")
+            and not path.startswith(".agents/skills/typst-authoring/")
+            or path in SCAFFOLD_PATHS
+        ):
             selected.add("scaffold")
             matched = True
         if path.startswith(".agents/skills/typst-authoring/"):
