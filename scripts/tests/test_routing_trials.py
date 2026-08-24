@@ -1135,7 +1135,10 @@ def test_event_receipt_requires_a_terminal_turn(tmp_path: Path) -> None:
     assert trials.read_last_agent_message(events) == (None, False)
 
 
-@pytest.mark.parametrize("activity", ("command_execution", "web_search"))
+@pytest.mark.parametrize(
+    "activity",
+    ("command_execution", "web_search", "file_change", "reasoning", "todo_list"),
+)
 def test_event_receipt_rejects_tool_activity_after_final_message(
     tmp_path: Path, activity: str
 ) -> None:
@@ -1376,7 +1379,7 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
                     "type": "item.completed",
                     "item": {
                         "type": "agent_message",
-                        "text": "x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1),
+                        "text": "é" * (trials.VERIFIER_REPORT_MAX_BYTES // 2 + 1),
                     },
                 }
             )

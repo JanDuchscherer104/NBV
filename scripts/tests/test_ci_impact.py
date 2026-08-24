@@ -218,7 +218,10 @@ class SelectionTests(unittest.TestCase):
             ".agents/example.qmd": {"scaffold"},
             ".agents/skills/README.md": {"docs", "scaffold"},
             ".agents/skills/typst-authoring/SKILL.md": {"docs", "scaffold"},
-            ".agents/skills/typst-authoring/references/workflow.md": {"docs", "scaffold"},
+            ".agents/skills/typst-authoring/references/workflow.md": {
+                "docs",
+                "scaffold",
+            },
             ".agents/skills/academic-writing/SKILL.md": {"docs", "scaffold"},
             ".agents/skills/scientific-review/SKILL.md": {"docs", "scaffold"},
             "aria_nbv/aria_nbv/__init__.py": {"package"},

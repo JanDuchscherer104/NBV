@@ -1130,7 +1130,10 @@ def run_verifier(
         verdict_text, stream_truncated = read_last_agent_message(verifier_events)
         if verdict_text is None:
             verdict_read_error = "verifier report is unreadable or malformed"
-        elif stream_truncated or len(verdict_text) > VERIFIER_REPORT_MAX_BYTES:
+        elif (
+            stream_truncated
+            or len(verdict_text.encode("utf-8")) > VERIFIER_REPORT_MAX_BYTES
+        ):
             verdict_read_error = "verifier report exceeds the byte bound"
         else:
             try:
@@ -1531,7 +1534,6 @@ def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
             if any(
                 isinstance(trailing_event, dict)
                 and isinstance(trailing_event.get("item"), dict)
-                and trailing_event["item"].get("type") in _EXECUTION_IDENTITY_FIELDS
                 for trailing_event in trailing
             ):
                 return None, stream_truncated
