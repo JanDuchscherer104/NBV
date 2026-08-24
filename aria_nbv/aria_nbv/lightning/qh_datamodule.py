@@ -14,7 +14,7 @@ and derive Python/NumPy worker seeds from each worker's
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from functools import partial
 from typing import Protocol, cast
 
@@ -47,6 +47,20 @@ class QhLearningContract:
 
     objective_profile: QhObjectiveProfile = "legacy_selected_rows_v1"
     """Closed fitted-Q support and padding semantics."""
+
+    def learning_semantics(self) -> "QhLearningContract":
+        """Return the population-independent optimization contract.
+
+        The complete training contract remains the model and bundle identity.
+        This projection is only for compatibility checks against validation or
+        held-out stages whose candidate-generator, rollout-recipe, and
+        behavior-policy vocabularies may intentionally differ. Reward, target,
+        mask, actor-source, horizon, weighting, and objective semantics remain
+        exact; stage artifact identity remains separately bound by dataset
+        configuration and provenance hashes.
+        """
+
+        return replace(self, data_contract=self.data_contract.learning_semantics())
 
 
 class _QhDataset(Protocol):

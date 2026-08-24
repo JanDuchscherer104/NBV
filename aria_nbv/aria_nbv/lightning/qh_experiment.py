@@ -533,8 +533,15 @@ class QhExperiment:
             experiment_profile=module_config.experiment_profile,
             objective_profile=objective_profile,
         )
-        if data.learning_contract_hash != identity["learning_contract_hash"]:
-            raise ValueError("Q_H exact-Q2 test learning contract drifted from the bundle.")
+        learning_payload = identity["learning_contract"]
+        bound_learning_contract = QhLearningContract(
+            data_contract=QhDataContract(**learning_payload["data_contract"]),
+            max_horizon=int(learning_payload["max_horizon"]),
+            horizon_weighting=str(learning_payload["horizon_weighting"]),
+            objective_profile=learning_payload["objective_profile"],
+        )
+        if data.learning_contract.learning_semantics() != bound_learning_contract.learning_semantics():
+            raise ValueError("Q_H exact-Q2 test learning semantics drifted from the bundle.")
         if data.actor_state_contract_hash != identity["actor_state_contract_hash"]:
             raise ValueError("Q_H exact-Q2 test actor-state contract drifted from the bundle.")
         if data.geometry_contract_hash != identity["geometry_contract_hash"]:

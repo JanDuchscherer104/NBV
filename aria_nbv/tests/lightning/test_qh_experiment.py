@@ -707,10 +707,21 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
         callbacks=base.trainer.callbacks,
     )
     experiment = base.model_copy(deep=True, update={"trainer": trainer}).setup_target()
+    train_dataset = _dense_dataset("train", 0)
+    validation_dataset = _dense_dataset("val", 20)
+    validation_dataset.contract = replace(
+        validation_dataset.contract,
+        rollout_config_hashes=("rollout-validation-v1",),
+    )
+    test_dataset = _dense_dataset("test", 40)
+    test_dataset.contract = replace(
+        test_dataset.contract,
+        rollout_config_hashes=("rollout-test-v1",),
+    )
     request = QhFitRequest(
-        train=_DatasetConfig(tmp_path / "train.zarr", _dense_dataset("train", 0)),  # type: ignore[arg-type]
-        validation=_DatasetConfig(tmp_path / "val.zarr", _dense_dataset("val", 20)),  # type: ignore[arg-type]
-        test=_DatasetConfig(tmp_path / "test.zarr", _dense_dataset("test", 40)),  # type: ignore[arg-type]
+        train=_DatasetConfig(tmp_path / "train.zarr", train_dataset),  # type: ignore[arg-type]
+        validation=_DatasetConfig(tmp_path / "val.zarr", validation_dataset),  # type: ignore[arg-type]
+        test=_DatasetConfig(tmp_path / "test.zarr", test_dataset),  # type: ignore[arg-type]
         warm_start_from=None,
         checkpoint_selection=QhCheckpointSelectionSpec(),
         seed=23,
