@@ -31,12 +31,14 @@ literature, bibliography, or Typst sources.
      [`symbols.typ`](../../../docs/typst/shared/symbols.typ), or Typst's
      [`notation policy`](../typst-authoring/references/aria-nbv-notation.md).
 3. Inspect exact evidence owners and report each finding with severity, locator,
-   rationale, and repair action. Separate evidence from inference.
+   rationale, repair action, gate, and review independence. Separate evidence
+   from inference.
 4. Return findings to the owning author or implementation lane. This review
    never advances a phase state; the owner decides whether to mutate, realize,
    or request a fresh review.
 
 ## Completion
 
-The unchanged candidate has a reproducible identity, all applicable checks have
-an evidence-bounded result, and unresolved risks are explicit for its owner.
+The unchanged candidate has a reproducible identity, recorded review
+independence, all applicable checks have an evidence-bounded result, and
+unresolved risks are explicit for its owner.

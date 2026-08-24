@@ -721,7 +721,10 @@ def audit_routing_fixtures(
         execution_mode = fixture.get("execution_mode", "read-only")
         changed_prefixes = fixture.get("required_changed_path_prefixes", [])
         typst_proof = fixture.get("typst_proof", False)
-        if execution_mode not in {"read-only", "workspace-write"}:
+        if not isinstance(execution_mode, str) or execution_mode not in {
+            "read-only",
+            "workspace-write",
+        }:
             errors.append(
                 f"{rel(path)} fixture {fixture_id or index}: execution_mode must be read-only or workspace-write"
             )
@@ -1209,6 +1212,11 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 "fixture-empty-outcomes",
                 lambda value: value["fixtures"][0].update(required_outcomes=[]),
                 "required_outcomes",
+            ),
+            (
+                "fixture-non-string-execution-mode",
+                lambda value: value["fixtures"][0].update(execution_mode=[]),
+                "execution_mode",
             ),
         ):
             mutated = json.loads(json.dumps(fixture))

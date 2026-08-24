@@ -108,6 +108,8 @@ def _trial_report() -> dict[str, object]:
         "runtime": {},
         "execution": {
             "sandbox": trials.READ_ONLY_SANDBOX,
+            "baseline_head": "baseline",
+            "head_after": "baseline",
             "required_changed_path_prefixes": [],
             "typst_proof": None,
             "changed_paths": [],
@@ -250,12 +252,24 @@ def test_subject_checkout_removes_evaluator_fixtures_and_history(tmp_path: Path)
     (checkout / "README.md").write_text("subject\n", encoding="utf-8")
     prompts.write_text('{"id":"trial","task":"answer"}\n', encoding="utf-8")
     rubric.write_text('{"fixtures":[{"id":"trial","answer":"leaked"}]}\n', encoding="utf-8")
+    (checkout / "scripts" / "tests").mkdir(parents=True)
+    (checkout / "scripts" / "tests" / "routing.py").write_text(
+        "evaluator\n", encoding="utf-8"
+    )
+    (checkout / ".agents" / "memory").mkdir(parents=True)
+    (checkout / ".agents" / "memory" / "debrief.md").write_text(
+        "evaluator\n", encoding="utf-8"
+    )
+    (checkout / ".omx").mkdir()
+    (checkout / ".omx" / "review.md").write_text("evaluator\n", encoding="utf-8")
     (checkout / ".git").write_text("gitdir: ignored\n", encoding="utf-8")
 
     trials.prepare_subject_checkout(checkout)
 
     assert not prompts.exists()
     assert not rubric.exists()
+    for relative_path in trials.EVALUATOR_EXCLUDED_PATHS:
+        assert not (checkout / relative_path).exists()
     result = subprocess.run(
         ["git", "show", f"HEAD:{trials.RUBRIC_RELATIVE.as_posix()}"],
         cwd=checkout,
@@ -292,8 +306,26 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
         check=True,
     )
 
+    registration = trials._subject_worktree_admin_dir(checkout)
     trials.prepare_subject_checkout(checkout)
-    trials.remove_subject_checkout(checkout, repository=repository)
+    baseline = trials.run_git("rev-parse", "HEAD", cwd=checkout)
+    untracked = checkout / "docs" / "typst" / "thesis" / "untracked.typ"
+    untracked.parent.mkdir(parents=True)
+    untracked.write_text("#let proof = true\n", encoding="utf-8")
+    assert untracked.relative_to(checkout).as_posix() in trials._changed_paths(
+        checkout, baseline
+    )
+    subprocess.run(["git", "add", "--all"], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-qm", "trial write"], cwd=checkout, check=True)
+    assert untracked.relative_to(checkout).as_posix() in trials._changed_paths(
+        checkout, baseline
+    )
+    trials.remove_subject_checkout(
+        checkout,
+        subject_root=tmp_path,
+        worktree_admin_dir=registration,
+        repository=repository,
+    )
 
     assert not checkout.exists()
     registered = subprocess.run(
@@ -306,10 +338,22 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
     assert str(checkout) not in registered
 
 
+def test_subject_cleanup_rejects_a_path_outside_its_temporary_root(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="escapes its temporary directory"):
+        trials.remove_subject_checkout(
+            tmp_path / "outside",
+            subject_root=tmp_path / "subjects",
+            worktree_admin_dir=tmp_path / "registration",
+            repository=tmp_path,
+        )
+
+
 def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
     report = _trial_report()
     report["execution"] = {
         "sandbox": trials.WORKSPACE_WRITE_SANDBOX,
+        "baseline_head": "baseline",
+        "head_after": "baseline",
         "required_changed_path_prefixes": ["docs/typst/thesis/"],
         "changed_paths": ["docs/typst/thesis/sections/01-research-questions.typ"],
         "typst_proof": {"passed": True},
@@ -318,6 +362,51 @@ def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
     assert trials.trial_passed(report)
     report["execution"]["typst_proof"] = {"passed": False}  # type: ignore[index]
     assert not trials.trial_passed(report)
+
+
+def test_trial_rejects_committed_or_out_of_scope_workspace_changes() -> None:
+    report = _trial_report()
+    report["execution"] = {
+        "sandbox": trials.WORKSPACE_WRITE_SANDBOX,
+        "baseline_head": "baseline",
+        "head_after": "baseline",
+        "required_changed_path_prefixes": ["docs/typst/thesis/"],
+        "changed_paths": ["docs/typst/thesis/sections/01-research-questions.typ"],
+        "typst_proof": {"passed": True},
+    }
+    report["adjudication"] = {"passed": True}
+    assert trials.trial_passed(report)
+    report["execution"]["head_after"] = "committed"  # type: ignore[index]
+    assert not trials.trial_passed(report)
+    report["execution"]["head_after"] = "baseline"  # type: ignore[index]
+    report["execution"]["changed_paths"].append("notes.txt")  # type: ignore[index]
+    assert not trials.trial_passed(report)
+
+
+def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    checkout.mkdir()
+    trial_dir.mkdir()
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[0] == "typst":
+            Path(command[3]).write_bytes(b"pdf")
+        else:
+            pages = Path(command[command.index("-o") + 1])
+            pages.mkdir()
+            (pages / "01.png").write_bytes(b"png")
+            (pages / "02.png").write_bytes(b"png")
+        return subprocess.CompletedProcess(command, 0)
+
+    with patch.object(trials.subprocess, "run", side_effect=fake_run):
+        proof = trials._typst_proof(checkout, trial_dir)
+
+    assert proof["passed"] is True
+    assert proof["artifacts"]["rendered_pages"] == ("01.png", "02.png")
+    assert "--pages" not in calls[1]
 
 
 def test_stream_capture_requires_per_stream_bounded_receipts() -> None:

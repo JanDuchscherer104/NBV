@@ -216,6 +216,7 @@ class SelectionTests(unittest.TestCase):
             "docs/index.qmd": {"docs"},
             ".agents/skills/aria-nbv-context/SKILL.md": {"scaffold"},
             ".agents/example.qmd": {"scaffold"},
+            ".agents/skills/README.md": {"docs", "scaffold"},
             ".agents/skills/typst-authoring/SKILL.md": {"docs", "scaffold"},
             ".agents/skills/typst-authoring/references/workflow.md": {"docs", "scaffold"},
             ".agents/skills/academic-writing/SKILL.md": {"docs", "scaffold"},

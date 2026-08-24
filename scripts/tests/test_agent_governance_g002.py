@@ -1403,6 +1403,9 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         assert phase in skill_guide
     for gate in ("`blocking`", "`advisory`", "`clear`"):
         assert gate in review_protocol
+    assert "`independence: independent`" in review_protocol
+    assert "same-context advisory review cannot unlock" in review_protocol
+    assert "independent scientific review" in skill_guide
     assert "prose-draft" not in thesis_writing
     assert "prose-polish" not in thesis_writing
     assert "generated context artifact" not in claim_discipline

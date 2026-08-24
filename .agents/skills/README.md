@@ -77,7 +77,7 @@ sources remain durable truth.
 - `proposed`: argument construction is complete enough for owner review.
 - `ready-for-realization`: the authoring owner has confirmed the cited evidence,
   limitation, and wording for this task; an empirical-result candidate also has
-  a candidate-bound scientific review with no blocking finding.
+  a candidate-bound, independent scientific review with no blocking finding.
 - `realized`: the exact Typst source changed and its required proof passed.
 - `scientifically released`: a separate human/evidence release gate passed; do
   not infer this state from realization.

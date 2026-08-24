@@ -84,6 +84,9 @@ def select_families(paths: list[str]) -> set[str]:
         ):
             selected.add("scaffold")
             matched = True
+        if path == ".agents/skills/README.md":
+            selected.add("docs")
+            matched = True
         if path.startswith(
             (
                 ".agents/skills/typst-authoring/",

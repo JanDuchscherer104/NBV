@@ -29,6 +29,12 @@ RUBRIC_PATH = ROOT / RUBRIC_RELATIVE
 REPORT_SCHEMA = ROOT / REPORT_SCHEMA_RELATIVE
 VERIFIER_SCHEMA = ROOT / VERIFIER_SCHEMA_RELATIVE
 EVALUATOR_FIXTURE_PATHS = (PROMPTS_RELATIVE, RUBRIC_RELATIVE)
+EVALUATOR_EXCLUDED_PATHS = (
+    *EVALUATOR_FIXTURE_PATHS,
+    Path("scripts/tests"),
+    Path(".agents/memory"),
+    Path(".omx"),
+)
 EVENT_EVIDENCE_MAX_ITEMS = 64
 EVENT_EVIDENCE_MAX_FIELD_CHARS = 2_048
 EVENT_EVIDENCE_MAX_TOTAL_CHARS = 32_768
@@ -282,9 +288,15 @@ def execution_contract(rubric: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _changed_paths(checkout: Path) -> tuple[str, ...]:
-    """Return tracked subject changes from the isolated trial repository."""
-    return tuple(run_git("diff", "--name-only", "HEAD", cwd=checkout).splitlines())
+def _changed_paths(checkout: Path, baseline_head: str) -> tuple[str, ...]:
+    """Return all tracked or untracked subject paths diverging from one baseline."""
+    changed = set(
+        run_git("diff", "--name-only", baseline_head, cwd=checkout).splitlines()
+    )
+    changed.update(
+        run_git("ls-files", "--others", "--exclude-standard", cwd=checkout).splitlines()
+    )
+    return tuple(sorted(path for path in changed if path))
 
 
 def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
@@ -301,8 +313,6 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
             str(pages),
             "--root",
             "docs",
-            "--pages",
-            "1",
             "--ppi",
             "150",
         ],
@@ -322,10 +332,15 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired):
             returncodes.append(125)
             break
+    rendered_pages = tuple(sorted(path.name for path in pages.glob("*.png")))
     return {
-        "passed": returncodes == [0, 0] and pdf.is_file() and pages.is_dir(),
+        "passed": returncodes == [0, 0] and pdf.is_file() and bool(rendered_pages),
         "returncodes": returncodes,
-        "artifacts": {"pdf": pdf.name, "pages": pages.name},
+        "artifacts": {
+            "pdf": pdf.name,
+            "pages": pages.name,
+            "rendered_pages": rendered_pages,
+        },
     }
 
 
@@ -599,11 +614,17 @@ def trial_passed(report: dict[str, Any]) -> bool:
     if not isinstance(execution, dict):
         return False
     sandbox = execution.get("sandbox")
+    baseline_head = execution.get("baseline_head")
+    head_after = execution.get("head_after")
     changed_paths = execution.get("changed_paths")
     prefixes = execution.get("required_changed_path_prefixes")
     proof = execution.get("typst_proof")
     if (
         sandbox not in _EXECUTION_MODES
+        or not isinstance(baseline_head, str)
+        or not baseline_head
+        or not isinstance(head_after, str)
+        or not head_after
         or not isinstance(changed_paths, list)
         or not all(isinstance(path, str) for path in changed_paths)
         or not isinstance(prefixes, list)
@@ -613,6 +634,7 @@ def trial_passed(report: dict[str, Any]) -> bool:
     if sandbox == READ_ONLY_SANDBOX:
         execution_valid = (
             report.get("checkout_clean_after")
+            and head_after == baseline_head
             and not prefixes
             and proof is None
             and not changed_paths
@@ -620,9 +642,14 @@ def trial_passed(report: dict[str, Any]) -> bool:
     else:
         execution_valid = (
             bool(prefixes)
+            and head_after == baseline_head
             and all(
                 any(path.startswith(prefix) for path in changed_paths)
                 for prefix in prefixes
+            )
+            and all(
+                any(path.startswith(prefix) for prefix in prefixes)
+                for path in changed_paths
             )
             and isinstance(proof, dict)
             and proof.get("passed") is True
@@ -939,7 +966,8 @@ def run_trial(
         effort=effort,
         sandbox=contract["sandbox"],
     )
-    changed_before = _changed_paths(checkout)
+    baseline_head = run_git("rev-parse", "HEAD", cwd=checkout)
+    changed_before = _changed_paths(checkout, baseline_head)
     started = time.time()
     output_overflow = Event()
     events_overflow = Event()
@@ -1011,7 +1039,8 @@ def run_trial(
         except subprocess.TimeoutExpired:
             returncode = 124
             timed_out = True
-    changed_after = _changed_paths(checkout)
+    head_after = run_git("rev-parse", "HEAD", cwd=checkout)
+    changed_after = _changed_paths(checkout, baseline_head)
     proof = None
     if contract["typst_proof"]:
         expected_change = all(
@@ -1042,7 +1071,7 @@ def run_trial(
         "timed_out": timed_out,
         "output_overflow": output_overflow.is_set(),
         "checkout_clean_before": not changed_before,
-        "checkout_clean_after": not changed_after,
+        "checkout_clean_after": head_after == baseline_head and not changed_after,
         "stream_capture": {
             "events": {
                 "observed_bytes": event_bytes[0],
@@ -1057,6 +1086,8 @@ def run_trial(
         },
         "execution": {
             **contract,
+            "baseline_head": baseline_head,
+            "head_after": head_after,
             "changed_paths": list(changed_after),
             "typst_proof": proof,
         },
@@ -1071,6 +1102,18 @@ def run_trial(
     return report
 
 
+def _subject_worktree_admin_dir(checkout: Path) -> Path:
+    """Return the linked-worktree administration directory for one subject."""
+    git_pointer = checkout / ".git"
+    if not git_pointer.is_file():
+        raise ValueError("routing subject checkout has no detachable Git pointer")
+    prefix = "gitdir: "
+    pointer = git_pointer.read_text(encoding="utf-8").strip()
+    if not pointer.startswith(prefix):
+        raise ValueError("routing subject checkout has an invalid Git pointer")
+    return (checkout / pointer.removeprefix(prefix)).resolve().parent
+
+
 def prepare_subject_checkout(checkout: Path) -> None:
     """Detach a disposable subject repository from evaluator fixtures and history."""
     for relative_path in EVALUATOR_FIXTURE_PATHS:
@@ -1079,11 +1122,13 @@ def prepare_subject_checkout(checkout: Path) -> None:
             raise ValueError(
                 f"cannot hide evaluator fixture: {relative_path.as_posix()}"
             )
-        path.unlink()
-    git_pointer = checkout / ".git"
-    if not git_pointer.is_file():
-        raise ValueError("routing subject checkout has no detachable Git pointer")
-    git_pointer.unlink()
+    for relative_path in EVALUATOR_EXCLUDED_PATHS:
+        path = checkout / relative_path
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+    (checkout / ".git").unlink()
     subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
     subprocess.run(
         ["git", "config", "user.email", "routing-subject@example.invalid"],
@@ -1101,13 +1146,29 @@ def prepare_subject_checkout(checkout: Path) -> None:
     )
 
 
-def remove_subject_checkout(checkout: Path, *, repository: Path = ROOT) -> None:
-    """Remove one detached routing subject and its stale worktree registration."""
+def remove_subject_checkout(
+    checkout: Path,
+    *,
+    subject_root: Path,
+    worktree_admin_dir: Path,
+    repository: Path = ROOT,
+) -> None:
+    """Remove one detached subject and only its linked-worktree registration."""
+    resolved_checkout = checkout.resolve()
+    if not resolved_checkout.is_relative_to(subject_root.resolve()):
+        raise ValueError("routing subject escapes its temporary directory")
+    common_dir = Path(
+        run_git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=repository)
+    ).resolve()
+    expected_parent = common_dir / "worktrees"
+    if not worktree_admin_dir.is_relative_to(expected_parent):
+        raise ValueError("routing subject registration escapes the repository worktree area")
     if checkout.exists():
         if not checkout.is_dir():
             raise ValueError(f"routing subject is not a directory: {checkout}")
         shutil.rmtree(checkout)
-    run_git("worktree", "prune", cwd=repository)
+    if worktree_admin_dir.exists():
+        shutil.rmtree(worktree_admin_dir)
 
 
 def parse_args() -> argparse.Namespace:
@@ -1185,10 +1246,12 @@ def main() -> int:
         checkouts = {
             trial_id: Path(temp) / f"checkout-{trial_id}" for trial_id in selected
         }
-        for checkout in checkouts.values():
-            run_git("worktree", "add", "--detach", str(checkout), tested_commit)
-            prepare_subject_checkout(checkout)
+        registrations: dict[Path, Path] = {}
         try:
+            for checkout in checkouts.values():
+                run_git("worktree", "add", "--detach", str(checkout), tested_commit)
+                registrations[checkout] = _subject_worktree_admin_dir(checkout)
+                prepare_subject_checkout(checkout)
             reports: list[dict[str, Any]] = []
             with ThreadPoolExecutor(max_workers=args.jobs) as executor:
                 futures = {
@@ -1234,8 +1297,12 @@ def main() -> int:
                 )
                 print(f"{report['trial_id']}: verdict={adjudication['reason']}")
         finally:
-            for checkout in checkouts.values():
-                remove_subject_checkout(checkout)
+            for checkout, registration in registrations.items():
+                remove_subject_checkout(
+                    checkout,
+                    subject_root=Path(temp),
+                    worktree_admin_dir=registration,
+                )
 
     index = {
         "tested_commit": tested_commit,
