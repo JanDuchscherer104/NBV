@@ -6,9 +6,9 @@ Date: 2026-08-01
 
 PRD: `.omx/plans/prd-thin-root-nested-agents-rewrite.md`
 
-Final Architect review: `.omx/plans/thin-root-nested-agents-rewrite-architect-review.md`
+Final Architect review: `.omx/reviews/thin-root-nested-agents-rewrite-architect-review.md`
 
-Final Critic review: `.omx/plans/thin-root-nested-agents-rewrite-critic-review.md`
+Final Critic review: `.omx/reviews/thin-root-nested-agents-rewrite-critic-review.md`
 
 ## Purpose
 

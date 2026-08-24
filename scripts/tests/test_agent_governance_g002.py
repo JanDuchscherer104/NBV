@@ -118,6 +118,16 @@ def _is_session_local_review_artifact(path: str) -> bool:
     return relative.parts[:2] == (".omx", "reviews") and len(relative.parts) > 2
 
 
+def _raw_review_plan_pointers(text: str) -> list[str]:
+    role = r"(?:architect(?:ure)?|critic|critique)"
+    path = r"\.omx/plans/[^\s`\"']*"
+    return re.findall(
+        rf"{path}(?:{role}[^\s`\"']*review|review[^\s`\"']*{role})[^\s`\"']*",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
     owner_paths = fixture.get("expected_owner_paths")
     return isinstance(owner_paths, list) and all(
@@ -919,6 +929,13 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     assert not _is_session_local_review_artifact(
         ".omx/specs/nested/accepted-peer-review/report.md"
     )
+
+    stale_review_pointers = {
+        path.relative_to(ROOT).as_posix(): pointers
+        for path in (ROOT / ".omx" / "plans").rglob("*.md")
+        if (pointers := _raw_review_plan_pointers(_read(path)))
+    }
+    assert not stale_review_pointers
 
     active_handoff = _read(ROOT / ".omx/plans/ralplan-handoff-online-oracle-mvp.md")
     assert (
