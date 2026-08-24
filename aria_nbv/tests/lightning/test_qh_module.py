@@ -632,6 +632,35 @@ def test_coral_metrics_expose_target_support_saturation(monkeypatch: pytest.Monk
     assert 0.0 <= logged["val/coral_monotonicity_violation_rate"].item() <= 1.0
 
 
+def test_coral_metrics_all_reduce_on_a_locally_empty_training_rank(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _coral_module()
+    batch = _batch()
+    output = module(batch.actor)
+    admitted = torch.zeros_like(batch.selected_train_mask)
+    targets = torch.zeros_like(batch.supervision.discount)
+    reductions: list[torch.Tensor] = []
+    logged: list[str] = []
+    monkeypatch.setattr(module, "_distributed", lambda: True)
+    monkeypatch.setattr(
+        torch.distributed,
+        "all_reduce",
+        lambda values, **kwargs: reductions.append(values.detach().clone()),
+    )
+    monkeypatch.setattr(module, "log", lambda name, *args, **kwargs: logged.append(name))
+
+    module._log_coral_metrics(  # noqa: SLF001
+        Stage.TRAIN,
+        batch=batch,
+        output=output,
+        targets=targets,
+        admitted=admitted,
+    )
+
+    assert len(reductions) == 1
+    assert reductions[0].tolist() == [0.0] * 6
+    assert logged == []
+
+
 def test_module_rejects_malformed_coral_payload_before_training() -> None:
     module = QhLightningModule(
         QhLightningModuleConfig(

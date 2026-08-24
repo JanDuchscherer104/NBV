@@ -609,7 +609,9 @@ class QhLightningModule(pl.LightningModule):
         """
 
         auxiliary = output.value_auxiliary
-        if auxiliary is None or not bool(admitted.any()):
+        if auxiliary is None:
+            return
+        if stage is not Stage.TRAIN and not bool(admitted.any()):
             return
         fitted_targets = targets[admitted]
         labels = torch.bucketize(fitted_targets, auxiliary.bin_edges)
@@ -638,6 +640,8 @@ class QhLightningModule(pl.LightningModule):
         if stage is Stage.TRAIN and self._distributed():
             torch.distributed.all_reduce(counts, op=torch.distributed.ReduceOp.SUM)
         below, above, outer, violations, row_count, ordered_pair_count = counts.unbind()
+        if int(row_count.item()) == 0:
+            return
         metrics = {
             "coral_target_below_support_fraction": below / row_count.clamp_min(1),
             "coral_target_above_support_fraction": above / row_count.clamp_min(1),
