@@ -120,6 +120,8 @@
   (key: "obs.points_semi", tex: "\\mathcal{P}^{\\mathrm{semi}}", description: "Semi-dense observed point set.", thesis_list: true, order: 710),
   (key: "obs.points_t", tex: "\\mathcal{P}_t", description: "Point set available at rollout step t.", thesis_list: true, order: 720),
   (key: "rl.candidate_table", tex: "\\mathcal{Q}_t", description: "Finite candidate-view table at rollout step t.", thesis_list: true, order: 730),
+  (key: "rl.exact_q2_target", tex: "y_t^{(2,\\mathrm{exact})}", description: "Exact two-step fitted-Q control using factual dense successor one-step rewards.", thesis_list: true, order: 732),
+  (key: "rl.q2_recursion_error", tex: "\\varepsilon_t^{(2)}", description: "Absolute learned-recursion target error against the exact two-step control.", thesis_list: true, order: 734),
   (key: "vin.field_v", tex: "\\boldsymbol{F}_v", description: "Learned value field evaluated at v.", thesis_list: true, order: 740),
 )
 

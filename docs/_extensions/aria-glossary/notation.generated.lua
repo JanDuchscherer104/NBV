@@ -302,6 +302,12 @@ return {
       description = "Fixed continuous-Q representative used to decode one CORAL class.",
       thesis_list = true,
     },
+    ["rl.exact_q2_target"] = {
+      tex = "y_t^{(2,\\mathrm{exact})}",
+      typst = "#symb.rl.exact_q2_target",
+      description = "Exact two-step fitted-Q control using factual dense successor one-step rewards.",
+      thesis_list = true,
+    },
     ["rl.feasibility_logits"] = {
       tex = "\\ell_{t,i}^{\\mathrm{feas}}",
       typst = "#symb.rl.feasibility_logits",
@@ -324,6 +330,12 @@ return {
       tex = "\\mathcal{M}_{\\mathrm{NBV}}",
       typst = "#symb.rl.mdp_nbv",
       description = "Target-conditioned finite-candidate NBV decision process.",
+      thesis_list = true,
+    },
+    ["rl.q2_recursion_error"] = {
+      tex = "\\varepsilon_t^{(2)}",
+      typst = "#symb.rl.q2_recursion_error",
+      description = "Absolute learned-recursion target error against the exact two-step control.",
       thesis_list = true,
     },
     ["rl.qh"] = {
@@ -890,6 +902,18 @@ return {
       tex = "y_t^{(h,e)}=r_t^e+\\gamma B_t^{(h,e)}",
       typst = "#eqs.rl.qh_doubleq_target",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_exact_q2_error"] = {
+      tex = "\\varepsilon_t^{(2)}=|y_t^{(2,\\mathrm{recursive})}-y_t^{(2,\\mathrm{exact})}|\\leq\\tau_{\\mathrm{abs}}+\\tau_{\\mathrm{rel}}|y_t^{(2,\\mathrm{exact})}|",
+      typst = "#eqs.rl.qh_exact_q2_error",
+      description = "Versioned absolute-plus-relative learned-recursion agreement gate.",
+      thesis_list = false,
+    },
+    ["rl.qh_exact_q2_target"] = {
+      tex = "y_t^{(2,\\mathrm{exact})}=r_t^e+\\gamma_t\\max_{j:m_{t+1,j}^{\\mathrm{train}}=1}r_{t+1,j}^e",
+      typst = "#eqs.rl.qh_exact_q2_target",
+      description = "Factual dense-successor exact-Q2 control.",
       thesis_list = false,
     },
     ["rl.qh_masked_argmax"] = {

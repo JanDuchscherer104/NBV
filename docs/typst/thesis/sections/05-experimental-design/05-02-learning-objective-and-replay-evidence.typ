@@ -55,9 +55,9 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   implementation: "partial",
   evidence: "pending",
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_datamodule.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
-  gate: [exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
-)[The scalar requested-horizon A0/A1 controls, hard-masked selected-transition Double-Q learner, feasibility auxiliary, and exact-Q2 diagnostic are implemented. A1 remains the default; task-sufficient dynamic state and comparative policy evidence remain unavailable.]
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_datamodule.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
+  gate: [populated held-out exact-Q2 receipt, supported H>2 targets, compatible checkpoint, frozen state protocol, and independent held-out oracle re-evaluation],
+)[The scalar requested-horizon A0/A1 controls, hard-masked selected-transition Double-Q learner, feasibility auxiliary, and bounded stratified exact-Q2 certification surface are implemented. A1 remains the default; a population receipt, task-sufficient dynamic state, and comparative policy evidence remain unavailable.]
 
 The finite-candidate value model decodes actions only over valid candidate rows:
 
@@ -95,9 +95,29 @@ This schedule preserves one inference interface and shared encoders while making
 
 For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
 
-#eqs.rl.finite_horizon_return
+#eqs.rl.qh_exact_q2_target
 
-This target uses no learned successor value or target network. Agreement between fitted $Q_2$ and this exact control is a required base-case test before interpreting longer-horizon results under either scorer interface.
+This target uses no learned successor value or target network. The executable
+base-case evaluation has two layers: exact-table injection tests the recursion
+implementation, while the frozen-bundle certification compares the learned
+recursive target against the factual control using
+
+#eqs.rl.qh_exact_q2_error
+
+The latter is evaluated on a deterministic bounded sample from a metadata-only
+census. Its versioned stratum contains scene, target row, configured horizon,
+candidate-width bin, candidate- and rollout-configuration hashes, and behavior
+policy. The receipt binds the scorer and module configuration, actor-state and
+learning contracts, ordered test-store manifests and paths, test provenance,
+selection seed and bounds, support minimum, and absolute and relative
+tolerances. It reports selected-chain coverage, rows without exact support,
+per-stratum support and error, and fixed-support CORAL saturation separately
+from recursion error. Missing support is a failed gate rather than zero error.
+Agreement with the exact control remains necessary but insufficient for
+interpreting longer horizons: positive oracle-lookahead headroom must come from
+independent held-out endpoint evaluation. A persisted terminal-step role
+contrast is retained as a diagnostic proxy and is manifest-bound, but it cannot
+promote an $h>2$ claim.
 
 === Double-Q and behavior-return controls
 
