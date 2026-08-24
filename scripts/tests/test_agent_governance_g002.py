@@ -760,18 +760,17 @@ def test_capture_and_routing_contracts() -> None:
         "references/execution-branches.md",
         "references/external-actions.md",
         "references/reviewed-intent.md",
-        "references/performance-goal-reporting.md",
-        "references/senpai-adoption.md",
+        "references/senpai-performance.md",
     }
     for reference_path in reference_paths:
         assert (agent_behavior_path.parent / reference_path).is_file()
 
-    senpai_reference = _read(
-        agent_behavior_path.parent / "references" / "senpai-adoption.md"
-    )
-    assert "772acc597f29065ccad012c749334a287d89badd" in senpai_reference
-    assert "git ls-remote https://github.com/wandb/senpai.git HEAD" in senpai_reference
-    assert "does not vendor SENPAI" in senpai_reference
+    senpai_reference = _read(agent_behavior_path.parent / "references" / "senpai-performance.md")
+    assert "senpai-adoption-updates.md" in senpai_reference
+    assert "does not vendor SENPAI" not in senpai_reference
+    senpai_updates = _read(agent_behavior_path.parent / "references" / "senpai-adoption-updates.md")
+    assert "772acc597f29065ccad012c749334a287d89badd" in senpai_updates
+    assert "git ls-remote https://github.com/wandb/senpai.git HEAD" in senpai_updates
 
     intent_reference = _read(
         agent_behavior_path.parent / "references" / "reviewed-intent.md"

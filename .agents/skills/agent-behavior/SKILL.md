@@ -77,17 +77,9 @@ explicit.
   capability, use the `simplification` workflow and preserve the outcome until
   comparative evidence supports its retained, replaced, removed, deferred, or
   open status.
-- **External research scaffold adoption:** Before adopting behavior from an
-  external research harness, read
-  [`references/senpai-adoption.md`](references/senpai-adoption.md). Reuse only
-  its demonstrated mechanics through an ARIA owner; keep the external runtime
-  separate and follow its pinned upstream-update route.
-- **Measured performance experiment:** Use `$oh-my-codex:performance-goal` for
-  its evaluator-gated lifecycle. Read
-  [`references/performance-goal-reporting.md`](references/performance-goal-reporting.md)
-  before recording an evaluator result; do not create a second autoresearch
-  sidecar or treat W&B as promotion authority.
-- **Formal SENPAI performance experiment:** Use `$oh-my-codex:performance-goal` and the reporting reference. Complete only after the immutable result has a published, read-back W&B run; its evaluator verdict remains OMX-owned.
+- **SENPAI:** For external-harness adoption or a formal measured experiment,
+  read [`references/senpai-performance.md`](references/senpai-performance.md).
+  It selects the adoption or evaluator-gated W&B reporting mode.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
