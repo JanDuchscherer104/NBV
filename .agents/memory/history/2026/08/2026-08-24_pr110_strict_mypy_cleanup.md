@@ -43,9 +43,13 @@ were repaired without changing persisted schemas or scientific contracts.
 - The affected Quartodoc script test passed: 2 tests.
 - Changed modules compiled and both staged and unstaged diffs passed
   `git diff --check`.
+- The hosted-CI-equivalent `PYTEST_WORKERS=0 make ruff-full package-smoke`
+  passed after refreshing the replay/oracle golden's source-identity seal: 469
+  Q_H contract tests and 125 package-smoke tests passed.
 
 ## Canonical-state impact
 
 The changes strengthen typing and repository guidance only. Runtime behavior,
 persistence formats, scientific projections, and the merged PR #110 feature
-surface remain unchanged.
+surface remain unchanged. The replay/oracle fixture changed only its persisted
+SHA-256 for the byte-modified `rollouts/zarr_store.py` source owner.
