@@ -675,6 +675,7 @@ def audit_routing_fixtures(
         "forbidden_outcomes",
         "execution_mode",
         "required_changed_path_prefixes",
+        "required_changed_paths",
         "typst_proof",
     }
     for index, fixture in enumerate(fixtures, start=1):
@@ -720,6 +721,7 @@ def audit_routing_fixtures(
 
         execution_mode = fixture.get("execution_mode", "read-only")
         changed_prefixes = fixture.get("required_changed_path_prefixes", [])
+        changed_paths = fixture.get("required_changed_paths", [])
         typst_proof = fixture.get("typst_proof", False)
         if not isinstance(execution_mode, str) or execution_mode not in {
             "read-only",
@@ -734,17 +736,25 @@ def audit_routing_fixtures(
             errors.append(
                 f"{rel(path)} fixture {fixture_id or index}: required_changed_path_prefixes must be a list of non-empty strings"
             )
+        if not isinstance(changed_paths, list) or not all(
+            isinstance(path, str) and path.strip() for path in changed_paths
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: required_changed_paths must be a list of non-empty strings"
+            )
         if not isinstance(typst_proof, bool):
             errors.append(
                 f"{rel(path)} fixture {fixture_id or index}: typst_proof must be boolean"
             )
         if execution_mode == "workspace-write" and (
-            not changed_prefixes or typst_proof is not True
+            not changed_prefixes or not changed_paths or typst_proof is not True
         ):
             errors.append(
                 f"{rel(path)} fixture {fixture_id or index}: workspace-write requires changed paths and typst_proof"
             )
-        if execution_mode == "read-only" and (changed_prefixes or typst_proof):
+        if execution_mode == "read-only" and (
+            changed_prefixes or changed_paths or typst_proof
+        ):
             errors.append(
                 f"{rel(path)} fixture {fixture_id or index}: read-only cannot require edit proof"
             )
@@ -875,6 +885,7 @@ def load_routing_prompts(path: Path) -> tuple[dict[str, str], list[str]]:
         "forbidden_outcomes",
         "execution_mode",
         "required_changed_path_prefixes",
+        "required_changed_paths",
         "typst_proof",
         "mcp__",
     )
