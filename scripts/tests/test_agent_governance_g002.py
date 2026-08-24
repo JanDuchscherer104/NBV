@@ -791,6 +791,12 @@ def test_capture_and_routing_contracts() -> None:
     ):
         assert requirement in intent_reference
 
+    memory = _read(ROOT / ".agents" / "memory" / "README.md")
+    assert "### Candidate Owner Intent" in memory
+    assert "candidate-intent branch" in memory
+    assert "Omit the section otherwise" in memory
+    assert "only explicit current-user acceptance" in memory
+
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
     )

@@ -121,6 +121,13 @@ worktree_kind: {provenance["worktree_kind"]}
 ## Commits
 - none — add full immutable implementation commit link after a completed workpackage
 
+## Candidate Owner Intent
+<!-- Omit this section unless the agent-behavior candidate-intent branch applies. -->
+- Statement: <precise reusable preference>
+- Evidence: <direct instruction or bounded recurring evidence>
+- Scope and target owner: <scope and exact owner path>
+- Status: proposed for current-user review
+
 ## Verification
 <commands; pass/fail; blockers>
 
