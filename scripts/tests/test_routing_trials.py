@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
 import json
 import shutil
 import subprocess
@@ -18,8 +19,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 ROUTING_PROXY_URL = "http://127.0.0.1:43123/v1"
 sys.path.insert(0, str(ROOT / "scripts" / "scaffold"))
-
-import run_routing_trials as trials
+trials = importlib.import_module("run_routing_trials")
 
 
 def _complete_event_evidence() -> dict[str, object]:
@@ -759,8 +759,6 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if "aria-thesis-mode=submission" in command:
-            return subprocess.CompletedProcess(command, 1)
         if command[0] == "bwrap" and "compile" in command:
             (trial_dir / "thesis.pdf").write_bytes(b"pdf")
         elif command[0] == "pdfinfo":
@@ -772,13 +770,35 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
             (pages / "02.png").write_bytes(b"png")
         return subprocess.CompletedProcess(command, 0)
 
-    with patch.object(trials.subprocess, "run", side_effect=fake_run):
+    def fake_gate(**kwargs: object) -> dict[str, object]:
+        command = kwargs["command"]
+        stderr_path = kwargs["stderr_path"]
+        assert isinstance(command, list)
+        assert isinstance(stderr_path, Path)
+        calls.append(command)
+        stderr_path.write_bytes(trials.SUBMISSION_GATE_DIAGNOSTIC)
+        return {
+            "returncode": 1,
+            "timed_out": False,
+            "output_overflow": False,
+            "launch_error": False,
+        }
+
+    with (
+        patch.object(trials.subprocess, "run", side_effect=fake_run),
+        patch.object(trials, "_run_bounded_process", side_effect=fake_gate),
+    ):
         proof = trials._typst_proof(checkout, trial_dir)
 
     assert proof["passed"] is True
     assert proof["artifacts"]["page_count"] == 2
     assert proof["artifacts"]["rendered_pages"] == ("01.png", "02.png")
     assert proof["submission_gate_returncode"] == 1
+    assert proof["submission_gate"] == {
+        "executed": True,
+        "returncode": 1,
+        "expected_diagnostic": True,
+    }
     assert "--pages" not in calls[1]
     assert "aria-thesis-mode=submission" in calls[2]
     assert calls[0][0] == "bwrap"
@@ -803,6 +823,63 @@ def test_typst_proof_does_not_render_when_compilation_fails(tmp_path: Path) -> N
     assert proof["passed"] is False
     assert proof["returncodes"] == [1]
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "gate_result, diagnostic",
+    (
+        (
+            {
+                "returncode": 124,
+                "timed_out": True,
+                "output_overflow": False,
+                "launch_error": False,
+            },
+            trials.SUBMISSION_GATE_DIAGNOSTIC,
+        ),
+        (
+            {
+                "returncode": 1,
+                "timed_out": False,
+                "output_overflow": False,
+                "launch_error": False,
+            },
+            b"unrelated candidate failure",
+        ),
+    ),
+)
+def test_typst_proof_requires_an_executed_expected_submission_gate(
+    tmp_path: Path, gate_result: dict[str, object], diagnostic: bytes
+) -> None:
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    checkout.mkdir()
+    trial_dir.mkdir()
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command[0] == "bwrap" and "compile" in command:
+            (trial_dir / "thesis.pdf").write_bytes(b"pdf")
+        elif command[0] == "pdfinfo":
+            return subprocess.CompletedProcess(command, 0, stdout="Pages: 1\n")
+        else:
+            pages = trial_dir / "thesis-pages"
+            pages.mkdir(exist_ok=True)
+            (pages / "01.png").write_bytes(b"png")
+        return subprocess.CompletedProcess(command, 0)
+
+    def fake_gate(**kwargs: object) -> dict[str, object]:
+        stderr_path = kwargs["stderr_path"]
+        assert isinstance(stderr_path, Path)
+        stderr_path.write_bytes(diagnostic)
+        return gate_result
+
+    with (
+        patch.object(trials.subprocess, "run", side_effect=fake_run),
+        patch.object(trials, "_run_bounded_process", side_effect=fake_gate),
+    ):
+        proof = trials._typst_proof(checkout, trial_dir)
+
+    assert proof["passed"] is False
 
 
 @pytest.mark.skipif(
@@ -1209,6 +1286,30 @@ def test_event_receipt_rejects_tool_activity_after_final_message(
     assert trials.read_last_agent_message(events) == (None, False)
 
 
+@pytest.mark.parametrize("late_event", ({"type": "error"}, {"type": "turn.started"}))
+def test_event_receipt_rejects_late_top_level_activity(
+    tmp_path: Path, late_event: dict[str, str]
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "item.completed",
+                    "item": {"type": "agent_message", "text": "{}"},
+                },
+                late_event,
+                {"type": "turn.completed"},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert trials.read_last_agent_message(events) == (None, False)
+
+
 def test_trial_response_validation_requires_the_canonical_schema() -> None:
     valid = {
         "loaded_guides": [".agents/skills/agent-behavior/SKILL.md"],
@@ -1437,6 +1538,21 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
         oversized = _run_verifier(report, trial_dir)
     assert oversized["passed"] is False
     assert "byte bound" in oversized["reason"]
+
+    def surrogate_result(**kwargs: object) -> dict[str, object]:
+        events_path = kwargs["events_path"]
+        assert isinstance(events_path, Path)
+        events_path.write_text(
+            '{"type":"item.completed","item":{"type":"agent_message","text":"\\ud800"}}\n'
+            '{"type":"turn.completed"}\n',
+            encoding="utf-8",
+        )
+        return _bounded_process_result()
+
+    with patch.object(trials, "_run_bounded_process", side_effect=surrogate_result):
+        surrogate = _run_verifier(report, trial_dir)
+    assert surrogate["passed"] is False
+    assert "unreadable" in surrogate["reason"]
 
 
 def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:

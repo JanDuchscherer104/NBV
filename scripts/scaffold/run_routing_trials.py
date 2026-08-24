@@ -66,6 +66,7 @@ EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES = 4_194_304
 TRIAL_STDERR_MAX_BYTES = 1_048_576
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
+SUBMISSION_GATE_DIAGNOSTIC = b"submission mode requires explicit aria-thesis-data"
 PROCESS_TERMINATE_GRACE_SECONDS = 5
 VERDICT_MAX_ITEMS = 64
 READ_ONLY_SANDBOX = "read-only"
@@ -841,33 +842,50 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired):
             returncodes.append(125)
             break
-    submission_gate_returncode = 125
+    submission_gate: dict[str, Any] = {
+        "executed": False,
+        "returncode": 125,
+        "expected_diagnostic": False,
+    }
     if returncodes == [0, 0]:
-        try:
-            result = subprocess.run(
-                _typst_proof_sandbox_command(
-                    checkout=checkout,
-                    proof_dir=trial_dir,
-                    command=[
-                        "typst",
-                        "compile",
-                        "docs/typst/thesis/main.typ",
-                        "/tmp/submission-gate.pdf",
-                        "--root",
-                        "/project/docs",
-                        "--input",
-                        "aria-thesis-mode=submission",
-                    ],
-                ),
-                cwd=checkout,
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=180,
-            )
-            submission_gate_returncode = result.returncode
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        gate_events = trial_dir / "submission-gate.events.jsonl"
+        gate_stderr = trial_dir / "submission-gate.stderr"
+        gate_result = _run_bounded_process(
+            command=_typst_proof_sandbox_command(
+                checkout=checkout,
+                proof_dir=trial_dir,
+                command=[
+                    "typst",
+                    "compile",
+                    "docs/typst/thesis/main.typ",
+                    "/tmp/submission-gate.pdf",
+                    "--root",
+                    "/project/docs",
+                    "--input",
+                    "aria-thesis-mode=submission",
+                ],
+            ),
+            prompt="",
+            cwd=checkout,
+            events_path=gate_events,
+            stderr_path=gate_stderr,
+            timeout_seconds=180,
+        )
+        gate_diagnostic = _read_bounded_regular_file(
+            gate_stderr, maximum_bytes=TRIAL_STDERR_MAX_BYTES
+        )
+        submission_gate = {
+            "executed": not (
+                gate_result["timed_out"]
+                or gate_result["launch_error"]
+                or gate_result["output_overflow"]
+            ),
+            "returncode": gate_result["returncode"],
+            "expected_diagnostic": (
+                gate_diagnostic is not None
+                and SUBMISSION_GATE_DIAGNOSTIC in gate_diagnostic
+            ),
+        }
     page_count = _pdf_page_count(pdf) if pdf.is_file() else None
     rendered_pages = tuple(sorted(path.name for path in pages.glob("*.png")))
     rendered_page_numbers = {
@@ -876,12 +894,15 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
     return {
         "passed": (
             returncodes == [0, 0]
-            and submission_gate_returncode != 0
+            and submission_gate["executed"]
+            and submission_gate["returncode"] != 0
+            and submission_gate["expected_diagnostic"]
             and page_count is not None
             and rendered_page_numbers == set(range(1, page_count + 1))
         ),
         "returncodes": returncodes,
-        "submission_gate_returncode": submission_gate_returncode,
+        "submission_gate_returncode": submission_gate["returncode"],
+        "submission_gate": submission_gate,
         "artifacts": {
             "pdf": pdf.name,
             "pages": pages.name,
@@ -1127,14 +1148,15 @@ def run_verifier(
         verdict_text, stream_truncated = read_last_agent_message(verifier_events)
         if verdict_text is None:
             verdict_read_error = "verifier report is unreadable or malformed"
-        elif (
-            stream_truncated
-            or len(verdict_text.encode("utf-8")) > VERIFIER_REPORT_MAX_BYTES
-        ):
+        elif stream_truncated:
             verdict_read_error = "verifier report exceeds the byte bound"
         else:
             try:
-                payload = json.loads(verdict_text)
+                verdict_bytes = verdict_text.encode("utf-8")
+                if len(verdict_bytes) > VERIFIER_REPORT_MAX_BYTES:
+                    verdict_read_error = "verifier report exceeds the byte bound"
+                else:
+                    payload = json.loads(verdict_text)
             except (json.JSONDecodeError, UnicodeError):
                 verdict_read_error = "verifier report is unreadable or malformed"
     if process_result["output_overflow"]:
@@ -1528,12 +1550,7 @@ def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
             and item.get("type") == "agent_message"
             and isinstance(item.get("text"), str)
         ):
-            trailing = parsed_events[index + 1 :]
-            if any(
-                isinstance(trailing_event, dict)
-                and isinstance(trailing_event.get("item"), dict)
-                for trailing_event in trailing
-            ):
+            if any(line.strip() for line in lines[index + 1 : terminal_index]):
                 return None, stream_truncated
             return item["text"], stream_truncated
     return None, stream_truncated
