@@ -24,7 +24,7 @@ from ...utils import TargetConfig
 
 
 class LearnableFourierFeatures(nn.Module):
-    """Learnable Fourier Features (LFF) positional encoding.
+    r"""Map continuous coordinates through learned sinusoidal features.
 
     This module maps continuous inputs $x \\in \\mathbb{R}^D$ into a learned
     feature space by:
@@ -37,6 +37,19 @@ class LearnableFourierFeatures(nn.Module):
     MLP allow the encoding to adapt to the downstream task. This is a learned
     coordinate-feature inductive bias; the arbitrary projection and MLP do not
     enforce translation, rotation, or SE(3) equivariance.
+
+    Theory:
+        For input $x\in\mathbb R^D$ and an even Fourier width $F$, the learned
+        matrix $W_r\in\mathbb R^{F/2\times D}$ produces
+
+        $$
+        z(x)=\frac{[\cos(xW_r^T),\sin(xW_r^T)]}{\sqrt F},\qquad
+        E(x)=\operatorname{MLP}(z(x)).
+        $$
+
+        `include_input=True` returns $[x,E(x)]$; otherwise only $E(x)$ is
+        emitted. $W_r$ is initialized from a zero-mean Gaussian scaled by
+        `gamma` and is optimized jointly with the downstream model.
     """
 
     def __init__(self, config: "LearnableFourierFeaturesConfig") -> None:
@@ -63,7 +76,7 @@ class LearnableFourierFeatures(nn.Module):
         return (self.input_dim if self.include_input else 0) + self.output_dim
 
     def forward(self, x: Tensor) -> Tensor:
-        """Encode vectors with learned sinusoidal features.
+        """Encode vectors with the learned projection, sine/cosine map, and MLP.
 
         Args:
             x: ``Tensor["... D"]`` input vectors with ``D == input_dim``.

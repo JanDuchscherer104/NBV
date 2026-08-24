@@ -1,7 +1,19 @@
-"""Pose encoder modules for VIN candidate views.
+r"""Encode reference-frame SE(3) poses with R6D and learned Fourier features.
 
 This module owns the active candidate-pose encoder interface and the R6D plus
-learnable Fourier feature implementation used by VIN-Core (v3).
+learnable Fourier feature implementation used by VIN-Core (v3). A pose
+$T_{AB}$ maps coordinates from frame $B$ into frame $A$; its translation
+$t_{AB}$ is therefore the origin of $B$ expressed in $A$, in metres.
+
+The active encoder forms
+
+$$
+x(T_{AB})=[s_t t_{AB},s_r\operatorname{R6D}(R_{AB})]\in\mathbb R^9,
+$$
+
+then passes that vector to :class:`LearnableFourierFeatures`. The positive
+translation and rotation scales are independent learned coordinate
+preconditioners, not physical units or uncertainty estimates.
 """
 
 from __future__ import annotations
@@ -72,11 +84,35 @@ class PoseEncoder(nn.Module):
 
 
 class R6dLffPoseEncoder(PoseEncoder):
-    """Encode reference-frame translation and rotation-6D through LFF.
+    r"""Encode reference-frame translation and PyTorch3D rotation-6D through LFF.
 
     The representation is continuous for common rotations but is not an
-    SE(3)-equivariant map: translation coordinates and rotation-matrix columns
+    SE(3)-equivariant map: translation coordinates and rotation-matrix entries
     are interpreted in the caller-supplied reference rig frame.
+
+    Theory:
+        The two positive group scales are parameterized in log space:
+
+        $$
+        s_t=\exp(\alpha_t)+\epsilon,\qquad
+        s_r=\exp(\alpha_r)+\epsilon.
+        $$
+
+        For a pose $T_{AB}=(R_{AB},t_{AB})$, the encoder input is
+
+        $$
+        x=[s_t t_{AB},s_r\operatorname{R6D}(R_{AB})]\in\mathbb R^9.
+        $$
+
+        :class:`LearnableFourierFeatures` maps $x$ through a learned projection,
+        paired sine/cosine features, and an MLP. The default output width is 32.
+        Scaling is shared across every pose encoded by this instance, including
+        candidates, targets, and causal history in the finite-horizon scorer.
+
+    Notes:
+        $s_t$ and $s_r$ initialize from `pose_scale_init`, normally $(1,1)$.
+        They rescale coordinates before feature learning; they do not alter the
+        stored :class:`efm3d.aria.pose.PoseTW` or its frame semantics.
     """
 
     def __init__(self, config: "R6dLffPoseEncoderConfig") -> None:
@@ -102,13 +138,21 @@ class R6dLffPoseEncoder(PoseEncoder):
         return scales[0], scales[1]
 
     def encode(self, pose_rig: PoseTW) -> PoseEncodingOutput:
-        """Encode poses in the reference rig frame.
+        r"""Encode poses already expressed in the caller-selected reference frame.
 
         Args:
-            pose_rig: ``PoseTW["... 12"]`` pose in reference rig frame.
+            pose_rig: ``PoseTW["... 12"]`` transform $T_{AB}$ into reference
+                frame $A$. Translation is metres; rotation is a valid matrix.
 
         Returns:
-            PoseEncodingOutput containing translation, pose vector, and embedding.
+            :class:`PoseEncodingOutput` containing $t_{AB}$, the scaled
+            nine-vector $[s_t t_{AB},s_r\operatorname{R6D}(R_{AB})]$, and its
+            learned Fourier embedding.
+
+        Notes:
+            `matrix_to_rotation_6d` owns the exact PyTorch3D R6D convention.
+            Callers own the meaning of frames $A$ and $B$; this method performs
+            no frame conversion.
         """
         center_m = pose_rig.t.to(dtype=torch.float32)
         r6d = matrix_to_rotation_6d(pose_rig.R.to(dtype=torch.float32))
@@ -140,13 +184,13 @@ class R6dLffPoseEncoderConfig(TargetConfig[R6dLffPoseEncoder]):
     """LFF encoder for ``[t, r6d]`` pose vectors (input_dim=9)."""
 
     pose_scale_init: tuple[Annotated[float, Field(gt=0.0)], Annotated[float, Field(gt=0.0)]] = (1.0, 1.0)
-    """Initial per-group scale for translation and rotation (t, r6d)."""
+    r"""Initial positive multipliers $(s_t,s_r)$ for translation and R6D coordinates."""
 
     pose_scale_learnable: bool = True
-    """Whether pose scaling parameters are learned."""
+    r"""Whether log-scales $(\alpha_t,\alpha_r)$ are learned; false keeps initial scales fixed."""
 
     pose_scale_eps: float = Field(default=1e-6, gt=0.0)
-    """Numerical epsilon for pose scaling."""
+    r"""Positive $\epsilon$ added after exponentiation in $s=\exp(\alpha)+\epsilon$."""
 
     @field_validator("pose_encoder_lff")
     @classmethod

@@ -104,6 +104,11 @@ class QhStaticContext:
     corresponding entries in ``evl_presence`` distinguish unavailable source
     evidence from an observed zero-valued voxel. Rich-training admission owns
     whether every field must be present.
+
+    The compact finite-horizon scorer reduces configured EVL volumes to four
+    global moments each and semidense points to root-frame first and second
+    moments plus support. This container retains the full source tensors; the
+    lossy ``root_moments_v1`` representation belongs to the scorer.
     """
 
     vin_snippet: VinSnippetView
@@ -194,6 +199,11 @@ class QhActorTensors:
     privileged supervision. For every row, ``action_mask`` implies
     ``candidate_mask``. :class:`~aria_nbv.data_handling.qh_data.batching.QhBatch`
     owns padding and its leading batch axis.
+
+    The current compact scorer does not carry an independent requested horizon
+    $h$. It interprets `horizon_remaining` as the physical budget $b_t$ and the
+    implicit query horizon, hence $h=b_t$. A future scalar-query scorer must add
+    that query explicitly rather than changing this field's budget semantics.
     """
 
     vin_snippet: VinSnippetView
@@ -203,10 +213,10 @@ class QhActorTensors:
     """``PoseTW["12"]``: world-from-root-rig pose; translation is metres."""
 
     target_pose_relative_root: PoseTW
-    """``PoseTW["12"]``: root-rig-from-target-object pose; translation is metres."""
+    """``PoseTW["12"]`` transform $T_{RT}=T_{RW}T_{WT}$; target origin and orientation are expressed in root-rig frame, translation in metres."""
 
     target_extents: Tensor
-    """``Tensor["3", float32]``: target object-frame OBB side lengths ``[x,y,z]`` in metres."""
+    """``Tensor["3", float32]`` target-frame OBB side lengths $[d_x,d_y,d_z]$ in metres, concatenated with the encoded $T_{RT}$ by the compact scorer."""
 
     candidate_pose_relative_root: PoseTW
     """``PoseTW["S N 12"]``: root-camera-from-candidate-camera poses in stored order. ``N`` is per-state width, never a planning-tree branch axis."""
@@ -224,7 +234,7 @@ class QhActorTensors:
     """``Tensor["S S", bool]``: factual-pose-prefix support, true exactly for realized ``j<s`` pairs."""
 
     horizon_remaining: Tensor
-    """``Tensor["S", int64]``: acquisition budget remaining, including the current factual action."""
+    """``Tensor["S", int64]`` physical acquisition budget $b_t$, including the current factual action; padding uses zero and the current scorer implicitly queries $h=b_t$."""
 
     step_mask: Tensor
     """``Tensor["S", bool]``: realized candidate-bearing states; this complete chain has all entries true."""

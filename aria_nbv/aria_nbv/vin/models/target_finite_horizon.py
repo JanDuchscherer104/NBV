@@ -1,4 +1,18 @@
-"""Actor-only finite-horizon scorer for persisted Q_H chain views."""
+r"""Encode actor-visible chain state into finite-candidate value estimates.
+
+This module owns the compact scorer configuration, state-token construction,
+candidate-to-state attention, and candidate-aligned scalar prediction boundary.
+The implemented scorer is the compact ``A1-S0-root-moments`` control. It embeds
+root-relative candidate poses, a root-relative target pose and extent, a
+strictly causal pose-history mean, the remaining acquisition budget, and a
+static summary of the root observation. Candidate tokens attend to those state
+tokens before a scalar value head predicts one value per actor-valid row.
+
+This owner currently has no independent requested-horizon input. Its
+``horizon_remaining`` field is both the physical remaining budget $b_t$ and the
+implicit value-query horizon, so the executable semantics are $h=b_t$. The
+planned scalar-query contract $Q_h(s_t,a_i\mid b_t)$ is not implemented here.
+"""
 
 from __future__ import annotations
 
@@ -34,10 +48,10 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
         "counts",
         "cent_pr",
     )
-    """Ordered compact root-EVL fields pooled into the state token."""
+    """Ordered root-EVL fields reduced independently to mean, std, min, and max."""
 
     representation_semantics: Literal["root_moments_v1"] = "root_moments_v1"
-    """Versioned meaning of the scene token: root-frame moments plus support."""
+    """Versioned scene carrier: four moments per EVL field plus eight point statistics."""
 
     attention_heads: int = Field(default=4, gt=0)
     """Heads in candidate-to-state attention."""
@@ -46,7 +60,7 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     """Training-only dropout in attention and the value head."""
 
     max_horizon: int = Field(default=5, gt=0)
-    """Largest admitted acquisition horizon; remaining budget is normalized by this value."""
+    """Largest budget $H_{max}$; the current scorer embeds $b_t/H_{max}$ and assumes $h=b_t$."""
 
     experiment_profile: Literal["qh_cf0_v1"] = "qh_cf0_v1"
     """Closed deployable actor profile; privileged CF+ observations are not accepted."""
@@ -69,7 +83,7 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
 
 class TargetFiniteHorizonScorer(nn.Module):
-    """Rank finite candidate rows from actor-visible EVL, target, and history.
+    r"""Rank finite candidate rows from actor-visible root evidence.
 
     The module exposes one deep interface: a batched
     :class:`~aria_nbv.data_handling.qh_data.QhActorTensors` enters and one
@@ -77,6 +91,51 @@ class TargetFiniteHorizonScorer(nn.Module):
     another, so jointly permuting candidate poses and masks permutes the output
     identically. Invalid and padded rows are zeroed after scoring and cannot
     influence admitted rows.
+
+    Theory:
+        Let $T_{RC_i}$ be candidate $i$ expressed in the root-rig frame,
+        $T_{RT}$ the target-object pose in that frame, and $d_T\in\mathbb R^3$
+        the target OBB side lengths in metres. The shared pose encoder
+        :class:`~aria_nbv.vin.encoders.R6dLffPoseEncoder` produces $E_p(T)$.
+        Candidate and target tokens are
+
+        $$
+        e_i=\operatorname{LN}(\operatorname{GELU}(W_iE_p(T_{RC_i})+c_i)),
+        $$
+
+        $$
+        e_T=\operatorname{LN}
+        \left(\operatorname{GELU}
+        \left(W_T[E_p(T_{RT}),d_T]+c_T\right)\right).
+        $$
+
+        The remaining budget $b_t$ is normalized by the configured maximum and
+        projected from one scalar:
+
+        $$
+        e_b=\operatorname{LN}
+        \left(\operatorname{GELU}
+        \left(W_b(b_t/H_{max})+c_b\right)\right).
+        $$
+
+        The attention memory is
+        $M_t=[e_{scene},e_T,e_{history},e_b]$. The history token projects the
+        arithmetic mean of encoded factual poses with indices $j<t$; an empty
+        prefix contributes the projection of the zero vector. Each candidate
+        independently performs multi-head attention against this memory, then
+        the value head consumes $[e_i,a_i,e_i\odot a_i]$. There is no
+        candidate--candidate attention and the temporal order within the
+        factual prefix is not retained by the mean.
+
+    Notes:
+        The current public call has no `requested_horizon`. Consequently it
+        cannot evaluate multiple $Q_h$ values at a fixed state and implements
+        only the implicit query $h=b_t$. Target--candidate geometry is also
+        indirect: both poses share the root frame, but the scorer does not form
+        the explicit relative transform $T_{C_iT}=T_{RC_i}^{-1}T_{RT}$.
+
+        Unlike the planned conditional-Q boundary, this control reads
+        `action_mask` inside the scorer and zeros invalid as well as padded rows.
     """
 
     def __init__(self, config: TargetFiniteHorizonScorerConfig) -> None:
@@ -126,15 +185,21 @@ class TargetFiniteHorizonScorer(nn.Module):
         )
 
     def forward(self, actor: QhActorTensors) -> Tensor:
-        """Return continuous candidate values aligned with ``action_mask``.
+        """Return the implicit full-remaining-budget query aligned with `action_mask`.
 
         Args:
-            actor: Batched actor-visible chain with candidate support
-                ``Tensor["B S N", bool]`` and compact root EVL evidence.
+            actor: Batched actor-visible chain. `horizon_remaining`
+                ``Tensor["B S", int64]`` supplies both remaining budget $b_t$
+                and implicit query horizon $h$; `action_mask`
+                ``Tensor["B S N", bool]`` defines scored support.
 
         Returns:
-            values ``Tensor["B S N", float32]``: Finite values on admitted
-                rows and zero outside realized actor-valid support.
+            values ``Tensor["B S N", float32]``: Finite scalar estimates for
+                $Q_{b_t}(s_t,a_i)$ on actor-valid rows and zero elsewhere.
+
+        Notes:
+            Padding may use $b_t=0$. Realized values are validated in
+            $[0,H_{max}]$, but no separate $h$ is accepted or encoded.
         """
 
         self._validate_actor(actor)
@@ -192,7 +257,36 @@ class TargetFiniteHorizonScorer(nn.Module):
         return values
 
     def _scene_summary(self, actor: QhActorTensors) -> Tensor:
-        """Pool detached root EVL and semidense evidence into one chain token."""
+        r"""Pool detached root EVL and semidense evidence into one chain vector.
+
+        Returns:
+            summary ``Tensor["B 4C+8", float32]``: For each of the $C$
+                configured EVL volumes, flattened mean, population standard
+                deviation, minimum, and maximum, followed by root-frame point
+                mean ``(x,y,z)``, point standard deviation ``(x,y,z)``, a
+                non-empty-support indicator, and the supported-point fraction.
+
+        Theory:
+            For a configured EVL field $V_c$, the volume contribution is
+
+            $$
+            g(V_c)=[\operatorname{mean}(V_c),\operatorname{std}(V_c),
+            \min(V_c),\max(V_c)].
+            $$
+
+            Semidense points are transformed from world to root coordinates by
+            $p_R=T_{RW}p_W$, where $T_{RW}=T_{WR}^{-1}$. For valid points
+            $P_R$, the remaining contribution is
+
+            $$
+            [\mu(P_R),\sigma(P_R),\mathbb 1(|P_R|>0),|P_R|/P_{max}].
+            $$
+
+            With the default five EVL channels this produces $5\cdot4+8=28$
+            scalars. The vector is static across a chain and intentionally
+            discards voxel topology, point correlations, target-local layout,
+            occlusion structure, and state-dependent scene updates.
+        """
 
         context = actor.static_context
         if context is None:  # guarded by _validate_actor
@@ -234,7 +328,7 @@ class TargetFiniteHorizonScorer(nn.Module):
 
     @staticmethod
     def _pool_channel(value: Tensor | None) -> Tensor:
-        """Return mean, standard deviation, minimum, and maximum per batch row."""
+        """Return flattened mean, population std, minimum, and maximum per batch row."""
 
         if value is None:
             raise ValueError("TargetFiniteHorizonScorer requires every configured root EVL field.")
