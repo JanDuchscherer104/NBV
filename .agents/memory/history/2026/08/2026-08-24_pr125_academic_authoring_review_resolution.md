@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: f25dacd8a65e2d01b13335a431eabd0c7f88a486
+repo_head: 679aa2f202bba9de04195de1088eeefbb3cbb983
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -112,6 +112,7 @@ duplicating it in all three skills.
 - [b36b376487cfb5704c5e15fb626ebb404a25a93a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b36b376487cfb5704c5e15fb626ebb404a25a93a) — implementation: isolate evaluator receipts and runtime
 - [e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df) — test: keep the sandbox command contract portable
 - [f25dacd8a65e2d01b13335a431eabd0c7f88a486](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f25dacd8a65e2d01b13335a431eabd0c7f88a486) — implementation: isolate routing trials from Codex auth
+- [679aa2f202bba9de04195de1088eeefbb3cbb983](https://github.com/JanDuchscherer104/ARIA-NBV/commit/679aa2f202bba9de04195de1088eeefbb3cbb983) — test: keep verifier sandbox tests portable
 
 ## Verification
 
