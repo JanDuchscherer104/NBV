@@ -900,10 +900,10 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     tracked_role_reviews = [
         path
         for path in tracked
-        if "review" in Path(path).name.lower()
+        if "review" in path.lower()
         and any(
-            role in Path(path).name.lower()
-            for role in ("architect", "architecture", "critic", "critique")
+            role in path.lower()
+            for role in ("architect", "architecture", "critic", "critique", "peer-review")
         )
     ]
     assert not tracked_role_reviews
@@ -912,6 +912,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     for role in ("architect", "architecture", "critic", "critique"):
         assert f".omx/**/*{role}*review*" in ignored
         assert f".omx/**/*review*{role}*" in ignored
+    assert ".omx/**/*peer-review*/**" in ignored
     ignored_role_reviews = subprocess.run(
         [
             "git",
@@ -930,6 +931,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
             ".omx/plans/nested/example-review-critic.md\n"
             ".omx/plans/example-critique-review.md\n"
             ".omx/plans/example-review-critique.md\n"
+            ".omx/specs/nested/thesis-peer-review/report.md\n"
         ),
         capture_output=True,
         text=True,
@@ -943,6 +945,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ".omx/plans/nested/example-review-critic.md",
         ".omx/plans/example-critique-review.md",
         ".omx/plans/example-review-critique.md",
+        ".omx/specs/nested/thesis-peer-review/report.md",
     ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")

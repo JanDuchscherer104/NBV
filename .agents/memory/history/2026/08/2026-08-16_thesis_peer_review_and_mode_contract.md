@@ -11,8 +11,6 @@ files_touched:
   - docs/typst/thesis/main.typ
   - docs/typst/thesis/sections
   - .agents/skills/typst-authoring
-artifacts:
-  - .omx/specs/autoresearch-thesis-peer-review-20260816/report.md
 ---
 
 ## Task
