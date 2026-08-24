@@ -15,7 +15,9 @@ grouped as `senpai`. The existing W&B Runs page shows only runs with the explici
 `aria_autoresearch` config namespace and never reads history for this table.
 When a result carries `evidence_series`, every point has a strictly increasing
 one-based acquisition `step` and finite metrics; the bridge emits those exact
-validated points to W&B only after OMX accepts the checkpoint.
+validated points to W&B only after OMX accepts the checkpoint. It binds every
+series metric to the hidden `aria_autoresearch/acquisition_number` custom x-axis;
+scalar result metrics are W&B summary values, never one-point history plots.
 
 Run the bridge explicitly from the package environment:
 
