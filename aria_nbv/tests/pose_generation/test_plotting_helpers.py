@@ -84,6 +84,7 @@ def test_plot_view_jitter_support_shows_components_validity_and_bounds() -> None
         {
             "view_jitter_yaw_deg": torch.tensor([-60.0, 0.0, 60.0]),
             "view_jitter_pitch_deg": torch.tensor([-30.0, 0.0, 30.0]),
+            "view_jitter_is_bounded": torch.ones(3, dtype=torch.bool),
             "view_jitter_azimuth_limit_deg": torch.full((3,), 60.0),
             "view_jitter_elevation_limit_deg": torch.full((3,), 30.0),
         }
@@ -96,6 +97,29 @@ def test_plot_view_jitter_support_shows_components_validity_and_bounds() -> None
     assert len(fig.layout.shapes) == 3
     assert fig.layout.xaxis.range == pytest.approx((-64.8, 64.8))
     assert fig.layout.yaxis.range == pytest.approx((-33.6, 33.6))
+
+
+def test_plot_view_jitter_support_keeps_uncapped_spherical_residuals_visible() -> None:
+    candidates = _make_candidates(num=3)
+    candidates.mask_valid = torch.tensor([True, True, False])
+    candidates.extras.update(
+        {
+            "view_jitter_yaw_deg": torch.tensor([-130.0, 25.0, 95.0]),
+            "view_jitter_pitch_deg": torch.tensor([-55.0, 15.0, 45.0]),
+            "view_jitter_is_bounded": torch.zeros(3, dtype=torch.bool),
+            "view_jitter_azimuth_limit_deg": torch.zeros(3),
+            "view_jitter_elevation_limit_deg": torch.zeros(3),
+        }
+    )
+
+    fig = plot_view_jitter_support(candidates)
+
+    visible_yaw = [float(value) for trace in fig.data for value in trace.x]
+    assert any(abs(value) > 0.0 for value in visible_yaw)
+    assert len(fig.layout.shapes) == 2
+    assert fig.layout.xaxis.range == (-180.0, 180.0)
+    assert fig.layout.yaxis.range == (-90.0, 90.0)
+    assert any("uncapped spherical support" in annotation.text for annotation in fig.layout.annotations)
 
 
 def test_plot_position_sphere_with_dirs() -> None:

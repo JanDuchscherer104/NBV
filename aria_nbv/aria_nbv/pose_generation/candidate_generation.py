@@ -506,6 +506,16 @@ class CandidateViewGenerator:
                 "view_dirs_delta": view_dirs_delta,
                 "view_jitter_yaw_deg": torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2])),
                 "view_jitter_pitch_deg": torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0))),
+                "view_jitter_is_bounded": torch.full(
+                    (centers_world.shape[0],),
+                    bool(
+                        self.config.view_sampling_strategy is None
+                        or float(self.config.view_max_azimuth_deg) > 0.0
+                        or float(self.config.view_max_elevation_deg) > 0.0
+                    ),
+                    dtype=torch.bool,
+                    device=device,
+                ),
                 "view_jitter_azimuth_limit_deg": torch.full(
                     (centers_world.shape[0],),
                     float(self.config.view_max_azimuth_deg),

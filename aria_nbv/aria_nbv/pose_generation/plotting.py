@@ -1174,6 +1174,7 @@ def plot_view_jitter_support(candidates: "CandidateSamplingResult") -> go.Figure
     pitch = candidates.extras.get("view_jitter_pitch_deg")
     azimuth_limit = candidates.extras.get("view_jitter_azimuth_limit_deg")
     elevation_limit = candidates.extras.get("view_jitter_elevation_limit_deg")
+    bounded = candidates.extras.get("view_jitter_is_bounded")
     if not all(isinstance(value, torch.Tensor) for value in (yaw, pitch, azimuth_limit, elevation_limit)):
         fig = go.Figure()
         fig.add_annotation(
@@ -1191,6 +1192,11 @@ def plot_view_jitter_support(candidates: "CandidateSamplingResult") -> go.Figure
     valid_np = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     azimuth_np = azimuth_limit.detach().cpu().numpy().reshape(-1)
     elevation_np = elevation_limit.detach().cpu().numpy().reshape(-1)
+    bounded_np = (
+        bounded.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+        if isinstance(bounded, torch.Tensor)
+        else (np.abs(azimuth_np) > 0.0) | (np.abs(elevation_np) > 0.0)
+    )
     components = candidates.component_name or tuple("candidate" for _ in range(yaw_np.shape[0]))
 
     fig = go.Figure()
@@ -1218,24 +1224,39 @@ def plot_view_jitter_support(candidates: "CandidateSamplingResult") -> go.Figure
                 )
             )
 
-    azimuth_bound = float(np.nanmax(np.abs(azimuth_np)))
-    elevation_bound = float(np.nanmax(np.abs(elevation_np)))
-    fig.add_shape(
-        type="rect",
-        x0=-azimuth_bound,
-        x1=azimuth_bound,
-        y0=-elevation_bound,
-        y1=elevation_bound,
-        line={"color": "#AAB2BF", "width": 2, "dash": "dot"},
-    )
+    if bounded_np.any():
+        azimuth_bound = float(np.nanmax(np.abs(azimuth_np[bounded_np])))
+        elevation_bound = float(np.nanmax(np.abs(elevation_np[bounded_np])))
+        fig.add_shape(
+            type="rect",
+            x0=-azimuth_bound,
+            x1=azimuth_bound,
+            y0=-elevation_bound,
+            y1=elevation_bound,
+            line={"color": "#AAB2BF", "width": 2, "dash": "dot"},
+        )
     fig.add_hline(y=0.0, line={"color": "#6B7280", "width": 1})
     fig.add_vline(x=0.0, line={"color": "#6B7280", "width": 1})
+    has_uncapped_support = bool((~bounded_np).any())
+    if has_uncapped_support:
+        fig.add_annotation(
+            text="uncapped spherical support: fixed yaw/pitch display axes; no box envelope.",
+            x=0.01,
+            y=0.99,
+            xref="paper",
+            yref="paper",
+            xanchor="left",
+            yanchor="top",
+            showarrow=False,
+        )
+    x_range = [-180.0, 180.0] if has_uncapped_support else [-1.08 * azimuth_bound, 1.08 * azimuth_bound]
+    y_range = [-90.0, 90.0] if has_uncapped_support else [-1.12 * elevation_bound, 1.12 * elevation_bound]
     fig.update_layout(
         title="Candidate gaze jitter in the local camera frame",
-        xaxis={"title": "yaw jitter (deg)", "range": [-1.08 * azimuth_bound, 1.08 * azimuth_bound]},
+        xaxis={"title": "yaw jitter (deg)", "range": x_range},
         yaxis={
             "title": "pitch jitter (deg)",
-            "range": [-1.12 * elevation_bound, 1.12 * elevation_bound],
+            "range": y_range,
             "scaleanchor": "x",
             "scaleratio": 1,
         },
