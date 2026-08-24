@@ -263,6 +263,7 @@ graphify-out/
 .omx/**/*critique*review*
 .omx/**/*review*critique*
 .omx/specs/**/*peer*review*/report.md
+.omx/specs/**/*review*peer*/report.md
 .omx/specs/**/mission.md
 .omx/specs/**/sandbox.md
 .omx/specs/**/result.json
