@@ -38,13 +38,7 @@ Validated one immutable version-one evaluator result, derived a SHA-256 evidence
 
 ## Commits
 - [821a9309ccb01c4c5639ce92bafc14b975f41d92](https://github.com/jdgalviss/ARIA-NBV/commit/821a9309ccb01c4c5639ce92bafc14b975f41d92) — immutable-result bridge, W&B inspection, and sidecar retirement
-
-## Candidate Owner Intent
-<!-- Omit this section unless the agent-behavior candidate-intent branch applies. -->
-- Statement: <precise reusable preference>
-- Evidence: <direct instruction or bounded recurring evidence>
-- Scope and target owner: <scope and exact owner path>
-- Status: proposed for current-user review
+- [92ba133873ba80d741b67c2d8aefca71b003076d](https://github.com/jdgalviss/ARIA-NBV/commit/92ba133873ba80d741b67c2d8aefca71b003076d) — preserve hard-gate, checkpoint, and byte-snapshot invariants
 
 ## Verification
 Passed focused Ruff and pytest checks (11 tests), `scripts/tests/test_agent_governance_g002.py`, and `make check-agent-memory` before the debrief index update.
