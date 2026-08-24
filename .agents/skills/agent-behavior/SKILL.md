@@ -10,8 +10,12 @@ handoff. Obvious one-line answers and read-only command output do not need the
 full preflight. The loop ends when the exact owner, scoped result, and proof are
 explicit.
 
-## Invariant
+## Invariants
 
+- Every changed path is request-owned or required verification.
+- Every claim has fresh evidence or names its exact gap.
+- Every durable delta has one authoritative owner.
+- Every activated branch meets its referenced completion criteria.
 - **Thesis-code synchronization.** Keep the active thesis sources and executable
    implementation in sync. When a change affects an implemented scientific or
    behavioral claim, update and verify both owning surfaces together; do not let
@@ -79,10 +83,3 @@ explicit.
   durable interface, architecture, or research-facing direction.
 - **Concrete failure owner:** Hand the reproducer and exact evidence to the
   nearest package, docs, or specialist owner.
-
-## Completion
-
-- Every changed path is request-owned or required verification.
-- Every claim has fresh evidence or names its exact gap.
-- Every durable delta has one authoritative owner.
-- Every activated branch meets its referenced completion criteria.
