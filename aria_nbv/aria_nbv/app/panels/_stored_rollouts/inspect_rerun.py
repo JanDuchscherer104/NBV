@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import MutableMapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -38,11 +38,31 @@ _QUERY_SCOPES = ("Rollout summaries", "Factual steps", "Candidates")
 _CANDIDATE_POPULATIONS = ("Selected step", "Selected rollout", "Explicit full store")
 
 
+class _SessionState(Protocol):
+    """Minimal mutable state surface used by query callbacks."""
+
+    def __iter__(self) -> Iterator[str]: ...
+    def get(self, key: str, default: Any = None) -> Any: ...
+    def __setitem__(self, key: str, value: Any) -> None: ...
+    def pop(self, key: str, default: Any = None) -> Any: ...
+
+
 def _canonical_query_store_identity(store_path: Path) -> str:
     """Return a stable compact identity for one canonical immutable-store path."""
 
     canonical = store_path.expanduser().resolve().as_posix()
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def _integral_scalar(value: Any) -> int:
+    """Convert one finite integral dataframe grouping key."""
+
+    if isinstance(value, bool) or not isinstance(value, int | float | np.integer | np.floating):
+        raise TypeError(f"Expected an integral numeric scalar, got {type(value).__name__}.")
+    numeric = float(value)
+    if not np.isfinite(numeric) or not numeric.is_integer():
+        raise ValueError(f"Expected an integral numeric scalar, got {value!r}.")
+    return int(numeric)
 
 
 def _query_namespace(store_identity: str, scope: str, candidate_population: str) -> str:
@@ -58,7 +78,7 @@ def _query_key(namespace: str, name: str) -> str:
     return f"{namespace}:{name}"
 
 
-def _activate_query_store(state: MutableMapping[str, Any], store_identity: str) -> None:
+def _activate_query_store(state: _SessionState, store_identity: str) -> None:
     """Discard query state from the previously active canonical store."""
 
     previous = state.get(_ACTIVE_QUERY_STORE_KEY)
@@ -98,7 +118,7 @@ def _evaluate_query_frame(frame: pd.DataFrame, expression: str) -> pd.DataFrame:
     return result.loc[:, source.columns].copy().reset_index(drop=True)
 
 
-def _clear_query_state(state: MutableMapping[str, Any], namespace: str) -> None:
+def _clear_query_state(state: _SessionState, namespace: str) -> None:
     """Clear expression/result state without mutating rollout or step selection."""
 
     for name in (
@@ -114,7 +134,7 @@ def _clear_query_state(state: MutableMapping[str, Any], namespace: str) -> None:
 
 
 def _apply_query_state(
-    state: MutableMapping[str, Any],
+    state: _SessionState,
     namespace: str,
     source: pd.DataFrame,
 ) -> None:
@@ -142,18 +162,18 @@ def _queue_query_promotion(namespace: str, payload: dict[str, int | None]) -> No
 def _apply_query_callback(namespace: str, source: pd.DataFrame) -> None:
     """Apply callback evaluated only after the operator presses Apply."""
 
-    _apply_query_state(st.session_state, namespace, source)
+    _apply_query_state(cast(_SessionState, st.session_state), namespace, source)
 
 
 def _clear_query_callback(namespace: str, signature: str) -> None:
     """Clear callback that runs before expression/result widgets instantiate."""
 
-    _clear_query_state(st.session_state, namespace)
+    _clear_query_state(cast(_SessionState, st.session_state), namespace)
     st.session_state[_query_key(namespace, "source_signature")] = signature
 
 
 def _consume_pending_promotion(
-    state: MutableMapping[str, Any],
+    state: _SessionState,
     namespace: str,
     *,
     rollout_ids: list[int],
@@ -190,7 +210,7 @@ def _consume_pending_promotion(
 
 
 def _query_source_frame(
-    session_handle: object,
+    session_handle: Any,
     *,
     scope: str,
     candidate_population: str,
@@ -232,7 +252,8 @@ def _query_source_signature(frame: pd.DataFrame) -> str:
     ]
     payload = "\0".join(frame.columns.astype(str).tolist()).encode("utf-8")
     if identifiers and not frame.empty:
-        payload += pd.util.hash_pandas_object(frame[identifiers], index=False).values.tobytes()
+        hashed = np.asarray(pd.util.hash_pandas_object(frame[identifiers], index=False).values)
+        payload += hashed.tobytes()
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -269,7 +290,7 @@ def _render_query_workbench(
     signature = _query_source_signature(source)
     signature_key = _query_key(namespace, "source_signature")
     if st.session_state.get(signature_key) not in (None, signature):
-        _clear_query_state(st.session_state, namespace)
+        _clear_query_state(cast(_SessionState, st.session_state), namespace)
     st.session_state[signature_key] = signature
     draft_key = _query_key(namespace, "draft_expression")
     st.text_area("Pandas query expression", key=draft_key, placeholder="Leave empty to match every row")
@@ -324,10 +345,10 @@ def _render_query_workbench(
             "Matched row to promote",
             options=choices,
             key=selection_key,
-            format_func=lambda index: _query_row_label(result.loc[index]),
+            format_func=lambda index: _query_row_label(_query_result_row(result, int(index))),
         )
     )
-    payload = _promotion_payload(result.loc[selected_index])
+    payload = _promotion_payload(_query_result_row(result, selected_index))
     st.button(
         "Promote queried row",
         key=_query_key(namespace, "promote"),
@@ -337,7 +358,16 @@ def _render_query_workbench(
     )
 
 
-def _query_row_label(row: pd.Series) -> str:
+def _query_result_row(frame: pd.DataFrame, index: int) -> pd.Series[Any]:
+    """Return one query-result row with the runtime shape pandas guarantees."""
+
+    row = frame.loc[index]
+    if not isinstance(row, pd.Series):
+        raise TypeError("query result row selection did not produce a pandas Series")
+    return row
+
+
+def _query_row_label(row: pd.Series[Any]) -> str:
     """Format stable ids for one query-result promotion choice."""
 
     fields = [
@@ -349,7 +379,7 @@ def _query_row_label(row: pd.Series) -> str:
 
 
 def _render_inspect_export_rerun(
-    session_handle: object,
+    session_handle: Any,
     *,
     store_path: Path,
     manifest_payload: dict[str, Any],
@@ -357,7 +387,7 @@ def _render_inspect_export_rerun(
 ) -> None:
     st.subheader("Drill-down")
     store_identity = _canonical_query_store_identity(store_path)
-    _activate_query_store(st.session_state, store_identity)
+    _activate_query_store(cast(_SessionState, st.session_state), store_identity)
     scope_key = f"stored_query:{store_identity}:scope"
     population_key = f"stored_query:{store_identity}:candidate_population"
     scope = st.selectbox("Query scope", options=_QUERY_SCOPES, key=scope_key)
@@ -382,11 +412,11 @@ def _render_inspect_export_rerun(
         )
         return
     steps_by_rollout = {
-        int(rollout): sorted(group["step_row_id"].astype(int).tolist())
+        _integral_scalar(rollout): sorted(group["step_row_id"].astype(int).tolist())
         for rollout, group in all_steps.groupby("rollout_row_id", sort=True)
     }
     promotion_error = _consume_pending_promotion(
-        st.session_state,
+        cast(_SessionState, st.session_state),
         namespace,
         rollout_ids=[int(value) for value in rollout_ids],
         steps_by_rollout=steps_by_rollout,
@@ -514,7 +544,7 @@ def _render_inspect_export_rerun(
     _render_rerun_launcher(store_path=store_path, rollout_id=rollout_id, paths=paths)
 
 
-def _render_evidence_bundle_download(session_handle: object) -> None:
+def _render_evidence_bundle_download(session_handle: Any) -> None:
     st.markdown("#### Canonical evidence bundle")
     status = st.radio("Evidence status", options=["pilot", "confirmatory"], horizontal=True, key="evidence_status")
     acknowledge = st.checkbox(
@@ -556,7 +586,8 @@ def _render_rerun_launcher(*, store_path: Path, rollout_id: int, paths: PathConf
         format_func=lambda value: str(value.value).replace("_", " ").title(),
     )
     with st.expander("Advanced included and initially visible layers"):
-        overrides: dict[RolloutLayerName, dict[str, bool]] = {}
+        overrides: Mapping[RolloutLayerName | str, Mapping[str, bool]]
+        mutable_overrides: dict[RolloutLayerName | str, Mapping[str, bool]] = {}
         defaults = resolve_rollout_launch_config(
             base_config_path=base_config,
             artifact_dir=artifact_dir,
@@ -573,7 +604,8 @@ def _render_rerun_launcher(*, store_path: Path, rollout_id: int, paths: PathConf
                 disabled=not included,
                 key=f"rerun_vis_{layer.value}",
             )
-            overrides[layer] = {"included": included, "visible": bool(visible and included)}
+            mutable_overrides[layer] = {"included": included, "visible": bool(visible and included)}
+        overrides = mutable_overrides
 
     mode = st.selectbox(
         "Launch mode",

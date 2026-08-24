@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 import torch
 from efm3d.aria.pose import PoseTW
+from pytorch3d.renderer.cameras import PerspectiveCameras
 
 from aria_nbv.data_handling import VinOracleBatch, VinSnippetView
 from aria_nbv.data_handling.vin_store.batch import CompactObbBlock, CompactTrajectoryBlock
@@ -19,21 +22,31 @@ from aria_nbv.vin.ordinal import coral_expected_from_logits, coral_logits_to_pro
 from aria_nbv.vin.types import EvlBackboneOutput, VinPrediction
 
 pytest.importorskip("pytorch_lightning")
-pytorch3d_cameras = pytest.importorskip("pytorch3d.renderer.cameras")
-PerspectiveCameras = pytorch3d_cameras.PerspectiveCameras
+pytest.importorskip("pytorch3d.renderer.cameras")
 
 
 def _identity_pose(num: int) -> PoseTW:
     eye = torch.eye(3, dtype=torch.float32).reshape(1, 9).repeat(num, 1)
     t = torch.zeros((num, 3), dtype=torch.float32)
-    return PoseTW(torch.cat([eye, t], dim=-1))
+    return cast(PoseTW, PoseTW(torch.cat([eye, t], dim=-1)))
 
 
 def _indexed_pose(num: int, *, offset: float = 0.0) -> PoseTW:
     eye = torch.eye(3, dtype=torch.float32).reshape(1, 9).repeat(num, 1)
     t = torch.zeros((num, 3), dtype=torch.float32)
     t[:, 0] = torch.arange(num, dtype=torch.float32) + float(offset)
-    return PoseTW(torch.cat([eye, t], dim=-1))
+    return cast(PoseTW, PoseTW(torch.cat([eye, t], dim=-1)))
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    to_tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, to_tensor())
+
+
+def _required_logged_tensor(values: dict[str, torch.Tensor | float], key: str) -> torch.Tensor:
+    value = values[key]
+    assert isinstance(value, torch.Tensor)
+    return value
 
 
 def _make_cameras(num: int) -> PerspectiveCameras:
@@ -42,13 +55,16 @@ def _make_cameras(num: int) -> PerspectiveCameras:
     focal = torch.full((num, 2), 250.0, dtype=torch.float32)
     principal = torch.zeros((num, 2), dtype=torch.float32)
     image_size = torch.tensor([[640.0, 480.0]], dtype=torch.float32).expand(num, -1)
-    return PerspectiveCameras(
-        R=rot,
-        T=trans,
-        focal_length=focal,
-        principal_point=principal,
-        image_size=image_size,
-        in_ndc=False,
+    return cast(
+        PerspectiveCameras,
+        PerspectiveCameras(
+            R=rot,
+            T=trans,
+            focal_length=focal,
+            principal_point=principal,
+            image_size=image_size,
+            in_ndc=False,
+        ),
     )
 
 
@@ -59,13 +75,16 @@ def _make_indexed_cameras(num: int, *, offset: float = 0.0) -> PerspectiveCamera
     focal = torch.full((num, 2), 250.0, dtype=torch.float32)
     principal = torch.zeros((num, 2), dtype=torch.float32)
     image_size = torch.tensor([[640.0, 480.0]], dtype=torch.float32).expand(num, -1)
-    return PerspectiveCameras(
-        R=rot,
-        T=trans,
-        focal_length=focal,
-        principal_point=principal,
-        image_size=image_size,
-        in_ndc=False,
+    return cast(
+        PerspectiveCameras,
+        PerspectiveCameras(
+            R=rot,
+            T=trans,
+            focal_length=focal,
+            principal_point=principal,
+            image_size=image_size,
+            in_ndc=False,
+        ),
     )
 
 
@@ -112,7 +131,7 @@ def _make_compact_batch(*, sem_names: dict[int, str] | None = None, offset: floa
     return VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_identity_pose(2),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.1 + offset, 0.2 + offset], dtype=torch.float32),
         pm_dist_before=torch.ones(2, dtype=torch.float32),
         pm_dist_after=torch.ones(2, dtype=torch.float32),
@@ -147,7 +166,7 @@ def test_collate_vin_oracle_batches_pads_candidates() -> None:
     batch_a = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_identity_pose(2),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.1, 0.2], dtype=torch.float32),
         pm_dist_before=torch.tensor([1.0, 1.1], dtype=torch.float32),
         pm_dist_after=torch.tensor([0.9, 1.0], dtype=torch.float32),
@@ -163,7 +182,7 @@ def test_collate_vin_oracle_batches_pads_candidates() -> None:
     batch_b = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_identity_pose(3),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.3, 0.4, 0.5], dtype=torch.float32),
         pm_dist_before=torch.tensor([1.2, 1.3, 1.4], dtype=torch.float32),
         pm_dist_after=torch.tensor([1.1, 1.2, 1.3], dtype=torch.float32),
@@ -181,6 +200,7 @@ def test_collate_vin_oracle_batches_pads_candidates() -> None:
 
     assert batched.candidate_poses_world_cam.shape == (batch_size, max_candidates, 12)  # noqa: S101
     assert batched.rri.shape == (batch_size, max_candidates)  # noqa: S101
+    assert batched.candidate_count is not None
     assert torch.equal(batched.candidate_count, torch.tensor([2, 3], dtype=torch.int64))  # noqa: S101
     assert torch.isnan(batched.rri[0, 2])  # noqa: S101
     assert torch.isfinite(batched.rri[1]).all()  # noqa: S101
@@ -251,7 +271,7 @@ def test_collate_vin_snippet_view_pads_points_and_traj() -> None:
     batch_a = VinOracleBatch(
         efm_snippet_view=snippet_a,
         candidate_poses_world_cam=_identity_pose(2),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.1, 0.2], dtype=torch.float32),
         pm_dist_before=torch.tensor([1.0, 1.1], dtype=torch.float32),
         pm_dist_after=torch.tensor([0.9, 1.0], dtype=torch.float32),
@@ -267,7 +287,7 @@ def test_collate_vin_snippet_view_pads_points_and_traj() -> None:
     batch_b = VinOracleBatch(
         efm_snippet_view=snippet_b,
         candidate_poses_world_cam=_identity_pose(2),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.3, 0.4], dtype=torch.float32),
         pm_dist_before=torch.tensor([1.2, 1.3], dtype=torch.float32),
         pm_dist_after=torch.tensor([1.1, 1.2], dtype=torch.float32),
@@ -296,7 +316,7 @@ def test_collate_fixed_width_batches_preserves_candidate_count() -> None:
     batch_a = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_identity_pose(width),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.1, 0.2, float("nan"), float("nan")], dtype=torch.float32),
         pm_dist_before=torch.tensor([1.0, 1.1, float("nan"), float("nan")], dtype=torch.float32),
         pm_dist_after=torch.tensor([0.9, 1.0, float("nan"), float("nan")], dtype=torch.float32),
@@ -313,7 +333,7 @@ def test_collate_fixed_width_batches_preserves_candidate_count() -> None:
     batch_b = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_identity_pose(width),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.3, 0.4, 0.5, float("nan")], dtype=torch.float32),
         pm_dist_before=torch.tensor([1.2, 1.3, 1.4, float("nan")], dtype=torch.float32),
         pm_dist_after=torch.tensor([1.1, 1.2, 1.3, float("nan")], dtype=torch.float32),
@@ -331,6 +351,7 @@ def test_collate_fixed_width_batches_preserves_candidate_count() -> None:
     batched = VinOracleBatch.collate([batch_a, batch_b])
 
     assert batched.rri.shape == (2, width)  # noqa: S101
+    assert batched.candidate_count is not None
     assert torch.equal(batched.candidate_count, torch.tensor([2, 3], dtype=torch.int64))  # noqa: S101
     assert torch.equal(
         batched.candidate_valid_mask(),
@@ -358,7 +379,7 @@ def test_lightning_training_step_masks_padded_tail_with_candidate_count() -> Non
         [torch.tensor([0.1, 0.2, 0.3], dtype=torch.float32)],
         num_classes=3,
     )
-    module._trainer = SimpleNamespace(sanity_checking=True)
+    module._trainer = cast(Any, SimpleNamespace(sanity_checking=True))
 
     logits = torch.tensor(
         [
@@ -387,7 +408,7 @@ def test_lightning_training_step_masks_padded_tail_with_candidate_count() -> Non
     batch = VinOracleBatch(
         efm_snippet_view=_make_snippet(),
         candidate_poses_world_cam=_identity_pose(4),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.10, 0.20, 0.95, 0.85], dtype=torch.float32),
         pm_dist_before=torch.ones(4, dtype=torch.float32),
         pm_dist_after=torch.ones(4, dtype=torch.float32),
@@ -430,11 +451,11 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
         num_classes=3,
     )
     module.prepare_for_inference()
-    module._trainer = SimpleNamespace(sanity_checking=False)
+    module._trainer = cast(Any, SimpleNamespace(sanity_checking=False))
     logged: dict[str, torch.Tensor | float] = {}
-    log_dict_calls: list[tuple[dict[str, torch.Tensor | float], dict[str, object]]] = []
+    log_dict_calls: list[tuple[dict[str, torch.Tensor | float], dict[str, Any]]] = []
 
-    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: Any, **kwargs: Any) -> None:
         del args
         logged.update(values)
         log_dict_calls.append((values, kwargs))
@@ -468,7 +489,7 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
     batch = VinOracleBatch(
         efm_snippet_view=_make_snippet(),
         candidate_poses_world_cam=_identity_pose(4),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.10, 0.20, 0.95, 0.85], dtype=torch.float32),
         pm_dist_before=torch.ones(4, dtype=torch.float32),
         pm_dist_after=torch.ones(4, dtype=torch.float32),
@@ -486,12 +507,14 @@ def test_lightning_logs_candidate_oracle_hit_with_table_mask(monkeypatch: pytest
     loss = module.training_step(batch, batch_idx=0)
 
     assert loss is not None
-    assert torch.allclose(logged["train-aux/candidate_top1_oracle_hit"], torch.tensor(0.0))
-    assert torch.allclose(logged["train-aux/candidate_top3_oracle_hit"], torch.tensor(1.0))
-    assert torch.allclose(logged["train-aux/selected_oracle_regret"], torch.tensor(0.1))
-    assert torch.allclose(logged["train-aux/selected_oracle_rank"], torch.tensor(2.0))
-    assert torch.allclose(logged["train-aux/selected_oracle_percentile"], torch.tensor(0.0))
-    assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(1.0))
+    assert torch.allclose(_required_logged_tensor(logged, "train-aux/candidate_top1_oracle_hit"), torch.tensor(0.0))
+    assert torch.allclose(_required_logged_tensor(logged, "train-aux/candidate_top3_oracle_hit"), torch.tensor(1.0))
+    assert torch.allclose(_required_logged_tensor(logged, "train-aux/selected_oracle_regret"), torch.tensor(0.1))
+    assert torch.allclose(_required_logged_tensor(logged, "train-aux/selected_oracle_rank"), torch.tensor(2.0))
+    assert torch.allclose(_required_logged_tensor(logged, "train-aux/selected_oracle_percentile"), torch.tensor(0.0))
+    assert torch.allclose(
+        _required_logged_tensor(logged, "train-aux/selected_oracle_valid_table_rate"), torch.tensor(1.0)
+    )
     assert any(
         "train-aux/candidate_top3_oracle_hit" in values and kwargs["batch_size"] == 1
         for values, kwargs in log_dict_calls
@@ -512,8 +535,8 @@ def test_lightning_table_metric_logging_uses_per_metric_denominators(
 
     def capture_log_dict(
         payload: dict[str, torch.Tensor | float],
-        *args: object,
-        **kwargs: object,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         del args
         assert len(payload) == 1
@@ -559,13 +582,13 @@ def test_lightning_candidate_metrics_weight_tables_and_reset_per_stage(
             num_classes=3,
         ),
     )
-    module._trainer = SimpleNamespace(sanity_checking=False)
+    module._trainer = cast(Any, SimpleNamespace(sanity_checking=False))
     captured: dict[str, torch.Tensor] = {}
 
     def capture_log_dict(
         payload: dict[str, torch.Tensor],
-        *args: object,
-        **kwargs: object,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         del args
         assert kwargs["on_step"] is False
@@ -616,10 +639,10 @@ def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypa
         num_classes=3,
     )
     module.prepare_for_inference()
-    module._trainer = SimpleNamespace(sanity_checking=False)
+    module._trainer = cast(Any, SimpleNamespace(sanity_checking=False))
     logged: dict[str, torch.Tensor | float] = {}
 
-    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: Any, **kwargs: Any) -> None:
         logged.update(values)
 
     monkeypatch.setattr(module, "log_dict", capture_log_dict)
@@ -641,7 +664,7 @@ def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypa
     batch = VinOracleBatch(
         efm_snippet_view=_make_snippet(),
         candidate_poses_world_cam=_identity_pose(4),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.10, 0.20, 0.95, 0.85], dtype=torch.float32),
         pm_dist_before=torch.ones(4, dtype=torch.float32),
         pm_dist_after=torch.ones(4, dtype=torch.float32),
@@ -659,10 +682,12 @@ def test_lightning_selected_oracle_logs_empty_when_no_finite_prediction(monkeypa
     loss = module.training_step(batch, batch_idx=0)
 
     assert loss is not None
-    assert torch.isnan(logged["train-aux/selected_oracle_regret"])
-    assert torch.isnan(logged["train-aux/selected_oracle_rank"])
-    assert torch.isnan(logged["train-aux/selected_oracle_percentile"])
-    assert torch.allclose(logged["train-aux/selected_oracle_valid_table_rate"], torch.tensor(0.0))
+    assert torch.isnan(_required_logged_tensor(logged, "train-aux/selected_oracle_regret"))
+    assert torch.isnan(_required_logged_tensor(logged, "train-aux/selected_oracle_rank"))
+    assert torch.isnan(_required_logged_tensor(logged, "train-aux/selected_oracle_percentile"))
+    assert torch.allclose(
+        _required_logged_tensor(logged, "train-aux/selected_oracle_valid_table_rate"), torch.tensor(0.0)
+    )
 
 
 def test_lightning_candidate_scorer_alias_preserves_vin_state_prefix() -> None:
@@ -760,10 +785,10 @@ def test_lightning_logs_without_spearman_when_disabled(monkeypatch: pytest.Monke
         num_classes=3,
     )
     module.prepare_for_inference()
-    module._trainer = SimpleNamespace(sanity_checking=False)
+    module._trainer = cast(Any, SimpleNamespace(sanity_checking=False))
     logged: dict[str, torch.Tensor | float] = {}
 
-    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: object, **kwargs: object) -> None:
+    def capture_log_dict(values: dict[str, torch.Tensor | float], *args: Any, **kwargs: Any) -> None:
         del args, kwargs
         logged.update(values)
 
@@ -786,7 +811,7 @@ def test_lightning_logs_without_spearman_when_disabled(monkeypatch: pytest.Monke
     batch = VinOracleBatch(
         efm_snippet_view=_make_snippet(),
         candidate_poses_world_cam=_identity_pose(2),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([0.10, 0.20], dtype=torch.float32),
         pm_dist_before=torch.ones(2, dtype=torch.float32),
         pm_dist_after=torch.ones(2, dtype=torch.float32),
@@ -818,7 +843,7 @@ def test_shuffle_candidates_preserves_padded_tail_unbatched() -> None:
     batch = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=candidates,
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([10.0, 11.0, 99.0, 100.0], dtype=torch.float32),
         pm_dist_before=torch.tensor([20.0, 21.0, 199.0, 200.0], dtype=torch.float32),
         pm_dist_after=torch.tensor([30.0, 31.0, 299.0, 300.0], dtype=torch.float32),
@@ -839,12 +864,12 @@ def test_shuffle_candidates_preserves_padded_tail_unbatched() -> None:
     assert torch.equal(shuffled.rri[:2], batch.rri[expected_prefix])  # noqa: S101
     assert torch.equal(shuffled.rri[2:], batch.rri[2:])  # noqa: S101
     assert torch.equal(
-        shuffled.candidate_poses_world_cam.tensor()[:2],
-        candidates.tensor()[expected_prefix],
+        _pose_tensor(shuffled.candidate_poses_world_cam)[:2],
+        _pose_tensor(candidates)[expected_prefix],
     )  # noqa: S101
     assert torch.equal(
-        shuffled.candidate_poses_world_cam.tensor()[2:],
-        candidates.tensor()[2:],
+        _pose_tensor(shuffled.candidate_poses_world_cam)[2:],
+        _pose_tensor(candidates)[2:],
     )  # noqa: S101
     assert torch.equal(shuffled.p3d_cameras.T[:2], cameras.T[expected_prefix])  # noqa: S101
     assert torch.equal(shuffled.p3d_cameras.T[2:], cameras.T[2:])  # noqa: S101
@@ -857,7 +882,7 @@ def test_shuffle_candidates_preserves_padded_tail_batched() -> None:
     batch_a = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_indexed_pose(width, offset=0.0),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([10.0, 11.0, 99.0, 100.0], dtype=torch.float32),
         pm_dist_before=torch.tensor([20.0, 21.0, 199.0, 200.0], dtype=torch.float32),
         pm_dist_after=torch.tensor([30.0, 31.0, 299.0, 300.0], dtype=torch.float32),
@@ -874,7 +899,7 @@ def test_shuffle_candidates_preserves_padded_tail_batched() -> None:
     batch_b = VinOracleBatch(
         efm_snippet_view=None,
         candidate_poses_world_cam=_indexed_pose(width, offset=10.0),
-        reference_pose_world_rig=PoseTW(_identity_pose(1).tensor().squeeze(0)),
+        reference_pose_world_rig=PoseTW(_pose_tensor(_identity_pose(1)).squeeze(0)),
         rri=torch.tensor([210.0, 211.0, 212.0, 299.0], dtype=torch.float32),
         pm_dist_before=torch.tensor([220.0, 221.0, 222.0, 399.0], dtype=torch.float32),
         pm_dist_after=torch.tensor([230.0, 231.0, 232.0, 499.0], dtype=torch.float32),
@@ -900,10 +925,10 @@ def test_shuffle_candidates_preserves_padded_tail_batched() -> None:
     assert torch.equal(shuffled.rri[1, :3], batch.rri[1, perm_b])  # noqa: S101
     assert torch.equal(shuffled.rri[1, 3:], batch.rri[1, 3:])  # noqa: S101
     assert torch.equal(
-        shuffled.candidate_poses_world_cam.tensor()[0, 2:],
-        batch.candidate_poses_world_cam.tensor()[0, 2:],
+        _pose_tensor(shuffled.candidate_poses_world_cam)[0, 2:],
+        _pose_tensor(batch.candidate_poses_world_cam)[0, 2:],
     )  # noqa: S101
     assert torch.equal(
-        shuffled.candidate_poses_world_cam.tensor()[1, 3:],
-        batch.candidate_poses_world_cam.tensor()[1, 3:],
+        _pose_tensor(shuffled.candidate_poses_world_cam)[1, 3:],
+        _pose_tensor(batch.candidate_poses_world_cam)[1, 3:],
     )  # noqa: S101

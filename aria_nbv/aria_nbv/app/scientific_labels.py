@@ -204,7 +204,7 @@ def equation_label(
 
 
 def _notation_row(
-    registry: dict[str, object],
+    registry: dict[str, Any],
     identifier: str,
     kind: Literal["equation", "symbol"],
     root: Path,
@@ -235,7 +235,7 @@ def _notation_source_url(identifier: str, typst: str, *, kind: Literal["equation
     return f"{_GITHUB_SOURCE_ROOT}/docs/typst/shared/{directory}/{module}.typ"
 
 
-def _term_row(registry: dict[str, dict[str, object]], identifier: str, root: Path) -> ResolvedTerm:
+def _term_row(registry: dict[str, dict[str, Any]], identifier: str, root: Path) -> ResolvedTerm:
     del root
     aliases = {"target-rri-reward": "target-specific-rri", "finite-horizon-return": "target-specific-rri"}
     row = registry.get(aliases.get(identifier, identifier))
@@ -291,7 +291,7 @@ def _load_registry(
     return notation, terms
 
 
-def _load_yaml(path: Path) -> object:
+def _load_yaml(path: Path) -> Any:
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, yaml.YAMLError) as exc:

@@ -13,7 +13,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, TypedDict, cast
 
 import numpy as np
 import typer
@@ -37,6 +37,16 @@ app = typer.Typer(
     help="Inspect rollout Zarr metadata, validation status, and compact rollout statistics.",
     pretty_exceptions_show_locals=False,
 )
+
+
+class _RewardSignalPayload(TypedDict):
+    """Finite target-root-gain summary used by rollout preflight."""
+
+    finite_count: int
+    mean: float | None
+    std: float | None
+    min: float | None
+    max: float | None
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -112,12 +122,12 @@ def info_command(
     store_dir = RolloutZarrStoreConfig(store_dir=store).store_dir
     reader = RolloutZarrStoreReader(store_dir)
     if random_index:
-        payload = _random_index_payload(reader=reader, min_horizon=min_horizon, seed=seed)
-        payload = compact_ase_atek_identifiers(payload)
+        random_payload = _random_index_payload(reader=reader, min_horizon=min_horizon, seed=seed)
+        random_payload = compact_ase_atek_identifiers(random_payload)
         if json_output:
-            print(json.dumps(payload, indent=2, sort_keys=True))
+            print(json.dumps(random_payload, indent=2, sort_keys=True))
         else:
-            print(payload["index"])
+            print(random_payload["index"])
         return
     payload: dict[str, Any] = reader.manifest()
     validation = None
@@ -142,11 +152,12 @@ def info_command(
         )
     if thesis_bundle_output is not None:
         assert thesis_evidence_status in {"pilot", "confirmatory"}
+        evidence_status = cast(Literal["pilot", "confirmatory"], thesis_evidence_status)
         try:
             frames = build_thesis_report_frames(
                 [store_dir],
                 sidecar_paths=sidecar_paths,
-                evidence_status=thesis_evidence_status,
+                evidence_status=evidence_status,
             )
             digest = write_thesis_report_bundle(thesis_bundle_output, frames)
         except (FileNotFoundError, TypeError, ValueError) as error:
@@ -245,7 +256,8 @@ def _preflight_payload(
             warnings.append(message)
 
     reward = _reward_signal_payload(reader)
-    if reward["finite_count"] <= 0 or reward["std"] is None or float(reward["std"]) <= 1.0e-8:
+    reward_std = reward["std"]
+    if reward["finite_count"] <= 0 or reward_std is None or reward_std <= 1.0e-8:
         message = "flat_reward_signal"
         if profile == "production":
             blockers.append(message)
@@ -254,9 +266,19 @@ def _preflight_payload(
 
     storage = runtime_storage_statistics(reader.store_dir, candidate_count=int(counts.get("candidates") or 0))
     bytes_per_candidate = storage["bytes_per_candidate"]
-    if storage["file_count"] > storage["file_count_limit"] or (
-        bytes_per_candidate is not None and bytes_per_candidate > storage["bytes_per_candidate_limit"]
-    ):
+    file_count = storage["file_count"]
+    file_count_limit = storage["file_count_limit"]
+    bytes_per_candidate_limit = storage["bytes_per_candidate_limit"]
+    storage_excessive = (
+        isinstance(file_count, int | float)
+        and isinstance(file_count_limit, int | float)
+        and file_count > file_count_limit
+    ) or (
+        isinstance(bytes_per_candidate, int | float)
+        and isinstance(bytes_per_candidate_limit, int | float)
+        and bytes_per_candidate > bytes_per_candidate_limit
+    )
+    if storage_excessive:
         message = "excessive_chunk_file_bloat"
         if profile == "production":
             blockers.append(message)
@@ -302,7 +324,7 @@ def _target_component_count(*component_counts: dict[str, int]) -> int:
     return total
 
 
-def _reward_signal_payload(reader: RolloutZarrStoreReader) -> dict[str, float | int | None]:
+def _reward_signal_payload(reader: RolloutZarrStoreReader) -> _RewardSignalPayload:
     try:
         values = np.asarray(reader.array("candidates/target_root_gain"), dtype=np.float64).reshape(-1)
     except KeyError:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from functools import cached_property
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field, field_validator
 from torch.utils.data import Dataset
@@ -266,7 +267,7 @@ class QhDataset(Dataset[QhChain]):
         return self._actor_state_contract
 
     @property
-    def provenance(self) -> dict[str, object]:
+    def provenance(self) -> dict[str, Any]:
         """Return rollout/actor store identity for audit displays, never scorer input."""
 
         return {
@@ -403,8 +404,14 @@ def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> FreeInp
             raise ValueError(
                 f"Named Q_H profile shard {shard.shard_id!r} lacks homogeneous compact EVL blocks; rebuild the store."
             )
+        missing_shapes = [name for name in expected_names if shard.blocks[name].shape is None]
+        if missing_shapes:
+            raise ValueError(
+                f"Named Q_H profile shard {shard.shard_id!r} lacks shapes for {missing_shapes}; rebuild the store."
+            )
         actual_signature = tuple(
-            (name, str(shard.blocks[name].dtype), tuple(shard.blocks[name].shape[1:])) for name in expected_names
+            (name, str(shard.blocks[name].dtype), tuple((shard.blocks[name].shape or [])[1:]))
+            for name in expected_names
         )
         if actual_signature != declared_signature:
             raise ValueError(

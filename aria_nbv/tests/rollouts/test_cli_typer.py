@@ -12,6 +12,7 @@ import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -20,12 +21,13 @@ from aria_nbv.configs import PathConfig
 from aria_nbv.oracle.pipelines import cli as rollout_cli
 from aria_nbv.oracle.pipelines.campaign import CampaignOutcome, CudaRolloutCampaignConfig
 from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriterConfig
+from aria_nbv.utils import BaseConfig
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 
 runner = CliRunner()
 
 
-def _fake_rollout_config(tmp_path):
+def _fake_rollout_config(tmp_path: Path) -> Any:
     return SimpleNamespace(
         source=SimpleNamespace(store=SimpleNamespace(store_dir=tmp_path / "vin_offline")),
         store=SimpleNamespace(store_dir=tmp_path / "rollouts.zarr"),
@@ -36,7 +38,7 @@ def _fake_rollout_config(tmp_path):
     )
 
 
-def test_build_rollouts_dry_run_parses_config_path(tmp_path, monkeypatch) -> None:
+def test_build_rollouts_dry_run_parses_config_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "rollouts.toml"
     config_path.write_text("max_samples = 1\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -53,12 +55,14 @@ def test_build_rollouts_dry_run_parses_config_path(tmp_path, monkeypatch) -> Non
     assert "target cap" in result.output
 
 
-def test_source_manifest_command_builds_without_existing_manifest(tmp_path, monkeypatch) -> None:
+def test_source_manifest_command_builds_without_existing_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config_path = tmp_path / "writer.toml"
     config_path.write_text("max_samples = 1\n", encoding="utf-8")
     output_path = tmp_path / "source.json"
-    source = object()
-    captured = {}
+    source = SimpleNamespace(kind="source-fixture")
+    captured: dict[str, Any] = {}
     manifest = SimpleNamespace(rows=(1, 2), split="train", source_manifest_hash="hash")
     monkeypatch.setattr(rollout_cli, "_source_config_from_writer_toml", lambda path: source)
     monkeypatch.setattr(
@@ -77,7 +81,7 @@ def test_source_manifest_command_builds_without_existing_manifest(tmp_path, monk
     assert "Planned Rollout Source Manifest" in result.output
 
 
-def test_source_manifest_parser_accepts_writer_source_without_manifest(tmp_path) -> None:
+def test_source_manifest_parser_accepts_writer_source_without_manifest(tmp_path: Path) -> None:
     config_path = tmp_path / "writer.toml"
     config_path.write_text(
         "[source]\nlimit = 1\n[source.store]\nstore_dir = 'local-store'\n",
@@ -139,7 +143,9 @@ def test_current_backbone_configs_explicitly_select_derived_free_input() -> None
     assert historical.backbone.free_input_mode == "native"
 
 
-def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(tmp_path, monkeypatch) -> None:
+def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     writer_path = tmp_path / "writer.toml"
     writer_path.write_text("[source.store]\nstore_dir = 'local-store'\n", encoding="utf-8")
     (tmp_path / "local-store").mkdir()
@@ -163,7 +169,7 @@ def test_internal_preflight_uses_current_writer_store_for_foreign_manifest_path(
     )
 
 
-def test_build_rollouts_rejects_partial_shard_arguments(tmp_path, monkeypatch) -> None:
+def test_build_rollouts_rejects_partial_shard_arguments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "rollouts.toml"
     config_path.write_text("max_samples = 1\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -205,12 +211,14 @@ def test_campaign_module_entrypoint_survives_missing_console_script() -> None:
     assert "nbv-rollout-campaign" in result.stdout
 
 
-def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, monkeypatch) -> None:
+def test_campaign_status_json_delegates_to_presentation_free_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class _Campaign:
         config = SimpleNamespace(campaign_id="test-campaign")
         progress_calls = 0
 
-        def read_status(self):
+        def read_status(self) -> Any:
             return SimpleNamespace(
                 state="completed_with_failures",
                 counts={
@@ -231,7 +239,7 @@ def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, mo
                 latest_failure_reason="timeout",
             )
 
-        def progress_summary(self):
+        def progress_summary(self) -> Any:
             self.progress_calls += 1
             return {
                 "counts": {
@@ -262,13 +270,13 @@ def test_campaign_status_json_delegates_to_presentation_free_reader(tmp_path, mo
     assert campaign.progress_calls == 1
 
 
-def test_campaign_preflight_delegates_once(tmp_path, monkeypatch) -> None:
-    calls = []
+def test_campaign_preflight_delegates_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str | tuple[str, dict[str, Any]]] = []
 
     class _Campaign:
         config = SimpleNamespace(writer_config_path=None)
 
-        def preflight(self, **kwargs):
+        def preflight(self, **kwargs: Any) -> None:
             calls.append("preflight")
 
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
@@ -277,11 +285,13 @@ def test_campaign_preflight_delegates_once(tmp_path, monkeypatch) -> None:
     assert calls == ["preflight"]
 
 
-def test_campaign_plan_reports_preflight_failure_without_traceback(tmp_path, monkeypatch) -> None:
+def test_campaign_plan_reports_preflight_failure_without_traceback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class Campaign:
         config = SimpleNamespace(writer_config_path=None)
 
-        def preflight(self, **_kwargs):
+        def preflight(self, **_kwargs: Any) -> None:
             raise RuntimeError("source-target preflight requires 100 scenes; found 5")
 
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: Campaign())
@@ -297,8 +307,10 @@ def test_campaign_plan_reports_preflight_failure_without_traceback(tmp_path, mon
 @pytest.mark.parametrize(
     ("command", "message"), [("run", "campaign run complete"), ("resume", "campaign resume complete")]
 )
-def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, message) -> None:
-    calls = []
+def test_campaign_run_and_resume_delegate_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str, message: str
+) -> None:
+    calls: list[str | tuple[str, dict[str, Any]]] = []
     output_root = tmp_path / "campaign"
     output_root.mkdir()
     (output_root / "smoke-evidence.json").write_text('{"plan_hash":"plan"}\n')
@@ -306,17 +318,17 @@ def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, m
     class _Campaign:
         config = SimpleNamespace(output_root=output_root, writer_config_path=None)
 
-        def load_plan(self, path):
+        def load_plan(self, path: Any) -> Any:
             return SimpleNamespace(plan_hash="plan")
 
-        def preflight(self, *args, **kwargs):
+        def preflight(self, *args: Any, **kwargs: Any) -> Any:
             calls.append("preflight")
             return SimpleNamespace(ok=True)
 
-        def smoke_evidence(self, plan):
+        def smoke_evidence(self, plan: Any) -> Any:
             return {"plan_hash": plan.plan_hash, "result": {"outcome": "succeeded", "validated": True}}
 
-        def run(self, plan, **kwargs):
+        def run(self, plan: Any, **kwargs: Any) -> None:
             calls.append((plan.plan_hash, kwargs))
 
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
@@ -327,15 +339,16 @@ def test_campaign_run_and_resume_delegate_once(tmp_path, monkeypatch, command, m
     assert "preflight" not in calls
 
 
-def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch, capsys) -> None:
+def test_campaign_worker_binds_selected_unit_profile_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     @dataclass(frozen=True)
     class _Entry:
         profile_hash: str = ""
         writer_config_hash: str = ""
 
-    class _WriterConfig:
-        def model_dump_jsonable(self):
-            return {"writer": "canonical"}
+    class _WriterConfig(BaseConfig):
+        writer: str = "canonical"
 
     writer_cfg = _WriterConfig()
     writer_path = tmp_path / "writer.toml"
@@ -364,17 +377,17 @@ def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch,
             model_dump_jsonable=lambda: {"campaign": "canonical"},
         )
 
-        def load_plan(self, _path):
+        def load_plan(self, _path: Any) -> Any:
             return plan
 
-        def shard_entry_for_unit(self, _plan, _unit):
+        def shard_entry_for_unit(self, _plan: Any, _unit: Any) -> Any:
             return _Entry()
 
-        def adapt_work_unit(self, _unit, **kwargs):
+        def adapt_work_unit(self, _unit: Any, **kwargs: Any) -> Any:
             seen["profile_hash"] = kwargs["profile_hash"]
             return writer_cfg, replace(kwargs["shard_entry"], profile_hash=kwargs["profile_hash"])
 
-        def preflight(self, **_kwargs):
+        def preflight(self, **_kwargs: Any) -> Any:
             return None
 
     @dataclass(frozen=True)
@@ -386,8 +399,7 @@ def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch,
 
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())
     monkeypatch.setattr(
-        rollout_cli.RolloutDatasetWriterConfig,
-        "from_toml",
+        "aria_nbv.oracle.pipelines.cli.RolloutDatasetWriterConfig.from_toml",
         lambda _path: writer_cfg,
     )
     monkeypatch.setattr(
@@ -412,20 +424,20 @@ def test_campaign_worker_binds_selected_unit_profile_hash(tmp_path, monkeypatch,
     assert payload["leaf_evidence"]["success_path"] == "success"
 
 
-def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) -> None:
+def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source = tmp_path / "source.json"
     source.write_text("{}\n")
-    captured = {}
+    captured: dict[str, Any] = {}
     reviewed_manifest = SimpleNamespace(to_jsonable=lambda: {"manifest": "canonical"})
     writer = SimpleNamespace(source_manifest_path=source, model_dump_jsonable=lambda: {"writer": "canonical"})
 
     class _Campaign:
         config = SimpleNamespace(campaign_id="campaign")
 
-        def preflight(self, **_kwargs):
+        def preflight(self, **_kwargs: Any) -> Any:
             return None
 
-        def plan(self, rows, **kwargs):
+        def plan(self, rows: Any, **kwargs: Any) -> Any:
             captured.update(rows=rows, kwargs=kwargs)
             return SimpleNamespace(
                 plan_hash="plan",
@@ -437,24 +449,24 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
                 to_jsonable=lambda: {"plan_hash": "plan"},
             )
 
-        def audit_source_manifest(self, writer_config, manifest):
+        def audit_source_manifest(self, writer_config: Any, manifest: Any) -> Any:
             captured.update(writer_config=writer_config, manifest=manifest)
             return [{"scene_id": "s0"}]
 
-        def write_plan(self, plan, path=None):
+        def write_plan(self, plan: Any, path: Any = None) -> Any:
             return path
 
-        def write_admission_audit(self, rows, **kwargs):
+        def write_admission_audit(self, rows: Any, **kwargs: Any) -> Any:
             captured.update(admission_rows=rows, admission_kwargs=kwargs)
             return source
 
-        def append_event(self, _event):
+        def append_event(self, _event: Any) -> Any:
             return None
 
-        def read_events(self, **_kwargs):
+        def read_events(self, **_kwargs: Any) -> Any:
             return []
 
-        def status(self, plan, *, stage):
+        def status(self, plan: Any, *, stage: Any) -> Any:
             captured.update(status_plan=plan, status_stage=stage)
             return SimpleNamespace(
                 state=stage,
@@ -474,14 +486,14 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
                 config_hash="config",
             )
 
-        def write_status(self, status):
+        def write_status(self, status: Any) -> Any:
             captured["status"] = status
             return None
 
-        def progress_summary(self):
+        def progress_summary(self) -> Any:
             return vars(captured["status"])
 
-        def model_dump_jsonable(self):
+        def model_dump_jsonable(self) -> Any:
             return {}
 
         utc_now = staticmethod(lambda: SimpleNamespace(isoformat=lambda: "now"))
@@ -514,7 +526,7 @@ def test_campaign_plan_reads_rows_from_manifest_envelope(tmp_path, monkeypatch) 
     assert status_payload["current_stage"] == "planned"
 
 
-def test_canonical_campaign_root_and_smoke_plan_resolution(tmp_path, monkeypatch) -> None:
+def test_canonical_campaign_root_and_smoke_plan_resolution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = CudaRolloutCampaignConfig.from_toml(
         Path(__file__).resolve().parents[3] / ".configs/build_rollouts_v1_cuda_campaign.toml"
     )
@@ -532,14 +544,14 @@ def test_canonical_campaign_root_and_smoke_plan_resolution(tmp_path, monkeypatch
     class _Campaign:
         config = SimpleNamespace(output_root=output_root, writer_config_path=None)
 
-        def preflight(self, **kwargs):
+        def preflight(self, **kwargs: Any) -> None:
             seen["preflight_plan_path"] = kwargs["plan_path"]
 
-        def load_plan(self, path):
+        def load_plan(self, path: Any) -> Any:
             seen["load_plan_path"] = path
             return SimpleNamespace()
 
-        def smoke(self, plan, **kwargs):
+        def smoke(self, plan: Any, **kwargs: Any) -> None:
             seen["smoke_plan_path"] = kwargs["plan_path"]
 
     monkeypatch.setattr(rollout_cli, "_campaign", lambda _path: _Campaign())

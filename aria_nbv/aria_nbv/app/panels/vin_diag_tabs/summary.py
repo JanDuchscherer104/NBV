@@ -7,6 +7,8 @@ inputs and outputs.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import plotly.express as px
 import streamlit as st
@@ -174,9 +176,9 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
             k_eff = int(min(k, int(scores.numel())))
             top_local = torch.topk(scores, k=k_eff, largest=True).indices
             top_idx = masked_idx[top_local]
-            rows: list[dict[str, object]] = []
+            rows: list[dict[str, Any]] = []
             for flat_idx in top_idx.tolist():
-                row: dict[str, object] = {
+                row: dict[str, Any] = {
                     "flat_idx": int(flat_idx),
                     "expected_norm": float(expected[flat_idx].item()),
                     "radius_m": float(radius_m[flat_idx].item()),
@@ -214,7 +216,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
             "Quick sanity checks: if expected score correlates almost perfectly with a proxy "
             "(e.g., semidense visibility), the model might be ignoring other cues.",
         )
-        corr_rows: list[dict[str, object]] = []
+        corr_rows: list[dict[str, Any]] = []
         for name, values in (
             ("radius_m", radius_m),
             ("voxel_valid_frac", voxel_valid),
@@ -230,7 +232,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
         semidense_proj = getattr(debug, "semidense_proj", None)
         voxel_proj = getattr(debug, "voxel_proj", None)
         for label, values in (("semidense_proj", semidense_proj), ("voxel_proj", voxel_proj)):
-            if not torch.is_tensor(values) or values.ndim != 3:
+            if not isinstance(values, torch.Tensor) or values.ndim != 3:
                 continue
             vec = values.reshape(-1, values.shape[-1])
             if int(vec.shape[-1]) != 5:
@@ -242,7 +244,7 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
                 "depth_mean",
                 "depth_std",
             ]
-            corr_vals: list[dict[str, object]] = []
+            corr_vals: list[dict[str, Any]] = []
             for idx, name in enumerate(names):
                 corr = _corr(vec[:, idx], expected)
                 corr_vals.append({"feature": f"{label}.{name}", "pearson": corr})
@@ -278,8 +280,9 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
     feature_dims: list[tuple[str, int]] = []
     if hasattr(debug, "pose_enc"):
         feature_dims.append(("pose_enc", int(debug.pose_enc.shape[-1])))
-    if getattr(debug, "global_feat", None) is not None:
-        feature_dims.append(("global_feat", int(debug.global_feat.shape[-1])))
+    global_feat = getattr(debug, "global_feat", None)
+    if isinstance(global_feat, torch.Tensor):
+        feature_dims.append(("global_feat", int(global_feat.shape[-1])))
     if hasattr(debug, "local_feat"):
         feature_dims.append(("local_feat", int(debug.local_feat.shape[-1])))
     if feature_dims:
@@ -448,6 +451,8 @@ def render_summary_tab(ctx: VinDiagContext) -> None:
         if st.button("Generate summary", key="vin_summary_generate") or auto_run:
             try:
                 with st.spinner("Generating VIN summary..."):
+                    if state.module is None:
+                        raise RuntimeError("VIN runtime module is unavailable.")
                     state.summary_text = state.module.summarize_vin(
                         batch,
                         include_torchsummary=include_torchsummary,

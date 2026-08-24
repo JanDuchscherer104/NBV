@@ -1,10 +1,17 @@
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
+import pytest
 
 from aria_nbv.data_handling.vin_store import target_inventory
-from aria_nbv.data_handling.vin_store.format import VinOfflineIndexRecord, VinOfflineShardSpec
+from aria_nbv.data_handling.vin_store.format import (
+    VinOfflineBlockSpec,
+    VinOfflineIndexRecord,
+    VinOfflineManifest,
+    VinOfflineMaterializedBlocks,
+    VinOfflineShardSpec,
+)
 
 
 def _records() -> tuple[VinOfflineIndexRecord, ...]:
@@ -14,21 +21,34 @@ def _records() -> tuple[VinOfflineIndexRecord, ...]:
     )
 
 
-def _manifest(*, detected: bool = True, gt: bool = True) -> SimpleNamespace:
-    return SimpleNamespace(
-        materialized_blocks=SimpleNamespace(detected_obbs=detected, gt_obbs=gt),
+def _manifest(*, detected: bool = True, gt: bool = True) -> VinOfflineManifest:
+    blocks = {
+        name: VinOfflineBlockSpec(name=name, kind="zarr_array", paths=[name.replace(".", "/")])
+        for name in ("gt.obbs", "detected.obbs")
+    }
+    return VinOfflineManifest(
+        version=10,
+        created_at="2026-08-23T00:00:00Z",
+        source={},
+        oracle={},
+        vin={},
+        materialized_blocks=VinOfflineMaterializedBlocks(
+            backbone=False,
+            depths=False,
+            candidate_pcs=False,
+            detected_obbs=detected,
+            gt_obbs=gt,
+        ),
         shards=[
-            VinOfflineShardSpec(
-                "shard-a", "shards/a", 0, 1, {name: SimpleNamespace() for name in ("gt.obbs", "detected.obbs")}
-            ),
-            VinOfflineShardSpec(
-                "shard-b", "shards/b", 1, 1, {name: SimpleNamespace() for name in ("gt.obbs", "detected.obbs")}
-            ),
+            VinOfflineShardSpec("shard-a", "shards/a", 0, 1, blocks),
+            VinOfflineShardSpec("shard-b", "shards/b", 1, 1, blocks),
         ],
     )
 
 
-def test_inventory_extracts_geometry_class_and_excludes_padding_and_nonfinite(monkeypatch, tmp_path: Path) -> None:
+def test_inventory_extracts_geometry_class_and_excludes_padding_and_nonfinite(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     valid = np.zeros((34,), dtype=np.float32)
     valid[:6] = [0, 2, 0, 1, 0, 3]
     valid[18:30] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 20, 30]
@@ -41,20 +61,18 @@ def test_inventory_extracts_geometry_class_and_excludes_padding_and_nonfinite(mo
     optional_reads: list[str] = []
 
     class Reader:
-        def __init__(self, _config: object) -> None:
+        def __init__(self, _config: Any) -> None:
             pass
 
         def read_numeric_block(self, record: VinOfflineIndexRecord, name: str) -> np.ndarray:
             return np.stack([valid, padded, nonfinite]) if record.sample_index == 0 else np.stack([valid, invalid])
 
-        def read_optional_record(self, _record: VinOfflineIndexRecord, name: str) -> object:
+        def read_optional_record(self, _record: VinOfflineIndexRecord, name: str) -> Any:
             optional_reads.append(name)
             return {7: "chair"} if name.endswith("obb_sem_id_to_name") else None
 
-    monkeypatch.setattr(target_inventory.VinOfflineManifest, "read", classmethod(lambda _cls, _path: _manifest()))
-    monkeypatch.setattr(
-        target_inventory.VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records()))
-    )
+    monkeypatch.setattr(VinOfflineManifest, "read", classmethod(lambda _cls, _path: _manifest()))
+    monkeypatch.setattr(VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records())))
     monkeypatch.setattr(target_inventory, "VinOfflineStoreReader", Reader)
 
     result = target_inventory.inspect_target_inventory(tmp_path)
@@ -75,15 +93,15 @@ def test_inventory_extracts_geometry_class_and_excludes_padding_and_nonfinite(mo
     assert result.to_jsonable()["detected"]["row_count"] == 2
 
 
-def test_inventory_keeps_missing_population_explicitly_unavailable(monkeypatch, tmp_path: Path) -> None:
+def test_inventory_keeps_missing_population_explicitly_unavailable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(
-        target_inventory.VinOfflineManifest,
+        VinOfflineManifest,
         "read",
         classmethod(lambda _cls, _path: _manifest(gt=False, detected=False)),
     )
-    monkeypatch.setattr(
-        target_inventory.VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records()))
-    )
+    monkeypatch.setattr(VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records())))
     monkeypatch.setattr(target_inventory, "VinOfflineStoreReader", lambda _config: object())
 
     result = target_inventory.inspect_target_inventory(tmp_path)
@@ -94,26 +112,24 @@ def test_inventory_keeps_missing_population_explicitly_unavailable(monkeypatch, 
     assert result.gt.reason == "gt.obbs_not_materialized"
 
 
-def test_inventory_retains_zero_target_samples_and_scenes(monkeypatch, tmp_path: Path) -> None:
+def test_inventory_retains_zero_target_samples_and_scenes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     valid = np.zeros((34,), dtype=np.float32)
     valid[:6] = [0, 1, 0, 1, 0, 1]
     valid[18:30] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 2, 3]
     padded = np.full((34,), -1, dtype=np.float32)
 
     class Reader:
-        def __init__(self, _config: object) -> None:
+        def __init__(self, _config: Any) -> None:
             pass
 
         def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
             return padded.reshape(1, 34) if record.sample_index == 0 else valid.reshape(1, 34)
 
-        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> object:
+        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> Any:
             return None
 
-    monkeypatch.setattr(target_inventory.VinOfflineManifest, "read", classmethod(lambda _cls, _path: _manifest()))
-    monkeypatch.setattr(
-        target_inventory.VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records()))
-    )
+    monkeypatch.setattr(VinOfflineManifest, "read", classmethod(lambda _cls, _path: _manifest()))
+    monkeypatch.setattr(VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records())))
     monkeypatch.setattr(target_inventory, "VinOfflineStoreReader", Reader)
 
     result = target_inventory.inspect_target_inventory(tmp_path)
@@ -123,18 +139,16 @@ def test_inventory_retains_zero_target_samples_and_scenes(monkeypatch, tmp_path:
     assert result.gt.split_counts == (("train", 0), ("val", 1))
 
 
-def test_inventory_rejects_malformed_shape_without_fallback(monkeypatch, tmp_path: Path) -> None:
+def test_inventory_rejects_malformed_shape_without_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     class Reader:
-        def __init__(self, _config: object) -> None:
+        def __init__(self, _config: Any) -> None:
             pass
 
         def read_numeric_block(self, _record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
             return np.zeros((3, 33), dtype=np.float32)
 
-    monkeypatch.setattr(target_inventory.VinOfflineManifest, "read", classmethod(lambda _cls, _path: _manifest()))
-    monkeypatch.setattr(
-        target_inventory.VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records()))
-    )
+    monkeypatch.setattr(VinOfflineManifest, "read", classmethod(lambda _cls, _path: _manifest()))
+    monkeypatch.setattr(VinOfflineIndexRecord, "read_many", classmethod(lambda _cls, _path: list(_records())))
     monkeypatch.setattr(target_inventory, "VinOfflineStoreReader", Reader)
 
     result = target_inventory.inspect_target_inventory(tmp_path)

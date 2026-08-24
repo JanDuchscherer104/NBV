@@ -7,10 +7,13 @@ from __future__ import annotations
 import inspect
 from contextlib import nullcontext
 from dataclasses import asdict, replace
+from typing import Any
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import pytest
+import streamlit as st
 
 pytest.importorskip("efm3d")
 
@@ -71,7 +74,7 @@ def test_pose_axis_frames_hide_by_default_and_bound_advanced_overlay() -> None:
 
 def test_geometry_anchors_can_withhold_pose_triads_without_hiding_context() -> None:
     frame_rows = pd.DataFrame([asdict(_frame())])
-    figure = candidate_generation.go.Figure()
+    figure = go.Figure()
 
     candidate_generation._add_geometry_anchors(
         figure,
@@ -141,24 +144,27 @@ def test_orientation_diagnostics_keep_frame_and_selected_populations_explicit() 
     assert sum(len(trace.y) for trace in figure.data) == len(rows)
 
 
-def test_geometry_renderer_keeps_proposal_and_trajectory_frames_projection_local(monkeypatch) -> None:
+def test_geometry_renderer_keeps_proposal_and_trajectory_frames_projection_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Proposal anchors never reuse factual trajectory frames."""
 
     captured_axis_frames: list[pd.DataFrame] = []
     captured_trajectory_frames: list[pd.DataFrame] = []
-    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
-    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(candidate_generation, "_render_plot", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         candidate_generation,
         "_add_geometry_anchors",
         lambda _figure, _frames, *, axis_frames, **_kwargs: captured_axis_frames.append(axis_frames.copy()),
     )
-    monkeypatch.setattr(
-        candidate_generation,
-        "_trajectory_figure",
-        lambda _points, frames: captured_trajectory_frames.append(frames.copy()) or candidate_generation.go.Figure(),
-    )
+
+    def trajectory_figure(_points: pd.DataFrame, frames: pd.DataFrame) -> go.Figure:
+        captured_trajectory_frames.append(frames.copy())
+        return go.Figure()
+
+    monkeypatch.setattr(candidate_generation, "_trajectory_figure", trajectory_figure)
     candidates = pd.DataFrame([{"candidate_row_id": 1}])
     proposal_frames = pd.DataFrame([{"frame_id": "proposal-frame"}])
     trajectory_frames = pd.DataFrame([{"frame_id": "trajectory-frame"}])
@@ -174,10 +180,10 @@ def test_geometry_renderer_keeps_proposal_and_trajectory_frames_projection_local
     assert [frame["frame_id"].tolist() for frame in captured_trajectory_frames] == [["trajectory-frame"]]
 
 
-def test_geometry_explanations_use_distinct_canonical_normalization_equations(monkeypatch) -> None:
-    explanations = []
-    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
-    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
+def test_geometry_explanations_use_distinct_canonical_normalization_equations(monkeypatch: pytest.MonkeyPatch) -> None:
+    explanations: list[Any] = []
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         candidate_generation, "_render_plot", lambda _figure, explanation: explanations.append(explanation)
     )

@@ -21,6 +21,8 @@ being changed.
 - `python-standards` owns generic Python, typing, config, docstring, and upstream
   reuse rules. `pyproject.toml` owns executable formatter/linter configuration;
   nearest source and tests own behavior and local API detail.
+- Type dynamic boundaries with the narrowest valid union, `TypedDict`, protocol,
+  or verified third-party `Any`; `object` is not an accepted type annotation.
 
 ## Procedure And Proof
 

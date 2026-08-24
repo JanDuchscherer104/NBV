@@ -9,8 +9,9 @@ aligned.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 import torch
 from efm3d.aria.pose import PoseTW
@@ -23,6 +24,21 @@ from .views import VinSnippetView, is_vin_snippet_view_instance
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+
+def _pose_tensor(pose: PoseTW) -> Tensor:
+    """Cross the untyped EFM pose accessor with a checked tensor result."""
+
+    tensor: Callable[[], Any] = pose.tensor
+    return cast(Tensor, tensor())
+
+
+def _sample_identifier(value: str | list[str], *, field: str) -> str:
+    """Require an unbatched identifier before constructing a new batch."""
+
+    if isinstance(value, str):
+        return value
+    raise ValueError(f"Cannot collate an already-batched {field} value.")
 
 
 @dataclass(slots=True)
@@ -160,7 +176,7 @@ class VinOracleBatch:
     def resolved_candidate_count(self, *, device: torch.device | None = None) -> Tensor:
         """Return clamped valid-prefix lengths as ``Tensor["", int64]`` or ``Tensor["B", int64]``."""
 
-        poses = self.candidate_poses_world_cam.tensor()
+        poses = _pose_tensor(self.candidate_poses_world_cam)
         target_device = device or poses.device
         max_candidates = int(poses.shape[-2])
         counts = self.candidate_count
@@ -197,7 +213,7 @@ class VinOracleBatch:
     def candidate_valid_mask(self, *, device: torch.device | None = None) -> Tensor:
         """Return ``Tensor["N", bool]`` or ``Tensor["B N", bool]`` valid-prefix masks."""
 
-        poses = self.candidate_poses_world_cam.tensor()
+        poses = _pose_tensor(self.candidate_poses_world_cam)
         counts = self.resolved_candidate_count(device=device)
         max_candidates = int(poses.shape[-2])
         arange = torch.arange(max_candidates, device=counts.device)
@@ -213,7 +229,7 @@ class VinOracleBatch:
         PyTorch3D cameras. Non-candidate fields (snippet view, backbone outputs)
         are preserved.
         """
-        poses = self.candidate_poses_world_cam.tensor()
+        poses = _pose_tensor(self.candidate_poses_world_cam)
         if poses.ndim == 2:
             batch_size = 1
             num_candidates = int(poses.shape[0])
@@ -426,8 +442,8 @@ class VinOracleBatch:
             target_len=max_candidates,
         )
 
-        scene_id = [sample.scene_id for sample in samples]
-        snippet_id = [sample.snippet_id for sample in samples]
+        scene_id = [_sample_identifier(sample.scene_id, field="scene_id") for sample in samples]
+        snippet_id = [_sample_identifier(sample.snippet_id, field="snippet_id") for sample in samples]
 
         backbone_out = None
         if any(sample.backbone_out is not None for sample in samples):
@@ -444,10 +460,11 @@ class VinOracleBatch:
         trajectory = cls._stack_optional_trajectory([sample.trajectory for sample in samples])
         vin_snippet = None
         if has_snippet:
-            points_list = [view.points_world for view in snippet_views if view is not None]
-            lengths_list = [view.lengths for view in snippet_views if view is not None]
-            traj_list = [view.t_world_rig for view in snippet_views if view is not None]
-            snippet_pose_list = [view.t_world_snippet for view in snippet_views if view is not None]
+            vin_views = [cast(VinSnippetView, view) for view in snippet_views if view is not None]
+            points_list = [view.points_world for view in vin_views]
+            lengths_list = [view.lengths for view in vin_views]
+            traj_list = [view.t_world_rig for view in vin_views]
+            snippet_pose_list = [view.t_world_snippet for view in vin_views]
             max_points = max(int(points.shape[0]) for points in points_list)
             max_frames = max(int(traj.shape[0]) for traj in traj_list)
             points_world = torch.stack(
@@ -485,11 +502,11 @@ class VinOracleBatch:
 
         candidate_count = torch.stack(
             [
-                sample.resolved_candidate_count(device=candidate_poses_world_cam.tensor().device).reshape(())
+                sample.resolved_candidate_count(device=_pose_tensor(candidate_poses_world_cam).device).reshape(())
                 for sample in samples
             ],
             dim=0,
-        ).to(device=candidate_poses_world_cam.tensor().device, dtype=torch.int64)
+        ).to(device=_pose_tensor(candidate_poses_world_cam).device, dtype=torch.int64)
 
         return cls(
             efm_snippet_view=vin_snippet,
@@ -515,7 +532,7 @@ class VinOracleBatch:
     @staticmethod
     def _pad_candidate_poses(poses: PoseTW, *, target_len: int) -> Tensor:
         """Pad or truncate candidate-pose tensors to ``target_len``."""
-        data = poses.tensor()
+        data = _pose_tensor(poses)
         if data.ndim == 1:
             data = data.unsqueeze(0)
         if data.shape[-1] != 12:
@@ -524,7 +541,7 @@ class VinOracleBatch:
         if num == target_len:
             return data
         if num == 0:
-            pad = PoseTW().tensor().expand(target_len, -1)
+            pad = _pose_tensor(PoseTW()).expand(target_len, -1)
             return pad
         if num > target_len:
             return data[:target_len]
@@ -554,7 +571,7 @@ class VinOracleBatch:
     @staticmethod
     def _pad_trajectory(poses: PoseTW, *, target_len: int) -> Tensor:
         """Pad or truncate trajectory poses to ``target_len`` frames."""
-        data = poses.tensor()
+        data = _pose_tensor(poses)
         if data.ndim == 3 and data.shape[0] == 1:
             data = data.squeeze(0)
         if data.ndim != 2 or data.shape[-1] != 12:
@@ -563,7 +580,7 @@ class VinOracleBatch:
         if num == target_len:
             return data
         if num == 0:
-            pad = PoseTW().tensor().expand(target_len, -1)
+            pad = _pose_tensor(PoseTW()).expand(target_len, -1)
             return pad
         if num > target_len:
             return data[:target_len]
@@ -592,7 +609,7 @@ class VinOracleBatch:
         """Stack reference poses into a batched ``PoseTW`` tensor."""
         tensors = []
         for pose in poses:
-            data = pose.tensor()
+            data = _pose_tensor(pose)
             if data.ndim == 2:
                 if data.shape[0] != 1:
                     raise ValueError("reference_pose_world_rig must have shape (12,) or (1,12).")
@@ -600,7 +617,7 @@ class VinOracleBatch:
             if data.ndim != 1:
                 raise ValueError("reference_pose_world_rig must have shape (12,) or (1,12).")
             tensors.append(data)
-        return PoseTW(torch.stack(tensors, dim=0))
+        return cast(PoseTW, PoseTW(torch.stack(tensors, dim=0)))
 
     @staticmethod
     def _expand_camera_param(param: Tensor, *, target_len: int, name: str) -> Tensor:

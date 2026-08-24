@@ -13,11 +13,11 @@ Conventions (efm3d / ATEK):
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Literal, Self
+from collections.abc import Callable, Sequence
+from typing import Any, Literal, Self, cast
 
 import numpy as np
-import plotly.graph_objects as go  # type: ignore[import-untyped]
+import plotly.graph_objects as go
 import torch
 import trimesh
 from efm3d.aria.camera import CameraTW
@@ -25,7 +25,7 @@ from efm3d.aria.obb import ObbTW
 from efm3d.aria.pose import PoseTW
 from matplotlib import colormaps
 from plotly import colors as plotly_colors
-from plotly.subplots import make_subplots  # type: ignore[import-untyped]
+from plotly.subplots import make_subplots
 
 from ..data_handling import EfmSnippetView
 from ..data_handling.ase_efm.views import EfmCameraView
@@ -51,6 +51,27 @@ BBOX_EDGE_IDX = np.array(
     ],
     dtype=np.int64,
 )
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    """Cross the untyped EFM pose accessor with a typed tensor result."""
+
+    tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, tensor())
+
+
+def _pose_to(pose: PoseTW, **kwargs: Any) -> PoseTW:
+    """Move an EFM pose across its untyped third-party method boundary."""
+
+    move: Callable[..., Any] = pose.to
+    return cast(PoseTW, move(**kwargs))
+
+
+def _camera_to(camera: CameraTW, device: torch.device) -> CameraTW:
+    """Move an EFM camera across its untyped third-party method boundary."""
+
+    move: Callable[..., Any] = camera.to
+    return cast(CameraTW, move(device))
 
 
 def pose_world_cam(
@@ -114,7 +135,7 @@ def get_frustum_segments(
     """
     # Keep all intermediate tensors on the same device/dtype as the camera to
     # avoid CPU/GPU mismatches when candidate poses live on CUDA.
-    pose_world_cam = pose_world_cam.to(device=cam.device, dtype=cam.dtype)
+    pose_world_cam = _pose_to(pose_world_cam, device=cam.device, dtype=cam.dtype)
 
     # Construct four pixel corners on an inscribed square
     c = cam.c.squeeze(0)  # (2,)
@@ -261,7 +282,7 @@ def configure_3d_scene(
     title: str | None = None,
     height: int | None = None,
     axis_titles: tuple[str, str, str] = ("X", "Y", "Z"),
-    scene_ranges: dict | None = None,
+    scene_ranges: dict[str, Any] | None = None,
 ) -> go.Figure:
     """Apply equal-scale 3D axes and an optional bounded scene range.
 
@@ -278,7 +299,7 @@ def configure_3d_scene(
     }
     if scene_ranges is not None:
         scene.update(scene_ranges)
-    layout: dict[str, object] = {"scene": scene}
+    layout: dict[str, Any] = {"scene": scene}
     if title is not None:
         layout["title"] = title
     if height is not None:
@@ -348,7 +369,7 @@ class SnippetPlotBuilder:
         """Create a builder whose initial bounds cover the snippet evidence."""
         return cls(snippet, title=title, height=height)
 
-    def _default_scene_ranges(self) -> dict:
+    def _default_scene_ranges(self) -> dict[str, Any]:
         self._bounds = self._compute_bounds()
         return self._build_scene_ranges(*self._bounds)
 
@@ -375,7 +396,7 @@ class SnippetPlotBuilder:
         vmin, vmax = bbox.min(axis=0), bbox.max(axis=0)
         return vmin, vmax
 
-    def _build_scene_ranges(self, vmin: np.ndarray, vmax: np.ndarray) -> dict:
+    def _build_scene_ranges(self, vmin: np.ndarray, vmax: np.ndarray) -> dict[str, Any]:
         max_extent = (vmax - vmin).max()
         padding = max(0.5, 0.1 * max_extent)
         return {
@@ -468,7 +489,7 @@ class SnippetPlotBuilder:
         if pts_np.size == 0:
             return self
         points = torch.as_tensor(pts_np[:, :3], dtype=torch.float32)
-        pose = self._pose_from_tw_payload(pose_world_object).to(device=points.device, dtype=points.dtype)
+        pose = _pose_to(self._pose_from_tw_payload(pose_world_object), device=points.device, dtype=points.dtype)
         extents_np = (
             extents.detach().cpu().numpy()
             if isinstance(extents, torch.Tensor)
@@ -645,6 +666,8 @@ class SnippetPlotBuilder:
 
                 t_world_frame = traj.t_world_rig[traj_idx]
             else:
+                if frame not in {"rgb", "slaml", "slamr"}:
+                    raise ValueError(f"Unsupported camera frame: {frame!r}")
                 cam_view = self.snippet.get_camera(frame)
                 n_cam = cam_view.num_frames
                 if n_cam == 0:
@@ -736,34 +759,34 @@ class SnippetPlotBuilder:
 
     def _center_from_input(self, center: np.ndarray | torch.Tensor | PoseTW) -> np.ndarray:
         if isinstance(center, PoseTW):
-            return center.t.detach().cpu().numpy()
+            return np.asarray(center.t.detach().cpu().numpy())
         if isinstance(center, torch.Tensor):
             arr = center.detach().cpu().numpy()
-            return arr.reshape(-1, 3)[0]
+            return np.asarray(arr.reshape(-1, 3)[0])
         arr_np = np.asarray(center)
-        return arr_np.reshape(-1, 3)[0]
+        return np.asarray(arr_np.reshape(-1, 3)[0])
 
     def _pose_from_tw_payload(self, pose: np.ndarray | torch.Tensor | PoseTW | Sequence[float]) -> PoseTW:
         """Return a single `PoseTW` from a flattened PoseTW or matrix payload."""
 
         if isinstance(pose, PoseTW):
-            data = pose.tensor().detach().cpu().to(dtype=torch.float32)
+            data = _pose_tensor(pose).detach().cpu().to(dtype=torch.float32)
             if data.ndim > 1:
                 data = data.reshape(-1, data.shape[-1])[0]
-            return PoseTW(data)
+            return cast(PoseTW, PoseTW(data))
         if isinstance(pose, torch.Tensor):
             data_np = pose.detach().cpu().numpy()
         else:
             data_np = np.asarray(pose, dtype=np.float32)
         data_np = np.asarray(data_np, dtype=np.float32)
         if data_np.shape == (3, 4):
-            return PoseTW.from_matrix3x4(torch.from_numpy(data_np))
+            return cast(PoseTW, PoseTW.from_matrix3x4(torch.from_numpy(data_np)))
         if data_np.shape == (4, 4):
-            return PoseTW.from_matrix3x4(torch.from_numpy(data_np[:3, :4]))
+            return cast(PoseTW, PoseTW.from_matrix3x4(torch.from_numpy(data_np[:3, :4])))
         flat = data_np.reshape(-1)
         if flat.size != 12:
             raise ValueError(f"Expected a flattened PoseTW payload with 12 values, got {flat.size}.")
-        return PoseTW(torch.from_numpy(flat.astype(np.float32, copy=False)))
+        return cast(PoseTW, PoseTW(torch.from_numpy(flat.astype(np.float32, copy=False))))
 
     def add_oriented_box_corners(
         self,
@@ -1030,7 +1053,7 @@ class SnippetPlotBuilder:
         unique_ids, inv = np.unique(cat_ids, return_inverse=True)
 
         def _rgb_to_hex(rgb: tuple[float, float, float]) -> str:
-            return plotly_colors.label_rgb(tuple(int(255 * c) for c in rgb))
+            return str(plotly_colors.label_rgb(tuple(int(255 * c) for c in rgb)))
 
         palette = colormaps.get_cmap("tab20")
         id_to_color = {
@@ -1082,9 +1105,9 @@ def _to_uint8_image(img: torch.Tensor) -> np.ndarray:
         arr = arr.unsqueeze(0)
     if arr.shape[0] == 1:
         arr = arr.repeat(3, 1, 1)
-    arr = arr.permute(1, 2, 0).clamp(0, 1).mul(255).to(torch.uint8).numpy()  # type: ignore
+    arr = arr.permute(1, 2, 0).clamp(0, 1).mul(255).to(torch.uint8).numpy()
 
-    return np.rot90(arr, k=ROTATE_90_CW)  # type: ignore
+    return np.asarray(np.rot90(arr, k=ROTATE_90_CW))
 
 
 def _depth_to_color(depth: torch.Tensor, *, percentile: float = 99.5) -> np.ndarray:
@@ -1204,8 +1227,8 @@ def project_pointcloud_on_frame(
     """Project 3D points into image plane and overlay on the frame."""
 
     target_device = cam.device
-    cam = cam.to(target_device)
-    pose_world_cam = pose_world_cam.to(device=target_device)
+    cam = _camera_to(cam, target_device)
+    pose_world_cam = _pose_to(pose_world_cam, device=target_device)
 
     if points_world.numel() == 0:
         return go.Figure()
@@ -1363,7 +1386,6 @@ if __name__ == "__main__":
     from aria_nbv.utils import Console
 
     debug = True
-    verbose = True
     console = Console.with_prefix("tst_import").set_verbose(True).set_debug(debug)
 
     ds_cfg = AseEfmDatasetConfig(
@@ -1371,7 +1393,6 @@ if __name__ == "__main__":
         mesh_simplify_ratio=0.01,
         load_meshes=True,
         require_mesh=True,
-        verbose=verbose,
         is_debug=debug,
     )
     dataset = ds_cfg.setup_target()

@@ -6,13 +6,17 @@ from __future__ import annotations
 
 import copy
 import json
+from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
 import pytest
+import torch
 import zarr
+from efm3d.aria.pose import PoseTW
 
 pytest.importorskip("efm3d")
 
@@ -63,24 +67,38 @@ from aria_nbv.rollouts.inspection import (
     temporal_metric_summary_rows,
     validity_waterfall_rows,
 )
+from aria_nbv.rollouts.read_model import target_rows as read_target_rows
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def _reader_stub() -> RolloutZarrStoreReader:
+    return cast(RolloutZarrStoreReader, SimpleNamespace())
+
+
+def _zarr_array(root: zarr.Group, path: str) -> zarr.Array[Any]:
+    return cast(zarr.Array[Any], root[path])
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    to_tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, to_tensor())
 
 
 def test_candidate_population_propagates_callback_type_error_without_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"rows": 0}
 
-    def audit_reader(_reader: object, *, row_callback) -> None:
+    def audit_reader(_reader: Any, *, row_callback: Any) -> None:
         calls["rows"] += 1
         row_callback({"candidate_row_id": 1})
 
-    def failing_consume(_self: object, _row: dict[str, object]) -> None:
+    def failing_consume(_self: Any, _row: dict[str, Any]) -> None:
         raise TypeError("callback-internal failure")
 
     monkeypatch.setattr(inspection_module._CandidatePopulationAccumulator, "consume", failing_consume)
 
     with pytest.raises(TypeError, match="callback-internal failure"):
-        candidate_population_evidence(object(), audit_reader=audit_reader)
+        candidate_population_evidence(_reader_stub(), audit_reader=audit_reader)
     assert calls["rows"] == 1
 
 
@@ -91,25 +109,27 @@ def test_pairwise_finite_pearson_keeps_pair_local_support_and_degenerate_reason(
     assert "n=2" in result.reasons[("left", "right")]
 
 
-def test_runtime_storage_statistics_does_not_fabricate_zero_candidate_ratio(tmp_path) -> None:
+def test_runtime_storage_statistics_does_not_fabricate_zero_candidate_ratio(tmp_path: Path) -> None:
     (tmp_path / "payload").write_bytes(b"payload")
     stats = inspection_module.runtime_storage_statistics(tmp_path, candidate_count=0)
     assert stats["bytes_per_candidate"] is None
     assert stats["bytes_per_candidate_reason"] == "unavailable: no persisted candidate rows"
 
 
-def test_geometry_projections_keep_complete_shells_and_factual_selected_path(tmp_path, monkeypatch) -> None:
+def test_geometry_projections_keep_complete_shells_and_factual_selected_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "geometry.zarr",
         build_rollout_records(horizon=2, num_samples=6, seed=731)[:1],
     )
     reader = RolloutZarrStoreReader(result.store_dir)
     target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
-    target = inspection_module.target_rows(reader)[0]
+    target = read_target_rows(reader)[0]
     target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
     target_pose[9:12] = target_center
     target = replace(target, center_world=target_center, pose_world_object=target_pose)
-    monkeypatch.setattr(inspection_module, "target_rows", lambda _reader: (target,))
+    monkeypatch.setattr("aria_nbv.rollouts.inspection.target_rows", lambda _reader: (target,))
 
     proposal = proposal_support_geometry(reader, max_candidates=10_000)
     trajectory = rollout_trajectory_geometry(reader)
@@ -123,21 +143,23 @@ def test_geometry_projections_keep_complete_shells_and_factual_selected_path(tmp
     assert [point.path_order for point in trajectory.points] == [0, 1, 2]
 
 
-def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(tmp_path, monkeypatch) -> None:
+def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "geometry-bounded.zarr",
         build_rollout_records(horizon=2, num_samples=6, seed=732)[:1],
     )
     reader = RolloutZarrStoreReader(result.store_dir)
     target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
-    target = inspection_module.target_rows(reader)[0]
+    target = read_target_rows(reader)[0]
     target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
     target_pose[9:12] = target_center
     target = replace(target, center_world=target_center, pose_world_object=target_pose)
-    monkeypatch.setattr(inspection_module, "target_rows", lambda _reader: (target,))
+    monkeypatch.setattr("aria_nbv.rollouts.inspection.target_rows", lambda _reader: (target,))
     original_array = reader.array
 
-    def reject_candidate_array(path: str):
+    def reject_candidate_array(path: str) -> Any:
         if path.startswith("candidates/"):
             raise AssertionError(f"geometry must use bounded Zarr handles, not reader.array({path!r})")
         return original_array(path)
@@ -146,7 +168,9 @@ def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(tmp_pat
     assert proposal_support_geometry(reader, max_candidates=10_000).points
 
 
-def test_geometry_projection_caps_before_the_first_shell_when_limit_is_smaller(tmp_path, monkeypatch) -> None:
+def test_geometry_projection_caps_before_the_first_shell_when_limit_is_smaller(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A small bound never lets the first complete candidate shell escape the limit."""
 
     result = write_rollout_zarr_store(
@@ -155,11 +179,11 @@ def test_geometry_projection_caps_before_the_first_shell_when_limit_is_smaller(t
     )
     reader = RolloutZarrStoreReader(result.store_dir)
     target_center = np.asarray([0.5, 0.0, 0.5], dtype=np.float32)
-    target = inspection_module.target_rows(reader)[0]
+    target = read_target_rows(reader)[0]
     target_pose = np.asarray(target.pose_world_object, dtype=np.float32).copy()
     target_pose[9:12] = target_center
     target = replace(target, center_world=target_center, pose_world_object=target_pose)
-    monkeypatch.setattr(inspection_module, "target_rows", lambda _reader: (target,))
+    monkeypatch.setattr("aria_nbv.rollouts.inspection.target_rows", lambda _reader: (target,))
 
     proposal = proposal_support_geometry(reader, max_candidates=1)
 
@@ -217,7 +241,7 @@ def test_candidate_population_owner_census_keeps_selection_domain_surface() -> N
         )
     )
     bundle = candidate_population_evidence(
-        cast(Any, object()),
+        cast(Any, SimpleNamespace()),
         audit_reader=lambda _reader, row_callback: None,
     )
     assert set(bundle["selection_dynamics"]) == {"position", "strategy", "mixture", "position_strategy"}
@@ -234,7 +258,7 @@ def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_s
     }
     forward_mass = {(0, 0): 0.8, (0, 1): 0.3, (0, 2): 0.6, (1, 0): 0.6, (1, 1): 0.6, (1, 2): 0.3}
     terminal_gain = {0: 0.5, 1: 0.1}
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     candidate_row_id = 0
     for rollout_row_id in range(2):
         for step_index in range(3):
@@ -278,7 +302,7 @@ def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_s
                 )
                 candidate_row_id += 1
     evidence = candidate_population_evidence(
-        object(), audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows]
+        _reader_stub(), audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows]
     )
     dynamics = evidence["selection_dynamics"]["position"]
     assert len(dynamics) == 12
@@ -334,7 +358,7 @@ def test_candidate_selection_dynamics_preserve_state_conditioning_and_terminal_s
 
 
 def test_pooled_selection_materializes_families_absent_from_a_temperature_cohort() -> None:
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
 
     def add_state(cohort: str, temperature: float, step_index: int, families: tuple[str, ...], selected: str) -> None:
         for family in families:
@@ -428,7 +452,7 @@ def test_candidate_selection_probability_failure_closes_policy_mass_only() -> No
         for index, (family, probability) in enumerate((("forward", 0.8), ("side", None)))
     ]
     evidence = candidate_population_evidence(
-        object(), audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows]
+        _reader_stub(), audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows]
     )
     dynamics = evidence["selection_dynamics"]["position"]
     assert all(row["policy_mass"] is None for row in dynamics)
@@ -440,10 +464,10 @@ def test_candidate_selection_probability_failure_closes_policy_mass_only() -> No
 
 def test_candidate_group_summary_rejects_unsupported_field() -> None:
     with pytest.raises(ValueError, match="Unsupported candidate group field"):
-        candidate_group_summary_rows(cast(Any, object()), group_by=cast(Any, "not-supported"))
+        candidate_group_summary_rows(cast(Any, SimpleNamespace()), group_by=cast(Any, "not-supported"))
 
 
-def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores(tmp_path) -> None:
+def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores(tmp_path: Path) -> None:
     """Inventory rows should diagnose stores before current-schema deep inspection."""
 
     current = write_rollout_zarr_store(
@@ -486,7 +510,9 @@ def test_rollout_store_inventory_rows_report_current_stale_and_unreadable_stores
     assert by_name["unreadable.zarr"]["first_error"]
 
 
-def test_rollout_header_summary_reuses_manifest_snapshot_without_statistics_read(tmp_path, monkeypatch) -> None:
+def test_rollout_header_summary_reuses_manifest_snapshot_without_statistics_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Header inspection consumes its manifest input and does not compute compact statistics."""
 
     result = write_rollout_zarr_store(
@@ -496,7 +522,7 @@ def test_rollout_header_summary_reuses_manifest_snapshot_without_statistics_read
     manifest = reader.manifest()
     manifest_calls = 0
 
-    def fail_manifest():
+    def fail_manifest() -> None:
         nonlocal manifest_calls
         manifest_calls += 1
         raise AssertionError("header summary reopened the manifest")
@@ -513,7 +539,7 @@ def test_rollout_header_summary_reuses_manifest_snapshot_without_statistics_read
     assert header["rollouts"] == result.num_rollouts
 
 
-def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discovery(tmp_path) -> None:
+def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discovery(tmp_path: Path) -> None:
     current = write_rollout_zarr_store(
         tmp_path / "current.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=42)[:1],
@@ -527,7 +553,7 @@ def test_rollout_store_inventory_can_skip_deep_validation_for_interactive_discov
     assert row["observed_candidates"] == current.num_candidates
 
 
-def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path) -> None:
+def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path: Path) -> None:
     """Discovery should recursively find candidate Zarr directories only."""
 
     first = tmp_path / "nested" / "a.zarr"
@@ -541,7 +567,7 @@ def test_discover_rollout_store_paths_returns_zarr_directories(tmp_path) -> None
     assert set(paths) == {first.resolve(), second.resolve()}
 
 
-def test_discover_rollout_store_paths_includes_completed_campaign_shards(tmp_path) -> None:
+def test_discover_rollout_store_paths_includes_completed_campaign_shards(tmp_path: Path) -> None:
     """Discovery should include only fully promoted hash-named campaign stores."""
 
     campaign_root = tmp_path / "rollout_supervision" / "campaigns" / "campaign" / "shards"
@@ -562,7 +588,7 @@ def test_discover_rollout_store_paths_includes_completed_campaign_shards(tmp_pat
     assert nested_group.resolve() not in paths
 
 
-def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path) -> None:
+def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path: Path) -> None:
     """Audit helpers should expose decoded rollout QA rows without changing store data."""
 
     records = build_rollout_records(horizon=1, num_samples=6, seed=43)[:1]
@@ -617,7 +643,7 @@ def test_rollout_inspection_helpers_join_candidates_targets_and_groups(tmp_path)
     assert sum(row["count"] for row in flow if row["source_stage"] == "root") == result.num_candidates
 
 
-def test_filtered_nonroot_audit_preserves_previous_selected_reference(tmp_path) -> None:
+def test_filtered_nonroot_audit_preserves_previous_selected_reference(tmp_path: Path) -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=143)[:1]
     result = write_rollout_zarr_store(tmp_path / "filtered-reference.zarr", records)
     reader = RolloutZarrStoreReader(result.store_dir)
@@ -647,7 +673,10 @@ def test_decision_relative_vector_uses_previous_selected_pose_and_is_global_inva
     def transform(pose: np.ndarray) -> np.ndarray:
         rotation = pose[:9].reshape(3, 3)
         center = pose[9:12]
-        return np.r_[(global_rotation @ rotation).reshape(-1), global_rotation @ center + translation]
+        return np.asarray(
+            np.r_[(global_rotation @ rotation).reshape(-1), global_rotation @ center + translation],
+            dtype=np.float64,
+        )
 
     assert _decision_relative_vector(transform(selected), transform(candidate)) == pytest.approx([1.0, 0.0, 0.0])
 
@@ -751,7 +780,7 @@ def test_candidate_geometry_evidence_keeps_missing_and_degenerate_baselines_unav
     assert all(row["target_normalized_lateral"] is None for row in rows)
 
 
-def _direction_fixture_rows() -> list[dict[str, object]]:
+def _direction_fixture_rows() -> list[dict[str, Any]]:
     common = {
         "generation_cohort_id": "cohort-a",
         "source_sample_key": "sample-a",
@@ -826,7 +855,7 @@ def test_candidate_direction_evidence_uses_complete_equal_area_bins_and_state_sc
         for row in density
         if row["aggregation_level"] == "state" and row["available"] and row.get("population") in {None, "all"}
     ]
-    state_fractions: dict[tuple[object, object], float] = {}
+    state_fractions: dict[tuple[Any, Any], float] = {}
     for row in state_rows:
         state_id = (row.get("rollout_row_id"), row.get("step_row_id"))
         state_fractions[state_id] = state_fractions.get(state_id, 0.0) + float(row["mean_state_fraction"])
@@ -1010,12 +1039,12 @@ def test_candidate_population_scientific_support_is_complete_and_sample_size_ind
         for index in range(4)
     ]
 
-    def audit_reader(_reader: object, *, row_callback) -> None:
+    def audit_reader(_reader: Any, *, row_callback: Any) -> None:
         for row in rows:
             row_callback(row)
 
-    bounded = candidate_population_evidence(object(), sample_size=1, audit_reader=audit_reader)
-    complete = candidate_population_evidence(object(), sample_size=100, audit_reader=audit_reader)
+    bounded = candidate_population_evidence(_reader_stub(), sample_size=1, audit_reader=audit_reader)
+    complete = candidate_population_evidence(_reader_stub(), sample_size=100, audit_reader=audit_reader)
     assert bounded["population_count"] == complete["population_count"] == 4
     assert bounded["sample"]["display_count"] == 1
     assert complete["sample"]["display_count"] == 4
@@ -1030,7 +1059,7 @@ def test_candidate_population_returns_macro_only_scientific_support_by_default()
 
     from aria_nbv.rollouts.inspection import candidate_population_evidence
 
-    def project(state_count: int) -> dict[str, object]:
+    def project(state_count: int) -> dict[str, Any]:
         rows = [
             {
                 **_direction_fixture_rows()[0],
@@ -1045,7 +1074,7 @@ def test_candidate_population_returns_macro_only_scientific_support_by_default()
             for index in range(state_count)
         ]
         return candidate_population_evidence(
-            object(),
+            _reader_stub(),
             audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
         )
 
@@ -1107,14 +1136,14 @@ def test_candidate_population_streaming_macros_match_direct_reducer_statistics()
         )
 
     projected = candidate_population_evidence(
-        object(),
+        _reader_stub(),
         sample_size=0,
         audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
     )
 
     def assert_statistics(
-        actual_rows: list[dict[str, object]],
-        expected_rows: list[dict[str, object]],
+        actual_rows: list[dict[str, Any]],
+        expected_rows: list[dict[str, Any]],
         *,
         key_fields: tuple[str, ...],
         value_fields: tuple[str, ...],
@@ -1183,7 +1212,7 @@ def test_candidate_population_can_skip_unused_scientific_reducers(monkeypatch: p
 
     import aria_nbv.rollouts.inspection as inspection
 
-    def poison(*_args, **_kwargs):
+    def poison(*_args: Any, **_kwargs: Any) -> None:
         raise AssertionError("unused scientific reducer was invoked")
 
     for name in (
@@ -1196,7 +1225,7 @@ def test_candidate_population_can_skip_unused_scientific_reducers(monkeypatch: p
     rows = [{**_direction_fixture_rows()[0], "candidate_row_id": 0}]
 
     evidence = inspection.candidate_population_evidence(
-        object(),
+        _reader_stub(),
         scientific_support=False,
         audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
     )
@@ -1219,7 +1248,7 @@ def test_candidate_population_assigns_evidence_roles_per_metric_family() -> None
         "target_evidence_role": "actor-visible",
     }
     evidence = candidate_population_evidence(
-        object(),
+        _reader_stub(),
         scientific_support=False,
         audit_reader=lambda _reader, *, row_callback: row_callback(row),
     )
@@ -1317,7 +1346,7 @@ def test_bounded_candidate_reducers_are_order_invariant_across_state_blocks() ->
     ]
     canonical[2]["actor_action"] = False
     canonical[3]["actor_action"] = False
-    blocks: dict[tuple[object, object, object], list[dict[str, object]]] = {}
+    blocks: dict[tuple[Any, Any, Any], list[dict[str, Any]]] = {}
     for row in canonical:
         key = (row["scene"], row["rollout_row_id"], row["step_row_id"])
         blocks.setdefault(key, []).append(row)
@@ -1434,10 +1463,10 @@ def test_candidate_motion_support_reports_all_motion_fields_and_collision_applic
         "path_min_clearance_m",
         "path_collision_rate",
     }
-    collision = next(row for row in evidence if row["metric"] == "path_collision_rate")
-    assert collision["applicable_count"] == 3
-    assert collision["evaluated_count"] == 2
-    assert collision["collision_count"] == 1
+    collision_summary = next(row for row in evidence if row["metric"] == "path_collision_rate")
+    assert collision_summary["applicable_count"] == 3
+    assert collision_summary["evaluated_count"] == 2
+    assert collision_summary["collision_count"] == 1
 
 
 def test_direction_macros_exclude_unavailable_states_instead_of_zero_filling() -> None:
@@ -1866,7 +1895,7 @@ def test_candidate_population_composition_keeps_incompatible_cohorts_faceted() -
     ]
 
     evidence = candidate_population_evidence(
-        object(),
+        _reader_stub(),
         audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
     )
     composition = evidence["composition"]["position"]
@@ -1931,20 +1960,20 @@ def test_target_view_and_motion_facets_preserve_cohort_population_and_macro_leve
         assert {row["aggregation_level"] for row in evidence} >= {"state", "scene_macro", "cohort_macro"}
 
 
-def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path) -> None:
+def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path: Path) -> None:
     """Suspicious-row predicates should find low fanout, missing labels, and motion outliers."""
 
     records = build_rollout_records(horizon=1, num_samples=6, seed=44)[:1]
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     root = zarr.open_group(result.store_dir, mode="a")
 
-    root["steps/num_valid_candidates"][0] = np.asarray(0, dtype=np.int32)
-    actor_valid = np.asarray(root["candidates/actor_action_mask"], dtype=np.bool_).reshape(-1)
+    _zarr_array(root, "steps/num_valid_candidates")[0] = np.asarray(0, dtype=np.int32)
+    actor_valid = np.asarray(_zarr_array(root, "candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
     first_valid = int(np.flatnonzero(actor_valid)[0])
-    root["candidates/target_root_gain"][first_valid] = np.asarray(np.nan, dtype=np.float32)
-    selected = np.asarray(root["candidates/selected_mask"], dtype=np.bool_).reshape(-1)
+    _zarr_array(root, "candidates/target_root_gain")[first_valid] = np.asarray(np.nan, dtype=np.float32)
+    selected = np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_).reshape(-1)
     selected_row = int(np.flatnonzero(selected)[0])
-    root["candidate_diagnostics/motion_step_length_m"][selected_row] = np.asarray(99.0, dtype=np.float32)
+    _zarr_array(root, "candidate_diagnostics/motion_step_length_m")[selected_row] = np.asarray(99.0, dtype=np.float32)
 
     rows = suspicious_rollout_rows(
         RolloutZarrStoreReader(result.store_dir),
@@ -1957,7 +1986,7 @@ def test_rollout_inspection_suspicious_queries_find_injected_anomalies(tmp_path)
     assert "selected_motion_outlier" in kinds
 
 
-def test_rollout_step_objective_rows_expose_existing_objective_and_sampling_fields(tmp_path) -> None:
+def test_rollout_step_objective_rows_expose_existing_objective_and_sampling_fields(tmp_path: Path) -> None:
     """Per-step rows should join objectives and selected-action provenance from existing arrays."""
 
     records = build_rollout_records(horizon=2, num_samples=6, seed=45)[:1]
@@ -2086,7 +2115,7 @@ def test_temporal_metric_summary_rows_validate_metrics_and_grouping_vocabulary()
 def test_rollout_endpoint_metric_summary_uses_one_factual_endpoint_per_rollout() -> None:
     """Endpoint statistics must retain mixed horizons and weight rollouts equally."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for rollout_row_id, endpoint in enumerate((0.0, 0.0, 0.0, 0.0, 100.0)):
         rows.extend(
             [
@@ -2151,7 +2180,7 @@ def test_rollout_endpoint_metric_summary_uses_one_factual_endpoint_per_rollout()
     assert misleading_median == 50.0
 
 
-def test_rollout_header_summary_requires_proven_reference_denominators(tmp_path) -> None:
+def test_rollout_header_summary_requires_proven_reference_denominators(tmp_path: Path) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=451)[:1],
@@ -2312,12 +2341,14 @@ def test_oracle_headroom_uses_exact_roles_and_raw_denominators() -> None:
     assert all(row["excluded_count"] == 1 for row in rejected["summary_rows"])
 
 
-def test_reader_policy_projection_excludes_incomplete_terminal_rollout(tmp_path, monkeypatch) -> None:
+def test_reader_policy_projection_excludes_incomplete_terminal_rollout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import aria_nbv.rollouts.inspection as inspection
 
     store = zarr.open_group(tmp_path / "headroom-reader.zarr", mode="w")
 
-    def put(path: str, values: object) -> None:
+    def put(path: str, values: Any) -> None:
         store.create_array(path, data=np.asarray(values))
 
     put("rollouts/rollout_row_id", [0, 1, 2])
@@ -2365,7 +2396,7 @@ def test_reader_policy_projection_excludes_incomplete_terminal_rollout(tmp_path,
             "manifest": {"generation": {"shard": {"writer_config_hash": "writer"}}},
         },
     )
-    evidence = inspection.oracle_headroom_evidence(reader)  # type: ignore[arg-type]
+    evidence = inspection.oracle_headroom_evidence(cast(RolloutZarrStoreReader, reader))
     delta_look = next(row for row in evidence["contrast_rows"] if row["contrast"] == "delta_look")
     assert delta_look["status"] == "excluded"
     assert delta_look["exclusion_reason"] == "incomplete_rollout:oracle_lookahead"
@@ -2553,9 +2584,9 @@ def test_candidate_evidence_preserves_cohorts_and_state_then_scene_macros() -> N
         state: int,
         actor: bool,
         selected: bool,
-        probability: float,
+        probability: float | None,
         mixture: str = "forward",
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         return {
             "candidate_row_id": candidate_row_id,
             "generation_cohort_id": cohort,
@@ -2716,29 +2747,31 @@ def test_candidate_population_evidence_is_compact_callback_parity_and_order_inva
     ]
 
     class Poison:
-        def __iter__(self):
+        def __iter__(self) -> None:
             raise AssertionError("the callback producer result must not be materialized")
 
     calls = 0
 
-    def producer(_reader, *, row_callback):
+    def producer(_reader: Any, *, row_callback: Any) -> Any:
         nonlocal calls
         calls += 1
         for row in rows:
             row_callback(row)
         return Poison()
 
-    evidence = candidate_population_evidence(object(), audit_reader=producer, sample_size=3)
+    evidence = candidate_population_evidence(_reader_stub(), audit_reader=producer, sample_size=3)
     assert calls == 1
     assert evidence["population_count"] == len(rows)
     assert len(evidence["sample"]["rows"]) == 3
     assert evidence["composition"]["mixture"] == candidate_composition_rows(rows)
     assert evidence["calibration"]["mixture"] == candidate_proposal_calibration_rows(rows)
     assert evidence["collision"] == candidate_collision_support_rows(rows)
-    assert evidence["groups"]["mixture"] == candidate_group_summary_rows(object(), group_by="mixture", audit_rows=rows)
+    assert evidence["groups"]["mixture"] == candidate_group_summary_rows(
+        _reader_stub(), group_by="mixture", audit_rows=rows
+    )
 
     reversed_evidence = candidate_population_evidence(
-        object(),
+        _reader_stub(),
         audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in reversed(rows)],
         sample_size=3,
     )
@@ -2786,7 +2819,7 @@ def test_candidate_population_probability_vectors_fail_closed(probabilities: lis
     ]
 
     evidence = candidate_population_evidence(
-        object(),
+        _reader_stub(),
         audit_reader=lambda _reader, *, row_callback: [row_callback(row) for row in rows],
     )
     calibration = evidence["calibration"]["mixture"][0]
@@ -2819,7 +2852,7 @@ def test_candidate_population_mixed_state_probability_error_closes_macro() -> No
         for index, probability in enumerate((0.5, 0.5, 0.8, 0.8))
     ]
 
-    row = candidate_population_evidence(object(), audit_reader=lambda _reader: rows)["calibration"]["mixture"][0]
+    row = candidate_population_evidence(_reader_stub(), audit_reader=lambda _reader: rows)["calibration"]["mixture"][0]
 
     assert row["proposal_available"] is False
     assert row["population_proposal_mass"] is None
@@ -2904,7 +2937,7 @@ class _NarrowCandidateFlowReader:
 
     def __init__(self) -> None:
         self.requested: list[str] = []
-        self._arrays = {
+        self._arrays: dict[str, np.ndarray] = {
             "rollouts/rollout_row_id": np.asarray([10, 11], dtype=np.int64),
             "rollouts/policy_id": np.asarray([0, 1], dtype=np.int32),
             "dictionaries/policy": np.frombuffer(b'["greedy", "softmax"]', dtype=np.uint8),
@@ -2922,9 +2955,9 @@ class _NarrowCandidateFlowReader:
         self.requested.append(path)
         if path not in self._arrays:
             raise AssertionError(f"candidate flow accessed forbidden array: {path}")
-        return self._arrays[path]
+        return np.asarray(self._arrays[path])
 
-    def manifest(self) -> dict[str, object]:
+    def manifest(self) -> dict[str, Any]:
         return {
             "manifest": {
                 "generation": {
@@ -2942,9 +2975,9 @@ def test_candidate_flow_rows_are_narrow_conservative_and_preserve_violations() -
     """The default provenance flow should conserve candidates without heavy audit reads."""
 
     reader = _NarrowCandidateFlowReader()
-    rows = candidate_flow_rows(reader)
+    rows = candidate_flow_rows(cast(RolloutZarrStoreReader, reader))
 
-    assert rows == candidate_flow_rows(_NarrowCandidateFlowReader())
+    assert rows == candidate_flow_rows(cast(RolloutZarrStoreReader, _NarrowCandidateFlowReader()))
     assert {row["root_denominator"] for row in rows} == {6}
     assert {row["store_candidate_count"] for row in rows} == {6}
     assert all(row["fraction_of_root"] == pytest.approx(row["count"] / 6.0) for row in rows)
@@ -2992,7 +3025,7 @@ def test_candidate_flow_rows_apply_policy_and_depth_filters_to_the_root_denomina
     """Policy and depth filters should be applied before all flow fractions are computed."""
 
     rows = candidate_flow_rows(
-        _NarrowCandidateFlowReader(),
+        cast(RolloutZarrStoreReader, _NarrowCandidateFlowReader()),
         policies=("softmax",),
         step_indices=(1,),
     )
@@ -3003,7 +3036,7 @@ def test_candidate_flow_rows_apply_policy_and_depth_filters_to_the_root_denomina
     assert not any(row["target_label"] == "selection_contract_violation" for row in rows)
 
 
-def test_rollout_tree_summary_rows_group_selected_branch_provenance(tmp_path) -> None:
+def test_rollout_tree_summary_rows_group_selected_branch_provenance(tmp_path: Path) -> None:
     """Tree summaries should aggregate selected-step routing without reading dense payloads."""
 
     records = build_rollout_records(horizon=2, num_samples=6, seed=45)[:2]
@@ -3024,7 +3057,7 @@ def test_rollout_tree_summary_rows_group_selected_branch_provenance(tmp_path) ->
     assert first["mean_invalid_fraction"] is not None
 
 
-def test_selected_depth_summary_rows_are_bounded_and_join_step_context(tmp_path) -> None:
+def test_selected_depth_summary_rows_are_bounded_and_join_step_context(tmp_path: Path) -> None:
     """Selected-depth inspection should summarize dense rows through rollout inspection helpers."""
 
     records = build_rollout_records(horizon=2, num_samples=6, seed=46)[:1]
@@ -3052,7 +3085,7 @@ def test_selected_depth_summary_rows_are_bounded_and_join_step_context(tmp_path)
     assert row["principal_y_px"] == pytest.approx(120.0)
 
 
-def test_selected_depth_summary_rows_report_disabled_store_without_dense_scan(tmp_path) -> None:
+def test_selected_depth_summary_rows_report_disabled_store_without_dense_scan(tmp_path: Path) -> None:
     """Disabled selected-depth stores should expose explicit unavailable rows."""
 
     records = build_rollout_records(horizon=1, num_samples=6, seed=48)[:1]
@@ -3067,7 +3100,7 @@ def test_selected_depth_summary_rows_report_disabled_store_without_dense_scan(tm
     assert "selected_depth_enabled=false" in str(rows[0]["warning"])
 
 
-def test_selected_depth_preview_returns_one_bounded_image_payload(tmp_path) -> None:
+def test_selected_depth_preview_returns_one_bounded_image_payload(tmp_path: Path) -> None:
     """Selected-depth previews should read one selected step and downsample for app plotting."""
 
     records = build_rollout_records(horizon=1, num_samples=6, seed=49)[:1]
@@ -3086,7 +3119,7 @@ def test_selected_depth_preview_returns_one_bounded_image_payload(tmp_path) -> N
     assert preview["image_size_hw"] == (240, 240)
 
 
-def test_mask_combinations_preserve_selected_rows_outside_q_train(tmp_path) -> None:
+def test_mask_combinations_preserve_selected_rows_outside_q_train(tmp_path: Path) -> None:
     """Selection is an actor decision, not a sequential stage after the training mask."""
 
     result = write_rollout_zarr_store(
@@ -3094,8 +3127,8 @@ def test_mask_combinations_preserve_selected_rows_outside_q_train(tmp_path) -> N
         build_rollout_records(horizon=1, num_samples=6, seed=50)[:1],
     )
     root = zarr.open_group(result.store_dir, mode="a")
-    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
-    root["candidates/q_train_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+    selected_row = int(np.flatnonzero(np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_))[0])
+    _zarr_array(root, "candidates/q_train_mask")[selected_row] = np.asarray(False, dtype=np.bool_)
 
     rows = mask_combination_rows(RolloutZarrStoreReader(result.store_dir))
     selected_without_training = next(row for row in rows if row["selected"] is True and row["q_train"] is False)
@@ -3107,7 +3140,7 @@ def test_mask_combinations_preserve_selected_rows_outside_q_train(tmp_path) -> N
     assert selected_without_training["fraction_of_all"] == pytest.approx(1.0 / result.num_candidates)
 
 
-def test_store_invariants_expose_mask_depth_target_and_q_h_contracts(tmp_path) -> None:
+def test_store_invariants_expose_mask_depth_target_and_q_h_contracts(tmp_path: Path) -> None:
     """Invariant evidence should name the persisted contracts rather than hide them in validation text."""
 
     result = write_rollout_zarr_store(
@@ -3132,7 +3165,7 @@ def test_store_invariants_expose_mask_depth_target_and_q_h_contracts(tmp_path) -
     assert "q_h/td_reward" in by_id["q_h_selected_transition"]["source_fields"]
 
 
-def test_store_invariants_fail_selected_actor_mask_without_reclassifying_q_train(tmp_path) -> None:
+def test_store_invariants_fail_selected_actor_mask_without_reclassifying_q_train(tmp_path: Path) -> None:
     """A selected invalid action is a violation, while selected-not-q-train remains allowed."""
 
     result = write_rollout_zarr_store(
@@ -3140,9 +3173,9 @@ def test_store_invariants_fail_selected_actor_mask_without_reclassifying_q_train
         build_rollout_records(horizon=1, num_samples=6, seed=52)[:1],
     )
     root = zarr.open_group(result.store_dir, mode="a")
-    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
-    root["candidates/actor_action_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
-    root["candidates/q_train_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+    selected_row = int(np.flatnonzero(np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_))[0])
+    _zarr_array(root, "candidates/actor_action_mask")[selected_row] = np.asarray(False, dtype=np.bool_)
+    _zarr_array(root, "candidates/q_train_mask")[selected_row] = np.asarray(False, dtype=np.bool_)
 
     by_id = {str(row["invariant_id"]): row for row in store_invariant_rows(RolloutZarrStoreReader(result.store_dir))}
 
@@ -3151,7 +3184,7 @@ def test_store_invariants_fail_selected_actor_mask_without_reclassifying_q_train
     assert by_id["q_train_supervision"]["status"] == "PASS"
 
 
-def test_comparable_policy_cohorts_gate_on_exact_scientific_keys(tmp_path) -> None:
+def test_comparable_policy_cohorts_gate_on_exact_scientific_keys(tmp_path: Path) -> None:
     """Policy comparison should use matched source, target, budget, and generator lineage."""
 
     records = build_rollout_records(horizon=2, num_samples=6, seed=53)
@@ -3183,7 +3216,7 @@ def test_comparable_policy_cohorts_gate_on_exact_scientific_keys(tmp_path) -> No
     assert "candidate_config" in blocked["mismatch_rows"][0]["mismatched_fields"]
 
 
-def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path) -> None:
+def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path: Path) -> None:
     """Paired summaries should bootstrap cohort deltas deterministically once three matches exist."""
 
     records = []
@@ -3221,7 +3254,7 @@ def test_paired_policy_comparison_rows_are_deterministic_and_paired(tmp_path) ->
     assert all(row["bootstrap_ci_high"] is not None for row in first)
 
 
-def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invalidity(tmp_path) -> None:
+def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invalidity(tmp_path: Path) -> None:
     """Regret ranks finite valid rewards even when the selected reward is negative."""
 
     result = write_rollout_zarr_store(
@@ -3229,13 +3262,13 @@ def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invali
         build_rollout_records(horizon=1, num_samples=8, seed=58)[:1],
     )
     root = zarr.open_group(result.store_dir, mode="a")
-    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
-    valid_rows = np.flatnonzero(np.asarray(root["candidates/actor_action_mask"], dtype=np.bool_))
+    selected_row = int(np.flatnonzero(np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_))[0])
+    valid_rows = np.flatnonzero(np.asarray(_zarr_array(root, "candidates/actor_action_mask"), dtype=np.bool_))
     alternative_row = int(next(row for row in valid_rows.tolist() if row != selected_row))
-    root["candidates/target_root_gain"][selected_row] = np.asarray(-0.25, dtype=np.float32)
-    root["candidates/target_root_gain"][alternative_row] = np.asarray(0.75, dtype=np.float32)
-    root["candidates/target_rri"][selected_row] = np.asarray(-0.5, dtype=np.float32)
-    root["candidates/target_rri"][alternative_row] = np.asarray(0.5, dtype=np.float32)
+    _zarr_array(root, "candidates/target_root_gain")[selected_row] = np.asarray(-0.25, dtype=np.float32)
+    _zarr_array(root, "candidates/target_root_gain")[alternative_row] = np.asarray(0.75, dtype=np.float32)
+    _zarr_array(root, "candidates/target_rri")[selected_row] = np.asarray(-0.5, dtype=np.float32)
+    _zarr_array(root, "candidates/target_rri")[alternative_row] = np.asarray(0.5, dtype=np.float32)
 
     row = selected_candidate_rank_rows(RolloutZarrStoreReader(result.store_dir))[0]
 
@@ -3249,7 +3282,7 @@ def test_selected_candidate_rank_rows_keep_negative_rewards_distinct_from_invali
     )
 
 
-def test_selected_candidate_rank_rows_expose_softmax_policy_and_exact_rri_rank(tmp_path) -> None:
+def test_selected_candidate_rank_rows_expose_softmax_policy_and_exact_rri_rank(tmp_path: Path) -> None:
     """Selected-step evidence should distinguish policy mechanics from target-RRI rank."""
 
     result = write_rollout_zarr_store(
@@ -3259,23 +3292,23 @@ def test_selected_candidate_rank_rows_expose_softmax_policy_and_exact_rri_rank(t
     reader = RolloutZarrStoreReader(result.store_dir)
     softmax = next(row for row in selected_candidate_rank_rows(reader) if row["policy"] == "temperature_softmax")
     root = zarr.open_group(result.store_dir, mode="a")
-    step_ids = np.asarray(root["candidates/step_row_id"], dtype=np.int64)
-    actor_valid = np.asarray(root["candidates/actor_action_mask"], dtype=np.bool_)
-    selected = np.asarray(root["candidates/selected_mask"], dtype=np.bool_)
+    step_ids = np.asarray(_zarr_array(root, "candidates/step_row_id"), dtype=np.int64)
+    actor_valid = np.asarray(_zarr_array(root, "candidates/actor_action_mask"), dtype=np.bool_)
+    selected = np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_)
     step_rows = np.flatnonzero((step_ids == int(softmax["step_row_id"])) & actor_valid)
     selected_row = int(np.flatnonzero((step_ids == int(softmax["step_row_id"])) & selected)[0])
     alternatives = [int(row) for row in step_rows.tolist() if int(row) != selected_row]
     assert len(alternatives) >= 3
 
-    root["candidates/target_rri"][step_rows] = np.asarray(0.0, dtype=np.float32)
-    root["candidates/selection_logits"][step_rows] = np.asarray(-1.0, dtype=np.float32)
-    root["candidates/target_rri"][selected_row] = np.asarray(1.0, dtype=np.float32)
-    root["candidates/selection_logits"][selected_row] = np.asarray(1.0, dtype=np.float32)
+    _zarr_array(root, "candidates/target_rri")[step_rows] = np.asarray(0.0, dtype=np.float32)
+    _zarr_array(root, "candidates/selection_logits")[step_rows] = np.asarray(-1.0, dtype=np.float32)
+    _zarr_array(root, "candidates/target_rri")[selected_row] = np.asarray(1.0, dtype=np.float32)
+    _zarr_array(root, "candidates/selection_logits")[selected_row] = np.asarray(1.0, dtype=np.float32)
     for value, row in zip((3.0, 2.0), alternatives[:2], strict=True):
-        root["candidates/target_rri"][row] = np.asarray(value, dtype=np.float32)
-        root["candidates/selection_logits"][row] = np.asarray(value, dtype=np.float32)
-    root["candidates/target_rri"][alternatives[2]] = np.asarray(1.0, dtype=np.float32)
-    root["candidates/selection_logits"][alternatives[2]] = np.asarray(1.0, dtype=np.float32)
+        _zarr_array(root, "candidates/target_rri")[row] = np.asarray(value, dtype=np.float32)
+        _zarr_array(root, "candidates/selection_logits")[row] = np.asarray(value, dtype=np.float32)
+    _zarr_array(root, "candidates/target_rri")[alternatives[2]] = np.asarray(1.0, dtype=np.float32)
+    _zarr_array(root, "candidates/selection_logits")[alternatives[2]] = np.asarray(1.0, dtype=np.float32)
 
     ranked = next(
         row
@@ -3293,7 +3326,7 @@ def test_selected_candidate_rank_rows_expose_softmax_policy_and_exact_rri_rank(t
     assert ranked["target_rri_rank_label"] == f"3 / {len(step_rows)}"
 
 
-def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailable(tmp_path) -> None:
+def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailable(tmp_path: Path) -> None:
     """Invalid shells and missing selected RRI must not receive synthetic ranks."""
 
     result = write_rollout_zarr_store(
@@ -3301,11 +3334,11 @@ def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailabl
         build_rollout_records(horizon=1, num_samples=6, seed=62)[:1],
     )
     root = zarr.open_group(result.store_dir, mode="a")
-    step_row_id = int(np.asarray(root["steps/step_row_id"], dtype=np.int64)[0])
-    step_rows = np.flatnonzero(np.asarray(root["candidates/step_row_id"], dtype=np.int64) == step_row_id)
-    root["candidates/actor_action_mask"][step_rows] = np.asarray(False, dtype=np.bool_)
-    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
-    root["candidates/target_rri"][selected_row] = np.asarray(np.nan, dtype=np.float32)
+    step_row_id = int(np.asarray(_zarr_array(root, "steps/step_row_id"), dtype=np.int64)[0])
+    step_rows = np.flatnonzero(np.asarray(_zarr_array(root, "candidates/step_row_id"), dtype=np.int64) == step_row_id)
+    _zarr_array(root, "candidates/actor_action_mask")[step_rows] = np.asarray(False, dtype=np.bool_)
+    selected_row = int(np.flatnonzero(np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_))[0])
+    _zarr_array(root, "candidates/target_rri")[selected_row] = np.asarray(np.nan, dtype=np.float32)
 
     row = selected_candidate_rank_rows(RolloutZarrStoreReader(result.store_dir))[0]
 
@@ -3316,11 +3349,11 @@ def test_selected_candidate_rank_rows_mark_all_invalid_or_missing_rri_unavailabl
     assert row["target_rri_rank_label"] == "unavailable"
 
 
-def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_path) -> None:
+def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_path: Path) -> None:
     """Geometry projection should never expose cross-scene absolute centers as comparison axes."""
 
     records = build_rollout_records(horizon=1, num_samples=6, seed=59)[:1]
-    root_tensor = records[0].evaluated.result.root_pose_world.tensor().clone()
+    root_tensor = _pose_tensor(records[0].evaluated.result.root_pose_world).clone()
     root_tensor[9:12] = root_tensor.new_tensor([1.0, 2.0, 3.0])
     records[0].evaluated.result.root_pose_world = records[0].evaluated.result.root_pose_world.__class__(root_tensor)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
@@ -3340,7 +3373,7 @@ def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_pa
     assert "center_x" not in first
 
 
-def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:
+def test_failure_triage_emits_exact_mask_violation_rows(tmp_path: Path) -> None:
     """Hard mask violations should carry exact rollout, step, and candidate identifiers."""
 
     result = write_rollout_zarr_store(
@@ -3348,9 +3381,9 @@ def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:
         build_rollout_records(horizon=1, num_samples=6, seed=60)[:1],
     )
     root = zarr.open_group(result.store_dir, mode="a")
-    selected_row = int(np.flatnonzero(np.asarray(root["candidates/selected_mask"], dtype=np.bool_))[0])
-    root["candidates/actor_action_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
-    root["candidates/q_train_mask"][selected_row] = np.asarray(False, dtype=np.bool_)
+    selected_row = int(np.flatnonzero(np.asarray(_zarr_array(root, "candidates/selected_mask"), dtype=np.bool_))[0])
+    _zarr_array(root, "candidates/actor_action_mask")[selected_row] = np.asarray(False, dtype=np.bool_)
+    _zarr_array(root, "candidates/q_train_mask")[selected_row] = np.asarray(False, dtype=np.bool_)
 
     failures = suspicious_rollout_rows(RolloutZarrStoreReader(result.store_dir))
     violation = next(row for row in failures if row["kind"] == "selected_actor_mask_violation")
@@ -3358,4 +3391,5 @@ def test_failure_triage_emits_exact_mask_violation_rows(tmp_path) -> None:
     assert violation["severity"] == "error"
     assert violation["rollout_row_id"] == 0
     assert violation["step_row_id"] == 0
-    assert violation["candidate_row_id"] == int(root["candidates/candidate_row_id"][selected_row])
+    persisted_candidate_id = np.asarray(_zarr_array(root, "candidates/candidate_row_id")[selected_row]).item()
+    assert violation["candidate_row_id"] == int(persisted_candidate_id)

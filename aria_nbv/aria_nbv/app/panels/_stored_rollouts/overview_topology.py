@@ -13,7 +13,6 @@ import streamlit as st
 
 from ....configs import PathConfig
 from ....dataset_topology import discover_vin_store_dirs
-from ....rollouts import RolloutZarrStoreReader
 from ....rollouts.reporting import RolloutCorpusSummary
 from ...scientific_labels import TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
@@ -35,7 +34,7 @@ _ADMISSION_REFERENCE = (
 
 def _render_store_selector(
     paths: PathConfig,
-    inventory: list[dict[str, object]],
+    inventory: list[dict[str, Any]],
 ) -> tuple[tuple[Path, ...], Path | None]:
     """Select an explicit corpus and one active drill-down store."""
 
@@ -105,7 +104,8 @@ def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_co
         st.info("No compatible contract facet has validated scientific totals yet.")
     else:
         st.markdown("#### Validated scientific totals by exact contract")
-        for row in contract_totals.to_dict("records"):
+        for record in contract_totals.to_dict("records"):
+            row = {str(key): value for key, value in record.items()}
             st.caption(_contract_overview_label(row))
             facet = st.columns(5)
             facet[0].metric("Stores", row["store_count"])
@@ -120,7 +120,7 @@ def _render_corpus_overview(summary: RolloutCorpusSummary | None, *, selected_co
         st.dataframe(pd.DataFrame(summary.excluded_stores), hide_index=True, width="stretch")
 
 
-def _contract_overview_label(row: dict[str, object]) -> str:
+def _contract_overview_label(row: dict[str, Any]) -> str:
     """Format one compact contract label without repeating its profile."""
 
     profile = str(row.get("profile", "unknown"))
@@ -309,7 +309,7 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
             "selected_count",
         )
         count_totals = {
-            field: int(pd.to_numeric(support.get(field), errors="coerce").fillna(0).sum())
+            field: int(pd.to_numeric(support[field], errors="coerce").fillna(0).sum())
             for field in count_fields
             if field in support
         }
@@ -388,11 +388,11 @@ def _render_corpus_admission(summary: RolloutCorpusSummary | None) -> None:
         metrics = st.columns(4)
         # Cards summarize the selected corpus, not the first generation
         # cohort. Rates are recomputed from additive denominators.
-        candidates = pd.to_numeric(feasibility.get("candidate_count"), errors="coerce").sum()
-        collision_evaluated = pd.to_numeric(feasibility.get("collision_evaluated_count"), errors="coerce").sum()
-        collisions = pd.to_numeric(feasibility.get("collision_count"), errors="coerce").sum()
-        clearance_finite = pd.to_numeric(feasibility.get("clearance_finite_count"), errors="coerce").sum()
-        clearance_denominator = pd.to_numeric(feasibility.get("clearance_denominator"), errors="coerce").sum()
+        candidates = pd.to_numeric(feasibility["candidate_count"], errors="coerce").sum()
+        collision_evaluated = pd.to_numeric(feasibility["collision_evaluated_count"], errors="coerce").sum()
+        collisions = pd.to_numeric(feasibility["collision_count"], errors="coerce").sum()
+        clearance_finite = pd.to_numeric(feasibility["clearance_finite_count"], errors="coerce").sum()
+        clearance_denominator = pd.to_numeric(feasibility["clearance_denominator"], errors="coerce").sum()
         metrics[0].metric("Candidates", _format_count(candidates))
         metrics[1].metric(
             "Collision rate", _format_fraction(collisions / collision_evaluated if collision_evaluated else None)
@@ -538,9 +538,8 @@ def _render_role_legend() -> None:
 def _render_trust_and_topology(
     *,
     session_handle: Any,
-    reader: RolloutZarrStoreReader,
     store_path: Path,
-    inventory_row: dict[str, object] | None,
+    inventory_row: dict[str, Any] | None,
     manifest_payload: dict[str, Any],
     paths: PathConfig,
     validation_ok: bool,
@@ -700,13 +699,13 @@ def _render_validated_store_header(session_handle: Any, *, validation_ok: bool) 
     _render_store_header_summary(session_handle)
 
 
-def _format_count(value: object) -> str:
+def _format_count(value: Any) -> str:
     """Format an optional integral count without inventing a zero."""
 
     return "n/a" if value is None else f"{int(value):,}"
 
 
-def _format_bytes(value: object) -> str:
+def _format_bytes(value: Any) -> str:
     """Format an optional byte count using compact binary units."""
 
     if value is None:
@@ -719,7 +718,7 @@ def _format_bytes(value: object) -> str:
     raise AssertionError("unreachable byte unit")
 
 
-def _format_fraction(value: object) -> str:
+def _format_fraction(value: Any) -> str:
     """Format an optional coverage fraction without deriving a denominator."""
 
     return "n/a" if value is None else f"{float(value):.1%}"

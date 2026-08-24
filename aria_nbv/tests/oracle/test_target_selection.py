@@ -4,8 +4,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import fields
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 import torch
@@ -39,7 +42,12 @@ from aria_nbv.targets.selection import observed_target_descriptors
 
 def _poses(translations: list[list[float]]) -> PoseTW:
     rotation = torch.eye(3, dtype=torch.float32).expand(len(translations), 3, 3).clone()
-    return PoseTW.from_Rt(rotation, torch.tensor(translations, dtype=torch.float32))
+    return cast(PoseTW, PoseTW.from_Rt(rotation, torch.tensor(translations, dtype=torch.float32)))
+
+
+def _pose_to(pose: PoseTW, *, device: str) -> PoseTW:
+    to_device: Callable[..., Any] = pose.to
+    return cast(PoseTW, to_device(device=device))
 
 
 def _obb_block(
@@ -86,21 +94,23 @@ def _cameras(count: int = 1) -> PerspectiveCameras:
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required for mixed-device regression.")
-def test_world_obb_normalization_aligns_transform_device(monkeypatch: pytest.MonkeyPatch):
+def test_world_obb_normalization_aligns_transform_device(monkeypatch: pytest.MonkeyPatch) -> None:
     block = _obb_block([[0.0, 0.0, 0.0]])
-    transform = _poses([[1.0, 0.0, 0.0]]).to(device="cuda")
+    transform = _pose_to(_poses([[1.0, 0.0, 0.0]]), device="cuda")
     monkeypatch.setattr(target_selection_module, "snippet_t_world_snippet", lambda _sample: transform)
 
-    result = target_selection_module._world_obbs_for_sample(ObbTW(block.obbs), SimpleNamespace())
+    sample = cast(VinOfflineSample, SimpleNamespace())
+    result = target_selection_module._world_obbs_for_sample(ObbTW(block.obbs), sample)
 
-    assert result.tensor().device.type == "cpu"
+    to_tensor: Callable[[], Any] = result.tensor
+    assert cast(torch.Tensor, to_tensor()).device.type == "cpu"
 
 
 def _sample(
     *,
     detected_obbs: CompactObbBlock | None = None,
     gt_obbs: CompactObbBlock | None = None,
-    backbone_out: object | None = None,
+    backbone_out: Any | None = None,
     points: list[list[float]] | None = None,
 ) -> VinOfflineSample:
     point_tensor = torch.tensor(points or [], dtype=torch.float32).reshape(-1, 3)
@@ -135,7 +145,7 @@ def _sample(
     )
 
 
-def _oracle_sampler(**kwargs: object) -> OracleTargetTaskSampler:
+def _oracle_sampler(**kwargs: Any) -> OracleTargetTaskSampler:
     return OracleTargetTaskSampler(OracleTargetTaskSamplerConfig(**kwargs))
 
 
@@ -288,7 +298,9 @@ def test_invalid_observed_geometry_is_retained_with_explicit_match_reason() -> N
     assert matched[0].reason is OracleMatchReason.INVALID_GEOMETRY
 
 
-def test_campaign_source_audit_enumerates_admitted_and_rejected_observed_targets(tmp_path, monkeypatch) -> None:
+def test_campaign_source_audit_enumerates_admitted_and_rejected_observed_targets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     sample = _sample(
         detected_obbs=_obb_block([[2.0, 0.0, 0.0], [4.0, 0.0, 0.0]], sem_ids=[1, 2]),
         gt_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]),
@@ -319,7 +331,7 @@ def test_campaign_source_audit_enumerates_admitted_and_rejected_observed_targets
     assert "explicit_target_config" not in audited[1]
 
 
-def test_campaign_source_audit_rejects_missing_match_rows(tmp_path, monkeypatch) -> None:
+def test_campaign_source_audit_rejects_missing_match_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sample = _sample(
         detected_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]),
         gt_obbs=_obb_block([[2.0, 0.0, 0.0]], sem_ids=[1]),
@@ -400,7 +412,7 @@ def test_observed_gt_matching_preserves_gt_source_row_identity() -> None:
         ),
     ],
 )
-def test_observed_gt_matching_reports_rejection_reason(gt_rows: list[object], reason: OracleMatchReason) -> None:
+def test_observed_gt_matching_reports_rejection_reason(gt_rows: list[Any], reason: OracleMatchReason) -> None:
     descriptor = _observed_descriptor(source_row=0)
     iou_fn = (
         None if reason is not OracleMatchReason.INVALID_GEOMETRY else lambda *_args: (_ for _ in ()).throw(ValueError())
@@ -415,7 +427,7 @@ def test_observed_gt_matching_returns_all_admitted_descriptors_in_source_order()
     descriptors = [_observed_descriptor(source_row=4), _observed_descriptor(source_row=1)]
     rows = [SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt")]
 
-    result = match_observed_target_descriptors(descriptors, rows, iou_fn=lambda *_args: 0.8)
+    result = match_observed_target_descriptors(descriptors, cast(Any, rows), iou_fn=lambda *_args: 0.8)
 
     assert [item.descriptor.source_row for item in result] == [1, 4]
     assert all(item.admitted for item in result)
@@ -428,7 +440,7 @@ def test_observed_gt_matching_marks_equal_best_qualified_matches_ambiguous() -> 
         SimpleNamespace(descriptor=SimpleNamespace(sem_id=1), target_id="gt-1"),
     ]
 
-    result = match_observed_target_descriptors([descriptor], rows, iou_fn=lambda *_args: 0.8)[0]
+    result = match_observed_target_descriptors([descriptor], cast(Any, rows), iou_fn=lambda *_args: 0.8)[0]
 
     assert result.admitted is False
     assert result.reason is OracleMatchReason.AMBIGUOUS

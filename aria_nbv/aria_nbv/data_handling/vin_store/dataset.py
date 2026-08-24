@@ -17,9 +17,9 @@ hand.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import torch
@@ -222,7 +222,7 @@ class VinOfflineDatasetConfig(TargetConfig["VinOfflineDataset"]):
     return_format: Literal["sample", "vin_batch"] = "sample"
     """Whether to return full offline samples or model-facing VIN batches."""
 
-    map_location: torch.device = Field(default="cpu")
+    map_location: torch.device = Field(default_factory=lambda: torch.device("cpu"))
     """Device used for returned tensors."""
 
     verbosity: Verbosity = Verbosity.NORMAL
@@ -671,7 +671,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
             if efm_snippet is None or efm_snippet.obbs is None:
                 return None
             return CompactObbBlock(
-                obbs=efm_snippet.obbs.obbs.tensor().detach().cpu().to(dtype=torch.float32),
+                obbs=cast(Callable[[], Tensor], efm_snippet.obbs.obbs.tensor)().detach().cpu().to(dtype=torch.float32),
                 sem_id_to_name=self._normalize_semantic_names(efm_snippet.efm.get("obbs/sem_id_to_name")),
             )
         if not self._has_block("gt.obbs"):
@@ -706,7 +706,7 @@ class VinOfflineDataset(Dataset[VinOfflineDatasetItem]):
         )
 
     @staticmethod
-    def _normalize_semantic_names(value: object | None) -> dict[int, str] | None:
+    def _normalize_semantic_names(value: Any | None) -> dict[int, str] | None:
         """Normalize stored semantic maps to sparse integer-key dictionaries."""
 
         if value is None:

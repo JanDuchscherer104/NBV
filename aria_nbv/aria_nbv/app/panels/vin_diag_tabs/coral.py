@@ -212,14 +212,14 @@ def render_coral_tab(ctx: VinDiagContext) -> None:
     st.plotly_chart(fig_mono, width="stretch")
 
     if batch.rri is not None and binner is not None:
-        rri_flat = batch.rri.reshape(-1)
+        rri_tensor = batch.rri.reshape(-1)
         logits_flat = logits_full.reshape(-1, logits_full.shape[-1])
-        mask = torch.isfinite(rri_flat)
+        mask = torch.isfinite(rri_tensor)
         if mask.any():
-            labels = binner.transform(rri_flat)
+            coral_labels = binner.transform(rri_tensor)
             loss_per = coral_loss(
                 logits_flat[mask],
-                labels[mask],
+                coral_labels[mask],
                 num_classes=int(binner.num_classes),
                 reduction="none",
             )

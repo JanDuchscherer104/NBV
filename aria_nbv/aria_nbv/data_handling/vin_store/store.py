@@ -126,7 +126,7 @@ class VinOfflineStoreConfig(BaseConfig):
             Global sample indices for the requested split.
         """
 
-        return np.load(self.split_path(split), allow_pickle=False)
+        return np.asarray(np.load(self.split_path(split), allow_pickle=False))
 
 
 @dataclass(slots=True)

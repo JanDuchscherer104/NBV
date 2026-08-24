@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
+from typing import Any
 
 import pytest
 import zarr
@@ -14,8 +16,13 @@ from typer.testing import CliRunner
 import aria_nbv.rollouts.info_cli as info_cli
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
 from aria_nbv.rollouts.info_cli import main as rollouts_info_main
+from aria_nbv.rollouts.inspection import build_compact_statistics
 from aria_nbv.rollouts.reporting import ANALYSIS_FACT_SIDECAR_VERSION, THESIS_REPORT_BUNDLE_VERSION
-from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, write_rollout_zarr_store
+from aria_nbv.rollouts.zarr_store import (
+    ROLLOUT_ZARR_SCHEMA_VERSION,
+    RolloutZarrStoreReader,
+    write_rollout_zarr_store,
+)
 from tests.rollout_fixtures import build_rollout_records
 
 runner = CliRunner()
@@ -31,7 +38,11 @@ runner = CliRunner()
     ],
 )
 def test_rollouts_info_preserves_demand_aligned_inspection_calls(
-    tmp_path, monkeypatch, flags, expected_calls, has_stats
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flags: list[str],
+    expected_calls: dict[str, int],
+    has_stats: bool,
 ) -> None:
     """CLI modes read only the manifest, validation, and statistics facets they demand."""
 
@@ -39,25 +50,25 @@ def test_rollouts_info_preserves_demand_aligned_inspection_calls(
         tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=101)
     )
     calls = dict.fromkeys(expected_calls, 0)
-    original_manifest = info_cli.RolloutZarrStoreReader.manifest
-    original_validate = info_cli.RolloutZarrStoreReader.validate
-    original_statistics = info_cli.build_compact_statistics
+    original_manifest = RolloutZarrStoreReader.manifest
+    original_validate = RolloutZarrStoreReader.validate
+    original_statistics = build_compact_statistics
 
-    def manifest(reader):
+    def manifest(reader: Any) -> Any:
         calls["manifest"] += 1
         return original_manifest(reader)
 
-    def validate(reader):
+    def validate(reader: Any) -> Any:
         calls["validation"] += 1
         return original_validate(reader)
 
-    def statistics(reader, *, manifest_payload=None):
+    def statistics(reader: Any, *, manifest_payload: Any = None) -> Any:
         calls["statistics"] += 1
         return original_statistics(reader, manifest_payload=manifest_payload)
 
-    monkeypatch.setattr(info_cli.RolloutZarrStoreReader, "manifest", manifest)
-    monkeypatch.setattr(info_cli.RolloutZarrStoreReader, "validate", validate)
-    monkeypatch.setattr(info_cli, "build_compact_statistics", statistics)
+    monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
+    monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
+    monkeypatch.setattr("aria_nbv.rollouts.info_cli.build_compact_statistics", statistics)
     cli_result = runner.invoke(info_cli.app, ["--store", str(result.store_dir), "--json", *flags])
 
     assert cli_result.exit_code == 0
@@ -66,7 +77,7 @@ def test_rollouts_info_preserves_demand_aligned_inspection_calls(
     assert ("stats" in payload) is has_stats
 
 
-def test_rollouts_info_json_unchanged_without_new_flags(tmp_path, capsys) -> None:
+def test_rollouts_info_json_unchanged_without_new_flags(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     records = build_rollout_records(horizon=1, num_samples=4, seed=1)[:1]
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     capsys.readouterr()
@@ -80,7 +91,9 @@ def test_rollouts_info_json_unchanged_without_new_flags(tmp_path, capsys) -> Non
     assert "stats" not in payload
 
 
-def test_rollouts_info_stats_reports_validity_and_selected_paths(tmp_path, capsys) -> None:
+def test_rollouts_info_stats_reports_validity_and_selected_paths(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=11)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     capsys.readouterr()
@@ -99,7 +112,9 @@ def test_rollouts_info_stats_reports_validity_and_selected_paths(tmp_path, capsy
     assert stats["policy_counts"]
 
 
-def test_rollouts_info_preflight_json_reports_go_no_go_sections(tmp_path, capsys) -> None:
+def test_rollouts_info_preflight_json_reports_go_no_go_sections(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=12)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     capsys.readouterr()
@@ -121,7 +136,9 @@ def test_rollouts_info_preflight_json_reports_go_no_go_sections(tmp_path, capsys
     assert isinstance(preflight["go"], bool)
 
 
-def test_rollouts_info_preflight_production_fails_on_stale_schema(tmp_path, capsys) -> None:
+def test_rollouts_info_preflight_production_fails_on_stale_schema(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     records = build_rollout_records(horizon=1, num_samples=4, seed=13)[:1]
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     root = zarr.open_group(result.store_dir, mode="a")
@@ -139,7 +156,7 @@ def test_rollouts_info_preflight_production_fails_on_stale_schema(tmp_path, caps
     assert "stale_schema:0.9-stale" in payload["preflight"]["blockers"]
 
 
-def test_rollouts_info_random_index_respects_min_horizon(tmp_path, capsys) -> None:
+def test_rollouts_info_random_index_respects_min_horizon(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     records = build_rollout_records(horizon=2, num_samples=4, seed=3)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     capsys.readouterr()
@@ -154,7 +171,7 @@ def test_rollouts_info_random_index_respects_min_horizon(tmp_path, capsys) -> No
     assert 0 <= value < result.num_rollouts
 
 
-def test_rollouts_info_random_index_errors_when_no_rows_are_eligible(tmp_path) -> None:
+def test_rollouts_info_random_index_errors_when_no_rows_are_eligible(tmp_path: Path) -> None:
     records = build_rollout_records(horizon=1, num_samples=4, seed=5)
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
 
@@ -174,7 +191,9 @@ def test_rollouts_info_help_exits_cleanly() -> None:
     assert "--thesis-sidecar" in result.output
 
 
-def test_rollouts_info_exports_deterministic_thesis_bundle_with_promoted_facts(tmp_path, capsys) -> None:
+def test_rollouts_info_exports_deterministic_thesis_bundle_with_promoted_facts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     records = build_rollout_records(horizon=1, num_samples=4, seed=21)[:1]
     result = write_rollout_zarr_store(tmp_path / "rollouts.zarr", records)
     sidecar = tmp_path / "analysis.json"
@@ -253,7 +272,7 @@ def test_rollouts_info_exports_deterministic_thesis_bundle_with_promoted_facts(t
     assert str(tmp_path) not in json.dumps(bundle["tables"]["sidecars"])
 
 
-def test_rollouts_info_text_reports_thesis_bundle_metadata(tmp_path, capsys) -> None:
+def test_rollouts_info_text_reports_thesis_bundle_metadata(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         build_rollout_records(horizon=1, num_samples=4, seed=22)[:1],
@@ -287,7 +306,7 @@ def test_rollouts_info_text_reports_thesis_bundle_metadata(tmp_path, capsys) -> 
         ["--thesis-sidecar", "analysis.json"],
     ],
 )
-def test_rollouts_info_rejects_incomplete_thesis_export_options(tmp_path, arguments) -> None:
+def test_rollouts_info_rejects_incomplete_thesis_export_options(tmp_path: Path, arguments: Any) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         build_rollout_records(horizon=1, num_samples=4, seed=23)[:1],

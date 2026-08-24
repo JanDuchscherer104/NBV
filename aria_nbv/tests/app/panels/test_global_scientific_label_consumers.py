@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from typing import Any
 
 import pytest
 
@@ -24,7 +25,7 @@ from aria_nbv.app.panels.vin_diag_tabs import bin_values, coral, geometry, summa
         (summary, "render_summary_tab", "current_scientific_label"),
     ),
 )
-def test_non_stored_rollout_consumers_use_shared_label_boundary(module, symbol: str, identifier: str) -> None:
+def test_non_stored_rollout_consumers_use_shared_label_boundary(module: Any, symbol: str, identifier: str) -> None:
     source = inspect.getsource(getattr(module, symbol))
     assert "current_scientific_label" in source
     assert identifier in source

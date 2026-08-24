@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
@@ -148,7 +149,7 @@ def _pose_to_numpy(pose: PoseTW) -> NDArray[Any]:
         raise ValueError("PoseTW payload is empty; cannot persist pose block.")
     array = _to_numpy(pose._data, dtype=np.float32)
     if array.ndim == 3 and array.shape[0] == 1:
-        return array[0]
+        return np.asarray(array[0])
     return array
 
 
@@ -346,8 +347,11 @@ def _validate_candidate_label_alignment(
             "of CandidateSamplingResult.candidate_shell_indices().",
         )
 
-    actual_poses = depths.poses.tensor().detach().to(device="cpu", dtype=torch.float32)
-    expected_poses = candidates.poses_world_cam(device=torch.device("cpu")).tensor().detach().to(dtype=torch.float32)
+    actual_poses = (
+        cast(Callable[[], torch.Tensor], depths.poses.tensor)().detach().to(device="cpu", dtype=torch.float32)
+    )
+    expected_pose_wrapper = candidates.poses_world_cam(device=torch.device("cpu"))
+    expected_poses = cast(Callable[[], torch.Tensor], expected_pose_wrapper.tensor)().detach().to(dtype=torch.float32)
     if expected_poses.shape[0] < candidate_count:
         raise ValueError(
             "CandidateSamplingResult exposes fewer world-camera poses "
@@ -363,7 +367,7 @@ def _validate_candidate_label_alignment(
 
 
 def _semantic_names_payload(
-    value: Mapping[object, object] | Sequence[object] | None,
+    value: Mapping[Any, Any] | Sequence[Any] | None,
 ) -> dict[int, str] | None:
     """Normalize semantic-name mappings for msgpack records."""
 
@@ -743,9 +747,9 @@ def flush_prepared_samples_to_shard(
 
     record_block_names = sorted({name for row in rows for name in row.record_blocks})
     for block_name in record_block_names:
-        records = [row.record_blocks.get(block_name) for row in rows]
-        if any(record is not None for record in records):
-            block_specs[block_name] = shard_writer.write_record_block(block_name, records)
+        block_records = [row.record_blocks.get(block_name) for row in rows]
+        if any(record is not None for record in block_records):
+            block_specs[block_name] = shard_writer.write_record_block(block_name, block_records)
 
     shard_id = f"shard-{shard_index:06d}"
     relative_dir = str(Path("shards") / shard_id)
@@ -756,7 +760,7 @@ def flush_prepared_samples_to_shard(
         num_rows=len(rows),
         blocks=block_specs,
     )
-    records = [
+    index_records = [
         VinOfflineIndexRecord(
             sample_index=-1,
             sample_key=row.sample_key,
@@ -768,7 +772,7 @@ def flush_prepared_samples_to_shard(
         )
         for local_row, row in enumerate(rows)
     ]
-    return shard_spec, records
+    return shard_spec, index_records
 
 
 def assign_offline_splits(

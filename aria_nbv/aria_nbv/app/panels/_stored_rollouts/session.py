@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import numpy as np
 import streamlit as st
@@ -72,7 +72,7 @@ def _cached_store_bundle_cached(
     return reader, trust, manifest_payload
 
 
-@wraps(_cached_store_bundle_cached.__wrapped__)
+@wraps(cast(Callable[..., Any], getattr(_cached_store_bundle_cached, "__wrapped__", _cached_store_bundle_cached)))
 def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, dict[str, Any]]:
     """Open one store through a cache key that changes when its manifest is replaced."""
 
@@ -85,7 +85,7 @@ def _cached_store_bundle(store_path: str) -> tuple[RolloutZarrStoreReader, Any, 
 
 
 @st.cache_data(show_spinner="Scanning rollout stores…", max_entries=8)
-def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
+def _cached_inventory(cache_root: str) -> list[dict[str, Any]]:
     """Project the immutable rollout-store inventory once per cache root."""
 
     return rollout_store_inventory_rows(
@@ -95,9 +95,7 @@ def _cached_inventory(cache_root: str) -> list[dict[str, object]]:
 
 
 @st.cache_data(show_spinner="Loading rollout evidence…", max_entries=128)
-def _cached_candidate_population_cached(
-    store_path: str, store_identity: str, sample_size: int = 500
-) -> dict[str, object]:
+def _cached_candidate_population_cached(store_path: str, store_identity: str, sample_size: int = 500) -> dict[str, Any]:
     """Build the complete candidate bundle once per immutable store identity."""
 
     reader, _, _ = _cached_store_bundle_cached(store_path, store_identity=store_identity)
@@ -158,7 +156,7 @@ class StoredRolloutSession:
         reader: Any,
         validation: Any,
         manifest_payload: dict[str, Any],
-        inventory_row: dict[str, object] | None = None,
+        inventory_row: dict[str, Any] | None = None,
         selected_path: Path | None = None,
     ) -> None:
         self.canonical_path = Path(canonical_path)
@@ -177,7 +175,7 @@ class StoredRolloutSession:
         return self._reader
 
     def _assert_current_identity(self) -> str:
-        current = _store_projection_identity(self._selected_path)
+        current = _store_projection_identity(self._selected_path.as_posix())
         if current != self.store_identity:
             raise RuntimeError(
                 "selected rollout store changed after this session opened; reopen the store before projecting evidence"
@@ -190,7 +188,7 @@ class StoredRolloutSession:
         self._assert_current_identity()
         return self.canonical_path.as_posix()
 
-    def candidate_population(self, sample_size: int = 500) -> dict[str, object]:
+    def candidate_population(self, sample_size: int = 500) -> dict[str, Any]:
         store_path = self._projection_path()
         result = _cached_candidate_population_cached(store_path, self.store_identity, sample_size)
         self._assert_current_identity()
@@ -319,7 +317,7 @@ class StoredRolloutSession:
 
     def failures(
         self, min_valid_candidates: int, dominant_invalid_fraction: float, max_step_distance_m: float
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         return _cached_failures(
             self._projection_path(),
             min_valid_candidates,
@@ -349,9 +347,7 @@ class StoredRolloutSession:
         return bundle
 
 
-def open_stored_rollout_session(
-    path: str | Path, inventory_row: dict[str, object] | None = None
-) -> StoredRolloutSession:
+def open_stored_rollout_session(path: str | Path, inventory_row: dict[str, Any] | None = None) -> StoredRolloutSession:
     """Open a metadata-bound session and reject a replacement during opening."""
 
     selected_path = Path(path).expanduser().absolute()
@@ -400,8 +396,9 @@ def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
     # allowing unrelated projections (for example header and steps) to reuse
     # one another's result.  Keep the small decorator seam, but give each
     # named owner a stable cache identity.
-    cached.__name__ = f"{function.__name__}_cached"
-    cached.__qualname__ = f"{function.__qualname__}_cached"
+    cached_dynamic: Any = cached
+    cached_dynamic.__name__ = f"{function.__name__}_cached"
+    cached_dynamic.__qualname__ = f"{function.__qualname__}_cached"
 
     @wraps(function)
     def wrapper(store_path: str, *args: Any, **kwargs: Any) -> Any:
@@ -418,8 +415,9 @@ def _identity_cache(function: Callable[..., Any]) -> Callable[..., Any]:
         _assert_current_identity(store_path, identity)
         return result
 
-    wrapper.clear = cached.clear  # type: ignore[attr-defined]
-    return wrapper
+    wrapper_dynamic: Any = wrapper
+    wrapper_dynamic.clear = cached_dynamic.clear
+    return cast(Callable[..., Any], wrapper_dynamic)
 
 
 @_identity_cache
@@ -517,9 +515,9 @@ def _cached_masks(store_path: str) -> Any:
 @_identity_cache
 def _cached_candidates(
     store_path: str, rollout_row_id: int | None = None, step_row_id: int | None = None, limit: int | None = None
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     reader, _, _ = _cached_store_bundle(store_path)
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     candidate_audit_rows(
         reader, rollout_row_id=rollout_row_id, step_row_id=step_row_id, limit=limit, row_callback=rows.append
     )
@@ -575,7 +573,7 @@ def _cached_depth_summary(store_path: str, rollout_row_id: int | None = None, li
     return selected_depth_summary_rows(reader, rollout_row_id=rollout_row_id, limit=limit)
 
 
-def _read_json_mapping(path: Path) -> dict[str, object] | None:
+def _read_json_mapping(path: Path) -> dict[str, Any] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -602,7 +600,7 @@ def _cached_topology_cached(
     )
 
 
-@wraps(_cached_topology_cached.__wrapped__)
+@wraps(cast(Callable[..., Any], getattr(_cached_topology_cached, "__wrapped__", _cached_topology_cached)))
 def _cached_topology(
     store_path: str,
     vin_store_dirs: tuple[str, ...],
@@ -634,7 +632,7 @@ def _cached_failures_cached(
     max_step_distance_m: float,
     *,
     store_identity: str = "",
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Cache failure triage for one replacement-sensitive store and threshold tuple."""
 
     reader, _, _ = _cached_store_bundle(store_path)
@@ -646,7 +644,7 @@ def _cached_failures_cached(
     return suspicious_rollout_rows(reader, config=config)
 
 
-@wraps(_cached_failures_cached.__wrapped__)
+@wraps(cast(Callable[..., Any], getattr(_cached_failures_cached, "__wrapped__", _cached_failures_cached)))
 def _cached_failures(
     store_path: str,
     min_valid_candidates: int,
@@ -654,7 +652,7 @@ def _cached_failures(
     max_step_distance_m: float,
     *,
     store_identity: str | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Evaluate failure triage through a cache key bound to the selected store identity."""
 
     identity = store_identity or _store_projection_identity(store_path)
@@ -674,11 +672,19 @@ def _cached_failures(
 def _cached_evidence_bundle_cached(store_path: str, evidence_status: str, *, store_identity: str = "") -> bytes:
     """Build one deterministic bundle for a replacement-sensitive store identity."""
 
-    frames = build_thesis_report_frames([Path(store_path)], evidence_status=evidence_status)
+    if evidence_status not in {"pilot", "confirmatory"}:
+        raise ValueError(f"Unsupported evidence status: {evidence_status!r}")
+    status = cast(Literal["pilot", "confirmatory"], evidence_status)
+    frames = build_thesis_report_frames([Path(store_path)], evidence_status=status)
     return serialize_thesis_report_bundle(frames)
 
 
-@wraps(_cached_evidence_bundle_cached.__wrapped__)
+@wraps(
+    cast(
+        Callable[..., Any],
+        getattr(_cached_evidence_bundle_cached, "__wrapped__", _cached_evidence_bundle_cached),
+    )
+)
 def _cached_evidence_bundle(store_path: str, evidence_status: str, *, store_identity: str | None = None) -> bytes:
     """Build a report bundle through the replacement-sensitive store cache key."""
 
@@ -721,7 +727,9 @@ def _clear_stored_rollout_caches() -> None:
         _cached_proposal_geometry,
         _cached_trajectory_geometry,
     ):
-        projection.clear()
+        clear: Any = getattr(projection, "clear", None)
+        if callable(clear):
+            clear()
     _cached_topology_cached.clear()
     _cached_failures_cached.clear()
     _cached_evidence_bundle_cached.clear()

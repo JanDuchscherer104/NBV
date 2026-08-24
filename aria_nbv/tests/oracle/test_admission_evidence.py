@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,7 +13,7 @@ from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
 
-def _payload(rows: list[dict[str, object]]) -> dict[str, object]:
+def _payload(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": "campaign-admission-audit-v2",
         "campaign_id": "campaign-test",
@@ -21,8 +23,8 @@ def _payload(rows: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
-def _row(**updates: object) -> dict[str, object]:
-    row: dict[str, object] = {
+def _row(**updates: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
         "sample_key": "sample-1",
         "scene_id": "scene-1",
         "target_id": "target-1",
@@ -143,7 +145,7 @@ def test_legacy_v1_audit_remains_readable_and_exportable() -> None:
         (lambda payload: payload.update(schema_version="campaign-admission-audit-v0"), "schema"),
     ],
 )
-def test_malformed_or_tampered_audit_fails_closed(change, message: str) -> None:
+def test_malformed_or_tampered_audit_fails_closed(change: Callable[[dict[str, Any]], None], message: str) -> None:
     payload = _payload([_row()])
     change(payload)
     with pytest.raises(ValueError, match=message):
@@ -232,7 +234,7 @@ def test_writer_shaped_ordinary_no_match_row_remains_an_observed_target() -> Non
 )
 @pytest.mark.parametrize("explicit_kind", [False, True])
 def test_zero_observation_sentinel_rejects_contradictory_gt_evidence(
-    field: str, value: object, explicit_kind: bool
+    field: str, value: Any, explicit_kind: bool
 ) -> None:
     row = {
         "sample_key": "sample-empty",
@@ -309,7 +311,7 @@ def test_admitted_rows_require_strict_iou_above_point_two(iou: float) -> None:
     ],
 )
 def test_observed_target_rows_fail_closed_on_identity_and_reason_invariants(
-    updates: dict[str, object], message: str
+    updates: dict[str, Any], message: str
 ) -> None:
     row = _row(**updates)
     if "gt_match_count" not in row:

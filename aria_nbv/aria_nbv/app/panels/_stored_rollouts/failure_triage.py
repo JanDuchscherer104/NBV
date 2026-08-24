@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -13,7 +15,7 @@ from .shared import render_plot as _render_plot
 _SECTION_KEY = "stored_rollouts_section"
 
 
-def _render_failure_triage(session_handle: object) -> None:
+def _render_failure_triage(session_handle: Any) -> None:
     st.subheader("Active-store failure detail")
     with st.expander("Advanced thresholds"):
         min_valid = int(st.number_input("Minimum valid fanout", min_value=0, value=3, step=1))
@@ -69,7 +71,7 @@ def _render_failure_triage(session_handle: object) -> None:
     )
 
 
-def _carry_failure_to_inspect(row: dict[str, object]) -> None:
+def _carry_failure_to_inspect(row: dict[str, Any]) -> None:
     """Carry stable rollout/step identifiers into the inspection workspace."""
 
     if row.get("rollout_row_id") is not None:

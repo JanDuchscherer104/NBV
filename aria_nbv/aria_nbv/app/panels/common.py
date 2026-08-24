@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import traceback
 from dataclasses import asdict
+from typing import Any
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -86,7 +87,7 @@ def _report_exception(exc: Exception, *, context: str) -> None:
         st.code(trace, language="text")
 
 
-def _offline_summary_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
+def _offline_summary_rows(stats: VinOfflineDatasetStats) -> list[dict[str, Any]]:
     """Return the shared aggregate rows for VIN offline diagnostics."""
 
     return [

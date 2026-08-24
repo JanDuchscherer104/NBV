@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Literal, TypeAlias, cast
 
 import numpy as np
 import pytest
@@ -30,7 +32,10 @@ from aria_nbv.data_handling.qh_data.views import (
     QhActorStateContract,
     QhAudit,
     QhChainKey,
+    QhExperimentProfile,
+    QhRootEvlProfile,
     QhSelectedObservationPrefix,
+    QhSelectedObservationProtocol,
     QhStaticContext,
     QhSupervision,
     validate_experiment_profile,
@@ -41,7 +46,7 @@ from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.oracle.pipelines.offline_vin import _compact_evl_block_signature, _point_feature_schema
-from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef
+from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef, _StoredChain
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, write_rollout_zarr_store
 from aria_nbv.targets.descriptor import TargetDescriptor
@@ -52,6 +57,39 @@ from aria_nbv.utils.rich_summary import capture_tree, rich_summary, summarize
 from aria_nbv.vin.types import EvlBackboneOutput
 from tests.data_handling.test_vin_offline_store import _write_test_store
 from tests.rollout_fixtures import build_rollout_records
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    to_tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, to_tensor())
+
+
+def _camera_tensor(camera: CameraTW) -> torch.Tensor:
+    to_tensor: Callable[[], Any] = camera.tensor
+    return cast(torch.Tensor, to_tensor())
+
+
+def _as_rollout_reader(reader: "_RolloutReader") -> QhRolloutReader:
+    return cast(QhRolloutReader, reader)
+
+
+def _as_actor_reader(reader: "_ActorReader") -> VinOfflineStoreReader:
+    return cast(VinOfflineStoreReader, reader)
+
+
+_SourceRefField: TypeAlias = Literal[
+    "source_sample_index",
+    "source_sample_key",
+    "source_shard_id",
+    "source_shard_row",
+    "scene_id",
+    "snippet_id",
+    "split",
+    "actor_store_version",
+    "source_manifest_hash",
+    "split_manifest_hash",
+]
+_SourceRefValue: TypeAlias = int | str | Stage
 
 
 def test_qh_datamodel_fields_have_inline_contract_docs_without_external_shape_types() -> None:
@@ -121,7 +159,10 @@ def test_qh_operator_docs_follow_current_schema_and_camera_frame_contract() -> N
     ),
 )
 def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
-    profile: str, root_evl: str, selected: str, geometry: str | None
+    profile: QhExperimentProfile,
+    root_evl: QhRootEvlProfile,
+    selected: QhSelectedObservationProtocol,
+    geometry: str | None,
 ) -> None:
     """Both named roles survive batch transfer while supervision stays outside actor inputs."""
 
@@ -137,7 +178,7 @@ def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
         contract = QhDataContract("8", "v1_observed", "gain", "return", "td", 0.95, "reason", "7")
         scenes = frozenset({"scene-profile"})
         max_horizon = 2
-        provenance: dict[str, object] = {}
+        provenance: dict[str, Any] = {}
 
         def __len__(self) -> int:
             return 1
@@ -151,7 +192,7 @@ def test_named_profile_batch_and_module_admission_preserve_actor_allowlist(
             return actor_contract
 
     dataset = _ProfileDataset()
-    data = QhDataModule(train=dataset, seed=7, experiment_profile=profile)  # type: ignore[arg-type]
+    data = QhDataModule(train=dataset, seed=7, experiment_profile=profile)
     batch = next(iter(data.train_dataloader())).to("cpu")
     assert batch.actor.vin_snippet is not None
     assert not hasattr(batch.actor, "one_step_target_rri")
@@ -191,9 +232,9 @@ def test_named_cf0_requires_observed_v1_while_unnamed_v0_remains_available() -> 
         selected_observation_protocol="none",
         target_protocol="v1_observed",
     )
-    legacy = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()),
-        actor_reader=_ActorReader(),
+    legacy = QhDataset(
+        rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+        actor_reader=_as_actor_reader(_ActorReader()),
     )
     assert legacy.contract.target_protocol == "v0_gt_input"
 
@@ -234,15 +275,17 @@ def test_move_qh_actor_tensors_transforms_nested_actor_fields() -> None:
     assert moved is not actor
     assert torch.equal(moved.action_mask, actor.action_mask)
     assert torch.equal(moved.vin_snippet.points_world, actor.vin_snippet.points_world)
-    assert torch.equal(moved.candidate_pose_relative_root.tensor(), actor.candidate_pose_relative_root.tensor())
+    assert torch.equal(
+        _pose_tensor(moved.candidate_pose_relative_root), _pose_tensor(actor.candidate_pose_relative_root)
+    )
 
 
 def _snippet(points: int = 2) -> VinSnippetView:
     return VinSnippetView(
         points_world=torch.arange(points * 3, dtype=torch.float32).reshape(points, 3),
         lengths=torch.tensor([points]),
-        t_world_rig=PoseTW(torch.stack([PoseTW().tensor()])),
-        t_world_snippet=PoseTW(torch.stack([PoseTW().tensor()])),
+        t_world_rig=PoseTW(torch.stack([_pose_tensor(PoseTW())])),
+        t_world_snippet=PoseTW(torch.stack([_pose_tensor(PoseTW())])),
     )
 
 
@@ -308,34 +351,35 @@ def test_sixty_candidate_identity_survives_materialization_collation_and_transfe
     """A full-width chain keeps candidate 59 distinct through every tensor seam."""
 
     steps, width = 5, 60
-    identity = PoseTW().tensor().numpy()
+    identity = _pose_tensor(PoseTW()).numpy()
     poses = np.repeat(identity[None, None, :], steps * width, axis=0).reshape(steps, width, -1)
     poses[..., -3] = np.arange(width, dtype=np.float32)[None, :]
-    stored = _stored(_source_ref())
-    stored.candidate_pose_relative_root = tuple(poses[row] for row in range(steps))
-    stored.action_mask = tuple(np.ones(width, dtype=np.bool_) for _ in range(steps))
-    stored.label_mask = tuple(np.ones(width, dtype=np.bool_) for _ in range(steps))
-    stored.candidate_reward = tuple(np.ones(width, dtype=np.float32) for _ in range(steps))
-    stored.one_step_target_rri = tuple(np.ones(width, dtype=np.float32) for _ in range(steps))
-    stored.selected_index = np.array([0, 11, 12, 59, 0], dtype=np.int64)
-    stored.horizon_remaining = np.arange(steps, 0, -1)
-    stored.discount = np.full(steps, 0.95, dtype=np.float32)
-    stored.terminal = np.array([False, False, False, False, True])
+    stored = replace(
+        _stored(_source_ref()),
+        candidate_pose_relative_root=tuple(poses[row] for row in range(steps)),
+        action_mask=tuple(np.ones(width, dtype=np.bool_) for _ in range(steps)),
+        label_mask=tuple(np.ones(width, dtype=np.bool_) for _ in range(steps)),
+        candidate_reward=tuple(np.ones(width, dtype=np.float32) for _ in range(steps)),
+        one_step_target_rri=tuple(np.ones(width, dtype=np.float32) for _ in range(steps)),
+        selected_index=np.array([0, 11, 12, 59, 0], dtype=np.int64),
+        horizon_remaining=np.arange(steps, 0, -1),
+        discount=np.full(steps, 0.95, dtype=np.float32),
+        terminal=np.array([False, False, False, False, True]),
+    )
 
     chain = _tensor_chain(stored, _snippet())
     batch = collate_qh_chains([chain, _chain(steps=2, width=3)])
-    selected = batch.actor.history_pose_relative_root.tensor()[0, 4, 3, -3]
+    selected = _pose_tensor(batch.actor.history_pose_relative_root)[0, 4, 3, -3]
     assert selected.item() == pytest.approx(59.0)
     monkeypatch.setattr(torch.Tensor, "pin_memory", lambda value: value)
     pinned = batch.pin_memory()
-    assert pinned.actor.history_pose_relative_root.tensor()[0, 4, 3, -3].item() == pytest.approx(59.0)
+    assert _pose_tensor(pinned.actor.history_pose_relative_root)[0, 4, 3, -3].item() == pytest.approx(59.0)
     transferred = batch.to("cpu")
-    assert transferred.actor.history_pose_relative_root.tensor()[0, 4, 3, -3].item() == pytest.approx(59.0)
+    assert _pose_tensor(transferred.actor.history_pose_relative_root)[0, 4, 3, -3].item() == pytest.approx(59.0)
 
 
 def test_materialization_rejects_invalid_factual_index_with_chain_context() -> None:
-    stored = _stored(_source_ref())
-    stored.selected_index = np.array([0, 1], dtype=np.int64)
+    stored = replace(_stored(_source_ref()), selected_index=np.array([0, 1], dtype=np.int64))
     with pytest.raises(ValueError, match="store_index=0.*rollout_row_id=4.*step=1.*candidate_width=1"):
         _tensor_chain(stored, _snippet())
 
@@ -344,7 +388,7 @@ def test_collate_mixed_horizons_and_widths_preserves_five_masks_and_causal_histo
     chains = [_chain(steps=1, width=2), _chain(steps=3, width=1, offset=10), _chain(steps=4, width=3, offset=20)]
     batch = collate_qh_chains(chains)
 
-    assert batch.actor.candidate_pose_relative_root.tensor().shape == (3, 4, 3, 12)
+    assert _pose_tensor(batch.actor.candidate_pose_relative_root).shape == (3, 4, 3, 12)
     assert batch.actor.step_mask.tolist() == [
         [True, False, False, False],
         [True, True, True, False],
@@ -405,7 +449,7 @@ def test_derived_selected_and_successor_masks_share_exact_support() -> None:
 @dataclass
 class _Manifest:
     version: int = 7
-    shards: tuple[object, ...] = ()
+    shards: tuple[Any, ...] = ()
 
 
 _RECORD = VinOfflineIndexRecord(0, "sample-0", "scene-0", "snippet-0", "train", "shard-0", 0)
@@ -433,7 +477,7 @@ class _ActorReader:
         return self.backbone
 
 
-def _source_ref(**changes: object) -> _QhSourceRef:
+def _source_ref() -> _QhSourceRef:
     manifest_hash = stable_msgspec_hash(_ActorReader.manifest)
     record = asdict(_RECORD)
     record["source_shard_id"] = record.pop("shard_id")
@@ -443,27 +487,50 @@ def _source_ref(**changes: object) -> _QhSourceRef:
         split="train",
         records=[{"order": 0, **record}],
     )
-    values = {
-        "source_sample_index": 0,
-        "source_sample_key": "sample-0",
-        "source_shard_id": "shard-0",
-        "source_shard_row": 0,
-        "scene_id": "scene-0",
-        "snippet_id": "snippet-0",
-        "split": Stage.TRAIN,
-        "actor_store_version": "7",
-        "source_manifest_hash": manifest_hash,
-        "split_manifest_hash": split_hash,
-    }
-    values.update(changes)
-    return _QhSourceRef(**values)  # type: ignore[arg-type]
+    return _QhSourceRef(
+        source_sample_index=0,
+        source_sample_key="sample-0",
+        source_shard_id="shard-0",
+        source_shard_row=0,
+        scene_id="scene-0",
+        snippet_id="snippet-0",
+        split=Stage.TRAIN,
+        actor_store_version="7",
+        source_manifest_hash=manifest_hash,
+        split_manifest_hash=split_hash,
+    )
 
 
-def _stored(source_ref: _QhSourceRef) -> SimpleNamespace:
-    identity = PoseTW().tensor().numpy()
+def _changed_source_ref(field: _SourceRefField, value: _SourceRefValue) -> _QhSourceRef:
+    source = _source_ref()
+    match field:
+        case "source_sample_index":
+            return replace(source, source_sample_index=cast(int, value))
+        case "source_sample_key":
+            return replace(source, source_sample_key=cast(str, value))
+        case "source_shard_id":
+            return replace(source, source_shard_id=cast(str, value))
+        case "source_shard_row":
+            return replace(source, source_shard_row=cast(int, value))
+        case "scene_id":
+            return replace(source, scene_id=cast(str, value))
+        case "snippet_id":
+            return replace(source, snippet_id=cast(str, value))
+        case "split":
+            return replace(source, split=cast(Stage, value))
+        case "actor_store_version":
+            return replace(source, actor_store_version=cast(str, value))
+        case "source_manifest_hash":
+            return replace(source, source_manifest_hash=cast(str, value))
+        case "split_manifest_hash":
+            return replace(source, split_manifest_hash=cast(str, value))
+
+
+def _stored(source_ref: _QhSourceRef) -> _StoredChain:
+    identity = _pose_tensor(PoseTW()).numpy()
     target = identity.copy()
     target[-3:] = np.array([1, 2, 3], dtype=np.float32)
-    return SimpleNamespace(
+    return _StoredChain(
         root_pose_world=identity,
         target_pose_world_object=target,
         target_extents=np.ones(3, dtype=np.float32),
@@ -492,7 +559,7 @@ def _stored(source_ref: _QhSourceRef) -> SimpleNamespace:
 class _RolloutReader:
     max_horizon = 2
     contract = QhDataContract("8", "v0_gt_input", "gain", "return", "td", 0.95, "reason", "7")
-    provenance = {"stores": []}
+    provenance: dict[str, Any] = {"stores": []}
     store_dirs = (Path("/tmp/rollouts.zarr"),)
 
     def __init__(
@@ -511,15 +578,15 @@ class _RolloutReader:
     def __len__(self) -> int:
         return 1
 
-    def __getitem__(self, index: int) -> SimpleNamespace:
+    def __getitem__(self, index: int) -> _StoredChain:
         del index
         return self.stored
 
 
 def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     actor_reader = _ActorReader()
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()), actor_reader=actor_reader
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())), actor_reader=_as_actor_reader(actor_reader)
     )
     chain = dataset[0]
 
@@ -528,7 +595,7 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert isinstance(chain.actor.target_pose_relative_root, PoseTW)
     assert isinstance(chain.actor.candidate_pose_relative_root, PoseTW)
     assert isinstance(chain.actor.history_pose_relative_root, PoseTW)
-    assert chain.actor.target_pose_relative_root.tensor()[-3:].tolist() == pytest.approx([1, 2, 3])
+    assert _pose_tensor(chain.actor.target_pose_relative_root)[-3:].tolist() == pytest.approx([1, 2, 3])
     assert chain.actor.history_mask.tolist() == [[False, False], [True, False]]
     assert chain.actor.horizon_remaining.tolist() == [2, 1]
     assert chain.supervision.one_step_target_rri[:, 0].tolist() == pytest.approx([0.2, 0.3])
@@ -554,15 +621,18 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching(monkeypatch: py
         )
     )
     rollout_reader = _RolloutReader(_source_ref(), include_selected_depth=True)
-    rollout_reader.stored.selected_depth_m = np.ones((2, 2, 3), dtype=np.float16)
-    rollout_reader.stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
-    rollout_reader.stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
-    rollout_reader.stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
-    rollout_reader.stored.selected_depth_image_size_hw = np.tile(np.array([2, 3]), (2, 1))
-    rollout_reader.stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=rollout_reader,
-        actor_reader=actor_reader,
+    rollout_reader.stored = replace(
+        rollout_reader.stored,
+        selected_depth_m=np.ones((2, 2, 3), dtype=np.float16),
+        selected_depth_valid_mask=np.ones((2, 2, 3), dtype=np.bool_),
+        selected_depth_focal_px=np.ones((2, 2), dtype=np.float32),
+        selected_depth_principal_point_px=np.ones((2, 2), dtype=np.float32),
+        selected_depth_image_size_hw=np.tile(np.array([2, 3]), (2, 1)),
+        selected_depth_renderer="Pytorch3DDepthRenderer",
+    )
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(rollout_reader),
+        actor_reader=_as_actor_reader(actor_reader),
         root_evl_profile="evl_v1",
         selected_observation_protocol="cf_gt",
         experiment_profile="qh_cfplus_gt_depth_v1",
@@ -571,7 +641,7 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching(monkeypatch: py
     chain = dataset[0]
     context = chain.actor.static_context
     assert context is not None
-    assert context.t_world_voxel is not None and context.t_world_voxel.tensor().shape == (12,)
+    assert context.t_world_voxel is not None and _pose_tensor(context.t_world_voxel).shape == (12,)
     assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)
     assert context.counts is not None and context.counts.shape == (2, 2, 2)
     assert context.pts_world is not None and context.pts_world.shape == (8, 3)
@@ -579,7 +649,7 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching(monkeypatch: py
     batch_context = batch.actor.static_context
     assert batch_context is not None
     assert batch_context.vin_snippet is batch.actor.vin_snippet
-    assert batch_context.t_world_voxel is not None and batch_context.t_world_voxel.tensor().shape == (2, 12)
+    assert batch_context.t_world_voxel is not None and _pose_tensor(batch_context.t_world_voxel).shape == (2, 12)
     assert batch_context.occ_pr is not None and batch_context.occ_pr.shape == (2, 1, 2, 2, 2)
     assert batch_context.counts is not None and batch_context.counts.shape == (2, 2, 2, 2)
     assert batch_context.pts_world is not None and batch_context.pts_world.shape == (2, 8, 3)
@@ -605,9 +675,9 @@ def test_root_evl_profile_does_not_require_selected_observations() -> None:
             pts_world=torch.ones((1, 8, 3), dtype=torch.float32),
         )
     )
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()),
-        actor_reader=actor_reader,
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+        actor_reader=_as_actor_reader(actor_reader),
         root_evl_profile="evl_v1",
     )
 
@@ -623,9 +693,9 @@ def test_cfplus_selected_observations_require_root_evl() -> None:
     """Named CF+ admission requires compact root EVL alongside selected depth."""
 
     with pytest.raises(ValueError, match="requires compact root EVL"):
-        QhDataset(  # type: ignore[arg-type]
-            rollout_reader=_RolloutReader(_source_ref(), include_selected_depth=True),
-            actor_reader=_ActorReader(),
+        QhDataset(
+            rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref(), include_selected_depth=True)),
+            actor_reader=_as_actor_reader(_ActorReader()),
             selected_observation_protocol="cf_gt",
             experiment_profile="qh_cfplus_gt_depth_v1",
         )
@@ -638,9 +708,9 @@ def test_rich_dataset_rejects_non_singleton_source_axis() -> None:
             voxel_extent=torch.ones(6),
         )
     )
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()),
-        actor_reader=actor_reader,
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+        actor_reader=_as_actor_reader(actor_reader),
         root_evl_profile="evl_v1",
     )
 
@@ -651,10 +721,10 @@ def test_rich_dataset_rejects_non_singleton_source_axis() -> None:
 def test_audit_reads_renderer_metadata_without_loading_rich_payloads() -> None:
     actor_reader = _ActorReader()
     rollout_reader = _RolloutReader(_source_ref())
-    rollout_reader.stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=rollout_reader,
-        actor_reader=actor_reader,
+    rollout_reader.stored = replace(rollout_reader.stored, selected_depth_renderer="Pytorch3DDepthRenderer")
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(rollout_reader),
+        actor_reader=_as_actor_reader(actor_reader),
         include_audit=True,
     )
 
@@ -690,13 +760,15 @@ def test_collate_rejects_incompatible_root_evl_geometry() -> None:
 
 def test_collate_rejects_incompatible_selected_depth_geometry() -> None:
     def rich_chain(height: int) -> QhChain:
-        stored = _stored(_source_ref())
-        stored.selected_depth_m = np.ones((2, height, 3), dtype=np.float16)
-        stored.selected_depth_valid_mask = np.ones((2, height, 3), dtype=np.bool_)
-        stored.selected_depth_focal_px = np.ones((2, 2), dtype=np.float32)
-        stored.selected_depth_principal_point_px = np.ones((2, 2), dtype=np.float32)
-        stored.selected_depth_image_size_hw = np.tile(np.array([height, 3]), (2, 1))
-        stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+        stored = replace(
+            _stored(_source_ref()),
+            selected_depth_m=np.ones((2, height, 3), dtype=np.float16),
+            selected_depth_valid_mask=np.ones((2, height, 3), dtype=np.bool_),
+            selected_depth_focal_px=np.ones((2, 2), dtype=np.float32),
+            selected_depth_principal_point_px=np.ones((2, 2), dtype=np.float32),
+            selected_depth_image_size_hw=np.tile(np.array([height, 3]), (2, 1)),
+            selected_depth_renderer="Pytorch3DDepthRenderer",
+        )
         return _tensor_chain(stored, _snippet(), selected_observation_protocol="cf_gt")
 
     with pytest.raises(ValueError, match="one raster geometry"):
@@ -705,27 +777,27 @@ def test_collate_rejects_incompatible_selected_depth_geometry() -> None:
 
 def test_dataset_rejects_split_inconsistent_with_unfiltered_reader() -> None:
     with pytest.raises(ValueError, match="must match rollout_reader.campaign_split"):
-        QhDataset(  # type: ignore[arg-type]
-            rollout_reader=_RolloutReader(_source_ref()),
-            actor_reader=_ActorReader(),
+        QhDataset(
+            rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+            actor_reader=_as_actor_reader(_ActorReader()),
             split=Stage.VAL,
         )
 
 
 def test_dataset_rejects_selected_observation_protocol_reader_mismatch() -> None:
     with pytest.raises(ValueError, match="must match rollout-reader loading"):
-        QhDataset(  # type: ignore[arg-type]
-            rollout_reader=_RolloutReader(_source_ref()),
-            actor_reader=_ActorReader(),
+        QhDataset(
+            rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+            actor_reader=_as_actor_reader(_ActorReader()),
             selected_observation_protocol="cf_gt",
         )
 
 
 def test_dataset_rejects_unnamed_cf_gt_before_reader_materialization() -> None:
     with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
-        QhDataset(  # type: ignore[arg-type]
-            rollout_reader=_RolloutReader(_source_ref(), include_selected_depth=True),
-            actor_reader=_ActorReader(),
+        QhDataset(
+            rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref(), include_selected_depth=True)),
+            actor_reader=_as_actor_reader(_ActorReader()),
             selected_observation_protocol="cf_gt",
         )
 
@@ -738,11 +810,13 @@ def test_dataset_config_rejects_unnamed_cf_gt_before_reader_construction(tmp_pat
         ).setup_target()
 
 
-def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path: Path, monkeypatch) -> None:
-    captured: dict[str, object] = {}
+def test_dataset_config_setup_target_forwards_learning_split_to_reader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
 
     class _Reader:
-        def __init__(self, store_dirs, *, campaign_split, include_selected_depth):
+        def __init__(self, store_dirs: Any, *, campaign_split: Any, include_selected_depth: Any) -> None:
             captured["store_dirs"] = store_dirs
             captured["campaign_split"] = campaign_split
             captured["include_selected_depth"] = include_selected_depth
@@ -751,7 +825,8 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
     monkeypatch.setattr(qh_dataset_module, "VinOfflineStoreReader", lambda actor: "actor-reader")
     monkeypatch.setattr(qh_dataset_module, "QhDataset", lambda **kwargs: kwargs)
 
-    result = QhDatasetConfig(rollout_store_dirs=(tmp_path / "rollouts.zarr",), split="val").setup_target()
+    configured = QhDatasetConfig(rollout_store_dirs=(tmp_path / "rollouts.zarr",), split=Stage.VAL).setup_target()
+    result = cast(dict[str, Any], configured)
 
     assert captured == {
         "store_dirs": (tmp_path / "rollouts.zarr",),
@@ -763,7 +838,9 @@ def test_dataset_config_setup_target_forwards_learning_split_to_reader(tmp_path:
     assert result["selected_observation_protocol"] == "none"
 
 
-def test_named_cf0_requires_root_evl_and_does_not_load_selected_depth(tmp_path: Path, monkeypatch) -> None:
+def test_named_cf0_requires_root_evl_and_does_not_load_selected_depth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config = QhDatasetConfig(
         rollout_store_dirs=(tmp_path / "rollouts.zarr",),
         experiment_profile="qh_cf0_v1",
@@ -771,22 +848,23 @@ def test_named_cf0_requires_root_evl_and_does_not_load_selected_depth(tmp_path: 
     with pytest.raises(ValueError, match="requires compact root EVL"):
         config.setup_target()
 
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class _Reader:
         contract = QhDataContract("8", "v1_observed", "gain", "return", "td", 0.95, "reason", "7")
 
-        def __init__(self, store_dirs, *, campaign_split, include_selected_depth):
+        def __init__(self, store_dirs: Any, *, campaign_split: Any, include_selected_depth: Any) -> None:
             captured["include_selected_depth"] = include_selected_depth
 
     monkeypatch.setattr(qh_dataset_module, "QhRolloutReader", _Reader)
     monkeypatch.setattr(qh_dataset_module, "VinOfflineStoreReader", lambda actor: "actor-reader")
     monkeypatch.setattr(qh_dataset_module, "QhDataset", lambda **kwargs: kwargs)
-    result = QhDatasetConfig(
+    configured = QhDatasetConfig(
         rollout_store_dirs=(tmp_path / "rollouts.zarr",),
         experiment_profile="qh_cf0_v1",
         root_evl_profile="evl_v1",
     ).setup_target()
+    result = cast(dict[str, Any], configured)
     assert captured["include_selected_depth"] is False
     assert result["experiment_profile"] == "qh_cf0_v1"
 
@@ -825,13 +903,13 @@ def test_named_profile_admission_rejects_point_schema_mutations(mutation: tuple[
         shards=[],
     )
     with pytest.raises(ValueError, match="canonical|semantics|units"):
-        _require_named_profile_store(SimpleNamespace(manifest=manifest))
+        _require_named_profile_store(cast(VinOfflineStoreReader, SimpleNamespace(manifest=manifest)))
 
 
 def test_named_profile_rejects_v8_with_rebuild_guidance() -> None:
     manifest = SimpleNamespace(version=8, vin={}, shards=[])
     with pytest.raises(ValueError, match="version 10|Rebuild"):
-        _require_named_profile_store(SimpleNamespace(manifest=manifest))
+        _require_named_profile_store(cast(VinOfflineStoreReader, SimpleNamespace(manifest=manifest)))
 
 
 @pytest.mark.parametrize("provenance", ["native_evl_v1", "derived_observed_complement_occ_input_v1"])
@@ -850,7 +928,7 @@ def test_named_profile_admission_returns_manifest_free_input_provenance(tmp_path
 
 
 @pytest.mark.parametrize("provenance", [None, "unknown"])
-def test_named_profile_admission_rejects_missing_or_unknown_free_input_provenance(provenance: object) -> None:
+def test_named_profile_admission_rejects_missing_or_unknown_free_input_provenance(provenance: Any) -> None:
     manifest = SimpleNamespace(
         version=10,
         vin={
@@ -863,7 +941,7 @@ def test_named_profile_admission_rejects_missing_or_unknown_free_input_provenanc
         shards=[],
     )
     with pytest.raises(ValueError, match="free-input provenance"):
-        _require_named_profile_store(SimpleNamespace(manifest=manifest))
+        _require_named_profile_store(cast(VinOfflineStoreReader, SimpleNamespace(manifest=manifest)))
 
 
 @pytest.mark.parametrize("mutation", ["dtype", "shape"])
@@ -888,13 +966,15 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(
 ) -> None:
     """CF-GT selected depth may enter only the later states that causally acquired it."""
 
-    stored = _stored(_source_ref())
-    stored.selected_depth_m = np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3)
-    stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
-    stored.selected_depth_focal_px = np.tile(np.array([10, 12], dtype=np.float32), (2, 1))
-    stored.selected_depth_principal_point_px = np.tile(np.array([0.75, 1.25], dtype=np.float32), (2, 1))
-    stored.selected_depth_image_size_hw = np.tile(np.array([2, 3], dtype=np.int64), (2, 1))
-    stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    stored = replace(
+        _stored(_source_ref()),
+        selected_depth_m=np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3),
+        selected_depth_valid_mask=np.ones((2, 2, 3), dtype=np.bool_),
+        selected_depth_focal_px=np.tile(np.array([10, 12], dtype=np.float32), (2, 1)),
+        selected_depth_principal_point_px=np.tile(np.array([0.75, 1.25], dtype=np.float32), (2, 1)),
+        selected_depth_image_size_hw=np.tile(np.array([2, 3], dtype=np.int64), (2, 1)),
+        selected_depth_renderer="Pytorch3DDepthRenderer",
+    )
     context = QhStaticContext(
         vin_snippet=_snippet(),
         t_world_voxel=PoseTW(),
@@ -920,17 +1000,19 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(
     assert prefix is not None
     assert isinstance(prefix.camera, CameraTW)
     assert prefix.camera.is_linear
-    assert prefix.camera.tensor().shape == (2, 2, 22)
+    assert _camera_tensor(prefix.camera).shape == (2, 2, 22)
     assert prefix.camera.size[1, 0].tolist() == pytest.approx([3.0, 2.0])
     assert prefix.camera.f[1, 0].tolist() == pytest.approx([10.0, 12.0])
     assert prefix.camera.c[1, 0].tolist() == pytest.approx([0.75, 1.25])
-    assert torch.allclose(prefix.camera.T_camera_rig[1, 0].tensor(), PoseTW().tensor())
+    assert torch.allclose(_pose_tensor(prefix.camera.T_camera_rig[1, 0]), _pose_tensor(PoseTW()))
     assert isinstance(prefix.camera_pose_relative_root, PoseTW)
     assert prefix.source_protocol == "cf_gt"
     assert not prefix.prefix_mask[0].any()
     assert prefix.prefix_mask.tolist() == [[False, False], [True, False]]
     assert not prefix.valid_mask[0].any()
-    assert torch.equal(prefix.depth_m[1, 0], torch.from_numpy(stored.selected_depth_m[0]))
+    selected_depth_m = stored.selected_depth_m
+    assert selected_depth_m is not None
+    assert torch.equal(prefix.depth_m[1, 0], torch.from_numpy(selected_depth_m[0]))
     assert not prefix.valid_mask[1, 1].any()
 
     batch = collate_qh_chains([chain]).to("cpu")
@@ -947,13 +1029,15 @@ def test_rich_chain_prefix_is_strictly_causal_and_audit_stays_cpu_only(
 def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
     """Keep the documented Q_H chain and padded-batch axes executable."""
 
-    stored = _stored(_source_ref())
-    stored.selected_depth_m = np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3)
-    stored.selected_depth_valid_mask = np.ones((2, 2, 3), dtype=np.bool_)
-    stored.selected_depth_focal_px = np.full((2, 2), 10, dtype=np.float32)
-    stored.selected_depth_principal_point_px = np.full((2, 2), 1, dtype=np.float32)
-    stored.selected_depth_image_size_hw = np.tile(np.array([2, 3], dtype=np.int64), (2, 1))
-    stored.selected_depth_renderer = "Pytorch3DDepthRenderer"
+    stored = replace(
+        _stored(_source_ref()),
+        selected_depth_m=np.arange(2 * 2 * 3, dtype=np.float16).reshape(2, 2, 3),
+        selected_depth_valid_mask=np.ones((2, 2, 3), dtype=np.bool_),
+        selected_depth_focal_px=np.full((2, 2), 10, dtype=np.float32),
+        selected_depth_principal_point_px=np.full((2, 2), 1, dtype=np.float32),
+        selected_depth_image_size_hw=np.tile(np.array([2, 3], dtype=np.int64), (2, 1)),
+        selected_depth_renderer="Pytorch3DDepthRenderer",
+    )
     context = QhStaticContext(
         vin_snippet=_snippet(),
         t_world_voxel=PoseTW(),
@@ -969,21 +1053,21 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
     chain = _tensor_chain(stored, _snippet(), static_context=context, selected_observation_protocol="cf_gt")
     batch = collate_qh_chains([chain, chain])
 
-    def summary(actor: QhActorTensors) -> dict[str, object]:
+    def summary(actor: QhActorTensors) -> dict[str, Any]:
         static = actor.static_context
         prefix = actor.selected_observation_prefix
         assert static is not None and prefix is not None
         return {
-            "candidate_pose_relative_root": summarize(actor.candidate_pose_relative_root.tensor()),
-            "history_pose_relative_root": summarize(actor.history_pose_relative_root.tensor()),
+            "candidate_pose_relative_root": summarize(_pose_tensor(actor.candidate_pose_relative_root)),
+            "history_pose_relative_root": summarize(_pose_tensor(actor.history_pose_relative_root)),
             "step_mask": summarize(actor.step_mask),
             "vin_points_world": summarize(actor.vin_snippet.points_world),
             "evl_occ_pr": summarize(static.occ_pr),
             "evl_presence": summarize(static.evl_presence),
             "selected_depth_m": summarize(prefix.depth_m),
             "selected_depth_valid_mask": summarize(prefix.valid_mask),
-            "selected_depth_camera": summarize(prefix.camera.tensor()),
-            "selected_depth_camera_pose_relative_root": summarize(prefix.camera_pose_relative_root.tensor()),
+            "selected_depth_camera": summarize(_camera_tensor(prefix.camera)),
+            "selected_depth_camera_pose_relative_root": summarize(_pose_tensor(prefix.camera_pose_relative_root)),
             "selected_depth_prefix_mask": summarize(prefix.prefix_mask),
         }
 
@@ -1004,9 +1088,9 @@ def test_rich_summary_reports_chain_and_batch_qh_axes() -> None:
 def test_rich_dataset_rejects_actor_store_without_root_evl_evidence() -> None:
     """Legacy source stores remain diagnostic-only and cannot silently enter rich training."""
 
-    dataset = QhDataset(  # type: ignore[arg-type]
-        rollout_reader=_RolloutReader(_source_ref()),
-        actor_reader=_ActorReader(),
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+        actor_reader=_as_actor_reader(_ActorReader()),
         root_evl_profile="evl_v1",
     )
     with pytest.raises(ValueError, match="requires every EVL evidence field"):
@@ -1028,20 +1112,20 @@ def test_rich_dataset_rejects_actor_store_without_root_evl_evidence() -> None:
         ("split_manifest_hash", "wrong"),
     ],
 )
-def test_dataset_rejects_each_source_identity_mismatch(field: str, value: object) -> None:
+def test_dataset_rejects_each_source_identity_mismatch(field: _SourceRefField, value: _SourceRefValue) -> None:
     with pytest.raises(
         (KeyError, ValueError),
         match="absent from split|does not match rollout chain|split manifest does not match",
     ):
         QhDataset(
-            rollout_reader=_RolloutReader(_source_ref(**{field: value})),  # type: ignore[arg-type]
-            actor_reader=_ActorReader(),  # type: ignore[arg-type]
+            rollout_reader=_as_rollout_reader(_RolloutReader(_changed_source_ref(field, value))),
+            actor_reader=_as_actor_reader(_ActorReader()),
         )
 
 
 @pytest.mark.parametrize("profile", ["qh_cf0_v1", "qh_cfplus_gt_depth_v1"])
 def test_named_profiles_use_written_vin_and_rollout_artifacts(
-    tmp_path: Path, profile: str, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, profile: QhExperimentProfile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     actor_config = _write_test_store(tmp_path / "vin", include_backbone=True)
     actor_reader = VinOfflineStoreReader(actor_config)
@@ -1073,6 +1157,13 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
     target.target_source = "detected_obbs"
     target.descriptor_source = "detected_obbs"
     target.descriptor_provenance = "actor_visible_detector"
+    assert target.target_source_index is not None
+    assert target.target_sem_id is not None
+    assert target.target_pose_world_object is not None
+    assert target.target_extents is not None
+    assert target.target_relative_pose_reference_object is not None
+    assert target.target_confidence is not None
+    assert target.target_inst_id is not None
     actor_target = ObservedTargetDescriptor(
         sample_key=str(source.source_sample_key),
         source="detected_obbs",
@@ -1082,7 +1173,7 @@ def test_named_profiles_use_written_vin_and_rollout_artifacts(
             sem_id=int(target.target_sem_id),
             class_name=str(target.target_class_name),
             pose_world_object=tuple(target.target_pose_world_object),
-            extents_m=tuple(target.target_extents),
+            extents_m=cast(tuple[float, float, float], tuple(target.target_extents)),
             relative_pose_reference_object=tuple(target.target_relative_pose_reference_object),
         ),
         confidence=float(target.target_confidence),

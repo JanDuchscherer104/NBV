@@ -21,10 +21,10 @@ scene scores or low-quality invalid rows.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 
 import numpy as np
 import torch
@@ -88,6 +88,15 @@ class _RolloutWriteRecord(Protocol):
 
     @property
     def rollout_id_prefix(self) -> str: ...
+
+
+@dataclass(slots=True)
+class _NormalizedRolloutWriteRecord:
+    """Writer record with store-local target lineage normalization applied."""
+
+    evaluated: _EvaluatedRollout
+    lineage: RolloutLineage
+    rollout_id_prefix: str
 
 
 class _SelectedDepthEvidence(Protocol):
@@ -509,7 +518,9 @@ class RolloutZarrStoreReader:
 
     def __init__(self, store_dir: Path | str) -> None:
         self.store_dir = Path(store_dir).expanduser().resolve()
-        self.root = zarr.open_group(store=LocalStore(str(self.store_dir), read_only=True), mode="r")
+        # Zarr's dynamic path lookup stubs return broad Array/Group unions even
+        # though this reader validates the concrete store schema before use.
+        self.root: Any = zarr.open_group(store=LocalStore(str(self.store_dir), read_only=True), mode="r")
 
     def array(self, path: str) -> np.ndarray:
         """Read an array by slash-separated Zarr path."""
@@ -879,7 +890,9 @@ class _RolloutZarrValidator:
 
     def __init__(self, store_dir: Path | str, *, validate_selected_depth_payload: bool) -> None:
         self.store_dir = Path(store_dir).expanduser().resolve()
-        self.root = zarr.open_group(
+        # The validator is the runtime type boundary for Zarr's dynamically
+        # keyed hierarchy; schema checks below narrow every consumed node.
+        self.root: Any = zarr.open_group(
             store=LocalStore(str(self.store_dir), read_only=True),
             mode="r",
         )
@@ -1850,7 +1863,7 @@ def _records_with_global_target_row_ids(records: list[_RolloutWriteRecord]) -> l
     ``target_source_index`` and assign dense store-local ids by first use.
     """
 
-    target_row_by_key: dict[tuple[object, ...], int] = {}
+    target_row_by_key: dict[tuple[Any, ...], int] = {}
     normalized: list[_RolloutWriteRecord] = []
     for record in records:
         lineage = record.lineage
@@ -1860,8 +1873,8 @@ def _records_with_global_target_row_ids(records: list[_RolloutWriteRecord]) -> l
         if target_source_index is None and lineage.target.target_row_id is not None:
             target_source_index = int(lineage.target.target_row_id)
         normalized.append(
-            replace(
-                record,
+            _NormalizedRolloutWriteRecord(
+                evaluated=record.evaluated,
                 lineage=replace(
                     lineage,
                     target=replace(
@@ -1870,12 +1883,13 @@ def _records_with_global_target_row_ids(records: list[_RolloutWriteRecord]) -> l
                         target_source_index=target_source_index,
                     ),
                 ),
+                rollout_id_prefix=record.rollout_id_prefix,
             )
         )
     return normalized
 
 
-def _global_target_key(lineage: RolloutLineage) -> tuple[object, ...]:
+def _global_target_key(lineage: RolloutLineage) -> tuple[Any, ...]:
     """Return the source-scoped identity for one selected rollout target."""
 
     selector_local_id = lineage.target.target_source_index
@@ -2467,7 +2481,7 @@ def _flatten_records(
     candidate_row_id = 0
     step_row_id = 0
     crop_row_id = 0
-    seen_source_rows: dict[int, tuple[object, ...]] = {}
+    seen_source_rows: dict[int, tuple[Any, ...]] = {}
     rollout_row_id = 0
     for record, trajectory, lineage in _record_items(records):
         final_target_rri = _trajectory_cumulative_metric(record, lineage.chain_id, trajectory, ("target_rri", "rri"))
@@ -2689,7 +2703,7 @@ def _append_source_row(
     )
 
 
-def _source_identity(*, lineage: RolloutLineage, source_row_id: int) -> tuple[object, ...]:
+def _source_identity(*, lineage: RolloutLineage, source_row_id: int) -> tuple[Any, ...]:
     """Return the source fields that must be stable for one source row id."""
 
     return (
@@ -2893,7 +2907,7 @@ def _append_candidate_row(
         target_candidate_support = float("nan")
     oracle_label = bool(is_valid and np.isfinite(target_root_gain))
     q_train = bool(is_valid and oracle_label and target_label_valid)
-    pose = step.candidates.shell_poses.tensor()[shell_index].detach().cpu().numpy().astype(np.float32)
+    pose = _pose_tensor(step.candidates.shell_poses)[shell_index].detach().cpu().numpy().astype(np.float32)
     rows["candidate_row_id"].append(candidate_row_id)
     rows["step_row_id"].append(step_row_id)
     rows["rollout_row_id"].append(rollout_row_id)
@@ -3177,7 +3191,7 @@ def _build_q_h_arrays(tables: _RolloutTables, *, gamma: float) -> dict[str, np.n
     max_candidates = _max_candidates_per_step(steps, candidates)
     state_count = int(step_ids.shape[0])
 
-    q = {
+    q: dict[str, np.ndarray] = {
         "state_step_row_id": step_ids,
         "source_row_id": np.full((state_count,), -1, dtype=np.int64),
         "candidate_row_id": np.full((state_count, max_candidates), -1, dtype=np.int64),
@@ -3363,7 +3377,7 @@ def _stored_horizon(root: Any) -> int:
     return int(values.max()) if values.size else 1
 
 
-def _exact_integer(value: object) -> int | None:
+def _exact_integer(value: Any) -> int | None:
     """Return persisted integer metadata without accepting lossy coercions."""
 
     if isinstance(value, bool) or not isinstance(value, int | np.integer):
@@ -3376,7 +3390,7 @@ def _max_candidates_per_step(steps: dict[str, np.ndarray], candidates: dict[str,
     return max((int((candidate_step_ids == int(step_id)).sum()) for step_id in steps["step_row_id"]), default=0)
 
 
-def _write_array(group: zarr.Group, name: str, values: np.ndarray) -> zarr.Array:
+def _write_array(group: zarr.Group, name: str, values: np.ndarray) -> zarr.Array[Any]:
     array = np.asarray(values)
     chunks = _default_chunks(array)
     zarr_array = group.create_array(name, shape=array.shape, chunks=chunks, dtype=array.dtype, overwrite=True)
@@ -3390,7 +3404,7 @@ def _write_selected_depth_array(
     values: np.ndarray,
     *,
     chunk_steps: int,
-) -> zarr.Array:
+) -> zarr.Array[Any]:
     array = np.asarray(values)
     chunks = _selected_depth_chunks(array, chunk_steps=chunk_steps)
     zarr_array = group.create_array(
@@ -3411,7 +3425,7 @@ def _write_q_h_array(
     values: np.ndarray,
     *,
     chunk_states: int,
-) -> zarr.Array:
+) -> zarr.Array[Any]:
     array = np.asarray(values)
     chunks = _q_h_chunks(array, chunk_states=chunk_states)
     zarr_array = group.create_array(name, shape=array.shape, chunks=chunks, dtype=array.dtype, overwrite=True)
@@ -3426,7 +3440,10 @@ def _write_string_array(group: zarr.Group, name: str, values: list[str]) -> None
 
 def _decode_string_array(value: Any) -> list[str]:
     encoded = np.asarray(value, dtype=np.uint8)
-    return json.loads(encoded.tobytes().decode("utf-8"))
+    decoded = json.loads(encoded.tobytes().decode("utf-8"))
+    if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+        raise ValueError("Persisted string dictionary must decode to a JSON string list.")
+    return cast(list[str], decoded)
 
 
 def _read_string_array(root: Any, path: str) -> list[str]:
@@ -3434,9 +3451,9 @@ def _read_string_array(root: Any, path: str) -> list[str]:
     return _decode_string_array(root[path])
 
 
-def _default_chunks(array: np.ndarray) -> tuple[int, ...] | None:
+def _default_chunks(array: np.ndarray) -> tuple[int, ...] | Literal["auto"]:
     if array.ndim == 0:
-        return None
+        return "auto"
     if array.ndim == 1:
         return (min(max(int(array.shape[0]), 1), 1024),)
     return (1, *array.shape[1:])
@@ -3449,9 +3466,9 @@ def _selected_depth_chunks(array: np.ndarray, *, chunk_steps: int) -> tuple[int,
     return (first, int(array.shape[1]), int(array.shape[2]))
 
 
-def _q_h_chunks(array: np.ndarray, *, chunk_states: int) -> tuple[int, ...] | None:
+def _q_h_chunks(array: np.ndarray, *, chunk_states: int) -> tuple[int, ...] | Literal["auto"]:
     if array.ndim == 0:
-        return None
+        return "auto"
     first = max(1, min(int(chunk_states), max(int(array.shape[0]), 1)))
     if array.ndim == 1:
         return (first,)
@@ -3694,7 +3711,7 @@ def _lineage_target_label_valid(lineage: RolloutLineage) -> bool:
 def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
     """Materialize the one typed target-label mapping for persisted rows."""
 
-    targets = root["targets"]
+    targets = cast(zarr.Group, root["targets"])
     protocol = str(root.attrs.get("target_protocol_version", ""))
     target_sources = _encoded_values(
         root,
@@ -3785,7 +3802,15 @@ def _canonical_target_label_mask(root: zarr.Group) -> np.ndarray:
 def _relative_pose_to_root(*, pose_world_cam: np.ndarray, root_pose_world: torch.Tensor) -> np.ndarray:
     root = PoseTW(root_pose_world.detach().cpu().to(dtype=torch.float32).reshape(-1))
     candidate = PoseTW(torch.as_tensor(pose_world_cam, dtype=torch.float32).reshape(-1))
-    return root.inverse().compose(candidate).tensor().detach().cpu().numpy().astype(np.float32).reshape(-1)
+    relative = root.inverse().compose(candidate)
+    return _pose_tensor(relative).detach().cpu().numpy().astype(np.float32).reshape(-1)
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    """Return the typed tensor behind an EFM3D pose wrapper."""
+
+    tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, tensor())
 
 
 def _missing_lineage_token(value: Any) -> bool:
