@@ -76,15 +76,15 @@ class SelectionTests(unittest.TestCase):
             '"uv==0.12.5"',
             setup_uv,
         )
-        self.assertIn('test "$(uv --version)" = "uv 0.12.5"', setup_uv)
+        self.assertIn('test "$(python -m uv --version)" = "uv 0.12.5"', setup_uv)
         self.assertNotIn("astral-sh/setup-uv@", workflow)
         self.assertNotIn("uses: actions/cache@", workflow)
-        self.assertEqual(workflow.count("uv sync --locked --extra dev"), 1)
+        self.assertEqual(workflow.count("python -m uv sync --locked --extra dev"), 1)
         sync = workflow.split("      - name: Sync package validation environment\n", 1)[
             1
         ].split("      - name: Set up Quarto\n", 1)[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", sync)
-        self.assertIn("run: uv sync --locked --extra dev", workflow)
+        self.assertIn("run: python -m uv sync --locked --extra dev", workflow)
         self.assertNotIn("pip install --upgrade pip uv", workflow)
         package_validation = workflow.split(
             "      - name: Validate package contracts\n", 1

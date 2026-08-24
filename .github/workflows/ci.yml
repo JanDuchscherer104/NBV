@@ -116,12 +116,12 @@ jobs:
         if: steps.impact.outputs.package == 'true'
         run: |
           python -m pip install --disable-pip-version-check --no-input "uv==0.12.5"
-          test "$(uv --version)" = "uv 0.12.5"
+          test "$(python -m uv --version)" = "uv 0.12.5"
 
       - name: Sync package validation environment
         if: steps.impact.outputs.package == 'true'
         working-directory: aria_nbv
-        run: uv sync --locked --extra dev
+        run: python -m uv sync --locked --extra dev
 
       - name: Set up Quarto
         if: steps.impact.outputs.docs == 'true'
