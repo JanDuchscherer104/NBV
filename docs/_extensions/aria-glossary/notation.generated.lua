@@ -110,6 +110,24 @@ return {
       description = "Per-candidate row feature assembled from pose, relation, support, validity, provenance, and history descriptors.",
       thesis_list = true,
     },
+    ["model.history_pose_feature"] = {
+      tex = "\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}",
+      typst = "#symb.model.history_pose_feature",
+      description = "Previously selected pose j encoded from the current camera at decision state t.",
+      thesis_list = true,
+    },
+    ["model.history_relative_age"] = {
+      tex = "a_{t,j}^{\\mathrm{hist}}",
+      typst = "#symb.model.history_relative_age",
+      description = "Normalized relative age of selected pose j at decision state t; the immediate predecessor has age zero.",
+      thesis_list = true,
+    },
+    ["model.history_token"] = {
+      tex = "\\boldsymbol{h}_t^{\\mathrm{hist}}",
+      typst = "#symb.model.history_token",
+      description = "Fixed-width causal selected-pose history token supplied to scorer state fusion.",
+      thesis_list = true,
+    },
     ["model.target_token"] = {
       tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}",
       typst = "#symb.model.target_token",
@@ -764,6 +782,12 @@ return {
       tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_frozen_interface",
       description = "Frozen scalar requested-horizon scorer interface.",
+      thesis_list = false,
+    },
+    ["model.qh_history_controls"] = {
+      tex = "\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}=\\operatorname{PoseEnc}(T_{c_t\\leftarrow c_j}),\\ a_{t,j}^{\\mathrm{hist}}=(t-1-j)/H_{\\max};\\quad \\boldsymbol{h}_t^{\\mathrm{H0}}=\\operatorname{HistProj}(\\operatorname{Mean}_{j<t}\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}),\\quad \\boldsymbol{h}_t^{\\mathrm{H1}}=\\operatorname{HistProj}(\\operatorname{LastValid}(\\operatorname{CausalTransformer}([\\boldsymbol{e}_{\\emptyset},\\{\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}+g(a_{t,j}^{\\mathrm{hist}})\\}_{j<t}])))",
+      typst = "#eqs.model.qh_history_controls",
+      description = "Checkpoint-compatible masked-mean H0 and exploratory ordered causal-transformer H1 selected-pose history controls.",
       thesis_list = false,
     },
     ["model.qh_input_contract"] = {

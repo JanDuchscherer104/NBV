@@ -136,11 +136,19 @@ This adopts QCNet's query-centric geometric discipline, not its trajectory decod
   implementation: "partial",
   evidence: "pending",
   citation: [@e3nn-SphericalHarmonics-2025 @Hestia-lu2026],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [directional-novelty fixture and matched architecture ablation],
-)[The implemented scorer consumes the strictly causal selected-pose prefix through a candidate-relative summary. Ordered token-level temporal encoding and directional memory remain representation ablations for longer-horizon models.]
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py; aria_nbv/tests/vin/test_qh_history_encoders.py; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [matched repeated-seed H0/H1 measurement, directional-novelty fixture, and held-out policy evidence],
+)[The scorer exposes a versioned selected-pose history seam. H0 is the checkpoint-compatible masked mean; H1 is an implemented exploratory causal Transformer over current-camera-relative pose tokens and relative age. Directional scene memory and scientific longer-horizon evidence remain pending.]
 
 The candidate row is a local query, not a duplicate of the full state. The implemented trunk encodes root-relative and current-relative candidate pose plus global root-scene moments, predicts feasibility before target or horizon conditioning, and then adds a candidate-local target transform for conditional value prediction. Shared target, scene, causal-history, remaining-budget, and requested-horizon context are supplied as state tokens. Hard action validity is not a scorer feature; candidate family or sampler provenance is audit-only by default and may enter the model only as a named ablation.
+
+For each realized state, materialization must provide the complete strictly causal selected-pose prefix. Each selected pose is expressed from the current camera before the shared R6D--LFF pose encoder. H0 reproduces the original masked arithmetic mean exactly. H1 attaches relative age—zero for the immediate predecessor, increasing backward through the prefix—then uses causal self-attention and last-valid-token readout:
+
+$
+  #eqs.model.qh_history_controls
+$
+
+The learned empty token represents the realized root state with no selected predecessor; padded states remain zero and cannot enter a candidate output. Relative age makes chronology observable without adding absolute step index as a separate feature. Prefix cardinality is also factual causal state, but neither chronology nor cardinality substitutes for the separately encoded remaining budget $b_t$ or requested value horizon $h$. H1 still observes poses only: it carries no selected depth, appearance, free/unknown update, target-local evidence, or new counterfactual render. It is therefore an `S0-pose` ablation rather than a sufficient dynamic reconstruction state.
 
 Viewing history is not reducible to camera distance. For a target-local point or cell, selected camera directions define a signed first moment together with the second-moment memory
 
