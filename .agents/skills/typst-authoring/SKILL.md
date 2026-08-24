@@ -14,6 +14,8 @@ use `scientific-review`.
 
 1. Read the nearest docs guide, identify the exact Typst owner, and inspect
    adjacent imports, shared notation, labels, and bibliography use.
+   For claim-bearing content arriving from academic-writing, read the shared
+   [academic work phase transition](../README.md#academic-work-phase-transition).
 2. For every non-trivial meaning- or layout-affecting edit, read
    [`workflow.md`](references/workflow.md). Load only the additional branch
    required by the change:
@@ -40,8 +42,9 @@ use `scientific-review`.
 3. Make the smallest source edit. Shared notation, glossary terms, equations,
    bibliography identities, and active thesis content remain with their exact
    owners.
-4. Compile and inspect affected output when layout or meaning can change. Run
-   the owner-defined authoring contract and report any skipped proof.
+4. Move `ready-for-realization` content to `realized` only after changing its
+   exact Typst owner and completing the required proof. Compile and inspect
+   affected output when layout or meaning can change; report any skipped proof.
 
 For current Typst or package API uncertainty, inspect local owners first, then
 read [`external-research.md`](references/external-research.md) and use the

@@ -9,8 +9,9 @@ Read this branch for drafting or revising an academic section or paragraph.
    implementation fact, design decision, empirical result, limitation, or
    hypothesis; match verb strength to evidence.
 4. Apply the section contract and retain incompatible scopes as distinct claims.
-5. Return accepted prose, evidence pointers, limitations, and a realization
-   handoff. Send disputed validity to `scientific-review` unchanged.
+5. Return a `proposed` or `ready-for-realization` candidate with evidence
+   pointers, limitations, and the realization proof. Send disputed validity to
+   `scientific-review` unchanged.
 
 For claim-bearing Typst content, use the repository's adjacent non-rendered
 evidence-comment convention when the active document owner requires it. The

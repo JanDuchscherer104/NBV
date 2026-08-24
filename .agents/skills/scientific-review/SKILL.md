@@ -1,6 +1,6 @@
 ---
 name: scientific-review
-description: Use to independently red-team an exact scientific candidate for leakage, confounding, split integrity, uncertainty, baseline parity, freshness, or claim escalation; return advisory findings without mutation.
+description: Use to independently review an exact scientific candidate for claim, citation, argument, mathematical, research-question, or empirical-validity risks; return advisory findings without mutation.
 ---
 
 # Scientific Review
@@ -14,16 +14,27 @@ literature, bibliography, or Typst sources.
 
 1. Capture the candidate identity, scope, and review question; read its nearest
    owner guidance.
-2. Read [`review-protocol.md`](references/review-protocol.md) and the shared
-   scientific evidence contract in
-   [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md),
-   then load only the applicable checks in
-   [`empirical-validity.md`](references/empirical-validity.md).
+2. Read [`review-protocol.md`](references/review-protocol.md), then select only
+   the applicable branch:
+   - empirical protocol, leakage, confounding, parity, uncertainty, or artifact
+     freshness: [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md)
+     and [`empirical-validity.md`](references/empirical-validity.md);
+   - claim/citation entailment, Related Work, contribution scope, or argument
+     coherence: academic-writing's
+     [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md)
+     and [`thesis section contracts`](../academic-writing/references/thesis-section-contracts.md);
+   - research-question/estimand alignment: the active
+     [`research questions`](../../../docs/typst/thesis/sections/01-research-questions.typ)
+     plus the applicable section contract;
+   - mathematical, notation, or theoretical consistency: the exact local source
+     plus [`equations.typ`](../../../docs/typst/shared/equations.typ),
+     [`symbols.typ`](../../../docs/typst/shared/symbols.typ), or Typst's
+     [`notation policy`](../typst-authoring/references/aria-nbv-notation.md).
 3. Inspect exact evidence owners and report each finding with severity, locator,
    rationale, and repair action. Separate evidence from inference.
-4. Return findings to the owning author or implementation lane. The owner, not
-   this review, decides whether to mutate the candidate and may request a fresh
-   review afterwards.
+4. Return findings to the owning author or implementation lane. This review
+   never advances a phase state; the owner decides whether to mutate, realize,
+   or request a fresh review.
 
 ## Completion
 

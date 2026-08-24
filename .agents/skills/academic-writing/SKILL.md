@@ -1,6 +1,6 @@
 ---
 name: academic-writing
-description: Use to construct source-grounded academic arguments, Related Work synthesis, or bounded section content; hand accepted content to typst-authoring and unresolved validity concerns to scientific-review.
+description: Use to construct source-grounded academic arguments, Related Work synthesis, or bounded section content; hand ready content to typst-authoring and unresolved validity concerns to scientific-review.
 ---
 
 # Academic Writing
@@ -22,6 +22,8 @@ realization or certify scientific validity.
    [`thesis-section-contracts.md`](references/thesis-section-contracts.md).
    For empirical claims, also read the scientific evidence contract in
    [`empirical-reporting-and-reproducibility.md`](../scientific-review/references/empirical-reporting-and-reproducibility.md).
+   For a candidate that may continue into realization, read the shared
+   [academic work phase transition](../README.md#academic-work-phase-transition).
 3. For Related Work or a concept-centred comparison, read
    [`literature-synthesis.md`](references/literature-synthesis.md). Use
    [`upstream-matt-writing.md`](references/upstream-matt-writing.md) only for
@@ -32,21 +34,12 @@ realization or certify scientific validity.
    confounding, uncertainty, baseline parity, freshness, or overclaiming to
    `scientific-review`.
 
-## Acceptance
-
-Keep a candidate `proposed` until its owning author confirms the cited evidence,
-limitations, and intended claim. Mark it `ready-for-realization` only with that
-task-local owner confirmation; unresolved scientific-review findings return it
-to `proposed`. An edit request that already authorizes Typst realization may
-continue directly from that confirmation into `typst-authoring`.
-
 ## Handoff
 
 State the candidate/source identity, destination section, evidence pointers,
-limitations or open findings, proposed or ready-for-realization state, and
-required verification. The
-packet is task-local; active Typst sources and their cited owners remain the
-durable record.
+limitations or open findings, phase state, and required verification. The packet
+is task-local; active Typst sources and their cited owners remain the durable
+record.
 
 ## Completion
 

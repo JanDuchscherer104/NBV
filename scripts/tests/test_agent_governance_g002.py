@@ -1364,11 +1364,26 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         in typst_skill
     )
     assert "ready-for-realization" in academic_skill
+    assert "academic work phase transition" in academic_skill
     assert (
         "../scientific-review/references/empirical-reporting-and-reproducibility.md"
         in academic_skill
     )
     assert "empirical-reporting-and-reproducibility.md" in scientific_skill
+    for review_route in (
+        "claim/citation entailment",
+        "research-question/estimand alignment",
+        "mathematical, notation, or theoretical consistency",
+    ):
+        assert review_route in scientific_skill
+    skill_guide = _read(ROOT / ".agents" / "skills" / "README.md")
+    for phase in (
+        "`proposed`",
+        "`ready-for-realization`",
+        "`realized`",
+        "`scientifically released`",
+    ):
+        assert phase in skill_guide
     assert "generated context artifact" not in claim_discipline
     assert (
         ROOT

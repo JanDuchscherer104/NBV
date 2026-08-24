@@ -96,9 +96,10 @@ DEFAULT_TRIAL_IDS = (
 
 ACADEMIC_AUTHORING_TRIAL_IDS = (
     "academic-writing-related-work-synthesis",
-    "academic-writing-handoff-to-typst",
-    "typst-authoring-accepted-content-render",
-    "scientific-review-empirical-validity",
+    "typst-authoring-layout-repair",
+    "scientific-review-frozen-claim",
+    "thesis-claim-revision",
+    "empirical-result-revision",
     "rollout-report-owner-not-writing-skill",
 )
 

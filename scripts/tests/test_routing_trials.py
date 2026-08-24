@@ -125,13 +125,35 @@ def test_prompt_and_rubric_ids_match_without_prompt_leakage() -> None:
 def test_academic_authoring_trial_selection_is_a_small_disjoint_suite() -> None:
     assert trials.ACADEMIC_AUTHORING_TRIAL_IDS == (
         "academic-writing-related-work-synthesis",
-        "academic-writing-handoff-to-typst",
-        "typst-authoring-accepted-content-render",
-        "scientific-review-empirical-validity",
+        "typst-authoring-layout-repair",
+        "scientific-review-frozen-claim",
+        "thesis-claim-revision",
+        "empirical-result-revision",
         "rollout-report-owner-not-writing-skill",
     )
     rubric = trials.load_rubric()
     assert set(trials.ACADEMIC_AUTHORING_TRIAL_IDS) <= set(rubric)
+
+
+def test_academic_authoring_prompts_are_natural_and_cover_composed_edits() -> None:
+    prompts = trials.load_prompts()
+    rubric = trials.load_rubric()
+    for trial_id in trials.ACADEMIC_AUTHORING_TRIAL_IDS:
+        task = prompts[trial_id].lower()
+        for leaked_route_word in (
+            "academic-writing",
+            "scientific-review",
+            "typst-authoring",
+            "accepted content",
+            "handoff",
+            "red-team",
+        ):
+            assert leaked_route_word not in task, trial_id
+    for trial_id in ("thesis-claim-revision", "empirical-result-revision"):
+        required = rubric[trial_id]["required_outcomes"]
+        assert any("ordered route:" in outcome for outcome in required)
+        assert any("active Typst source is changed" in outcome for outcome in required)
+        assert any("compile and affected-page render proof" in outcome for outcome in required)
 
 
 def test_academic_authoring_selector_runs_only_its_focused_suite() -> None:
