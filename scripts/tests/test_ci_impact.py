@@ -58,6 +58,15 @@ class SelectionTests(unittest.TestCase):
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.48"',
             workflow,
         )
+        pdf_validator = workflow.split(
+            "      - name: Install PDF evidence validator\n", 1
+        )[1].split("      - name: Set up uv\n", 1)[0]
+        self.assertIn("if: steps.impact.outputs.docs == 'true'", pdf_validator)
+        self.assertIn("sudo apt-get update", pdf_validator)
+        self.assertIn(
+            "sudo apt-get install --no-install-recommends --yes poppler-utils",
+            pdf_validator,
+        )
         self.assertIn(
             "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0",
             workflow,
