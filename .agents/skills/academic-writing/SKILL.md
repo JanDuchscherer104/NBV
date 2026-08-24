@@ -21,7 +21,7 @@ realization or certify scientific validity.
    [`thesis-writing.md`](references/thesis-writing.md) and
    [`thesis-section-contracts.md`](references/thesis-section-contracts.md).
    For empirical-result claims, also read the scientific evidence contract in
-   [`empirical-reporting-and-reproducibility.md`](../scientific-review/references/empirical-reporting-and-reproducibility.md)
+   [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md)
    and obtain scientific-review findings before marking the candidate
    `ready-for-realization`.
    For a candidate that may continue into realization, read the shared

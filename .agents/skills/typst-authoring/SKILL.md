@@ -38,7 +38,7 @@ use `scientific-review`.
    - accepted claim/citation realization: the academic-writing
      [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md),
      or empirical-result realization:
-     [`empirical-reporting-and-reproducibility.md`](../scientific-review/references/empirical-reporting-and-reproducibility.md).
+     [`empirical-reporting-and-reproducibility.md`](../academic-writing/references/empirical-reporting-and-reproducibility.md).
 3. Make the smallest source edit. Shared notation, glossary terms, equations,
    bibliography identities, and active thesis content remain with their exact
    owners.

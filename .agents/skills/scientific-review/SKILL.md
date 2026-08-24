@@ -17,7 +17,8 @@ literature, bibliography, or Typst sources.
 2. Read [`review-protocol.md`](references/review-protocol.md), then select only
    the applicable branch:
    - empirical protocol, leakage, confounding, parity, uncertainty, or artifact
-     freshness: [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md)
+     freshness: academic-writing's
+     [`empirical-reporting-and-reproducibility.md`](../academic-writing/references/empirical-reporting-and-reproducibility.md)
      and [`empirical-validity.md`](references/empirical-validity.md);
    - claim/citation entailment, Related Work, contribution scope, or argument
      coherence: academic-writing's

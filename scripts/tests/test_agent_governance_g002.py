@@ -1376,17 +1376,20 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     assert "references/workflow.md" in typst_skill
     assert "../../../docs/typst/shared/style.typ" in typst_skill
     assert (
-        "../scientific-review/references/empirical-reporting-and-reproducibility.md"
+        "references/empirical-reporting-and-reproducibility.md"
         in typst_skill
     )
     assert "ready-for-realization" in academic_skill
     assert "obtain scientific-review findings before marking" in academic_skill
     assert "academic work phase transition" in academic_skill
     assert (
-        "../scientific-review/references/empirical-reporting-and-reproducibility.md"
+        "references/empirical-reporting-and-reproducibility.md"
         in academic_skill
     )
-    assert "empirical-reporting-and-reproducibility.md" in scientific_skill
+    assert (
+        "../academic-writing/references/empirical-reporting-and-reproducibility.md"
+        in scientific_skill
+    )
     for review_route in (
         "claim/citation entailment",
         "research-question/estimand alignment",
@@ -1409,11 +1412,22 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     assert "prose-draft" not in thesis_writing
     assert "prose-polish" not in thesis_writing
     assert "generated context artifact" not in claim_discipline
+    claim_ledger = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "assets"
+        / "templates"
+        / "claim-ledger.md"
+    )
+    assert "defining code + focused tests + active configuration" in claim_ledger
+    assert "code path or generated context" not in claim_ledger
     assert (
         ROOT
         / ".agents"
         / "skills"
-        / "scientific-review"
+        / "academic-writing"
         / "references"
         / "empirical-reporting-and-reproducibility.md"
     ).is_file()
@@ -1421,7 +1435,7 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         ROOT
         / ".agents"
         / "skills"
-        / "typst-authoring"
+        / "scientific-review"
         / "references"
         / "empirical-reporting-and-reproducibility.md"
     ).exists()
