@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df
+repo_head: f25dacd8a65e2d01b13335a431eabd0c7f88a486
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -82,6 +82,11 @@ duplicating it in all three skills.
 - The portable sandbox command-shape test uses a mounted system command rather
   than requiring Codex on every CI runner; the separate Bubblewrap integration
   test exercises the resolved Codex runtime whenever both binaries are present.
+- Routing subjects and model-based verifiers now require an explicit local
+  Responses-compatible broker, use a credential-free custom provider inside
+  Bubblewrap, and never mount host `auth.json`. The current machine has no
+  configured broker or API key, so a live current-head academic routing receipt
+  remains unavailable rather than falling back to host credentials.
 - The trial report schema is mounted read-only outside the model-writable
   receipt, trial receipts are checked against that canonical schema before
   adjudication, and verifier stdout/stderr now have the same bounded capture
@@ -106,6 +111,7 @@ duplicating it in all three skills.
 - [9f08d5586d8455642dfdc51bfdf8445203e533cb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9f08d5586d8455642dfdc51bfdf8445203e533cb) — implementation: bound and validate routing receipts
 - [b36b376487cfb5704c5e15fb626ebb404a25a93a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b36b376487cfb5704c5e15fb626ebb404a25a93a) — implementation: isolate evaluator receipts and runtime
 - [e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df) — test: keep the sandbox command contract portable
+- [f25dacd8a65e2d01b13335a431eabd0c7f88a486](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f25dacd8a65e2d01b13335a431eabd0c7f88a486) — implementation: isolate routing trials from Codex auth
 
 ## Verification
 
@@ -120,6 +126,7 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 49 passed, including process-group timeout escalation and exact Codex-runtime Bubblewrap proof.
 - CI-equivalent scaffold verification with pytest supplied by `uv` — 94 passed; agent-status, governance, Graphify, and worktree setup checks passed.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 49 passed; Ruff and `git diff --check` passed.
+- `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 57 passed, including Bubblewrap proof that the subject cannot access `/codex-home/auth.json`; routing listing remains available without a broker and live execution fails closed when one is absent.
 
 ## Canonical Owner Impact
 
