@@ -13,6 +13,7 @@ canonical_updates_needed:
   - scripts/scaffold/fixtures/routing.json
   - scripts/ci_impact.py
   - scripts/scaffold_audit.py
+  - .agents/skills/scientific-review/references/review-protocol.md
 touched_owner_paths:
   - .agents/skills/README.md
   - .agents/skills/academic-writing/SKILL.md
@@ -29,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 6f7d170b9b88607a333a4de00bccb58c3abb06d1
+repo_head: a76cef4590579f46dff29e59c398529ab9443765
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -61,6 +62,12 @@ duplicating it in all three skills.
 - Empirical-result candidates need a candidate-bound review without a blocking
   finding before they are ready for Typst realization.
 - Authoring-owner changes trigger both documentation and scaffold CI gates.
+- Routing subjects exclude evaluator fixtures, tests, debriefs, and OMX state;
+  their fresh Git baseline detects untracked and committed writes, and
+  workspace-write trials accept only the required Typst roots plus a full-page
+  render receipt.
+- Empirical readiness requires an independent review receipt separately from
+  its blocking, advisory, or clear finding gate.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -68,12 +75,14 @@ duplicating it in all three skills.
 
 - [6c1669ac1d4c7367148a481fcbf88b625135d903](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6c1669ac1d4c7367148a481fcbf88b625135d903) — implementation: compose academic authoring phases
 - [6f7d170b9b88607a333a4de00bccb58c3abb06d1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6f7d170b9b88607a333a4de00bccb58c3abb06d1) — implementation: enforce authoring routing evidence
+- [a76cef4590579f46dff29e59c398529ab9443765](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a76cef4590579f46dff29e59c398529ab9443765) — implementation: close routing review gaps
 
 ## Verification
 
 - `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_agent_governance_g002.py scripts/tests/test_routing_trials.py scripts/tests/test_scientific_review_trials.py` — 68 passed.
 - `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py scripts/tests/test_agent_governance_g002.py scripts/tests/test_scientific_review_trials.py scripts/tests/test_debrief_index.py` — 124 passed, 50 subtests passed.
 - `make scaffold-audit scaffold-audit-self-test ci-impact-self-test check-agent-memory PYTHON_INTERPRETER=python3` — passed.
+- `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py scripts/tests/test_agent_governance_g002.py scripts/tests/test_scientific_review_trials.py` — 90 passed, 51 subtests passed.
 - The three modified skills passed the skill validator.
 - `git diff --check` and routing fixture JSON/JSONL parsing passed.
 
