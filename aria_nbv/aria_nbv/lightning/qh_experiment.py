@@ -414,11 +414,21 @@ class QhExperiment:
         )
 
     def evaluate_held_out(self, request: QhHeldOutEvaluationRequest) -> QhHeldOutEvaluationResult:
-        """Run explicit diagnostic fitted-Q evaluation on a bundle's frozen test population.
+        """Run diagnostic fitted-Q evaluation on the bundle's frozen test population.
 
-        This operation is intentionally separate from :meth:`fit` and does not
-        provide endpoint-policy evidence; endpoint evaluation remains owned by
-        the online oracle contract.
+        Configuration equality identifies the intended paths but cannot prove
+        that immutable stores still occupy them. Evaluation therefore rebuilds
+        the dataset and rechecks its learning semantics, actor/geometry
+        contracts, full provenance, and ordered store-manifest hashes against
+        the verified bundle before materializing a test batch. The receipt binds
+        that observed provenance. This operation remains separate from
+        :meth:`fit` and provides no endpoint-policy evidence; endpoint
+        evaluation is owned by the online oracle contract.
+
+        Raises:
+            FileExistsError: If the receipt destination already exists.
+            ValueError: If the requested configuration or reconstructed test
+                population has drifted from the frozen bundle identity.
         """
 
         output = request.output_receipt_path.expanduser().resolve()
@@ -430,21 +440,29 @@ class QhExperiment:
         if expected_test != actual_test:
             raise ValueError("Q_H held-out diagnostic population does not match the frozen bundle test identity.")
         test = request.test.setup_target()
-        runtime = self.load_for_inference(request.bundle, device="cpu")
+        identity = manifest["identity"]
         module_config = QhLightningModuleConfig.model_validate(manifest["module_config"])
-        module = QhLightningModule(module_config, scorer=runtime.scorer)
-        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
+        objective_profile = identity["learning_contract"].get("objective_profile")
         data = QhDataModule(
             train=test,
             batch_size=int(self.config.batch_size),
             num_workers=int(self.config.num_workers),
             pin_memory=bool(self.config.pin_memory),
             persistent_workers=bool(self.config.persistent_workers),
-            seed=int(manifest["identity"]["seed"]),
+            seed=int(identity["seed"]),
             experiment_profile=module_config.experiment_profile,
-            objective_profile=self.config.objective_profile,
+            objective_profile=objective_profile,
+        )
+        _validate_bound_test_population(
+            manifest=manifest,
+            test=test,
+            data=data,
+            operation="held-out diagnostic",
         )
         data.test_dataset = test
+        runtime = self.load_for_inference(request.bundle, device="cpu")
+        module = QhLightningModule(module_config, scorer=runtime.scorer)
+        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
         trainer_config = self.config.trainer.model_copy(
             deep=True,
             update={
@@ -465,6 +483,14 @@ class QhExperiment:
             "endpoint_policy_evidence": False,
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
+            "test_provenance_sha256": _json_payload_hash(test.provenance),
+            "ordered_store_manifest_sha256s": _ordered_store_manifest_hashes(test.provenance),
+            "ordered_store_manifests_sha256": _json_payload_hash(_ordered_store_manifest_hashes(test.provenance)),
+            "bound_contract": {
+                "learning_contract_hash": identity["learning_contract_hash"],
+                "actor_state_contract_hash": identity["actor_state_contract_hash"],
+                "geometry_contract_hash": identity["geometry_contract_hash"],
+            },
             "test_loss_sum": float(module.test_loss_sum.item()),
             "test_row_count": int(module.test_row_count.item()),
         }
@@ -533,22 +559,12 @@ class QhExperiment:
             experiment_profile=module_config.experiment_profile,
             objective_profile=objective_profile,
         )
-        learning_payload = identity["learning_contract"]
-        bound_learning_contract = QhLearningContract(
-            data_contract=QhDataContract(**learning_payload["data_contract"]),
-            max_horizon=int(learning_payload["max_horizon"]),
-            horizon_weighting=str(learning_payload["horizon_weighting"]),
-            objective_profile=learning_payload["objective_profile"],
+        _validate_bound_test_population(
+            manifest=manifest,
+            test=test,
+            data=data,
+            operation="exact-Q2",
         )
-        if data.learning_contract.learning_semantics() != bound_learning_contract.learning_semantics():
-            raise ValueError("Q_H exact-Q2 test learning semantics drifted from the bundle.")
-        if data.actor_state_contract_hash != identity["actor_state_contract_hash"]:
-            raise ValueError("Q_H exact-Q2 test actor-state contract drifted from the bundle.")
-        if data.geometry_contract_hash != identity["geometry_contract_hash"]:
-            raise ValueError("Q_H exact-Q2 test geometry contract drifted from the bundle.")
-        expected_provenance = identity["dataset_provenance"]["test"]
-        if _jsonable(test.provenance) != expected_provenance:
-            raise ValueError("Q_H exact-Q2 test provenance drifted from the bundle.")
 
         device = _certification_device(request.device)
         runtime = self.load_for_inference(request.bundle, device=device)
@@ -1012,6 +1028,58 @@ def _ordered_store_manifest_hashes(provenance: dict[str, object]) -> list[str]:
             raise ValueError(f"Q_H dataset provenance store {index} has no manifest_sha256.")
         hashes.append(str(store["manifest_sha256"]))
     return hashes
+
+
+def _validate_bound_test_population(
+    *,
+    manifest: dict[str, Any],
+    test: Any,
+    data: QhDataModule,
+    operation: str,
+) -> None:
+    """Prove a reconstructed held-out population still matches its bundle.
+
+    A dataset configuration is an address-and-reader recipe, not immutable
+    population evidence: a store can be replaced in place while the serialized
+    request remains byte-identical. This boundary therefore compares the
+    reconstructed dataset's population-independent Bellman semantics,
+    actor-visible state carrier, privileged-geometry role, full stage
+    provenance, and ordered store manifests with the values observed at fit
+    publication. Both ordinary diagnostics and exact-Q2 certification call the
+    same proof so neither can issue a receipt for stale bundle identity.
+
+    Args:
+        manifest: Already verified inference-bundle manifest.
+        test: Reconstructed held-out chain dataset exposing contract and
+            provenance properties.
+        data: Data module admitted from exactly ``test`` under the bound
+            objective profile.
+        operation: Human-readable caller name used in fail-closed diagnostics.
+
+    Raises:
+        ValueError: If semantic, actor-state, geometry, provenance, or ordered
+            store-manifest identity differs from the frozen bundle.
+    """
+
+    identity = manifest["identity"]
+    learning_payload = identity["learning_contract"]
+    bound_learning_contract = QhLearningContract(
+        data_contract=QhDataContract(**learning_payload["data_contract"]),
+        max_horizon=int(learning_payload["max_horizon"]),
+        horizon_weighting=str(learning_payload["horizon_weighting"]),
+        objective_profile=learning_payload["objective_profile"],
+    )
+    if data.learning_contract.learning_semantics() != bound_learning_contract.learning_semantics():
+        raise ValueError(f"Q_H {operation} test learning semantics drifted from the bundle.")
+    if data.actor_state_contract_hash != identity["actor_state_contract_hash"]:
+        raise ValueError(f"Q_H {operation} test actor-state contract drifted from the bundle.")
+    if data.geometry_contract_hash != identity["geometry_contract_hash"]:
+        raise ValueError(f"Q_H {operation} test geometry contract drifted from the bundle.")
+    if _jsonable(test.provenance) != identity["dataset_provenance"]["test"]:
+        raise ValueError(f"Q_H {operation} test provenance drifted from the bundle.")
+    observed_manifests = _ordered_store_manifest_hashes(test.provenance)
+    if observed_manifests != identity["ordered_store_manifests"]["test"]:
+        raise ValueError(f"Q_H {operation} ordered test store manifests drifted from the bundle.")
 
 
 def _validate_artifact_name(name: str, raw_path: object) -> str:

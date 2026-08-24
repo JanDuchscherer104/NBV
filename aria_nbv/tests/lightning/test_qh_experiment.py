@@ -750,6 +750,18 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
     assert held_out_receipt["diagnostic_only"] is True
     assert held_out_receipt["endpoint_policy_evidence"] is False
+    assert (
+        held_out_receipt["test_provenance_sha256"]
+        == hashlib.sha256(
+            json.dumps(test_dataset.provenance, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    )
+    assert held_out_receipt["ordered_store_manifest_sha256s"] == []
+    assert held_out_receipt["bound_contract"] == {
+        "learning_contract_hash": training_receipt["learning_contract_hash"],
+        "actor_state_contract_hash": training_receipt["actor_state_contract_hash"],
+        "geometry_contract_hash": test_dataset.actor_state_contract.geometry_contract_hash,
+    }
 
     certification = experiment.certify_exact_q2(
         QhExactQ2CertificationRequest(
@@ -804,3 +816,15 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     repeated_receipt = json.loads(repeated.training_receipt_path.read_text(encoding="utf-8"))
     assert repeated_receipt["warm_start_parent_manifest_sha256"] == result.bundle.manifest_sha256
     assert repeated_receipt["optimizer_updates"] == training_receipt["optimizer_updates"]
+
+    test_dataset.provenance = {"scene": "same-path-replacement"}
+    drift_receipt = tmp_path / "held-out-after-replacement.json"
+    with pytest.raises(ValueError, match="held-out diagnostic test provenance drifted"):
+        experiment.evaluate_held_out(
+            QhHeldOutEvaluationRequest(
+                bundle=result.bundle,
+                test=request.test,
+                output_receipt_path=drift_receipt,
+            )
+        )
+    assert not drift_receipt.exists()
