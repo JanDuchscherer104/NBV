@@ -62,6 +62,7 @@ def load_result_snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
         raise ResultContractError("result.checkpoint_status must be pass, fail, or blocked")
     _validate_scalar_mapping(raw["metrics"], field="metrics", boolean=False)
     _validate_scalar_mapping(raw["hard_gates"], field="hard_gates", boolean=True)
+    _validate_evidence_series(raw.get("evidence_series", []))
     if raw["checkpoint_status"] == "pass" and not all(raw["hard_gates"].values()):
         raise ResultContractError("result.checkpoint_status cannot be pass when a hard gate failed")
     return raw, result_bytes
@@ -78,6 +79,24 @@ def _validate_scalar_mapping(value: Any, *, field: str, boolean: bool) -> None:
                 raise ResultContractError(f"result.{field}.{key} must be boolean")
         elif isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(item):
             raise ResultContractError(f"result.{field}.{key} must be a finite number")
+
+
+def _validate_evidence_series(value: Any) -> None:
+    """Require monotonic, finite evaluator measurements when a series is supplied."""
+    if not isinstance(value, list):
+        raise ResultContractError("result.evidence_series must be a list")
+    previous_step = 0
+    for index, point in enumerate(value):
+        if not isinstance(point, Mapping):
+            raise ResultContractError(f"result.evidence_series[{index}] must be an object")
+        step = point.get("step")
+        if isinstance(step, bool) or not isinstance(step, int) or step <= previous_step:
+            raise ResultContractError("result.evidence_series steps must be strictly increasing positive integers")
+        metrics = point.get("metrics")
+        _validate_scalar_mapping(metrics, field=f"evidence_series[{index}].metrics", boolean=False)
+        if not metrics:
+            raise ResultContractError(f"result.evidence_series[{index}].metrics must not be empty")
+        previous_step = step
 
 
 def result_sha256(result_bytes: bytes) -> str:
@@ -114,6 +133,15 @@ def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str
         },
     )
     try:
+        series = result.get("evidence_series", [])
+        for point in series:
+            run.log(
+                {
+                    "aria_autoresearch/acquisition_number": point["step"],
+                    **{f"aria_autoresearch/{key}": value for key, value in point["metrics"].items()},
+                },
+                step=point["step"],
+            )
         run.log({f"aria_autoresearch/{key}": value for key, value in result["metrics"].items()})
         artifact = wandb.Artifact(
             name=f"performance-goal-{result['goal_slug']}-{digest[:12]}",
