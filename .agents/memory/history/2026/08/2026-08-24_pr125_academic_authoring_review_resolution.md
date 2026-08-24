@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 679aa2f202bba9de04195de1088eeefbb3cbb983
+repo_head: f54e641926793c08e7a410a38392069867bde7b8
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -73,10 +73,9 @@ duplicating it in all three skills.
 - Baseline evidence includes ignored files, and proof compares every rendered
   PNG page identity with Poppler's bounded PDF page count.
 - Bubblewrap mounts only the sanitized subject, a separate receipt directory,
-  system runtime files, and the Codex auth file; its regression proves the
-  evaluator's absolute fixture path cannot be read.
-- The sandbox builder accepts an injected test auth file, keeping its
-  production auth requirement while allowing credential-free CI validation.
+  the required system runtime files, and an empty Codex home; it never mounts
+  host authentication, and its regression proves the evaluator's absolute
+  fixture path cannot be read.
 - Bubblewrap execution probes are conditional on a host Bubblewrap binary;
   every environment still checks the immutable-schema sandbox command shape.
 - The portable sandbox command-shape test uses a mounted system command rather
@@ -96,6 +95,14 @@ duplicating it in all three skills.
   and removed from the subject checkout; a process-group termination escalation
   bounds timeout cleanup, and Bubblewrap mounts the exact resolved Codex
   runtime rather than relying on its ambient PATH.
+- Trial and verifier receipts are opened with `O_NOFOLLOW`, verified regular,
+  and read under their byte bounds, so a sandbox-created symlink cannot turn a
+  report read into a host-file read.
+- Typst compilation and page rendering run inside a separate network-isolated
+  Bubblewrap namespace. The exact Typst executable and, when locally available,
+  its read-only package cache are mounted explicitly; rendering is skipped after
+  compilation failure. The trusted renderer is an attested evaluator fixture,
+  so `--head` cannot combine tested thesis sources with a different renderer.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -113,6 +120,8 @@ duplicating it in all three skills.
 - [e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e9e04fc26c78dcf4eae223f83bc71a9b9d6a43df) — test: keep the sandbox command contract portable
 - [f25dacd8a65e2d01b13335a431eabd0c7f88a486](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f25dacd8a65e2d01b13335a431eabd0c7f88a486) — implementation: isolate routing trials from Codex auth
 - [679aa2f202bba9de04195de1088eeefbb3cbb983](https://github.com/JanDuchscherer104/ARIA-NBV/commit/679aa2f202bba9de04195de1088eeefbb3cbb983) — test: keep verifier sandbox tests portable
+- [804930a42c748ad1b0f08dff9a4769455975c5b1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/804930a42c748ad1b0f08dff9a4769455975c5b1) — implementation: harden routing trial receipts and proof
+- [f54e641926793c08e7a410a38392069867bde7b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f54e641926793c08e7a410a38392069867bde7b8) — implementation: isolate Typst proof execution
 
 ## Verification
 
@@ -128,6 +137,7 @@ duplicating it in all three skills.
 - CI-equivalent scaffold verification with pytest supplied by `uv` — 94 passed; agent-status, governance, Graphify, and worktree setup checks passed.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 49 passed; Ruff and `git diff --check` passed.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 57 passed, including Bubblewrap proof that the subject cannot access `/codex-home/auth.json`; routing listing remains available without a broker and live execution fails closed when one is absent.
+- `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 64 passed, including a real isolated compile and render of the active thesis; Ruff and `git diff --check` passed.
 
 ## Canonical Owner Impact
 
