@@ -930,6 +930,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         assert f".omx/**/*{role}*review*" in ignored
         assert f".omx/**/*review*{role}*" in ignored
     assert ".omx/specs/**/*peer*review*/report.md" in ignored
+    assert ".omx/specs/**/*review*peer*/report.md" in ignored
     assert ".omx/specs/**" not in ignored.splitlines()
     ignored_role_reviews = subprocess.run(
         [
@@ -976,7 +977,9 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
             check=True,
             input=(
                 ".omx/specs/nested/thesis-peer-review/report.md\n"
+                ".omx/specs/nested/thesis-review-peer/report.md\n"
                 ".omx/specs/nested/accepted-spec/report.md\n"
+                ".omx/specs/nested/ordinary-report.md\n"
                 ".omx/specs/accepted-spec.md\n"
                 ".omx/plans/accepted-plan.md\n"
                 ".agents/memory/history/2026/08/eligible-debrief.md\n"
@@ -986,7 +989,8 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
             text=True,
         ).stdout.splitlines()
         assert isolated_ignored_paths == [
-            ".omx/specs/nested/thesis-peer-review/report.md"
+            ".omx/specs/nested/thesis-peer-review/report.md",
+            ".omx/specs/nested/thesis-review-peer/report.md",
         ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
