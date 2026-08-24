@@ -28,10 +28,11 @@ Adopt the final seminar view-jitter support for production candidate mixtures an
 Traced the mixture, orientation, rollout-config, live-app, visualization, test, and thesis owners. Replaced zero production mixture overrides with the existing symmetric 60-degree yaw and 30-degree pitch caps, rejected zero resolved mixture caps, retained per-row jitter provenance, and added a full-shell yaw--pitch support plot.
 
 ## Findings
-The single-family generator already defaulted to the seminar caps, but mixture presets, rollout configurations, and the live target-aware rollout builder overrode them to zero. The mixture validator now makes that production failure explicit. `candidate_generation.py` retains sampled yaw/pitch and resolved caps even when general debug collection is disabled, so `plotting.py` and the Candidates page can distinguish proposal support from downstream hard-rule rejection.
+The single-family generator already defaulted to the seminar caps, but mixture presets, rollout configurations, and the live target-aware rollout builder overrode them to zero. The mixture validator now makes that production failure explicit. `candidate_generation.py` retains sampled yaw/pitch, resolved caps, and a per-candidate bounded-support flag even when general debug collection is disabled, so `plotting.py` and the Candidates page can distinguish proposal support from downstream hard-rule rejection. Legacy zero-cap spherical samplers are marked uncapped and plotted on fixed spherical axes without a misleading zero-area box.
 
 ## Commits
 - [1c4ecd9751bb0371098f7e9be8c29cbc61550336](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1c4ecd9751bb0371098f7e9be8c29cbc61550336)
+- [6cde7ef77912fecde4c4277d31ce2cffee680721](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6cde7ef77912fecde4c4277d31ce2cffee680721)
 
 ## Candidate Owner Intent
 <!-- Omit this section unless the agent-behavior candidate-intent branch applies. -->
@@ -46,6 +47,7 @@ The single-family generator already defaulted to the seminar caps, but mixture p
 - 93 counterfactual rollout and live-panel tests passed.
 - 12 rollout-profile configuration tests passed; the attempted full campaign module was not a valid dirty-worktree check because campaign revision tests intentionally require a clean checkout.
 - `typst compile typst/thesis/main.typ` and `make typst-authoring-contract` passed.
+- The review regression suite passed 28 focused pose-generation, plotting, mixture, and Candidates-panel tests; it proves nonzero zero-cap spherical residuals remain visible on fixed yaw `[-180, 180]` and pitch `[-90, 90]` axes with no envelope rectangle.
 
 ## Canonical Owner Impact
 Updated the exact candidate-mixture/generation owners, active rollout configs, live candidate-generation UI, plotting helper, contract tests, and active thesis method section. No further canonical updates are pending for this slice.
