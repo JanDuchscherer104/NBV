@@ -850,7 +850,7 @@ def test_capture_and_routing_contracts() -> None:
         ROOT
         / ".agents"
         / "skills"
-        / "typst-authoring"
+        / "academic-writing"
         / "references"
         / "upstream-matt-writing.md",
     ):

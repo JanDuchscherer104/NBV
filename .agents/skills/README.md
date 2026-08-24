@@ -65,6 +65,13 @@ For an already-known exact owner, open that owner and its nearest `AGENTS.md`
 and stop retrieving. Use optional navigation, recall, or external-document
 references only when their branch condition is active.
 
+Academic work has three disjoint first owners: `academic-writing` constructs
+source-grounded arguments and accepted-content handoffs; `scientific-review`
+independently reviews an exact candidate without mutation; `typst-authoring`
+realizes accepted content, notation, citations, and rendered pages. Handoffs
+carry only candidate identity, evidence pointers, limitations, acceptance state,
+destination, and required proof; active sources remain durable truth.
+
 ## Upstream skills
 
 Byte-identical, separately pinned upstream bundles keep their upstream
