@@ -88,17 +88,20 @@ def _validate_verdict(payload: object, event_evidence: object) -> tuple[bool, st
 def _run_verifier(
     report: dict[str, object], checkout: Path, trial_dir: Path
 ) -> dict[str, Any]:
-    return trials.run_verifier(
-        report=report,
-        rubric={"trial": {"id": "trial"}},
-        rubric_commit="rubric",
-        checkout=checkout,
-        trial_dir=trial_dir,
-        model=None,
-        effort=None,
-        proxy_url=ROUTING_PROXY_URL,
-        timeout_seconds=1,
-    )
+    # Unit tests mock process execution. Supply a stable mounted executable so
+    # command construction stays portable on CI runners without Codex.
+    with patch.object(trials.shutil, "which", return_value="/usr/bin/true"):
+        return trials.run_verifier(
+            report=report,
+            rubric={"trial": {"id": "trial"}},
+            rubric_commit="rubric",
+            checkout=checkout,
+            trial_dir=trial_dir,
+            model=None,
+            effort=None,
+            proxy_url=ROUTING_PROXY_URL,
+            timeout_seconds=1,
+        )
 
 
 def _bounded_process_result(**overrides: object) -> dict[str, object]:
