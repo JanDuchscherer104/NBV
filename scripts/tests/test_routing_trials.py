@@ -788,7 +788,12 @@ def test_final_diff_evidence_is_host_generated_and_bounded(tmp_path: Path) -> No
     baseline = trials.run_git("rev-parse", "HEAD", cwd=checkout)
     source.write_text("after\n", encoding="utf-8")
 
-    evidence = trials._final_diff_evidence(checkout, baseline, trial_dir)
+    evidence = trials._final_diff_evidence(
+        checkout,
+        baseline,
+        ("docs/typst/thesis/section.typ",),
+        trial_dir,
+    )
 
     assert evidence["valid"] is True
     assert "-before" in evidence["content"]
@@ -995,8 +1000,8 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
     assert (
         verdict_schema["properties"]["evidence"]["maxItems"] == trials.VERDICT_MAX_ITEMS
     )
-    assert evidence_item["additionalProperties"] is False
-    assert set(evidence_item["required"]) == {
+    assert len(evidence_item["oneOf"]) == 2
+    assert set(evidence_item["oneOf"][0]["required"]) == {
         "event_index",
         "event_type",
         "item_type",
@@ -1553,6 +1558,34 @@ def test_verdict_rejects_duplicate_event_references() -> None:
     reference = _event_reference()
     assert not _validate_verdict(
         _verdict(evidence=[reference, reference]), _complete_event_evidence()
+    )[0]
+
+
+def test_workspace_write_verdict_requires_a_host_final_diff_reference() -> None:
+    final_diff = {"valid": True, "sha256": "a" * 64, "content": "diff"}
+    payload = _verdict(
+        evidence=[
+            _event_reference(),
+            {"kind": "final_diff", "sha256": "a" * 64, "claim": "source changed"},
+        ]
+    )
+    assert trials.validate_verdict(
+        payload,
+        trial_id="trial",
+        tested_commit="tested",
+        rubric_commit="rubric",
+        event_evidence=_complete_event_evidence(),
+        final_diff=final_diff,
+        require_final_diff=True,
+    ) == (True, "pass")
+    assert not trials.validate_verdict(
+        _verdict(),
+        trial_id="trial",
+        tested_commit="tested",
+        rubric_commit="rubric",
+        event_evidence=_complete_event_evidence(),
+        final_diff=final_diff,
+        require_final_diff=True,
     )[0]
 
 

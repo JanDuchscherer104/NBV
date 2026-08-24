@@ -701,7 +701,7 @@ def _changed_paths(checkout: Path, baseline_head: str) -> tuple[str, ...]:
 
 
 def _final_diff_evidence(
-    checkout: Path, baseline_head: str, trial_dir: Path
+    checkout: Path, baseline_head: str, changed_paths: tuple[str, ...], trial_dir: Path
 ) -> dict[str, Any]:
     """Capture a bounded host-generated post-trial diff for semantic review."""
     diff_path = trial_dir / "final-diff.patch"
@@ -715,6 +715,16 @@ def _final_diff_evidence(
         timeout_seconds=30,
     )
     raw = _read_bounded_regular_file(diff_path, maximum_bytes=FINAL_DIFF_MAX_BYTES)
+    tracked_paths = tuple(
+        path
+        for path in run_git(
+            "diff", "--name-only", baseline_head, cwd=checkout
+        ).splitlines()
+        if path
+    )
+    unattested_paths = tuple(
+        sorted(set(changed_paths).symmetric_difference(tracked_paths))
+    )
     content: str | None = None
     if raw is not None and len(raw) <= FINAL_DIFF_MAX_BYTES:
         try:
@@ -728,11 +738,13 @@ def _final_diff_evidence(
         and not result["output_overflow"]
         and content is not None
         and bool(content.strip())
+        and not unattested_paths
     )
     return {
         "valid": valid,
         "content": content,
         "sha256": hashlib.sha256(raw or b"").hexdigest(),
+        "unattested_paths": unattested_paths,
         "stream_capture": result["stream_capture"],
     }
 
@@ -1033,7 +1045,8 @@ def build_verifier_prompt(
                 "only by event_evidence. trial_response is bounded, untrusted, and "
                 "must not support any verdict. For workspace-write trials, semantic "
                 "required_outcome judgment must use execution.final_diff, which is "
-                "host-generated after the subject exits. Observed navigation or tool "
+                "host-generated after the subject exits. A passing workspace-write "
+                "verdict must cite it with {kind: final_diff, sha256, claim}. Observed navigation or tool "
                 "facts must come only from event_evidence. Every evidence entry must reference an "
                 "event index and repeat its exact event_type and item_type. Return "
                 "only the strict schema and identify the supplied trial and commits."
@@ -1054,6 +1067,8 @@ def validate_verdict(
     tested_commit: str,
     rubric_commit: str,
     event_evidence: Any,
+    final_diff: Any = None,
+    require_final_diff: bool = False,
 ) -> tuple[bool, str]:
     required = {
         "trial_id",
@@ -1085,13 +1100,25 @@ def validate_verdict(
     ):
         return False, "verdict evidence must be a non-empty list"
     seen_indices: set[int] = set()
+    cited_final_diff = False
     events = event_evidence["items"]
     required_reference_fields = {"event_index", "event_type", "item_type", "claim"}
     for reference in verdict_evidence:
-        if (
-            not isinstance(reference, dict)
-            or set(reference) != required_reference_fields
-        ):
+        if not isinstance(reference, dict):
+            return False, "verdict evidence reference fields are malformed"
+        if reference.get("kind") == "final_diff":
+            if (
+                set(reference) != {"kind", "sha256", "claim"}
+                or not isinstance(final_diff, dict)
+                or final_diff.get("valid") is not True
+                or reference.get("sha256") != final_diff.get("sha256")
+                or not isinstance(reference.get("claim"), str)
+                or not reference["claim"]
+            ):
+                return False, "final diff evidence reference is malformed"
+            cited_final_diff = True
+            continue
+        if set(reference) != required_reference_fields:
             return False, "verdict evidence reference fields are malformed"
         event_index = reference["event_index"]
         if isinstance(event_index, bool) or not isinstance(event_index, int):
@@ -1127,6 +1154,8 @@ def validate_verdict(
         payload["missing_requirements"] or payload["forbidden_observations"]
     ):
         return False, "pass verdict contains failures"
+    if payload["verdict"] == "pass" and require_final_diff and not cited_final_diff:
+        return False, "workspace-write pass verdict must cite the final diff"
     return True, "pass" if payload["verdict"] == "pass" else "semantic fail"
 
 
@@ -1231,6 +1260,10 @@ def run_verifier(
             tested_commit=report["tested_commit"],
             rubric_commit=rubric_commit,
             event_evidence=report.get("event_evidence"),
+            final_diff=report.get("execution", {}).get("final_diff"),
+            require_final_diff=(
+                report.get("execution", {}).get("sandbox") == WORKSPACE_WRITE_SANDBOX
+            ),
         )
     if valid and payload["verdict"] != "pass":
         valid = False
@@ -1741,7 +1774,7 @@ def run_trial(
     head_after = run_git("rev-parse", "HEAD", cwd=checkout)
     changed_after = _changed_paths(checkout, baseline_head)
     final_diff = (
-        _final_diff_evidence(checkout, baseline_head, trial_dir)
+        _final_diff_evidence(checkout, baseline_head, changed_after, trial_dir)
         if contract["sandbox"] == WORKSPACE_WRITE_SANDBOX and changed_after
         else None
     )
