@@ -27,6 +27,7 @@ from ..data_handling.qh_data.views import (
 )
 from ..utils import Stage, TargetConfig
 from ..vin.models.target_finite_horizon import QhScoreOutput
+from ..vin.ordinal import coral_loss
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 
 
@@ -40,7 +41,7 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
     """Optional stateful schedule stepped once after each real optimizer update."""
 
     huber_delta: FiniteFloat = Field(default=1.0, gt=0.0)
-    """Positive transition point for selected-action Huber loss."""
+    """Positive transition point for the direct-regression decoder's Huber loss."""
 
     feasibility_loss_weight: FiniteFloat = Field(default=0.0, ge=0.0)
     """Auxiliary binary-feasibility loss weight; zero preserves the A1 control."""
@@ -96,7 +97,9 @@ class QhLightningModule(pl.LightningModule):
     ranks contributing a zero connected to the online scorer graph.
 
     Args:
-        config: Optimizer, scheduler, Huber, and target-sync policy.
+        config: Optimizer, scheduler, regression-Huber, feasibility, and
+            target-sync policy. A CORAL scorer supplies its ordinal loss
+            metadata through :class:`QhScoreOutput`.
         scorer: Required actor-only module returning :class:`QhScoreOutput`.
     """
 
@@ -300,6 +303,13 @@ class QhLightningModule(pl.LightningModule):
             online_values=online_output.conditional_q,
             target_values=target_output.conditional_q,
         )
+        self._log_coral_metrics(
+            Stage.TRAIN,
+            batch=batch,
+            output=online_output,
+            targets=targets,
+            admitted=admitted,
+        )
         return loss.detach()
 
     def on_train_epoch_start(self) -> None:
@@ -343,7 +353,7 @@ class QhLightningModule(pl.LightningModule):
         self._log_aggregate(Stage.TEST, self.test_loss_sum, self.test_row_count)
 
     def compute_fitted_q_loss(self, batch: QhBatch) -> tuple[Tensor, Tensor, Tensor]:
-        """Return local selected-action Huber loss, targets, and admission mask."""
+        """Return selected-action decoder loss, fitted-Q targets, and support."""
 
         losses, targets, admitted, _online, _target = self._fitted_q_components(batch)
         return losses.sum() / admitted.sum().clamp_min(1), targets, admitted
@@ -459,13 +469,55 @@ class QhLightningModule(pl.LightningModule):
 
         predictions = online_values[admitted].gather(-1, safe_selected[admitted].unsqueeze(-1)).squeeze(-1)
         self._require_finite(predictions, "selected online predictions used for fitted-Q loss")
-        losses = functional.huber_loss(
-            predictions,
-            targets[admitted].detach(),
-            delta=self.config.huber_delta,
-            reduction="none",
+        losses = self._value_losses(
+            online_output,
+            predictions=predictions,
+            targets=targets[admitted].detach(),
+            admitted=admitted,
+            selected=safe_selected,
         )
         return losses, targets.detach(), admitted, online_output, target_output
+
+    def _value_losses(
+        self,
+        output: QhScoreOutput,
+        *,
+        predictions: Tensor,
+        targets: Tensor,
+        admitted: Tensor,
+        selected: Tensor,
+    ) -> Tensor:
+        r"""Return per-row loss for the scorer's configured value decoder.
+
+        Regression applies Huber loss directly in fitted-Q units. CORAL maps
+        the same continuous targets to fixed ordinal classes using the bin
+        edges attached by the decoder, then applies cumulative-threshold BCE.
+        Bellman recursion is unchanged: it always bootstraps from decoded
+        ``conditional_q`` in continuous Q units. Hard-invalid, unsupported,
+        and padded rows are removed by ``admitted`` before either objective.
+        """
+
+        auxiliary = output.value_auxiliary
+        if auxiliary is None:
+            return functional.huber_loss(
+                predictions,
+                targets,
+                delta=self.config.huber_delta,
+                reduction="none",
+            )
+
+        logits_by_row = auxiliary.logits[admitted]
+        num_thresholds = logits_by_row.shape[-1]
+        gather_index = selected[admitted].reshape(-1, 1, 1).expand(-1, 1, num_thresholds)
+        selected_logits = logits_by_row.gather(1, gather_index).squeeze(1)
+        self._require_finite(selected_logits, "selected CORAL logits used for fitted-Q loss")
+        labels = torch.bucketize(targets, auxiliary.bin_edges).to(dtype=torch.int64)
+        return coral_loss(
+            selected_logits,
+            labels,
+            num_classes=num_thresholds + 1,
+            reduction="none",
+        )
 
     def _evaluation_step(self, batch: QhBatch, stage: Stage) -> Tensor:
         if self._effective_world_size() != 1:
@@ -486,6 +538,13 @@ class QhLightningModule(pl.LightningModule):
                 admitted=admitted,
                 online_values=online_output.conditional_q,
                 target_values=target_output.conditional_q,
+            )
+            self._log_coral_metrics(
+                stage,
+                batch=batch,
+                output=online_output,
+                targets=_targets,
+                admitted=admitted,
             )
         elif bool(batch.selected_train_mask.any()):
             self._log_unsupported_backup_metrics(stage, batch=batch)
@@ -524,6 +583,77 @@ class QhLightningModule(pl.LightningModule):
                 reduce_fx="sum" if name == "nonfinite_valid_values" else "mean",
             )
         self._log_unsupported_backup_metrics(stage, batch=batch)
+
+    def _log_coral_metrics(
+        self,
+        stage: Stage,
+        *,
+        batch: QhBatch,
+        output: QhScoreOutput,
+        targets: Tensor,
+        admitted: Tensor,
+    ) -> None:
+        r"""Report CORAL support saturation and threshold-order diagnostics.
+
+        CORAL supplies ordinal order but not continuous metric distance. The
+        configured representatives create that extra interpretation and bound
+        the decoded scalar. This diagnostic therefore counts fitted-Q targets
+        below or above the outer representatives, as well as targets assigned
+        to either open-ended outer class. It also reports adjacent cumulative
+        probabilities that violate :math:`P(y>k+1)\leq P(y>k)` before the
+        inference decoder repairs class marginals.
+
+        Training counts are explicitly all-reduced before fractions are
+        formed, avoiding rank-mean bias when admitted-row counts differ.
+        Validation and test are already restricted to one device.
+        """
+
+        auxiliary = output.value_auxiliary
+        if auxiliary is None or not bool(admitted.any()):
+            return
+        fitted_targets = targets[admitted]
+        labels = torch.bucketize(fitted_targets, auxiliary.bin_edges)
+        logits_by_row = auxiliary.logits[admitted]
+        num_thresholds = logits_by_row.shape[-1]
+        selected = batch.supervision.selected_index.long().clamp(0, output.conditional_q.shape[-1] - 1)
+        gather_index = selected[admitted].reshape(-1, 1, 1).expand(-1, 1, num_thresholds)
+        selected_logits = logits_by_row.gather(1, gather_index).squeeze(1)
+        probabilities_gt = torch.sigmoid(selected_logits)
+        violation_count = (
+            (probabilities_gt[..., 1:] > probabilities_gt[..., :-1]).sum()
+            if num_thresholds > 1
+            else fitted_targets.new_zeros((), dtype=torch.int64)
+        )
+        pair_count = fitted_targets.numel() * max(num_thresholds - 1, 0)
+        counts = torch.stack(
+            (
+                fitted_targets.lt(auxiliary.bin_values[0]).sum(),
+                fitted_targets.gt(auxiliary.bin_values[-1]).sum(),
+                (labels.eq(0) | labels.eq(num_thresholds)).sum(),
+                violation_count,
+                fitted_targets.new_tensor(fitted_targets.numel(), dtype=torch.int64),
+                fitted_targets.new_tensor(pair_count, dtype=torch.int64),
+            )
+        ).to(dtype=torch.float64)
+        if stage is Stage.TRAIN and self._distributed():
+            torch.distributed.all_reduce(counts, op=torch.distributed.ReduceOp.SUM)
+        below, above, outer, violations, row_count, ordered_pair_count = counts.unbind()
+        metrics = {
+            "coral_target_below_support_fraction": below / row_count.clamp_min(1),
+            "coral_target_above_support_fraction": above / row_count.clamp_min(1),
+            "coral_outer_class_fraction": outer / row_count.clamp_min(1),
+            "coral_monotonicity_violation_rate": violations / ordered_pair_count.clamp_min(1),
+        }
+        training = stage is Stage.TRAIN
+        for name, value in metrics.items():
+            self.log(
+                f"{stage.value}/{name}",
+                value.float(),
+                on_step=training,
+                on_epoch=not training,
+                sync_dist=False,
+                batch_size=max(int(row_count.item()), 1),
+            )
 
     def _log_unsupported_backup_metrics(self, stage: Stage, *, batch: QhBatch) -> None:
         selected = batch.selected_train_mask
@@ -659,6 +789,38 @@ class QhLightningModule(pl.LightningModule):
                 raise ValueError(f"Q_H scorer {name} must use float32 dtype, got {values.dtype}.")
             if values.device != actor.action_mask.device:
                 raise ValueError(f"Q_H scorer {name} must remain on the actor device.")
+        auxiliary = output.value_auxiliary
+        if auxiliary is not None:
+            logits = auxiliary.logits
+            if not isinstance(logits, Tensor) or logits.shape[:3] != expected or logits.ndim != 4:
+                actual = getattr(logits, "shape", type(logits).__name__)
+                raise ValueError(f"Q_H scorer CORAL logits must have shape (B,S,N,K-1), got {actual}.")
+            if logits.shape[-1] < 1 or logits.dtype is not torch.float32 or logits.device != actor.action_mask.device:
+                raise ValueError("Q_H scorer CORAL logits require K-1 >= 1, float32 dtype, and the actor device.")
+            edges = auxiliary.bin_edges
+            if (
+                not isinstance(edges, Tensor)
+                or edges.shape != (logits.shape[-1],)
+                or edges.dtype is not torch.float32
+                or edges.device != actor.action_mask.device
+                or not bool(torch.isfinite(edges).all())
+                or not bool((edges[1:] > edges[:-1]).all())
+            ):
+                raise ValueError("Q_H scorer CORAL bin edges must be finite, strictly increasing float32[K-1].")
+            values = auxiliary.bin_values
+            if (
+                not isinstance(values, Tensor)
+                or values.shape != (logits.shape[-1] + 1,)
+                or values.dtype is not torch.float32
+                or values.device != actor.action_mask.device
+                or not bool(torch.isfinite(values).all())
+                or not bool((values[1:] > values[:-1]).all())
+                or not bool(((values[:-1] <= edges) & (edges <= values[1:])).all())
+            ):
+                raise ValueError(
+                    "Q_H scorer CORAL representatives must be finite, strictly increasing float32[K] "
+                    "with each edge between adjacent values."
+                )
         return output
 
     @staticmethod

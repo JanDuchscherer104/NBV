@@ -10,11 +10,27 @@ from __future__ import annotations
 from .heads import VinScorerHead, VinScorerHeadConfig
 from .normalization import largest_divisor_leq
 from .pooling import PoseConditionedGlobalPool
+from .qh_value_decoders import (
+    QhCoralAuxiliary,
+    QhCoralValueDecoder,
+    QhCoralValueDecoderConfig,
+    QhDecodedValue,
+    QhRegressionValueDecoder,
+    QhRegressionValueDecoderConfig,
+    QhValueDecoderConfig,
+)
 from .scene_field import SceneFieldProjection, SceneFieldProjectionConfig
 from .semidense_grid import SemidenseGridEncoder, SemidenseGridEncoderConfig
 
 __all__ = [
     "PoseConditionedGlobalPool",
+    "QhCoralAuxiliary",
+    "QhCoralValueDecoder",
+    "QhCoralValueDecoderConfig",
+    "QhDecodedValue",
+    "QhRegressionValueDecoder",
+    "QhRegressionValueDecoderConfig",
+    "QhValueDecoderConfig",
     "SceneFieldProjection",
     "SceneFieldProjectionConfig",
     "SemidenseGridEncoder",

@@ -30,6 +30,7 @@ from aria_nbv.lightning.qh_module import QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from aria_nbv.vin.models.target_finite_horizon import TargetFiniteHorizonScorerConfig
+from aria_nbv.vin.modules.qh_value_decoders import QhCoralValueDecoderConfig
 from tests.data_handling.test_qh import _chain
 from tests.lightning.test_qh_module import _ChainDataset
 from tests.vin.test_target_finite_horizon import _actor
@@ -42,6 +43,30 @@ def _experiment() -> QhExperiment:
             attention_heads=4,
             dropout=0.0,
             max_horizon=4,
+        ),
+        module=QhLightningModuleConfig(
+            actor_state_contract_hash="bound-during-fit",
+            learning_contract_hash="bound-during-fit",
+            lr_scheduler=None,
+        ),
+    )
+    return config.setup_target()
+
+
+def _coral_experiment() -> QhExperiment:
+    """Return the same experiment contract with a fixed three-class Q support."""
+
+    config = QhExperimentConfig(
+        scorer=TargetFiniteHorizonScorerConfig(
+            hidden_dim=32,
+            attention_heads=4,
+            dropout=0.0,
+            max_horizon=4,
+            value_decoder=QhCoralValueDecoderConfig(
+                bin_edges=(-0.5, 0.5),
+                bin_values=(-1.0, 0.0, 1.0),
+                preinit_bias=False,
+            ),
         ),
         module=QhLightningModuleConfig(
             actor_state_contract_hash="bound-during-fit",
@@ -127,6 +152,49 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
         text=True,
     )
     assert probe.stdout.strip() == str(expected_rank.tolist())
+
+
+def test_qh_coral_bundle_round_trip_preserves_support_thresholds_and_ranking(tmp_path) -> None:
+    torch.manual_seed(19)
+    experiment = _coral_experiment()
+    scorer = experiment.config.scorer.setup_target().eval()
+    actor = _actor()
+    expected = scorer(actor)
+    expected_rank = expected.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1)
+    bundle_dir = tmp_path / "coral-bundle"
+    bundle_dir.mkdir()
+    module_config, identity = _publish_contracts(experiment)
+    manifest = experiment._publish_bundle(  # noqa: SLF001
+        bundle_dir,
+        scorer,
+        module_config=module_config,
+        identity=identity,
+        artifact_hashes=_stub_artifacts(bundle_dir),
+    )
+    ref = QhInferenceBundleRef(
+        bundle_path=bundle_dir,
+        schema_version=QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
+        manifest_sha256=manifest["manifest_sha256"],
+    )
+
+    runtime = QhExperiment.load_for_inference(ref, device="cpu")
+    actual = runtime.scorer(actor)
+
+    assert manifest["scorer_config"]["value_decoder"] == {
+        "kind": "coral",
+        "bin_edges": [-0.5, 0.5],
+        "bin_values": [-1.0, 0.0, 1.0],
+        "preinit_bias": False,
+    }
+    assert expected.value_auxiliary is not None
+    assert actual.value_auxiliary is not None
+    assert torch.equal(actual.conditional_q, expected.conditional_q)
+    assert torch.equal(actual.value_auxiliary.logits, expected.value_auxiliary.logits)
+    assert torch.equal(actual.value_auxiliary.bin_edges, expected.value_auxiliary.bin_edges)
+    assert torch.equal(
+        actual.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1),
+        expected_rank,
+    )
 
 
 def test_qh_bundle_detects_manifest_and_state_mutation(tmp_path) -> None:

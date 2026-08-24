@@ -18,6 +18,7 @@ from aria_nbv.vin.models.target_finite_horizon import (
     TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
 )
+from aria_nbv.vin.modules.qh_value_decoders import QhCoralValueDecoderConfig
 from tests.data_handling.test_qh import _chain, _snippet
 
 
@@ -51,6 +52,25 @@ def _scorer() -> TargetFiniteHorizonScorer:
     return scorer
 
 
+def _coral_scorer() -> TargetFiniteHorizonScorer:
+    """Return a deterministic scorer with a three-class ordinal value head."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        attention_heads=4,
+        dropout=0.0,
+        max_horizon=4,
+        value_decoder=QhCoralValueDecoderConfig(
+            bin_edges=(-0.5, 0.5),
+            bin_values=(-1.0, 0.0, 1.0),
+            preinit_bias=False,
+        ),
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
 def test_qh_scorer_output_matches_actor_candidate_axes_and_is_deterministic() -> None:
     actor = _actor()
     scorer = _scorer()
@@ -74,6 +94,27 @@ def test_qh_scorer_returns_conditional_q_and_feasibility_logits() -> None:
     assert output.feasibility_logits.shape == actor.action_mask.shape
     assert output.conditional_q.dtype is torch.float32
     assert output.feasibility_logits.dtype is torch.float32
+    assert output.value_auxiliary is None
+
+
+def test_qh_coral_scorer_preserves_scalar_contract_and_attaches_thresholds() -> None:
+    actor = _actor()
+    output = _coral_scorer()(actor)
+    materialized = actor.candidate_mask & actor.step_mask.unsqueeze(-1)
+
+    assert output.value_auxiliary is not None
+    assert output.conditional_q.shape == actor.action_mask.shape
+    assert output.value_auxiliary.logits.shape == (*actor.action_mask.shape, 2)
+    assert output.value_auxiliary.logits.dtype is torch.float32
+    assert output.value_auxiliary.bin_edges.tolist() == [-0.5, 0.5]
+    assert output.value_auxiliary.bin_values.tolist() == [-1.0, 0.0, 1.0]
+    assert torch.isfinite(output.value_auxiliary.logits[materialized]).all()
+    assert torch.equal(
+        output.value_auxiliary.logits[~materialized],
+        torch.zeros_like(output.value_auxiliary.logits[~materialized]),
+    )
+    assert bool((output.conditional_q[materialized] >= -1.0).all())
+    assert bool((output.conditional_q[materialized] <= 1.0).all())
 
 
 def test_qh_scorer_explicit_remaining_horizon_matches_default_query() -> None:
@@ -140,6 +181,21 @@ def test_qh_scorer_raw_outputs_are_independent_of_action_mask() -> None:
     assert torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
 
 
+def test_qh_coral_thresholds_are_independent_of_action_mask() -> None:
+    actor = _actor()
+    scorer = _coral_scorer()
+    changed_mask = actor.action_mask.clone()
+    changed_mask[..., 0] = ~changed_mask[..., 0]
+
+    baseline = scorer(actor)
+    changed = scorer(replace(actor, action_mask=changed_mask))
+
+    assert baseline.value_auxiliary is not None
+    assert changed.value_auxiliary is not None
+    assert torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(changed.value_auxiliary.logits, baseline.value_auxiliary.logits)
+
+
 def test_qh_scorer_materialized_candidate_rows_are_finite_when_not_action_selectable() -> None:
     actor = _actor()
     action_mask = actor.action_mask.clone()
@@ -189,6 +245,30 @@ def test_qh_scorer_candidate_permutation_preserves_both_output_heads() -> None:
     assert torch.allclose(
         actual.feasibility_logits,
         expected.feasibility_logits[:, :, permutation],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_qh_coral_scorer_candidate_permutation_preserves_thresholds() -> None:
+    actor = _actor()
+    scorer = _coral_scorer()
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+
+    expected = scorer(actor)
+    actual = scorer(permuted)
+
+    assert expected.value_auxiliary is not None
+    assert actual.value_auxiliary is not None
+    assert torch.allclose(
+        actual.value_auxiliary.logits,
+        expected.value_auxiliary.logits[:, :, permutation],
         atol=1e-6,
         rtol=1e-6,
     )
