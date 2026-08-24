@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 9f08d5586d8455642dfdc51bfdf8445203e533cb
+repo_head: b36b376487cfb5704c5e15fb626ebb404a25a93a
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -83,6 +83,11 @@ duplicating it in all three skills.
   receipt, trial receipts are checked against that canonical schema before
   adjudication, and verifier stdout/stderr now have the same bounded capture
   and fail-closed overflow behavior as subject execution.
+- Host-captured streams, final reports, and verifier output now remain outside
+  the model-writable subject receipt. Both schemas are frozen evaluator inputs
+  and removed from the subject checkout; a process-group termination escalation
+  bounds timeout cleanup, and Bubblewrap mounts the exact resolved Codex
+  runtime rather than relying on its ambient PATH.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -96,6 +101,7 @@ duplicating it in all three skills.
 - [e2348b3091932c882e7d8c55b447e86c5db78388](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e2348b3091932c882e7d8c55b447e86c5db78388) — implementation: isolate routing trial subjects
 - [6393da2cae8f4e911f8f86bf5a2d851b67d0bf25](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6393da2cae8f4e911f8f86bf5a2d851b67d0bf25) — test: make routing isolation portable
 - [9f08d5586d8455642dfdc51bfdf8445203e533cb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/9f08d5586d8455642dfdc51bfdf8445203e533cb) — implementation: bound and validate routing receipts
+- [b36b376487cfb5704c5e15fb626ebb404a25a93a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b36b376487cfb5704c5e15fb626ebb404a25a93a) — implementation: isolate evaluator receipts and runtime
 
 ## Verification
 
@@ -107,6 +113,8 @@ duplicating it in all three skills.
 - `git diff --check` and routing fixture JSON/JSONL parsing passed.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 47 passed, including real local Bubblewrap probes.
 - CI-equivalent scaffold verification with pytest supplied by `uv` — 92 passed; agent-status, governance, Graphify, and worktree setup checks passed.
+- `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 49 passed, including process-group timeout escalation and exact Codex-runtime Bubblewrap proof.
+- CI-equivalent scaffold verification with pytest supplied by `uv` — 94 passed; agent-status, governance, Graphify, and worktree setup checks passed.
 
 ## Canonical Owner Impact
 
