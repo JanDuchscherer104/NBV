@@ -231,6 +231,37 @@ def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) ->
     assert "expected_owner_paths" not in " ".join(command)
 
 
+def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    receipt_dir = tmp_path / "receipt"
+    checkout.mkdir()
+    receipt_dir.mkdir()
+    evaluator_fixture = ROOT / trials.RUBRIC_RELATIVE
+    command = trials._subject_sandbox_command(
+        codex_command=["/usr/bin/test", "!", "-e", str(evaluator_fixture)],
+        checkout=checkout,
+        receipt_dir=receipt_dir,
+        sandbox=trials.READ_ONLY_SANDBOX,
+    )
+
+    subprocess.run(command, check=True)
+
+
+def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    receipt_dir = tmp_path / "receipt"
+    checkout.mkdir()
+    receipt_dir.mkdir()
+    command = trials._subject_sandbox_command(
+        codex_command=["codex", "--version"],
+        checkout=checkout,
+        receipt_dir=receipt_dir,
+        sandbox=trials.READ_ONLY_SANDBOX,
+    )
+
+    subprocess.run(command, check=True, capture_output=True, text=True)
+
+
 def test_workspace_write_contract_requires_source_change_and_typst_proof() -> None:
     contract = trials.execution_contract(
         {

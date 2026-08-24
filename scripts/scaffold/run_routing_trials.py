@@ -262,6 +262,79 @@ def _build_codex_command(
     return command
 
 
+def _subject_sandbox_command(
+    *,
+    codex_command: list[str],
+    checkout: Path,
+    receipt_dir: Path,
+    sandbox: str,
+) -> list[str]:
+    """Run Codex where only the sanitized subject and receipt mount are visible."""
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+    auth_path = codex_home / "auth.json"
+    if not auth_path.is_file():
+        raise RuntimeError("routing trials require a readable Codex auth file")
+    subject_bind = "--ro-bind" if sandbox == READ_ONLY_SANDBOX else "--bind"
+    return [
+        "bwrap",
+        "--unshare-all",
+        "--share-net",
+        "--die-with-parent",
+        "--clearenv",
+        "--setenv",
+        "PATH",
+        "/usr/local/bin:/usr/bin:/bin",
+        "--setenv",
+        "HOME",
+        "/home/codex",
+        "--setenv",
+        "CODEX_HOME",
+        "/codex-home",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/etc",
+        "/etc",
+        "--symlink",
+        "usr/bin",
+        "/bin",
+        "--symlink",
+        "usr/sbin",
+        "/sbin",
+        "--symlink",
+        "usr/lib",
+        "/lib",
+        "--symlink",
+        "usr/lib64",
+        "/lib64",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--dir",
+        "/home",
+        "--dir",
+        "/home/codex",
+        "--dir",
+        "/codex-home",
+        "--ro-bind",
+        str(auth_path),
+        "/codex-home/auth.json",
+        subject_bind,
+        str(checkout),
+        "/workspace",
+        "--bind",
+        str(receipt_dir),
+        "/receipt",
+        "--chdir",
+        "/workspace",
+        *codex_command,
+    ]
+
+
 def execution_contract(rubric: dict[str, Any]) -> dict[str, Any]:
     """Return the bounded execution contract for one hidden routing fixture."""
     sandbox = rubric.get("execution_mode", READ_ONLY_SANDBOX)
@@ -999,13 +1072,21 @@ def run_trial(
     stderr_path = trial_dir / "stderr.txt"
     trial_response_path = trial_dir / "trial-response.json"
     final_report = trial_dir / "report.json"
+    trial_schema_path = trial_dir / REPORT_SCHEMA.name
+    shutil.copyfile(REPORT_SCHEMA, trial_schema_path)
     contract = execution_contract(rubric)
-    command = _build_codex_command(
-        checkout=checkout,
-        output_schema=REPORT_SCHEMA,
-        output_report=trial_response_path,
+    codex_command = _build_codex_command(
+        checkout=Path("/workspace"),
+        output_schema=Path("/receipt") / trial_schema_path.name,
+        output_report=Path("/receipt") / trial_response_path.name,
         model=model,
         effort=effort,
+        sandbox=contract["sandbox"],
+    )
+    command = _subject_sandbox_command(
+        codex_command=codex_command,
+        checkout=checkout,
+        receipt_dir=trial_dir,
         sandbox=contract["sandbox"],
     )
     baseline_head = run_git("rev-parse", "HEAD", cwd=checkout)
@@ -1024,7 +1105,7 @@ def run_trial(
         try:
             process = subprocess.Popen(
                 command,
-                cwd=ROOT,
+                cwd=checkout,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -1098,7 +1179,7 @@ def run_trial(
         "codex_version": codex_version,
         "requested_model": model,
         "requested_effort": effort,
-        "command_flags": command[1:-1],
+        "command_flags": codex_command[1:-1],
     }
     report = {
         "trial_id": trial_id,
