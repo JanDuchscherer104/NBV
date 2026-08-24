@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: f54e641926793c08e7a410a38392069867bde7b8
+repo_head: 5bfe12c81132156c097cd99fb2a4185751dde6f5
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -103,6 +103,10 @@ duplicating it in all three skills.
   its read-only package cache are mounted explicitly; rendering is skipped after
   compilation failure. The trusted renderer is an attested evaluator fixture,
   so `--head` cannot combine tested thesis sources with a different renderer.
+- Workspace-write layout-repair trials now require the same active-source diff
+  and Typst receipt as claim and empirical revisions. Trial and verifier final
+  messages are derived from bounded host-captured JSONL, and the verifier runs
+  in an empty evaluator-owned checkout rather than the modified subject.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -122,6 +126,7 @@ duplicating it in all three skills.
 - [679aa2f202bba9de04195de1088eeefbb3cbb983](https://github.com/JanDuchscherer104/ARIA-NBV/commit/679aa2f202bba9de04195de1088eeefbb3cbb983) — test: keep verifier sandbox tests portable
 - [804930a42c748ad1b0f08dff9a4769455975c5b1](https://github.com/JanDuchscherer104/ARIA-NBV/commit/804930a42c748ad1b0f08dff9a4769455975c5b1) — implementation: harden routing trial receipts and proof
 - [f54e641926793c08e7a410a38392069867bde7b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f54e641926793c08e7a410a38392069867bde7b8) — implementation: isolate Typst proof execution
+- [5bfe12c81132156c097cd99fb2a4185751dde6f5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5bfe12c81132156c097cd99fb2a4185751dde6f5) — implementation: isolate routing adjudication evidence
 
 ## Verification
 
