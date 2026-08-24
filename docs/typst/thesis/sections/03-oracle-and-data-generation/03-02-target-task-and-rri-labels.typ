@@ -267,7 +267,7 @@ This thesis therefore treats the metric as an operational estimand over a frozen
 
 === Target-Specific @relative-reconstruction-improvement:short
 
-The thesis objective is not the absolute point--mesh error alone, but its normalized reduction after a fixed acquisition budget. Root normalization makes gains dimensionless and keeps every step on one rollout-specific denominator, so equal-horizon returns telescope to the endpoint change when the discount is unity.
+The thesis objective is not the absolute point--mesh error alone, but its normalized reduction after a fixed acquisition budget. It distinguishes state-relative RRI, the additive target-root reward, and endpoint gain: all are dimensionless reductions of the same target-cropped error, but their denominators and scientific roles differ.
 
 The state-relative marginal target RRI remains the VIN-compatible candidate diagnostic:
 
@@ -287,7 +287,7 @@ $
   #eqs.rl.target_root_gain_reward
 $
 
-Its undiscounted selected-chain sum does telescope under the frozen sequential error pipeline:
+With matched sequential states and unit discount, its selected-chain sum is the root-normalized endpoint difference under that same clamped root denominator:
 
 $
   #eqs.rl.cumulative_target_root_gain
@@ -311,4 +311,4 @@ $
   #eqs.entity.log_gain
 $
 
-#symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. Root-normalized gains telescope to endpoint gain when the discount is unity and geometry, horizon, and acquisition budget are matched. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.
+#symb.entity.endpoint_gain is the fixed-budget evaluation metric, #symb.entity.return_h is the learning return, and #symb.entity.log_gain is a sensitivity diagnostic. The endpoint equation uses $Delta_0^e + epsilon$, whereas the additive target-root reward uses $max(Delta_0^e, epsilon)$; the two are therefore not canonically interchangeable, even when geometry, horizon, and acquisition budget match. State-relative one-step @relative-reconstruction-improvement:short remains a VIN-compatible diagnostic. The resolved manifest must freeze the discount, clipping, target cap, crop policy, and all evaluation-geometry parameters for each reported experiment.

@@ -505,7 +505,11 @@ class ProjectionTests(unittest.TestCase):
                 owner = self.fixture.root / relative
                 original = owner.read_bytes()
                 outside = self.fixture.root.parent / f"outside-owner-{index}"
-                outside.write_bytes(original)
+                outside.write_bytes(
+                    b"\xff"
+                    if relative.startswith(("docs/references", "docs/literature"))
+                    else original
+                )
                 owner.unlink()
                 owner.symlink_to(outside)
                 try:

@@ -58,6 +58,15 @@ class SelectionTests(unittest.TestCase):
             'pip install --upgrade pip pytest PyYAML "graphifyy==0.9.48"',
             workflow,
         )
+        pdf_validator = workflow.split(
+            "      - name: Install PDF evidence validator\n", 1
+        )[1].split("      - name: Set up uv\n", 1)[0]
+        self.assertIn("if: steps.impact.outputs.docs == 'true'", pdf_validator)
+        self.assertIn("sudo apt-get update", pdf_validator)
+        self.assertIn(
+            "sudo apt-get install --no-install-recommends --yes poppler-utils",
+            pdf_validator,
+        )
         self.assertIn(
             "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0",
             workflow,
@@ -126,6 +135,7 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertIn("python3 scripts/tests/test_graphify_worktree_seed.py", workflow)
         self.assertIn('"scripts/build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/literature_catalog.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
         self.assertIn('"scripts/scaffold_audit.py"', workflow)
@@ -145,6 +155,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/setup_worktree_env.sh"', workflow)
         self.assertIn('"scripts/ci_impact.py"', workflow)
         self.assertIn('"scripts/tests/test_build_graphify_projection.py"', workflow)
+        self.assertIn('"scripts/tests/test_thesis_literature_provenance.py"', workflow)
         self.assertIn('"scripts/tests/test_ci_impact.py"', workflow)
         self.assertIn('"scripts/debrief_index.py"', workflow)
         self.assertIn('"scripts/debrief_nudge.sh"', workflow)
@@ -216,7 +227,9 @@ class SelectionTests(unittest.TestCase):
             ".configs/example.toml": {"package"},
             ".graphifyignore": {"docs"},
             "scripts/build_graphify_projection.py": {"docs"},
+            "scripts/literature_catalog.py": {"docs"},
             "scripts/tests/test_build_graphify_projection.py": {"docs"},
+            "scripts/tests/test_thesis_literature_provenance.py": {"docs"},
             "scripts/check_graphify_freshness.py": {"scaffold"},
             "scripts/graphify_worktree_seed.py": {"scaffold"},
             "scripts/scaffold_audit.py": {"scaffold"},
