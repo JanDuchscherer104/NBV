@@ -299,6 +299,7 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("fixture\n", encoding="utf-8")
     (repository / "README.md").write_text("subject\n", encoding="utf-8")
+    (repository / ".gitignore").write_text(".ignored/\n", encoding="utf-8")
     subprocess.run(["git", "add", "--all"], cwd=repository, check=True)
     subprocess.run(["git", "commit", "-qm", "subject"], cwd=repository, check=True)
     subprocess.run(
@@ -319,6 +320,12 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
     untracked.parent.mkdir(parents=True)
     untracked.write_text("#let proof = true\n", encoding="utf-8")
     assert untracked.relative_to(checkout).as_posix() in trials._changed_paths(
+        checkout, baseline
+    )
+    ignored = checkout / ".ignored" / "trial.txt"
+    ignored.parent.mkdir()
+    ignored.write_text("ignored\n", encoding="utf-8")
+    assert ignored.relative_to(checkout).as_posix() in trials._changed_paths(
         checkout, baseline
     )
     subprocess.run(["git", "add", "--all"], cwd=checkout, check=True)
@@ -406,6 +413,8 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
         calls.append(command)
         if command[0] == "typst":
             Path(command[3]).write_bytes(b"pdf")
+        elif command[0] == "pdfinfo":
+            return subprocess.CompletedProcess(command, 0, stdout="Pages: 2\n")
         else:
             pages = Path(command[command.index("-o") + 1])
             pages.mkdir()
@@ -417,6 +426,7 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
         proof = trials._typst_proof(checkout, trial_dir)
 
     assert proof["passed"] is True
+    assert proof["artifacts"]["page_count"] == 2
     assert proof["artifacts"]["rendered_pages"] == ("01.png", "02.png")
     assert "--pages" not in calls[1]
 

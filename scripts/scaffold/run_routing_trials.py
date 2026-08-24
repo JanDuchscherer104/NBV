@@ -296,7 +296,40 @@ def _changed_paths(checkout: Path, baseline_head: str) -> tuple[str, ...]:
     changed.update(
         run_git("ls-files", "--others", "--exclude-standard", cwd=checkout).splitlines()
     )
+    changed.update(
+        run_git(
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            cwd=checkout,
+        ).splitlines()
+    )
     return tuple(sorted(path for path in changed if path))
+
+
+def _pdf_page_count(pdf: Path) -> int | None:
+    """Return a bounded Poppler page count, or ``None`` when it is unavailable."""
+    try:
+        result = subprocess.run(
+            ["pdfinfo", str(pdf)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode:
+        return None
+    for line in result.stdout.splitlines():
+        if line.startswith("Pages:"):
+            try:
+                count = int(line.removeprefix("Pages:").strip())
+            except ValueError:
+                return None
+            return count if count > 0 else None
+    return None
 
 
 def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
@@ -332,13 +365,22 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired):
             returncodes.append(125)
             break
+    page_count = _pdf_page_count(pdf) if pdf.is_file() else None
     rendered_pages = tuple(sorted(path.name for path in pages.glob("*.png")))
+    rendered_page_numbers = {
+        int(path.stem) for path in pages.glob("*.png") if path.stem.isdigit()
+    }
     return {
-        "passed": returncodes == [0, 0] and pdf.is_file() and bool(rendered_pages),
+        "passed": (
+            returncodes == [0, 0]
+            and page_count is not None
+            and rendered_page_numbers == set(range(1, page_count + 1))
+        ),
         "returncodes": returncodes,
         "artifacts": {
             "pdf": pdf.name,
             "pages": pages.name,
+            "page_count": page_count,
             "rendered_pages": rendered_pages,
         },
     }
