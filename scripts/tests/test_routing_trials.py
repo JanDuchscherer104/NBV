@@ -321,7 +321,9 @@ def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> Non
     auth_path = tmp_path / "auth.json"
     auth_path.write_text("{}\n", encoding="utf-8")
     command = trials._subject_sandbox_command(
-        codex_command=["codex", "exec"],
+        # This is a portable command-shape test.  The Codex runtime mount has
+        # its own Bubblewrap integration coverage below when both tools exist.
+        codex_command=["/usr/bin/true"],
         checkout=checkout,
         receipt_dir=receipt_dir,
         schema_path=trials.REPORT_SCHEMA,
