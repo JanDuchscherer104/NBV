@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 335935f6287f64ce9131bef79bf369dc28649e69
+repo_head: 996223bfe01d4a991aca72ca540a0135d9a8bfba
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -111,6 +111,11 @@ duplicating it in all three skills.
   a private Unix socket. Trial and verifier Bubblewrap namespaces are network
   unshared and reach only an in-namespace TCP-to-socket relay; they cannot
   probe other host-loopback services.
+- Routing receipts accept a final model response only when it is followed by
+  no further completed item before `turn.completed`; this fails closed for
+  late tool, search, file-change, reasoning, and todo activity.
+- The verifier's declared report byte bound is enforced on UTF-8 encoded text,
+  not Python character count, so multi-byte output cannot exceed the contract.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -132,6 +137,11 @@ duplicating it in all three skills.
 - [f54e641926793c08e7a410a38392069867bde7b8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f54e641926793c08e7a410a38392069867bde7b8) — implementation: isolate Typst proof execution
 - [5bfe12c81132156c097cd99fb2a4185751dde6f5](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5bfe12c81132156c097cd99fb2a4185751dde6f5) — implementation: isolate routing adjudication evidence
 - [335935f6287f64ce9131bef79bf369dc28649e69](https://github.com/JanDuchscherer104/ARIA-NBV/commit/335935f6287f64ce9131bef79bf369dc28649e69) — implementation: confine routing broker network
+- [6830720bbe15385826c51e22067eb0ba28f69c3e](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6830720bbe15385826c51e22067eb0ba28f69c3e) — test: keep broker isolation checks portable
+- [bdfcea0dccb229daf0ad682b1cc00ba15b23ab42](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bdfcea0dccb229daf0ad682b1cc00ba15b23ab42) — implementation: make routing receipts terminal
+- [39b828b5a6a5f442ca803fd1a84049c5e62b1c4b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/39b828b5a6a5f442ca803fd1a84049c5e62b1c4b) — implementation: validate exact routing write paths
+- [8ca4b57d129ae3da376e5ed4d5e7df75683762f3](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8ca4b57d129ae3da376e5ed4d5e7df75683762f3) — implementation: reject all late routing activity
+- [996223bfe01d4a991aca72ca540a0135d9a8bfba](https://github.com/JanDuchscherer104/ARIA-NBV/commit/996223bfe01d4a991aca72ca540a0135d9a8bfba) — implementation: fail closed on terminal receipts
 
 ## Verification
 
@@ -148,6 +158,7 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 49 passed; Ruff and `git diff --check` passed.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 57 passed, including Bubblewrap proof that the subject cannot access `/codex-home/auth.json`; routing listing remains available without a broker and live execution fails closed when one is absent.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 64 passed, including a real isolated compile and render of the active thesis; Ruff and `git diff --check` passed.
+- `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py` — 83 passed, 51 subtests passed; receipt-terminal and UTF-8 byte-bound regressions passed.
 
 ## Canonical Owner Impact
 
