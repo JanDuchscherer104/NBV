@@ -63,7 +63,6 @@ def render_stored_rollouts_page() -> None:
     selected_inventory = next((row for row in inventory if Path(str(row["path"])) == store_path), None)
     try:
         active_session = session.open_stored_rollout_session(store_path)
-        reader = active_session
         validation = active_session.validation
         manifest_payload = active_session.manifest_payload
     except Exception as exc:
@@ -117,7 +116,6 @@ def render_stored_rollouts_page() -> None:
             overview._render_corpus_overview(corpus_summary, selected_count=len(corpus_paths))
             overview._render_trust_and_topology(
                 session_handle=active_session,
-                reader=reader,
                 store_path=store_path,
                 inventory_row=selected_inventory,
                 manifest_payload=manifest_payload,

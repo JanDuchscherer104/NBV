@@ -19,7 +19,7 @@ import plotly.express as px
 import streamlit as st
 
 from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
-from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaignConfig
+from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutCampaignConfig
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 
 from ..scientific_labels import TheoryReferences
@@ -342,7 +342,7 @@ def capture_tmux_tail(session: str, *, runner: Callable[..., Any] = subprocess.r
     return (getattr(result, "stdout", "") or "")[-limit:]
 
 
-def _campaign(config_path: Path):
+def _campaign(config_path: Path) -> CudaRolloutCampaign:
     return CudaRolloutCampaignConfig.from_toml(config_path).setup_target()
 
 
@@ -384,11 +384,8 @@ def render_campaign_generation_page() -> None:  # pragma: no cover - Streamlit p
     try:
         config_path = resolve_config_toml_path(config_text)
         campaign = _campaign(config_path)
-        config_error = None
     except Exception as exc:
-        config_path, campaign, config_error = None, None, str(exc)
-    if config_error:
-        st.error(config_error)
+        st.error(str(exc))
         return
     cfg = campaign.config
     plan_path = cfg.output_root / "plan.json"

@@ -7,16 +7,23 @@ from __future__ import annotations
 import inspect
 from contextlib import nullcontext
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
+import streamlit as st
 
 from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return
-from aria_nbv.rollouts.inspection import _materialize_selection_family_union, candidate_target_view_evidence
+from aria_nbv.app.scientific_labels import TheoryReferences
+from aria_nbv.rollouts.inspection import (
+    _materialize_selection_family_union,
+    candidate_selection_pooled_summary_rows,
+    candidate_target_view_evidence,
+)
 
 
-def _pooled_row(*, family: str, step_index: int, fraction: float) -> dict[str, object]:
+def _pooled_row(*, family: str, step_index: int, fraction: float) -> dict[str, Any]:
     return {
         "metric": "policy_mass",
         "group_by": "position_strategy",
@@ -143,7 +150,7 @@ def test_pairwise_correlation_fails_closed_without_two_finite_components() -> No
     assert "need n>=2" in prepared["reasons"][("left", "right")]
 
 
-def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch) -> None:
+def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch: pytest.MonkeyPatch) -> None:
     rows = pd.DataFrame(
         [
             {
@@ -160,7 +167,7 @@ def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch
             for contract, temperature in (("contract-a", 0.5), ("contract-b", 2.0))
         ]
     )
-    monkeypatch.setattr(candidate_generation.st, "selectbox", lambda *_args, **_kwargs: "contract-a")
+    monkeypatch.setattr(st, "selectbox", lambda *_args, **_kwargs: "contract-a")
 
     selected, controls = candidate_generation._select_candidate_choice_controls(rows, group_by="position_strategy")
 
@@ -169,7 +176,7 @@ def test_candidate_choice_controls_pool_all_temperatures_and_cohorts(monkeypatch
     assert selected["generation_cohort_id"].tolist() == ["cohort-0.5"]
 
 
-def test_candidate_choice_vocabulary_help_describes_compatible_pooling(monkeypatch) -> None:
+def test_candidate_choice_vocabulary_help_describes_compatible_pooling(monkeypatch: pytest.MonkeyPatch) -> None:
     help_text: dict[str, str] = {}
     rows = [
         {
@@ -182,12 +189,12 @@ def test_candidate_choice_vocabulary_help_describes_compatible_pooling(monkeypat
         }
     ]
 
-    def selectbox(label, options, **kwargs):
+    def selectbox(label: Any, options: Any, **kwargs: Any) -> Any:
         if "help" in kwargs:
             help_text[label] = kwargs["help"]
         return "position_strategy" if label == "Candidate evidence grouping" else list(options)[0]
 
-    monkeypatch.setattr(candidate_generation.st, "selectbox", selectbox)
+    monkeypatch.setattr(st, "selectbox", selectbox)
     monkeypatch.setattr(candidate_generation, "_render_complete_candidate_support", lambda *args, **kwargs: None)
     monkeypatch.setattr(candidate_generation, "candidate_selection_pooled_summary_rows", lambda *args, **kwargs: [])
 
@@ -243,15 +250,15 @@ def test_pooled_candidate_choice_keeps_absent_family_as_zero_across_temperatures
 
     union = _materialize_selection_family_union(rows)
     assert sum(int(row["family_candidate_count"]) == 0 for row in union) == 2
-    pooled = pd.DataFrame(candidate_generation.candidate_selection_pooled_summary_rows(rows, metric="allocation_share"))
+    pooled = pd.DataFrame(candidate_selection_pooled_summary_rows(rows, metric="allocation_share"))
 
     assert set(pooled["family"]) == {"forward", "side"}
     assert pooled["fraction"].tolist() == [0.5, 0.5]
 
 
-def test_candidate_family_breakdown_requires_family_and_cohort_identity(monkeypatch) -> None:
+def test_candidate_family_breakdown_requires_family_and_cohort_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     warnings: list[str] = []
-    monkeypatch.setattr(candidate_generation.st, "warning", warnings.append)
+    monkeypatch.setattr(st, "warning", warnings.append)
 
     missing = candidate_generation._require_family_cohort_columns(pd.DataFrame({"position": ["forward"]}), "Family")
     complete = candidate_generation._require_family_cohort_columns(
@@ -273,7 +280,7 @@ def test_candidate_support_explanation_keeps_theory_and_inspection_owner() -> No
         "Warning",
         "inspection.candidate_direction_evidence",
         "actor-visible",
-        candidate_generation.TheoryReferences(
+        TheoryReferences(
             equation_ids=("action.angle_cap_transform",),
             term_ids=("finite-candidate-action-set",),
         ),
@@ -291,7 +298,7 @@ def test_candidate_support_explanation_keeps_theory_and_inspection_owner() -> No
     assert explanation.external_references[0][1].endswith("aria_nbv/aria_nbv/rollouts/inspection.py")
 
 
-def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypatch) -> None:
+def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypatch: pytest.MonkeyPatch) -> None:
     """The target-view reducer's persisted ``count`` must not break availability plots."""
 
     rows = candidate_target_view_evidence(
@@ -316,14 +323,14 @@ def test_complete_candidate_support_renders_reducer_target_view_counts(monkeypat
     )
     assert rows and "count" in rows[0]
 
-    plots = []
+    plots: list[Any] = []
     monkeypatch.setattr(candidate_generation, "_render_plot", lambda figure, *_args, **_kwargs: plots.append(figure))
     monkeypatch.setattr(candidate_generation, "_download_frame", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(candidate_generation.st, "caption", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(candidate_generation.st, "dataframe", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(candidate_generation.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "expander", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(
-        candidate_generation.st,
+        st,
         "selectbox",
         lambda _label, options, **_kwargs: list(options)[0],
     )

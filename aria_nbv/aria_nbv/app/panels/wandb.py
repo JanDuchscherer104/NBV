@@ -9,18 +9,13 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-
-try:  # Optional dependency for W&B diagnostics.
-    import wandb  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - optional dependency guard
-    wandb = None
 
 from ...utils.wandb_utils import (
     WANDB_STEP_KEYS,
@@ -46,6 +41,16 @@ from .common import (
     _report_exception,
     current_scientific_label,
 )
+
+_wandb: Any
+try:  # Optional dependency for W&B diagnostics.
+    import wandb as _wandb_module
+except ImportError:  # pragma: no cover - optional dependency guard
+    _wandb = None
+else:
+    _wandb = _wandb_module
+
+wandb: Any = _wandb
 
 _ENTITY_CACHE_TTL_S = 300
 _DEFAULT_METRIC_FILTER = (
@@ -103,8 +108,8 @@ def _select_with_custom(
     index = cleaned.index(default) if default in cleaned else 0
     choice = column.selectbox(label, options=cleaned, index=index)
     if choice == "Custom...":
-        return column.text_input(custom_label, value=default)
-    return choice
+        return str(column.text_input(custom_label, value=default))
+    return str(choice)
 
 
 def _render_run_filters(cache: dict[str, Any]) -> dict[str, Any]:
@@ -269,7 +274,7 @@ def render_wandb_analysis_page() -> None:
 
     run_by_id = {str(getattr(run, "id", "")): run for run in runs}
     meta_df, summary_df, config_df = build_run_dataframes(runs)
-    config_by_id: dict[str, dict[str, Any]] = config_df.to_dict(orient="index") if not config_df.empty else {}
+    config_by_id = cast(dict[str, dict[str, Any]], config_df.to_dict(orient="index")) if not config_df.empty else {}
 
     summary_keys = sorted(summary_df.columns)
     summary_filter_raw = st.text_input(
@@ -333,7 +338,12 @@ def render_wandb_analysis_page() -> None:
     )
     fetch_histories = col_h2.button("Fetch history for selected runs")
 
-    histories = cache.get("histories") or {}
+    raw_histories = cache.get("histories") or {}
+    histories: dict[str, pd.DataFrame] = (
+        {str(run_id): frame for run_id, frame in raw_histories.items() if isinstance(frame, pd.DataFrame)}
+        if isinstance(raw_histories, dict)
+        else {}
+    )
     if cache.get("history_rows") != int(history_rows):
         histories = {}
 
@@ -353,10 +363,8 @@ def render_wandb_analysis_page() -> None:
             _report_exception(exc, context="W&B history load failed")
             return
 
-    selected_histories = {
-        run_id: histories.get(run_id)
-        for run_id in selected_ids
-        if run_id in histories and histories[run_id] is not None
+    selected_histories: dict[str, pd.DataFrame] = {
+        run_id: histories[run_id] for run_id in selected_ids if run_id in histories
     }
     if not selected_histories:
         st.info("Fetch histories to compare training dynamics.")
@@ -713,12 +721,12 @@ def render_wandb_analysis_page() -> None:
                 st.image(
                     [str(path) for path in train_images[:max_images]],
                     caption=[path.name for path in train_images[:max_images]],
-                    width=None,
+                    width="content",
                 )
             if val_images:
                 st.markdown("**Val figures**")
                 st.image(
                     [str(path) for path in val_images[:max_images]],
                     caption=[path.name for path in val_images[:max_images]],
-                    width=None,
+                    width="content",
                 )

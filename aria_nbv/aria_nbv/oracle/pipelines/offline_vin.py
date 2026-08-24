@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import shutil
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 from pydantic import Field
@@ -63,7 +63,7 @@ class VinOfflineWriterConfig(TargetConfig["VinOfflineWriter"]):
     dataset: AseEfmDatasetConfig = Field(default_factory=lambda: AseEfmDatasetConfig(wds_shuffle=True))
     """Raw ASE/EFM dataset configuration used to stream snippets."""
 
-    labeler: OracleRriLabelerConfig = Field(default_factory=OracleRriLabelerConfig)
+    labeler: OracleRriLabelerConfig = Field(default_factory=lambda: OracleRriLabelerConfig.model_validate({}))
     """Oracle labeler configuration."""
 
     backbone: EvlBackboneConfig | None = Field(default_factory=EvlBackboneConfig)
@@ -383,14 +383,21 @@ def _point_feature_schema(*, include_obs_count: bool) -> list[dict[str, str]]:
     return [{"name": name, "dtype": dtype, "unit": unit, "version": "vin_points_v1"} for name, dtype, unit in fields]
 
 
-def _compact_evl_block_signature(shard_specs: list[VinOfflineShardSpec]) -> list[dict[str, object]]:
+def _compact_evl_block_signature(shard_specs: list[VinOfflineShardSpec]) -> list[dict[str, Any]]:
     """Return one homogeneous compact-EVL signature across finalized shards."""
 
     signatures: set[tuple[tuple[str, str, tuple[int, ...]], ...]] = set()
     for shard in shard_specs:
         blocks = shard.blocks
+        missing_shapes = [
+            name
+            for name in sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS)
+            if name in blocks and blocks[name].shape is None
+        ]
+        if missing_shapes:
+            raise ValueError(f"VIN compact EVL blocks lack row shapes: {missing_shapes}.")
         signature = tuple(
-            (name, str(blocks[name].dtype), tuple(blocks[name].shape[1:]))
+            (name, str(blocks[name].dtype), tuple((blocks[name].shape or [])[1:]))
             for name in sorted(REQUIRED_COMPACT_EVL_NUMERIC_FIELDS)
             if name in blocks
         )

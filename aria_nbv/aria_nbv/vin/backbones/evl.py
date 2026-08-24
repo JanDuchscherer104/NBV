@@ -13,10 +13,10 @@ them to `EvlBackboneOutput`; durable cache writers must record that identity.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import hydra
 import omegaconf
@@ -37,6 +37,9 @@ from torch import Tensor
 from ...configs import PathConfig
 from ...utils import BaseConfig, Console, TargetConfig
 from ..types import EfmDict, EvlBackboneOutput, FreeInputMode, FreeInputProvenance
+
+if TYPE_CHECKING:
+    from efm3d.aria.obb import ObbTW
 
 
 def _target_cls() -> type["EvlBackbone"]:
@@ -116,7 +119,7 @@ def filter_backbone_output_for_features_mode(
     raise ValueError(f"Unsupported EVL features_mode: {features_mode!r}.")
 
 
-def _resolve_evl_asset_path(value: object, *, root: Path) -> str:
+def _resolve_evl_asset_path(value: Any, *, root: Path) -> str:
     """Resolve EVL Hydra asset paths against the current project checkout."""
 
     path = Path(str(value)).expanduser()
@@ -235,6 +238,8 @@ class EvlBackbone:
 
         checkpoint = torch.load(self.config.model_ckpt, weights_only=True, map_location=self.device)
         model_config = omegaconf.OmegaConf.load(self.config.model_cfg)
+        if not isinstance(model_config, omegaconf.DictConfig):
+            raise TypeError(f"EVL model config must decode to a mapping, got {type(model_config).__name__}.")
         model_config = _normalize_evl_model_config_paths(model_config, root=self.config.paths.root)
         model = hydra.utils.instantiate(model_config)
         model.load_state_dict(checkpoint["state_dict"], strict=True)
@@ -254,7 +259,7 @@ class EvlBackbone:
         img = batch.get(ARIA_IMG[0])
         needs_batchify = isinstance(img, torch.Tensor) and img.ndim == 4  # T C H W
         if needs_batchify:
-            batchify(batch, device=self.device)
+            cast(Callable[..., None], batchify)(batch, device=self.device)
             return batch
 
         # Already batched (or missing rgb/img); just move tensor-like values.
@@ -284,7 +289,7 @@ class EvlBackbone:
         obb_feat = out.get("neck/obb_feat")
         occ_pr = out.get("occ_pr")
         occ_input = out.get("voxel/occ_input")
-        native_free_input = out.get("voxel/free_input")
+        native_free_input = cast(Tensor | None, out.get("voxel/free_input"))
         counts = out.get("voxel/counts")
         counts_m = out.get("voxel/counts_m")
         cent_pr = out.get("cent_pr")
@@ -295,11 +300,11 @@ class EvlBackbone:
         pts_world = out.get("voxel/pts_world")
         voxel_feat = out.get("voxel/feat")
         voxel_select_t = out.get("voxel/selectT")
-        obb_pred = out.get(ARIA_OBB_PRED)
-        obb_pred_viz = out.get(ARIA_OBB_PRED_VIZ)
-        obb_pred_sem_id_to_name = out.get(ARIA_OBB_PRED_SEM_ID_TO_NAME)
-        obb_pred_probs_full = out.get(ARIA_OBB_PRED_PROBS_FULL)
-        obb_pred_probs_full_viz = out.get(ARIA_OBB_PRED_PROBS_FULL_VIZ)
+        obb_pred = cast("ObbTW | None", out.get(ARIA_OBB_PRED))
+        obb_pred_viz = cast("ObbTW | None", out.get(ARIA_OBB_PRED_VIZ))
+        obb_pred_sem_id_to_name = cast(dict[int, str] | None, out.get(ARIA_OBB_PRED_SEM_ID_TO_NAME))
+        obb_pred_probs_full = cast(list[Tensor] | None, out.get(ARIA_OBB_PRED_PROBS_FULL))
+        obb_pred_probs_full_viz = cast(list[Tensor] | None, out.get(ARIA_OBB_PRED_PROBS_FULL_VIZ))
 
         feat2d_upsampled: dict[str, Tensor] = {}
         token2d: dict[str, Tensor] = {}

@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from itertools import combinations, pairwise
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import torch
@@ -78,9 +78,7 @@ class PairwiseCorrelationResult:
     has_finite_off_diagonal: bool
 
 
-def pairwise_finite_pearson(
-    values: Mapping[str, Iterable[object]], columns: Collection[str]
-) -> PairwiseCorrelationResult:
+def pairwise_finite_pearson(values: Mapping[str, Iterable[Any]], columns: Collection[str]) -> PairwiseCorrelationResult:
     """Compute finite paired Pearson correlations without pooling missing rows.
 
     Each pair has its own finite-row denominator.  Fewer than two paired rows,
@@ -371,7 +369,7 @@ def rollout_store_inventory_rows(
     store_paths: Iterable[Path],
     *,
     validate: bool = True,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return schema, validation, count, lineage, and storage rows for stores.
 
     Args:
@@ -448,7 +446,7 @@ def rollout_header_summary(
     reader: RolloutZarrStoreReader,
     *,
     manifest_payload: dict[str, Any] | None = None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Return selected-store counts, reference coverage, and whole-store byte costs.
 
     Reference coverage is available only when manifest provenance supplies an
@@ -520,9 +518,9 @@ def rollout_header_summary(
         "logical_source_rows": dict(sorted(coverage.get("source_shard_counts", {}).items()))
         if isinstance(coverage.get("source_shard_counts"), dict)
         else {},
-        "physical_store_bytes": int(storage["total_bytes"]),
-        "physical_bytes_per_rollout": _ratio(int(storage["total_bytes"]), rollouts),
-        "physical_bytes_per_candidate": _ratio(int(storage["total_bytes"]), candidates),
+        "physical_store_bytes": _nonnegative_int(storage["total_bytes"]) or 0,
+        "physical_bytes_per_rollout": _ratio(_nonnegative_int(storage["total_bytes"]), rollouts),
+        "physical_bytes_per_candidate": _ratio(_nonnegative_int(storage["total_bytes"]), candidates),
         "physical_bytes_per_candidate_reason": storage["bytes_per_candidate_reason"],
         "return_semantics": root_attrs.get("return_semantics"),
         "discount_gamma": _finite_or_none(root_attrs.get("discount_gamma")),
@@ -563,7 +561,7 @@ def runtime_storage_statistics(store_dir: Path, *, candidate_count: int) -> dict
 def promoted_store_validation_error(
     reader: RolloutZarrStoreReader,
     *,
-    manifest_payload: Mapping[str, object] | None = None,
+    manifest_payload: Mapping[str, Any] | None = None,
 ) -> str | None:
     """Return an error when campaign completion evidence is not current."""
 
@@ -626,10 +624,10 @@ def candidate_audit_rows(
     rollout_row_id: int | None = None,
     step_row_id: int | None = None,
     limit: int | None = None,
-    row_callback: Callable[[dict[str, object]], None] | None = None,
-) -> list[dict[str, object]]:
+    row_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> list[dict[str, Any]]:
     """Return candidate rows, or stream them to ``row_callback`` without retention."""
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     emitted = 0
     oracle_label_mask = reader.array("candidates/oracle_label_mask")
     q_train_mask = reader.array("candidates/q_train_mask")
@@ -811,8 +809,8 @@ def candidate_population_evidence(
     group_by: CandidateGroupField | None = None,
     sample_size: int = 500,
     scientific_support: bool = True,
-    audit_reader: Callable[..., object] = candidate_audit_rows,
-) -> dict[str, object]:
+    audit_reader: Callable[..., Any] = candidate_audit_rows,
+) -> dict[str, Any]:
     """Collect candidate evidence once and expose bounded public projections.
 
     The callback path keeps Zarr access incremental and centralizes all
@@ -831,7 +829,7 @@ def candidate_population_evidence(
     # stores; the display sample remains the only retained candidate subset.
     spooled_rows = tempfile.SpooledTemporaryFile(max_size=4 * 1024 * 1024, mode="w+b") if scientific_support else None
 
-    def consume(row: Mapping[str, object]) -> None:
+    def consume(row: Mapping[str, Any]) -> None:
         accumulator.consume(row)
         if spooled_rows is not None:
             pickle.dump(dict(row), spooled_rows, protocol=pickle.HIGHEST_PROTOCOL)
@@ -848,12 +846,12 @@ def candidate_population_evidence(
         # failure and cannot trigger a second, duplicate read.
         audit_reader(reader, row_callback=consume)
     else:
-        for row in audit_reader(reader):  # type: ignore[operator]
+        for row in audit_reader(reader):
             consume(row)
     if spooled_rows is not None:
         spooled_rows.seek(0)
 
-    def replay_rows() -> Iterable[dict[str, object]]:
+    def replay_rows() -> Iterable[dict[str, Any]]:
         if spooled_rows is None:
             return
         spooled_rows.seek(0)
@@ -940,7 +938,7 @@ def candidate_population_evidence(
             spooled_rows.close()
 
 
-def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Attach a target-normalized, root-centred 2-D frame to audit rows.
 
     The frame is deliberately local: the root is ``(0, 0)`` and the observed
@@ -949,7 +947,7 @@ def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> li
     target baselines remain unavailable rather than being fabricated.
     """
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     frame = "root=(0,0), target=(1,0), right-handed lateral axis"
     for raw in rows:
         row = dict(raw)
@@ -957,12 +955,15 @@ def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> li
         y = _finite_or_none(row.get("root_relative_y_m"))
         tx = _finite_or_none(row.get("root_to_target_x_m"))
         ty = _finite_or_none(row.get("root_to_target_y_m"))
-        norm = None if tx is None or ty is None else float(np.hypot(tx, ty))
-        if norm is None or norm <= _GEOMETRY_EPSILON or x is None or y is None:
+        if tx is None or ty is None or x is None or y is None:
             forward = lateral = None
         else:
-            forward = float((x * tx + y * ty) / (norm * norm))
-            lateral = float((-x * ty + y * tx) / (norm * norm))
+            norm = float(np.hypot(tx, ty))
+            if norm <= _GEOMETRY_EPSILON:
+                forward = lateral = None
+            else:
+                forward = float((x * tx + y * ty) / (norm * norm))
+                lateral = float((-x * ty + y * tx) / (norm * norm))
         row.update(
             target_normalized_forward=forward,
             target_normalized_lateral=lateral,
@@ -972,7 +973,7 @@ def candidate_geometry_evidence_rows(rows: Iterable[Mapping[str, object]]) -> li
     return output
 
 
-def _candidate_state_key(row: Mapping[str, object]) -> tuple[str, str, str]:
+def _candidate_state_key(row: Mapping[str, Any]) -> tuple[str, str, str]:
     return (
         str(row.get("scene", "unknown")),
         str(row.get("rollout_row_id", "unknown")),
@@ -981,18 +982,18 @@ def _candidate_state_key(row: Mapping[str, object]) -> tuple[str, str, str]:
 
 
 def _population_state_groups(
-    rows: Iterable[Mapping[str, object]],
+    rows: Iterable[Mapping[str, Any]],
     *,
     extra_fields: tuple[str, ...] = (),
-) -> dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]]:
+) -> dict[tuple[str, ...], list[dict[str, Any]]]:
     """Group audit rows by persisted cohort/state and explicit population.
 
     A state is one factual ``scene/rollout/step`` record.  Aggregation must
     happen after the state reduction: otherwise states with a large candidate
     shell silently dominate the scientific summary.
     """
-    grouped: dict[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]] = {}
-    state_keys: set[tuple[str, str, str, str, *tuple[str, ...]]] = set()
+    grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    state_keys: set[tuple[str, ...]] = set()
     for raw in rows:
         row = dict(raw)
         cohort = str(row.get("generation_cohort_id", "unknown"))
@@ -1008,18 +1009,18 @@ def _population_state_groups(
     return grouped
 
 
-def _candidate_scientific_state_key(row: Mapping[str, object]) -> tuple[str, str, str, str]:
+def _candidate_scientific_state_key(row: Mapping[str, Any]) -> tuple[str, str, str, str]:
     """Return the ordered factual state identity used by scientific reducers."""
 
     cohort = str(row.get("generation_cohort_id", "unknown"))
     return (cohort, *_candidate_state_key(row))
 
 
-def _iter_candidate_state_chunks(rows: Iterable[Mapping[str, object]]) -> Iterable[list[dict[str, object]]]:
+def _iter_candidate_state_chunks(rows: Iterable[Mapping[str, Any]]) -> Iterable[list[dict[str, Any]]]:
     """Yield contiguous factual states while retaining no prior candidate rows."""
 
     current_key: tuple[str, str, str, str] | None = None
-    current: list[dict[str, object]] = []
+    current: list[dict[str, Any]] = []
     closed: set[tuple[str, str, str, str]] = set()
     for raw in rows:
         row = dict(raw)
@@ -1037,18 +1038,18 @@ def _iter_candidate_state_chunks(rows: Iterable[Mapping[str, object]]) -> Iterab
 
 
 def _iter_candidate_state_groups(
-    rows: Iterable[Mapping[str, object]], *, extra_fields: tuple[str, ...] = ()
-) -> Iterable[tuple[tuple[str, str, str, str, *tuple[str, ...], str], list[dict[str, object]]]]:
+    rows: Iterable[Mapping[str, Any]], *, extra_fields: tuple[str, ...] = ()
+) -> Iterable[tuple[tuple[str, ...], list[dict[str, Any]]]]:
     """Reduce each bounded state chunk before advancing the source stream."""
 
     for chunk in _iter_candidate_state_chunks(rows):
         yield from _population_state_groups(chunk, extra_fields=extra_fields).items()
 
 
-def _sort_candidate_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+def _sort_candidate_summary_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Restore canonical public ordering after bounded state reduction."""
 
-    normalized: list[dict[str, object]] = []
+    normalized: list[dict[str, Any]] = []
     for raw in rows:
         row = dict(raw)
         if "candidate_direction_count" not in row and "candidate_total_count" in row:
@@ -1079,12 +1080,12 @@ def _sort_candidate_summary_rows(rows: list[dict[str, object]]) -> list[dict[str
     )
 
 
-def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
+def candidate_direction_evidence(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     """Summarize directions per factual state, then scene and cohort macros."""
     azimuth_bins, elevation_bins = 12, 6
-    density: list[dict[str, object]] = []
-    cap_rows: list[dict[str, object]] = []
-    angular_rows: list[dict[str, object]] = []
+    density: list[dict[str, Any]] = []
+    cap_rows: list[dict[str, Any]] = []
+    angular_rows: list[dict[str, Any]] = []
     phi = (1.0 + np.sqrt(5.0)) / 2.0
 
     def fibonacci_sphere(count: int) -> np.ndarray:
@@ -1279,7 +1280,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
     # Cell-wise macros preserve the complete 12x6 grid while excluding only
     # unavailable state values from numeric denominators.
     for level in ("scene_macro", "cohort_macro"):
-        groups: dict[tuple[str, str, str, int, int], list[dict[str, object]]] = {}
+        groups: dict[tuple[str, str, str, int, int], list[dict[str, Any]]] = {}
         for row in density:
             if row["aggregation_level"] != "state":
                 continue
@@ -1295,7 +1296,7 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
                 [],
             ).append(row)
         for key, grouped in sorted(groups.items()):
-            state_facets: dict[tuple[str, str, str], dict[str, object]] = {}
+            state_facets: dict[tuple[str, str, str], dict[str, Any]] = {}
             for row in grouped:
                 state_key = (str(row["scene"]), str(row["rollout_row_id"]), str(row["step_row_id"]))
                 state_facets.setdefault(state_key, row)
@@ -1343,24 +1344,24 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
             )
     for rows_out, metric_name in ((cap_rows, "cap"), (angular_rows, "angular")):
         for level in ("scene_macro", "cohort_macro"):
-            groups: dict[tuple[str, str, str, object], list[dict[str, object]]] = {}
+            metric_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
             for row in rows_out:
                 if row["aggregation_level"] != "state":
                     continue
                 scene = str(row["scene"]) if level == "scene_macro" else "all"
-                facet = row.get("radius_deg", metric_name)
-                groups.setdefault((str(row["generation_cohort_id"]), scene, str(row["population"]), facet), []).append(
-                    row
-                )
-            for key, grouped in sorted(groups.items(), key=lambda item: tuple(map(str, item[0]))):
+                facet = str(row.get("radius_deg", metric_name))
+                metric_groups.setdefault(
+                    (str(row["generation_cohort_id"]), scene, str(row["population"]), facet), []
+                ).append(row)
+            for key, grouped in sorted(metric_groups.items(), key=lambda item: tuple(map(str, item[0]))):
                 value_key = "discrepancy" if metric_name == "cap" else "nearest_neighbor_deg"
                 if level == "cohort_macro":
-                    by_scene: dict[str, list[float]] = {}
+                    metric_by_scene: dict[str, list[float]] = {}
                     for row in grouped:
                         value = row.get(value_key)
                         if value is not None:
-                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(value))
-                    values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                            metric_by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(value))
+                    values = [float(np.mean(scene_values)) for scene_values in metric_by_scene.values() if scene_values]
                 else:
                     values = [float(r[value_key]) for r in grouped if r.get(value_key) is not None]
                 covering_values = [
@@ -1417,17 +1418,17 @@ def candidate_direction_evidence(rows: Iterable[Mapping[str, object]]) -> dict[s
     }
 
 
-def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Summarize spatial support with shell- and population-preserving macros."""
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, grouped in _iter_candidate_state_groups(rows, extra_fields=("position",)):
         cohort, scene, rollout_id, step_id, shell, population = key
-        values = {
+        values: dict[str, list[float]] = {
             "decision_horizontal_radius_m": [
                 float(
                     np.hypot(
-                        r.get("decision_relative_x_m", r.get("root_relative_x_m")),
-                        r.get("decision_relative_z_m", r.get("root_relative_z_m")),
+                        cast(float, _finite_or_none(r.get("decision_relative_x_m", r.get("root_relative_x_m")))),
+                        cast(float, _finite_or_none(r.get("decision_relative_z_m", r.get("root_relative_z_m")))),
                     )
                 )
                 for r in grouped
@@ -1438,9 +1439,9 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 float(
                     np.linalg.norm(
                         [
-                            r.get("decision_relative_x_m", r.get("root_relative_x_m")),
-                            r.get("decision_relative_y_m", r.get("root_relative_y_m")),
-                            r.get("decision_relative_z_m", r.get("root_relative_z_m")),
+                            cast(float, _finite_or_none(r.get("decision_relative_x_m", r.get("root_relative_x_m")))),
+                            cast(float, _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m")))),
+                            cast(float, _finite_or_none(r.get("decision_relative_z_m", r.get("root_relative_z_m")))),
                         ]
                     )
                 )
@@ -1455,7 +1456,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 )
             ],
             "decision_height_m": [
-                float(r.get("decision_relative_y_m", r.get("root_relative_y_m")))
+                cast(float, _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m"))))
                 for r in grouped
                 if _finite_or_none(r.get("decision_relative_y_m", r.get("root_relative_y_m"))) is not None
             ],
@@ -1488,7 +1489,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 }
             )
     for level in ("scene_macro", "cohort_macro"):
-        groups_macro: dict[tuple[str, str, str, str, str], list[dict[str, object]]] = {}
+        groups_macro: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
         for row in output:
             if row["aggregation_level"] != "state":
                 continue
@@ -1509,9 +1510,9 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                 for row in grouped:
                     if row.get("mean") is not None:
                         by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
-                values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                macro_values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
             else:
-                values = [float(r["mean"]) for r in grouped if r.get("mean") is not None]
+                macro_values = [float(r["mean"]) for r in grouped if r.get("mean") is not None]
             output.append(
                 {
                     **grouped[0],
@@ -1519,7 +1520,7 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "rollout_row_id": "all",
                     "step_row_id": "all",
                     "scene": key[1],
-                    "mean": None if not values else float(np.mean(values)),
+                    "mean": None if not macro_values else float(np.mean(macro_values)),
                     "count": sum(int(row.get("count", 0)) for row in grouped),
                     "total_count": sum(int(row.get("total_count", row.get("count", 0))) for row in grouped),
                     "finite_count": sum(int(row.get("finite_count", 0)) for row in grouped),
@@ -1536,15 +1537,15 @@ def candidate_spatial_support_evidence(rows: Iterable[Mapping[str, object]]) -> 
                     "state_count": len(grouped),
                     "defined_state_count": sum(int(row.get("defined_state_count", 0)) for row in grouped),
                     "scene_count": len({str(row.get("scene", "unknown")) for row in grouped}),
-                    "available": bool(values),
+                    "available": bool(macro_values),
                 }
             )
     return _sort_candidate_summary_rows(output)
 
 
-def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+def candidate_target_view_evidence(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Expose target distance and explicit unavailable view metrics per facet."""
-    result: list[dict[str, object]] = []
+    result: list[dict[str, Any]] = []
     for key, grouped in _iter_candidate_state_groups(rows):
         cohort, scene, rollout_id, step_id, population = key
         values = [_finite_or_none(row.get("target_distance_m")) for row in grouped]
@@ -1599,7 +1600,7 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
                 }
             )
     for level in ("scene_macro", "cohort_macro"):
-        groups_macro: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+        groups_macro: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
         for row in result:
             if row["aggregation_level"] != "state":
                 continue
@@ -1646,9 +1647,9 @@ def candidate_target_view_evidence(rows: Iterable[Mapping[str, object]]) -> list
     return _sort_candidate_summary_rows(result)
 
 
-def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+def candidate_motion_support_evidence(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Summarize motion and collision diagnostics per state and real macros."""
-    result: list[dict[str, object]] = []
+    result: list[dict[str, Any]] = []
     metrics = (
         ("motion_step_length_m", "m"),
         ("motion_height_delta_m", "m"),
@@ -1710,7 +1711,7 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
             }
         )
     for level in ("scene_macro", "cohort_macro"):
-        groups_macro: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+        groups_macro: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
         for row in result:
             if row["aggregation_level"] != "state":
                 continue
@@ -1750,12 +1751,12 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                 collisions = sum(int(row.get("collision_count", 0)) for row in grouped)
                 state_rates = [float(row["collision_rate"]) for row in grouped if row.get("collision_rate") is not None]
                 if level == "cohort_macro":
-                    by_scene: dict[str, list[float]] = {}
+                    collision_by_scene: dict[str, list[float]] = {}
                     for row in grouped:
                         rate = row.get("collision_rate")
                         if rate is not None:
-                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(rate))
-                    scene_rates = [float(np.mean(rates)) for rates in by_scene.values() if rates]
+                            collision_by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(rate))
+                    scene_rates = [float(np.mean(rates)) for rates in collision_by_scene.values() if rates]
                 else:
                     scene_rates = state_rates
                 base.update(
@@ -1771,11 +1772,11 @@ def candidate_motion_support_evidence(rows: Iterable[Mapping[str, object]]) -> l
                 )
             else:
                 if level == "cohort_macro":
-                    by_scene: dict[str, list[float]] = {}
+                    motion_by_scene: dict[str, list[float]] = {}
                     for row in grouped:
                         if row.get("mean") is not None:
-                            by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
-                    values = [float(np.mean(scene_values)) for scene_values in by_scene.values() if scene_values]
+                            motion_by_scene.setdefault(str(row.get("scene", "unknown")), []).append(float(row["mean"]))
+                    values = [float(np.mean(scene_values)) for scene_values in motion_by_scene.values() if scene_values]
                 else:
                     values = [float(row["mean"]) for row in grouped if row.get("mean") is not None]
                 base.update(mean=None if not values else float(np.mean(values)), available=bool(values))
@@ -1818,9 +1819,9 @@ class _CandidateMacroAccumulator:
 
     def __init__(self, *, facet_fields: tuple[str, ...]) -> None:
         self._facet_fields = facet_fields
-        self._scene_groups: dict[tuple[object, ...], dict[str, object]] = {}
+        self._scene_groups: dict[tuple[Any, ...], dict[str, Any]] = {}
 
-    def consume(self, row: Mapping[str, object]) -> None:
+    def consume(self, row: Mapping[str, Any]) -> None:
         """Consume one state-level summary without retaining that state row."""
 
         if row.get("aggregation_level") != "state":
@@ -1834,45 +1835,45 @@ class _CandidateMacroAccumulator:
 
     @staticmethod
     def _update(
-        groups: dict[tuple[object, ...], dict[str, object]],
-        key: tuple[object, ...],
-        row: Mapping[str, object],
+        groups: dict[tuple[Any, ...], dict[str, Any]],
+        key: tuple[Any, ...],
+        row: Mapping[str, Any],
     ) -> None:
         stats = groups.setdefault(
             key,
             {
                 "prototype": dict(row),
                 "member_count": 0,
-                "mean_sums": Counter(),
-                "mean_counts": Counter(),
-                "sums": Counter(),
+                "mean_sums": {},
+                "mean_counts": {},
+                "sums": {},
             },
         )
         stats["member_count"] = int(stats["member_count"]) + 1
         mean_sums = stats["mean_sums"]
         mean_counts = stats["mean_counts"]
         sums = stats["sums"]
-        assert isinstance(mean_sums, Counter)
-        assert isinstance(mean_counts, Counter)
-        assert isinstance(sums, Counter)
+        assert isinstance(mean_sums, dict)
+        assert isinstance(mean_counts, dict)
+        assert isinstance(sums, dict)
         for field in _CANDIDATE_MACRO_MEAN_FIELDS:
             value = _finite_or_none(row.get(field))
             if value is not None:
-                mean_sums[field] += value
-                mean_counts[field] += 1
+                mean_sums[field] = float(mean_sums.get(field, 0.0)) + value
+                mean_counts[field] = int(mean_counts.get(field, 0)) + 1
         for field in _CANDIDATE_MACRO_SUM_FIELDS:
             value = row.get(field)
             if isinstance(value, (int, np.integer)) and not isinstance(value, bool):
-                sums[field] += int(value)
+                sums[field] = int(sums.get(field, 0)) + int(value)
 
-    def rows(self) -> list[dict[str, object]]:
+    def rows(self) -> list[dict[str, Any]]:
         """Return deterministic scene and equal-scene cohort macro rows."""
 
         scene_rows = [
             self._finalize(stats, level="scene_macro", scene=key[1])
             for key, stats in sorted(self._scene_groups.items(), key=lambda item: tuple(map(str, item[0])))
         ]
-        cohort_groups: dict[tuple[object, ...], dict[str, object]] = {}
+        cohort_groups: dict[tuple[Any, ...], dict[str, Any]] = {}
         for row in scene_rows:
             key = (row.get("generation_cohort_id"), *(row.get(field) for field in self._facet_fields))
             self._update(cohort_groups, key, row)
@@ -1883,15 +1884,15 @@ class _CandidateMacroAccumulator:
         return _sort_candidate_summary_rows([*scene_rows, *cohort_rows])
 
     @staticmethod
-    def _finalize(stats: Mapping[str, object], *, level: str, scene: object) -> dict[str, object]:
+    def _finalize(stats: Mapping[str, Any], *, level: str, scene: Any) -> dict[str, Any]:
         prototype = stats["prototype"]
         mean_sums = stats["mean_sums"]
         mean_counts = stats["mean_counts"]
         sums = stats["sums"]
         assert isinstance(prototype, dict)
-        assert isinstance(mean_sums, Counter)
-        assert isinstance(mean_counts, Counter)
-        assert isinstance(sums, Counter)
+        assert isinstance(mean_sums, dict)
+        assert isinstance(mean_counts, dict)
+        assert isinstance(sums, dict)
         row = {
             **prototype,
             "aggregation_level": level,
@@ -1900,11 +1901,13 @@ class _CandidateMacroAccumulator:
             "scene": scene,
         }
         for field in _CANDIDATE_MACRO_MEAN_FIELDS:
-            if field in prototype or mean_counts[field]:
-                row[field] = None if not mean_counts[field] else float(mean_sums[field] / mean_counts[field])
+            mean_count = int(mean_counts.get(field, 0))
+            if field in prototype or mean_count:
+                row[field] = None if not mean_count else float(mean_sums[field] / mean_count)
         for field in _CANDIDATE_MACRO_SUM_FIELDS:
-            if field in prototype or sums[field]:
-                row[field] = int(sums[field])
+            total = int(sums.get(field, 0))
+            if field in prototype or total:
+                row[field] = total
         if "candidate_total_count" in row:
             row["total_count"] = row["candidate_total_count"]
         if "candidate_finite_count" in row:
@@ -1914,9 +1917,9 @@ class _CandidateMacroAccumulator:
         if "state_count" not in row:
             row["state_count"] = int(stats["member_count"])
         row["scene_count"] = 1 if level == "scene_macro" else int(stats["member_count"])
-        row["available"] = any(mean_counts[field] > 0 for field in _CANDIDATE_MACRO_MEAN_FIELDS)
+        row["available"] = any(int(mean_counts.get(field, 0)) > 0 for field in _CANDIDATE_MACRO_MEAN_FIELDS)
         if "nearest_neighbor_available" in prototype:
-            row["nearest_neighbor_available"] = mean_counts["nearest_neighbor_deg"] > 0
+            row["nearest_neighbor_available"] = int(mean_counts.get("nearest_neighbor_deg", 0)) > 0
             row["nearest_neighbor_reason"] = (
                 None if row["nearest_neighbor_available"] else "undefined for the selected state population"
             )
@@ -1924,8 +1927,8 @@ class _CandidateMacroAccumulator:
 
 
 def _candidate_scientific_macro_evidence(
-    rows: Iterable[Mapping[str, object]],
-) -> tuple[dict[str, object], list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
+    rows: Iterable[Mapping[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Stream complete candidates into scene/cohort evidence without cached state rows."""
 
     direction_density = _CandidateMacroAccumulator(facet_fields=("population", "azimuth_bin", "sin_elevation_bin"))
@@ -1964,7 +1967,7 @@ def _candidate_scientific_macro_evidence(
     )
 
 
-def _probability_state_error(state: Mapping[str, object]) -> str | None:
+def _probability_state_error(state: Mapping[str, Any]) -> str | None:
     """Return the fail-closed reason for one complete sampler vector."""
 
     total = int(state["total"])
@@ -1993,20 +1996,18 @@ class _CandidatePopulationAccumulator:
     def __init__(self, *, max_sample_rows: int) -> None:
         self.max_sample_rows = max_sample_rows
         self.population_count = 0
-        self._sample: list[tuple[str, int, dict[str, object]]] = []
-        self._cohorts: dict[str, dict[str, object]] = {}
-        self._state_families: dict[CandidateGroupField, dict[tuple[str, str, str], dict[str, object]]] = {
+        self._sample: list[tuple[str, int, dict[str, Any]]] = []
+        self._cohorts: dict[str, dict[str, Any]] = {}
+        self._state_families: dict[CandidateGroupField, dict[tuple[str, str, str], dict[str, Any]]] = {
             key: {} for key in CANDIDATE_GROUP_FIELDS
         }
-        self._groups: dict[CandidateGroupField, dict[str, dict[str, object]]] = {
-            key: {} for key in CANDIDATE_GROUP_FIELDS
-        }
-        self._collision: dict[str, dict[str, object]] = {}
+        self._groups: dict[CandidateGroupField, dict[str, dict[str, Any]]] = {key: {} for key in CANDIDATE_GROUP_FIELDS}
+        self._collision: dict[str, dict[str, Any]] = {}
         self._target_evidence_roles: dict[str, dict[str, int]] = {}
-        self._selection_states: dict[tuple[str, str], dict[str, object]] = {}
+        self._selection_states: dict[tuple[str, str], dict[str, Any]] = {}
         self._selection_vocab: dict[tuple[str, CandidateSelectionGroupField], set[str]] = {}
 
-    def consume(self, row: Mapping[str, object]) -> None:
+    def consume(self, row: Mapping[str, Any]) -> None:
         normalized = dict(row)
         self.population_count += 1
         cohort_id = str(normalized.get("generation_cohort_id", "unknown"))
@@ -2195,8 +2196,8 @@ class _CandidatePopulationAccumulator:
             del self._sample[self.max_sample_rows :]
 
     @staticmethod
-    def _state_macro(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-        by_scene: dict[str, list[Mapping[str, object]]] = {}
+    def _state_macro(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        by_scene: dict[str, list[Mapping[str, Any]]] = {}
         for row in rows:
             by_scene.setdefault(str(row["scene"]), []).append(row)
         return [
@@ -2207,15 +2208,15 @@ class _CandidatePopulationAccumulator:
             for scene, scene_rows in sorted(by_scene.items())
         ]
 
-    def compositions(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
-        output: dict[CandidateGroupField, list[dict[str, object]]] = {}
+    def compositions(self) -> dict[CandidateGroupField, list[dict[str, Any]]]:
+        output: dict[CandidateGroupField, list[dict[str, Any]]] = {}
         for group_by in CANDIDATE_GROUP_FIELDS:
-            families: dict[tuple[str, str], list[dict[str, object]]] = {}
+            families: dict[tuple[str, str], list[dict[str, Any]]] = {}
             for (cohort_id, family, _state_id), state in self._state_families[group_by].items():
                 families.setdefault((cohort_id, family), []).append(state)
-            rows: list[dict[str, object]] = []
+            rows: list[dict[str, Any]] = []
             for (cohort_id, family), states in sorted(families.items()):
-                scenes: dict[str, list[dict[str, object]]] = {}
+                scenes: dict[str, list[dict[str, Any]]] = {}
                 for state in states:
                     scenes.setdefault(str(state["scene"]), []).append(state)
                 scene_rates = [
@@ -2262,7 +2263,7 @@ class _CandidatePopulationAccumulator:
             output[group_by] = rows
         return output
 
-    def target_evidence_roles(self) -> list[dict[str, object]]:
+    def target_evidence_roles(self) -> list[dict[str, Any]]:
         """Return complete, cohort-qualified target evidence-role counts."""
 
         return [
@@ -2275,11 +2276,11 @@ class _CandidatePopulationAccumulator:
             for role, count in sorted(roles.items())
         ]
 
-    def calibrations(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
+    def calibrations(self) -> dict[CandidateGroupField, list[dict[str, Any]]]:
         compositions = self.compositions()
-        output: dict[CandidateGroupField, list[dict[str, object]]] = {}
+        output: dict[CandidateGroupField, list[dict[str, Any]]] = {}
         for group_by in CANDIDATE_GROUP_FIELDS:
-            rows: list[dict[str, object]] = []
+            rows: list[dict[str, Any]] = []
             for summary in compositions[group_by]:
                 cohort_id = str(summary["generation_cohort_id"])
                 family = str(summary["family"])
@@ -2290,7 +2291,7 @@ class _CandidatePopulationAccumulator:
                     if cid == cohort_id and fam == family
                 ]
                 all_states = cohort["states"]
-                state_rows: list[dict[str, object]] = []
+                state_rows: list[dict[str, Any]] = []
                 family_state_by_id = {
                     key[2]: value
                     for key, value in self._state_families[group_by].items()
@@ -2328,7 +2329,7 @@ class _CandidatePopulationAccumulator:
                             "selected_share": selected_share,
                             "selection_enrichment": None
                             if empirical in (None, 0.0) or selected_share is None
-                            else selected_share / empirical,
+                            else selected_share / cast(float, empirical),
                         }
                     )
                 scene_rows = self._state_macro(state_rows)
@@ -2373,7 +2374,7 @@ class _CandidatePopulationAccumulator:
                         "population_selected_share": selected_share,
                         "population_selection_enrichment": None
                         if empirical in (None, 0.0) or selected_share is None
-                        else selected_share / empirical,
+                        else selected_share / cast(float, empirical),
                         "state_count": len(all_states),
                         "scene_count": len(scene_rows),
                         "empirical_frequency": macro["empirical_frequency"],
@@ -2394,8 +2395,8 @@ class _CandidatePopulationAccumulator:
             output[group_by] = rows
         return output
 
-    def collision(self) -> list[dict[str, object]]:
-        rows: list[dict[str, object]] = []
+    def collision(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
         for cohort_id, summary in sorted(self._collision.items()):
             state_rows = []
             for state in summary["states"].values():
@@ -2440,12 +2441,12 @@ class _CandidatePopulationAccumulator:
             )
         return rows
 
-    def selection_dynamics(self) -> dict[CandidateSelectionGroupField, list[dict[str, object]]]:
+    def selection_dynamics(self) -> dict[CandidateSelectionGroupField, list[dict[str, Any]]]:
         """Return state-level family availability, policy mass, and realized selection."""
 
-        output: dict[CandidateSelectionGroupField, list[dict[str, object]]] = {}
+        output: dict[CandidateSelectionGroupField, list[dict[str, Any]]] = {}
         for group_by in CANDIDATE_SELECTION_GROUP_FIELDS:
-            rows: list[dict[str, object]] = []
+            rows: list[dict[str, Any]] = []
             for (cohort_id, _state_id), state in sorted(
                 self._selection_states.items(),
                 key=lambda item: (
@@ -2502,8 +2503,8 @@ class _CandidatePopulationAccumulator:
             output[group_by] = rows
         return output
 
-    def groups(self) -> dict[CandidateGroupField, list[dict[str, object]]]:
-        output: dict[CandidateGroupField, list[dict[str, object]]] = {}
+    def groups(self) -> dict[CandidateGroupField, list[dict[str, Any]]]:
+        output: dict[CandidateGroupField, list[dict[str, Any]]] = {}
         for group_by in CANDIDATE_GROUP_FIELDS:
             rows = []
             for family, summary in sorted(self._groups[group_by].items()):
@@ -2523,7 +2524,7 @@ class _CandidatePopulationAccumulator:
             output[group_by] = rows
         return output
 
-    def sample(self) -> dict[str, object]:
+    def sample(self) -> dict[str, Any]:
         rows = [row for _, _, row in self._sample]
         return {
             "rows": rows,
@@ -2535,7 +2536,7 @@ class _CandidatePopulationAccumulator:
         }
 
 
-def _candidate_selection_family(row: Mapping[str, object], group_by: CandidateSelectionGroupField) -> str:
+def _candidate_selection_family(row: Mapping[str, Any], group_by: CandidateSelectionGroupField) -> str:
     """Return one closed-vocabulary family label for selection diagnostics."""
 
     if group_by == "position_strategy":
@@ -2543,7 +2544,7 @@ def _candidate_selection_family(row: Mapping[str, object], group_by: CandidateSe
     return str(row.get(group_by, "unknown"))
 
 
-def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, object]]) -> bool:
+def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, Any]]) -> bool:
     """Return whether state rows can form ordered factual sequences."""
 
     materialized = list(rows)
@@ -2553,12 +2554,12 @@ def _selection_rows_have_factual_identity(rows: Iterable[Mapping[str, object]]) 
 
 
 def _materialize_selection_family_union(
-    rows: Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
+    rows: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Add zero-valued rows for families absent from compatible factual states."""
 
     materialized = [dict(row) for row in rows]
-    families_by_contract: dict[tuple[object, ...], set[str]] = {}
+    families_by_contract: dict[tuple[Any, ...], set[str]] = {}
     for row in materialized:
         contract = (
             row.get("group_by"),
@@ -2569,7 +2570,7 @@ def _materialize_selection_family_union(
         )
         families_by_contract.setdefault(contract, set()).add(str(row["family"]))
 
-    states: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    states: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for row in materialized:
         contract = (
             row.get("group_by"),
@@ -2588,7 +2589,7 @@ def _materialize_selection_family_union(
         )
         states.setdefault(state, []).append(row)
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     zero_fields = (
         "family_candidate_count",
         "family_actor_valid_count",
@@ -2621,10 +2622,10 @@ def _materialize_selection_family_union(
 
 
 def candidate_selection_transition_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
+    dynamics_rows: Iterable[Mapping[str, Any]],
     *,
     pool_temperatures: bool = False,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Summarize expected and realized family transitions over factual depth.
 
     ``policy_mass`` is the complete candidate-level selection-probability mass
@@ -2638,7 +2639,7 @@ def candidate_selection_transition_rows(
     rows = [dict(row) for row in dynamics_rows]
     if pool_temperatures:
         rows = _materialize_selection_family_union(rows)
-    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
+    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, Any]]]] = {}
     for row in rows:
         rollout_row_id = row.get("rollout_row_id")
         step_index = row.get("step_index")
@@ -2647,7 +2648,7 @@ def candidate_selection_transition_rows(
         key = (str(row.get("generation_cohort_id", "unknown")), int(rollout_row_id))
         by_rollout.setdefault(key, {}).setdefault(int(step_index), []).append(row)
 
-    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    grouped: dict[tuple[Any, ...], dict[str, Any]] = {}
     for (_cohort_id, _rollout_row_id), steps in sorted(by_rollout.items()):
         indices = sorted(steps)
         if indices != list(range(len(indices))):
@@ -2705,7 +2706,7 @@ def candidate_selection_transition_rows(
                 else:
                     expected_values.append(policy_mass)
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
         expected = np.asarray(summary["expected_values"], dtype=np.float64)
         q25, median, q75 = (
@@ -2764,10 +2765,10 @@ def candidate_selection_transition_rows(
 
 
 def candidate_selection_temporal_summary_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
+    dynamics_rows: Iterable[Mapping[str, Any]],
     *,
     metric: str,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Summarize one state-level candidate-family quantity over factual depth."""
 
     if metric not in _CANDIDATE_SELECTION_TEMPORAL_METRICS:
@@ -2775,7 +2776,7 @@ def candidate_selection_temporal_summary_rows(
             f"Unsupported candidate selection metric {metric!r}; "
             f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
         )
-    grouped: dict[tuple[object, ...], list[object]] = {}
+    grouped: dict[tuple[Any, ...], list[Any]] = {}
     for source_row in dynamics_rows:
         row = dict(source_row)
         step_index = row.get("step_index")
@@ -2794,7 +2795,7 @@ def candidate_selection_temporal_summary_rows(
             row.get("family"),
         )
         grouped.setdefault(key, []).append(row.get(metric))
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, values in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
         finite = np.asarray(
             [value for value in (_finite_or_none(value) for value in values) if value is not None],
@@ -2845,10 +2846,10 @@ def candidate_selection_temporal_summary_rows(
 
 
 def candidate_selection_pooled_summary_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
+    dynamics_rows: Iterable[Mapping[str, Any]],
     *,
     metric: str,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Pool one compatible candidate-family fraction over factual trajectories.
 
     This is a sample-population view for one selected store. It deliberately
@@ -2863,7 +2864,7 @@ def candidate_selection_pooled_summary_rows(
             f"Unsupported candidate selection metric {metric!r}; "
             f"expected one of {_CANDIDATE_SELECTION_TEMPORAL_METRICS}."
         )
-    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    grouped: dict[tuple[Any, ...], dict[str, Any]] = {}
     for row in _materialize_selection_family_union(dynamics_rows):
         step_index = row.get("step_index")
         if step_index is None:
@@ -2908,7 +2909,7 @@ def candidate_selection_pooled_summary_rows(
         denominator = 1 if denominator_field is None else int(row[denominator_field])
         summary["denominator"] = int(summary["denominator"]) + denominator
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, summary in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
         group_by, policy, horizon, branch_factor, beam_width, step_index, family = key
         state_ids = summary["state_ids"]
@@ -2948,12 +2949,12 @@ def candidate_selection_pooled_summary_rows(
 
 
 def candidate_selection_sequence_rows(
-    dynamics_rows: Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
+    dynamics_rows: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Return one selected-family sequence and terminal gain per factual rollout."""
 
     rows = [dict(row) for row in dynamics_rows]
-    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, object]]]] = {}
+    by_rollout: dict[tuple[str, int], dict[int, list[dict[str, Any]]]] = {}
     for row in rows:
         rollout_row_id = row.get("rollout_row_id")
         step_index = row.get("step_index")
@@ -2962,7 +2963,7 @@ def candidate_selection_sequence_rows(
         key = (str(row.get("generation_cohort_id", "unknown")), int(rollout_row_id))
         by_rollout.setdefault(key, {}).setdefault(int(step_index), []).append(row)
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for (cohort_id, rollout_row_id), steps in sorted(by_rollout.items()):
         indices = sorted(steps)
         if indices != list(range(len(indices))):
@@ -2998,11 +2999,11 @@ def candidate_selection_sequence_rows(
 
 
 def candidate_sequence_return_summary_rows(
-    sequence_rows: Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
+    sequence_rows: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Summarize terminal return by exact selected-family sequence."""
 
-    grouped: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    grouped: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for source_row in sequence_rows:
         row = dict(source_row)
         key = (
@@ -3017,7 +3018,7 @@ def candidate_sequence_return_summary_rows(
             row.get("sequence"),
         )
         grouped.setdefault(key, []).append(row)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, rows in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
         gains = np.asarray(
             [
@@ -3069,11 +3070,11 @@ def candidate_sequence_return_summary_rows(
 
 
 def temporal_metric_summary_rows(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
     *,
     metric: str,
     group_fields: Iterable[str] = (),
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Aggregate one factual rollout metric over depth and explicit strata.
 
     Args:
@@ -3106,9 +3107,9 @@ def temporal_metric_summary_rows(
             f"{sorted(_TEMPORAL_GROUP_FIELDS)}."
         )
 
-    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else list(source)
+    source_rows = rollout_step_objective_rows(source) if isinstance(source, RolloutZarrStoreReader) else list(source)
     value_field, units = _TEMPORAL_METRICS[metric]
-    grouped: dict[tuple[object, ...], list[object]] = {}
+    grouped: dict[tuple[Any, ...], list[Any]] = {}
     for source_row in source_rows:
         row = dict(source_row)
         step_index = row.get("step_index")
@@ -3117,7 +3118,7 @@ def temporal_metric_summary_rows(
         key = (*(_temporal_group_value(row, field) for field in groups), int(step_index))
         grouped.setdefault(key, []).append(row.get(value_field))
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, values in sorted(
         grouped.items(),
         key=lambda item: (*tuple(str(value) for value in item[0][:-1]), int(item[0][-1])),
@@ -3143,7 +3144,7 @@ def temporal_metric_summary_rows(
             }
         else:
             statistics = dict.fromkeys(("median", "q25", "q75", "mean", "min", "max"))
-        row_output: dict[str, object] = {
+        row_output: dict[str, Any] = {
             "metric": metric,
             "units": units,
             "step_index": int(key[-1]),
@@ -3158,10 +3159,10 @@ def temporal_metric_summary_rows(
 
 
 def rollout_endpoint_metric_summary(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
     *,
     metric: str,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Summarize one terminal factual step per rollout for a metric.
 
     Each rollout contributes exactly its greatest persisted ``step_index``;
@@ -3171,9 +3172,9 @@ def rollout_endpoint_metric_summary(
 
     if metric not in _TEMPORAL_METRICS:
         raise ValueError(f"Unsupported temporal metric {metric!r}; expected one of {sorted(_TEMPORAL_METRICS)}.")
-    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else list(source)
+    source_rows = rollout_step_objective_rows(source) if isinstance(source, RolloutZarrStoreReader) else list(source)
     value_field, units = _TEMPORAL_METRICS[metric]
-    endpoints: dict[int, tuple[int, int, object]] = {}
+    endpoints: dict[int, tuple[int, int, Any]] = {}
     for position, source_row in enumerate(source_rows):
         row = dict(source_row)
         if row.get("rollout_row_id") is None or row.get("step_index") is None:
@@ -3199,14 +3200,18 @@ def rollout_endpoint_metric_summary(
 
 
 def reconstruction_metric_summary_rows(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Summarize the fixed factual reconstruction and selection metric plan."""
 
-    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
+    source_rows = (
+        rollout_step_objective_rows(source)
+        if isinstance(source, RolloutZarrStoreReader)
+        else [dict(row) for row in source]
+    )
     rollout_count = len({int(row["rollout_row_id"]) for row in source_rows if row.get("rollout_row_id") is not None})
     endpoints = reconstruction_endpoint_rows(source_rows)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for family, metric, label in _RECONSTRUCTION_METRIC_SPECS:
         values = [_finite_or_none(row.get(metric)) for row in source_rows]
         finite = np.asarray([value for value in values if value is not None], dtype=np.float64)
@@ -3233,12 +3238,16 @@ def reconstruction_metric_summary_rows(
 
 
 def reconstruction_endpoint_rows(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
-) -> list[dict[str, object]]:
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Return one greatest persisted factual step per rollout."""
 
-    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
-    endpoints: dict[int, tuple[int, int, dict[str, object]]] = {}
+    source_rows = (
+        rollout_step_objective_rows(source)
+        if isinstance(source, RolloutZarrStoreReader)
+        else [dict(row) for row in source]
+    )
+    endpoints: dict[int, tuple[int, int, dict[str, Any]]] = {}
     for position, row in enumerate(source_rows):
         if row.get("rollout_row_id") is None or row.get("step_index") is None:
             raise ValueError("Endpoint source rows require rollout_row_id and step_index.")
@@ -3259,10 +3268,10 @@ def reconstruction_endpoint_rows(
 
 
 def reconstruction_endpoint_summary_rows(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
     *,
     group_fields: Iterable[str] = ("policy", "horizon"),
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Summarize factual endpoints over supported exact display strata."""
 
     groups = tuple(group_fields)
@@ -3270,9 +3279,9 @@ def reconstruction_endpoint_summary_rows(
     if unsupported:
         raise ValueError(f"Unsupported endpoint group field(s): {unsupported!r}.")
     endpoints = reconstruction_endpoint_rows(source)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for family, metric, label in _RECONSTRUCTION_METRIC_SPECS:
-        grouped: dict[tuple[object, ...], list[object]] = {}
+        grouped: dict[tuple[Any, ...], list[Any]] = {}
         for row in endpoints:
             grouped.setdefault(tuple(row.get(field) for field in groups), []).append(row.get(metric))
         for key, values in sorted(grouped.items(), key=lambda item: tuple(str(value) for value in item[0])):
@@ -3295,11 +3304,11 @@ def reconstruction_endpoint_summary_rows(
 
 
 def discounted_rollout_return_rows(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
     *,
-    return_semantics: object,
-    discount_gamma: object,
-) -> dict[str, object]:
+    return_semantics: Any,
+    discount_gamma: Any,
+) -> dict[str, Any]:
     """Derive discounted factual selected gain under the persisted contract."""
 
     if return_semantics != "cumulative_target_root_gain":
@@ -3307,19 +3316,23 @@ def discounted_rollout_return_rows(
     gamma = _finite_or_none(discount_gamma)
     if gamma is None or gamma < 0.0 or gamma > 1.0:
         return {"available": False, "reason": f"invalid discount_gamma={discount_gamma!r}", "rows": []}
-    source_rows = rollout_step_objective_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
-    grouped: dict[int, list[dict[str, object]]] = {}
+    source_rows = (
+        rollout_step_objective_rows(source)
+        if isinstance(source, RolloutZarrStoreReader)
+        else [dict(row) for row in source]
+    )
+    grouped: dict[int, list[dict[str, Any]]] = {}
     for row in source_rows:
         if row.get("rollout_row_id") is not None:
             grouped.setdefault(int(row["rollout_row_id"]), []).append(row)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for rollout_row_id, rows in sorted(grouped.items()):
         ordered = sorted(rows, key=lambda row: int(row["step_index"]))
         rewards = [_finite_or_none(row.get("selected_target_root_gain")) for row in ordered]
         discounted = (
             None
             if any(reward is None for reward in rewards)
-            else float(sum((gamma**index) * float(reward) for index, reward in enumerate(rewards)))
+            else float(sum((gamma**index) * reward for index, reward in enumerate(cast(list[float], rewards))))
         )
         first = ordered[0]
         output.append(
@@ -3339,10 +3352,10 @@ def discounted_rollout_return_rows(
     return {"available": True, "reason": "derived from factual selected_target_root_gain steps", "rows": output}
 
 
-def exact_policy_role_rows(cohort_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+def exact_policy_role_rows(cohort_rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Attach roles from exact persisted pairs without dropping unknown rows."""
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for raw_row_id, source_row in enumerate(cohort_rows):
         row = dict(source_row)
         identifier = (str(row.get("policy", "")), str(row.get("branch_schedule", "")))
@@ -3359,18 +3372,21 @@ def exact_policy_role_rows(cohort_rows: Iterable[Mapping[str, object]]) -> list[
 
 
 def oracle_headroom_evidence(
-    source: RolloutZarrStoreReader | Iterable[Mapping[str, object]],
+    source: RolloutZarrStoreReader | Iterable[Mapping[str, Any]],
     *,
     threshold: float = 1e-8,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Return exact-role diagnostic endpoint contrasts with honest exclusions."""
 
     if threshold <= 0.0:
         raise ValueError("threshold must be positive.")
-    source_rows = _policy_cohort_projection_rows(source) if hasattr(source, "array") else [dict(row) for row in source]
+    if callable(getattr(source, "array", None)):
+        source_rows = _policy_cohort_projection_rows(cast(RolloutZarrStoreReader, source))
+    else:
+        source_rows = [dict(row) for row in cast(Iterable[Mapping[str, Any]], source)]
     role_rows = exact_policy_role_rows(source_rows)
-    grouped: dict[str, list[dict[str, object]]] = {}
-    malformed_rows: list[dict[str, object]] = []
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    malformed_rows: list[dict[str, Any]] = []
     for row in role_rows:
         if row.get("semantic_role") is None:
             malformed_rows.append(
@@ -3409,15 +3425,15 @@ def oracle_headroom_evidence(
         "delta_Q": ("learned_one_step", "q_h"),
         "eta_Q": ("learned_one_step", "q_h", "oracle_lookahead"),
     }
-    contrast_rows: list[dict[str, object]] = []
-    role_disposition_rows: list[dict[str, object]] = []
+    contrast_rows: list[dict[str, Any]] = []
+    role_disposition_rows: list[dict[str, Any]] = []
     for invariant_key, rows in sorted(grouped.items()):
-        by_role: dict[str, list[dict[str, object]]] = {}
+        by_role: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
             by_role.setdefault(str(row["semantic_role"]), []).append(row)
         for contrast, roles in contrast_specs.items():
             reason: str | None = None
-            selected: dict[str, dict[str, object]] = {}
+            selected: dict[str, dict[str, Any]] = {}
             for role in roles:
                 matches = by_role.get(role, [])
                 if not matches:
@@ -3427,7 +3443,7 @@ def oracle_headroom_evidence(
                     reason = f"duplicate_role:{role}"
                     break
                 selected[role] = matches[0]
-            normalized_conditions: dict[str, dict[str, object]] = {}
+            normalized_conditions: dict[str, dict[str, Any]] = {}
             values: dict[str, float] = {}
             if reason is None:
                 for role, row in selected.items():
@@ -3440,11 +3456,11 @@ def oracle_headroom_evidence(
                         reason = "unsupported_semantics"
                         break
                     normalized_conditions[role] = {"temperature": temperature, "random_seed": random_seed}
-                    value = _finite_or_none(row.get("final_cumulative_target_root_gain"))
-                    if value is None:
+                    endpoint_value = _finite_or_none(row.get("final_cumulative_target_root_gain"))
+                    if endpoint_value is None:
                         reason = f"nonfinite_endpoint:{role}"
                         break
-                    values[role] = value
+                    values[role] = endpoint_value
             if reason is None:
                 for field in ("temperature", "random_seed"):
                     applicable = {
@@ -3502,7 +3518,7 @@ def oracle_headroom_evidence(
                 }
                 for row in rows
             )
-    malformed_cohorts: list[dict[str, object]] = []
+    malformed_cohorts: list[dict[str, Any]] = []
     for malformed in malformed_rows:
         malformed_cohorts.append(malformed)
     for malformed in malformed_cohorts:
@@ -3542,7 +3558,7 @@ def oracle_headroom_evidence(
                     "exclusion_reason": malformed["exclusion_reason"],
                 }
             )
-    dispositions_by_id: dict[int, list[dict[str, object]]] = {}
+    dispositions_by_id: dict[int, list[dict[str, Any]]] = {}
     for disposition in role_disposition_rows:
         dispositions_by_id.setdefault(int(disposition["raw_row_id"]), []).append(disposition)
     for row in role_rows:
@@ -3558,7 +3574,7 @@ def oracle_headroom_evidence(
         else:
             row["evidence_status"] = "not_applicable"
             row["exclusion_reason"] = None
-    summary_rows: list[dict[str, object]] = []
+    summary_rows: list[dict[str, Any]] = []
     for contrast in contrast_specs:
         rows = [row for row in contrast_rows if row["contrast"] == contrast]
         reasons = Counter(str(row["exclusion_reason"]) for row in rows if row["exclusion_reason"] is not None)
@@ -3586,16 +3602,16 @@ def oracle_headroom_evidence(
     }
 
 
-def _missing_identity(value: object) -> bool:
+def _missing_identity(value: Any) -> bool:
     return value is None or value == ""
 
 
 def _headroom_condition(
-    row: Mapping[str, object],
+    row: Mapping[str, Any],
     field: str,
     *,
     missing_value: int,
-) -> tuple[object, bool]:
+) -> tuple[Any, bool]:
     value = row.get(field)
     applicable = bool(row.get(f"{field}_applicable", False))
     if value is None or value == missing_value or (isinstance(value, float) and not np.isfinite(value)):
@@ -3609,7 +3625,7 @@ def candidate_flow_rows(
     *,
     policies: Iterable[str] | None = None,
     step_indices: Iterable[int] | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return a count-conserving categorical candidate-provenance flow.
 
     The projection reads only rollout policy, candidate depth, provenance,
@@ -3705,7 +3721,7 @@ def candidate_flow_rows(
         for source_node, target_node in pairwise(nodes):
             transition_counts[(*source_node, *target_node)] += 1
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     stage_order = {stage: index for index, stage in enumerate(("root", "proposal", "actor_validity"))}
     for transition, count in sorted(
         transition_counts.items(),
@@ -3731,10 +3747,10 @@ def candidate_flow_rows(
 
 
 def candidate_composition_rows(
-    audit_rows: Iterable[Mapping[str, object]],
+    audit_rows: Iterable[Mapping[str, Any]],
     *,
     group_by: CandidateGroupField = "mixture",
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Macro-summarize candidate populations without pooling decision states.
 
     ``audit_rows`` must be the one materialized :func:`candidate_audit_rows`
@@ -3743,14 +3759,14 @@ def candidate_composition_rows(
     """
     if group_by not in CANDIDATE_GROUP_FIELDS:
         raise ValueError(f"Unsupported candidate group field {group_by!r}; expected one of {CANDIDATE_GROUP_FIELDS}.")
-    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for source_row in audit_rows:
         row = dict(source_row)
         cohort_id = str(row.get("generation_cohort_id", "unknown"))
         family = str(row.get(group_by, "unknown"))
         state = f"{row.get('scene', 'unknown')}\0{row.get('rollout_row_id', 'unknown')}\0{row.get('step_row_id', 'unknown')}"
         grouped.setdefault((cohort_id, family, state), []).append(row)
-    per_family: dict[tuple[str, str], list[dict[str, object]]] = {}
+    per_family: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for (cohort_id, family, state), rows in grouped.items():
         per_family.setdefault((cohort_id, family), []).append(
             {
@@ -3764,12 +3780,12 @@ def candidate_composition_rows(
                 "selected_count": sum(bool(row.get("selected")) for row in rows),
             }
         )
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for (cohort_id, family), states in sorted(per_family.items()):
-        scenes: dict[str, list[dict[str, object]]] = {}
+        scenes: dict[str, list[dict[str, Any]]] = {}
         for state in states:
             scenes.setdefault(str(state["scene"]), []).append(state)
-        scene_rates: list[dict[str, float]] = []
+        scene_rates: list[dict[str, Any]] = []
         for scene, scene_states in scenes.items():
             scene_rates.append(
                 {
@@ -3817,18 +3833,18 @@ def candidate_composition_rows(
 
 
 def candidate_proposal_calibration_rows(
-    audit_rows: Iterable[Mapping[str, object]],
+    audit_rows: Iterable[Mapping[str, Any]],
     *,
     group_by: CandidateGroupField = "mixture",
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Compare proposal mass and selected share inside exact decision states."""
     rows = [dict(row) for row in audit_rows]
     composition = candidate_composition_rows(rows, group_by=group_by)
-    by_family: dict[tuple[str, str], list[dict[str, object]]] = {}
+    by_family: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in rows:
         key = (str(row.get("generation_cohort_id", "unknown")), str(row.get(group_by, "unknown")))
         by_family.setdefault(key, []).append(row)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for summary in composition:
         cohort_id = str(summary["generation_cohort_id"])
         family_rows = by_family[(cohort_id, str(summary["family"]))]
@@ -3885,7 +3901,7 @@ def candidate_proposal_calibration_rows(
                 "population_selected_share": selected_share,
                 "population_selection_enrichment": None
                 if empirical in (None, 0.0) or selected_share is None
-                else selected_share / empirical,
+                else selected_share / cast(float, empirical),
                 "state_count": len(state_rows),
                 "scene_count": len(scene_rows),
                 "empirical_frequency": macro["empirical_frequency"],
@@ -3912,10 +3928,10 @@ def candidate_proposal_calibration_rows(
     return output
 
 
-def _group_candidate_states(rows: Iterable[Mapping[str, object]]) -> dict[tuple[object, ...], list[dict[str, object]]]:
+def _group_candidate_states(rows: Iterable[Mapping[str, Any]]) -> dict[tuple[Any, ...], list[dict[str, Any]]]:
     """Group candidate rows by one persisted decision state for validation."""
 
-    grouped: dict[tuple[object, ...], list[dict[str, object]]] = {}
+    grouped: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for source_row in rows:
         row = dict(source_row)
         key = (row.get("rollout_row_id"), row.get("step_row_id"))
@@ -3923,7 +3939,7 @@ def _group_candidate_states(rows: Iterable[Mapping[str, object]]) -> dict[tuple[
     return grouped
 
 
-def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
+def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Expose cohort-preserving collision and clearance availability.
 
     Counts remain exact populations. Rates are additionally reported as a
@@ -3931,10 +3947,10 @@ def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]])
     descriptive comparison.
     """
     rows = [dict(row) for row in audit_rows]
-    by_cohort: dict[str, list[dict[str, object]]] = {}
+    by_cohort: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         by_cohort.setdefault(str(row.get("generation_cohort_id", "unknown")), []).append(row)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for cohort_id, cohort_rows in sorted(by_cohort.items()):
         collision_available = [row for row in cohort_rows if _collision_evaluated(row)]
         clearance = [_finite_or_none(row.get("path_min_clearance_m")) for row in cohort_rows]
@@ -3975,14 +3991,14 @@ def candidate_collision_support_rows(audit_rows: Iterable[Mapping[str, object]])
     return output
 
 
-def _collision_evaluated(row: Mapping[str, object]) -> bool:
+def _collision_evaluated(row: Mapping[str, Any]) -> bool:
     """Read only explicit collision-evaluation evidence."""
 
     return row.get("path_collision_evaluated") is True
 
 
-def _candidate_state_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+def _candidate_state_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for source_row in rows:
         row = dict(source_row)
         key = (
@@ -3991,7 +4007,7 @@ def _candidate_state_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str
             str(row.get("step_row_id", "unknown")),
         )
         grouped.setdefault(key, []).append(row)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for (scene, _rollout, _step), state_rows in sorted(grouped.items()):
         available = [row for row in state_rows if _collision_evaluated(row)]
         finite_clearance = [
@@ -4017,8 +4033,8 @@ def _candidate_state_rows(rows: Iterable[Mapping[str, object]]) -> list[dict[str
 
 
 def _candidate_state_family_rows(
-    family_rows: Iterable[Mapping[str, object]], cohort_rows: Iterable[Mapping[str, object]]
-) -> list[dict[str, object]]:
+    family_rows: Iterable[Mapping[str, Any]], cohort_rows: Iterable[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     state_keys = {
         (
             str(row.get("scene", "unknown")),
@@ -4027,7 +4043,7 @@ def _candidate_state_family_rows(
         )
         for row in cohort_rows
     }
-    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for source_row in cohort_rows:
         row = dict(source_row)
         grouped.setdefault(
@@ -4038,7 +4054,7 @@ def _candidate_state_family_rows(
             ),
             [],
         ).append(row)
-    family_grouped: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    family_grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for source_row in family_rows:
         row = dict(source_row)
         family_grouped.setdefault(
@@ -4049,7 +4065,7 @@ def _candidate_state_family_rows(
             ),
             [],
         ).append(row)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key in sorted(state_keys):
         state = grouped[key]
         family = family_grouped.get(key, [])
@@ -4076,15 +4092,17 @@ def _candidate_state_family_rows(
                 "proposal_mass": proposal,
                 "selected_share": selected_share,
                 "selection_enrichment": (
-                    None if empirical in (None, 0.0) or selected_share is None else selected_share / empirical
+                    None
+                    if empirical is None or empirical == 0.0 or selected_share is None
+                    else selected_share / empirical
                 ),
             }
         )
     return output
 
 
-def _candidate_scene_macro_rows(state_rows: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
-    grouped: dict[str, list[dict[str, object]]] = {}
+def _candidate_scene_macro_rows(state_rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for row in state_rows:
         grouped.setdefault(str(row.get("scene", "unknown")), []).append(dict(row))
     return [
@@ -4103,18 +4121,18 @@ _MACRO_RATE_FIELDS = (
 )
 
 
-def _macro_mean(rows: Iterable[Mapping[str, object]], field: str) -> float | None:
+def _macro_mean(rows: Iterable[Mapping[str, Any]], field: str) -> float | None:
     values = [_finite_or_none(row.get(field)) for row in rows]
     finite = [value for value in values if value is not None]
     return None if not finite else float(np.mean(finite))
 
 
 def deterministic_candidate_display_sample(
-    audit_rows: Iterable[Mapping[str, object]],
+    audit_rows: Iterable[Mapping[str, Any]],
     *,
     max_rows: int = 500,
     seed: str = "stored-rollout-display-v1",
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Return an order-invariant, explicitly descriptive bounded sample."""
     if isinstance(max_rows, bool) or max_rows < 1:
         raise ValueError("max_rows must be a positive integer.")
@@ -4147,7 +4165,7 @@ def q_h_evidence_rows(
     state_row_limit: int | None = None,
     progress_callback: Callable[[int, int], bool] | None = None,
     validation_result: RolloutZarrValidationResult | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Read store-local Q_H contract facts without dataset-stage admission.
 
     Canonical validation is mandatory.  The default path reads metadata only;
@@ -4171,7 +4189,7 @@ def q_h_evidence_rows(
             }
         ]
     root_attrs = dict(root.attrs)
-    row: dict[str, object] = {
+    row: dict[str, Any] = {
         "available": True,
         "blocking_reason": None,
         "deep_count": deep_count,
@@ -4301,7 +4319,7 @@ def _validate_monotonic_array_chunks(array: Any, *, chunk_size: int) -> None:
         previous = int(values[-1])
 
 
-def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Return stored target-task rows with frozen selection and GT-audit fields."""
 
     return [
@@ -4336,7 +4354,7 @@ def target_audit_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]
     ]
 
 
-def validity_waterfall_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def validity_waterfall_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Return full-shell to selected counts for one rollout store."""
 
     total = int(np.asarray(reader.array("candidates/candidate_row_id")).size)
@@ -4353,7 +4371,7 @@ def validity_waterfall_rows(reader: RolloutZarrStoreReader) -> list[dict[str, ob
     ]
 
 
-def mask_combination_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def mask_combination_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Return observed candidate-mask combinations with explicit denominators.
 
     ``selected_mask`` is an actor decision and therefore only implies
@@ -4374,7 +4392,7 @@ def mask_combination_rows(reader: RolloutZarrStoreReader) -> list[dict[str, obje
     q_train = np.asarray(reader.array("candidates/q_train_mask"), dtype=np.bool_).reshape(-1)
     selected = np.asarray(reader.array("candidates/selected_mask"), dtype=np.bool_).reshape(-1)
     total = int(actor.size)
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for actor_value in (False, True):
         for oracle_value in (False, True):
             for q_train_value in (False, True):
@@ -4417,7 +4435,7 @@ def store_invariant_rows(
     *,
     manifest: dict[str, Any] | None = None,
     manifest_payload: dict[str, Any] | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Project the store's scientific and structural invariants as evidence rows.
 
     Args:
@@ -4501,8 +4519,8 @@ def candidate_group_summary_rows(
     reader: RolloutZarrStoreReader,
     *,
     group_by: CandidateGroupField,
-    audit_rows: Iterable[dict[str, object]] | None = None,
-) -> list[dict[str, object]]:
+    audit_rows: Iterable[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """Summarize candidate validity and labels by a decoded categorical field.
 
     Args:
@@ -4532,7 +4550,7 @@ def candidate_group_summary_rows(
             summary["target_root_gain_sum"] += float(gain)
             summary["gain_count"] += 1
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, summary in sorted(groups.items()):
         total = int(summary["total"])
         gain_count = int(summary["gain_count"])
@@ -4552,7 +4570,7 @@ def candidate_group_summary_rows(
     return output
 
 
-def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, object]:
+def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, Any]:
     """Build exact matched cohorts for scientifically valid policy comparison.
 
     Cohorts match on source sample, target identity/protocol, horizon and search
@@ -4571,14 +4589,14 @@ def comparable_policy_cohorts(reader: RolloutZarrStoreReader) -> dict[str, objec
 
     rows = _policy_cohort_projection_rows(reader)
     key_fields = _POLICY_COHORT_KEY_FIELDS
-    grouped: dict[str, list[dict[str, object]]] = {}
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         grouped.setdefault(str(row["cohort_key"]), []).append(row)
 
-    cohort_summaries: list[dict[str, object]] = []
-    eligible_summaries: list[dict[str, object]] = []
+    cohort_summaries: list[dict[str, Any]] = []
+    eligible_summaries: list[dict[str, Any]] = []
     for cohort_key, cohort_rows in sorted(grouped.items()):
-        by_label: dict[str, list[dict[str, object]]] = {}
+        by_label: dict[str, list[dict[str, Any]]] = {}
         for row in cohort_rows:
             by_label.setdefault(str(row["comparison_label"]), []).append(row)
         labels = tuple(sorted(by_label))
@@ -4618,7 +4636,7 @@ def paired_policy_comparison_rows(
     bootstrap_samples: int = 2_000,
     confidence: float = 0.95,
     seed: int = 0,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Summarize paired endpoint differences over exact policy cohorts.
 
     Args:
@@ -4644,14 +4662,14 @@ def paired_policy_comparison_rows(
 
     projection = comparable_policy_cohorts(reader)
     eligible_keys = {str(row["cohort_key"]) for row in projection["eligible_cohort_rows"]}
-    grouped: dict[str, dict[str, dict[str, object]]] = {}
+    grouped: dict[str, dict[str, dict[str, Any]]] = {}
     for row in projection["cohort_rows"]:
         cohort_key = str(row["cohort_key"])
         if cohort_key not in eligible_keys:
             continue
         grouped.setdefault(cohort_key, {})[str(row["comparison_label"])] = row
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     labels = tuple(str(value) for value in projection["comparison_policies"])
     metrics = (
         ("final_cumulative_target_rri", "dimensionless cumulative target RRI"),
@@ -4718,7 +4736,7 @@ def selected_candidate_rank_rows(
     *,
     policies: Iterable[str] | None = None,
     step_indices: Iterable[int] | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Rank selected actions by policy score and oracle target diagnostics.
 
     Root-gain rank/regret preserve the historical projection contract.
@@ -4809,7 +4827,7 @@ def selected_candidate_rank_rows(
     for candidate_position, step_row_id in enumerate(candidate_step_ids.tolist()):
         candidate_positions_by_step.setdefault(int(step_row_id), []).append(candidate_position)
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for step_row_id, rollout_row_id, step_index, selected_candidate_id in zip(
         step_row_ids,
         step_rollout_ids,
@@ -4907,7 +4925,7 @@ def root_relative_candidate_rows(
     rollout_row_id: int | None = None,
     step_row_id: int | None = None,
     actor_valid_only: bool = False,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return candidate centers relative to each rollout root in Z-up metres.
 
     The translation is ``candidate_center_world - root_center_world``. This
@@ -4926,7 +4944,7 @@ def root_relative_candidate_rows(
         units and ``RIGHT_HAND_Z_UP`` as the frame convention.
     """
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
@@ -4969,9 +4987,9 @@ def rollout_step_objective_rows(
     reader: RolloutZarrStoreReader,
     *,
     rollout_row_id: int | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return per-step objective, branching, and selected-action audit rows."""
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     candidate_configs = _decoded_array(reader, "lineage/candidate_config_id", "config")
     rollout_configs = _decoded_array(reader, "lineage/rollout_config_id", "config")
@@ -5054,7 +5072,7 @@ def rollout_step_objective_rows(
     return rows
 
 
-def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Summarize selected rollout-tree provenance by policy, step, and family.
 
     Rollout stores persist factual selected chains, not a full parent-edge tree.
@@ -5071,7 +5089,7 @@ def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, 
         "selected_probability": "selected_probability",
         "selected_entropy": "selected_entropy",
     }
-    groups: dict[tuple[object, ...], dict[str, float]] = {}
+    groups: dict[tuple[Any, ...], dict[str, float]] = {}
     for row in rollout_step_objective_rows(reader):
         key = (
             row.get("policy", ""),
@@ -5098,7 +5116,7 @@ def rollout_tree_summary_rows(reader: RolloutZarrStoreReader) -> list[dict[str, 
                 summary[f"{metric}_sum"] += value
                 summary[f"{metric}_count"] += 1.0
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, summary in sorted(groups.items(), key=lambda item: (str(item[0][0]), int(item[0][5] or 0), str(item[0]))):
         (
             policy,
@@ -5143,7 +5161,7 @@ def selected_depth_summary_rows(
     rollout_row_id: int | None = None,
     step_row_id: int | None = None,
     limit: int | None = 128,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return bounded summaries for persisted selected-action depth rasters.
 
     Dense selected-depth arrays are intentionally read only for the filtered
@@ -5151,7 +5169,7 @@ def selected_depth_summary_rows(
     production store by accident.
     """
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
@@ -5164,7 +5182,7 @@ def selected_depth_summary_rows(
                 return rows
             depth = selected_depth_for_step(reader, step)
             selected = step.selected_local_index
-            row: dict[str, object] = dict.fromkeys(
+            row: dict[str, Any] = dict.fromkeys(
                 "candidate_row_id valid_pixels finite_pixels pixel_count valid_fraction finite_fraction "
                 "depth_min_m depth_mean_m depth_max_m image_height image_width focal_x_px focal_y_px "
                 "principal_x_px principal_y_px".split()
@@ -5228,10 +5246,10 @@ def selected_depth_preview(
     *,
     step_row_id: int,
     max_size: int = 96,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Return one downsampled selected-depth payload for Plotly app previews."""
 
-    matches = []
+    matches: list[Any] = []
     rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
     for rollout_position in range(rollout_count):
         rollout = rollout_at(reader, rollout_position)
@@ -5268,12 +5286,12 @@ def selected_depth_preview(
     }
 
 
-def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[str, object]]]:
+def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[str, Any]]]:
     """Return live `CandidateSamplingResult` counts by position and invalid reason."""
 
     valid = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     position_values = getattr(candidates, "position_id", None)
-    position_rows: list[dict[str, object]] = []
+    position_rows: list[dict[str, Any]] = []
     if position_values is not None:
         positions = position_values.detach().cpu().numpy().reshape(-1)
         for value in sorted(np.unique(positions).tolist()):
@@ -5290,7 +5308,7 @@ def candidate_result_diagnostic_counts(candidates: Any) -> dict[str, list[dict[s
     reason_bitset, primary = _candidate_invalid_reasons(candidates)
     del reason_bitset
     primary_np = primary.detach().cpu().numpy().reshape(-1)
-    invalid_rows: list[dict[str, object]] = []
+    invalid_rows: list[dict[str, Any]] = []
     for value in sorted(np.unique(primary_np[~valid]).tolist()):
         mask = (~valid) & (primary_np == int(value))
         invalid_rows.append({"invalid_reason": decode_invalid_reason(int(value)), "count": int(mask.sum())})
@@ -5301,11 +5319,11 @@ def suspicious_rollout_rows(
     reader: RolloutZarrStoreReader,
     *,
     config: RolloutSuspiciousQueryConfig | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return heuristic anomaly rows for rollout-store QA triage."""
 
     cfg = config or RolloutSuspiciousQueryConfig()
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     rows.extend(_mask_violation_rows(reader))
     rows.extend(_low_fanout_rows(reader, cfg))
     rows.extend(_dominant_invalid_reason_rows(reader, cfg))
@@ -5317,7 +5335,7 @@ def suspicious_rollout_rows(
     return rows
 
 
-def _mask_violation_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def _mask_violation_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Return exact hard-mask implication violations at candidate-row grain."""
 
     candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
@@ -5329,7 +5347,7 @@ def _mask_violation_rows(reader: RolloutZarrStoreReader) -> list[dict[str, objec
     step_table_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
     step_rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
     rollout_by_step = {int(step): int(rollout) for step, rollout in zip(step_table_ids, step_rollout_ids, strict=True)}
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for index in np.flatnonzero(selected & (~actor)).tolist():
         step_id = int(step_ids[index])
         rows.append(
@@ -5357,10 +5375,10 @@ def _mask_violation_rows(reader: RolloutZarrStoreReader) -> list[dict[str, objec
     return rows
 
 
-def _target_ambiguity_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def _target_ambiguity_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Return persisted target-match ambiguity without treating it as low reward."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for target in target_audit_rows(reader):
         status = str(target.get("gt_match_status", "")).lower()
         if "ambigu" not in status:
@@ -5378,12 +5396,12 @@ def _target_ambiguity_rows(reader: RolloutZarrStoreReader) -> list[dict[str, obj
     return rows
 
 
-def _selected_depth_health_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def _selected_depth_health_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     """Return selected-depth linkage or finite-pixel failures when depth is enabled."""
 
     if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
         return []
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for depth in selected_depth_summary_rows(reader, limit=None):
         if bool(depth.get("available")) and int(depth.get("finite_pixels") or 0) > 0:
             continue
@@ -5400,7 +5418,7 @@ def _selected_depth_health_rows(reader: RolloutZarrStoreReader) -> list[dict[str
     return rows
 
 
-def _low_fanout_rows(reader: RolloutZarrStoreReader, cfg: RolloutSuspiciousQueryConfig) -> list[dict[str, object]]:
+def _low_fanout_rows(reader: RolloutZarrStoreReader, cfg: RolloutSuspiciousQueryConfig) -> list[dict[str, Any]]:
     valid_counts = np.asarray(reader.array("steps/num_valid_candidates"), dtype=np.int64).reshape(-1)
     step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
     rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
@@ -5421,13 +5439,13 @@ def _low_fanout_rows(reader: RolloutZarrStoreReader, cfg: RolloutSuspiciousQuery
 def _dominant_invalid_reason_rows(
     reader: RolloutZarrStoreReader,
     cfg: RolloutSuspiciousQueryConfig,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     candidate_step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
     step_ids = np.asarray(reader.array("steps/step_row_id"), dtype=np.int64).reshape(-1)
     rollout_ids = np.asarray(reader.array("steps/rollout_row_id"), dtype=np.int64).reshape(-1)
     valid = np.asarray(reader.array("candidates/actor_action_mask"), dtype=np.bool_).reshape(-1)
     primary = np.asarray(reader.array("candidates/primary_invalid_reason"), dtype=np.int64).reshape(-1)
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for step_index, step_row_id in enumerate(step_ids.tolist()):
         mask = candidate_step_ids == int(step_row_id)
         invalid_reasons = primary[mask & (~valid)]
@@ -5450,7 +5468,7 @@ def _dominant_invalid_reason_rows(
     return output
 
 
-def _missing_label_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def _missing_label_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     candidate_ids = np.asarray(reader.array("candidates/candidate_row_id"), dtype=np.int64).reshape(-1)
     rollout_ids = np.asarray(reader.array("candidates/rollout_row_id"), dtype=np.int64).reshape(-1)
     step_ids = np.asarray(reader.array("candidates/step_row_id"), dtype=np.int64).reshape(-1)
@@ -5474,8 +5492,8 @@ def _missing_label_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object
 def _high_score_invalid_target_rows(
     reader: RolloutZarrStoreReader,
     cfg: RolloutSuspiciousQueryConfig,
-) -> list[dict[str, object]]:
-    output: list[dict[str, object]] = []
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
     for row in target_audit_rows(reader):
         score = row.get("selection_score")
         if score is None or float(score) < float(cfg.high_target_score) or bool(row.get("gt_label_valid")):
@@ -5497,14 +5515,14 @@ def _high_score_invalid_target_rows(
 def _selected_motion_outlier_rows(
     reader: RolloutZarrStoreReader,
     cfg: RolloutSuspiciousQueryConfig,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     checks = (
         ("motion_step_length_m", cfg.max_step_distance_m, ">"),
         ("motion_height_delta_m", cfg.max_height_delta_m, "abs>"),
         ("motion_backward_step_m", cfg.max_backward_step_m, ">"),
         ("motion_yaw_delta_deg", cfg.max_yaw_delta_deg, "abs>"),
     )
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for row in candidate_audit_rows(reader):
         if not bool(row.get("selected")):
             continue
@@ -5531,7 +5549,7 @@ def _selected_motion_outlier_rows(
     return output
 
 
-def _rollout_store_inventory_row(store_path: Path, *, validate: bool = True) -> dict[str, object]:
+def _rollout_store_inventory_row(store_path: Path, *, validate: bool = True) -> dict[str, Any]:
     try:
         root = zarr.open_group(store_path, mode="r")
     except Exception as exc:
@@ -5581,7 +5599,7 @@ def _rollout_store_inventory_row(store_path: Path, *, validate: bool = True) -> 
             }
 
     missing_required = [name for name in _required_groups() if name not in root]
-    row: dict[str, object] = {
+    row: dict[str, Any] = {
         "path": store_path.as_posix(),
         "name": store_path.name,
         "schema_status": "current" if schema_version == ROLLOUT_ZARR_SCHEMA_VERSION else "stale",
@@ -5677,7 +5695,7 @@ def _manifest_coverage_count(manifest: dict[str, Any], key: str) -> int | None:
     return None
 
 
-def _store_stats(store_path: Path) -> dict[str, object]:
+def _store_stats(store_path: Path) -> dict[str, Any]:
     file_count = 0
     byte_size = 0
     if store_path.exists():
@@ -5787,7 +5805,7 @@ def _invariant_row(
     source_fields: tuple[str, ...],
     data_role: str,
     violation_count: int,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     return {
         "invariant_id": invariant_id,
         "category": category,
@@ -5801,7 +5819,7 @@ def _invariant_row(
     }
 
 
-def _schema_manifest_invariant(root_attrs: dict[str, Any], manifest: object) -> dict[str, object]:
+def _schema_manifest_invariant(root_attrs: dict[str, Any], manifest: Any) -> dict[str, Any]:
     manifest_dict = manifest if isinstance(manifest, dict) else {}
     root_schema = root_attrs.get("schema_version")
     manifest_schema = manifest_dict.get("schema_version")
@@ -5820,7 +5838,7 @@ def _schema_manifest_invariant(root_attrs: dict[str, Any], manifest: object) -> 
     )
 
 
-def _row_identity_invariant(reader: RolloutZarrStoreReader) -> dict[str, object]:
+def _row_identity_invariant(reader: RolloutZarrStoreReader) -> dict[str, Any]:
     sources = np.asarray(reader.array("sources/source_row_id"), dtype=np.int64).reshape(-1)
     targets = np.asarray(reader.array("targets/target_row_id"), dtype=np.int64).reshape(-1)
     rollouts = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
@@ -5864,7 +5882,7 @@ def _row_identity_invariant(reader: RolloutZarrStoreReader) -> dict[str, object]
 def _selected_depth_invariant(
     reader: RolloutZarrStoreReader,
     root_attrs: dict[str, Any],
-) -> dict[str, object]:
+) -> dict[str, Any]:
     enabled = bool(root_attrs.get("selected_depth_enabled", False))
     if not enabled:
         return _invariant_row(
@@ -5926,7 +5944,7 @@ def _selected_depth_invariant(
 def _target_eval_invariant(
     reader: RolloutZarrStoreReader,
     root_attrs: dict[str, Any],
-) -> dict[str, object]:
+) -> dict[str, Any]:
     enabled = bool(root_attrs.get("target_eval_crops_enabled", False))
     try:
         crop_ids = np.asarray(reader.array("target_eval_crops/crop_row_id"), dtype=np.int64).reshape(-1)
@@ -5995,7 +6013,7 @@ def _target_eval_invariant(
 def _target_protocol_invariant(
     reader: RolloutZarrStoreReader,
     root_attrs: dict[str, Any],
-) -> dict[str, object]:
+) -> dict[str, Any]:
     expected = str(root_attrs.get("target_protocol_version", ""))
     values = _decoded_array(reader, "lineage/target_protocol_version_id", "config")
     unique = tuple(sorted(set(values)))
@@ -6016,7 +6034,7 @@ def _target_protocol_invariant(
 def _q_h_invariant_rows(
     reader: RolloutZarrStoreReader,
     root_attrs: dict[str, Any],
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     try:
         persisted = reader.q_h_view()
         gamma = float(root_attrs.get("discount_gamma", 1.0))
@@ -6153,7 +6171,7 @@ def _arrays_equal(left: np.ndarray, right: np.ndarray) -> bool:
     return bool(np.array_equal(left_array, right_array))
 
 
-def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[str, object]]:
+def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[str, Any]]:
     rollout_ids = np.asarray(reader.array("rollouts/rollout_row_id"), dtype=np.int64).reshape(-1)
     source_ids = np.asarray(reader.array("rollouts/source_row_id"), dtype=np.int64).reshape(-1)
     target_ids = np.asarray(reader.array("rollouts/target_row_id"), dtype=np.int64).reshape(-1)
@@ -6195,10 +6213,10 @@ def _policy_cohort_projection_rows(reader: RolloutZarrStoreReader) -> list[dict[
     binding = shard.get("campaign_binding")
     binding = binding if isinstance(binding, dict) else {}
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for index, rollout_row_id in enumerate(rollout_ids.tolist()):
         source_key, source_index = source_by_id.get(int(source_ids[index]), (f"source_row:{source_ids[index]}", -1))
-        row: dict[str, object] = {
+        row: dict[str, Any] = {
             "rollout_row_id": int(rollout_row_id),
             "chain_id": int(chain_ids[index]),
             "source_row_id": int(source_ids[index]),
@@ -6256,7 +6274,7 @@ def _decoded_array(reader: RolloutZarrStoreReader, path: str, dictionary: str) -
     return [values[int(value)] if 0 <= int(value) < len(values) else "" for value in ids.tolist()]
 
 
-def _condition_applicable(*, field: str, policy: object, recipe: object) -> bool:
+def _condition_applicable(*, field: str, policy: Any, recipe: Any) -> bool:
     """Derive stochastic-condition applicability from the frozen policy names."""
 
     policy_name = str(policy)
@@ -6277,11 +6295,11 @@ def _cohort_ineligibility_reason(labels: tuple[str, ...], duplicates: tuple[str,
 
 
 def _nearest_policy_mismatch_rows(
-    rows: list[dict[str, object]],
+    rows: list[dict[str, Any]],
     labels: tuple[str, ...],
-    grouped: dict[str, list[dict[str, object]]],
-) -> list[dict[str, object]]:
-    output: list[dict[str, object]] = []
+    grouped: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
     by_label = {label: [row for row in rows if row["comparison_label"] == label] for label in labels}
     for left_label, right_label in combinations(labels, 2):
         exact_match = any(
@@ -6290,7 +6308,7 @@ def _nearest_policy_mismatch_rows(
         )
         if exact_match:
             continue
-        candidates: list[tuple[int, int, int, dict[str, object], dict[str, object], tuple[str, ...]]] = []
+        candidates: list[tuple[int, int, int, dict[str, Any], dict[str, Any], tuple[str, ...]]] = []
         for left in by_label[left_label]:
             for right in by_label[right_label]:
                 mismatches = tuple(field for field in _POLICY_COHORT_KEY_FIELDS if left.get(field) != right.get(field))
@@ -6390,7 +6408,7 @@ def _id_counts(values: np.ndarray, *, names: dict[int, str]) -> dict[str, int]:
 
 def _component_names(manifest_payload: dict[str, Any]) -> dict[int, str]:
     writer_config = manifest_payload.get("manifest", {}).get("generation", {}).get("writer_config")
-    components = []
+    components: list[Any] = []
     if isinstance(writer_config, dict):
         candidate_mixture = writer_config.get("candidate_mixture")
         if isinstance(candidate_mixture, dict):
@@ -6411,7 +6429,7 @@ def _decoded_id(value: int, *, names: Mapping[int, str], prefix: str) -> str:
     return str(names.get(value) or f"{prefix}_{value}")
 
 
-def _temporal_group_value(row: Mapping[str, object], field: str) -> object:
+def _temporal_group_value(row: Mapping[str, Any], field: str) -> Any:
     if field == "budget_configuration":
         existing = row.get(field)
         if existing not in (None, ""):
@@ -6426,7 +6444,7 @@ def _read_string_array(reader: RolloutZarrStoreReader, path: str) -> list[str]:
         encoded = np.asarray(reader.array(path), dtype=np.uint8)
     except KeyError:
         return []
-    return json.loads(encoded.tobytes().decode("utf-8"))
+    return cast(list[str], json.loads(encoded.tobytes().decode("utf-8")))
 
 
 def _distribution(values: np.ndarray) -> dict[str, float | int | None]:
@@ -6457,7 +6475,7 @@ def _distribution(values: np.ndarray) -> dict[str, float | int | None]:
     }
 
 
-def _finite_or_none(value: object) -> float | None:
+def _finite_or_none(value: Any) -> float | None:
     try:
         value_float = float(value)
     except (TypeError, ValueError):
@@ -6481,10 +6499,10 @@ def _finite_summary(values: np.ndarray) -> dict[str, float | None]:
     }
 
 
-def _nonnegative_int(*values: object) -> int | None:
+def _nonnegative_int(*values: Any) -> int | None:
     for value in values:
         try:
-            normalized = int(value)  # type: ignore[arg-type]
+            normalized = int(value)
         except (TypeError, ValueError, OverflowError):
             continue
         if normalized >= 0:
@@ -6622,12 +6640,12 @@ class GeometryProjection:
     issues: tuple[GeometryIssue, ...]
     truncated: bool = False
 
-    def point_rows(self) -> list[dict[str, object]]:
+    def point_rows(self) -> list[dict[str, Any]]:
         """Return serializable point mappings for reporting and plotting clients."""
 
         return [asdict(point) for point in self.points]
 
-    def frame_rows(self) -> list[dict[str, object]]:
+    def frame_rows(self) -> list[dict[str, Any]]:
         """Return serializable frame mappings for anchor rendering clients."""
 
         return [asdict(frame) for frame in self.frames]
@@ -7103,7 +7121,10 @@ def _geometry_frame(
     rig_target_yaw_error = _horizontal_angle_deg(reference_rotation[:, 2], basis @ target_delta_local)
 
     def axis(rotation: np.ndarray, index: int) -> tuple[float, float, float]:
-        return tuple(float(value) for value in rotation[:, index])
+        values = tuple(float(value) for value in rotation[:, index])
+        if len(values) != 3:
+            raise ValueError("Geometry rotation axes must have exactly three coordinates.")
+        return values
 
     return GeometryFrame(
         frame_id=frame_id,

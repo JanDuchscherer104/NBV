@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -19,7 +21,7 @@ from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
 
-def _render_bounded_candidate_geometry(session_handle: object, *, limit: int) -> None:
+def _render_bounded_candidate_geometry(session_handle: Any, *, limit: int) -> None:
     """Render geometry from one identity-bound, bounded candidate read."""
 
     candidates = pd.DataFrame(session_handle.candidates(limit=limit))
@@ -32,7 +34,7 @@ def _render_bounded_candidate_geometry(session_handle: object, *, limit: int) ->
     )
 
 
-def _render_targets_and_support(session_handle: object) -> None:
+def _render_targets_and_support(session_handle: Any) -> None:
     st.subheader("Targets and action support")
     candidate_plot_limit = int(
         st.number_input(

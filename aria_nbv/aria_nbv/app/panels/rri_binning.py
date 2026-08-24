@@ -18,7 +18,9 @@ import torch
 
 from ...configs import PathConfig
 from ...data_handling import VinOfflineDatasetConfig, VinOfflineStoreConfig
+from ...data_handling.vin_store.dataset import VinOfflineSample
 from ...rri_metrics.ordinal import RriOrdinalBinner
+from ...utils import Stage
 from ...utils.plotting import _histogram_overlay
 from .common import (
     _info_popover,
@@ -174,7 +176,7 @@ def render_rri_binning_page() -> None:
             cdf_values = cdf
 
             def _to_quantile(vals: np.ndarray) -> np.ndarray:
-                return np.interp(vals, sorter, cdf, left=0.0, right=1.0)
+                return np.asarray(np.interp(vals, sorter, cdf, left=0.0, right=1.0))
 
             rri_np = _to_quantile(rri_np)
             edge_values = _to_quantile(edge_values)
@@ -408,13 +410,13 @@ def render_rri_binning_page() -> None:
         if compute_split or st.session_state.get("rri_binner_split_cache_key") != split_cache_key:
             edges_cpu = edges.detach().cpu().reshape(-1).to(dtype=torch.float32)
 
-            def _count_labels(split_name: str) -> tuple[np.ndarray, int, int]:
+            def _count_labels(split: Stage) -> tuple[np.ndarray, int, int]:
                 dataset = VinOfflineDatasetConfig(
                     store=VinOfflineStoreConfig(store_dir=cache_dir),
-                    split=split_name,
+                    split=split,
                     limit=max_snippets or None,
                     return_format="sample",
-                    map_location="cpu",
+                    map_location=torch.device("cpu"),
                     load_backbone=False,
                     load_candidates=False,
                     load_depths=False,
@@ -426,9 +428,11 @@ def render_rri_binning_page() -> None:
 
                 counts_t = torch.zeros((int(num_classes),), dtype=torch.int64)
                 total_candidates = 0
-                progress = st.progress(0.0, text=f"Scanning {split_name} split…")
+                progress = st.progress(0.0, text=f"Scanning {split.value} split…")
                 for idx in range(total):
                     sample = dataset[idx]
+                    if not isinstance(sample, VinOfflineSample):
+                        raise TypeError("RRI split diagnostics require sample-format VIN rows.")
                     rri_t = sample.oracle.rri.to(dtype=torch.float32).reshape(-1)
                     rri_t = rri_t[torch.isfinite(rri_t)]
                     if rri_t.numel() == 0:
@@ -438,12 +442,15 @@ def render_rri_binning_page() -> None:
                     counts_t += torch.bincount(labels_t, minlength=int(num_classes))
                     total_candidates += int(rri_t.numel())
 
-                    progress.progress((idx + 1) / total, text=f"Scanning {split_name}: {idx + 1}/{total} snippets")
+                    progress.progress(
+                        (idx + 1) / total,
+                        text=f"Scanning {split.value}: {idx + 1}/{total} snippets",
+                    )
                 progress.empty()
                 return counts_t.cpu().numpy(), total, total_candidates
 
-            train_counts, train_snippets, train_candidates = _count_labels("train")
-            val_counts, val_snippets, val_candidates = _count_labels("val")
+            train_counts, train_snippets, train_candidates = _count_labels(Stage.TRAIN)
+            val_counts, val_snippets, val_candidates = _count_labels(Stage.VAL)
 
             st.session_state["rri_binner_split_cache_key"] = split_cache_key
             st.session_state["rri_binner_split_train_counts"] = train_counts

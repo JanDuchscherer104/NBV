@@ -7,10 +7,12 @@ hard invalidity and unavailable labels.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -464,10 +466,10 @@ def _target_mixture_counts_from_budget(candidate_budget: int) -> dict[str, int]:
     counts = {mode: max(1, int(np.floor(budget * weight / total))) for mode, weight in weights.items()}
     while sum(counts.values()) < budget:
         deficits = {mode: (budget * weights[mode] / total) - counts[mode] for mode in counts}
-        mode = max(deficits, key=deficits.get)
+        mode = max(deficits, key=lambda name: deficits[name])
         counts[mode] += 1
     while sum(counts.values()) > budget:
-        mode = max((mode for mode in counts if counts[mode] > 1), key=counts.get)
+        mode = max((mode for mode in counts if counts[mode] > 1), key=lambda name: counts[name])
         counts[mode] -= 1
     return counts
 
@@ -533,7 +535,7 @@ def _candidate_config_for_live_rollout(
     scoring_mode: LiveRolloutScoringMode,
     candidate_budget: int,
     seed: int | None,
-    device: str,
+    device: torch.device,
     counts: dict[str, int] | None = None,
 ) -> CandidateViewGeneratorConfig | CandidateMixtureViewGeneratorConfig:
     """Return the candidate generator used by one live rollout run."""
@@ -542,7 +544,7 @@ def _candidate_config_for_live_rollout(
         num_samples=int(candidate_budget),
         oversample_factor=2.0,
         seed=seed,
-        device=device,
+        device=torch.device(str(device)),
         collect_rule_masks=True,
         collect_debug_stats=True,
         verbosity=Verbosity.NORMAL,
@@ -700,7 +702,7 @@ def _counterfactual_trajectory_rows(
 def _trajectory_metric_rows(evaluated: EvaluatedRollout) -> pd.DataFrame:
     """Return selected-step and fanout metric rows for rollout dashboard plots."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for traj_idx, trajectory in enumerate(evaluated.result.trajectories):
         cumulative = 0.0
         for step in trajectory.steps:
@@ -756,10 +758,10 @@ def _valid_step_metric_values(step: EvaluatedRolloutStep, metric_name: str) -> n
             f"or compact valid count {int(mask.sum())}."
         )
     finite = np.isfinite(values_np)
-    return values_np[finite].astype(float, copy=False)
+    return np.asarray(values_np[finite].astype(float, copy=False))
 
 
-def _metric_float(value: object) -> float | None:
+def _metric_float(value: Any) -> float | None:
     try:
         value_float = float(value)
     except (TypeError, ValueError):
@@ -767,7 +769,18 @@ def _metric_float(value: object) -> float | None:
     return value_float if np.isfinite(value_float) else None
 
 
-def _format_optional_metric(value: object) -> str:
+def _int_scalar(value: Any) -> int:
+    """Convert one finite integral scalar from a dataframe boundary."""
+
+    if isinstance(value, bool) or not isinstance(value, int | float | np.integer | np.floating):
+        raise TypeError(f"Expected an integral numeric scalar, got {type(value).__name__}.")
+    numeric = float(value)
+    if not np.isfinite(numeric) or not numeric.is_integer():
+        raise ValueError(f"Expected an integral numeric scalar, got {value!r}.")
+    return int(numeric)
+
+
+def _format_optional_metric(value: Any) -> str:
     value_float = _metric_float(value)
     return "n/a" if value_float is None else f"{value_float:.4f}"
 
@@ -889,7 +902,7 @@ def _render_live_step_candidate_diagnostics(
         )
 
 
-def _live_step_candidate_score_rows(step: EvaluatedRolloutStep) -> list[dict[str, object]]:
+def _live_step_candidate_score_rows(step: EvaluatedRolloutStep) -> list[dict[str, Any]]:
     transition = step.transition
     evaluation = step.evaluation
     candidates = transition.candidates
@@ -897,7 +910,7 @@ def _live_step_candidate_score_rows(step: EvaluatedRolloutStep) -> list[dict[str
     shell_indices = np.flatnonzero(mask)
     if shell_indices.size == 0:
         return []
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     selection_scores = _aligned_valid_vector(transition.selection_scores, shell_indices=shell_indices)
     probabilities = _aligned_valid_vector(transition.selection_probabilities, shell_indices=shell_indices)
     logits = _aligned_valid_vector(transition.selection_logits, shell_indices=shell_indices)
@@ -944,18 +957,18 @@ def _live_step_candidate_score_rows(step: EvaluatedRolloutStep) -> list[dict[str
     return rows
 
 
-def _aligned_valid_vector(values: object, *, shell_indices: np.ndarray) -> np.ndarray | None:
+def _aligned_valid_vector(values: Any, *, shell_indices: np.ndarray) -> np.ndarray | None:
     if values is None:
         return None
     values_np = torch.as_tensor(values).detach().cpu().numpy().reshape(-1).astype(float, copy=False)
     if values_np.shape[0] == shell_indices.shape[0]:
         return values_np
     if values_np.shape[0] > int(shell_indices.max()):
-        return values_np[shell_indices]
+        return np.asarray(values_np[shell_indices])
     return None
 
 
-def _full_shell_int_values(values: object, *, expected: int) -> np.ndarray | None:
+def _full_shell_int_values(values: Any, *, expected: int) -> np.ndarray | None:
     if values is None:
         return None
     values_np = torch.as_tensor(values).detach().cpu().numpy().reshape(-1)
@@ -964,7 +977,7 @@ def _full_shell_int_values(values: object, *, expected: int) -> np.ndarray | Non
     return values_np.astype(np.int64, copy=False)
 
 
-def _full_shell_float_values(values: object, *, expected: int) -> np.ndarray | None:
+def _full_shell_float_values(values: Any, *, expected: int) -> np.ndarray | None:
     if values is None:
         return None
     values_np = torch.as_tensor(values).detach().cpu().numpy().reshape(-1)
@@ -1011,7 +1024,7 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
     for traj_idx, traj_df in step_df.groupby("trajectory", sort=True):
         traj_sorted = traj_df.sort_values("step")
-        color = _ROLLOUT_PLOT_COLORS[int(traj_idx) % len(_ROLLOUT_PLOT_COLORS)]
+        color = _ROLLOUT_PLOT_COLORS[_int_scalar(traj_idx) % len(_ROLLOUT_PLOT_COLORS)]
         selected_metric = traj_sorted["selected_target_rri"]
         selected_identifier = "selected_target_rri"
         if "selected_target_root_gain" in traj_sorted and traj_sorted["selected_target_root_gain"].notna().any():
@@ -1057,13 +1070,13 @@ def _build_fanout_band_figure(step_df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def _target_rows_table(rows: tuple[OracleTargetTask, ...]) -> list[dict[str, object]]:
+def _target_rows_table(rows: tuple[OracleTargetTask, ...]) -> list[dict[str, Any]]:
     """Return a compact dataframe payload for target rows."""
 
     return target_selection_audit_rows(rows)
 
 
-def _target_detail_row(row: OracleTargetTask) -> dict[str, object]:
+def _target_detail_row(row: OracleTargetTask) -> dict[str, Any]:
     """Return one target row with pose/crop-relevant fields."""
 
     return {
@@ -1348,7 +1361,7 @@ def _render_live_rollouts_tab() -> None:
         scoring_mode=scoring_mode,
         candidate_budget=int(candidate_budget if target_counts is None else sum(target_counts.values())),
         seed=int(seed),
-        device=str(device),
+        device=torch.device(str(device)),
         counts=target_counts,
     )
     rollout_cfg = CounterfactualPoseGeneratorConfig(
@@ -1746,10 +1759,10 @@ def _render_live_selected_depth_tab(
     )
 
 
-def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, object]]:
+def _live_selected_depth_rows(evaluated: EvaluatedRollout) -> list[dict[str, Any]]:
     """Return selected-depth availability and summary stats for live rollout steps."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for trajectory_index, trajectory in enumerate(evaluated.result.trajectories):
         for transition in trajectory.steps:
             step = evaluated.step(trajectory_index, transition.step_index)
@@ -1877,7 +1890,8 @@ def _oriented_box_corners_world(
         [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]],
         dtype=torch.float32,
     )
-    return pose.transform(signs * half)
+    transform: Callable[[torch.Tensor], Any] = pose.transform
+    return cast(torch.Tensor, transform(signs * half))
 
 
 def _format_live_selected_depth_option(row: pd.Series) -> str:
@@ -1918,7 +1932,7 @@ def _render_live_rollout_metric_dashboard(
     g_target = pd.to_numeric(rows_df["G_target"], errors="coerce")
     j_endpoint = pd.to_numeric(rows_df["J_endpoint"], errors="coerce")
     best_idx = int(cumulative_score.idxmax())
-    metric_cols[0].metric("Best branch", int(rows_df.loc[best_idx, "trajectory"]))
+    metric_cols[0].metric("Best branch", _int_scalar(rows_df.loc[best_idx, "trajectory"]))
     metric_cols[1].metric(current_scientific_label("return_h"), _format_optional_metric(g_target.max()))
     metric_cols[2].metric(current_scientific_label("endpoint_gain"), _format_optional_metric(j_endpoint.max()))
     mean_fanout = None if step_df.empty else step_df["valid_candidates"].mean()
@@ -1983,13 +1997,16 @@ def _render_live_rollout_metric_dashboard(
             "available, falling back to target RRI; the selected line shows the action actually taken."
         )
 
-    top_rows = []
-    for row in step_df.itertuples(index=False):
-        for rank, value in enumerate(row.top_target_rri, start=1):
+    top_rows: list[dict[str, int | float]] = []
+    for row in cast(list[dict[str, Any]], step_df.to_dict("records")):
+        top_values = row.get("top_target_rri")
+        if not isinstance(top_values, list):
+            continue
+        for rank, value in enumerate(top_values, start=1):
             top_rows.append(
                 {
-                    "trajectory": int(row.trajectory),
-                    "step": int(row.step),
+                    "trajectory": _int_scalar(row.get("trajectory")),
+                    "step": _int_scalar(row.get("step")),
                     "rank": rank,
                     "top_target_rri": float(value),
                 }

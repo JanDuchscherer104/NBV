@@ -7,15 +7,21 @@ import pickle
 import subprocess
 import sys
 import tarfile
+from collections.abc import Callable
 from dataclasses import asdict
 from io import BytesIO
 from pathlib import Path
 from types import MethodType, SimpleNamespace
+from typing import Any, cast
 
 import msgspec
 import numpy as np
 import pytest
 import torch
+from efm3d.aria.camera import CameraTW
+from efm3d.aria.obb import ObbTW
+from efm3d.aria.pose import PoseTW
+from pytorch3d.renderer.cameras import PerspectiveCameras
 
 import aria_nbv.data_handling.vin_store.diagnostics as offline_diagnostics
 from aria_nbv.data_handling import (
@@ -26,6 +32,7 @@ from aria_nbv.data_handling import (
     VinSnippetView,
 )
 from aria_nbv.data_handling.qh_data.materialization import _evl_block_signature, _read_static_context
+from aria_nbv.data_handling.vin_store.dataset import VinOfflineSample
 from aria_nbv.data_handling.vin_store.diagnostics import (
     collect_vin_offline_dataset_coverage,
     collect_vin_offline_dataset_stats,
@@ -46,24 +53,22 @@ from aria_nbv.data_handling.vin_store.writer import (
 )
 from aria_nbv.lightning.aria_nbv_experiment import AriaNBVExperimentConfig
 from aria_nbv.lightning.lit_datamodule import VinDataModuleConfig
-from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter
+from aria_nbv.oracle.pipelines.offline_vin import VinOfflineWriter, VinOfflineWriterConfig
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.rendering.candidate_depth_renderer import CandidateDepths
 from aria_nbv.rri_metrics.rri import RriResult
 from aria_nbv.utils import Console, Stage
 from aria_nbv.vin.types import EvlBackboneOutput
 
-PoseTW = pytest.importorskip("efm3d.aria.pose").PoseTW
-CameraTW = pytest.importorskip("efm3d.aria.camera").CameraTW
-ObbTW = pytest.importorskip("efm3d.aria.obb").ObbTW
+pytest.importorskip("efm3d.aria.pose")
+pytest.importorskip("efm3d.aria.camera")
+pytest.importorskip("efm3d.aria.obb")
 aria_constants = pytest.importorskip("efm3d.aria.aria_constants")
 ARIA_OBB_PADDED = aria_constants.ARIA_OBB_PADDED
 ARIA_OBB_SEM_ID_TO_NAME = aria_constants.ARIA_OBB_SEM_ID_TO_NAME
 ARIA_POSE_TIME_NS = aria_constants.ARIA_POSE_TIME_NS
 ARIA_POSE_T_WORLD_RIG = aria_constants.ARIA_POSE_T_WORLD_RIG
-PerspectiveCameras = pytest.importorskip(
-    "pytorch3d.renderer.cameras",
-).PerspectiveCameras
+pytest.importorskip("pytorch3d.renderer.cameras")
 
 
 def _write_sample_index(path: Path, records: list[VinOfflineIndexRecord]) -> None:
@@ -75,7 +80,7 @@ def _write_sample_index(path: Path, records: list[VinOfflineIndexRecord]) -> Non
     path.write_text(payload, encoding="utf-8")
 
 
-def _read_sample_index_rows(path: Path) -> list[dict[str, object]]:
+def _read_sample_index_rows(path: Path) -> list[dict[str, Any]]:
     """Read the sample index into plain dictionaries for assertions."""
 
     if not path.exists():
@@ -83,7 +88,7 @@ def _read_sample_index_rows(path: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def _read_indexed_record(shard_dir: Path, block: VinOfflineBlockSpec, *, row: int = 0) -> object:
+def _read_indexed_record(shard_dir: Path, block: VinOfflineBlockSpec, *, row: int = 0) -> Any:
     """Read one indexed msgpack record from a shard-local block."""
 
     payload_path, offsets_path = block.paths
@@ -97,14 +102,49 @@ def _make_pose_batch(num: int, *, offset: float = 0.0) -> PoseTW:
     translation = torch.zeros((num, 3), dtype=torch.float32)
     translation[:, 0] = offset
     translation[:, 1] = torch.arange(num, dtype=torch.float32)
-    return PoseTW.from_Rt(rotation, translation)
+    return cast(PoseTW, PoseTW.from_Rt(rotation, translation))
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    to_tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, to_tensor())
+
+
+def _pose_squeeze(pose: PoseTW, dim: int) -> PoseTW:
+    squeeze: Callable[[int], Any] = pose.squeeze
+    return cast(PoseTW, squeeze(dim))
+
+
+def _pose_inverse(pose: PoseTW) -> PoseTW:
+    inverse: Callable[[], Any] = pose.inverse
+    return cast(PoseTW, inverse())
+
+
+def _obb_tensor(obbs: ObbTW) -> torch.Tensor:
+    to_tensor: Callable[[], Any] = obbs.tensor
+    return cast(torch.Tensor, to_tensor())
+
+
+def _require_sample(value: VinOfflineSample | VinOracleBatch) -> VinOfflineSample:
+    assert isinstance(value, VinOfflineSample)
+    return value
+
+
+def _require_batch(value: VinOfflineSample | VinOracleBatch) -> VinOracleBatch:
+    assert isinstance(value, VinOracleBatch)
+    return value
+
+
+def _required_tensor(value: torch.Tensor | None) -> torch.Tensor:
+    assert value is not None
+    return value
 
 
 def _make_stub_depths(num_candidates: int, *, offset: float = 0.0) -> CandidateDepths:
     depths = torch.full((num_candidates, 4, 4), 1.0 + offset, dtype=torch.float32)
     depths_valid = torch.ones_like(depths, dtype=torch.bool)
     poses = _make_pose_batch(num_candidates, offset=offset)
-    ref_pose = _make_pose_batch(1, offset=offset).squeeze(0)
+    ref_pose = _pose_squeeze(_make_pose_batch(1, offset=offset), 0)
     rotation = torch.eye(3, dtype=torch.float32).expand(num_candidates, 3, 3).clone()
     translation = torch.zeros((num_candidates, 3), dtype=torch.float32)
     focal = torch.full((num_candidates, 2), 50.0, dtype=torch.float32)
@@ -124,7 +164,7 @@ def _make_stub_depths(num_candidates: int, *, offset: float = 0.0) -> CandidateD
         poses=poses,
         reference_pose=ref_pose,
         candidate_indices=torch.arange(num_candidates, dtype=torch.long),
-        camera=None,
+        camera=_make_camera_views_for_world_poses(poses),
         p3d_cameras=p3d,
     )
 
@@ -132,33 +172,36 @@ def _make_stub_depths(num_candidates: int, *, offset: float = 0.0) -> CandidateD
 def _make_camera_views_for_world_poses(poses_world_cam: PoseTW) -> CameraTW:
     """Build candidate camera views whose extrinsics align with world poses."""
 
-    num = int(poses_world_cam.tensor().shape[0])
-    return CameraTW.from_surreal(
-        width=torch.full((num,), 4.0, dtype=torch.float32),
-        height=torch.full((num,), 4.0, dtype=torch.float32),
-        type_str="Pinhole",
-        params=torch.tensor([[50.0, 50.0, 2.0, 2.0]], dtype=torch.float32).repeat(num, 1),
-        gain=torch.zeros(num, dtype=torch.float32),
-        exposure_s=torch.zeros(num, dtype=torch.float32),
-        valid_radius=torch.full((num,), 4.0, dtype=torch.float32),
-        T_camera_rig=poses_world_cam.inverse(),
+    num = int(_pose_tensor(poses_world_cam).shape[0])
+    return cast(
+        CameraTW,
+        CameraTW.from_surreal(
+            width=torch.full((num,), 4.0, dtype=torch.float32),
+            height=torch.full((num,), 4.0, dtype=torch.float32),
+            type_str="Pinhole",
+            params=torch.tensor([[50.0, 50.0, 2.0, 2.0]], dtype=torch.float32).repeat(num, 1),
+            gain=torch.zeros(num, dtype=torch.float32),
+            exposure_s=torch.zeros(num, dtype=torch.float32),
+            valid_radius=torch.full((num,), 4.0, dtype=torch.float32),
+            T_camera_rig=_pose_inverse(poses_world_cam),
+        ),
     )
 
 
 def _make_ordered_candidates_and_depths() -> tuple[CandidateSamplingResult, CandidateDepths]:
     """Build a full-shell fixture where valid candidates are shell rows 1 and 3."""
 
-    reference = PoseTW(_make_pose_batch(1).tensor().squeeze(0))
+    reference = cast(PoseTW, PoseTW(_pose_tensor(_make_pose_batch(1)).squeeze(0)))
     selected_poses = _make_pose_batch(2, offset=30.0)
-    shell_data = _make_pose_batch(4, offset=100.0).tensor().clone()
-    shell_data[1] = selected_poses.tensor()[0]
-    shell_data[3] = selected_poses.tensor()[1]
+    shell_data = _pose_tensor(_make_pose_batch(4, offset=100.0)).clone()
+    shell_data[1] = _pose_tensor(selected_poses)[0]
+    shell_data[3] = _pose_tensor(selected_poses)[1]
     candidates = CandidateSamplingResult(
         views=_make_camera_views_for_world_poses(selected_poses),
         reference_pose=reference,
         mask_valid=torch.tensor([False, True, False, True], dtype=torch.bool),
         masks={},
-        shell_poses=PoseTW(shell_data),
+        shell_poses=cast(PoseTW, PoseTW(shell_data)),
     )
     base_depths = _make_stub_depths(2)
     depths = CandidateDepths(
@@ -226,16 +269,19 @@ def _make_obb_tensor(num: int = 2, *, offset: float = 0.0) -> ObbTW:
     inst_id = torch.arange(num, dtype=torch.float32).reshape(num, 1) + 10.0
     prob = torch.full((num, 1), 0.9, dtype=torch.float32)
     moveable = torch.zeros((num, 1), dtype=torch.float32)
-    return ObbTW.from_lmc(
-        bb3_object=bb3,
-        bb2_rgb=bb2,
-        bb2_slaml=bb2,
-        bb2_slamr=bb2,
-        T_world_object=pose,
-        sem_id=sem_id,
-        inst_id=inst_id,
-        prob=prob,
-        moveable=moveable,
+    return cast(
+        ObbTW,
+        ObbTW.from_lmc(
+            bb3_object=bb3,
+            bb2_rgb=bb2,
+            bb2_slaml=bb2,
+            bb2_slamr=bb2,
+            T_world_object=pose,
+            sem_id=sem_id,
+            inst_id=inst_id,
+            prob=prob,
+            moveable=moveable,
+        ),
     )
 
 
@@ -246,7 +292,7 @@ def _make_source_sample(*, offset: float = 0.0) -> EfmSnippetView:
         ARIA_POSE_T_WORLD_RIG: _make_pose_batch(2, offset=offset),
         ARIA_POSE_TIME_NS: torch.tensor([100, 200], dtype=torch.int64),
         "pose/gravity_in_world": torch.tensor([0.0, 0.0, -9.81], dtype=torch.float32),
-        ARIA_OBB_PADDED: ObbTW(_make_obb_tensor(2, offset=offset).tensor().unsqueeze(0).repeat(2, 1, 1)),
+        ARIA_OBB_PADDED: ObbTW(_obb_tensor(_make_obb_tensor(2, offset=offset)).unsqueeze(0).repeat(2, 1, 1)),
         ARIA_OBB_SEM_ID_TO_NAME: {0: "chair", 1: "table", 28: "window"},
     }
     return EfmSnippetView(
@@ -290,7 +336,7 @@ def _make_stub_backbone() -> EvlBackboneOutput:
         bbox_pr=torch.ones((1, 7, 2, 2, 2), dtype=torch.float32),
         clas_pr=torch.ones((1, 3, 2, 2, 2), dtype=torch.float32),
         cent_pr_nms=scalar_grid * 5.0,
-        obb_pred_viz=ObbTW(_make_obb_tensor(2, offset=0.25).tensor().unsqueeze(0)),
+        obb_pred_viz=ObbTW(_obb_tensor(_make_obb_tensor(2, offset=0.25)).unsqueeze(0)),
         obb_pred_sem_id_to_name={0: "chair", 1: "table", 2: "lamp"},
         obb_pred_probs_full_viz=[torch.full((3,), 1.0 / 3.0, dtype=torch.float32) for _ in range(2)],
         pts_world=torch.zeros((1, 8, 3), dtype=torch.float32),
@@ -302,7 +348,7 @@ def _make_stub_backbone() -> EvlBackboneOutput:
 class _DumpConfig:
     """Tiny config double exposing the writer's manifest dump method."""
 
-    def model_dump_cache(self, *, exclude_none: bool = False) -> dict[str, object]:  # noqa: ARG002
+    def model_dump_cache(self, *, exclude_none: bool = False) -> dict[str, Any]:  # noqa: ARG002
         """Return an empty stable config payload."""
 
         return {}
@@ -389,7 +435,7 @@ def test_prepare_vin_offline_sample_preserves_candidate_label_order_in_payloads(
     assert np.isnan(row.numeric_blocks["oracle.rri"][2:]).all()  # noqa: S101
     assert np.allclose(  # noqa: S101
         row.numeric_blocks["oracle.candidate_poses_world_cam"][:2],
-        depths.poses.tensor().numpy(),
+        _pose_tensor(depths.poses).numpy(),
     )
 
     shard_dir = tmp_path / "shard-000000"
@@ -409,7 +455,7 @@ def test_prepare_vin_offline_sample_preserves_candidate_label_order_in_payloads(
 
     assert decoded_depths.candidate_indices.tolist() == [1, 3]  # noqa: S101
     assert decoded_candidates.candidate_shell_indices().tolist() == [1, 3]  # noqa: S101
-    assert torch.allclose(decoded_depths.poses.tensor(), decoded_candidates.poses_world_cam().tensor())  # noqa: S101
+    assert torch.allclose(_pose_tensor(decoded_depths.poses), _pose_tensor(decoded_candidates.poses_world_cam()))  # noqa: S101
 
 
 def test_prepare_vin_offline_sample_rejects_candidate_index_drift() -> None:
@@ -465,7 +511,7 @@ def test_flush_vin_offline_payloads_normalizes_numpy_scalars(tmp_path: Path) -> 
     """Diagnostic payloads from EVL may include NumPy scalar metadata."""
 
     backbone = _make_stub_backbone()
-    backbone.obb_pred_sem_id_to_name = [np.str_("chair"), np.str_("table")]
+    backbone.obb_pred_sem_id_to_name = {0: np.str_("chair"), 1: np.str_("table")}
     row = prepare_vin_offline_sample(
         scene_id="scene-a",
         snippet_id="snippet-000",
@@ -606,7 +652,9 @@ def test_flush_rejects_heterogeneous_compact_evl_dtype_or_row_shape(tmp_path: Pa
         flush_prepared_samples_to_shard(shard_index=0, shard_dir=tmp_path / "shard-000000", rows=rows)
 
 
-def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_path: Path) -> None:
+def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Ctrl-C should produce a valid partial store for already prepared rows."""
 
     store_cfg = VinOfflineStoreConfig(store_dir=tmp_path / "vin_offline")
@@ -635,35 +683,38 @@ def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_pa
         num_failures_allowed=0,
     )
     writer = VinOfflineWriter.__new__(VinOfflineWriter)
-    writer.config = config
+    writer.config = cast(VinOfflineWriterConfig, config)
     writer.console = Console.with_prefix("test-vin-offline-writer")
-    writer._dataset = [
-        SimpleNamespace(scene_id="scene-a", snippet_id="snippet-000"),
-        SimpleNamespace(scene_id="scene-b", snippet_id="snippet-001"),
-        SimpleNamespace(scene_id="scene-c", snippet_id="snippet-002"),
-    ]
+    writer._dataset = cast(
+        Any,
+        [
+            SimpleNamespace(scene_id="scene-a", snippet_id="snippet-000"),
+            SimpleNamespace(scene_id="scene-b", snippet_id="snippet-001"),
+            SimpleNamespace(scene_id="scene-c", snippet_id="snippet-002"),
+        ],
+    )
 
     class _InterruptingLabeler:
         def __init__(self) -> None:
             self.count = 0
 
-        def run(self, sample: object) -> object:  # noqa: ARG002
+        def run(self, sample: Any) -> Any:  # noqa: ARG002
             self.count += 1
             if self.count == 3:
                 raise KeyboardInterrupt
             return SimpleNamespace()
 
-    writer._labeler = _InterruptingLabeler()
+    writer._labeler = cast(Any, _InterruptingLabeler())
     writer._backbone = None
 
     def _prepare_stub_row(
         self: VinOfflineWriter,  # noqa: ARG001
         *,
-        sample: object,
-        label_batch: object,  # noqa: ARG001
-        backbone_out: object,  # noqa: ARG001
+        sample: Any,
+        label_batch: Any,  # noqa: ARG001
+        backbone_out: Any,  # noqa: ARG001
         max_candidates: int,
-    ) -> object:
+    ) -> Any:
         offset = 0.0 if sample.snippet_id.endswith("000") else 10.0
         return prepare_vin_offline_sample(
             scene_id=sample.scene_id,
@@ -681,7 +732,7 @@ def test_vin_offline_writer_finalizes_prepared_rows_on_keyboard_interrupt(tmp_pa
             include_diagnostic_payloads=False,
         )
 
-    writer._prepare_row = MethodType(_prepare_stub_row, writer)
+    monkeypatch.setattr(writer, "_prepare_row", MethodType(_prepare_stub_row, writer))
 
     manifest = writer.run()
 
@@ -699,7 +750,7 @@ def _write_test_store(
     *,
     include_diagnostic_payloads: bool = False,
     include_backbone: bool = False,
-    dataset_config: dict[str, object] | None = None,
+    dataset_config: dict[str, Any] | None = None,
 ) -> VinOfflineStoreConfig:
     """Create a small immutable VIN offline store for reader tests."""
 
@@ -773,7 +824,7 @@ def _write_test_store(
             sample_key=local_records[0].sample_key,
             scene_id=local_records[0].scene_id,
             snippet_id=local_records[0].snippet_id,
-            split="train",
+            split=Stage.TRAIN,
             shard_id=local_records[0].shard_id,
             row=local_records[0].row,
         ),
@@ -782,7 +833,7 @@ def _write_test_store(
             sample_key=local_records[1].sample_key,
             scene_id=local_records[1].scene_id,
             snippet_id=local_records[1].snippet_id,
-            split="train",
+            split=Stage.TRAIN,
             shard_id=local_records[1].shard_id,
             row=local_records[1].row,
         ),
@@ -791,7 +842,7 @@ def _write_test_store(
             sample_key=local_records[2].sample_key,
             scene_id=local_records[2].scene_id,
             snippet_id=local_records[2].snippet_id,
-            split="val",
+            split=Stage.VAL,
             shard_id=local_records[2].shard_id,
             row=local_records[2].row,
         ),
@@ -997,7 +1048,7 @@ def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: P
     evidence = reader.read_backbone_evidence(reader.sample_index[0])
 
     assert evidence is not None  # noqa: S101
-    assert evidence.t_world_voxel.tensor().shape == (1, 12)  # noqa: S101
+    assert _pose_tensor(evidence.t_world_voxel).shape == (1, 12)  # noqa: S101
     assert evidence.voxel_extent.shape == (6,)  # noqa: S101
     assert evidence.occ_pr is not None and evidence.occ_pr.shape == (1, 1, 2, 2, 2)  # noqa: S101
     assert evidence.occ_input is not None  # noqa: S101
@@ -1009,7 +1060,7 @@ def test_store_reader_decodes_typed_root_evl_evidence_for_qh_context(tmp_path: P
     snippet = reader.read_actor_snippet(reader.sample_index[0])
     context = _read_static_context(reader, reader.sample_index[0], snippet)
     assert context is not None  # noqa: S101
-    assert context.t_world_voxel is not None and context.t_world_voxel.tensor().shape == (12,)  # noqa: S101
+    assert context.t_world_voxel is not None and _pose_tensor(context.t_world_voxel).shape == (12,)  # noqa: S101
     assert context.occ_pr is not None and context.occ_pr.shape == (1, 2, 2, 2)  # noqa: S101
     assert context.counts is not None and context.counts.shape == (2, 2, 2)  # noqa: S101
     assert context.pts_world is not None and context.pts_world.shape == (8, 3)  # noqa: S101
@@ -1050,7 +1101,7 @@ def test_summarize_vin_batch_shapes_preserves_exact_unbatched_mapping(tmp_path: 
     store_cfg = _write_test_store(tmp_path, include_backbone=True)
     dataset = VinOfflineDatasetConfig(
         store=store_cfg,
-        split="all",
+        split=None,
         limit=1,
         load_candidates=False,
         load_depths=False,
@@ -1059,7 +1110,7 @@ def test_summarize_vin_batch_shapes_preserves_exact_unbatched_mapping(tmp_path: 
         map_location=torch.device("cpu"),
     ).setup_target()
 
-    assert summarize_vin_batch_shapes(dataset[0]) == {  # noqa: S101
+    assert summarize_vin_batch_shapes(_require_batch(dataset[0])) == {  # noqa: S101
         "candidate_poses_world_cam": "(4, 12)",
         "reference_pose_world_rig": "(12,)",
         "rri": "(4,)",
@@ -1105,7 +1156,7 @@ def test_summarize_vin_batch_shapes_preserves_exact_batched_mapping(tmp_path: Pa
     store_cfg = _write_test_store(tmp_path, include_backbone=True)
     dataset = VinOfflineDatasetConfig(
         store=store_cfg,
-        split="all",
+        split=None,
         limit=1,
         load_candidates=False,
         load_depths=False,
@@ -1113,7 +1164,7 @@ def test_summarize_vin_batch_shapes_preserves_exact_batched_mapping(tmp_path: Pa
         return_format="vin_batch",
         map_location=torch.device("cpu"),
     ).setup_target()
-    batch = VinOracleBatch.collate([dataset[0], dataset[0]])
+    batch = VinOracleBatch.collate([_require_batch(dataset[0]), _require_batch(dataset[0])])
 
     assert summarize_vin_batch_shapes(batch) == {  # noqa: S101
         "candidate_poses_world_cam": "(2, 4, 12)",
@@ -1215,10 +1266,10 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     sample_dataset = VinOfflineDatasetConfig(
         store=store_cfg,
         return_format="sample",
-        split="all",
+        split=None,
     ).setup_target()
     assert len(sample_dataset) == 3  # noqa: S101
-    first = sample_dataset[0]
+    first = _require_sample(sample_dataset[0])
     assert first.scene_id == "scene-a"  # noqa: S101
     assert first.oracle.candidate_count == 2  # noqa: S101
     assert first.source_shard_id == "shard-000000"  # noqa: S101
@@ -1231,7 +1282,7 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     assert first.gt_obbs.sem_id_to_name == {0: "chair", 1: "table", 28: "window"}  # noqa: S101
     assert first.detected_obbs is None  # noqa: S101
     assert first.trajectory is not None  # noqa: S101
-    assert torch.equal(first.trajectory.time_ns, torch.tensor([100, 200], dtype=torch.int64))  # noqa: S101
+    assert torch.equal(_required_tensor(first.trajectory.time_ns), torch.tensor([100, 200], dtype=torch.int64))
     assert first.trajectory.gravity_in_world is not None  # noqa: S101
     assert first.trajectory.gravity_in_world.tolist() == pytest.approx([0.0, 0.0, -9.81])  # noqa: S101
 
@@ -1257,9 +1308,9 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     batch_dataset = VinOfflineDatasetConfig(
         store=store_cfg,
         return_format="vin_batch",
-        split="train",
+        split=Stage.TRAIN,
     ).setup_target()
-    batch = batch_dataset[0]
+    batch = _require_batch(batch_dataset[0])
     assert isinstance(batch, VinOracleBatch)  # noqa: S101
     assert batch.scene_id == "scene-a"  # noqa: S101
     assert not hasattr(batch, "source_shard_id")  # noqa: S101
@@ -1269,7 +1320,7 @@ def test_vin_offline_dataset_round_trip(tmp_path: Path) -> None:
     assert batch.gt_obbs is not None  # noqa: S101
     assert batch.gt_obbs.obbs.shape == (2, 2, 34)  # noqa: S101
     assert batch.trajectory is not None  # noqa: S101
-    assert torch.equal(batch.trajectory.time_ns, torch.tensor([100, 200], dtype=torch.int64))  # noqa: S101
+    assert torch.equal(_required_tensor(batch.trajectory.time_ns), torch.tensor([100, 200], dtype=torch.int64))
 
 
 def test_vin_offline_dataset_rejects_conflicting_rich_backbone_provenance(
@@ -1317,7 +1368,7 @@ def test_vin_offline_dataset_canonicalizes_legacy_rich_backbone_provenance(
         ),
     )
 
-    sample = dataset[0]
+    sample = _require_sample(dataset[0])
     assert sample.backbone_out is not None  # noqa: S101
     assert sample.backbone_out.free_input_provenance == "native_evl_v1"  # noqa: S101
 
@@ -1329,7 +1380,7 @@ def test_actor_snippet_reader_matches_one_step_sample_and_reads_once(
     """One-step samples should use one shared typed actor-snippet read."""
 
     store_cfg = _write_test_store(tmp_path)
-    dataset = VinOfflineDatasetConfig(store=store_cfg, return_format="sample", split="all").setup_target()
+    dataset = VinOfflineDatasetConfig(store=store_cfg, return_format="sample", split=None).setup_target()
     record = dataset._records[0]
     direct = dataset._store.read_actor_snippet(record)
     reads: list[VinOfflineIndexRecord] = []
@@ -1344,12 +1395,12 @@ def test_actor_snippet_reader_matches_one_step_sample_and_reads_once(
         return original(requested, device=device)
 
     monkeypatch.setattr(dataset._store, "read_actor_snippet", _record_read)
-    sample = dataset[0]
+    sample = _require_sample(dataset[0])
 
     assert reads == [record]  # noqa: S101
     torch.testing.assert_close(sample.vin_snippet.points_world, direct.points_world, equal_nan=True)
     assert torch.equal(sample.vin_snippet.lengths, direct.lengths)  # noqa: S101
-    assert torch.equal(sample.vin_snippet.t_world_rig.tensor(), direct.t_world_rig.tensor())  # noqa: S101
+    assert torch.equal(_pose_tensor(sample.vin_snippet.t_world_rig), _pose_tensor(direct.t_world_rig))  # noqa: S101
     assert sample.vin_snippet.points_world.dtype is torch.float32  # noqa: S101
     assert sample.vin_snippet.lengths.dtype is torch.int64  # noqa: S101
 
@@ -1388,7 +1439,7 @@ def test_actor_snippet_reader_drops_worker_handles_when_pickled(tmp_path: Path) 
     actual = restored.read_actor_snippet(restored.sample_index[0])
     torch.testing.assert_close(actual.points_world, expected.points_world, equal_nan=True)
     assert torch.equal(actual.lengths, expected.lengths)  # noqa: S101
-    assert torch.equal(actual.t_world_rig.tensor(), expected.t_world_rig.tensor())  # noqa: S101
+    assert torch.equal(_pose_tensor(actual.t_world_rig), _pose_tensor(expected.t_world_rig))  # noqa: S101
 
 
 def test_vin_offline_dataset_get_by_scene_snippet_accepts_compact_ase_atek_ids(tmp_path: Path) -> None:
@@ -1402,7 +1453,7 @@ def test_vin_offline_dataset_get_by_scene_snippet_accepts_compact_ase_atek_ids(t
     dataset = VinOfflineDatasetConfig(
         store=store_cfg,
         return_format="sample",
-        split="all",
+        split=None,
     ).setup_target()
 
     found = dataset.get_by_scene_snippet(scene_id="81286", snippet_id="ASE_81286_Atek_000000")
@@ -1418,10 +1469,10 @@ def test_vin_offline_store_persists_detected_obbs_for_training(tmp_path: Path) -
     sample_dataset = VinOfflineDatasetConfig(
         store=store_cfg,
         return_format="sample",
-        split="all",
+        split=None,
     ).setup_target()
 
-    first = sample_dataset[0]
+    first = _require_sample(sample_dataset[0])
     assert first.detected_obbs is not None  # noqa: S101
     assert first.detected_obbs.obbs.shape == (1, 2, 34)  # noqa: S101
     assert first.detected_obbs.probs is not None  # noqa: S101
@@ -1431,9 +1482,9 @@ def test_vin_offline_store_persists_detected_obbs_for_training(tmp_path: Path) -
     batch_dataset = VinOfflineDatasetConfig(
         store=store_cfg,
         return_format="vin_batch",
-        split="train",
+        split=Stage.TRAIN,
     ).setup_target()
-    batched = VinOracleBatch.collate([batch_dataset[0], batch_dataset[1]])
+    batched = VinOracleBatch.collate([_require_batch(batch_dataset[0]), _require_batch(batch_dataset[1])])
     assert batched.gt_obbs is not None  # noqa: S101
     assert batched.gt_obbs.obbs.shape == (2, 2, 2, 34)  # noqa: S101
     assert batched.detected_obbs is not None  # noqa: S101
@@ -1528,18 +1579,18 @@ def test_vin_offline_dataset_vin_batch_skips_optional_record_reads(
     dataset = VinOfflineDatasetConfig(
         store=store_cfg,
         return_format="vin_batch",
-        split="train",
+        split=Stage.TRAIN,
     ).setup_target()
 
     original_read_optional_record = dataset._store.read_optional_record
 
-    def _raise_if_diagnostic_record(record: object, block_name: str) -> object:
+    def _raise_if_diagnostic_record(record: Any, block_name: str) -> Any:
         if block_name not in {"gt.obb_sem_id_to_name", "detected.obb_sem_id_to_name"}:
             raise AssertionError(f"vin_batch path should not touch diagnostic record block {block_name!r}")
         return original_read_optional_record(record, block_name)
 
     monkeypatch.setattr(dataset._store, "read_optional_record", _raise_if_diagnostic_record)
-    batch = dataset[0]
+    batch = _require_batch(dataset[0])
     assert isinstance(batch, VinOracleBatch)  # noqa: S101
 
 
@@ -1550,13 +1601,15 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
         pytest.skip("Host multiprocessing backend does not support worker tensor sharing.")
 
     store_cfg = _write_test_store(tmp_path)
-    prior_strategy = torch.multiprocessing.get_sharing_strategy()
-    torch.multiprocessing.set_sharing_strategy("file_system")
+    get_sharing_strategy: Callable[[], str] = torch.multiprocessing.get_sharing_strategy
+    set_sharing_strategy: Callable[[str], None] = torch.multiprocessing.set_sharing_strategy
+    prior_strategy = get_sharing_strategy()
+    set_sharing_strategy("file_system")
     dm_cfg = VinDataModuleConfig(
         source=VinOfflineSourceConfig(
             offline=VinOfflineDatasetConfig(store=store_cfg),
-            train_split="train",
-            val_split="val",
+            train_split=Stage.TRAIN,
+            val_split=Stage.VAL,
         ),
         batch_size=2,
         shuffle=False,
@@ -1574,7 +1627,7 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
         val_batch = next(iter(datamodule.val_dataloader()))
         assert isinstance(train_batch, VinOracleBatch)  # noqa: S101
         assert train_batch.rri.shape == (2, 4)  # noqa: S101
-        assert torch.equal(train_batch.candidate_count, torch.tensor([2, 3], dtype=torch.int64))  # noqa: S101
+        assert torch.equal(_required_tensor(train_batch.candidate_count), torch.tensor([2, 3], dtype=torch.int64))
         assert torch.equal(
             train_batch.candidate_valid_mask(),
             torch.tensor(
@@ -1590,10 +1643,10 @@ def test_vin_offline_datamodule_supports_worker_batching(tmp_path: Path) -> None
 
         assert isinstance(val_batch, VinOracleBatch)  # noqa: S101
         assert val_batch.rri.shape == (1, 4)  # noqa: S101
-        assert torch.equal(val_batch.candidate_count, torch.tensor([2], dtype=torch.int64))  # noqa: S101
+        assert torch.equal(_required_tensor(val_batch.candidate_count), torch.tensor([2], dtype=torch.int64))
         assert val_batch.scene_id == ["scene-c"]  # noqa: S101
     finally:
-        torch.multiprocessing.set_sharing_strategy(prior_strategy)
+        set_sharing_strategy(prior_strategy)
 
 
 def test_vin_offline_source_config_disables_diagnostic_blocks_for_vin_batches(tmp_path: Path) -> None:
@@ -1602,8 +1655,8 @@ def test_vin_offline_source_config_disables_diagnostic_blocks_for_vin_batches(tm
     store_cfg = _write_test_store(tmp_path)
     dataset = VinOfflineSourceConfig(
         offline=VinOfflineDatasetConfig(store=store_cfg),
-        train_split="train",
-        val_split="val",
+        train_split=Stage.TRAIN,
+        val_split=Stage.VAL,
     ).setup_target(split=Stage.TRAIN)
 
     assert dataset.config.return_format == "vin_batch"  # noqa: S101
@@ -1637,8 +1690,10 @@ def test_fit_binner_offline_config_selects_all_stored_rows(tmp_path: Path) -> No
 def test_vin_offline_source_normalizes_stage_strings() -> None:
     """Source split text should normalize to all rows or canonical stages."""
 
-    all_rows = VinOfflineSourceConfig(train_split="all", val_split=None, test_split="all")
-    concrete = VinOfflineSourceConfig(train_split="fit", val_split="validate", test_split="test")
+    all_rows = VinOfflineSourceConfig.model_validate({"train_split": "all", "val_split": None, "test_split": "all"})
+    concrete = VinOfflineSourceConfig.model_validate(
+        {"train_split": "fit", "val_split": "validate", "test_split": "test"}
+    )
 
     assert all_rows.train_split is None  # noqa: S101
     assert all_rows.val_split is None  # noqa: S101

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -331,7 +331,7 @@ def _corpus_temporal_figure(rows: pd.DataFrame, *, metric_label: str) -> go.Figu
     return figure
 
 
-def _temporal_series_display_labels(grouped: list[tuple[object, pd.DataFrame]], group_fields: list[str]) -> list[str]:
+def _temporal_series_display_labels(grouped: list[tuple[Any, pd.DataFrame]], group_fields: list[str]) -> list[str]:
     """Build compact legend labels while retaining exact identity in hover data."""
 
     labels: list[str] = []
@@ -413,7 +413,7 @@ def _corpus_temporal_explanation(metric: str) -> ScientificExplanation:
     )
 
 
-def _render_scientific_evidence(session_handle: object) -> None:
+def _render_scientific_evidence(session_handle: Any) -> None:
     st.subheader("Scientific evidence")
     _render_reconstruction_summary(session_handle)
     cohort = session_handle.cohorts()
@@ -508,7 +508,7 @@ def _render_scientific_evidence(session_handle: object) -> None:
             _render_selected_rank_and_geometry(session_handle)
 
 
-def _render_reconstruction_summary(session_handle: object) -> None:
+def _render_reconstruction_summary(session_handle: Any) -> None:
     """Render frozen reconstruction, return, and headroom rows on demand."""
 
     if not st.toggle(
@@ -555,7 +555,7 @@ def _render_reconstruction_summary(session_handle: object) -> None:
         st.dataframe(headroom_summary, hide_index=True, width="stretch")
 
 
-def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
+def _render_temporal_explorer(session_handle: Any, steps: pd.DataFrame, *, matched_cohorts: bool) -> None:
     """Render one population metric at a time and a one-rollout raw drill-down."""
 
     available_labels = [
@@ -596,7 +596,8 @@ def _render_temporal_explorer(session_handle: object, steps: pd.DataFrame, *, ma
     total_count = int(summary["total_count"].sum())
     missing_count = int(summary["missing_count"].sum())
     endpoint_depth = int(summary["step_index"].max()) + 1
-    endpoint = rollout_endpoint_metric_summary(steps.to_dict("records"), metric=metric)
+    step_records = [{str(key): value for key, value in record.items()} for record in steps.to_dict("records")]
+    endpoint = rollout_endpoint_metric_summary(step_records, metric=metric)
     endpoint_median = endpoint["median"]
     cols = st.columns(4)
     cols[0].metric("Finite temporal rows", f"{finite_count:,} / {total_count:,}")
@@ -797,13 +798,16 @@ def _temporal_evidence_role(
         raise ValueError(f"Temporal metric {metric!r} has no explicit evidence role.") from exc
 
 
-def _render_selected_rank_and_geometry(session_handle: object) -> None:
+def _render_selected_rank_and_geometry(session_handle: Any) -> None:
     """Render expensive selected-rank and complete root-relative evidence on demand."""
 
     ranks = pd.DataFrame(session_handle.ranks())
     if not ranks.empty:
-        rank_col = "selected_rank" if "selected_rank" in ranks else next((c for c in ranks if "rank" in c), None)
-        regret_col = "regret" if "regret" in ranks else next((c for c in ranks if "regret" in c), None)
+        rank_columns = {str(column) for column in ranks.columns}
+        rank_col = (
+            "selected_rank" if "selected_rank" in rank_columns else next((c for c in rank_columns if "rank" in c), None)
+        )
+        regret_col = "regret" if "regret" in rank_columns else next((c for c in rank_columns if "regret" in c), None)
         if rank_col and regret_col:
             fig = px.scatter(
                 ranks,

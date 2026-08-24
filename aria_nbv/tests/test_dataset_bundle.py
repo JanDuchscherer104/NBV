@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
@@ -222,7 +223,7 @@ def test_qh_readiness_json_export_plainifies_cfplus_geometry(monkeypatch: pytest
 
     payload = readiness.to_jsonable()
     json.dumps(payload, sort_keys=True)
-    assert payload["contract"]["selected_depth_geometry"]["image_size_hw"] == [240, 240]  # type: ignore[index]
+    assert payload["contract"]["selected_depth_geometry"]["image_size_hw"] == [240, 240]
 
 
 def test_qh_batch_preview_is_seeded_and_reports_real_padding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -510,7 +511,7 @@ def test_blocked_root_excludes_every_rollout_from_training_totals_and_topology(t
     assert any(finding.code == "root_split_unreadable" for finding in evidence.findings)
 
 
-def test_required_validation_controls_ready_verdict(monkeypatch, tmp_path: Path) -> None:
+def test_required_validation_controls_ready_verdict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="ready.zarr", source_hash=source_hash)
 
@@ -559,7 +560,9 @@ def test_coral_catalog_is_non_blocking_and_labels_missing_provenance(tmp_path: P
     )
 
 
-def test_deep_statistics_reports_trainable_coverage_without_mutating_summary(monkeypatch, tmp_path: Path) -> None:
+def test_deep_statistics_reports_trainable_coverage_without_mutating_summary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     root, source_hash = _write_root_store(tmp_path)
     rollout = _write_rollout_store(tmp_path, name="deep.zarr", source_hash=source_hash)
 
@@ -611,7 +614,7 @@ def test_deep_statistics_preserves_unavailable_status_when_selected_store_scan_f
     assert deep["aggregate"]["finite_target_rri_candidates"] is None
 
 
-def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_path: Path) -> None:
+def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     root, _source_hash = _write_root_store(tmp_path)
     manifest = VinOfflineManifest.read(root / "manifest.json")
     block = VinOfflineBlockSpec.for_zarr_array(
@@ -636,7 +639,7 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     finite_nonpositive_geometry[1] = 0.0
 
     class _Reader:
-        def __init__(self, _config: object) -> None:
+        def __init__(self, _config: Any) -> None:
             pass
 
         def read_numeric_block(self, record: VinOfflineIndexRecord, _name: str) -> np.ndarray:
@@ -647,7 +650,7 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
                 ]
             )
 
-        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> object | None:
+        def read_optional_record(self, _record: VinOfflineIndexRecord, _name: str) -> Any | None:
             return None
 
     monkeypatch.setattr("aria_nbv.dataset_bundle.VinOfflineStoreReader", _Reader)
@@ -661,7 +664,9 @@ def test_root_gt_obb_scan_counts_only_finite_non_padding_rows(monkeypatch, tmp_p
     assert scan["per_sample"][1]["gt_obb_target_opportunities"] == 1
 
 
-def test_root_gt_obb_scan_does_not_mask_unexpected_reader_failures(monkeypatch, tmp_path: Path) -> None:
+def test_root_gt_obb_scan_does_not_mask_unexpected_reader_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     root, _source_hash = _write_root_store(tmp_path)
     manifest = VinOfflineManifest.read(root / "manifest.json")
     block = VinOfflineBlockSpec.for_zarr_array(
@@ -677,7 +682,7 @@ def test_root_gt_obb_scan_does_not_mask_unexpected_reader_failures(monkeypatch, 
     manifest.write(root / "manifest.json")
 
     class _BrokenReader:
-        def __init__(self, _config: object) -> None:
+        def __init__(self, _config: Any) -> None:
             pass
 
         def read_numeric_block(self, _record: VinOfflineIndexRecord, _name: str) -> np.ndarray:

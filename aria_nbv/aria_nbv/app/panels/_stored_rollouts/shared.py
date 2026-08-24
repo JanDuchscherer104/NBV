@@ -24,6 +24,9 @@ _ROLE_COLORS = {
     "provenance": "#6b7280",
 }
 
+EvidenceRole = Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
+"""Scientific evidence role used consistently across stored-rollout panels."""
+
 
 @dataclass(frozen=True, slots=True)
 class ExplanationSection:
@@ -44,7 +47,7 @@ class ScientificExplanation:
     question: str
     answer: str
     sections: tuple[ExplanationSection, ...]
-    evidence_role: Literal["actor-visible", "oracle/evaluation", "derived training data", "provenance"]
+    evidence_role: EvidenceRole
     source_fields: tuple[str, ...]
     theory: TheoryReferences | None = None
     external_references: tuple[tuple[str, str], ...] = ()
@@ -59,7 +62,7 @@ class ScientificExplanation:
 
 
 def render_stale_store_boundary(
-    validation: Any, *, inventory_row: dict[str, object] | None, manifest_payload: dict[str, Any]
+    validation: Any, *, inventory_row: dict[str, Any] | None, manifest_payload: dict[str, Any]
 ) -> None:
     st.warning(
         "Scientific evidence and Rerun are disabled because this store does not pass the current schema contract."
@@ -73,7 +76,7 @@ def render_stale_store_boundary(
     )
 
 
-def plot_control_key(plot_name: str, *identity: object) -> str:
+def plot_control_key(plot_name: str, *identity: Any) -> str:
     payload = "\x1f".join((plot_name, *(str(value) for value in identity)))
     return f"stored-rollout-plot:{plot_name}:{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
 
@@ -178,7 +181,7 @@ def download_frame(label: str, file_name: str, frame: pd.DataFrame) -> None:
     st.caption(f"Export rows: {len(frame):,} (complete filtered dataset).")
 
 
-def download_json(label: str, file_name: str, payload: object) -> None:
+def download_json(label: str, file_name: str, payload: Any) -> None:
     st.download_button(
         label,
         data=lambda: serialize_json(payload),
@@ -193,11 +196,11 @@ def serialize_frame_csv(frame: pd.DataFrame) -> bytes:
     return frame.to_csv(index=False).encode("utf-8")
 
 
-def serialize_json(payload: object) -> bytes:
+def serialize_json(payload: Any) -> bytes:
     return json.dumps(payload, indent=2, sort_keys=True, default=json_default).encode("utf-8") + b"\n"
 
 
-def json_default(value: object) -> object:
+def json_default(value: Any) -> Any:
     if isinstance(value, Path):
         return value.as_posix()
     if isinstance(value, np.generic):

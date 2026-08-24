@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import omegaconf
 import pytest
 import torch
+from efm3d.aria.pose import PoseTW
 
 from aria_nbv.vin.backbones.evl import (
     _normalize_evl_model_config_paths,
@@ -15,13 +17,14 @@ from aria_nbv.vin.backbones.evl import (
 )
 from aria_nbv.vin.types import EvlBackboneOutput
 
-PoseTW = __import__("efm3d.aria.pose", fromlist=["PoseTW"]).PoseTW
-
 
 def _pose() -> PoseTW:
     """Return a single identity world<-voxel pose."""
 
-    return PoseTW.from_Rt(torch.eye(3, dtype=torch.float32).unsqueeze(0), torch.zeros((1, 3), dtype=torch.float32))
+    return cast(
+        PoseTW,
+        PoseTW.from_Rt(torch.eye(3, dtype=torch.float32).unsqueeze(0), torch.zeros((1, 3), dtype=torch.float32)),
+    )
 
 
 def _backbone_output() -> EvlBackboneOutput:

@@ -5,13 +5,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Generator, Iterable
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 import numpy as np
 import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-import aria_nbv.app.panels.training_dataset as training_dataset_panel
 from aria_nbv.app.panels.training_dataset import (
     _artifact_identity,
     _clear_qh_results_for_control_change,
@@ -31,7 +34,12 @@ from aria_nbv.data_handling.vin_store.format import (
     VinOfflineMaterializedBlocks,
 )
 from aria_nbv.data_handling.vin_store.store import OFFLINE_DATASET_VERSION
-from aria_nbv.dataset_bundle import DatasetBundleSelection, build_dataset_bundle_summary
+from aria_nbv.dataset_bundle import (
+    DatasetBundleSelection,
+    QhBatchPreview,
+    QhCorpusReadiness,
+    build_dataset_bundle_summary,
+)
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 
@@ -53,8 +61,12 @@ _PATH_CONFIG_FIELDS = (
 )
 
 
+def _element_labels(elements: Iterable[Any]) -> list[str]:
+    return [str(element.label) for element in elements]
+
+
 @pytest.fixture
-def isolated_path_config(tmp_path: Path):
+def isolated_path_config(tmp_path: Path) -> Generator[PathConfig, None, None]:
     """Point the singleton path owner at one isolated app workspace."""
 
     original = PathConfig()
@@ -165,7 +177,7 @@ def test_hub_discovers_composes_and_scans_explicit_stores(
         "Validate bundle",
         "Deep statistics / target scan",
     }
-    assert "Download resolved bundle evidence JSON" in {button.label for button in app.get("download_button")}
+    assert "Download resolved bundle evidence JSON" in set(_element_labels(app.get("download_button")))
     assert "Run full single-step pipeline" not in {button.label for button in app.button}
     assert "Deep statistics / target scan" in {button.label for button in app.button}
     assert "Deep target and candidate evidence" not in {item.label for item in app.expander}
@@ -284,7 +296,7 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
         batch_size=4,
         seed=7,
     )
-    evidence = object()
+    evidence = cast(QhBatchPreview, SimpleNamespace())
     state = (baseline, evidence)
 
     assert _qh_preview_for_identity(state, baseline) is evidence
@@ -301,7 +313,7 @@ def test_qh_preview_reuses_only_exact_selection_and_controls() -> None:
 def test_qh_readiness_hides_stale_preflight_after_loader_control_changes() -> None:
     selection = ("selection",)
     baseline = _qh_readiness_identity(selection, batch_size=4, seed=7)
-    evidence = object()
+    evidence = cast(QhCorpusReadiness, SimpleNamespace())
     state = (baseline, evidence)
 
     assert _qh_readiness_for_identity(state, baseline) is evidence
@@ -314,7 +326,7 @@ def test_qh_control_change_clears_displayed_readiness_and_preview(monkeypatch: p
         "training_dataset_qh_readiness": ("old-controls", object()),
         "training_dataset_qh_preview": ("old-controls", object()),
     }
-    monkeypatch.setattr(training_dataset_panel.st, "session_state", state)
+    monkeypatch.setattr(st, "session_state", state)
 
     _clear_qh_results_for_control_change()
 
@@ -395,7 +407,7 @@ def test_artifact_identity_tolerates_metadata_disappearing_during_stat(
     original_lstat = Path.lstat
     manifest_stat_calls = 0
 
-    def _lstat(path: Path, *args: object, **kwargs: object):
+    def _lstat(path: Path, *args: Any, **kwargs: Any) -> Any:
         nonlocal manifest_stat_calls
         if path == manifest:
             manifest_stat_calls += 1

@@ -7,7 +7,8 @@ as low-value oracle labels.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import plotly.graph_objects as go
@@ -49,6 +50,13 @@ if TYPE_CHECKING:
     from ...pose_generation import CandidateViewGeneratorConfig
     from ...pose_generation.types import CandidateSamplingResult
 from .common import _info_popover, _pretty_label, current_scientific_label
+
+
+def _pose_tensor(pose: PoseTW) -> torch.Tensor:
+    """Cross the untyped EFM pose accessor with a typed tensor result."""
+
+    tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, tensor())
 
 
 def _target_point_from_config(cand_cfg: CandidateViewGeneratorConfig | None) -> torch.Tensor | None:
@@ -110,10 +118,12 @@ def _full_shell_color_payload(candidates: CandidateSamplingResult, mode: str) ->
         _bitset, primary = _candidate_invalid_reasons(candidates)
         return primary.detach().cpu().to(dtype=torch.float32).reshape(-1), "invalid_reason_id"
     extras = candidates.extras if hasattr(candidates, "extras") else {}
-    if mode == "target_distance" and torch.is_tensor(extras.get("target_distance_m")):
-        return extras["target_distance_m"].detach().cpu().to(dtype=torch.float32).reshape(-1), "target_distance_m"
-    if mode == "target_bearing_yaw" and torch.is_tensor(extras.get("target_bearing_yaw_rad")):
-        return torch.rad2deg(extras["target_bearing_yaw_rad"].detach().cpu().to(dtype=torch.float32).reshape(-1)), (
+    target_distance = extras.get("target_distance_m")
+    if mode == "target_distance" and isinstance(target_distance, torch.Tensor):
+        return target_distance.detach().cpu().to(dtype=torch.float32).reshape(-1), "target_distance_m"
+    target_bearing = extras.get("target_bearing_yaw_rad")
+    if mode == "target_bearing_yaw" and isinstance(target_bearing, torch.Tensor):
+        return torch.rad2deg(target_bearing.detach().cpu().to(dtype=torch.float32).reshape(-1)), (
             "target_bearing_yaw_deg"
         )
     return None, None
@@ -128,10 +138,10 @@ def _color_payload_np(candidates: CandidateSamplingResult, mode: str) -> tuple[n
     return values.detach().cpu().numpy().reshape(-1), label
 
 
-def _candidate_provenance_preview(candidates: CandidateSamplingResult) -> list[dict[str, object]]:
+def _candidate_provenance_preview(candidates: CandidateSamplingResult) -> list[dict[str, Any]]:
     """Return decoded provenance counts for target-aware candidate mixtures."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     mask_valid = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
     if candidates.position_id is not None:
         position = candidates.position_id.detach().cpu().numpy().reshape(-1)
@@ -163,7 +173,7 @@ def _candidate_provenance_preview(candidates: CandidateSamplingResult) -> list[d
 def _motion_threshold_rows(
     candidates: CandidateSamplingResult,
     cand_cfg: CandidateViewGeneratorConfig | None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Return configured rule thresholds with observed diagnostic ranges."""
 
     if cand_cfg is None:
@@ -177,14 +187,14 @@ def _motion_threshold_rows(
         ("backward_step", "max", "m", cand_cfg.max_backward_step_m, "motion_backward_step_m"),
         ("yaw_delta", "max_abs", "deg", cand_cfg.max_yaw_delta_deg, "motion_yaw_delta_rad"),
     ]
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for name, comparator, unit, threshold, debug_key in specs:
         if threshold is None:
             continue
         observed_min: float | None = None
         observed_max: float | None = None
         values = extras.get(debug_key)
-        if torch.is_tensor(values):
+        if isinstance(values, torch.Tensor):
             flat = values.detach().cpu().to(dtype=torch.float32).reshape(-1)
             if debug_key == "motion_yaw_delta_rad":
                 flat = torch.rad2deg(flat)
@@ -361,7 +371,7 @@ def _render_live_candidates_page(
             key="cand_position_color_mode",
         )
         color_values, color_title = _color_payload_np(candidates, color_mode)
-        if has_snippet:
+        if sample is not None:
             builder = CandidatePlotBuilder.from_candidates(
                 sample,
                 candidates,
@@ -433,7 +443,7 @@ def _render_live_candidates_page(
                     key="cand_max_frustums",
                 )
 
-            if has_snippet:
+            if sample is not None:
                 frust_builder = (
                     CandidatePlotBuilder.from_candidates(
                         sample,
@@ -673,11 +683,11 @@ def _render_live_candidates_page(
                 "summarizes rejection counts per rule to reveal dominant filters.",
             )
             masks = candidates.masks
-            if has_snippet and isinstance(masks, dict) and len(masks) > 0 and shell_poses is not None:
+            if sample is not None and isinstance(masks, dict) and len(masks) > 0 and shell_poses is not None:
                 masks_tensor = torch.stack(list(masks.values()))
                 mask_fig = plot_rule_masks(
                     snippet=sample,
-                    shell_poses=shell_poses.tensor() if hasattr(shell_poses, "tensor") else shell_poses,
+                    shell_poses=_pose_tensor(shell_poses),
                     masks=masks_tensor,
                     rule_names=list(masks.keys()),
                 )
@@ -689,21 +699,27 @@ def _render_live_candidates_page(
             dist_min = extras.get("min_distance_to_mesh")
             path_collide = extras.get("path_collision_mask")
 
-            if has_snippet and dist_min is not None:
+            if sample is not None and dist_min is not None:
                 st.plotly_chart(
-                    plot_min_distance_to_mesh(
-                        snippet=sample,
-                        candidates=candidates,
-                        distances=dist_min,
+                    cast(
+                        go.Figure,
+                        plot_min_distance_to_mesh(
+                            snippet=sample,
+                            candidates=candidates,
+                            distances=dist_min,
+                        ),
                     ),
                     width="stretch",
                 )
-            if has_snippet and path_collide is not None:
+            if sample is not None and path_collide is not None:
                 st.plotly_chart(
-                    plot_path_collision_segments(
-                        snippet=sample,
-                        candidates=candidates,
-                        collision_mask=path_collide,
+                    cast(
+                        go.Figure,
+                        plot_path_collision_segments(
+                            snippet=sample,
+                            candidates=candidates,
+                            collision_mask=path_collide,
+                        ),
                     ),
                     width="stretch",
                 )
@@ -732,7 +748,7 @@ def _render_live_candidates_page(
                     st.info(
                         "No rejected poses to plot; all sampled candidates survived rule filtering.",
                     )
-                elif has_snippet:
+                elif sample is not None:
                     rej_fig = (
                         CandidatePlotBuilder.from_candidates(
                             sample,

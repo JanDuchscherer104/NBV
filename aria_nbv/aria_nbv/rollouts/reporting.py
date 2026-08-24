@@ -14,7 +14,7 @@ import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -43,22 +43,38 @@ from .inspection import (
     target_audit_rows,
     validity_waterfall_rows,
 )
-from .zarr_store import RolloutZarrStoreReader
+from .zarr_store import RolloutZarrStoreReader, RolloutZarrValidationResult
 
 
-class _ManifestSnapshotReader:
+class _ManifestSnapshotReader(RolloutZarrStoreReader):
     """Reader view that reuses one already-read manifest snapshot."""
 
-    def __init__(self, reader: RolloutZarrStoreReader, manifest_payload: dict[str, object]) -> None:
+    def __init__(self, reader: RolloutZarrStoreReader, manifest_payload: dict[str, Any]) -> None:
         self._reader = reader
         self._manifest_payload = manifest_payload
+        self.store_dir = reader.store_dir
 
-    def manifest(self) -> dict[str, object]:
+    def array(self, path: str) -> np.ndarray:
+        """Read one array through the underlying fixed-generation reader."""
+
+        return self._reader.array(path)
+
+    def validate(self, *, validate_selected_depth_payload: bool = True) -> RolloutZarrValidationResult:
+        """Validate through the underlying fixed-generation reader."""
+
+        return self._reader.validate(validate_selected_depth_payload=validate_selected_depth_payload)
+
+    def manifest(self) -> dict[str, Any]:
         """Return the fixed manifest snapshot for this report projection."""
 
         return self._manifest_payload
 
-    def __getattr__(self, name: str) -> object:
+    def q_h_view(self, *, discount_gamma: float | None = None) -> dict[str, np.ndarray]:
+        """Read the Q_H view through the underlying fixed-generation reader."""
+
+        return self._reader.q_h_view(discount_gamma=discount_gamma)
+
+    def __getattr__(self, name: str) -> Any:
         return getattr(self._reader, name)
 
 
@@ -507,13 +523,13 @@ class RolloutCorpusSummary:
     selected_paths: tuple[Path, ...]
     """Normalized requested store paths in deterministic order."""
 
-    included_stores: tuple[dict[str, object], ...]
+    included_stores: tuple[dict[str, Any], ...]
     """Validated store identities and profiles included in all totals."""
 
     excluded_stores: tuple[dict[str, str], ...]
     """Selected stores excluded with exact validation or projection reasons."""
 
-    totals: dict[str, object]
+    totals: dict[str, Any]
     """Additive store, rollout, storage, and complete deep-Q_H counts."""
 
     candidate_support: pd.DataFrame
@@ -568,7 +584,7 @@ def build_thesis_report_frames(
 
     if evidence_status not in {"pilot", "confirmatory"}:
         raise ValueError("evidence_status must be 'pilot' or 'confirmatory'.")
-    rows: dict[str, list[dict[str, object]]] = {name: [] for name in THESIS_REPORT_TABLE_COLUMNS}
+    rows: dict[str, list[dict[str, Any]]] = {name: [] for name in THESIS_REPORT_TABLE_COLUMNS}
     resolved_stores = sorted({Path(path).expanduser().resolve() for path in store_paths}, key=Path.as_posix)
     if not resolved_stores:
         raise ValueError("At least one rollout store is required to build thesis report frames.")
@@ -598,10 +614,10 @@ def build_rollout_corpus_summary(store_paths: Iterable[Path | str]) -> RolloutCo
     if not selected:
         raise ValueError("At least one rollout store is required to build a corpus summary.")
 
-    included: list[dict[str, object]] = []
+    included: list[dict[str, Any]] = []
     excluded: list[dict[str, str]] = []
     valid_frames: list[dict[str, pd.DataFrame]] = []
-    q_h_rows: list[dict[str, object]] = []
+    q_h_rows: list[dict[str, Any]] = []
     for path in selected:
         try:
             frames = build_thesis_report_frames((path,), evidence_status="pilot")
@@ -736,7 +752,7 @@ def _report_profile(frames: Mapping[str, pd.DataFrame], store_id: str) -> str:
 
 def _corpus_temporal_summary(
     frames: list[dict[str, pd.DataFrame]],
-    included: list[dict[str, object]],
+    included: list[dict[str, Any]],
 ) -> pd.DataFrame:
     """Recompute factual depth summaries over compatible validated shards.
 
@@ -808,9 +824,7 @@ def _corpus_temporal_summary(
                 cohort_payload=None if cohort_json.empty else str(cohort_json.iloc[0]),
             )
 
-        def series_identity(
-            value: object, index: int, mapping: Mapping[str, tuple[str, str]] = series_by_cohort
-        ) -> str:
+        def series_identity(value: Any, index: int, mapping: Mapping[str, tuple[str, str]] = series_by_cohort) -> str:
             return mapping[str(_temporal_group_scalar(value))][index]
 
         steps["generation_series_id"] = steps["generation_cohort_id"].map(lambda value: series_identity(value, 0))
@@ -853,8 +867,10 @@ def _corpus_temporal_summary(
     )
     summaries: list[pd.DataFrame] = []
     for outer_key, partition in source.groupby(list(outer_groups), dropna=False, sort=True):
-        outer_values = dict(zip(outer_groups, outer_key if isinstance(outer_key, tuple) else (outer_key,), strict=True))
-        partition_records = partition.to_dict("records")
+        outer_values: dict[str, Any] = dict(
+            zip(outer_groups, outer_key if isinstance(outer_key, tuple) else (outer_key,), strict=True)
+        )
+        partition_records = cast(list[Mapping[str, Any]], partition.to_dict("records"))
         cohort_ids = sorted({str(value) for value in partition["generation_cohort_id"].dropna()})
         cohort_payloads = {
             str(row["generation_cohort_id"]): row.get("generation_cohort")
@@ -893,7 +909,7 @@ def _corpus_temporal_summary(
             )
             frame["store_count"] = frame["store_count"].astype(np.int64)
             frame["iqr_width"] = frame["q75"] - frame["q25"]
-            summaries.append(frame.loc[:, columns])
+            summaries.append(cast(pd.DataFrame, frame.loc[:, columns]))
     if not summaries:
         return pd.DataFrame(columns=columns)
     return (
@@ -910,7 +926,7 @@ def _scientific_temporal_series_identity(
     frames: Mapping[str, pd.DataFrame],
     *,
     store_id: str,
-    contract: Mapping[str, object],
+    contract: Mapping[str, Any],
     cohort_id: str,
     cohort_payload: str | None,
 ) -> tuple[str, str]:
@@ -930,7 +946,7 @@ def _scientific_temporal_series_identity(
         & parameters.get("key", pd.Series(dtype=str)).astype(str).str.startswith("writer_config.recipes[")
     ]
 
-    def scalar(row: pd.Series) -> object:
+    def scalar(row: pd.Series) -> Any:
         for value_field in ("value_text", "value_float", "value_int", "value_bool"):
             value = row.get(value_field)
             if pd.notna(value):
@@ -947,7 +963,7 @@ def _scientific_temporal_series_identity(
     recipe_payload = {
         str(row["key"]): scalar(row) for _, row in recipe_rows.iterrows() if semantic_key(str(row["key"])) is not None
     }
-    cohort_fields: dict[str, object]
+    cohort_fields: dict[str, Any]
     try:
         parsed = json.loads(cohort_payload) if cohort_payload else None
     except (TypeError, json.JSONDecodeError):
@@ -978,7 +994,7 @@ def _scientific_temporal_series_identity(
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16], encoded
 
 
-def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, object]:
+def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: str, profile: str) -> dict[str, Any]:
     """Return the exact persisted compatibility contract for one store.
 
     The human label is intentionally compact, but the identity is derived from
@@ -990,12 +1006,12 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
 
     parameters = frames["parameters"]
 
-    def values(key: str) -> tuple[object, ...]:
+    def values(key: str) -> tuple[Any, ...]:
         rows = parameters[
             (parameters["store_id"] == store_id)
             & ((parameters["key"] == key) | parameters["key"].str.startswith(f"{key}["))
         ]
-        output: list[object] = []
+        output: list[Any] = []
         for _, row in rows.iterrows():
             for column in ("value_text", "value_float", "value_int", "value_bool"):
                 candidate = row[column]
@@ -1004,7 +1020,7 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
                     break
         return tuple(output)
 
-    def value(key: str) -> object:
+    def value(key: str) -> Any:
         return values(key)[0] if values(key) else None
 
     # Compatibility is semantic, not work-unit identity.  In particular,
@@ -1062,7 +1078,7 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
         "selected_depth_codec",
     }
 
-    def json_value(row: pd.Series) -> object:
+    def json_value(row: pd.Series) -> Any:
         for column in ("value_text", "value_float", "value_int", "value_bool"):
             candidate = row[column]
             if pd.notna(candidate):
@@ -1072,7 +1088,7 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
                 return candidate
         return None
 
-    exact_rows: list[dict[str, object]] = []
+    exact_rows: list[dict[str, Any]] = []
     for _, row in parameters[parameters["store_id"] == store_id].iterrows():
         key = str(row["key"])
         root_attr_key = key.removeprefix("root_attrs.")
@@ -1088,7 +1104,7 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
             continue
         exact_rows.append({"key": key, "value": json_value(row)})
     exact_rows.sort(key=lambda item: (str(item["key"]), json.dumps(item["value"], sort_keys=True, default=str)))
-    payload: dict[str, object] = {"profile": profile, "parameters": exact_rows}
+    payload: dict[str, Any] = {"profile": profile, "parameters": exact_rows}
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     candidate_configs = values("config_hashes.candidate")
     return {
@@ -1099,7 +1115,7 @@ def _persisted_rollout_contract(frames: Mapping[str, pd.DataFrame], store_id: st
     }
 
 
-def _temporal_group_scalar(value: object) -> object:
+def _temporal_group_scalar(value: Any) -> Any:
     """Match the inspection owner's explicit unknown-group normalization."""
 
     return "unknown" if value is None or (not isinstance(value, str) and bool(pd.isna(value))) else value
@@ -1119,7 +1135,7 @@ def _concat_report_frames(frames: list[dict[str, pd.DataFrame]], name: str) -> p
 
 def _contract_frames(
     frames: list[dict[str, pd.DataFrame]],
-    included: list[dict[str, object]],
+    included: list[dict[str, Any]],
     name: str,
 ) -> pd.DataFrame:
     """Attach persisted contract identity before any corpus grouping."""
@@ -1144,8 +1160,8 @@ def _contract_frames(
 
 def _contract_additive_totals(
     frames: list[dict[str, pd.DataFrame]],
-    included: list[dict[str, object]],
-    q_h_rows: list[dict[str, object]],
+    included: list[dict[str, Any]],
+    q_h_rows: list[dict[str, Any]],
 ) -> pd.DataFrame:
     """Return additive physical totals without pooling incompatible contracts."""
 
@@ -1170,12 +1186,12 @@ def _contract_additive_totals(
     )
     if not frames:
         return pd.DataFrame(columns=columns)
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for bundle, store in zip(frames, included, strict=True):
         stores = bundle["stores"]
         runtime = bundle["runtime_storage"]
-        store_row = stores.iloc[0] if not stores.empty else {}
-        runtime_row = runtime.iloc[0] if not runtime.empty else {}
+        store_row: Mapping[str, Any] = cast(dict[str, Any], stores.iloc[0].to_dict()) if not stores.empty else {}
+        runtime_row: Mapping[str, Any] = cast(dict[str, Any], runtime.iloc[0].to_dict()) if not runtime.empty else {}
         store_path = store.get("path")
         q_h = next(
             (
@@ -1218,7 +1234,7 @@ def _contract_additive_totals(
             }
         )
     source = pd.DataFrame(rows)
-    additive = {
+    additive: dict[str, Any] = {
         field: (field, "sum")
         for field in columns[4:]
         if field
@@ -1234,10 +1250,11 @@ def _contract_additive_totals(
     for field_name in ("q_h_state_count", "q_h_trainable_count", "q_h_padding_count"):
         additive[field_name] = (field_name, lambda values: values.sum(min_count=1))
     additive["q_h_chain_count"] = ("q_h_chain_count", lambda values: values.sum(min_count=1))
-    grouped = (
+    grouped = cast(
+        pd.DataFrame,
         source.groupby(["contract_id", "contract", "contract_payload_json", "profile"], dropna=False, sort=True)
         .agg(store_count=("store_count", "sum"), **additive)
-        .reset_index()
+        .reset_index(),
     )
     contract_keys = ["contract_id", "contract", "contract_payload_json", "profile"]
     availability = (
@@ -1248,20 +1265,27 @@ def _contract_additive_totals(
     grouped = grouped.drop(columns="q_h_chain_available", errors="ignore").merge(
         availability, on=contract_keys, how="left", validate="one_to_one"
     )
-    reasons = (
-        source.groupby(contract_keys, dropna=False, sort=True)["q_h_chain_unavailable_reason"]
-        .agg(lambda values: tuple(sorted({str(value) for value in values if pd.notna(value) and str(value)})))
-        .reset_index(name="_q_h_reasons")
-    )
+    reason_rows: list[dict[str, Any]] = []
+    for contract_key, partition in source.groupby(contract_keys, dropna=False, sort=True):
+        key_values = contract_key if isinstance(contract_key, tuple) else (contract_key,)
+        reasons_for_contract = tuple(
+            sorted(
+                {
+                    str(value)
+                    for value in partition["q_h_chain_unavailable_reason"].tolist()
+                    if pd.notna(value) and str(value)
+                }
+            )
+        )
+        reason_rows.append(
+            {
+                **dict(zip(contract_keys, key_values, strict=True)),
+                "_q_h_reasons": reasons_for_contract,
+            }
+        )
+    reasons = pd.DataFrame(reason_rows)
     grouped = grouped.merge(reasons, on=contract_keys, how="left", validate="one_to_one")
-    grouped["q_h_chain_unavailable_reason"] = grouped.apply(
-        lambda row: (
-            None
-            if bool(row["q_h_chain_available"])
-            else "; ".join(row["_q_h_reasons"]) or "Q_H evidence unavailable or incomplete"
-        ),
-        axis=1,
-    )
+    grouped["q_h_chain_unavailable_reason"] = [_q_h_unavailable_reason(row) for _, row in grouped.iterrows()]
     unavailable = ~grouped["q_h_chain_available"].astype(bool)
     grouped.loc[
         unavailable,
@@ -1273,14 +1297,27 @@ def _contract_additive_totals(
         ],
     ] = None
     grouped = grouped.drop(columns="_q_h_reasons")
-    return grouped.loc[:, columns].sort_values("contract_id", kind="stable").reset_index(drop=True)
+    result = cast(pd.DataFrame, grouped.loc[:, columns])
+    return result.sort_values("contract_id", kind="stable").reset_index(drop=True)
 
 
-def _optional_qh_count(row: Mapping[str, object], field: str) -> int | None:
+def _q_h_unavailable_reason(row: pd.Series[Any]) -> str | None:
+    """Return the aggregate reason for one exact-contract Q_H row."""
+
+    if bool(row["q_h_chain_available"]):
+        return None
+    reasons = cast(tuple[str, ...], row["_q_h_reasons"])
+    return "; ".join(reasons) or "Q_H evidence unavailable or incomplete"
+
+
+def _optional_qh_count(row: Mapping[str, Any], field: str) -> int | None:
     """Keep unavailable deep counts distinct from an observed zero."""
 
     value = row.get(field)
-    return int(value) if _is_nonnegative_int(value) else None
+    if not _is_nonnegative_int(value):
+        return None
+    assert isinstance(value, int | np.integer)
+    return int(value)
 
 
 def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
@@ -1343,11 +1380,10 @@ def _candidate_corpus_support(composition: pd.DataFrame) -> pd.DataFrame:
     grouped["trainable_rate"] = grouped["trainable_count"] / allocated
     grouped["selected_rate"] = grouped["selected_count"] / allocated
     grouped["aggregation"] = "additive counts within exact generation cohort and family"
-    return (
-        grouped.loc[:, columns]
-        .sort_values(["contract_id", "generation_cohort_id", "family"], kind="stable", na_position="last")
-        .reset_index(drop=True)
-    )
+    result = cast(pd.DataFrame, grouped.loc[:, columns])
+    return result.sort_values(
+        ["contract_id", "generation_cohort_id", "family"], kind="stable", na_position="last"
+    ).reset_index(drop=True)
 
 
 def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
@@ -1369,7 +1405,8 @@ def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
     targets = targets.copy()
     if "corpus_store_path" not in targets:
         targets["corpus_store_path"] = targets["store_id"]
-    return (
+    result = cast(
+        pd.DataFrame,
         targets.groupby(
             [
                 "contract_id",
@@ -1385,8 +1422,9 @@ def _corpus_target_admission(targets: pd.DataFrame) -> pd.DataFrame:
         )
         .agg(count=("target_row_id", "size"), store_count=("corpus_store_path", "nunique"))
         .reset_index()
-        .loc[:, columns]
+        .loc[:, columns],
     )
+    return result
 
 
 def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
@@ -1442,12 +1480,12 @@ def _corpus_feasibility(collision: pd.DataFrame) -> pd.DataFrame:
     grouped["clearance_coverage"] = grouped["clearance_finite_count"] / grouped["clearance_denominator"].replace(
         0, np.nan
     )
-    return grouped.loc[:, columns]
+    return cast(pd.DataFrame, grouped.loc[:, columns])
 
 
 def _corpus_endpoints(
     frames: list[dict[str, pd.DataFrame]],
-    included: list[dict[str, object]],
+    included: list[dict[str, Any]],
 ) -> pd.DataFrame:
     """Retain raw diagnostic endpoints with store and exact contract identity."""
 
@@ -1476,16 +1514,12 @@ def _corpus_endpoints(
     )
     if not rows:
         return pd.DataFrame(columns=columns)
-    return (
-        pd.concat(rows, ignore_index=True)
-        .loc[:, columns]
-        .sort_values(
-            ["contract_id", "policy", "horizon", "store_id", "rollout_row_id"],
-            kind="stable",
-            na_position="last",
-        )
-        .reset_index(drop=True)
-    )
+    result = cast(pd.DataFrame, pd.concat(rows, ignore_index=True).loc[:, columns])
+    return result.sort_values(
+        ["contract_id", "policy", "horizon", "store_id", "rollout_row_id"],
+        kind="stable",
+        na_position="last",
+    ).reset_index(drop=True)
 
 
 def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
@@ -1506,7 +1540,8 @@ def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
     failures = failures.copy()
     if "corpus_store_path" not in failures:
         failures["corpus_store_path"] = failures["store_id"]
-    return (
+    result = cast(
+        pd.DataFrame,
         failures.groupby(
             ["contract_id", "contract", "contract_payload_json", "profile", "kind", "severity"],
             dropna=False,
@@ -1514,8 +1549,9 @@ def _corpus_failure_counts(failures: pd.DataFrame) -> pd.DataFrame:
         )
         .agg(count=("message", "size"), store_count=("corpus_store_path", "nunique"))
         .reset_index()
-        .loc[:, columns]
+        .loc[:, columns],
     )
+    return result
 
 
 def _frame_int_sum(frame: pd.DataFrame, column: str) -> int:
@@ -1529,13 +1565,13 @@ def _frame_int_sum(frame: pd.DataFrame, column: str) -> int:
     return int(values.sum())
 
 
-def _row_int_sum(rows: list[dict[str, object]], field: str) -> int:
+def _row_int_sum(rows: list[dict[str, Any]], field: str) -> int:
     """Sum a deep-Q_H count after completeness has been proven."""
 
     return sum(int(row[field]) for row in rows)
 
 
-def _is_nonnegative_int(value: object) -> bool:
+def _is_nonnegative_int(value: Any) -> bool:
     """Return whether a value is a factual nonnegative integer count."""
 
     return isinstance(value, int | np.integer) and not isinstance(value, bool) and int(value) >= 0
@@ -1550,7 +1586,7 @@ def serialize_thesis_report_bundle(frames: Mapping[str, pd.DataFrame]) -> bytes:
     """
 
     _validate_frame_schema(frames)
-    tables: dict[str, dict[str, object]] = {}
+    tables: dict[str, dict[str, Any]] = {}
     for name, columns in THESIS_REPORT_TABLE_COLUMNS.items():
         frame = frames[name]
         records = [
@@ -1591,7 +1627,7 @@ def write_thesis_report_bundle(path: Path | str, frames: Mapping[str, pd.DataFra
 
 
 def _append_store_rows(
-    rows: dict[str, list[dict[str, object]]],
+    rows: dict[str, list[dict[str, Any]]],
     store_path: Path,
     *,
     evidence_status: Literal["pilot", "confirmatory"],
@@ -1614,7 +1650,7 @@ def _append_store_rows(
     if not trust.ok:
         detail = "; ".join(trust.errors[:3]) or "unknown promotion error"
         raise ValueError(f"Rollout store {store_path} failed promotion validation: {detail}")
-    reader = _ManifestSnapshotReader(reader, manifest_payload)  # type: ignore[assignment]
+    reader = _ManifestSnapshotReader(reader, manifest_payload)
     manifest = manifest_payload.get("manifest", {})
     root_attrs = manifest_payload.get("root_attrs", {})
     manifest_sha256 = str(root_attrs["manifest_sha256"])
@@ -1812,7 +1848,7 @@ def _append_store_rows(
 
 
 def _append_sidecar_rows(
-    rows: dict[str, list[dict[str, object]]],
+    rows: dict[str, list[dict[str, Any]]],
     sidecar_path: Path,
     *,
     evidence_status: Literal["pilot", "confirmatory"],
@@ -1822,7 +1858,7 @@ def _append_sidecar_rows(
     data = sidecar_path.read_bytes()
     suffix = sidecar_path.suffix.lower()
     if suffix == ".json":
-        payload: object = json.loads(data)
+        payload: Any = json.loads(data)
         format_name = "json"
     elif suffix == ".jsonl":
         payload = [json.loads(line) for line in data.splitlines() if line.strip()]
@@ -1863,7 +1899,7 @@ def _append_sidecar_rows(
     rows["facts"].extend(promoted)
 
 
-def _sidecar_logical_name(payload: object, *, fallback: str) -> str:
+def _sidecar_logical_name(payload: Any, *, fallback: str) -> str:
     if not isinstance(payload, dict) or payload.get("bundle_role") != _ANALYSIS_FACT_SIDECAR_ROLE:
         return fallback
     logical_name = payload.get("logical_name", fallback)
@@ -1875,12 +1911,12 @@ def _sidecar_logical_name(payload: object, *, fallback: str) -> str:
 
 
 def _analysis_fact_rows(
-    payload: object,
+    payload: Any,
     *,
     sidecar_id: str,
     evidence_status: Literal["pilot", "confirmatory"],
     known_store_ids: set[str],
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
     role = payload.get("bundle_role")
@@ -1909,7 +1945,7 @@ def _analysis_fact_rows(
     if not isinstance(facts, list) or not facts:
         raise ValueError("Analysis sidecar facts must be a non-empty list.")
 
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     identities: set[tuple[str, str]] = set()
     for index, fact in enumerate(facts):
         if not isinstance(fact, dict) or set(fact) != _ANALYSIS_FACT_FIELDS:
@@ -1947,13 +1983,13 @@ def _analysis_fact_rows(
     return output
 
 
-def _required_text(value: object, *, field: str, index: int) -> str:
+def _required_text(value: Any, *, field: str, index: int) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise ValueError(f"Analysis sidecar fact {index} {field} must be a non-empty trimmed string.")
     return value
 
 
-def _fact_scalar(value: object, *, index: int) -> bool | int | float | str | None:
+def _fact_scalar(value: Any, *, index: int) -> bool | int | float | str | None:
     if value is None or isinstance(value, bool | int | str):
         return value
     if isinstance(value, float):
@@ -1963,8 +1999,8 @@ def _fact_scalar(value: object, *, index: int) -> bool | int | float | str | Non
     raise TypeError(f"Analysis sidecar fact {index} value must be a JSON scalar; received {type(value).__name__}.")
 
 
-def _typed_leaf_rows(owner_key: str, owner: str, payload: object) -> list[dict[str, object]]:
-    output: list[dict[str, object]] = []
+def _typed_leaf_rows(owner_key: str, owner: str, payload: Any) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
     for key, value in _flatten_leaves(payload):
         output.append({owner_key: owner, "key": key, **_typed_value(value)})
     return output
@@ -1972,10 +2008,10 @@ def _typed_leaf_rows(owner_key: str, owner: str, payload: object) -> list[dict[s
 
 def _fact_rows(
     store_id: str,
-    statistics: dict[str, object],
+    statistics: dict[str, Any],
     *,
     evidence_status: Literal["pilot", "confirmatory"],
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     return [
         {
             "store_id": store_id,
@@ -1991,8 +2027,8 @@ def _fact_rows(
     ]
 
 
-def _nested_value(payload: dict[str, object], dotted_key: str) -> object:
-    value: object = payload
+def _nested_value(payload: dict[str, Any], dotted_key: str) -> Any:
+    value: Any = payload
     for part in dotted_key.split("."):
         if not isinstance(value, dict):
             return None
@@ -2000,9 +2036,9 @@ def _nested_value(payload: dict[str, object], dotted_key: str) -> object:
     return value
 
 
-def _flatten_leaves(payload: object, *, prefix: str = "") -> list[tuple[str, object]]:
+def _flatten_leaves(payload: Any, *, prefix: str = "") -> list[tuple[str, Any]]:
     if isinstance(payload, dict):
-        output: list[tuple[str, object]] = []
+        output: list[tuple[str, Any]] = []
         for key in sorted(payload, key=str):
             child = f"{prefix}.{key}" if prefix else str(key)
             output.extend(_flatten_leaves(payload[key], prefix=child))
@@ -2016,7 +2052,7 @@ def _flatten_leaves(payload: object, *, prefix: str = "") -> list[tuple[str, obj
     return [(prefix or "value", payload)]
 
 
-def _typed_value(value: object) -> dict[str, object]:
+def _typed_value(value: Any) -> dict[str, Any]:
     output = dict.fromkeys(_VALUE_COLUMNS[:-1])
     output["is_missing"] = value is None
     if value is None:
@@ -2040,10 +2076,10 @@ def _typed_value(value: object) -> dict[str, object]:
     return output
 
 
-def _source_coverage_rows(store_id: str, coverage: object) -> list[dict[str, object]]:
+def _source_coverage_rows(store_id: str, coverage: Any) -> list[dict[str, Any]]:
     if not isinstance(coverage, dict):
         return []
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for key, value in sorted(coverage.items()):
         if not key.endswith("_counts") or not isinstance(value, dict):
             continue
@@ -2060,17 +2096,17 @@ def _source_coverage_rows(store_id: str, coverage: object) -> list[dict[str, obj
     return output
 
 
-def _with_store_id(store_id: str, records: list[dict[str, object]]) -> list[dict[str, object]]:
+def _with_store_id(store_id: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"store_id": store_id, **record} for record in records]
 
 
-def _without_raw_toml(payload: object) -> object:
+def _without_raw_toml(payload: Any) -> Any:
     if not isinstance(payload, dict):
         return payload
     return {key: value for key, value in payload.items() if key != "raw_toml_text"}
 
 
-def _frame(name: str, rows: list[dict[str, object]]) -> pd.DataFrame:
+def _frame(name: str, rows: list[dict[str, Any]]) -> pd.DataFrame:
     columns = THESIS_REPORT_TABLE_COLUMNS[name]
     frame = pd.DataFrame(rows, columns=columns)
     if frame.empty:
@@ -2089,7 +2125,7 @@ def _validate_frame_schema(frames: Mapping[str, pd.DataFrame]) -> None:
             raise ValueError(f"Report table {name!r} columns must be {columns}; received {actual_columns}.")
 
 
-def _json_scalar(value: object, *, table: str, column: str) -> object:
+def _json_scalar(value: Any, *, table: str, column: str) -> Any:
     if value is None or value is pd.NA or value is pd.NaT:
         return None
     if isinstance(value, np.generic):

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -65,22 +66,22 @@ def _resolve_store(
     return VinOfflineStoreConfig(store_dir=Path(store_dir_text).expanduser())
 
 
-def _component_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
+def _component_rows(stats: VinOfflineDatasetStats) -> list[dict[str, Any]]:
     """Return RRI component summary rows."""
 
     return [{"component": name, **asdict(summary)} for name, summary in sorted(stats.rri_component_summaries.items())]
 
 
-def _pose_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
+def _pose_rows(stats: VinOfflineDatasetStats) -> list[dict[str, Any]]:
     """Return candidate-pose summary rows."""
 
     return [{"metric": name, **asdict(summary)} for name, summary in sorted(stats.candidate_pose_summaries.items())]
 
 
-def _block_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
+def _block_rows(stats: VinOfflineDatasetStats) -> list[dict[str, Any]]:
     """Return manifest block diagnostics as table rows."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for block in stats.block_diagnostics:
         rows.append(
             {
@@ -96,10 +97,10 @@ def _block_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
     return rows
 
 
-def _sample_rows(stats: VinOfflineDatasetStats) -> list[dict[str, object]]:
+def _sample_rows(stats: VinOfflineDatasetStats) -> list[dict[str, Any]]:
     """Return sampled per-row sanity summaries as table rows."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for sample in stats.sample_summaries:
         rows.append(
             {
@@ -641,14 +642,17 @@ def render_offline_dataset_page() -> None:
 
     cached = st.session_state.get(_STATS_CACHE_KEY)
     coverage_cached = st.session_state.get(_COVERAGE_CACHE_KEY)
-    coverage = (
-        coverage_cached.get("coverage")
-        if isinstance(coverage_cached, dict) and coverage_cached.get("key") == coverage_key
+    coverage_value = coverage_cached.get("coverage") if isinstance(coverage_cached, dict) else None
+    cached_coverage = (
+        coverage_value
+        if isinstance(coverage_cached, dict)
+        and coverage_cached.get("key") == coverage_key
+        and isinstance(coverage_value, VinOfflineCoverageStats)
         else None
     )
     if not cached or cached.get("key") != stats_key:
-        if coverage is not None:
-            _render_coverage(coverage)
+        if cached_coverage is not None:
+            _render_coverage(cached_coverage)
         else:
             st.info("Choose a store and click Inspect offline store.")
         return
@@ -659,7 +663,7 @@ def render_offline_dataset_page() -> None:
         candidate_bins=candidate_bins,
         binner_classes=binner_classes,
         log_y=log_y,
-        coverage=coverage,
+        coverage=cached_coverage,
     )
 
 

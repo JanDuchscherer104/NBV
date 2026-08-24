@@ -16,7 +16,7 @@ import streamlit as st
 if TYPE_CHECKING:
     from aria_nbv.app.config import NbvStreamlitAppConfig
     from aria_nbv.app.controller import PipelineController
-    from aria_nbv.app.state import PipelineState
+    from aria_nbv.app.state_types import AppState
     from aria_nbv.utils import Console
 
 
@@ -53,7 +53,7 @@ class NbvStreamlitApp:
                 st.code(trace, language="text")
             st.stop()
 
-    def _single_step_runtime(self) -> tuple[Console, PipelineState, PipelineController]:
+    def _single_step_runtime(self) -> tuple[Console, AppState, PipelineController]:
         """Construct state and controls for a selected single-step page only."""
 
         from aria_nbv.app.controller import PipelineController

@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol, cast
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
@@ -284,7 +284,7 @@ class CampaignWorkUnit:
     generation_revision_hash: str = ""
 
 
-def derive_campaign_seed(*parts: object) -> int:
+def derive_campaign_seed(*parts: Any) -> int:
     """Derive a stable 32-bit seed from the campaign seed lineage parts."""
 
     payload = json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode()
@@ -687,6 +687,7 @@ def validate_cuda_contract(value: Any) -> None:
 
 class CampaignProcess(Protocol):
     pid: int
+    returncode: int | None
     stdout: Any
     stderr: Any
 
@@ -719,7 +720,10 @@ class CampaignProcessRunner:
     """Injectable subprocess boundary with process-group termination."""
 
     def start(self, argv: Sequence[str], *, stdout: Any = None, stderr: Any = None) -> CampaignProcess:
-        return subprocess.Popen(tuple(argv), stdout=stdout, stderr=stderr, start_new_session=True)
+        return cast(
+            CampaignProcess,
+            subprocess.Popen(tuple(argv), stdout=stdout, stderr=stderr, start_new_session=True),
+        )
 
     def terminate_group(self, process: CampaignProcess, *, grace_seconds: float = 10) -> None:
         try:
@@ -791,6 +795,12 @@ class CampaignProcessRunner:
                 stderr_tail=err or "",
                 disposition=disposition,
             ) from None
+        if process.returncode is None:
+            raise RuntimeError("child process completed without a return code")
+        if isinstance(out, bytes):
+            out = out.decode(errors="replace")
+        if isinstance(err, bytes):
+            err = err.decode(errors="replace")
         return process.returncode, out or "", err or ""
 
     def run_stage(
@@ -1092,7 +1102,14 @@ class CudaRolloutCampaign:
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
         audit_rows = _jsonable_audit_rows(rows)
         admission_audit_hash = stable_msgspec_hash(audit_rows)
-        payload = {
+        zero_admission_scene_ids = tuple(
+            sorted(
+                scene
+                for scene in scenes
+                if not any(is_strictly_eligible(row) and str(val(row, "scene_id")) == scene for row in rows)
+            )
+        )
+        plan_payload: dict[str, Any] = {
             "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
             "campaign_id": self.config.campaign_id,
             "seed": self.config.seed,
@@ -1104,19 +1121,11 @@ class CudaRolloutCampaign:
             "admission_counts": admission_counts,
             "admission_reason_counts": reason_counts,
             "generation_revision": generation_revision.to_jsonable(),
-            "zero_admission_scene_ids": sorted(
-                scene
-                for scene in scenes
-                if not any(is_strictly_eligible(row) and str(val(row, "scene_id")) == scene for row in rows)
-            ),
-            "zero_admission_scene_count": sum(
-                1
-                for scene in scenes
-                if not any(is_strictly_eligible(row) and str(val(row, "scene_id")) == scene for row in rows)
-            ),
+            "zero_admission_scene_ids": zero_admission_scene_ids,
+            "zero_admission_scene_count": len(zero_admission_scene_ids),
             "work_units": [asdict(u) for u in units],
         }
-        plan_hash = stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
+        plan_hash = stable_msgspec_hash(json.loads(json.dumps(plan_payload, sort_keys=True, default=str)))
         return CampaignPlan(
             self.config.campaign_id,
             self.config.seed,
@@ -1130,8 +1139,8 @@ class CudaRolloutCampaign:
             admission_counts,
             reason_counts,
             generation_revision,
-            tuple(payload["zero_admission_scene_ids"]),
-            int(payload["zero_admission_scene_count"]),
+            zero_admission_scene_ids,
+            len(zero_admission_scene_ids),
         )
 
     def audit_source_manifest(self, writer_config: Any, source_manifest: Any) -> list[dict[str, Any]]:
@@ -1459,9 +1468,12 @@ class CudaRolloutCampaign:
         if not path.exists():
             raise RuntimeError("current passing smoke evidence is required")
         try:
-            evidence = json.loads(path.read_text(encoding="utf-8"))
+            raw_evidence = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError("smoke evidence is unreadable") from exc
+        if not isinstance(raw_evidence, dict) or not all(isinstance(key, str) for key in raw_evidence):
+            raise RuntimeError("smoke evidence must be a JSON object with string keys")
+        evidence: dict[str, Any] = raw_evidence
         if evidence.get("campaign_id") != self.config.campaign_id or evidence.get("plan_hash") != plan.plan_hash:
             raise RuntimeError("smoke evidence is stale for this campaign plan")
         if not evidence.get("work_unit_hash") or evidence.get("config_hash") != plan.config_hash:
@@ -1608,7 +1620,7 @@ class CudaRolloutCampaign:
             from ...targets.protocol import TargetInputProtocol
 
             store = cfg.store.model_copy(update={"target_protocol_version": TargetInputProtocol.V1_OBSERVED})
-            from .rollout_dataset import OracleTargetTaskSamplerConfig
+            from ..target_selection import OracleTargetTaskSamplerConfig
 
             cfg = cfg.model_copy(
                 update={
@@ -2607,8 +2619,13 @@ class CudaRolloutCampaign:
                     )
                 )
                 return not probe(str(payload["tmux_session"]))
+
+            def default_pid_probe(pid: int) -> bool:
+                os.kill(pid, 0)
+                return True
+
             try:
-                alive = (pid_probe or (lambda p: os.kill(p, 0) is None))(int(payload["pid"]))
+                alive = (pid_probe or default_pid_probe)(int(payload["pid"]))
             except ProcessLookupError:
                 alive = False
             if alive and payload.get("process_group") and process_group_probe is not None:

@@ -7,6 +7,8 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -21,7 +23,11 @@ pytest.importorskip("efm3d")
 
 from aria_nbv.rollouts.info_cli import app as rollouts_info_app
 from aria_nbv.rollouts.inspection import (
+    build_compact_statistics,
+    build_promotion_evidence,
+    candidate_audit_rows,
     candidate_group_summary_rows,
+    candidate_population_evidence,
     rollout_statistics,
     rollout_step_objective_rows,
     rollout_tree_summary_rows,
@@ -101,7 +107,7 @@ def test_persisted_contract_payload_separates_one_compatibility_field() -> None:
 
 
 def test_report_export_preserves_one_manifest_validation_promotion_and_statistics_call_per_store(
-    tmp_path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Report export composes each demanded inspection facet exactly once."""
 
@@ -111,29 +117,29 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
     calls = {"manifest": 0, "validation": 0, "promotion": 0, "statistics": 0}
     original_manifest = RolloutZarrStoreReader.manifest
     original_validate = RolloutZarrStoreReader.validate
-    original_promotion = reporting.build_promotion_evidence
-    original_statistics = reporting.build_compact_statistics
+    original_promotion = build_promotion_evidence
+    original_statistics = build_compact_statistics
 
-    def manifest(reader):
+    def manifest(reader: Any) -> Any:
         calls["manifest"] += 1
         return original_manifest(reader)
 
-    def validate(reader):
+    def validate(reader: Any) -> Any:
         calls["validation"] += 1
         return original_validate(reader)
 
-    def promotion(reader, *, manifest_payload=None):
+    def promotion(reader: Any, *, manifest_payload: Any = None) -> Any:
         calls["promotion"] += 1
         return original_promotion(reader, manifest_payload=manifest_payload)
 
-    def statistics(reader, *, manifest_payload=None):
+    def statistics(reader: Any, *, manifest_payload: Any = None) -> Any:
         calls["statistics"] += 1
         return original_statistics(reader, manifest_payload=manifest_payload)
 
     monkeypatch.setattr(RolloutZarrStoreReader, "manifest", manifest)
     monkeypatch.setattr(RolloutZarrStoreReader, "validate", validate)
-    monkeypatch.setattr(reporting, "build_promotion_evidence", promotion)
-    monkeypatch.setattr(reporting, "build_compact_statistics", statistics)
+    monkeypatch.setattr("aria_nbv.rollouts.reporting.build_promotion_evidence", promotion)
+    monkeypatch.setattr("aria_nbv.rollouts.reporting.build_compact_statistics", statistics)
 
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
 
@@ -143,20 +149,22 @@ def test_report_export_preserves_one_manifest_validation_promotion_and_statistic
     assert frames["steps"]["generation_cohort"].notna().all()
 
 
-def test_report_export_requests_only_candidate_facets_it_serializes(tmp_path, monkeypatch) -> None:
+def test_report_export_requests_only_candidate_facets_it_serializes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Reporting never pays for discarded scientific candidate-support reducers."""
 
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr", build_rollout_records(horizon=1, num_samples=6, seed=112)[:1]
     )
-    original = reporting.candidate_population_evidence
+    original = candidate_population_evidence
     calls: list[bool] = []
 
-    def candidate_population(reader, **kwargs):
+    def candidate_population(reader: Any, **kwargs: Any) -> Any:
         calls.append(bool(kwargs.get("scientific_support", True)))
         return original(reader, **kwargs)
 
-    monkeypatch.setattr(reporting, "candidate_population_evidence", candidate_population)
+    monkeypatch.setattr("aria_nbv.rollouts.reporting.candidate_population_evidence", candidate_population)
 
     build_thesis_report_frames([result.store_dir], evidence_status="pilot")
 
@@ -253,7 +261,7 @@ def test_corpus_non_temporal_aggregates_keep_incompatible_contracts_separate() -
     assert list(failure_counts["count"]) == [1, 1]
 
 
-def test_corpus_reducers_count_distinct_physical_paths_with_shared_store_id(monkeypatch) -> None:
+def test_corpus_reducers_count_distinct_physical_paths_with_shared_store_id(monkeypatch: pytest.MonkeyPatch) -> None:
     """Copied shards retain two physical contributors despite one content digest."""
 
     monkeypatch.setattr(
@@ -341,7 +349,7 @@ def test_corpus_reducers_count_distinct_physical_paths_with_shared_store_id(monk
     assert failures.iloc[0]["count"] == 2
 
 
-def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_support(tmp_path) -> None:
+def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_support(tmp_path: Path) -> None:
     """An invalid selection remains visible and contributes no scientific rows."""
 
     valid = write_rollout_zarr_store(
@@ -370,7 +378,7 @@ def test_corpus_summary_keeps_invalid_stores_and_recomputes_only_additive_suppor
     assert set(summary.endpoints["store_id"]) == {summary.included_stores[0]["store_id"]}
 
 
-def test_corpus_summary_rejects_fractional_persisted_qh_counts(tmp_path) -> None:
+def test_corpus_summary_rejects_fractional_persisted_qh_counts(tmp_path: Path) -> None:
     """Malformed persisted Q_H counts cannot be truncated into Ready evidence."""
 
     store = write_rollout_zarr_store(
@@ -389,12 +397,12 @@ def test_corpus_summary_rejects_fractional_persisted_qh_counts(tmp_path) -> None
     assert summary.contract_totals.empty
 
 
-def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(tmp_path) -> None:
+def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(tmp_path: Path) -> None:
     """Matching generated shards pool factual depths; profile changes stay faceted."""
 
     records = build_rollout_records(horizon=2, num_samples=6, seed=112)[:1]
 
-    def store(name: str, profile: str):
+    def store(name: str, profile: str) -> Any:
         return write_rollout_zarr_store(
             tmp_path / f"{name}.zarr",
             records,
@@ -443,7 +451,7 @@ def test_corpus_temporal_summary_combines_matching_shards_and_facets_contracts(t
             assert "contract_payload_json" in frame.columns
 
 
-def test_report_profile_falls_back_to_explicit_campaign_profile_hash(tmp_path) -> None:
+def test_report_profile_falls_back_to_explicit_campaign_profile_hash(tmp_path: Path) -> None:
     """Generated stores without a name expose their campaign profile hash."""
 
     profile_hash = "campaign-profile-hash-1234567890"
@@ -460,10 +468,10 @@ def test_report_profile_falls_back_to_explicit_campaign_profile_hash(tmp_path) -
     assert reporting._report_profile(frames, store_id) == f"profile_hash={profile_hash[:12]}"
 
 
-def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
+def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
     """Outer compatibility fields stay separate from the inner temporal vocabulary."""
 
-    def contract(_frames, store_id, profile):
+    def contract(_frames: Any, store_id: Any, profile: Any) -> Any:
         suffix = "a" if store_id == "store-a" else "b"
         return {"id": f"contract-{suffix}", "label": f"contract-{suffix}", "profile": profile}
 
@@ -500,7 +508,7 @@ def test_corpus_temporal_summary_facets_outer_contracts(monkeypatch) -> None:
     assert set(summary["store_count"]) == {1}
 
 
-def test_corpus_temporal_summary_preserves_generation_cohort_facets(monkeypatch) -> None:
+def test_corpus_temporal_summary_preserves_generation_cohort_facets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Distinct persisted rollout lineages remain separate temporal populations."""
 
     monkeypatch.setattr(
@@ -542,7 +550,9 @@ def test_corpus_temporal_summary_preserves_generation_cohort_facets(monkeypatch)
     assert set(summary["store_count"]) == {1}
 
 
-def test_corpus_temporal_summary_pools_seed_only_cohorts_and_retains_provenance(monkeypatch) -> None:
+def test_corpus_temporal_summary_pools_seed_only_cohorts_and_retains_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Seed-only work units form one statistical series with nonzero IQR."""
 
     monkeypatch.setattr(
@@ -625,7 +635,7 @@ def test_corpus_temporal_summary_pools_seed_only_cohorts_and_retains_provenance(
     assert gain["generation_series_id"] == summary["generation_series_id"].iloc[0]
 
 
-def test_corpus_temporal_summary_separates_candidate_or_branch_changes(monkeypatch) -> None:
+def test_corpus_temporal_summary_separates_candidate_or_branch_changes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Scientific candidate and branch controls never pool into one series."""
 
     monkeypatch.setattr(
@@ -684,7 +694,7 @@ def test_corpus_temporal_summary_separates_candidate_or_branch_changes(monkeypat
     assert summary["generation_series_id"].nunique() == 2
 
 
-def test_corpus_temporal_summary_uses_factual_early_terminated_depths(monkeypatch) -> None:
+def test_corpus_temporal_summary_uses_factual_early_terminated_depths(monkeypatch: pytest.MonkeyPatch) -> None:
     """An early-terminated rollout contributes no fabricated later-depth zero."""
 
     monkeypatch.setattr(
@@ -707,7 +717,7 @@ def test_corpus_temporal_summary_uses_factual_early_terminated_depths(monkeypatc
         "generation_cohort": "cohort",
     }
 
-    def bundle(rows: list[dict[str, object]], store_id: str) -> dict[str, pd.DataFrame]:
+    def bundle(rows: list[dict[str, Any]], store_id: str) -> dict[str, pd.DataFrame]:
         return {
             "steps": pd.DataFrame(rows),
             "parameters": pd.DataFrame(
@@ -855,7 +865,7 @@ def test_contract_additive_totals_fail_closed_for_mixed_qh_completeness() -> Non
 
 
 @pytest.mark.parametrize("field,value", [("state_count", None), ("trainable_count", 1.5), ("padding_count", -1)])
-def test_contract_additive_totals_require_complete_nonnegative_qh_counts(field: str, value: object) -> None:
+def test_contract_additive_totals_require_complete_nonnegative_qh_counts(field: str, value: Any) -> None:
     """Deep Q_H status is unavailable unless every additive count is valid."""
 
     bundle = {
@@ -893,27 +903,28 @@ def test_contract_additive_totals_require_complete_nonnegative_qh_counts(field: 
     assert row["q_h_chain_unavailable_reason"] == "Q_H evidence unavailable or incomplete"
 
 
-def test_report_groups_materialize_candidate_audit_once_per_store(tmp_path, monkeypatch) -> None:
+def test_report_groups_materialize_candidate_audit_once_per_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr", build_rollout_records(horizon=2, num_samples=6, seed=71)
     )
-    import aria_nbv.rollouts.reporting as reporting
 
-    original = reporting.candidate_audit_rows
+    original = candidate_audit_rows
     calls = 0
 
-    def spy(reader):
+    def spy(reader: Any) -> Any:
         nonlocal calls
         calls += 1
         return original(reader)
 
-    monkeypatch.setattr(reporting, "candidate_audit_rows", spy)
+    monkeypatch.setattr("aria_nbv.rollouts.reporting.candidate_audit_rows", spy)
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
     assert calls == 1
     assert len(frames["candidate_groups"]) > 0
 
 
-def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:
+def test_rollout_statistics_match_cli_stats_payload(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """The report seam and CLI should expose the same compact statistics."""
 
     result = write_rollout_zarr_store(
@@ -935,7 +946,7 @@ def test_rollout_statistics_match_cli_stats_payload(tmp_path, capsys) -> None:
     )
 
 
-def test_serialized_facts_and_storage_match_cli_payload(tmp_path, capsys) -> None:
+def test_serialized_facts_and_storage_match_cli_payload(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Selected thesis facts and runtime storage should retain CLI semantics end to end."""
 
     result = write_rollout_zarr_store(
@@ -981,7 +992,7 @@ def test_serialized_facts_and_storage_match_cli_payload(tmp_path, capsys) -> Non
     }
 
 
-def test_report_bundle_round_trips_unavailable_discounted_return(tmp_path) -> None:
+def test_report_bundle_round_trips_unavailable_discounted_return(tmp_path: Path) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "discounted-unavailable.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=902)[:1],
@@ -1000,7 +1011,9 @@ def test_report_bundle_round_trips_unavailable_discounted_return(tmp_path) -> No
 
 
 @pytest.mark.parametrize("gamma", [None, np.nan, -0.1, 1.1])
-def test_report_bundle_fails_closed_for_invalid_discount_gamma(tmp_path, monkeypatch, gamma) -> None:
+def test_report_bundle_fails_closed_for_invalid_discount_gamma(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gamma: Any
+) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "discounted-invalid-gamma.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=904)[:1],
@@ -1019,7 +1032,7 @@ def test_report_bundle_fails_closed_for_invalid_discount_gamma(tmp_path, monkeyp
     assert "discount_gamma" in str(row["reason"])
 
 
-def test_report_headroom_summary_preserves_proxy_provenance(tmp_path) -> None:
+def test_report_headroom_summary_preserves_proxy_provenance(tmp_path: Path) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "headroom-provenance.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=903)[:1],
@@ -1040,7 +1053,7 @@ def test_report_headroom_summary_preserves_proxy_provenance(tmp_path) -> None:
         assert not reconstruction["independent_endpoint_evaluation"].any()
 
 
-def test_streamlit_inspection_rows_map_identically_into_bundle_frames(tmp_path) -> None:
+def test_streamlit_inspection_rows_map_identically_into_bundle_frames(tmp_path: Path) -> None:
     """Report tables should be exact projections of the row builders used by Streamlit."""
 
     result = write_rollout_zarr_store(
@@ -1074,7 +1087,7 @@ def test_streamlit_inspection_rows_map_identically_into_bundle_frames(tmp_path) 
     )
 
 
-def test_failures_projection_matches_shared_suspicious_rows(tmp_path) -> None:
+def test_failures_projection_matches_shared_suspicious_rows(tmp_path: Path) -> None:
     """Failure rows should retain the shared inspection predicates and evidence status."""
 
     result = write_rollout_zarr_store(
@@ -1084,7 +1097,8 @@ def test_failures_projection_matches_shared_suspicious_rows(tmp_path) -> None:
     root = zarr.open_group(result.store_dir, mode="a")
     selected = np.asarray(root["candidates/selected_mask"], dtype=np.bool_).reshape(-1)
     selected_row = int(np.flatnonzero(selected)[0])
-    root["candidate_diagnostics/motion_step_length_m"][selected_row] = np.asarray(99.0, dtype=np.float32)
+    motion = cast(zarr.Array[Any], root["candidate_diagnostics/motion_step_length_m"])
+    motion[selected_row] = np.asarray(99.0, dtype=np.float32)
     reader = RolloutZarrStoreReader(result.store_dir)
 
     frames = build_thesis_report_frames([result.store_dir], evidence_status="pilot")
@@ -1106,7 +1120,7 @@ def test_failures_projection_matches_shared_suspicious_rows(tmp_path) -> None:
     assert_frame_equal(frames["failures"], expected, check_dtype=False)
 
 
-def test_permuted_inputs_and_independent_rebuilds_are_byte_stable(tmp_path) -> None:
+def test_permuted_inputs_and_independent_rebuilds_are_byte_stable(tmp_path: Path) -> None:
     """Input ordering and fresh DataFrame objects should not affect bundle bytes."""
 
     first_store = write_rollout_zarr_store(
@@ -1144,7 +1158,7 @@ def test_permuted_inputs_and_independent_rebuilds_are_byte_stable(tmp_path) -> N
     assert str(tmp_path) not in serialize_thesis_report_bundle(first_frames).decode()
 
 
-def test_same_name_different_content_sidecars_remain_distinct(tmp_path) -> None:
+def test_same_name_different_content_sidecars_remain_distinct(tmp_path: Path) -> None:
     """Portable sidecar identity should distinguish content collisions."""
 
     store = write_rollout_zarr_store(
@@ -1170,7 +1184,7 @@ def test_same_name_different_content_sidecars_remain_distinct(tmp_path) -> None:
     assert frames["sidecars"]["sidecar_id"].nunique() == 2
 
 
-def test_report_frames_preserve_parameters_sidecars_missingness_and_provenance(tmp_path) -> None:
+def test_report_frames_preserve_parameters_sidecars_missingness_and_provenance(tmp_path: Path) -> None:
     """Resolved manifests and optional sidecars should remain typed and attributable."""
 
     context = RolloutStoreManifestContext(
@@ -1229,7 +1243,7 @@ def test_report_frames_preserve_parameters_sidecars_missingness_and_provenance(t
     assert set(frames["facts"]["source"]) == {"inspection.rollout_statistics"}
 
 
-def test_thesis_report_bundle_is_strict_compact_and_byte_stable(tmp_path) -> None:
+def test_thesis_report_bundle_is_strict_compact_and_byte_stable(tmp_path: Path) -> None:
     """Identical report frames should produce identical finite JSON bytes and digests."""
 
     result = write_rollout_zarr_store(
@@ -1262,7 +1276,7 @@ def test_thesis_report_bundle_is_strict_compact_and_byte_stable(tmp_path) -> Non
         serialize_thesis_report_bundle(invalid)
 
 
-def test_thesis_report_bundle_rejects_schema_drift(tmp_path) -> None:
+def test_thesis_report_bundle_rejects_schema_drift(tmp_path: Path) -> None:
     """Bundle serialization should fail when a named frame changes shape."""
 
     result = write_rollout_zarr_store(
@@ -1277,7 +1291,7 @@ def test_thesis_report_bundle_rejects_schema_drift(tmp_path) -> None:
         serialize_thesis_report_bundle(invalid)
 
 
-def test_report_frames_reject_missing_optional_sidecar(tmp_path) -> None:
+def test_report_frames_reject_missing_optional_sidecar(tmp_path: Path) -> None:
     """Optional means caller-selected, not silently ignored when selected."""
 
     result = write_rollout_zarr_store(
@@ -1296,7 +1310,7 @@ def test_report_frames_reject_missing_optional_sidecar(tmp_path) -> None:
         build_thesis_report_frames([result.store_dir], evidence_status="draft")  # type: ignore[arg-type]
 
 
-def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_path) -> None:
+def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_path: Path) -> None:
     """A versioned analysis envelope should promote facts without losing its audit rows."""
 
     result = write_rollout_zarr_store(
@@ -1367,7 +1381,7 @@ def test_analysis_fact_sidecar_promotes_typed_facts_with_stable_provenance(tmp_p
         ({"facts": []}, "non-empty"),
     ],
 )
-def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, message) -> None:
+def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path: Path, payload_patch: Any, message: Any) -> None:
     """Analysis sidecars should fail closed on schema, status, or shape drift."""
 
     result = write_rollout_zarr_store(
@@ -1411,7 +1425,7 @@ def test_analysis_fact_sidecar_rejects_envelope_drift(tmp_path, payload_patch, m
         ({"unexpected": 1}, "fields"),
     ],
 )
-def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path, fact_patch, message) -> None:
+def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path: Path, fact_patch: Any, message: Any) -> None:
     """Promoted analysis facts should be finite, typed, and exact-schema."""
 
     result = write_rollout_zarr_store(
@@ -1449,7 +1463,7 @@ def test_analysis_fact_sidecar_rejects_malformed_facts(tmp_path, fact_patch, mes
         )
 
 
-def test_analysis_fact_sidecar_rejects_duplicate_and_store_fact_conflicts(tmp_path) -> None:
+def test_analysis_fact_sidecar_rejects_duplicate_and_store_fact_conflicts(tmp_path: Path) -> None:
     """A promoted fact identity may have exactly one authoritative source."""
 
     result = write_rollout_zarr_store(
@@ -1519,11 +1533,11 @@ def test_serializer_normalizes_pandas_missing_values() -> None:
     assert row["value_text"] is None
 
 
-def _typed_row_value(row: dict[str, object]) -> object:
+def _typed_row_value(row: dict[str, Any]) -> Any:
     return row.get(f"value_{row['value_type']}")
 
 
-def _sorted_expected_frame(name: str, rows: list[dict[str, object]]) -> pd.DataFrame:
+def _sorted_expected_frame(name: str, rows: list[dict[str, Any]]) -> pd.DataFrame:
     columns = THESIS_REPORT_TABLE_COLUMNS[name]
     frame = pd.DataFrame(rows, columns=columns)
     if frame.empty:

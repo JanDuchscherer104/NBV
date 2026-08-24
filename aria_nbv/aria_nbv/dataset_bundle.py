@@ -169,7 +169,7 @@ class QhStageReadiness:
     max_horizon: int
     """Largest realized chain length in the stage."""
 
-    provenance: dict[str, object]
+    provenance: dict[str, Any]
     """Actor and rollout identities reported by the validated dataset."""
 
 
@@ -212,10 +212,10 @@ class QhCorpusReadiness:
     stages: tuple[QhStageReadiness, ...]
     """Train, validation, and test rows in stable order."""
 
-    contract: dict[str, object] | None
+    contract: dict[str, Any] | None
     """Homogeneous horizon-independent Q_H data contract."""
 
-    actor_contract: dict[str, object] | None
+    actor_contract: dict[str, Any] | None
     """Exact named actor contract used to construct every stage."""
 
     loader_settings: dict[str, int | bool]
@@ -227,7 +227,7 @@ class QhCorpusReadiness:
     storage: tuple[NormalizedStorageMetric, ...]
     """Persisted bytes normalized by physical and Q_H factual denominators."""
 
-    def to_jsonable(self) -> dict[str, object]:
+    def to_jsonable(self) -> dict[str, Any]:
         """Return presentation-neutral readiness evidence."""
 
         return {
@@ -292,13 +292,13 @@ class QhBatchPreview:
     selected_chain_index: int
     """Requested zero-based dataset index."""
 
-    selected_chain_key: dict[str, object]
+    selected_chain_key: dict[str, Any]
     """CPU-only source identity for the directly read chain."""
 
     selected_chain_steps: int
     """Realized state count in the directly read chain."""
 
-    batch_chain_keys: tuple[dict[str, object], ...]
+    batch_chain_keys: tuple[dict[str, Any], ...]
     """CPU-only identities collated by the actual DataLoader."""
 
     batch_step_counts: tuple[int, ...]
@@ -322,7 +322,7 @@ class QhBatchPreview:
     trainable_candidate_count: int
     """Persisted label-supported candidate entries in the batch."""
 
-    def to_jsonable(self) -> dict[str, object]:
+    def to_jsonable(self) -> dict[str, Any]:
         """Return JSON-compatible chain and collation evidence."""
 
         return {
@@ -677,7 +677,7 @@ def _blocked_qh_readiness(
     )
 
 
-def _qh_key_row(key: Any) -> dict[str, object]:
+def _qh_key_row(key: Any) -> dict[str, Any]:
     """Project one CPU-only chain key into a presentation-neutral row."""
 
     return {
@@ -1100,7 +1100,7 @@ def _rollout_summary(
                 store.as_posix(),
             )
         )
-    config_hashes = manifest.get("config_hashes") if isinstance(manifest.get("config_hashes"), dict) else {}
+    config_hashes = _string_keyed_mapping(manifest.get("config_hashes"))
     source_hashes = _string_values(config_hashes.get("source_manifest"))
     source_hash = source_hashes[0] if len(source_hashes) == 1 else None
     if root_hash is None or source_hash != root_hash:
@@ -1112,9 +1112,8 @@ def _rollout_summary(
                 store.as_posix(),
             )
         )
-    coverage = manifest.get("source_coverage") if isinstance(manifest.get("source_coverage"), dict) else {}
-    source_rows = coverage.get("sources") if isinstance(coverage, dict) else None
-    source_rows = source_rows if isinstance(source_rows, list) else []
+    coverage = _string_keyed_mapping(manifest.get("source_coverage"))
+    source_rows = _list_value(coverage.get("sources"))
     if not source_rows:
         findings.append(
             DatasetBundleFinding(
@@ -1169,12 +1168,12 @@ def _rollout_summary(
             )
         )
 
-    counts = manifest.get("counts") if isinstance(manifest.get("counts"), dict) else {}
-    root_attrs = manifest.get("root_attrs") if isinstance(manifest.get("root_attrs"), dict) else {}
-    generation = manifest.get("generation") if isinstance(manifest.get("generation"), dict) else {}
-    writer_config = generation.get("writer_config") if isinstance(generation.get("writer_config"), dict) else {}
-    invocation = generation.get("invocation") if isinstance(generation.get("invocation"), dict) else {}
-    recipes = writer_config.get("recipes") if isinstance(writer_config.get("recipes"), list) else []
+    counts = _string_keyed_mapping(manifest.get("counts"))
+    root_attrs = _string_keyed_mapping(manifest.get("root_attrs"))
+    generation = _string_keyed_mapping(manifest.get("generation"))
+    writer_config = _string_keyed_mapping(generation.get("writer_config"))
+    invocation = _string_keyed_mapping(generation.get("invocation"))
+    recipes = _list_value(writer_config.get("recipes"))
     blockers_after = sum(
         finding.severity == "blocking" and finding.store_path == store.as_posix() for finding in findings
     )
@@ -1204,7 +1203,7 @@ def _rollout_summary(
         ),
         "source_manifest_hash": source_hash,
         "split_manifest_hashes": _string_values(config_hashes.get("split_manifest")),
-        "source_splits": dict(coverage.get("split_counts", {})) if isinstance(coverage, dict) else {},
+        "source_splits": _string_keyed_mapping(coverage.get("split_counts")),
         "source_sample_count": len(source_rows),
         "source_sample_identities": [
             [source_hash, int(row["source_sample_index"])]
@@ -1263,7 +1262,7 @@ def _canonical_key(value: Any) -> str:
 
 def _aggregate_summary(root: dict[str, Any], rollouts: tuple[dict[str, Any], ...]) -> dict[str, Any]:
     included = [row for row in rollouts if bool(row.get("included_in_training_totals"))]
-    counts = Counter()
+    counts: Counter[str] = Counter()
     source_identities: set[tuple[str, int]] = set()
     for row in included:
         counts.update(row.get("counts", {}))
@@ -1430,9 +1429,26 @@ def _complete_storage_total(rows: list[dict[str, Any]]) -> int | None:
     """Sum storage evidence only when every contributing row is known."""
 
     values = [row.get("storage_bytes") for row in rows]
-    if any(not isinstance(value, int) or value < 0 for value in values):
-        return None
-    return sum(values)
+    known_values: list[int] = []
+    for value in values:
+        if not isinstance(value, int) or value < 0:
+            return None
+        known_values.append(value)
+    return sum(known_values)
+
+
+def _string_keyed_mapping(value: Any) -> dict[str, Any]:
+    """Normalize a decoded JSON mapping at a dynamic manifest boundary."""
+
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _list_value(value: Any) -> list[Any]:
+    """Return a decoded JSON list or an empty list at a manifest boundary."""
+
+    return value if isinstance(value, list) else []
 
 
 def _deep_scan_status(

@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import Any
 
 import pytest
+import streamlit as st
 
 from aria_nbv.app.panels._stored_rollouts import candidate_generation, overview_topology, reconstruction_return, shared
 from aria_nbv.app.panels._stored_rollouts.shared import ExplanationSection, ScientificExplanation
 from aria_nbv.app.scientific_labels import TheoryReferences, TheoryResolutionError, resolve_theory
 
 
-def _explanation(**kwargs: object) -> ScientificExplanation:
-    values: dict[str, object] = {
+def _explanation(**kwargs: Any) -> ScientificExplanation:
+    values: dict[str, Any] = {
         "question": "What does this show?",
         "answer": "It shows persisted scientific evidence.",
         "sections": (),
@@ -21,7 +23,7 @@ def _explanation(**kwargs: object) -> ScientificExplanation:
         "source_fields": ("inspection.rows",),
     }
     values.update(kwargs)
-    return ScientificExplanation(**values)  # type: ignore[arg-type]
+    return ScientificExplanation(**values)
 
 
 def test_author_shaped_explanations_may_omit_optional_sections() -> None:
@@ -93,8 +95,8 @@ def test_invalid_theory_warns_and_allows_remaining_guide(monkeypatch: pytest.Mon
     warnings: list[str] = []
     rendered: list[str] = []
     monkeypatch.setattr(shared, "resolve_theory", lambda _theory: (_ for _ in ()).throw(TheoryResolutionError("bad")))
-    monkeypatch.setattr(shared.st, "warning", warnings.append)
-    monkeypatch.setattr(shared.st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
+    monkeypatch.setattr(st, "warning", warnings.append)
+    monkeypatch.setattr(st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
     explanation = _explanation(
         sections=(ExplanationSection("Metric", "A descriptive value."),),
         theory=TheoryReferences(symbol_ids=("missing.symbol",)),
@@ -120,7 +122,9 @@ def test_render_plot_delegates_answer_to_one_guide_owner() -> None:
 def test_stored_rollout_plot_answers_are_not_generic() -> None:
     generic = "This plot answers the question using the persisted evidence rows"
     for module in (candidate_generation, overview_topology, reconstruction_return, shared):
-        assert generic not in Path(module.__file__).read_text(encoding="utf-8")
+        module_path = module.__file__
+        assert module_path is not None
+        assert generic not in Path(module_path).read_text(encoding="utf-8")
 
 
 def test_candidate_population_literal_questions_have_authored_answers() -> None:
@@ -141,7 +145,7 @@ def test_candidate_population_literal_questions_have_authored_answers() -> None:
 
 def test_scientific_guide_has_one_ordered_narrative_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     rendered: list[str] = []
-    monkeypatch.setattr(shared.st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
+    monkeypatch.setattr(st, "markdown", lambda value, **_kwargs: rendered.append(str(value)))
     shared._render_scientific_guide(_explanation(), log_y_key=None)
     text = "\n".join(rendered)
     assert text.index("### Core idea") < text.index("**Question**") < text.index("**Answer**")

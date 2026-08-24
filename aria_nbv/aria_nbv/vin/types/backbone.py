@@ -8,25 +8,24 @@ canonical definition owner.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, cast
+from typing import Annotated, Any, Literal, TypedDict, cast
 
 import torch
+from efm3d.aria.obb import ObbTW
+from efm3d.aria.pose import PoseTW
 from typing_extensions import Doc
 
 from ...utils.semantic_names import normalize_semantic_name_map
 from ...utils.typed_payloads import from_serializable, to_serializable
-
-if TYPE_CHECKING:
-    from efm3d.aria.obb import ObbTW
-    from efm3d.aria.pose import PoseTW
 
 Tensor = torch.Tensor
 FreeInputMode = Literal["native", "derived"]
 FreeInputProvenance = Literal["native_evl_v1", "derived_observed_complement_occ_input_v1"]
 
 
-def validate_free_input_provenance(value: object) -> FreeInputProvenance:
+def validate_free_input_provenance(value: Any) -> FreeInputProvenance:
     """Validate and narrow the persisted free-input provenance label."""
 
     if value not in {"native_evl_v1", "derived_observed_complement_occ_input_v1"}:
@@ -157,7 +156,7 @@ class EvlBackboneOutput:
     globally interchangeable.
     """
 
-    def to_serializable(self, *, include_fields: set[str] | None = None) -> dict[str, object]:
+    def to_serializable(self, *, include_fields: set[str] | None = None) -> dict[str, Any]:
         """Serialize this backbone output into a cache-friendly CPU payload.
 
         Args:
@@ -182,7 +181,7 @@ class EvlBackboneOutput:
     @classmethod
     def from_serializable(
         cls,
-        payload: dict[str, object],
+        payload: dict[str, Any],
         *,
         device: torch.device,
         include_fields: set[str] | None = None,
@@ -224,8 +223,14 @@ class EvlBackboneOutput:
         def _move_dict(values: dict[str, Tensor]) -> dict[str, Tensor]:
             return {key: val.to(device=device) for key, val in values.items()}
 
+        def _move_pose(value: PoseTW) -> PoseTW:
+            return cast(Callable[..., PoseTW], value.to)(device=device)
+
+        def _move_obbs(value: ObbTW | None) -> ObbTW | None:
+            return None if value is None else cast(Callable[..., ObbTW], value.to)(device=device)
+
         return EvlBackboneOutput(
-            t_world_voxel=self.t_world_voxel.to(device=device),
+            t_world_voxel=_move_pose(self.t_world_voxel),
             voxel_extent=self.voxel_extent.to(device=device),
             voxel_feat=_move(self.voxel_feat),
             occ_feat=_move(self.occ_feat),
@@ -241,9 +246,9 @@ class EvlBackboneOutput:
             bbox_pr=_move(self.bbox_pr),
             clas_pr=_move(self.clas_pr),
             cent_pr_nms=_move(self.cent_pr_nms),
-            obbs_pr_nms=self.obbs_pr_nms.to(device=device) if self.obbs_pr_nms is not None else None,
-            obb_pred=self.obb_pred.to(device=device) if self.obb_pred is not None else None,
-            obb_pred_viz=self.obb_pred_viz.to(device=device) if self.obb_pred_viz is not None else None,
+            obbs_pr_nms=_move_obbs(self.obbs_pr_nms),
+            obb_pred=_move_obbs(self.obb_pred),
+            obb_pred_viz=_move_obbs(self.obb_pred_viz),
             obb_pred_sem_id_to_name=self.obb_pred_sem_id_to_name,
             obb_pred_probs_full=_move_list(self.obb_pred_probs_full),
             obb_pred_probs_full_viz=_move_list(self.obb_pred_probs_full_viz),

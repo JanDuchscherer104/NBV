@@ -8,17 +8,39 @@ import json
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, TypeVar, cast
 
 import pandas as pd
 import pytest
+import streamlit as st
 import zarr
 
 from aria_nbv.app.panels._stored_rollouts import overview_topology, qh_admission, session
 from aria_nbv.configs import PathConfig
+from aria_nbv.oracle.pipelines.rollout_dataset import RolloutDatasetWriterConfig
 from aria_nbv.oracle.pipelines.shards import plan_rollout_shards, run_rollout_shard
+from aria_nbv.rollouts.inspection import (
+    build_effective_streamlit_trust,
+    build_manifest_facts,
+    build_promotion_evidence,
+    build_schema_validation,
+)
+from aria_nbv.rollouts.reporting import RolloutCorpusSummary, build_thesis_report_frames
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from tests.rollout_fixtures import build_rollout_records
 from tests.rollouts.test_dataset_writer import _fake_record, _FakeRolloutConfig
+
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+def _record(items: list[_T], item: _T, result: _R) -> _R:
+    items.append(item)
+    return result
+
+
+def _uncached(function: Any) -> Any:
+    return function.__wrapped__
 
 
 def test_contract_overview_label_is_compact_and_keeps_exact_identity() -> None:
@@ -39,14 +61,14 @@ def test_contract_overview_label_is_compact_and_keeps_exact_identity() -> None:
 def test_corpus_overview_defers_per_store_qh_rows_to_drill_down(monkeypatch: pytest.MonkeyPatch) -> None:
     """Overview stays aggregate-only while drill-down retains store-qualified evidence."""
 
-    metrics: dict[str, object] = {}
-    frames: list[object] = []
+    metrics: dict[str, Any] = {}
+    frames: list[Any] = []
 
     class Column:
-        def metric(self, label: str, value: object) -> None:
+        def metric(self, label: str, value: Any) -> None:
             metrics[label] = value
 
-    summary = session.RolloutCorpusSummary(
+    summary = RolloutCorpusSummary(
         verdict="Ready",
         selected_paths=(Path("/fixture.zarr"),),
         included_stores=({"path": "/fixture.zarr", "store_id": "fixture", "profile": "pilot"},),
@@ -65,10 +87,10 @@ def test_corpus_overview_defers_per_store_qh_rows_to_drill_down(monkeypatch: pyt
         failure_counts=pd.DataFrame(),
         q_h_stores=pd.DataFrame([{"store_id": "fixture", "state_count": 6}]),
     )
-    monkeypatch.setattr(overview_topology.st, "subheader", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(overview_topology.st, "columns", lambda count: [Column() for _ in range(count)])
-    monkeypatch.setattr(overview_topology.st, "caption", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(overview_topology.st, "dataframe", lambda frame, **_kwargs: frames.append(frame))
+    monkeypatch.setattr(st, "subheader", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "columns", lambda count: [Column() for _ in range(count)])
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "dataframe", lambda frame, **_kwargs: frames.append(frame))
 
     overview_topology._render_corpus_overview(summary, selected_count=1)
 
@@ -90,14 +112,14 @@ def test_corpus_summary_cache_delegates_only_after_explicit_dispatch_and_preserv
     calls: list[tuple[Path, ...]] = []
     expected = object()
 
-    def build(paths):
+    def build(paths: Any) -> Any:
         calls.append(tuple(paths))
         return expected
 
     monkeypatch.setattr(session, "build_rollout_corpus_summary", build)
     monkeypatch.setattr(session, "_assert_current_identity", lambda *_args: None)
 
-    result = session._cached_corpus_summary.__wrapped__(("/b.zarr", "/a.zarr"), ("b-id", "a-id"))
+    result = _uncached(session._cached_corpus_summary)(("/b.zarr", "/a.zarr"), ("b-id", "a-id"))
 
     assert result is expected
     assert calls == [(Path("/b.zarr"), Path("/a.zarr"))]
@@ -132,7 +154,7 @@ def test_invalid_store_withholds_scientific_header_projection(monkeypatch: pytes
     """Invalid or tampered stores keep diagnostics but never render coverage projections."""
 
     messages: list[str] = []
-    monkeypatch.setattr(overview_topology.st, "info", messages.append)
+    monkeypatch.setattr(st, "info", messages.append)
     monkeypatch.setattr(
         overview_topology, "_render_store_header_summary", lambda _handle: pytest.fail("header was rendered")
     )
@@ -151,24 +173,24 @@ def test_store_bundle_composes_one_manifest_schema_and_promotion_snapshot(
         tmp_path / "typed-trust.zarr", build_rollout_records(horizon=1, num_samples=6, seed=907)[:1]
     )
     calls = {"manifest": 0, "schema": 0, "promotion": 0, "trust": 0}
-    original_manifest = session.build_manifest_facts
-    original_schema = session.build_schema_validation
-    original_promotion = session.build_promotion_evidence
-    original_trust = session.build_effective_streamlit_trust
+    original_manifest = build_manifest_facts
+    original_schema = build_schema_validation
+    original_promotion = build_promotion_evidence
+    original_trust = build_effective_streamlit_trust
 
-    def manifest(*args, **kwargs):
+    def manifest(*args: Any, **kwargs: Any) -> Any:
         calls["manifest"] += 1
         return original_manifest(*args, **kwargs)
 
-    def schema(*args, **kwargs):
+    def schema(*args: Any, **kwargs: Any) -> Any:
         calls["schema"] += 1
         return original_schema(*args, **kwargs)
 
-    def promotion(*args, **kwargs):
+    def promotion(*args: Any, **kwargs: Any) -> Any:
         calls["promotion"] += 1
         return original_promotion(*args, **kwargs)
 
-    def trust(*args, **kwargs):
+    def trust(*args: Any, **kwargs: Any) -> Any:
         calls["trust"] += 1
         return original_trust(*args, **kwargs)
 
@@ -176,7 +198,7 @@ def test_store_bundle_composes_one_manifest_schema_and_promotion_snapshot(
     monkeypatch.setattr(session, "build_schema_validation", schema)
     monkeypatch.setattr(session, "build_promotion_evidence", promotion)
     monkeypatch.setattr(session, "build_effective_streamlit_trust", trust)
-    _, effective, manifest_payload = session._cached_store_bundle_cached.__wrapped__(
+    _, effective, manifest_payload = _uncached(session._cached_store_bundle_cached)(
         result.store_dir.as_posix(), store_identity="typed-trust"
     )
 
@@ -202,17 +224,13 @@ def test_named_cache_identity_changes_for_same_path_replacement(tmp_path: Path) 
     assert third != first
 
 
-def test_store_cache_identity_does_not_read_payload_bytes(tmp_path: Path) -> None:
+def test_store_cache_identity_does_not_read_payload_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "array-mutation.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=901)[:1],
     )
-    original_read_bytes = Path.read_bytes
-    Path.read_bytes = lambda _self: pytest.fail("cache identity must not read payload bytes")
-    try:
-        session._store_projection_identity(result.store_dir.as_posix())
-    finally:
-        Path.read_bytes = original_read_bytes
+    monkeypatch.setattr(Path, "read_bytes", lambda _self: pytest.fail("cache identity must not read payload bytes"))
+    session._store_projection_identity(result.store_dir.as_posix())
 
 
 def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path: Path) -> None:
@@ -227,7 +245,7 @@ def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path:
     )
     (result.store_dir / "post-promotion.txt").write_text("tampered", encoding="utf-8")
 
-    _, validation, _ = session._cached_store_bundle_cached.__wrapped__(
+    _, validation, _ = _uncached(session._cached_store_bundle_cached)(
         result.store_dir.as_posix(), store_identity="changed"
     )
 
@@ -236,7 +254,7 @@ def test_promoted_store_rejects_content_newer_than_completion_evidence(tmp_path:
 
 
 def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(tmp_path: Path) -> None:
-    config = _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path)
+    config = cast(RolloutDatasetWriterConfig, _FakeRolloutConfig([_fake_record(0)], store_dir=tmp_path))
     entry = plan_rollout_shards(config, rows_per_shard=1)[0]
     result = run_rollout_shard(
         config,
@@ -251,8 +269,8 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
     assert first_validation.ok
 
     root = zarr.open_group(result.final_dir, mode="a")
-    clearance = root["candidate_diagnostics/path_min_clearance_m"]
-    clearance[0] = float(clearance[0]) + 0.125
+    clearance = cast(zarr.Array[Any], root["candidate_diagnostics/path_min_clearance_m"])
+    clearance[0] = float(cast(Any, clearance[0])) + 0.125
     for path, mtime_ns in mtimes.items():
         os.utime(path, ns=(path.stat().st_atime_ns, mtime_ns))
 
@@ -263,7 +281,7 @@ def test_promoted_store_cache_and_report_reject_same_size_restored_mtime_tamper(
     assert not second_validation.ok
     assert "canonical store content" in "; ".join(second_validation.errors)
     with pytest.raises(ValueError, match="promotion validation"):
-        session.build_thesis_report_frames([result.final_dir], evidence_status="pilot")
+        build_thesis_report_frames([result.final_dir], evidence_status="pilot")
 
 
 def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -283,19 +301,19 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
 
     progress = Progress()
     status = Status()
-    session_state: dict[str, object] = {}
-    monkeypatch.setattr(qh_admission.st, "session_state", session_state)
-    monkeypatch.setattr(qh_admission.st, "markdown", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(qh_admission.st, "toggle", lambda *_args, **_kwargs: True)
+    session_state: dict[str, Any] = {}
+    monkeypatch.setattr(st, "session_state", session_state)
+    monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
-        qh_admission.st,
+        st,
         "number_input",
         lambda label, **_kwargs: 2 if "chunk" in label else 0,
     )
-    monkeypatch.setattr(qh_admission.st, "checkbox", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(qh_admission.st, "progress", lambda *_args, **_kwargs: progress)
-    monkeypatch.setattr(qh_admission.st, "empty", lambda: status)
-    monkeypatch.setattr(qh_admission.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "checkbox", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "progress", lambda *_args, **_kwargs: progress)
+    monkeypatch.setattr(st, "empty", lambda: status)
+    monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(qh_admission, "_download_frame", lambda *_args, **_kwargs: None)
 
     class Handle:
@@ -303,13 +321,15 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
         reader = object()
         validation = object()
 
-        def q_h(self, **_kwargs):
+        def q_h(self, **_kwargs: Any) -> Any:
             return []
 
-    handle = Handle()
+        def q_h_progressive(self, **kwargs: Any) -> Any:
+            return q_h(**kwargs)
+
     callback_results: list[bool] = []
 
-    def q_h(**kwargs):
+    def q_h(**kwargs: Any) -> Any:
         callback = kwargs["progress_callback"]
         callback_results.append(callback(2, 4))
         return [
@@ -321,7 +341,7 @@ def test_q_h_render_wires_progress_and_chunk_boundary_cancellation(monkeypatch: 
             }
         ]
 
-    handle.q_h_progressive = q_h  # type: ignore[method-assign]
+    handle = Handle()
     qh_admission._render_q_h_evidence(handle)
 
     assert callback_results == [False]
@@ -385,14 +405,14 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     topology_calls: list[str] = []
     failure_calls: list[str] = []
 
-    def topology(*, rollout_store_dir: Path, **_kwargs: object) -> dict[str, str]:
+    def topology(*, rollout_store_dir: Path, **_kwargs: Any) -> dict[str, str]:
         manifest = session._cached_store_bundle(rollout_store_dir.as_posix())[2]
         marker = json.dumps(manifest, sort_keys=True)
         topology_calls.append(marker)
         return {"manifest": marker}
 
-    def failures(reader: object, *, config: object) -> list[dict[str, str]]:
-        marker = session._cached_store_bundle(reader.store_dir.as_posix())[2]  # type: ignore[attr-defined]
+    def failures(reader: Any, *, config: Any) -> list[dict[str, str]]:
+        marker = session._cached_store_bundle(reader.store_dir.as_posix())[2]
         value = json.dumps(marker, sort_keys=True)
         failure_calls.append(value)
         return [{"manifest": value}]
@@ -400,14 +420,14 @@ def test_topology_and_failure_cache_owners_recompute_after_atomic_swap(
     monkeypatch.setattr(session, "build_dataset_topology", topology)
     monkeypatch.setattr(session, "suspicious_rollout_rows", failures)
     path = selected.as_posix()
-    topology_first = session._cached_topology(path, (), None)
+    topology_first = session._cached_topology(path, (), PathConfig())
     failure_first = session._cached_failures(path, 1, 0.5, 1.0)
 
     replacement = tmp_path / "replacement-link.zarr"
     replacement.symlink_to(second.store_dir, target_is_directory=True)
     replacement.replace(selected)
 
-    topology_second = session._cached_topology(path, (), None)
+    topology_second = session._cached_topology(path, (), PathConfig())
     failure_second = session._cached_failures(path, 1, 0.5, 1.0)
 
     assert topology_first != topology_second
@@ -448,7 +468,7 @@ def test_session_open_rejects_mid_open_generation_swap(monkeypatch: pytest.Monke
     selected = tmp_path / "selected.zarr"
     selected.symlink_to(first, target_is_directory=True)
 
-    def swap_during_bundle(path: str, *, store_identity: str):
+    def swap_during_bundle(path: str, *, store_identity: str) -> Any:
         replacement = tmp_path / "replacement.zarr"
         replacement.symlink_to(second, target_is_directory=True)
         replacement.replace(selected)
@@ -477,12 +497,12 @@ def test_manifest_read_failure_blocks_session_without_synthetic_manifest(monkeyp
     """A manifest read failure cannot become a trusted synthetic empty payload."""
 
     class Reader:
-        def manifest(self):
+        def manifest(self) -> None:
             raise RuntimeError("manifest read failed")
 
     monkeypatch.setattr(session, "RolloutZarrStoreReader", lambda _path: Reader())
     with pytest.raises(RuntimeError, match="manifest read failed"):
-        session._cached_store_bundle_cached.__wrapped__("/unpromoted.zarr", store_identity="fixture")
+        _uncached(session._cached_store_bundle_cached)("/unpromoted.zarr", store_identity="fixture")
 
 
 def test_open_session_binds_real_projections_until_next_open(tmp_path: Path) -> None:
@@ -519,7 +539,7 @@ def test_open_session_rejects_mid_open_generation_swap(monkeypatch: pytest.Monke
         session.open_stored_rollout_session(selected)
 
 
-def _swap_selected(tmp_path: Path, selected: Path):
+def _swap_selected(tmp_path: Path, selected: Path) -> Any:
     replacement = tmp_path / "replacement.zarr"
     replacement.mkdir()
     replacement.replace(selected)
@@ -536,9 +556,11 @@ def test_open_session_symlink_aliases_share_canonical_identity_and_cache_owner(
     aliases = [tmp_path / "a.zarr", tmp_path / "b.zarr"]
     for alias in aliases:
         alias.symlink_to(target, target_is_directory=True)
-    calls = []
+    calls: list[tuple[str, dict[str, Any]]] = []
     monkeypatch.setattr(
-        session, "_cached_store_bundle_cached", lambda path, **kw: calls.append((path, kw)) or (object(), object(), {})
+        session,
+        "_cached_store_bundle_cached",
+        lambda path, **kw: _record(calls, (path, kw), (object(), object(), {})),
     )
     first = session.open_stored_rollout_session(aliases[0])
     second = session.open_stored_rollout_session(aliases[1])
@@ -554,9 +576,9 @@ def test_projection_dispatch_binds_manifest_identity_for_same_path_replacement(t
     store.mkdir()
     manifest = store / "manifest.json"
     manifest.write_text('{"generation": "first"}', encoding="utf-8")
-    first = session._store_projection_identity(store)
+    first = session._store_projection_identity(store.as_posix())
     manifest.write_text('{"generation": "second"}', encoding="utf-8")
-    second = session._store_projection_identity(store)
+    second = session._store_projection_identity(store.as_posix())
     assert first != second
 
 
@@ -569,7 +591,7 @@ def test_store_cache_identity_does_not_enumerate_payload_chunks(
     store.mkdir()
     (store / "manifest.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(Path, "rglob", lambda *_a, **_k: pytest.fail("payload chunks enumerated"))
-    assert session._store_projection_identity(store)
+    assert session._store_projection_identity(store.as_posix())
 
 
 def test_store_cache_identity_ignores_payload_mutation_until_replacement(tmp_path: Path) -> None:
@@ -578,10 +600,11 @@ def test_store_cache_identity_ignores_payload_mutation_until_replacement(tmp_pat
     result = write_rollout_zarr_store(
         tmp_path / "mutation.zarr", build_rollout_records(horizon=1, num_samples=6, seed=901)[:1]
     )
-    first = session._store_projection_identity(result.store_dir)
+    first = session._store_projection_identity(result.store_dir.as_posix())
     root = zarr.open_group(result.store_dir, mode="a")
-    root["candidates/candidate_row_id"][0] = int(root["candidates/candidate_row_id"][0]) + 1
-    assert session._store_projection_identity(result.store_dir) == first
+    candidate_ids = cast(zarr.Array[Any], root["candidates/candidate_row_id"])
+    candidate_ids[0] = int(cast(Any, candidate_ids[0])) + 1
+    assert session._store_projection_identity(result.store_dir.as_posix()) == first
 
 
 def test_stored_rollout_lightweight_header_reads_manifest_validation_promotion_once(
@@ -593,32 +616,30 @@ def test_stored_rollout_lightweight_header_reads_manifest_validation_promotion_o
         tmp_path / "header.zarr", build_rollout_records(horizon=1, num_samples=6, seed=103)[:1]
     )
     calls = {"manifest": 0, "validation": 0, "promotion": 0}
-    original_manifest = session.build_manifest_facts
-    original_schema = session.build_schema_validation
-    original_promotion = session.build_promotion_evidence
+    original_manifest = build_manifest_facts
+    original_schema = build_schema_validation
+    original_promotion = build_promotion_evidence
+
+    def counted(key: str, function: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        calls[key] += 1
+        return function(*args, **kwargs)
 
     monkeypatch.setattr(
         session,
         "build_manifest_facts",
-        lambda *args, **kwargs: (
-            calls.__setitem__("manifest", calls["manifest"] + 1) or original_manifest(*args, **kwargs)
-        ),
+        lambda *args, **kwargs: counted("manifest", original_manifest, *args, **kwargs),
     )
     monkeypatch.setattr(
         session,
         "build_schema_validation",
-        lambda *args, **kwargs: (
-            calls.__setitem__("validation", calls["validation"] + 1) or original_schema(*args, **kwargs)
-        ),
+        lambda *args, **kwargs: counted("validation", original_schema, *args, **kwargs),
     )
     monkeypatch.setattr(
         session,
         "build_promotion_evidence",
-        lambda *args, **kwargs: (
-            calls.__setitem__("promotion", calls["promotion"] + 1) or original_promotion(*args, **kwargs)
-        ),
+        lambda *args, **kwargs: counted("promotion", original_promotion, *args, **kwargs),
     )
-    _, validation, manifest = session._cached_store_bundle_cached.__wrapped__(
+    _, validation, manifest = _uncached(session._cached_store_bundle_cached)(
         result.store_dir.as_posix(), store_identity="fixture"
     )
     assert validation.ok
@@ -640,11 +661,11 @@ def test_stored_rollout_session_cache_decorator_matrix_is_explicit() -> None:
 def test_stored_rollout_session_candidate_population_uses_captured_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     """Candidate population uses the opened handle identity rather than recomputing a path key."""
 
-    calls = []
+    calls: list[tuple[str, str, int]] = []
     monkeypatch.setattr(
         session,
         "_cached_candidate_population_cached",
-        lambda path, identity, sample_size=500: calls.append((path, identity, sample_size)) or {"sample": []},
+        lambda path, identity, sample_size=500: _record(calls, (path, identity, sample_size), {"sample": []}),
     )
     handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
     monkeypatch.setattr(handle, "_assert_current_identity", lambda: "first")
@@ -679,13 +700,14 @@ def test_cached_proposal_geometry_preserves_zero_limit(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         session,
         "proposal_support_geometry",
-        lambda _reader, *, max_candidates: (
-            captured.append(max_candidates)
-            or type("Projection", (), {"points": (), "frames": (), "issues": (), "truncated": True})()
+        lambda _reader, *, max_candidates: _record(
+            captured,
+            max_candidates,
+            type("Projection", (), {"points": (), "frames": (), "issues": (), "truncated": True})(),
         ),
     )
 
-    session._cached_proposal_geometry.__wrapped__("/selected.zarr", 0)
+    _uncached(session._cached_proposal_geometry)("/selected.zarr", 0)
 
     assert captured == [0]
 
@@ -776,9 +798,9 @@ def test_stored_rollout_session_discounted_returns_reads_generated_store(tmp_pat
 def test_stored_rollout_session_failure_projection_stays_bound_to_old_handle(monkeypatch: pytest.MonkeyPatch) -> None:
     """Failure projection carries the captured identity into its cache owner."""
 
-    calls = []
+    calls: list[str] = []
     monkeypatch.setattr(
-        session, "_cached_failures", lambda *args, **kwargs: calls.append(kwargs["store_identity"]) or []
+        session, "_cached_failures", lambda *args, **kwargs: _record(calls, kwargs["store_identity"], [])
     )
     handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", object(), object(), {}, None)
     monkeypatch.setattr(handle, "_assert_current_identity", lambda: "first")
@@ -832,8 +854,8 @@ def test_stored_rollout_session_open_computes_identity_once_and_binds_core_key(
 
     store = tmp_path / "selected.zarr"
     store.mkdir()
-    calls = []
-    monkeypatch.setattr(session, "_store_projection_identity", lambda path: calls.append(path) or "identity")
+    calls: list[str] = []
+    monkeypatch.setattr(session, "_store_projection_identity", lambda path: _record(calls, path, "identity"))
     core = object()
     monkeypatch.setattr(session, "_cached_store_bundle_cached", lambda path, **kwargs: (core, object(), {}))
     opened = session.open_stored_rollout_session(store)
@@ -869,8 +891,13 @@ def test_stored_rollout_session_rejects_mid_handle_swap(monkeypatch: pytest.Monk
 def test_stored_rollout_session_topology_preserves_structured_cache_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
     """Topology retains structured VIN directories, PathConfig, source row, and identity."""
 
-    calls = []
-    monkeypatch.setattr(session, "_cached_topology", lambda *args, **kwargs: calls.append((args, kwargs)) or object())
+    calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+    topology_result = object()
+    monkeypatch.setattr(
+        session,
+        "_cached_topology",
+        lambda *args, **kwargs: _record(calls, (args, kwargs), topology_result),
+    )
     handle = session.StoredRolloutSession(Path("/selected.zarr"), "identity", object(), object(), {}, None)
     monkeypatch.setattr(handle, "_assert_current_identity", lambda: "identity")
     paths = PathConfig()
@@ -904,8 +931,8 @@ def test_stored_rollout_session_selected_depth_rejects_mid_domain_call_swap(
         handle.selected_depth_preview(step_row_id=1)
 
 
-def _owner_stub(result: object) -> Callable[..., object]:
-    def owner(*_args: object, **_kwargs: object) -> object:
+def _owner_stub(result: Any) -> Callable[..., Any]:
+    def owner(*_args: Any, **_kwargs: Any) -> Any:
         return result
 
     return owner

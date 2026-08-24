@@ -5,13 +5,15 @@ Corpus construction remains on the Training Dataset page.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import streamlit as st
 
 from .shared import download_frame as _download_frame
 
 
-def _render_q_h_evidence(session_handle: object) -> None:
+def _render_q_h_evidence(session_handle: Any) -> None:
     """Render metadata-only Q_H facts and gate mask counts behind an explicit toggle."""
 
     st.markdown("#### Store-local Q_H evidence")

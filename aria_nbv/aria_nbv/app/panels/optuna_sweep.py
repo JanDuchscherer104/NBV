@@ -9,18 +9,13 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-
-try:  # Optional dependency for Optuna diagnostics.
-    import optuna  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - optional dependency guard
-    optuna = None
 
 from ...configs import OptunaConfig, PathConfig
 from .common import (
@@ -29,6 +24,16 @@ from .common import (
     _report_exception,
     current_scientific_label,
 )
+
+_optuna: Any
+try:  # Optional dependency for Optuna diagnostics.
+    import optuna as _optuna_module
+except ImportError:  # pragma: no cover - optional dependency guard
+    _optuna = None
+else:
+    _optuna = _optuna_module
+
+optuna: Any = _optuna
 
 _CACHE_TTL_S = 120
 
@@ -97,10 +102,10 @@ def _bin_numeric_series(series: pd.Series, *, bins: int) -> pd.Series:
         return pd.Series(["all"] * len(series), index=series.index, dtype=str)
     binned = pd.cut(
         _coerce_numeric(series),
-        bins=edges,
+        bins=edges.tolist(),
         include_lowest=True,
     )
-    return binned.astype(str)
+    return cast(pd.Series[Any], binned.astype(str))
 
 
 def _bucket_param(series: pd.Series, *, bins: int) -> pd.Series:
@@ -314,8 +319,8 @@ def _cliffs_delta(a: np.ndarray, b: np.ndarray) -> float:
         return float("nan")
     a = a.reshape(-1, 1)
     b = b.reshape(1, -1)
-    greater = np.sum(a > b)
-    less = np.sum(a < b)
+    greater = int(np.sum(a > b))
+    less = int(np.sum(a < b))
     denom = float(a.size * b.size)
     return float((greater - less) / denom) if denom > 0 else float("nan")
 

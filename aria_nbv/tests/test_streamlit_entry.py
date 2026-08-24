@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from aria_nbv.app.app import NbvStreamlitApp
 from aria_nbv.app.config import NbvStreamlitAppConfig
 from aria_nbv.configs import PathConfig
@@ -21,7 +23,7 @@ def _seed_default_ase_paths(root: Path) -> None:
     taxonomy.write_text("", encoding="utf-8")
 
 
-def test_streamlit_argv_uses_auto_watcher_by_default(monkeypatch) -> None:
+def test_streamlit_argv_uses_auto_watcher_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STREAMLIT_SERVER_FILE_WATCHER_TYPE", raising=False)
     monkeypatch.delenv("STREAMLIT_SERVER_RUN_ON_SAVE", raising=False)
 
@@ -38,7 +40,7 @@ def test_streamlit_argv_uses_auto_watcher_by_default(monkeypatch) -> None:
     ]
 
 
-def test_streamlit_argv_preserves_file_watcher_cli_override(monkeypatch) -> None:
+def test_streamlit_argv_preserves_file_watcher_cli_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STREAMLIT_SERVER_FILE_WATCHER_TYPE", raising=False)
     monkeypatch.delenv("STREAMLIT_SERVER_RUN_ON_SAVE", raising=False)
 
@@ -61,7 +63,7 @@ def test_streamlit_argv_preserves_file_watcher_cli_override(monkeypatch) -> None
     ]
 
 
-def test_streamlit_argv_preserves_file_watcher_env_override(monkeypatch) -> None:
+def test_streamlit_argv_preserves_file_watcher_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "poll")
     monkeypatch.delenv("STREAMLIT_SERVER_RUN_ON_SAVE", raising=False)
 
@@ -70,7 +72,7 @@ def test_streamlit_argv_preserves_file_watcher_env_override(monkeypatch) -> None
     assert argv == ["streamlit", "run", "--server.runOnSave", "true", "/tmp/app.py"]
 
 
-def test_streamlit_argv_preserves_run_on_save_cli_and_env_overrides(monkeypatch) -> None:
+def test_streamlit_argv_preserves_run_on_save_cli_and_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("STREAMLIT_SERVER_FILE_WATCHER_TYPE", raising=False)
     monkeypatch.delenv("STREAMLIT_SERVER_RUN_ON_SAVE", raising=False)
 
@@ -91,7 +93,7 @@ def test_streamlit_argv_preserves_run_on_save_cli_and_env_overrides(monkeypatch)
     assert argv == ["streamlit", "run", "--server.fileWatcherType", "auto", "/tmp/app.py"]
 
 
-def test_streamlit_entry_rewrites_sys_argv(monkeypatch) -> None:
+def test_streamlit_entry_rewrites_sys_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_argv: list[str] = []
 
     def fake_streamlit_main() -> None:

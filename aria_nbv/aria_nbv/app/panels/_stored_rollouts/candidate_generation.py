@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from itertools import pairwise
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -21,7 +23,7 @@ from ....rollouts.inspection import (
 from ....utils.data_plotting import add_pose_axes_to_figure, configure_3d_scene
 from ...scientific_labels import TheoryReferences
 from ..common import current_scientific_label, render_scientific_notation
-from .shared import ExplanationSection, ScientificExplanation
+from .shared import EvidenceRole, ExplanationSection, ScientificExplanation
 from .shared import download_frame as _download_frame
 from .shared import render_plot as _render_plot
 
@@ -188,7 +190,7 @@ def _normalized_radius_figure(geometry: pd.DataFrame) -> go.Figure:
 def _orientation_diagnostic_rows(geometry: pd.DataFrame, frames: pd.DataFrame) -> pd.DataFrame:
     """Return explicit rig, selected-camera, and target-elevation diagnostics."""
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for _, frame in frames.iterrows():
         rollout = int(frame["rollout_row_id"])
         step = int(frame["step_index"])
@@ -252,7 +254,7 @@ def _trajectory_figure(points: pd.DataFrame, frames: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> dict[str, object]:
+def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> dict[str, Any]:
     """Adapt the typed domain reducer to the Streamlit dataframe surface."""
 
     result = pairwise_finite_pearson(
@@ -267,16 +269,14 @@ def _prepare_pairwise_correlation(frame: pd.DataFrame, columns: list[str]) -> di
     }
 
 
-def _select_candidate_choice_controls(
-    dynamics: pd.DataFrame, *, group_by: str
-) -> tuple[pd.DataFrame, dict[str, object]]:
+def _select_candidate_choice_controls(dynamics: pd.DataFrame, *, group_by: str) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Select only exact compatibility controls before pooling temperatures.
 
     Temperature and generation cohort are deliberately absent: pooling across
     those dimensions is the purpose of the pooled candidate-choice view.
     """
 
-    selected_controls: dict[str, object] = {}
+    selected_controls: dict[str, Any] = {}
     control_fields = (
         "contract_id",
         "contract",
@@ -305,7 +305,7 @@ def _select_candidate_choice_controls(
     return dynamics, selected_controls
 
 
-def _render_candidate_population_evidence(session_handle: object) -> None:
+def _render_candidate_population_evidence(session_handle: Any) -> None:
     """Render complete candidate aggregates and a deterministic display-only sample."""
 
     st.markdown("#### Complete candidate-family lineage and choice")
@@ -345,27 +345,28 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
             dynamics = pd.DataFrame(selection_dynamics[group_by])
             dynamics, selected_controls = _select_candidate_choice_controls(dynamics, group_by=group_by)
         if not dynamics.empty:
-            quantity_options = ("allocation_share", "valid_share", "policy_mass", "selected_share")
-            selection_metric = st.selectbox(
+            quantity_options = ["allocation_share", "valid_share", "policy_mass", "selected_share"]
+            quantity_labels = {
+                "allocation_share": "Candidate availability",
+                "valid_share": "Actor-valid support",
+                "policy_mass": "Policy mass",
+                "selected_share": "Realized selection",
+            }
+            selected_quantity = st.selectbox(
                 "Per-step quantity",
                 options=quantity_options,
                 index=2,
-                format_func={
-                    "allocation_share": "Candidate availability",
-                    "valid_share": "Actor-valid support",
-                    "policy_mass": "Policy mass",
-                    "selected_share": "Realized selection",
-                }.get,
+                format_func=lambda value: quantity_labels[value],
                 help=(
                     "Availability uses the full candidate shell; actor-valid support uses actor-valid rows; "
                     "policy mass is the mean persisted probability; realized selection is the selected-family fraction."
                 ),
             )
+            selection_metric = selected_quantity if isinstance(selected_quantity, str) else "policy_mass"
             if selection_metric not in quantity_options:
                 selection_metric = "policy_mass"
-            pooled = pd.DataFrame(
-                candidate_selection_pooled_summary_rows(dynamics.to_dict("records"), metric=selection_metric)
-            )
+            dynamics_records = cast(list[Mapping[str, Any]], dynamics.to_dict("records"))
+            pooled = pd.DataFrame(candidate_selection_pooled_summary_rows(dynamics_records, metric=selection_metric))
             if not pooled.empty:
                 _render_plot(
                     _pooled_candidate_selection_figure(pooled),
@@ -386,7 +387,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
                     ),
                 )
                 transitions = pd.DataFrame(
-                    candidate_selection_transition_rows(dynamics.to_dict("records"), pool_temperatures=True)
+                    candidate_selection_transition_rows(dynamics_records, pool_temperatures=True)
                 )
                 if not transitions.empty:
                     depths = sorted(transitions["step_index"].dropna().astype(int).unique().tolist())
@@ -481,7 +482,7 @@ def _render_candidate_population_evidence(session_handle: object) -> None:
         st.dataframe(sample_rows, hide_index=True, width="stretch")
 
 
-def _candidate_evidence_roles(population: dict[str, object]) -> dict[str, str]:
+def _candidate_evidence_roles(population: dict[str, Any]) -> dict[str, EvidenceRole]:
     """Return the typed metric-family evidence roles from the domain projection."""
 
     expected = {
@@ -499,7 +500,11 @@ def _candidate_evidence_roles(population: dict[str, object]) -> dict[str, str]:
     if not isinstance(raw, dict) or set(raw) != expected:
         return dict.fromkeys(expected, "provenance")
     allowed = {"actor-visible", "oracle/evaluation", "derived training data", "provenance"}
-    return {name: str(raw[name]) if str(raw[name]) in allowed else "provenance" for name in expected}
+    roles: dict[str, EvidenceRole] = {}
+    for name in expected:
+        value = str(raw[name])
+        roles[name] = cast(EvidenceRole, value) if value in allowed else "provenance"
+    return roles
 
 
 _CANDIDATE_POPULATION_ANSWERS = {
@@ -525,7 +530,7 @@ def _candidate_population_explanation(
     expected_text: str,
     warning_text: str,
     source: str,
-    role: str,
+    role: EvidenceRole,
     theory: TheoryReferences | None = None,
     external_references: tuple[tuple[str, str], ...] = (),
 ) -> ScientificExplanation:
@@ -589,7 +594,7 @@ def _require_family_cohort_columns(frame: pd.DataFrame, label: str) -> pd.DataFr
     return frame
 
 
-def _render_complete_candidate_support(population: dict[str, object], *, evidence_roles: dict[str, str]) -> None:
+def _render_complete_candidate_support(population: dict[str, Any], *, evidence_roles: dict[str, EvidenceRole]) -> None:
     """Render PR101 support facets through the decomposed candidate owner."""
 
     direction = population.get("direction", {})
@@ -979,7 +984,7 @@ def _select_metric_unit(frame: pd.DataFrame, label: str) -> pd.DataFrame:
     return selected
 
 
-def _render_candidate_provenance_flow(session_handle: object) -> None:
+def _render_candidate_provenance_flow(session_handle: Any) -> None:
     """Render the lightweight complete-population candidate provenance flow."""
 
     store_candidate_count = int(session_handle.validation.num_candidates)
@@ -1173,7 +1178,7 @@ def _render_selected_action_policy_flow(ranks: pd.DataFrame) -> None:
     )
 
 
-def _selected_action_flow_rows(ranks: pd.DataFrame) -> list[dict[str, object]]:
+def _selected_action_flow_rows(ranks: pd.DataFrame) -> list[dict[str, Any]]:
     """Aggregate selected-step policy and target-RRI ranks for a Sankey."""
 
     if ranks.empty or "selected_candidate_row_id" not in ranks:
@@ -1203,7 +1208,7 @@ def _selected_action_flow_rows(ranks: pd.DataFrame) -> list[dict[str, object]]:
             counts[(*source_node, *target_node)] += 1
 
     stage_order = {stage: index for index, stage in enumerate(("selected_root", "candidate_action_policy"))}
-    output: list[dict[str, object]] = []
+    output: list[dict[str, Any]] = []
     for transition, count in sorted(
         counts.items(),
         key=lambda item: (stage_order[item[0][2]], item[0][0], item[0][3]),
@@ -1226,7 +1231,7 @@ def _selected_action_flow_rows(ranks: pd.DataFrame) -> list[dict[str, object]]:
     return output
 
 
-def _target_rri_rank_bucket(value: object) -> str:
+def _target_rri_rank_bucket(value: Any) -> str:
     """Return the compact displayed bucket for one exact target-RRI rank."""
 
     try:
@@ -1238,7 +1243,7 @@ def _target_rri_rank_bucket(value: object) -> str:
     return str(rank) if rank <= 10 else ">10"
 
 
-def _selected_action_flow_figure(flow: pd.DataFrame | list[dict[str, object]]) -> go.Figure:
+def _selected_action_flow_figure(flow: pd.DataFrame | list[dict[str, Any]]) -> go.Figure:
     """Build the selected-step policy-to-target-RRI-rank Sankey."""
 
     return _sankey_figure(
@@ -1290,7 +1295,7 @@ def _sankey_figure(flow: pd.DataFrame, *, stage_order: tuple[str, ...], title: s
     return figure
 
 
-def _render_candidate_aggregate_breakdowns(session_handle: object) -> None:
+def _render_candidate_aggregate_breakdowns(session_handle: Any) -> None:
     """Render restored complete-store candidate audit plots on demand."""
 
     population = session_handle.candidate_population()
@@ -1666,8 +1671,8 @@ def _render_target_score_diagnostics(targets: pd.DataFrame) -> None:
 
 def _render_candidate_geometry_diagnostics(
     candidates: pd.DataFrame,
-    root_geometry: pd.DataFrame | dict[str, object],
-    trajectory_geometry: dict[str, object] | None = None,
+    root_geometry: pd.DataFrame | dict[str, Any],
+    trajectory_geometry: dict[str, Any] | None = None,
     *,
     total_candidates: int,
 ) -> None:

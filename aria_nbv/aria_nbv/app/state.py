@@ -7,7 +7,7 @@ Streamlit. For Streamlit-free state types and cache key helpers, see
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 import streamlit as st
 
@@ -54,7 +54,7 @@ def set_label_display_mode(mode: str) -> LabelDisplayMode:
 
     if mode not in LABEL_DISPLAY_MODES:
         raise ValueError(f"Unsupported label display mode: {mode!r}")
-    selected = cast(LabelDisplayMode, mode)
+    selected = mode
     st.session_state[LABEL_DISPLAY_MODE_KEY] = selected
     return selected
 
@@ -111,8 +111,9 @@ def safe_rerun() -> None:
     if hasattr(st, "rerun"):
         st.rerun()
         return
-    if hasattr(st, "experimental_rerun"):
-        st.experimental_rerun()  # type: ignore[attr-defined]
+    experimental_rerun: Any = getattr(st, "experimental_rerun", None)
+    if callable(experimental_rerun):
+        experimental_rerun()
         return
     raise RuntimeError("Streamlit rerun API not available.")  # pragma: no cover
 

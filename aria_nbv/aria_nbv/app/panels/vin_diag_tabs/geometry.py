@@ -7,7 +7,10 @@ to the diagnostic batch.
 
 from __future__ import annotations
 
-import plotly.graph_objects as go  # type: ignore[import-untyped]
+from collections.abc import Callable
+from typing import Any, Literal, cast
+
+import plotly.graph_objects as go
 import streamlit as st
 import torch
 
@@ -15,9 +18,16 @@ from ....data_handling import VinSnippetView
 from ....vin.diagnostics import build_alignment_figures
 from ....vin.diagnostics.plotting import build_geometry_overview_figure, build_semidense_projection_figure
 from ....vin.ordinal import coral_loss
+from ...scene_view import scene_plot_options_ui
 from ..common import _info_popover, current_scientific_label
-from ..data import scene_plot_options_ui
 from .context import VinDiagContext
+
+
+def _pose_tensor(pose: Any) -> torch.Tensor:
+    """Cross the untyped EFM pose accessor with a typed tensor result."""
+
+    tensor: Callable[[], Any] = pose.tensor
+    return cast(torch.Tensor, tensor())
 
 
 def render_geometry_tab(ctx: VinDiagContext) -> None:
@@ -43,13 +53,13 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             "Geometry plots require EFM or VIN snippets from the configured diagnostics source.",
         )
         return
-    if isinstance(snippet_view, VinSnippetView) or not hasattr(snippet_view, "camera_rgb"):
+    if isinstance(snippet_view, VinSnippetView):
         st.info(
             "VIN offline snippets provide minimal geometry. Showing semidense-only views "
             "and candidate visibility instead of the full scene overview.",
         )
         points_world = snippet_view.points_world
-        if not torch.is_tensor(points_world) or points_world.numel() == 0:
+        if not isinstance(points_world, torch.Tensor) or points_world.numel() == 0:
             st.info("VIN offline snippet points are empty.")
         else:
             batch_idx = 0
@@ -105,7 +115,7 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             )
             st.plotly_chart(fig_points, width="stretch")
 
-            poses = batch.candidate_poses_world_cam.tensor()
+            poses = _pose_tensor(batch.candidate_poses_world_cam)
             if poses.ndim == 3:
                 cand_batch = int(poses.shape[0])
                 num_candidates = int(poses.shape[1])
@@ -335,7 +345,7 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
                     key="vin_geom_backbone_max_points",
                 ),
             )
-    candidate_plot_mode = "valid_fraction"
+    candidate_plot_mode: Literal["valid_fraction", "solid", "scalar"] = "valid_fraction"
     candidate_color_values: torch.Tensor | None = None
     candidate_color_title = "value"
     match candidate_color_mode_ui:
@@ -428,49 +438,55 @@ def render_geometry_tab(ctx: VinDiagContext) -> None:
             "Note: VIN apply_cw90_correction is disabled; geometry plots assume corrected poses.",
         )
 
+    gt_timestamp = plot_opts.gt_timestamp
+    if isinstance(gt_timestamp, str):
+        gt_timestamp = int(gt_timestamp) if gt_timestamp.isdecimal() else None
     st.plotly_chart(
-        build_geometry_overview_figure(
-            debug,
-            snippet=snippet_view,
-            reference_pose_world_rig=reference_pose_world_rig,
-            max_candidates=512,
-            show_scene_bounds=plot_opts.show_scene_bounds,
-            show_crop_bounds=plot_opts.show_crop_bounds,
-            show_frustum=plot_opts.show_frustum,
-            frustum_camera=cam_choice,
-            frustum_frame_indices=frustum_indices,
-            frustum_scale=plot_opts.frustum_scale,
-            show_gt_obbs=plot_opts.show_gt_obbs,
-            gt_timestamp=plot_opts.gt_timestamp,
-            semidense_mode=plot_opts.semidense_mode,
-            max_sem_points=plot_opts.max_sem_points,
-            show_trajectory=plot_opts.mark_first_last,
-            mark_first_last=plot_opts.mark_first_last,
-            show_reference_axes=show_reference_axes,
-            show_voxel_axes=show_voxel_axes,
-            display_rotate_yaw_cw90=display_rotate_yaw_cw90,
-            candidate_pose_mode="ref_rig"
-            if candidate_pose_mode == "ref rig"
-            else "world_cam"
-            if candidate_pose_mode == "world cam"
-            else "rig",
-            candidate_poses_world_cam=candidate_poses_world_cam,
-            candidate_color_mode=candidate_plot_mode,
-            candidate_color=candidate_color,
-            candidate_colorscale=candidate_colorscale,
-            candidate_color_values=candidate_color_values,
-            candidate_color_title=candidate_color_title,
-            candidate_frusta_indices=candidate_frusta_indices,
-            candidate_frusta_camera=candidate_frusta_camera,
-            candidate_frusta_frame_index=candidate_frusta_frame_index,
-            candidate_frusta_scale=candidate_frusta_scale,
-            candidate_frusta_color=candidate_frusta_color,
-            candidate_frusta_show_axes=candidate_frusta_show_axes,
-            candidate_frusta_show_center=candidate_frusta_show_center,
-            backbone_fields=backbone_fields,
-            backbone_occ_threshold=backbone_threshold,
-            backbone_max_points=backbone_max_points,
-            backbone_colorscale=backbone_colorscale,
+        cast(
+            go.Figure,
+            build_geometry_overview_figure(
+                debug,
+                snippet=snippet_view,
+                reference_pose_world_rig=reference_pose_world_rig,
+                max_candidates=512,
+                show_scene_bounds=plot_opts.show_scene_bounds,
+                show_crop_bounds=plot_opts.show_crop_bounds,
+                show_frustum=plot_opts.show_frustum,
+                frustum_camera=cam_choice,
+                frustum_frame_indices=frustum_indices,
+                frustum_scale=plot_opts.frustum_scale,
+                show_gt_obbs=plot_opts.show_gt_obbs,
+                gt_timestamp=gt_timestamp,
+                semidense_mode=plot_opts.semidense_mode,
+                max_sem_points=plot_opts.max_sem_points,
+                show_trajectory=plot_opts.mark_first_last,
+                mark_first_last=plot_opts.mark_first_last,
+                show_reference_axes=show_reference_axes,
+                show_voxel_axes=show_voxel_axes,
+                display_rotate_yaw_cw90=display_rotate_yaw_cw90,
+                candidate_pose_mode="ref_rig"
+                if candidate_pose_mode == "ref rig"
+                else "world_cam"
+                if candidate_pose_mode == "world cam"
+                else "rig",
+                candidate_poses_world_cam=candidate_poses_world_cam,
+                candidate_color_mode=candidate_plot_mode,
+                candidate_color=candidate_color,
+                candidate_colorscale=candidate_colorscale,
+                candidate_color_values=candidate_color_values,
+                candidate_color_title=candidate_color_title,
+                candidate_frusta_indices=candidate_frusta_indices,
+                candidate_frusta_camera=candidate_frusta_camera,
+                candidate_frusta_frame_index=candidate_frusta_frame_index,
+                candidate_frusta_scale=candidate_frusta_scale,
+                candidate_frusta_color=candidate_frusta_color,
+                candidate_frusta_show_axes=candidate_frusta_show_axes,
+                candidate_frusta_show_center=candidate_frusta_show_center,
+                backbone_fields=backbone_fields,
+                backbone_occ_threshold=backbone_threshold,
+                backbone_max_points=backbone_max_points,
+                backbone_colorscale=backbone_colorscale,
+            ),
         ),
         width="stretch",
         key="vin_geometry_overview",

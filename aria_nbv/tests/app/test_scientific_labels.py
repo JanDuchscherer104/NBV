@@ -31,10 +31,10 @@ def test_resolve_theory_uses_current_typst_registries() -> None:
     assert theory.symbols[0].typst == "#symb.oracle.rri"
     assert theory.equations[0].source_url.endswith("/docs/typst/shared/equations/rl.typ")
     assert theory.terms[0].label == "Target-Specific RRI"
-    assert all(
-        item.source_url.startswith("https://github.com/")
-        for item in (*theory.equations, *theory.symbols, *theory.terms)
-    )
+    source_urls = [item.source_url for item in theory.equations]
+    source_urls.extend(item.source_url for item in theory.symbols)
+    source_urls.extend(item.source_url for item in theory.terms)
+    assert all(source_url.startswith("https://github.com/") for source_url in source_urls)
 
 
 def test_persisted_metric_labels_use_current_entity_symbol_owners() -> None:
@@ -56,7 +56,7 @@ def test_every_scientific_label_symbol_resolves_from_canonical_registry() -> Non
         assert resolved[0].identifier == symbol_id
 
 
-def test_scientific_label_modes_resolve_at_the_presentation_boundary(tmp_path) -> None:
+def test_scientific_label_modes_resolve_at_the_presentation_boundary(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     (docs / "glossary").mkdir(parents=True)
     (docs / "notation.yml").write_text(
@@ -76,7 +76,7 @@ def test_scientific_label_modes_resolve_at_the_presentation_boundary(tmp_path) -
     )
 
 
-def test_unknown_scientific_label_fails_closed(tmp_path) -> None:
+def test_unknown_scientific_label_fails_closed(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     (docs / "glossary").mkdir(parents=True)
     (docs / "notation.yml").write_text("symbols: {}\nequations: {}\n", encoding="utf-8")
@@ -85,7 +85,7 @@ def test_unknown_scientific_label_fails_closed(tmp_path) -> None:
         symbol_label("missing", root=tmp_path)
 
 
-def test_theory_registry_cache_invalidates_on_content_replacement(tmp_path) -> None:
+def test_theory_registry_cache_invalidates_on_content_replacement(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     (docs / "glossary").mkdir(parents=True)
     notation = docs / "notation.yml"
@@ -102,7 +102,7 @@ def test_theory_registry_cache_invalidates_on_content_replacement(tmp_path) -> N
     assert symbol_label("demo.value", mode="Symbols", root=tmp_path) == "$y$"
 
 
-def test_invalid_utf8_theory_registry_fails_closed(tmp_path) -> None:
+def test_invalid_utf8_theory_registry_fails_closed(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     (docs / "glossary").mkdir(parents=True)
     (docs / "notation.yml").write_bytes(b"symbols: \xff\nequations: {}\n")

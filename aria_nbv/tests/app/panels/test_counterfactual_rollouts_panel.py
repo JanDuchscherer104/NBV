@@ -5,16 +5,20 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Generator, Iterable
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, TypeVar, cast
 
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import pytest
+import streamlit as st
 import torch
 import zarr
-from efm3d.aria import CameraTW
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 from streamlit.testing.v1 import AppTest
 
@@ -34,8 +38,10 @@ from aria_nbv.app.panels._stored_rollouts import (
     validity_support,
 )
 from aria_nbv.configs import PathConfig
+from aria_nbv.data_handling.vin_store.dataset import VinOfflineSample
 from aria_nbv.oracle.labels import OracleCandidateEvaluation, OracleCandidateLabels, RetainedOracleEvidence
 from aria_nbv.oracle.pipelines.evaluated_rollout import EvaluatedRollout, EvaluatedRolloutStep
+from aria_nbv.oracle.scene_rri import SceneRriScorerConfig
 from aria_nbv.oracle.target_rri import TargetRriScorerConfig
 from aria_nbv.oracle.target_selection import OracleTargetTask, TargetTaskIdentityStatus
 from aria_nbv.pose_generation import (
@@ -55,6 +61,19 @@ from aria_nbv.rollouts.replay.state import CounterfactualStepResult
 from aria_nbv.rollouts.zarr_store import write_rollout_zarr_store
 from aria_nbv.targets import TargetDescriptor
 from tests.rollout_fixtures import build_rollout_records
+
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+def _record(items: list[_T], item: _T, result: _R) -> _R:
+    items.append(item)
+    return result
+
+
+def _element_labels(elements: Iterable[Any]) -> list[str]:
+    return [str(element.label) for element in elements]
+
 
 stored_rollouts_page = SimpleNamespace(
     st=__import__("streamlit"),
@@ -91,7 +110,9 @@ _PATH_CONFIG_FIELDS = (
 )
 
 
-def _evaluated_single_step(result, transition, *, metrics=None, evidence=None) -> EvaluatedRollout:
+def _evaluated_single_step(
+    result: Any, transition: Any, *, metrics: Any = None, evidence: Any = None
+) -> EvaluatedRollout:
     labels = OracleCandidateLabels(
         scores=torch.as_tensor([transition.selection_score], dtype=torch.float32),
         score_label=transition.selection_score_label,
@@ -114,7 +135,7 @@ def _evaluated_single_step(result, transition, *, metrics=None, evidence=None) -
 
 
 @pytest.fixture
-def isolated_path_config(tmp_path):
+def isolated_path_config(tmp_path: Path) -> Generator[PathConfig, None, None]:
     original = PathConfig()
     original_values = {field: getattr(original, field) for field in _PATH_CONFIG_FIELDS}
     (tmp_path / ".configs").mkdir()
@@ -145,29 +166,31 @@ def _metric_values(app: AppTest) -> dict[str, str]:
     return {metric.label: metric.value for metric in app.metric}
 
 
-def test_manual_non_zarr_path_is_passed_to_existing_readonly_selector(monkeypatch, tmp_path: Path) -> None:
+def test_manual_non_zarr_path_is_passed_to_existing_readonly_selector(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Campaign handoff remains an explicit path override, not discovery."""
     selected = (tmp_path / "campaign-shard").resolve()
     stored_rollouts_page.st.session_state["rollout_store_manual_path"] = str(selected)
 
     class _Column:
-        def selectbox(self, *args, **kwargs):
+        def selectbox(self, *args: Any, **kwargs: Any) -> None:
             raise AssertionError("empty inventory must not discover stores")
 
-        def info(self, *args, **kwargs):
+        def info(self, *args: Any, **kwargs: Any) -> Any:
             return None
 
-        def metric(self, *args, **kwargs):
+        def metric(self, *args: Any, **kwargs: Any) -> Any:
             return None
 
-        def button(self, *args, **kwargs):
+        def button(self, *args: Any, **kwargs: Any) -> Any:
             return False
 
     class _Expander:
-        def __enter__(self):
+        def __enter__(self) -> Any:
             return self
 
-        def __exit__(self, *args):
+        def __exit__(self, *args: Any) -> Any:
             return False
 
     monkeypatch.setattr(stored_rollouts_page.st, "columns", lambda *_args, **_kwargs: (_Column(), _Column()))
@@ -187,15 +210,18 @@ def _set_stored_rollout_workspace(app: AppTest, workspace: str) -> AppTest:
 
 
 def _dummy_camera() -> CameraTW:
-    return CameraTW.from_surreal(
-        width=torch.tensor([64.0]),
-        height=torch.tensor([64.0]),
-        type_str="Pinhole",
-        params=torch.tensor([[60.0, 60.0, 32.0, 32.0]]),
-        gain=torch.zeros(1),
-        exposure_s=torch.zeros(1),
-        valid_radius=torch.tensor([64.0]),
-        T_camera_rig=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0)),
+    return cast(
+        CameraTW,
+        CameraTW.from_surreal(
+            width=torch.tensor([64.0]),
+            height=torch.tensor([64.0]),
+            type_str="Pinhole",
+            params=torch.tensor([[60.0, 60.0, 32.0, 32.0]]),
+            gain=torch.zeros(1),
+            exposure_s=torch.zeros(1),
+            valid_radius=torch.tensor([64.0]),
+            T_camera_rig=PoseTW.from_matrix3x4(torch.eye(3, 4).unsqueeze(0)),
+        ),
     )
 
 
@@ -243,7 +269,7 @@ def _json_dictionary_array(values: list[str]) -> np.ndarray:
     return np.frombuffer(json.dumps(values).encode("utf-8"), dtype=np.uint8)
 
 
-def test_live_dataset_config_loads_vin_offline_sample_assets(tmp_path) -> None:
+def test_live_dataset_config_loads_vin_offline_sample_assets(tmp_path: Path) -> None:
     cfg = rollout_panel._build_live_dataset_config(store_dir=tmp_path, split="all")
 
     assert cfg.return_format == "sample"
@@ -272,7 +298,7 @@ def test_default_target_mixture_uses_requested_budget_16() -> None:
 def test_live_rollout_device_options_default_cuda_when_torch_cuda_is_available(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(rollout_panel.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(rollout_panel, "_pytorch3d_cuda_rasterization_available", lambda: False)
 
     assert rollout_panel._live_rollout_device_options() == ["cuda", "cpu"]
@@ -281,13 +307,13 @@ def test_live_rollout_device_options_default_cuda_when_torch_cuda_is_available(
 def test_live_rollout_device_options_stay_cpu_only_without_torch_cuda(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(rollout_panel.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
     assert rollout_panel._live_rollout_device_options() == ["cpu"]
 
 
 def test_cuda_preflight_fails_with_actionable_hint(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(rollout_panel.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(rollout_panel, "_pytorch3d_cuda_rasterization_available", lambda: False)
 
     with pytest.raises(RuntimeError, match="PyTorch3D rasterizer"):
@@ -303,7 +329,7 @@ def test_live_depth_config_uses_explicit_cpu_device() -> None:
 
 
 def test_rollout_scene_defaults_are_minimal_evidence_view() -> None:
-    defaults = rollout_panel.ROLLOUT_SCENE_DEFAULTS
+    defaults = scene_view.ROLLOUT_SCENE_DEFAULTS
 
     assert defaults.show_mesh is True
     assert defaults.mesh_opacity <= 0.2
@@ -316,8 +342,8 @@ def test_rollout_scene_defaults_are_minimal_evidence_view() -> None:
 
 
 def test_data_and_rollout_pages_share_scene_control_helper() -> None:
-    assert data_panel.scene_plot_options_ui is scene_view.scene_plot_options_ui
-    assert rollout_panel.scene_plot_options_ui is scene_view.scene_plot_options_ui
+    assert vars(data_panel)["scene_plot_options_ui"] is scene_view.scene_plot_options_ui
+    assert vars(rollout_panel)["scene_plot_options_ui"] is scene_view.scene_plot_options_ui
 
 
 def test_loaded_sample_info_documents_target_table_columns() -> None:
@@ -410,8 +436,8 @@ def test_live_depth_target_overlays_project_descriptor_target() -> None:
     )
 
     overlays = rollout_panel._live_depth_target_overlays(
-        step,
-        sample=SimpleNamespace(),
+        cast(EvaluatedRolloutStep, step),
+        sample=cast(VinOfflineSample, SimpleNamespace()),
         target=_target_row(gt_label_valid=False),
         show_actor_target=True,
         show_gt_target=False,
@@ -422,7 +448,7 @@ def test_live_depth_target_overlays_project_descriptor_target() -> None:
     assert overlays[0].corners_px.shape == (8, 2)
 
 
-def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config, tmp_path) -> None:
+def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_config: Any, tmp_path: Path) -> None:
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "current.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=47)[:1],
@@ -438,7 +464,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert _metric_values(app)["Rollouts"] == "1"
     assert _metric_values(app)["Steps"] == "1"
     assert _metric_values(app)["Candidates"] == "12"
-    assert [tab.label for tab in app.tabs] == [
+    assert _element_labels(app.tabs) == [
         "Overview",
         "Reward & reconstruction",
         "Admission & feasibility",
@@ -446,7 +472,7 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
         "Drill-down",
     ]
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
-    assert "Download invariant CSV" not in {button.label for button in app.get("download_button")}
+    assert "Download invariant CSV" not in set(_element_labels(app.get("download_button")))
     advanced = next(
         toggle for toggle in app.toggle if toggle.label == "Show advanced validation, topology, and raw metadata"
     )
@@ -469,8 +495,8 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert any("Active-store drill-down · Admission & feasibility" in item.value for item in app.markdown)
     assert any("Active store full path:" in item.value for item in app.caption)
     assert any("strictly > 0.20" in item.value and "exactly one" in item.value for item in app.info)
-    assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
-    assert "Download mask combinations CSV" in {button.label for button in app.get("download_button")}
+    assert "Download target protocol CSV" in set(_element_labels(app.get("download_button")))
+    assert "Download mask combinations CSV" in set(_element_labels(app.get("download_button")))
     assert any(toggle.label == "Load complete candidate aggregate breakdowns" for toggle in app.toggle)
     assert any(expander.label == "Bounded candidate geometry and reward plots" for expander in app.expander)
 
@@ -487,11 +513,11 @@ def test_stored_rollouts_page_exercises_current_schema_features(isolated_path_co
     assert not any("Drill-down is unavailable" in warning.value for warning in app.warning)
     assert "Query scope" in {selectbox.label for selectbox in app.selectbox}
     assert "Rollout row" in {selectbox.label for selectbox in app.selectbox}
-    assert "Download selected-chain CSV" in {button.label for button in app.get("download_button")}
+    assert "Download selected-chain CSV" in set(_element_labels(app.get("download_button")))
     assert "Refresh stores" in {button.label for button in app.button}
 
 
-def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_path_config, tmp_path) -> None:
+def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_path_config: Any, tmp_path: Path) -> None:
     stale_path = isolated_path_config.offline_cache_dir / "stale.zarr"
     stale_root = zarr.open_group(stale_path, mode="w")
     stale_root.attrs["schema_version"] = "0.6-rollout-core"
@@ -512,7 +538,7 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     )
     advanced.set_value(True)
     app = app.run()
-    assert {button.label for button in app.get("download_button")} >= {
+    assert set(_element_labels(app.get("download_button"))) >= {
         "Download store metadata JSON",
         "Download topology JSON",
     }
@@ -523,7 +549,7 @@ def test_stored_rollouts_page_keeps_stale_store_diagnostics_visible(isolated_pat
     assert not any(selectbox.label == "Rollout row" for selectbox in app.selectbox)
 
 
-def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path_config, tmp_path) -> None:
+def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path_config: Any, tmp_path: Path) -> None:
     result = write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "missing-depth.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=48)[:1],
@@ -536,11 +562,13 @@ def test_stored_rollouts_missing_depth_disables_only_depth_preview(isolated_path
 
     assert not app.exception
     assert any("No selected-depth row" in info.value for info in app.info)
-    assert "Download selected-step candidate CSV" in {button.label for button in app.get("download_button")}
+    assert "Download selected-step candidate CSV" in set(_element_labels(app.get("download_button")))
     assert "Launch Rerun" in {button.label for button in app.button}
 
 
-def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolated_path_config, tmp_path) -> None:
+def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(
+    isolated_path_config: Any, tmp_path: Path
+) -> None:
     write_rollout_zarr_store(
         isolated_path_config.offline_cache_dir / "large.zarr",
         build_rollout_records(horizon=3, num_samples=12, seed=49),
@@ -555,8 +583,8 @@ def test_stored_rollouts_large_store_stays_on_lightweight_trust_workspace(isolat
 
 
 def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
-    isolated_path_config,
-    tmp_path,
+    isolated_path_config: Any,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Opening support flow keeps candidate reads bounded and avoids the heavy aggregate audit."""
@@ -569,7 +597,7 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
 
     limits: list[int | None] = []
 
-    def bounded_audit(*_args, **kwargs):
+    def bounded_audit(*_args: Any, **kwargs: Any) -> Any:
         limits.append(kwargs.get("limit"))
         return []
 
@@ -579,26 +607,26 @@ def test_stored_rollouts_default_candidate_flow_does_not_load_heavy_audit(
 
     assert not app.exception
     assert limits and all(limit == 50_000 for limit in limits)
-    assert "Download target protocol CSV" in {button.label for button in app.get("download_button")}
-    assert "Download family support CSV" not in {button.label for button in app.get("download_button")}
+    assert "Download target protocol CSV" in set(_element_labels(app.get("download_button")))
+    assert "Download family support CSV" not in set(_element_labels(app.get("download_button")))
 
 
-def test_bounded_geometry_reads_exact_limit_without_heavy_population_audit(monkeypatch) -> None:
+def test_bounded_geometry_reads_exact_limit_without_heavy_population_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, int]] = []
     rendered: list[tuple[pd.DataFrame, int]] = []
 
     class Handle:
         validation = SimpleNamespace(num_candidates=60)
 
-        def candidates(self, *, limit: int):
+        def candidates(self, *, limit: int) -> Any:
             calls.append(("candidates", limit))
             return [{"target_distance_m": 2.0, "normalized_radius": 0.5}]
 
-        def proposal_geometry(self, *, limit: int):
+        def proposal_geometry(self, *, limit: int) -> Any:
             calls.append(("proposal_geometry", limit))
             return {"points": [], "frames": []}
 
-        def trajectory_geometry(self):
+        def trajectory_geometry(self) -> Any:
             calls.append(("trajectory_geometry", 0))
             return {"points": [], "frames": []}
 
@@ -617,8 +645,8 @@ def test_bounded_geometry_reads_exact_limit_without_heavy_population_audit(monke
 
 
 def test_stored_rollouts_default_evidence_defers_selected_rank_flow(
-    isolated_path_config,
-    tmp_path,
+    isolated_path_config: Any,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Evidence defaults defer all candidate-derived projections until explicitly requested."""
@@ -696,7 +724,7 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
     captured: list[shared.ScientificExplanation] = []
 
     class Handle:
-        def ranks(self, **_kwargs):
+        def ranks(self, **_kwargs: Any) -> Any:
             return [
                 {
                     "selected_rank": 2,
@@ -708,10 +736,10 @@ def test_selected_rank_regret_explanation_is_oracle_evaluation(monkeypatch: pyte
                 }
             ]
 
-        def root_geometry(self, **_kwargs):
+        def root_geometry(self, **_kwargs: Any) -> Any:
             return []
 
-    def capture_plot(_figure, explanation):
+    def capture_plot(_figure: Any, explanation: Any) -> None:
         captured.append(explanation)
 
     monkeypatch.setattr(reconstruction_return, "_render_plot", capture_plot)
@@ -742,14 +770,14 @@ def test_query_state_is_namespaced_deterministic_and_preserves_last_valid_result
         index=[9, 8, 7],
     )
     original = source.copy(deep=True)
-    state = {
+    state: dict[str, Any] = {
         stored_rollouts_page._query_key(step_namespace, "draft_expression"): "gain > 0.5 and actor_action",
         stored_rollouts_page._query_key(step_namespace, "rollout_widget"): 1,
         stored_rollouts_page._query_key(step_namespace, "step_widget"): 2,
     }
 
     stored_rollouts_page._apply_query_state(state, step_namespace, source)
-    result = state[stored_rollouts_page._query_key(step_namespace, "last_valid_result")]
+    result = cast(pd.DataFrame, state[stored_rollouts_page._query_key(step_namespace, "last_valid_result")])
 
     pd.testing.assert_frame_equal(source, original)
     assert list(result.columns) == sorted(source.columns)
@@ -783,7 +811,7 @@ def test_query_store_change_and_pending_promotion_are_fail_closed() -> None:
     """Store changes should purge prior query state and stale promotion ids should preserve selection."""
 
     namespace = stored_rollouts_page._query_namespace("store-a", "Candidates", "Selected step")
-    state = {
+    state: dict[str, Any] = {
         "stored_rollouts_active_query_store": "store-a",
         stored_rollouts_page._query_key(namespace, "draft_expression"): "selected",
         stored_rollouts_page._query_key(namespace, "last_error"): "old error",
@@ -837,28 +865,43 @@ def test_candidate_query_source_routes_full_store_only_for_explicit_population(
     calls: list[tuple[int | None, int | None]] = []
 
     class Handle:
-        def candidates(self, **kwargs):
+        def candidates(self, **kwargs: Any) -> Any:
             calls.append((kwargs.get("rollout_row_id"), kwargs.get("step_row_id")))
             return []
 
-    kwargs = {
-        "session_handle": Handle(),
-        "scope": "Candidates",
-        "rollout_id": 7,
-        "step_id": 11,
-        "all_steps": pd.DataFrame(),
-    }
-
-    inspect_rerun._query_source_frame(**kwargs, candidate_population="Selected step")
-    inspect_rerun._query_source_frame(**kwargs, candidate_population="Selected rollout")
-    inspect_rerun._query_source_frame(**kwargs, candidate_population="Explicit full store")
+    handle = Handle()
+    all_steps = pd.DataFrame()
+    inspect_rerun._query_source_frame(
+        handle,
+        scope="Candidates",
+        rollout_id=7,
+        step_id=11,
+        all_steps=all_steps,
+        candidate_population="Selected step",
+    )
+    inspect_rerun._query_source_frame(
+        handle,
+        scope="Candidates",
+        rollout_id=7,
+        step_id=11,
+        all_steps=all_steps,
+        candidate_population="Selected rollout",
+    )
+    inspect_rerun._query_source_frame(
+        handle,
+        scope="Candidates",
+        rollout_id=7,
+        step_id=11,
+        all_steps=all_steps,
+        candidate_population="Explicit full store",
+    )
 
     assert calls == [(7, 11), (7, None), (None, None)]
 
 
 def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
-    isolated_path_config,
-    tmp_path,
+    isolated_path_config: Any,
+    tmp_path: Path,
 ) -> None:
     """App query workflow should preserve valid results and promote a candidate's owning step."""
 
@@ -886,7 +929,7 @@ def test_stored_rollouts_query_apply_invalid_recovery_and_candidate_promotion(
     app = app.run()
     assert not app.exception
     assert any("matched rows: 1" in caption.value for caption in app.caption)
-    assert "Download queried rows CSV" in {button.label for button in app.get("download_button")}
+    assert "Download queried rows CSV" in set(_element_labels(app.get("download_button")))
 
     expression = next(item for item in app.text_area if item.label == "Pandas query expression")
     expression.set_value("unknown_column > 0")
@@ -1115,8 +1158,8 @@ def test_corpus_reward_figure_exposes_series_and_contributing_cohorts() -> None:
 def test_log_y_axis_control_copies_figure_and_preserves_linear_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every opted-in plot gets an independent, non-mutating axis control."""
 
-    original = rollout_panel.go.Figure(rollout_panel.go.Scatter(x=[0, 1], y=[1.0, 10.0]))
-    monkeypatch.setattr(panel_common.st, "toggle", lambda *_args, **_kwargs: False)
+    original = go.Figure(go.Scatter(x=[0, 1], y=[1.0, 10.0]))
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: False)
 
     linear, enabled = panel_common._plot_with_y_axis_control(original, key="plot-a")
 
@@ -1129,11 +1172,11 @@ def test_log_y_axis_control_warns_and_sets_log_scale(monkeypatch: pytest.MonkeyP
     """The logarithmic option must disclose its non-positive-value limitation."""
 
     captions: list[str] = []
-    monkeypatch.setattr(panel_common.st, "toggle", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(panel_common.st, "caption", captions.append)
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "caption", captions.append)
 
     rendered, enabled = panel_common._plot_with_y_axis_control(
-        rollout_panel.go.Figure(rollout_panel.go.Scatter(y=[0.0, 1.0, 10.0])),
+        go.Figure(go.Scatter(y=[0.0, 1.0, 10.0])),
         key="plot-b",
     )
 
@@ -1147,15 +1190,15 @@ def test_live_quality_plot_unifies_context_axis_control_and_chart(monkeypatch: p
 
     info: list[tuple[str, str]] = []
     controls: list[str] = []
-    charts: list[object] = []
-    figure = rollout_panel.go.Figure(rollout_panel.go.Scatter(y=[1.0]))
+    charts: list[Any] = []
+    figure = go.Figure(go.Scatter(y=[1.0]))
     monkeypatch.setattr(rollout_panel, "_info_popover", lambda label, text: info.append((label, text)))
     monkeypatch.setattr(
         rollout_panel,
         "_plot_with_y_axis_control",
-        lambda fig, *, key: controls.append(key) or (fig, False),
+        lambda fig, *, key: _record(controls, key, (fig, False)),
     )
-    monkeypatch.setattr(rollout_panel.st, "plotly_chart", lambda fig, **_kwargs: charts.append(fig))
+    monkeypatch.setattr(st, "plotly_chart", lambda fig, **_kwargs: charts.append(fig))
 
     rollout_panel._render_live_quality_plot(
         figure,
@@ -1265,7 +1308,7 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
 ) -> None:
     """CSV/JSON downloads should defer bytes until click and avoid eager media URLs."""
 
-    downloads: list[dict[str, object]] = []
+    downloads: list[dict[str, Any]] = []
     captions: list[str] = []
     csv_calls = 0
     json_calls = 0
@@ -1277,7 +1320,7 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
         csv_calls += 1
         return serialize_csv(frame)
 
-    def count_json(payload: object) -> bytes:
+    def count_json(payload: Any) -> bytes:
         nonlocal json_calls
         json_calls += 1
         return serialize_json(payload)
@@ -1285,11 +1328,11 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
     monkeypatch.setattr(shared, "serialize_frame_csv", count_csv)
     monkeypatch.setattr(shared, "serialize_json", count_json)
     monkeypatch.setattr(
-        shared.st,
+        st,
         "download_button",
         lambda label, **kwargs: downloads.append({"label": label, **kwargs}),
     )
-    monkeypatch.setattr(shared.st, "caption", captions.append)
+    monkeypatch.setattr(st, "caption", captions.append)
     frame = pd.DataFrame({"rollout_row_id": [2, 3, 5], "note": ["a,b", "line\nbreak", "plain"]})
     payload = {"z": np.int64(2), "a": ["first"]}
 
@@ -1308,7 +1351,7 @@ def test_stored_rollout_download_helpers_are_lazy_complete_and_deterministic(
     assert captions == ["Export rows: 3 (complete filtered dataset)."]
 
 
-def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path) -> None:
+def test_stored_candidate_rows_decode_strategy_and_mixture_names(tmp_path: Path) -> None:
     result = write_rollout_zarr_store(
         tmp_path / "rollouts.zarr",
         build_rollout_records(horizon=1, num_samples=6, seed=37)[:1],
@@ -1331,7 +1374,7 @@ def test_target_rri_candidate_config_uses_target_aware_mixture() -> None:
         scoring_mode=rollout_panel.LiveRolloutScoringMode.TARGET_RRI,
         candidate_budget=16,
         seed=7,
-        device="cpu",
+        device=torch.device("cpu"),
     )
 
     assert isinstance(cfg, CandidateMixtureViewGeneratorConfig)
@@ -1353,7 +1396,7 @@ def test_geometry_candidate_config_has_requested_count_without_mixture() -> None
         scoring_mode=rollout_panel.LiveRolloutScoringMode.GEOMETRY,
         candidate_budget=16,
         seed=7,
-        device="cpu",
+        device=torch.device("cpu"),
     )
 
     assert isinstance(cfg, CandidateViewGeneratorConfig)
@@ -1373,7 +1416,7 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
     fake_sample = SimpleNamespace(efm_snippet_view=object())
     fake_evaluator = object()
 
-    def _fake_setup_target(self, **kwargs):  # noqa: ANN001
+    def _fake_setup_target(self: TargetRriScorerConfig, **kwargs: Any) -> Any:
         assert kwargs["target_sample"] is fake_sample
         assert kwargs["target_task"] is target
         return fake_evaluator
@@ -1385,15 +1428,19 @@ def test_target_rri_score_context_uses_selected_target_runtime_context(monkeypat
         sample=fake_sample,  # type: ignore[arg-type]
         target=target,
         target_scorer_config=TargetRriScorerConfig(),
-        scene_scorer_config=rollout_panel.SceneRriScorerConfig(),
+        scene_scorer_config=SceneRriScorerConfig(),
     )
 
     assert context.score_label == "target_rri"
+    assert context.evaluator is not None
     assert context.evaluator.scorer is fake_evaluator
-    assert context.runtime_context is not None
-    assert context.runtime_context.target_id.startswith("target-")
-    assert context.runtime_context.target_id != target.target_id
-    assert torch.equal(context.runtime_context.target_center_world, torch.tensor([1.0, 2.0, 3.0]))
+    runtime_context = context.runtime_context
+    assert runtime_context is not None
+    assert runtime_context.target_id is not None
+    assert runtime_context.target_id.startswith("target-")
+    assert runtime_context.target_id != target.target_id
+    assert runtime_context.target_center_world is not None
+    assert torch.equal(runtime_context.target_center_world, torch.tensor([1.0, 2.0, 3.0]))
 
 
 def test_target_rri_score_context_rejects_gt_invalid_target() -> None:
@@ -1403,7 +1450,7 @@ def test_target_rri_score_context_rejects_gt_invalid_target() -> None:
             sample=SimpleNamespace(efm_snippet_view=object()),  # type: ignore[arg-type]
             target=_target_row(gt_label_valid=False),
             target_scorer_config=TargetRriScorerConfig(),
-            scene_scorer_config=rollout_panel.SceneRriScorerConfig(),
+            scene_scorer_config=SceneRriScorerConfig(),
         )
 
 
@@ -1453,7 +1500,10 @@ def test_counterfactual_trajectory_rows_capture_step_count_score_and_final_pose(
 def test_trajectory_metric_rows_use_empirical_95_band_not_min_mean_max() -> None:
     step = CounterfactualStepResult(
         step_index=0,
-        candidates=SimpleNamespace(mask_valid=torch.tensor([True, False, True, False])),
+        candidates=cast(
+            CandidateSamplingResult,
+            SimpleNamespace(mask_valid=torch.tensor([True, False, True, False])),
+        ),
         selected_valid_index=0,
         selected_shell_index=0,
         selection_score=0.2,
@@ -1491,7 +1541,7 @@ def test_valid_step_metric_values_rejects_mask_metric_length_mismatch() -> None:
     )
 
     with pytest.raises(ValueError, match="Candidate validity mask shape"):
-        rollout_panel._valid_step_metric_values(step, "target_rri")
+        rollout_panel._valid_step_metric_values(cast(EvaluatedRolloutStep, step), "target_rri")
 
 
 def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
@@ -1502,24 +1552,24 @@ def test_valid_step_metric_values_accepts_compact_valid_vectors() -> None:
         ),
     )
 
-    values = rollout_panel._valid_step_metric_values(step, "target_root_gain")
+    values = rollout_panel._valid_step_metric_values(cast(EvaluatedRolloutStep, step), "target_root_gain")
 
     assert values.tolist() == pytest.approx([0.5, 0.9])
 
 
-def test_live_step_diagnostics_reads_replay_transition_candidates(monkeypatch) -> None:
-    candidates = object()
-    observed = []
+def test_live_step_diagnostics_reads_replay_transition_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    candidates = cast(CandidateSamplingResult, SimpleNamespace())
+    observed: list[CandidateSamplingResult] = []
     monkeypatch.setattr(rollout_panel, "_info_popover", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         rollout_panel,
         "candidate_result_diagnostic_counts",
-        lambda value: observed.append(value) or {},
+        lambda value: _record(observed, value, {}),
     )
-    monkeypatch.setattr(rollout_panel.st, "info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "info", lambda *_args, **_kwargs: None)
 
     rollout_panel._render_live_step_candidate_diagnostics(
-        SimpleNamespace(candidates=candidates),
+        cast(CounterfactualStepResult, SimpleNamespace(candidates=candidates)),
         None,
     )
 
@@ -1546,7 +1596,7 @@ def test_live_step_candidate_score_rows_align_compact_valid_vectors() -> None:
         evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_root_gain": torch.tensor([0.2, 0.8])})),
     )
 
-    rows = rollout_panel._live_step_candidate_score_rows(step)
+    rows = rollout_panel._live_step_candidate_score_rows(cast(EvaluatedRolloutStep, step))
 
     assert [row["shell_index"] for row in rows] == [0, 2]
     assert rows[0]["position"] == "forward_local"
@@ -1579,7 +1629,7 @@ def test_live_step_candidate_score_rows_align_full_shell_vectors() -> None:
         evaluation=SimpleNamespace(labels=SimpleNamespace(metrics={"target_rri": torch.tensor([0.3, 100.0, 0.7])})),
     )
 
-    rows = rollout_panel._live_step_candidate_score_rows(step)
+    rows = rollout_panel._live_step_candidate_score_rows(cast(EvaluatedRolloutStep, step))
 
     assert [row["selection_score"] for row in rows] == pytest.approx([0.1, 0.9])
     assert [row["target_rri"] for row in rows] == pytest.approx([0.3, 0.7])
@@ -1587,7 +1637,7 @@ def test_live_step_candidate_score_rows_align_full_shell_vectors() -> None:
 
 
 def test_fanout_band_figure_uses_filled_band_and_selected_line() -> None:
-    rows = rollout_panel.pd.DataFrame(
+    rows = pd.DataFrame(
         [
             {
                 "trajectory": 0,
