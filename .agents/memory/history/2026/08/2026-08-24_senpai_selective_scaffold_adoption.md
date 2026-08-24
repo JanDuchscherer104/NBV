@@ -41,6 +41,7 @@ provides the standard `git ls-remote` plus compare-review update route.
 ## Commits
 - `a1399a4772d71fa90d106b25d72ac684bf57bfba` — selective SENPAI adoption
 - `5b72103f778bbe93932d0df417325b28e8e3e9fe` — consolidate the SENPAI routing and upstream-update references
+- `c1cc148180fe28d4b9f7955a6d1b61a060d26b56` — reduce SENPAI references to their operational contract
 
 ## Verification
 `python3 scripts/tests/test_agent_governance_g002.py`; `make check-agent-memory`;
