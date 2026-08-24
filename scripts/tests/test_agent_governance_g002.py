@@ -113,6 +113,23 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
     ]
 
 
+def _is_session_local_review_artifact(path: str) -> bool:
+    relative = Path(path)
+    leaf = relative.name.lower()
+    role_review = "review" in leaf and any(
+        role in leaf for role in ("architect", "architecture", "critic", "critique")
+    )
+    nested_peer_review = (
+        relative.parts[:2] == (".omx", "specs")
+        and leaf == "report.md"
+        and any(
+            "peer" in part.lower() and "review" in part.lower()
+            for part in relative.parts[2:-1]
+        )
+    )
+    return role_review or nested_peer_review
+
+
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
     owner_paths = fixture.get("expected_owner_paths")
     return isinstance(owner_paths, list) and all(
@@ -898,13 +915,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         text=True,
     ).stdout.split("\0")
     tracked_role_reviews = [
-        path
-        for path in tracked
-        if "review" in path.lower()
-        and any(
-            role in path.lower()
-            for role in ("architect", "architecture", "critic", "critique", "peer-review")
-        )
+        path for path in tracked if _is_session_local_review_artifact(path)
     ]
     assert not tracked_role_reviews
 
@@ -912,7 +923,8 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     for role in ("architect", "architecture", "critic", "critique"):
         assert f".omx/**/*{role}*review*" in ignored
         assert f".omx/**/*review*{role}*" in ignored
-    assert ".omx/**/*peer-review*/**" in ignored
+    assert ".omx/specs/**/*peer*review*/report.md" in ignored
+    assert ".omx/specs/**" not in ignored.splitlines()
     ignored_role_reviews = subprocess.run(
         [
             "git",
@@ -947,6 +959,28 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ".omx/plans/example-review-critique.md",
         ".omx/specs/nested/thesis-peer-review/report.md",
     ]
+
+    with tempfile.TemporaryDirectory(prefix="g002-review-ignore-") as tmp:
+        root = Path(tmp)
+        (root / ".gitignore").write_text(ignored, encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        isolated_ignored_paths = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--stdin"],
+            cwd=root,
+            check=True,
+            input=(
+                ".omx/specs/nested/thesis-peer-review/report.md\n"
+                ".omx/specs/nested/accepted-spec/report.md\n"
+                ".omx/specs/accepted-spec.md\n"
+                ".omx/plans/accepted-plan.md\n"
+                ".agents/memory/history/2026/08/eligible-debrief.md\n"
+            ),
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        assert isolated_ignored_paths == [
+            ".omx/specs/nested/thesis-peer-review/report.md"
+        ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
     conventions = _read(
