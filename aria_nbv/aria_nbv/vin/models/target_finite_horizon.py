@@ -175,7 +175,7 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
             and self.hidden_dim % self.state_fusion.attention_heads != 0
         ):
             raise ValueError("hidden_dim must be divisible by state_fusion.attention_heads.")
-        pose_dim = int(self.pose_encoder.pose_encoder_lff.output_dim)
+        pose_dim = int(self.pose_encoder.out_dim)
         if (
             isinstance(self.history_encoder, QhCausalTransformerHistoryEncoderConfig)
             and pose_dim % self.history_encoder.attention_heads != 0

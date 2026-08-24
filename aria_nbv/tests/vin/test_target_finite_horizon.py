@@ -15,6 +15,7 @@ from efm3d.aria.pose import PoseTW
 from aria_nbv.data_handling.qh_data import QhActorTensors, collate_qh_chains
 from aria_nbv.data_handling.qh_data.views import QhStaticContext
 from aria_nbv.utils.fingerprints import stable_config_hash
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 from aria_nbv.vin.models.target_finite_horizon import (
     TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
@@ -720,6 +721,28 @@ def test_qh_scorer_config_rejects_incompatible_attention_width() -> None:
         TargetFiniteHorizonScorerConfig(
             hidden_dim=31,
             state_fusion=QhCrossAttentionStateFusionConfig(attention_heads=4),
+        )
+
+
+def test_qh_scorer_config_validates_complete_history_pose_width() -> None:
+    """H1 divisibility includes a concatenated raw pose residual."""
+
+    pose_encoder = R6dLffPoseEncoderConfig(
+        pose_encoder_lff=LearnableFourierFeaturesConfig(
+            input_dim=9,
+            fourier_dim=64,
+            hidden_dim=128,
+            output_dim=32,
+            include_input=True,
+        ),
+    )
+    assert pose_encoder.out_dim == 41
+
+    with pytest.raises(ValueError, match="pose-encoder output width must be divisible"):
+        TargetFiniteHorizonScorerConfig(
+            hidden_dim=32,
+            pose_encoder=pose_encoder,
+            history_encoder=QhCausalTransformerHistoryEncoderConfig(attention_heads=4),
         )
 
 

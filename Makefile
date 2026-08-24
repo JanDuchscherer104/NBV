@@ -109,6 +109,8 @@ QH_CI_RUFF_PATHS := \
 	aria_nbv/rollouts/zarr_store.py \
 	aria_nbv/vin/models/__init__.py \
 	aria_nbv/vin/models/target_finite_horizon.py \
+	aria_nbv/vin/encoders/fourier.py \
+	aria_nbv/vin/encoders/pose.py \
 	aria_nbv/vin/modules/qh_history_encoders.py \
 	aria_nbv/vin/modules/qh_state_fusion.py \
 	aria_nbv/vin/modules/qh_value_decoders.py \
@@ -120,6 +122,7 @@ QH_CI_RUFF_PATHS := \
 	tests/rollouts/test_public_rollouts_api.py \
 	tests/rollouts/test_zarr_store.py \
 	tests/vin/test_models_namespace.py \
+	tests/vin/test_learnable_fourier_features.py \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/lightning/test_qh_datamodule.py \
@@ -159,6 +162,7 @@ QH_CI_TESTS := \
 	tests/data_handling/test_vin_offline_store.py \
 	tests/data_handling/test_public_api_contract.py \
 	tests/vin/test_models_namespace.py \
+	tests/vin/test_learnable_fourier_features.py \
 	../scripts/tests/test_check_replay_oracle_golden.py \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
