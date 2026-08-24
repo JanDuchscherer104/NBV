@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from io import BytesIO
+from itertools import pairwise
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any
@@ -14,6 +15,7 @@ from unittest.mock import patch
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+ROUTING_PROXY_URL = "http://127.0.0.1:43123/v1"
 sys.path.insert(0, str(ROOT / "scripts" / "scaffold"))
 
 import run_routing_trials as trials
@@ -94,6 +96,7 @@ def _run_verifier(
         trial_dir=trial_dir,
         model=None,
         effort=None,
+        proxy_url=ROUTING_PROXY_URL,
         timeout_seconds=1,
     )
 
@@ -305,12 +308,56 @@ def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) ->
         output_report=tmp_path / "model.json",
         model="test-model",
         effort="high",
+        proxy_url=ROUTING_PROXY_URL,
     )
     assert "--ephemeral" in command
+    assert "--ignore-user-config" in command
     assert command[command.index("--sandbox") + 1] == "read-only"
     assert command[command.index("--output-schema") + 1] == str(trials.REPORT_SCHEMA)
     assert command[-1] == "-"
     assert "expected_owner_paths" not in " ".join(command)
+    provider_config = next(
+        value
+        for flag, value in pairwise(command)
+        if flag == "-c" and "model_providers." in value
+    )
+    assert ROUTING_PROXY_URL in provider_config
+    assert "requires_openai_auth=false" in provider_config
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "https://127.0.0.1:43123/v1",
+        "http://localhost:43123/v1",
+        "http://127.0.0.1:43123/v1?token=unsafe",
+        "http://127.0.0.1/v1",
+    ),
+)
+def test_routing_trial_proxy_rejects_nonlocal_or_credential_urls(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv(trials.ROUTING_TRIAL_PROXY_URL_ENV, value)
+
+    with pytest.raises(ValueError, match="proxy URL"):
+        trials.routing_trial_proxy_url()
+
+
+def test_routing_trial_proxy_accepts_local_unauthenticated_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(trials.ROUTING_TRIAL_PROXY_URL_ENV, ROUTING_PROXY_URL)
+
+    assert trials.routing_trial_proxy_url() == ROUTING_PROXY_URL
+
+
+def test_routing_trial_proxy_is_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(trials.ROUTING_TRIAL_PROXY_URL_ENV, raising=False)
+
+    with pytest.raises(ValueError, match=trials.ROUTING_TRIAL_PROXY_URL_ENV):
+        trials.routing_trial_proxy_url()
 
 
 def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> None:
@@ -318,9 +365,7 @@ def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> Non
     receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
     receipt_dir.mkdir()
-    auth_path = tmp_path / "auth.json"
-    auth_path.write_text("{}\n", encoding="utf-8")
-    command = trials._subject_sandbox_command(
+    command = trials._sandboxed_codex_command(
         # This is a portable command-shape test.  The Codex runtime mount has
         # its own Bubblewrap integration coverage below when both tools exist.
         codex_command=["/usr/bin/true"],
@@ -328,12 +373,12 @@ def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> Non
         receipt_dir=receipt_dir,
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
-        auth_path=auth_path,
     )
 
     assert str(trials.REPORT_SCHEMA) in command
     assert "/schema/routing_trial_report.schema.json" in command
     assert str(receipt_dir / trials.REPORT_SCHEMA.name) not in command
+    assert "/codex-home/auth.json" not in command
 
 
 @pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
@@ -342,17 +387,31 @@ def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
     receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
     receipt_dir.mkdir()
-    auth_path = tmp_path / "auth.json"
-    auth_path.write_text("{}\n", encoding="utf-8")
     evaluator_fixture = ROOT / trials.RUBRIC_RELATIVE
-    command = trials._subject_sandbox_command(
+    command = trials._sandboxed_codex_command(
         codex_command=["/usr/bin/test", "!", "-e", str(evaluator_fixture)],
         checkout=checkout,
         receipt_dir=receipt_dir,
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
-        auth_path=auth_path,
     )
+    subprocess.run(command, check=True)
+
+
+@pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
+def test_subject_sandbox_does_not_expose_codex_auth(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    receipt_dir = tmp_path / "receipt"
+    checkout.mkdir()
+    receipt_dir.mkdir()
+    command = trials._sandboxed_codex_command(
+        codex_command=["/usr/bin/test", "!", "-e", "/codex-home/auth.json"],
+        checkout=checkout,
+        receipt_dir=receipt_dir,
+        schema_path=trials.REPORT_SCHEMA,
+        sandbox=trials.READ_ONLY_SANDBOX,
+    )
+
     subprocess.run(command, check=True)
 
 
@@ -362,15 +421,12 @@ def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
     receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
     receipt_dir.mkdir()
-    auth_path = tmp_path / "auth.json"
-    auth_path.write_text("{}\n", encoding="utf-8")
-    command = trials._subject_sandbox_command(
+    command = trials._sandboxed_codex_command(
         codex_command=["codex", "--version"],
         checkout=checkout,
         receipt_dir=receipt_dir,
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
-        auth_path=auth_path,
     )
 
     sandboxed = subprocess.run(command, check=True, capture_output=True, text=True)
@@ -972,6 +1028,25 @@ def test_verifier_rejects_an_invalid_trial_response_before_execution(
     run_process.assert_not_called()
 
 
+def test_verifier_uses_the_credentialless_sandbox(tmp_path: Path) -> None:
+    report = _trial_report()
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    checkout.mkdir()
+    trial_dir.mkdir()
+
+    with patch.object(
+        trials, "_run_bounded_process", return_value=_bounded_process_result()
+    ) as run_process:
+        _run_verifier(report, checkout, trial_dir)
+
+    command = run_process.call_args.kwargs["command"]
+    assert command[0] == "bwrap"
+    assert "--ignore-user-config" in command
+    assert "/codex-home/auth.json" not in command
+    assert ROUTING_PROXY_URL in " ".join(command)
+
+
 def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
     evidence = _complete_event_evidence()
     assert _validate_verdict(_verdict(), evidence) == (True, "pass")
@@ -1063,12 +1138,11 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     trial_dir = tmp_path / "trial"
     checkout.mkdir()
     trial_dir.mkdir()
+    verifier_report = trial_dir / "verifier-receipt" / "verifier-report.json"
 
     def complete_with_verdict(verdict: dict[str, object]) -> object:
         def run_process(**_: object) -> dict[str, object]:
-            (trial_dir / "verifier-report.json").write_text(
-                json.dumps(verdict), encoding="utf-8"
-            )
+            verifier_report.write_text(json.dumps(verdict), encoding="utf-8")
             return _bounded_process_result()
 
         return run_process
@@ -1098,9 +1172,10 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
     trial_dir = tmp_path / "trial"
     checkout.mkdir()
     trial_dir.mkdir()
+    verifier_report = trial_dir / "verifier-receipt" / "verifier-report.json"
 
     def invalid_result(**_: object) -> dict[str, object]:
-        (trial_dir / "verifier-report.json").write_bytes(b"\xff")
+        verifier_report.write_bytes(b"\xff")
         return _bounded_process_result()
 
     with patch.object(trials, "_run_bounded_process", side_effect=invalid_result):
@@ -1109,9 +1184,7 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
     assert "unreadable" in invalid_utf8["reason"]
 
     def oversized_result(**_: object) -> dict[str, object]:
-        (trial_dir / "verifier-report.json").write_bytes(
-            b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1)
-        )
+        verifier_report.write_bytes(b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1))
         return _bounded_process_result()
 
     with patch.object(trials, "_run_bounded_process", side_effect=oversized_result):
@@ -1151,7 +1224,9 @@ def test_run_verifier_discards_a_preexisting_subject_receipt(tmp_path: Path) -> 
     trial_dir = tmp_path / "trial"
     checkout.mkdir()
     trial_dir.mkdir()
-    (trial_dir / "verifier-report.json").write_text(
+    receipt_dir = trial_dir / "verifier-receipt"
+    receipt_dir.mkdir()
+    (receipt_dir / "verifier-report.json").write_text(
         json.dumps(_verdict()), encoding="utf-8"
     )
 
@@ -1162,4 +1237,4 @@ def test_run_verifier_discards_a_preexisting_subject_receipt(tmp_path: Path) -> 
 
     assert result["passed"] is False
     assert result["verdict"] is None
-    assert not (trial_dir / "verifier-report.json").exists()
+    assert not (receipt_dir / "verifier-report.json").exists()

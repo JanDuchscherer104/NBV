@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run bounded, read-only Codex routing trials against an exact Git head."""
+"""Run bounded Codex routing trials against an exact Git head.
+
+Live trials require ``ARIA_NBV_ROUTING_TRIAL_PROXY_URL`` to name a local,
+Responses-compatible credential broker. Host credentials never enter the
+Bubblewrap namespace that executes a trial or its model-based verifier.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any, BinaryIO
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_RELATIVE = Path("scripts/scaffold/fixtures/routing_prompts.jsonl")
@@ -58,6 +64,8 @@ PROCESS_TERMINATE_GRACE_SECONDS = 5
 VERDICT_MAX_ITEMS = 64
 READ_ONLY_SANDBOX = "read-only"
 WORKSPACE_WRITE_SANDBOX = "workspace-write"
+ROUTING_TRIAL_PROXY_URL_ENV = "ARIA_NBV_ROUTING_TRIAL_PROXY_URL"
+ROUTING_TRIAL_PROXY_PROVIDER = "aria_nbv_routing_trials"
 _EXECUTION_MODES = (READ_ONLY_SANDBOX, WORKSPACE_WRITE_SANDBOX)
 _TRUNCATION_SUFFIX = "...<truncated>"
 _EXECUTION_IDENTITY_FIELDS = {
@@ -375,12 +383,14 @@ def _build_codex_command(
     output_report: Path,
     model: str | None,
     effort: str | None,
+    proxy_url: str,
     sandbox: str = READ_ONLY_SANDBOX,
 ) -> list[str]:
     command = [
         "codex",
         "exec",
         "--ephemeral",
+        "--ignore-user-config",
         "--sandbox",
         sandbox,
         "--json",
@@ -392,6 +402,15 @@ def _build_codex_command(
         str(checkout),
         "-c",
         'approval_policy="never"',
+        "-c",
+        f'model_provider="{ROUTING_TRIAL_PROXY_PROVIDER}"',
+        "-c",
+        (
+            f"model_providers.{ROUTING_TRIAL_PROXY_PROVIDER}="
+            '{name="ARIA-NBV routing-trial proxy",'
+            f'base_url="{proxy_url}",wire_api="responses",'
+            "requires_openai_auth=false}"
+        ),
     ]
     if model:
         command.extend(["--model", model])
@@ -401,21 +420,45 @@ def _build_codex_command(
     return command
 
 
-def _subject_sandbox_command(
+def routing_trial_proxy_url() -> str:
+    """Return the required local model broker endpoint for untrusted trials."""
+    value = os.environ.get(ROUTING_TRIAL_PROXY_URL_ENV)
+    if not value:
+        raise ValueError(
+            f"routing trials require {ROUTING_TRIAL_PROXY_URL_ENV} to name a "
+            "local Responses-compatible credential broker"
+        )
+    parsed = urlparse(value)
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError("routing trial proxy URL has an invalid port") from error
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "::1"}
+        or port is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "routing trial proxy URL must be an unauthenticated http URL bound "
+            "to 127.0.0.1 or ::1 with an explicit port"
+        )
+    return value.rstrip("/")
+
+
+def _sandboxed_codex_command(
     *,
     codex_command: list[str],
     checkout: Path,
     receipt_dir: Path,
     schema_path: Path,
     sandbox: str,
-    auth_path: Path | None = None,
 ) -> list[str]:
-    """Run Codex with a sanitized subject and immutable evaluator schema."""
-    resolved_auth_path = auth_path or (
-        Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
-    )
-    if not resolved_auth_path.is_file():
-        raise RuntimeError("routing trials require a readable Codex auth file")
+    """Run Codex without host credentials or mutable evaluator inputs."""
     if not schema_path.is_file():
         raise RuntimeError("routing trials require the canonical report schema")
     subject_bind = "--ro-bind" if sandbox == READ_ONLY_SANDBOX else "--bind"
@@ -489,9 +532,6 @@ def _subject_sandbox_command(
         "--dir",
         "/schema",
         *codex_mount,
-        "--ro-bind",
-        str(resolved_auth_path),
-        "/codex-home/auth.json",
         "--ro-bind",
         str(schema_path),
         "/schema/routing_trial_report.schema.json",
@@ -799,15 +839,18 @@ def run_verifier(
     trial_dir: Path,
     model: str | None,
     effort: str | None,
+    proxy_url: str,
     timeout_seconds: int,
 ) -> dict[str, Any]:
-    verifier_report = trial_dir / "verifier-report.json"
+    verifier_receipt_dir = trial_dir / "verifier-receipt"
+    verifier_receipt_dir.mkdir(exist_ok=True)
+    verifier_report = verifier_receipt_dir / "verifier-report.json"
     verifier_events = trial_dir / "verifier-events.jsonl"
     verifier_stderr = trial_dir / "verifier-stderr.txt"
     artifacts = {
         "events": verifier_events.name,
         "stderr": verifier_stderr.name,
-        "report": verifier_report.name,
+        "report": str(verifier_report.relative_to(trial_dir)),
     }
     failure_reason: str | None = None
     if report.get("rubric_commit") != rubric_commit:
@@ -831,11 +874,19 @@ def run_verifier(
         }
     verifier_report.unlink(missing_ok=True)
     command = _build_codex_command(
-        checkout=checkout,
-        output_schema=VERIFIER_SCHEMA,
-        output_report=verifier_report,
+        checkout=Path("/workspace"),
+        output_schema=Path("/schema/routing_verdict.schema.json"),
+        output_report=Path("/receipt") / verifier_report.name,
         model=model,
         effort=effort,
+        proxy_url=proxy_url,
+    )
+    command = _sandboxed_codex_command(
+        codex_command=command,
+        checkout=checkout,
+        receipt_dir=verifier_receipt_dir,
+        schema_path=VERIFIER_SCHEMA,
+        sandbox=READ_ONLY_SANDBOX,
     )
     process_result = _run_bounded_process(
         command=command,
@@ -1284,6 +1335,7 @@ def run_trial(
     codex_version: str,
     model: str | None,
     effort: str | None,
+    proxy_url: str,
     timeout_seconds: int,
 ) -> dict[str, Any]:
     trial_dir = output_dir / trial_id
@@ -1301,9 +1353,10 @@ def run_trial(
         output_report=Path("/receipt") / trial_response_path.name,
         model=model,
         effort=effort,
+        proxy_url=proxy_url,
         sandbox=contract["sandbox"],
     )
-    command = _subject_sandbox_command(
+    command = _sandboxed_codex_command(
         codex_command=codex_command,
         checkout=checkout,
         receipt_dir=subject_receipt_dir,
@@ -1501,6 +1554,10 @@ def main() -> int:
         raise SystemExit("--jobs must be positive")
     if shutil.which("bwrap") is None:
         raise SystemExit("routing trials require Bubblewrap (bwrap)")
+    try:
+        proxy_url = routing_trial_proxy_url()
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     if run_git("status", "--porcelain"):
         raise SystemExit("commit the candidate before routing trials")
 
@@ -1544,6 +1601,7 @@ def main() -> int:
                         codex_version=codex_version,
                         model=args.model,
                         effort=args.effort,
+                        proxy_url=proxy_url,
                         timeout_seconds=args.timeout,
                     ): trial_id
                     for trial_id in selected
@@ -1565,6 +1623,7 @@ def main() -> int:
                     trial_dir=output_dir / report["trial_id"],
                     model=args.model,
                     effort=args.effort,
+                    proxy_url=proxy_url,
                     timeout_seconds=args.timeout,
                 )
                 report["adjudication"] = adjudication
