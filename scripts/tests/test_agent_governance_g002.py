@@ -929,8 +929,14 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         "ralplan_critic_review: "
         ".omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md"
     ) in active_handoff
-    assert ".omx/plans/ralplan-architect-review-online-oracle-mvp-iteration-6.md" not in active_handoff
-    assert ".omx/plans/ralplan-critic-review-online-oracle-mvp-iteration-3.md" not in active_handoff
+    assert (
+        ".omx/plans/ralplan-architect-review-online-oracle-mvp-iteration-6.md"
+        not in active_handoff
+    )
+    assert (
+        ".omx/plans/ralplan-critic-review-online-oracle-mvp-iteration-3.md"
+        not in active_handoff
+    )
 
     ignored = _read(ROOT / ".gitignore")
     assert ".omx/reviews/" in ignored.splitlines()
