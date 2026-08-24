@@ -11,6 +11,8 @@ canonical_updates_needed:
   - .agents/skills/scientific-review/SKILL.md
   - .agents/skills/typst-authoring/SKILL.md
   - scripts/scaffold/fixtures/routing.json
+  - scripts/ci_impact.py
+  - scripts/scaffold_audit.py
 touched_owner_paths:
   - .agents/skills/README.md
   - .agents/skills/academic-writing/SKILL.md
@@ -21,10 +23,13 @@ touched_owner_paths:
   - scripts/scaffold/fixtures/routing.json
   - scripts/scaffold/fixtures/routing_prompts.jsonl
   - scripts/scaffold/run_routing_trials.py
+  - scripts/scaffold_audit.py
+  - scripts/ci_impact.py
   - scripts/tests/test_agent_governance_g002.py
+  - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 679a830ced9015a488e9d03b11d391e4e6c7f424
+repo_head: 7889b13d7fc869f9c883e8a76e7158749e9a6455
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -50,16 +55,25 @@ duplicating it in all three skills.
   realization, but scientific release remains a separate human/evidence gate.
 - The focused routing suite now uses natural synthesis, mechanical-repair,
   frozen-review, claim-revision, empirical-revision, and non-writing cases.
+- Workspace-write routing cases must produce the required active-Thesis diff
+  and compile/render receipt; their disposable subject checkout excludes both
+  evaluator fixtures and the candidate repository history.
+- Empirical-result candidates need a candidate-bound review without a blocking
+  finding before they are ready for Typst realization.
+- Authoring-owner changes trigger both documentation and scaffold CI gates.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
 ## Commits
 
 - [679a830ced9015a488e9d03b11d391e4e6c7f424](https://github.com/JanDuchscherer104/ARIA-NBV/commit/679a830ced9015a488e9d03b11d391e4e6c7f424) — implementation: compose academic authoring phases
+- [7889b13d7fc869f9c883e8a76e7158749e9a6455](https://github.com/JanDuchscherer104/ARIA-NBV/commit/7889b13d7fc869f9c883e8a76e7158749e9a6455) — implementation: enforce authoring routing evidence
 
 ## Verification
 
 - `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_agent_governance_g002.py scripts/tests/test_routing_trials.py scripts/tests/test_scientific_review_trials.py` — 68 passed.
+- `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py scripts/tests/test_agent_governance_g002.py scripts/tests/test_scientific_review_trials.py scripts/tests/test_debrief_index.py` — 124 passed, 50 subtests passed.
+- `make scaffold-audit scaffold-audit-self-test ci-impact-self-test check-agent-memory PYTHON_INTERPRETER=python3` — passed.
 - The three modified skills passed the skill validator.
 - `git diff --check` and routing fixture JSON/JSONL parsing passed.
 
