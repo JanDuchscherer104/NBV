@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from aria_nbv.performance_checkpoint import ResultContractError, record_checkpoint
+from aria_nbv.configs.wandb_config import WandbConfig
+from aria_nbv.performance_checkpoint import ResultContractError, load_result_snapshot, record_checkpoint, result_sha256
 
 
 def _result(path: Path, *, status: str = "pass") -> Path:
@@ -52,6 +53,24 @@ def test_record_checkpoint_rejects_nonfinite_metric(tmp_path: Path) -> None:
         record_checkpoint(path, dry_run=True)
 
 
+def test_record_checkpoint_rejects_pass_with_failed_hard_gate(tmp_path: Path) -> None:
+    path = _result(tmp_path / "result.json")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["hard_gates"] = {"regression_tests": False}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ResultContractError, match="hard gate failed"):
+        record_checkpoint(path, dry_run=True)
+
+
+def test_snapshot_digest_is_stable_after_source_replacement(tmp_path: Path) -> None:
+    path = _result(tmp_path / "result.json")
+    _, result_bytes = load_result_snapshot(path)
+    path.write_text("{}", encoding="utf-8")
+
+    assert result_sha256(result_bytes) != result_sha256(path.read_bytes())
+
+
 def test_record_checkpoint_invokes_omx_with_digest_backed_evidence(tmp_path: Path) -> None:
     completed = __import__("subprocess").CompletedProcess([], 0, stdout="recorded", stderr="")
     with patch("aria_nbv.performance_checkpoint.subprocess.run", return_value=completed) as run:
@@ -61,3 +80,25 @@ def test_record_checkpoint_invokes_omx_with_digest_backed_evidence(tmp_path: Pat
     assert command[:3] == ["omx", "performance-goal", "checkpoint"]
     assert command[command.index("--status") + 1] == "pass"
     assert outcome["omx_stdout"] == "recorded"
+
+
+def test_record_checkpoint_mirrors_to_wandb_only_after_omx_accepts(tmp_path: Path) -> None:
+    completed = __import__("subprocess").CompletedProcess([], 0, stdout="recorded", stderr="")
+    events: list[str] = []
+
+    def checkpoint(*args: object, **kwargs: object) -> object:
+        events.append("omx")
+        return completed
+
+    def mirror(*args: object, **kwargs: object) -> str:
+        events.append("wandb")
+        return "wandb-run"
+
+    with (
+        patch("aria_nbv.performance_checkpoint.subprocess.run", side_effect=checkpoint),
+        patch("aria_nbv.performance_checkpoint.log_wandb_result", side_effect=mirror),
+    ):
+        outcome = record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig())
+
+    assert events == ["omx", "wandb"]
+    assert outcome["wandb_run_id"] == "wandb-run"

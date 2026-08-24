@@ -35,10 +35,17 @@ class ResultContractError(ValueError):
 
 
 def load_result(path: Path) -> dict[str, Any]:
-    """Load and validate a version-one immutable evaluator result."""
+    """Load a version-one evaluator result for callers that need only its fields."""
+    result, _ = load_result_snapshot(path)
+    return result
+
+
+def load_result_snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
+    """Read once, validate, and retain the exact evaluator-result bytes."""
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        result_bytes = path.read_bytes()
+        raw = json.loads(result_bytes)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ResultContractError(f"cannot read JSON result: {exc}") from exc
     if not isinstance(raw, dict):
         raise ResultContractError("result must be a JSON object")
@@ -54,7 +61,9 @@ def load_result(path: Path) -> dict[str, Any]:
         raise ResultContractError("result.checkpoint_status must be pass, fail, or blocked")
     _validate_scalar_mapping(raw["metrics"], field="metrics", boolean=False)
     _validate_scalar_mapping(raw["hard_gates"], field="hard_gates", boolean=True)
-    return raw
+    if raw["checkpoint_status"] == "pass" and not all(raw["hard_gates"].values()):
+        raise ResultContractError("result.checkpoint_status cannot be pass when a hard gate failed")
+    return raw, result_bytes
 
 
 def _validate_scalar_mapping(value: Any, *, field: str, boolean: bool) -> None:
@@ -70,9 +79,9 @@ def _validate_scalar_mapping(value: Any, *, field: str, boolean: bool) -> None:
             raise ResultContractError(f"result.{field}.{key} must be a finite number")
 
 
-def result_sha256(path: Path) -> str:
-    """Return the digest of the exact result bytes that were evaluated."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def result_sha256(result_bytes: bytes) -> str:
+    """Return the digest of the exact evaluator bytes that were validated."""
+    return hashlib.sha256(result_bytes).hexdigest()
 
 
 def checkpoint_evidence(result: Mapping[str, Any], digest: str) -> str:
@@ -86,7 +95,7 @@ def checkpoint_evidence(result: Mapping[str, Any], digest: str) -> str:
     )
 
 
-def log_wandb_result(result_path: Path, result: Mapping[str, Any], digest: str, config: WandbConfig) -> str:
+def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str, config: WandbConfig) -> str:
     """Log a result mirror and its source file as a W&B artifact, returning the run id."""
     import wandb
 
@@ -110,7 +119,8 @@ def log_wandb_result(result_path: Path, result: Mapping[str, Any], digest: str, 
             type="aria-performance-result",
             metadata={"result_sha256": digest, "checkpoint_status": result["checkpoint_status"]},
         )
-        artifact.add_file(result_path.as_posix(), name="result.json")
+        with artifact.new_file("result.json", mode="wb") as result_file:
+            result_file.write(result_bytes)
         run.log_artifact(artifact)
         return str(run.id)
     finally:
@@ -125,8 +135,8 @@ def record_checkpoint(
 ) -> dict[str, Any]:
     """Validate, optionally mirror, then record one evaluator checkpoint with OMX."""
     resolved_path = result_path.resolve()
-    result = load_result(resolved_path)
-    digest = result_sha256(resolved_path)
+    result, result_bytes = load_result_snapshot(resolved_path)
+    digest = result_sha256(result_bytes)
     evidence = checkpoint_evidence(result, digest)
     outcome: dict[str, Any] = {
         "result_path": resolved_path.as_posix(),
@@ -138,11 +148,6 @@ def record_checkpoint(
     if dry_run:
         outcome["dry_run"] = True
         return outcome
-    if wandb_config is not None:
-        try:
-            outcome["wandb_run_id"] = log_wandb_result(resolved_path, result, digest, wandb_config)
-        except Exception as exc:  # W&B is an optional mirror, never the gate.
-            outcome["wandb_error"] = str(exc)
     command = [
         "omx",
         "performance-goal",
@@ -156,6 +161,11 @@ def record_checkpoint(
     ]
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
     outcome["omx_stdout"] = completed.stdout
+    if wandb_config is not None:
+        try:
+            outcome["wandb_run_id"] = log_wandb_result(result, result_bytes, digest, wandb_config)
+        except Exception as exc:  # W&B is an optional mirror, never the gate.
+            outcome["wandb_error"] = str(exc)
     return outcome
 
 
