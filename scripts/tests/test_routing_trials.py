@@ -691,7 +691,7 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if command[0] == "bwrap" and "typst" in command:
+        if command[0] == "bwrap" and "compile" in command:
             (trial_dir / "thesis.pdf").write_bytes(b"pdf")
         elif command[0] == "pdfinfo":
             return subprocess.CompletedProcess(command, 0, stdout="Pages: 2\n")
@@ -712,6 +712,37 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
     assert calls[0][0] == "bwrap"
     assert "--unshare-all" in calls[0]
     assert "--share-net" not in calls[0]
+
+
+def test_typst_proof_does_not_render_when_compilation_fails(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    (checkout / "docs").mkdir(parents=True)
+    trial_dir.mkdir()
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1)
+
+    with patch.object(trials.subprocess, "run", side_effect=fake_run):
+        proof = trials._typst_proof(checkout, trial_dir)
+
+    assert proof["passed"] is False
+    assert proof["returncodes"] == [1]
+    assert len(calls) == 1
+
+
+@pytest.mark.skipif(
+    shutil.which("bwrap") is None
+    or shutil.which("typst") is None
+    or shutil.which("pdfinfo") is None,
+    reason="Bubblewrap, Typst, or Poppler is unavailable",
+)
+def test_typst_proof_executes_in_its_isolated_runtime(tmp_path: Path) -> None:
+    proof = trials._typst_proof(ROOT, tmp_path)
+
+    assert proof["passed"] is True
 
 
 def test_stream_capture_requires_per_stream_bounded_receipts() -> None:
@@ -768,13 +799,12 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     prompts.parent.mkdir(parents=True)
     prompts.write_text('{"id":"trial","task":"first"}\n', encoding="utf-8")
     rubric.write_text('{"fixtures":[{"id":"trial"}]}\n', encoding="utf-8")
-    for relative_path in (
-        trials.REPORT_SCHEMA_RELATIVE,
-        trials.VERIFIER_SCHEMA_RELATIVE,
-    ):
+    for relative_path in trials.EVALUATOR_FIXTURE_PATHS:
+        if relative_path in {trials.PROMPTS_RELATIVE, trials.RUBRIC_RELATIVE}:
+            continue
         path = repo / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("schema\n", encoding="utf-8")
+        path.write_text("fixture\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "rubric"], cwd=repo, check=True)
     rubric_commit = subprocess.run(
@@ -802,8 +832,13 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     )
     assert fixture_bytes[trials.PROMPTS_RELATIVE] == prompts.read_bytes()
 
-    prompts.write_text('{"id":"trial","task":"second"}\n', encoding="utf-8")
-    subprocess.run(["git", "add", str(trials.PROMPTS_RELATIVE)], cwd=repo, check=True)
+    trusted_renderer = repo / trials.TRUSTED_RENDER_SCRIPT_RELATIVE
+    trusted_renderer.write_text("different renderer\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", str(trials.TRUSTED_RENDER_SCRIPT_RELATIVE)],
+        cwd=repo,
+        check=True,
+    )
     subprocess.run(["git", "commit", "-qm", "fixture drift"], cwd=repo, check=True)
     tested_commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],

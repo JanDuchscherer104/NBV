@@ -37,12 +37,16 @@ PROMPTS_PATH = ROOT / PROMPTS_RELATIVE
 RUBRIC_PATH = ROOT / RUBRIC_RELATIVE
 REPORT_SCHEMA = ROOT / REPORT_SCHEMA_RELATIVE
 VERIFIER_SCHEMA = ROOT / VERIFIER_SCHEMA_RELATIVE
-TRUSTED_RENDER_SCRIPT = ROOT / ".agents/skills/typst-authoring/scripts/render_png.sh"
+TRUSTED_RENDER_SCRIPT_RELATIVE = Path(
+    ".agents/skills/typst-authoring/scripts/render_png.sh"
+)
+TRUSTED_RENDER_SCRIPT = ROOT / TRUSTED_RENDER_SCRIPT_RELATIVE
 EVALUATOR_FIXTURE_PATHS = (
     PROMPTS_RELATIVE,
     RUBRIC_RELATIVE,
     REPORT_SCHEMA_RELATIVE,
     VERIFIER_SCHEMA_RELATIVE,
+    TRUSTED_RENDER_SCRIPT_RELATIVE,
 )
 EVALUATOR_EXCLUDED_PATHS = (
     *EVALUATOR_FIXTURE_PATHS,
@@ -662,6 +666,27 @@ def _typst_proof_sandbox_command(
 ) -> list[str]:
     """Run trusted proof tooling against candidate Typst only inside Bubblewrap."""
     docs_root = checkout / "docs"
+    typst_cache = (
+        Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "typst"
+    )
+    typst_executable = shutil.which("typst")
+    typst_mount: list[str] = []
+    sandbox_command = list(command)
+    if typst_executable is not None:
+        typst_mount = [
+            "--dir",
+            "/opt",
+            "--dir",
+            "/opt/typst",
+            "--ro-bind",
+            str(Path(typst_executable).resolve()),
+            "/opt/typst/typst",
+        ]
+        if sandbox_command[0] == "typst":
+            sandbox_command[0] = "/opt/typst/typst"
+    cache_mount = (
+        ["--ro-bind", str(typst_cache), "/cache/typst"] if typst_cache.is_dir() else []
+    )
     return [
         "bwrap",
         "--unshare-all",
@@ -669,7 +694,10 @@ def _typst_proof_sandbox_command(
         "--clearenv",
         "--setenv",
         "PATH",
-        "/usr/bin:/bin",
+        "/opt/typst:/usr/bin:/bin",
+        "--setenv",
+        "XDG_CACHE_HOME",
+        "/cache",
         "--ro-bind",
         "/usr",
         "/usr",
@@ -696,6 +724,10 @@ def _typst_proof_sandbox_command(
         "/tmp",
         "--dir",
         "/project",
+        "--dir",
+        "/cache",
+        *typst_mount,
+        *cache_mount,
         "--ro-bind",
         str(docs_root),
         "/project/docs",
@@ -709,7 +741,7 @@ def _typst_proof_sandbox_command(
         "/receipt",
         "--chdir",
         "/project",
-        *command,
+        *sandbox_command,
     ]
 
 
@@ -752,6 +784,8 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
                 timeout=180,
             )
             returncodes.append(result.returncode)
+            if result.returncode:
+                break
         except (OSError, subprocess.TimeoutExpired):
             returncodes.append(125)
             break
