@@ -19,7 +19,7 @@
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
   source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/lightning/test_qh_q2_certification.py",
   gate: [retain the one-step scorer as a matched control, populate a held-out exact-Q2 receipt, and require independent oracle-rescored policy evidence],
-)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, bounded exact-Q2 certifier, and hard-masked online adapter are implemented. A1 remains the default and A0 its identical-feature interaction control; scientific policy evidence is pending.]
+)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, bounded exact-Q2 certifier, hard-masked online adapter, and dense-valid data path are implemented. Both decoders complete a one-epoch GPU fit on a real bounded corpus. A1 remains the default and A0 its identical-feature interaction control; the learned exact-Q2 and scientific policy gates remain unmet.]
 
 The actor DTO carries root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. It deliberately excludes supervision and audit lineage from scorer inputs. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
 
@@ -109,6 +109,14 @@ gated until this learned $Q_2$ error passes its frozen support and tolerance
 contract and independent held-out endpoint evaluation establishes positive
 oracle-lookahead headroom. The existing persisted terminal-step contrast is a
 diagnostic proxy and cannot satisfy that endpoint gate.
+
+The census denominator is the complete eligible held-out chain population,
+not only chains that happen to contain an exact horizon-two row. A chain that
+terminates or becomes unsupported before factual $h=2$ contributes zero exact
+rows and therefore lowers support coverage. It must not disappear through
+post-hoc filtering. Consequently, an executable one-epoch fit, a valid bundle,
+or even low error on a few supported rows cannot promote $h>2$ when the frozen
+minimum-row, coverage, or tolerance predicate fails.
 
 Double Q is an optional estimator for the learned successor maximum. It uses the online scorer to select
 
