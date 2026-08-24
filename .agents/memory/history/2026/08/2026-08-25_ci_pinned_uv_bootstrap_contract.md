@@ -12,7 +12,7 @@ touched_owner_paths:
   - .github/workflows/ci.yml
   - scripts/tests/test_ci_impact.py
 repo_object_format: sha1
-repo_head: 40e9c39734139b2d04378999886f7c408ae7d34e
+repo_head: 47e67f352834c634ab45759edc5e54e4d5198f65
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -30,7 +30,8 @@ it still required the removed `astral-sh/setup-uv` action and its cache
 settings. The next hosted run installed `uv==0.12.5` correctly, but invoked a
 preinstalled older `uv` found earlier on `PATH`. The active workflow now calls
 the exact pip-installed module through `python -m uv` for both version proof
-and environment synchronization.
+and environment synchronization. The version proof accepts uv's documented
+platform suffix while rejecting any other semantic version.
 
 ## Verification
 
@@ -38,6 +39,8 @@ and environment synchronization.
 - Parsed `.github/workflows/ci.yml` and asserted the package-only bootstrap,
   interpreter-bound exact pinned version, module-based sync, and absence of a
   `uses` action.
+- Checked the shell predicate against both supported `uv 0.12.5` forms and a
+  mismatched `uv 0.12.6` version.
 - `git diff --check` — passed.
 
 ## Canonical Owner Impact
@@ -49,3 +52,4 @@ locks the intentional pinned-pip bootstrap rather than the retired action.
 
 - [6621b463ba55a905c91d61a432eb85a72bca8834](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6621b463ba55a905c91d61a432eb85a72bca8834) — test: lock pinned uv bootstrap
 - [40e9c39734139b2d04378999886f7c408ae7d34e](https://github.com/JanDuchscherer104/ARIA-NBV/commit/40e9c39734139b2d04378999886f7c408ae7d34e) — implementation: bind uv commands to pinned module
+- [47e67f352834c634ab45759edc5e54e4d5198f65](https://github.com/JanDuchscherer104/ARIA-NBV/commit/47e67f352834c634ab45759edc5e54e4d5198f65) — implementation: accept uv platform version suffix
