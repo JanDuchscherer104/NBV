@@ -92,8 +92,10 @@ def select_families(paths: list[str]) -> set[str]:
             )
         ):
             # Authoring guidance changes can alter docs behavior even though
-            # the skill itself lives under the scaffold namespace.
+            # the skill itself lives under the scaffold namespace. They also
+            # own tested routing and phase boundaries, so keep both gates live.
             selected.add("docs")
+            selected.add("scaffold")
             matched = True
         if path.startswith("aria_nbv/") or path.startswith(".configs/"):
             selected.add("package")

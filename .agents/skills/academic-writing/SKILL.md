@@ -20,8 +20,10 @@ realization or certify scientific validity.
    For thesis prose, also read
    [`thesis-writing.md`](references/thesis-writing.md) and
    [`thesis-section-contracts.md`](references/thesis-section-contracts.md).
-   For empirical claims, also read the scientific evidence contract in
-   [`empirical-reporting-and-reproducibility.md`](../scientific-review/references/empirical-reporting-and-reproducibility.md).
+   For empirical-result claims, also read the scientific evidence contract in
+   [`empirical-reporting-and-reproducibility.md`](../scientific-review/references/empirical-reporting-and-reproducibility.md)
+   and obtain scientific-review findings before marking the candidate
+   `ready-for-realization`.
    For a candidate that may continue into realization, read the shared
    [academic work phase transition](../README.md#academic-work-phase-transition).
 3. For Related Work or a concept-centred comparison, read
@@ -30,9 +32,10 @@ realization or certify scientific validity.
    applicable scratch, shape, or beat mechanics.
 4. Calibrate every substantive claim to its evidence. Turn unsupported strength
    into a limitation, hypothesis, or open evidence request.
-5. Hand ready-for-realization content to `typst-authoring`; hand concerns about leakage,
-   confounding, uncertainty, baseline parity, freshness, or overclaiming to
-   `scientific-review`.
+5. Hand ready-for-realization content to `typst-authoring`; hand concerns about
+   leakage, confounding, uncertainty, baseline parity, freshness, or
+   overclaiming to `scientific-review`. An empirical-result candidate remains
+   `proposed` while a blocking scientific-review finding is open.
 
 ## Handoff
 

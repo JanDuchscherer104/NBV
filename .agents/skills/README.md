@@ -76,16 +76,17 @@ sources remain durable truth.
 
 - `proposed`: argument construction is complete enough for owner review.
 - `ready-for-realization`: the authoring owner has confirmed the cited evidence,
-  limitation, and wording for this task; a blocking review finding returns it to
-  `proposed`.
+  limitation, and wording for this task; an empirical-result candidate also has
+  a candidate-bound scientific review with no blocking finding.
 - `realized`: the exact Typst source changed and its required proof passed.
 - `scientifically released`: a separate human/evidence release gate passed; do
   not infer this state from realization.
 
-One request may compose `academic-writing` → optional `scientific-review` →
-`typst-authoring` when it already authorizes the repository edit and no material
-claim escalation remains. Material escalation requires explicit current-user
-approval; advisory review never accepts or releases content.
+One request may compose `academic-writing` → `scientific-review` when empirical
+results are involved → `typst-authoring` when it already authorizes the
+repository edit and no material claim escalation remains. Material escalation
+requires explicit current-user approval; advisory review never accepts or
+releases content.
 
 ## Upstream skills
 

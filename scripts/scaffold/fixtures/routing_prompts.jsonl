@@ -44,7 +44,7 @@
 {"id":"python-docstring-contract","task":"Write or refactor docstrings for Python public API contracts."}
 {"id":"typst-thesis-edit","task":"Edit Typst thesis prose, notation, citations, figures, or rendered-page QA."}
 {"id":"docs-literature-no-browser","task":"Plan a Quarto literature navigation cleanup with local bibliography evidence."}
-{"id":"typst-prose-no-python-analyzer","task":"Polish Typst thesis prose and citations without changing Python code."}
+{"id":"typst-prose-no-python-analyzer","task":"Polish the active Typst thesis prose and citations without changing Python code, then compile and inspect the affected page."}
 {"id":"typst-prose-matt-writing-modes","task":"Draft or polish ARIA thesis prose with writing mechanics."}
 {"id":"scaffold-cleanup","task":"Prune or simplify scaffold skills, metadata, or references while preserving behavior."}
 {"id":"lrz-failed-job-container-start","task":"Route a failed LRZ job or container-start failure to the exact troubleshooting owner."}

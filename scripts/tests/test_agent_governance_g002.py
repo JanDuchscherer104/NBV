@@ -1347,6 +1347,22 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     scientific_skill = _read(
         ROOT / ".agents" / "skills" / "scientific-review" / "SKILL.md"
     )
+    review_protocol = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "scientific-review"
+        / "references"
+        / "review-protocol.md"
+    )
+    thesis_writing = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "references"
+        / "thesis-writing.md"
+    )
     claim_discipline = _read(
         ROOT
         / ".agents"
@@ -1364,6 +1380,7 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         in typst_skill
     )
     assert "ready-for-realization" in academic_skill
+    assert "obtain scientific-review findings before marking" in academic_skill
     assert "academic work phase transition" in academic_skill
     assert (
         "../scientific-review/references/empirical-reporting-and-reproducibility.md"
@@ -1384,6 +1401,10 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         "`scientifically released`",
     ):
         assert phase in skill_guide
+    for gate in ("`blocking`", "`advisory`", "`clear`"):
+        assert gate in review_protocol
+    assert "prose-draft" not in thesis_writing
+    assert "prose-polish" not in thesis_writing
     assert "generated context artifact" not in claim_discipline
     assert (
         ROOT

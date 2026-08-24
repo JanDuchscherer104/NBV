@@ -106,6 +106,24 @@ def _trial_report() -> dict[str, object]:
         "checkout_clean_before": True,
         "checkout_clean_after": True,
         "runtime": {},
+        "execution": {
+            "sandbox": trials.READ_ONLY_SANDBOX,
+            "required_changed_path_prefixes": [],
+            "typst_proof": None,
+            "changed_paths": [],
+        },
+        "stream_capture": {
+            "events": {
+                "observed_bytes": 1,
+                "maximum_bytes": trials.EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+                "overflowed": False,
+            },
+            "stderr": {
+                "observed_bytes": 0,
+                "maximum_bytes": trials.TRIAL_STDERR_MAX_BYTES,
+                "overflowed": False,
+            },
+        },
         "trial_response": trials.bound_trial_response({"outcome": "bounded"}),
         "event_evidence": _complete_event_evidence(),
     }
@@ -209,6 +227,106 @@ def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) ->
     assert command[command.index("--output-schema") + 1] == str(trials.REPORT_SCHEMA)
     assert command[-1] == "-"
     assert "expected_owner_paths" not in " ".join(command)
+
+
+def test_workspace_write_contract_requires_source_change_and_typst_proof() -> None:
+    contract = trials.execution_contract(
+        {
+            "execution_mode": trials.WORKSPACE_WRITE_SANDBOX,
+            "required_changed_path_prefixes": ["docs/typst/thesis/"],
+            "typst_proof": True,
+        }
+    )
+    assert contract["sandbox"] == trials.WORKSPACE_WRITE_SANDBOX
+    with pytest.raises(ValueError, match="require a source path and Typst proof"):
+        trials.execution_contract({"execution_mode": trials.WORKSPACE_WRITE_SANDBOX})
+
+
+def test_subject_checkout_removes_evaluator_fixtures_and_history(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    prompts = checkout / trials.PROMPTS_RELATIVE
+    rubric = checkout / trials.RUBRIC_RELATIVE
+    prompts.parent.mkdir(parents=True)
+    (checkout / "README.md").write_text("subject\n", encoding="utf-8")
+    prompts.write_text('{"id":"trial","task":"answer"}\n', encoding="utf-8")
+    rubric.write_text('{"fixtures":[{"id":"trial","answer":"leaked"}]}\n', encoding="utf-8")
+    (checkout / ".git").write_text("gitdir: ignored\n", encoding="utf-8")
+
+    trials.prepare_subject_checkout(checkout)
+
+    assert not prompts.exists()
+    assert not rubric.exists()
+    result = subprocess.run(
+        ["git", "show", f"HEAD:{trials.RUBRIC_RELATIVE.as_posix()}"],
+        cwd=checkout,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+
+
+def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    checkout = tmp_path / "checkout"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "routing@example.invalid"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Routing Test"], cwd=repository, check=True
+    )
+    for relative_path in trials.EVALUATOR_FIXTURE_PATHS:
+        path = repository / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture\n", encoding="utf-8")
+    (repository / "README.md").write_text("subject\n", encoding="utf-8")
+    subprocess.run(["git", "add", "--all"], cwd=repository, check=True)
+    subprocess.run(["git", "commit", "-qm", "subject"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(checkout), "HEAD"],
+        cwd=repository,
+        check=True,
+    )
+
+    trials.prepare_subject_checkout(checkout)
+    trials.remove_subject_checkout(checkout, repository=repository)
+
+    assert not checkout.exists()
+    registered = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert str(checkout) not in registered
+
+
+def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
+    report = _trial_report()
+    report["execution"] = {
+        "sandbox": trials.WORKSPACE_WRITE_SANDBOX,
+        "required_changed_path_prefixes": ["docs/typst/thesis/"],
+        "changed_paths": ["docs/typst/thesis/sections/01-research-questions.typ"],
+        "typst_proof": {"passed": True},
+    }
+    report["adjudication"] = {"passed": True}
+    assert trials.trial_passed(report)
+    report["execution"]["typst_proof"] = {"passed": False}  # type: ignore[index]
+    assert not trials.trial_passed(report)
+
+
+def test_stream_capture_requires_per_stream_bounded_receipts() -> None:
+    report = _trial_report()
+    assert trials.validate_stream_capture(report["stream_capture"])
+    report["stream_capture"]["events"]["observed_bytes"] = (  # type: ignore[index]
+        trials.EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES + 1
+    )
+    assert not trials.validate_stream_capture(report["stream_capture"])
 
 
 def test_trial_and_verdict_schemas_are_strict() -> None:
@@ -636,15 +754,12 @@ def test_verdict_validation_rejects_malformed_payload() -> None:
     assert not _validate_verdict(_verdict(evidence=[]), evidence)[0]
 
 
-def test_aggregate_rejects_clean_trial_with_failing_adjudication() -> None:
-    report = {
-        "returncode": 0,
-        "checkout_clean_after": True,
-        "adjudication": {"passed": False, "reason": "semantic fail"},
-    }
+def test_aggregate_requires_passing_adjudication() -> None:
+    report = _trial_report()
+    report["adjudication"] = {"passed": False, "reason": "semantic fail"}
     assert trials.trial_passed(report) is False
     report["adjudication"] = {"passed": True, "reason": "pass"}
-    assert trials.trial_passed(report) is False
+    assert trials.trial_passed(report) is True
 
 
 def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) -> None:

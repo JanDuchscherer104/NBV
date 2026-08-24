@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,6 +41,9 @@ TRIAL_STDERR_MAX_BYTES = 1_048_576
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
 VERDICT_MAX_ITEMS = 64
+READ_ONLY_SANDBOX = "read-only"
+WORKSPACE_WRITE_SANDBOX = "workspace-write"
+_EXECUTION_MODES = (READ_ONLY_SANDBOX, WORKSPACE_WRITE_SANDBOX)
 _TRUNCATION_SUFFIX = "...<truncated>"
 _EXECUTION_IDENTITY_FIELDS = {
     "command_execution": ("command",),
@@ -226,13 +230,14 @@ def _build_codex_command(
     output_report: Path,
     model: str | None,
     effort: str | None,
+    sandbox: str = READ_ONLY_SANDBOX,
 ) -> list[str]:
     command = [
         "codex",
         "exec",
         "--ephemeral",
         "--sandbox",
-        "read-only",
+        sandbox,
         "--json",
         "--output-schema",
         str(output_schema),
@@ -249,6 +254,109 @@ def _build_codex_command(
         command.extend(["-c", f'model_reasoning_effort="{effort}"'])
     command.append("-")
     return command
+
+
+def execution_contract(rubric: dict[str, Any]) -> dict[str, Any]:
+    """Return the bounded execution contract for one hidden routing fixture."""
+    sandbox = rubric.get("execution_mode", READ_ONLY_SANDBOX)
+    if sandbox not in _EXECUTION_MODES:
+        raise ValueError(f"unsupported routing execution mode: {sandbox!r}")
+    prefixes = rubric.get("required_changed_path_prefixes", [])
+    if not isinstance(prefixes, list) or not all(
+        isinstance(prefix, str) and prefix for prefix in prefixes
+    ):
+        raise ValueError("routing changed-path prefixes must be non-empty strings")
+    typst_proof = rubric.get("typst_proof", False)
+    if not isinstance(typst_proof, bool):
+        raise ValueError("routing typst_proof must be boolean")
+    if sandbox == WORKSPACE_WRITE_SANDBOX and (not prefixes or not typst_proof):
+        raise ValueError(
+            "workspace-write routing trials require a source path and Typst proof"
+        )
+    if sandbox == READ_ONLY_SANDBOX and (prefixes or typst_proof):
+        raise ValueError("read-only routing trials cannot require edit proof")
+    return {
+        "sandbox": sandbox,
+        "required_changed_path_prefixes": prefixes,
+        "typst_proof": typst_proof,
+    }
+
+
+def _changed_paths(checkout: Path) -> tuple[str, ...]:
+    """Return tracked subject changes from the isolated trial repository."""
+    return tuple(run_git("diff", "--name-only", "HEAD", cwd=checkout).splitlines())
+
+
+def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
+    """Compile and render the edited active thesis into the isolated trial receipt."""
+    pdf = trial_dir / "thesis.pdf"
+    pages = trial_dir / "thesis-pages"
+    commands = (
+        ["typst", "compile", "docs/typst/thesis/main.typ", str(pdf), "--root", "docs"],
+        [
+            ".agents/skills/typst-authoring/scripts/render_png.sh",
+            "-i",
+            "docs/typst/thesis/main.typ",
+            "-o",
+            str(pages),
+            "--root",
+            "docs",
+            "--pages",
+            "1",
+            "--ppi",
+            "150",
+        ],
+    )
+    returncodes: list[int] = []
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command,
+                cwd=checkout,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=180,
+            )
+            returncodes.append(result.returncode)
+        except (OSError, subprocess.TimeoutExpired):
+            returncodes.append(125)
+            break
+    return {
+        "passed": returncodes == [0, 0] and pdf.is_file() and pages.is_dir(),
+        "returncodes": returncodes,
+        "artifacts": {"pdf": pdf.name, "pages": pages.name},
+    }
+
+
+def validate_stream_capture(capture: Any) -> bool:
+    """Validate the persisted byte-bound receipt for both trial process streams."""
+    expected = {
+        "events": EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+        "stderr": TRIAL_STDERR_MAX_BYTES,
+    }
+    if not isinstance(capture, dict) or set(capture) != set(expected):
+        return False
+    for stream_name, maximum in expected.items():
+        record = capture[stream_name]
+        if not isinstance(record, dict) or set(record) != {
+            "observed_bytes",
+            "maximum_bytes",
+            "overflowed",
+        }:
+            return False
+        observed = record["observed_bytes"]
+        if (
+            isinstance(observed, bool)
+            or not isinstance(observed, int)
+            or not 0 <= observed <= maximum
+            or record["maximum_bytes"] != maximum
+            or not isinstance(record["overflowed"], bool)
+        ):
+            return False
+        if record["overflowed"] and observed != maximum:
+            return False
+    return True
 
 
 def build_verifier_prompt(
@@ -271,6 +379,8 @@ def build_verifier_prompt(
                 "requested_effort",
             )
         },
+        "execution": report["execution"],
+        "stream_capture": report["stream_capture"],
         "trial_response": report["trial_response"],
         "event_evidence": report["event_evidence"],
     }
@@ -483,12 +593,46 @@ def run_verifier(
 
 
 def trial_passed(report: dict[str, Any]) -> bool:
-    """Return whether one trial satisfies process, cleanliness, and adjudication."""
+    """Return whether one trial satisfies its bounded execution contract."""
     evidence_valid, _ = validate_event_evidence(report.get("event_evidence"))
+    execution = report.get("execution")
+    if not isinstance(execution, dict):
+        return False
+    sandbox = execution.get("sandbox")
+    changed_paths = execution.get("changed_paths")
+    prefixes = execution.get("required_changed_path_prefixes")
+    proof = execution.get("typst_proof")
+    if (
+        sandbox not in _EXECUTION_MODES
+        or not isinstance(changed_paths, list)
+        or not all(isinstance(path, str) for path in changed_paths)
+        or not isinstance(prefixes, list)
+        or not all(isinstance(prefix, str) for prefix in prefixes)
+    ):
+        return False
+    if sandbox == READ_ONLY_SANDBOX:
+        execution_valid = (
+            report.get("checkout_clean_after")
+            and not prefixes
+            and proof is None
+            and not changed_paths
+        )
+    else:
+        execution_valid = (
+            bool(prefixes)
+            and all(
+                any(path.startswith(prefix) for path in changed_paths)
+                for prefix in prefixes
+            )
+            and isinstance(proof, dict)
+            and proof.get("passed") is True
+        )
     return bool(
         report.get("returncode") == 0
-        and report.get("checkout_clean_after")
+        and report.get("checkout_clean_before")
         and not report.get("output_overflow", False)
+        and validate_stream_capture(report.get("stream_capture"))
+        and execution_valid
         and evidence_valid
         and report.get("adjudication", {}).get("passed", False)
     )
@@ -772,6 +916,7 @@ def run_trial(
     task: str,
     head: str,
     rubric_commit: str,
+    rubric: dict[str, Any],
     checkout: Path,
     output_dir: Path,
     codex_version: str,
@@ -785,16 +930,20 @@ def run_trial(
     stderr_path = trial_dir / "stderr.txt"
     trial_response_path = trial_dir / "trial-response.json"
     final_report = trial_dir / "report.json"
+    contract = execution_contract(rubric)
     command = _build_codex_command(
         checkout=checkout,
         output_schema=REPORT_SCHEMA,
         output_report=trial_response_path,
         model=model,
         effort=effort,
+        sandbox=contract["sandbox"],
     )
-    clean_before = run_git("status", "--porcelain", cwd=checkout)
+    changed_before = _changed_paths(checkout)
     started = time.time()
     output_overflow = Event()
+    events_overflow = Event()
+    stderr_overflow = Event()
     output_lock = Lock()
     event_bytes = [0]
     stderr_bytes = [0]
@@ -816,6 +965,12 @@ def run_trial(
             assert process.stderr is not None
             process.stdin.write(task.encode("utf-8"))
             process.stdin.close()
+
+            def terminate_for(overflow: Event) -> None:
+                overflow.set()
+                output_overflow.set()
+                process.terminate()
+
             with ThreadPoolExecutor(max_workers=2) as executor:
                 copies = (
                     executor.submit(
@@ -823,8 +978,8 @@ def run_trial(
                         process.stdout,
                         events,
                         maximum_bytes=EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
-                        overflow=output_overflow,
-                        on_overflow=process.terminate,
+                        overflow=events_overflow,
+                        on_overflow=lambda: terminate_for(events_overflow),
                         lock=output_lock,
                         written=event_bytes,
                     ),
@@ -833,8 +988,8 @@ def run_trial(
                         process.stderr,
                         stderr,
                         maximum_bytes=TRIAL_STDERR_MAX_BYTES,
-                        overflow=output_overflow,
-                        on_overflow=process.terminate,
+                        overflow=stderr_overflow,
+                        on_overflow=lambda: terminate_for(stderr_overflow),
                         lock=output_lock,
                         written=stderr_bytes,
                     ),
@@ -856,7 +1011,18 @@ def run_trial(
         except subprocess.TimeoutExpired:
             returncode = 124
             timed_out = True
-    clean_after = run_git("status", "--porcelain", cwd=checkout)
+    changed_after = _changed_paths(checkout)
+    proof = None
+    if contract["typst_proof"]:
+        expected_change = all(
+            any(path.startswith(prefix) for path in changed_after)
+            for prefix in contract["required_changed_path_prefixes"]
+        )
+        proof = (
+            _typst_proof(checkout, trial_dir)
+            if expected_change
+            else {"passed": False}
+        )
     runtime = {
         "codex_version": codex_version,
         "requested_model": model,
@@ -875,8 +1041,25 @@ def run_trial(
         "returncode": returncode,
         "timed_out": timed_out,
         "output_overflow": output_overflow.is_set(),
-        "checkout_clean_before": clean_before == "",
-        "checkout_clean_after": clean_after == "",
+        "checkout_clean_before": not changed_before,
+        "checkout_clean_after": not changed_after,
+        "stream_capture": {
+            "events": {
+                "observed_bytes": event_bytes[0],
+                "maximum_bytes": EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+                "overflowed": events_overflow.is_set(),
+            },
+            "stderr": {
+                "observed_bytes": stderr_bytes[0],
+                "maximum_bytes": TRIAL_STDERR_MAX_BYTES,
+                "overflowed": stderr_overflow.is_set(),
+            },
+        },
+        "execution": {
+            **contract,
+            "changed_paths": list(changed_after),
+            "typst_proof": proof,
+        },
         "artifacts": {
             "events": events_path.name,
             "stderr": stderr_path.name,
@@ -886,6 +1069,45 @@ def run_trial(
     }
     final_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report
+
+
+def prepare_subject_checkout(checkout: Path) -> None:
+    """Detach a disposable subject repository from evaluator fixtures and history."""
+    for relative_path in EVALUATOR_FIXTURE_PATHS:
+        path = checkout / relative_path
+        if not path.is_file():
+            raise ValueError(
+                f"cannot hide evaluator fixture: {relative_path.as_posix()}"
+            )
+        path.unlink()
+    git_pointer = checkout / ".git"
+    if not git_pointer.is_file():
+        raise ValueError("routing subject checkout has no detachable Git pointer")
+    git_pointer.unlink()
+    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "routing-subject@example.invalid"],
+        cwd=checkout,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Routing Subject"], cwd=checkout, check=True
+    )
+    subprocess.run(["git", "add", "--all"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "isolated routing subject"],
+        cwd=checkout,
+        check=True,
+    )
+
+
+def remove_subject_checkout(checkout: Path, *, repository: Path = ROOT) -> None:
+    """Remove one detached routing subject and its stale worktree registration."""
+    if checkout.exists():
+        if not checkout.is_dir():
+            raise ValueError(f"routing subject is not a directory: {checkout}")
+        shutil.rmtree(checkout)
+    run_git("worktree", "prune", cwd=repository)
 
 
 def parse_args() -> argparse.Namespace:
@@ -908,7 +1130,7 @@ def parse_args() -> argparse.Namespace:
         "--effort", help="Explicit reasoning effort; otherwise inherit config."
     )
     parser.add_argument(
-        "--jobs", type=int, default=1, help="Concurrent read-only trials."
+        "--jobs", type=int, default=1, help="Concurrent isolated routing trials."
     )
     parser.add_argument("--timeout", type=int, default=600, help="Seconds per trial.")
     return parser.parse_args()
@@ -960,8 +1182,12 @@ def main() -> int:
     ).stdout.strip()
 
     with tempfile.TemporaryDirectory(prefix=f"aria-routing-{short_head}-") as temp:
-        checkout = Path(temp) / "checkout"
-        run_git("worktree", "add", "--detach", str(checkout), tested_commit)
+        checkouts = {
+            trial_id: Path(temp) / f"checkout-{trial_id}" for trial_id in selected
+        }
+        for checkout in checkouts.values():
+            run_git("worktree", "add", "--detach", str(checkout), tested_commit)
+            prepare_subject_checkout(checkout)
         try:
             reports: list[dict[str, Any]] = []
             with ThreadPoolExecutor(max_workers=args.jobs) as executor:
@@ -972,7 +1198,8 @@ def main() -> int:
                         task=prompts[trial_id],
                         head=tested_commit,
                         rubric_commit=rubric_commit,
-                        checkout=checkout,
+                        rubric=rubric[trial_id],
+                        checkout=checkouts[trial_id],
                         output_dir=output_dir,
                         codex_version=codex_version,
                         model=args.model,
@@ -994,7 +1221,7 @@ def main() -> int:
                     report=report,
                     rubric=rubric,
                     rubric_commit=rubric_commit,
-                    checkout=checkout,
+                    checkout=checkouts[report["trial_id"]],
                     trial_dir=output_dir / report["trial_id"],
                     model=args.model,
                     effort=args.effort,
@@ -1007,7 +1234,8 @@ def main() -> int:
                 )
                 print(f"{report['trial_id']}: verdict={adjudication['reason']}")
         finally:
-            run_git("worktree", "remove", "--force", str(checkout))
+            for checkout in checkouts.values():
+                remove_subject_checkout(checkout)
 
     index = {
         "tested_commit": tested_commit,
@@ -1020,6 +1248,8 @@ def main() -> int:
                 "returncode": report["returncode"],
                 "timed_out": report["timed_out"],
                 "checkout_clean_after": report["checkout_clean_after"],
+                "execution": report["execution"],
+                "stream_capture": report["stream_capture"],
                 "adjudicated": report.get("adjudication", {}).get("passed", False),
                 "verdict": report.get("adjudication", {}).get("verdict"),
                 "report": f"{report['trial_id']}/report.json",
