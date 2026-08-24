@@ -88,7 +88,14 @@ def _validate_verdict(payload: object, event_evidence: object) -> tuple[bool, st
 def _run_verifier(report: dict[str, object], trial_dir: Path) -> dict[str, Any]:
     # Unit tests mock process execution. Supply a stable mounted executable so
     # command construction stays portable on CI runners without Codex.
-    with patch.object(trials.shutil, "which", return_value="/usr/bin/true"):
+    real_which = trials.shutil.which
+    with patch.object(
+        trials.shutil,
+        "which",
+        side_effect=lambda name: (
+            "/usr/bin/true" if name == "codex" else real_which(name)
+        ),
+    ):
         return trials.run_verifier(
             report=report,
             rubric={"trial": {"id": "trial"}},
@@ -414,6 +421,7 @@ def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> Non
         codex_command=["/usr/bin/true"],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
     )
@@ -435,6 +443,7 @@ def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
         codex_command=["/usr/bin/test", "!", "-e", str(evaluator_fixture)],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
     )
@@ -460,6 +469,7 @@ def test_subject_sandbox_mounts_each_schema_at_its_declared_path(
         codex_command=["/usr/bin/test", "-f", sandbox_path],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        broker_socket=tmp_path / "proxy.sock",
         schema_path=schema_path,
         sandbox=trials.READ_ONLY_SANDBOX,
     )
@@ -477,6 +487,7 @@ def test_subject_sandbox_does_not_expose_codex_auth(tmp_path: Path) -> None:
         codex_command=["/usr/bin/test", "!", "-e", "/codex-home/auth.json"],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
     )
@@ -494,6 +505,7 @@ def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
         codex_command=["codex", "--version"],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        broker_socket=tmp_path / "proxy.sock",
         schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
     )
@@ -1167,7 +1179,10 @@ def test_verifier_uses_the_credentialless_sandbox(tmp_path: Path) -> None:
     assert command[0] == "bwrap"
     assert "--ignore-user-config" in command
     assert "/codex-home/auth.json" not in command
-    assert ROUTING_PROXY_URL in " ".join(command)
+    assert trials.SANDBOX_PROXY_URL in " ".join(command)
+    assert ROUTING_PROXY_URL not in " ".join(command)
+    assert "--share-net" not in command
+    assert "/broker/proxy.sock" in " ".join(command)
 
 
 def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:

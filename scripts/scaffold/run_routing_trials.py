@@ -9,6 +9,7 @@ Bubblewrap namespace that executes a trial or its model-based verifier.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -71,6 +72,7 @@ READ_ONLY_SANDBOX = "read-only"
 WORKSPACE_WRITE_SANDBOX = "workspace-write"
 ROUTING_TRIAL_PROXY_URL_ENV = "ARIA_NBV_ROUTING_TRIAL_PROXY_URL"
 ROUTING_TRIAL_PROXY_PROVIDER = "aria_nbv_routing_trials"
+SANDBOX_PROXY_URL = "http://127.0.0.1:43124/v1"
 _EXECUTION_MODES = (READ_ONLY_SANDBOX, WORKSPACE_WRITE_SANDBOX)
 _TRUNCATION_SUFFIX = "...<truncated>"
 _EXECUTION_IDENTITY_FIELDS = {
@@ -497,11 +499,49 @@ def routing_trial_proxy_url() -> str:
     return value.rstrip("/")
 
 
+@contextlib.contextmanager
+def broker_socket_relay(proxy_url: str) -> Any:
+    """Expose exactly one host-loopback broker as a private Unix socket."""
+    executable = shutil.which("socat")
+    if executable is None:
+        raise RuntimeError("routing trials require socat for broker isolation")
+    parsed = urlparse(proxy_url)
+    assert parsed.hostname is not None and parsed.port is not None
+    upstream = (
+        f"TCP6:[{parsed.hostname}]:{parsed.port}"
+        if parsed.hostname == "::1"
+        else f"TCP:{parsed.hostname}:{parsed.port}"
+    )
+    with tempfile.TemporaryDirectory(prefix="aria-routing-broker-") as temporary:
+        socket_path = Path(temporary) / "proxy.sock"
+        process = subprocess.Popen(
+            [
+                executable,
+                f"UNIX-LISTEN:{socket_path},fork,mode=600",
+                upstream,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        deadline = time.monotonic() + 5
+        while not socket_path.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if not socket_path.exists() or process.poll() is not None:
+            _stop_process_group(process)
+            raise RuntimeError("routing broker socket failed to start")
+        try:
+            yield socket_path
+        finally:
+            _stop_process_group(process)
+
+
 def _sandboxed_codex_command(
     *,
     codex_command: list[str],
     checkout: Path,
     receipt_dir: Path | None,
+    broker_socket: Path,
     schema_path: Path,
     sandbox: str,
 ) -> list[str]:
@@ -534,10 +574,19 @@ def _sandboxed_codex_command(
     receipt_mount = (
         ["--bind", str(receipt_dir), "/receipt"] if receipt_dir is not None else []
     )
+    relay_command = [
+        "/bin/sh",
+        "-ec",
+        (
+            "socat TCP-LISTEN:43124,bind=127.0.0.1,reuseaddr,fork "
+            'UNIX-CONNECT:/broker/proxy.sock & sleep 0.1; exec "$@"'
+        ),
+        "routing-broker-relay",
+        *sandbox_command,
+    ]
     return [
         "bwrap",
         "--unshare-all",
-        "--share-net",
         "--die-with-parent",
         "--clearenv",
         "--setenv",
@@ -581,17 +630,22 @@ def _sandboxed_codex_command(
         "/codex-home",
         "--dir",
         "/schema",
+        "--dir",
+        "/broker",
         *codex_mount,
         "--ro-bind",
         str(schema_path),
         str(Path("/schema") / schema_path.name),
+        "--ro-bind",
+        str(broker_socket.parent),
+        "/broker",
         subject_bind,
         str(checkout),
         "/workspace",
         *receipt_mount,
         "--chdir",
         "/workspace",
-        *sandbox_command,
+        *relay_command,
     ]
 
 
@@ -1045,15 +1099,19 @@ def run_verifier(
         output_report=None,
         model=model,
         effort=effort,
-        proxy_url=proxy_url,
+        proxy_url=SANDBOX_PROXY_URL,
     )
-    with tempfile.TemporaryDirectory(prefix="aria-routing-evaluator-") as temporary:
+    with (
+        tempfile.TemporaryDirectory(prefix="aria-routing-evaluator-") as temporary,
+        broker_socket_relay(proxy_url) as broker_socket,
+    ):
         evaluator_checkout = Path(temporary) / "workspace"
         evaluator_checkout.mkdir()
         command = _sandboxed_codex_command(
             codex_command=command,
             checkout=evaluator_checkout,
             receipt_dir=None,
+            broker_socket=broker_socket,
             schema_path=VERIFIER_SCHEMA,
             sandbox=READ_ONLY_SANDBOX,
         )
@@ -1559,27 +1617,29 @@ def run_trial(
         output_report=None,
         model=model,
         effort=effort,
-        proxy_url=proxy_url,
-        sandbox=contract["sandbox"],
-    )
-    command = _sandboxed_codex_command(
-        codex_command=codex_command,
-        checkout=checkout,
-        receipt_dir=None,
-        schema_path=REPORT_SCHEMA,
+        proxy_url=SANDBOX_PROXY_URL,
         sandbox=contract["sandbox"],
     )
     baseline_head = run_git("rev-parse", "HEAD", cwd=checkout)
     changed_before = _changed_paths(checkout, baseline_head)
     started = time.time()
-    process_result = _run_bounded_process(
-        command=command,
-        prompt=task,
-        cwd=checkout,
-        events_path=events_path,
-        stderr_path=stderr_path,
-        timeout_seconds=timeout_seconds,
-    )
+    with broker_socket_relay(proxy_url) as broker_socket:
+        command = _sandboxed_codex_command(
+            codex_command=codex_command,
+            checkout=checkout,
+            receipt_dir=None,
+            broker_socket=broker_socket,
+            schema_path=REPORT_SCHEMA,
+            sandbox=contract["sandbox"],
+        )
+        process_result = _run_bounded_process(
+            command=command,
+            prompt=task,
+            cwd=checkout,
+            events_path=events_path,
+            stderr_path=stderr_path,
+            timeout_seconds=timeout_seconds,
+        )
     head_after = run_git("rev-parse", "HEAD", cwd=checkout)
     changed_after = _changed_paths(checkout, baseline_head)
     proof = None
