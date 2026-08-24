@@ -12,6 +12,9 @@ finite scalar metrics, and boolean hard gates. W&B is optional observational
 evidence: its artifact and run may fail without changing the OMX checkpoint
 decision. The existing W&B Runs page shows only runs with the explicit
 `aria_autoresearch` config namespace and never reads history for this table.
+When a result carries `evidence_series`, every point has a strictly increasing
+one-based acquisition `step` and finite metrics; the bridge emits those exact
+validated points to W&B only after OMX accepts the checkpoint.
 
 Run the bridge explicitly from the package environment:
 

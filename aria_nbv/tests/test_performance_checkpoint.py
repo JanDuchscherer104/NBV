@@ -27,6 +27,10 @@ def _result(path: Path, *, status: str = "pass") -> Path:
                 "evaluator_fingerprint": "sha256:evaluator",
                 "metrics": {"p95_ms": 12.5},
                 "hard_gates": {"regression_tests": True},
+                "evidence_series": [
+                    {"step": 1, "metrics": {"p95_ms": 14.0}},
+                    {"step": 2, "metrics": {"p95_ms": 12.5}},
+                ],
             }
         ),
         encoding="utf-8",
@@ -60,6 +64,16 @@ def test_record_checkpoint_rejects_pass_with_failed_hard_gate(tmp_path: Path) ->
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ResultContractError, match="hard gate failed"):
+        record_checkpoint(path, dry_run=True)
+
+
+def test_record_checkpoint_rejects_nonmonotonic_evidence_series(tmp_path: Path) -> None:
+    path = _result(tmp_path / "result.json")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["evidence_series"][1]["step"] = 1
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ResultContractError, match="strictly increasing"):
         record_checkpoint(path, dry_run=True)
 
 
