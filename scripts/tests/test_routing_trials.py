@@ -283,6 +283,7 @@ def test_subject_checkout_removes_evaluator_fixtures_and_history(tmp_path: Path)
 def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     checkout = tmp_path / "checkout"
+    sibling = tmp_path / "sibling"
     repository.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
     subprocess.run(
@@ -302,6 +303,11 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
     subprocess.run(["git", "commit", "-qm", "subject"], cwd=repository, check=True)
     subprocess.run(
         ["git", "worktree", "add", "--detach", str(checkout), "HEAD"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(sibling), "HEAD"],
         cwd=repository,
         check=True,
     )
@@ -336,6 +342,12 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
         text=True,
     ).stdout
     assert str(checkout) not in registered
+    assert str(sibling) in registered
+    subprocess.run(
+        ["git", "worktree", "remove", "--force", str(sibling)],
+        cwd=repository,
+        check=True,
+    )
 
 
 def test_subject_cleanup_rejects_a_path_outside_its_temporary_root(tmp_path: Path) -> None:

@@ -1111,7 +1111,7 @@ def _subject_worktree_admin_dir(checkout: Path) -> Path:
     pointer = git_pointer.read_text(encoding="utf-8").strip()
     if not pointer.startswith(prefix):
         raise ValueError("routing subject checkout has an invalid Git pointer")
-    return (checkout / pointer.removeprefix(prefix)).resolve().parent
+    return (checkout / pointer.removeprefix(prefix)).resolve()
 
 
 def prepare_subject_checkout(checkout: Path) -> None:
@@ -1161,7 +1161,7 @@ def remove_subject_checkout(
         run_git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=repository)
     ).resolve()
     expected_parent = common_dir / "worktrees"
-    if not worktree_admin_dir.is_relative_to(expected_parent):
+    if worktree_admin_dir.parent != expected_parent:
         raise ValueError("routing subject registration escapes the repository worktree area")
     if checkout.exists():
         if not checkout.is_dir():
