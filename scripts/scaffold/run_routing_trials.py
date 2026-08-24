@@ -8,14 +8,16 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Event, Lock
 from pathlib import Path
-from typing import Any, BinaryIO, Callable
+from threading import Event, Lock
+from typing import Any, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_RELATIVE = Path("scripts/scaffold/fixtures/routing_prompts.jsonl")
@@ -28,7 +30,13 @@ PROMPTS_PATH = ROOT / PROMPTS_RELATIVE
 RUBRIC_PATH = ROOT / RUBRIC_RELATIVE
 REPORT_SCHEMA = ROOT / REPORT_SCHEMA_RELATIVE
 VERIFIER_SCHEMA = ROOT / VERIFIER_SCHEMA_RELATIVE
-EVALUATOR_FIXTURE_PATHS = (PROMPTS_RELATIVE, RUBRIC_RELATIVE)
+TRUSTED_RENDER_SCRIPT = ROOT / ".agents/skills/typst-authoring/scripts/render_png.sh"
+EVALUATOR_FIXTURE_PATHS = (
+    PROMPTS_RELATIVE,
+    RUBRIC_RELATIVE,
+    REPORT_SCHEMA_RELATIVE,
+    VERIFIER_SCHEMA_RELATIVE,
+)
 EVALUATOR_EXCLUDED_PATHS = (
     *EVALUATOR_FIXTURE_PATHS,
     Path("scripts/tests"),
@@ -46,6 +54,7 @@ EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES = 4_194_304
 TRIAL_STDERR_MAX_BYTES = 1_048_576
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
+PROCESS_TERMINATE_GRACE_SECONDS = 5
 VERDICT_MAX_ITEMS = 64
 READ_ONLY_SANDBOX = "read-only"
 WORKSPACE_WRITE_SANDBOX = "workspace-write"
@@ -168,6 +177,7 @@ def _run_bounded_process(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=os.environ.copy(),
+                start_new_session=True,
             )
             assert process.stdin is not None
             assert process.stdout is not None
@@ -175,10 +185,29 @@ def _run_bounded_process(
             process.stdin.write(prompt.encode("utf-8"))
             process.stdin.close()
 
+            def signal_process_group(signal_number: int) -> None:
+                try:
+                    os.killpg(process.pid, signal_number)
+                except (AttributeError, ProcessLookupError, PermissionError):
+                    process.terminate()
+
+            def stop_process() -> None:
+                if process.poll() is not None:
+                    return
+                signal_process_group(signal.SIGTERM)
+                try:
+                    process.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
+                except subprocess.TimeoutExpired:
+                    signal_process_group(signal.SIGKILL)
+                    try:
+                        process.wait(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
+                    except subprocess.TimeoutExpired:
+                        pass
+
             def terminate_for(overflow: Event) -> None:
                 overflow.set()
                 output_overflow.set()
-                process.terminate()
+                signal_process_group(signal.SIGTERM)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
                 copies = (
@@ -203,19 +232,26 @@ def _run_bounded_process(
                         written=stderr_bytes,
                     ),
                 )
-                try:
-                    returncode = process.wait(timeout=timeout_seconds)
-                except subprocess.TimeoutExpired:
-                    process.terminate()
-                    process.wait()
-                    returncode = 124
-                    timed_out = True
-                if output_overflow.is_set() and process.poll() is None:
-                    process.terminate()
-                    process.wait()
-                    returncode = 125
+                deadline = time.monotonic() + timeout_seconds
+                while process.poll() is None:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        stop_process()
+                        returncode = 124
+                        timed_out = True
+                        break
+                    if output_overflow.is_set():
+                        stop_process()
+                        returncode = 125
+                        break
+                    try:
+                        returncode = process.wait(timeout=min(remaining, 0.1))
+                    except subprocess.TimeoutExpired:
+                        continue
+                else:
+                    returncode = process.returncode
                 for copy in copies:
-                    copy.result()
+                    copy.result(timeout=PROCESS_TERMINATE_GRACE_SECONDS)
         except subprocess.TimeoutExpired:
             launch_error = True
             timed_out = True
@@ -268,7 +304,7 @@ def load_prompts(source: bytes | Path = PROMPTS_PATH) -> dict[str, str]:
         prompt_id = record["id"]
         task = record["task"]
         if not isinstance(prompt_id, str) or not isinstance(task, str):
-            raise ValueError(f"prompt line {line_number}: id and task must be strings")
+            raise TypeError(f"prompt line {line_number}: id and task must be strings")
         if prompt_id in prompts:
             raise ValueError(f"prompt line {line_number}: duplicate id {prompt_id!r}")
         prompts[prompt_id] = task
@@ -279,11 +315,11 @@ def load_rubric(source: bytes | Path = RUBRIC_PATH) -> dict[str, dict[str, Any]]
     data = json.loads(_source_bytes(source).decode("utf-8"))
     fixtures = data.get("fixtures")
     if not isinstance(fixtures, list):
-        raise ValueError("rubric fixtures must be a list")
+        raise TypeError("rubric fixtures must be a list")
     rubric: dict[str, dict[str, Any]] = {}
     for fixture in fixtures:
         if not isinstance(fixture, dict) or not isinstance(fixture.get("id"), str):
-            raise ValueError("every rubric fixture needs a string id")
+            raise TypeError("every rubric fixture needs a string id")
         trial_id = fixture["id"]
         if trial_id in rubric:
             raise ValueError(f"duplicate rubric fixture id {trial_id!r}")
@@ -383,6 +419,28 @@ def _subject_sandbox_command(
     if not schema_path.is_file():
         raise RuntimeError("routing trials require the canonical report schema")
     subject_bind = "--ro-bind" if sandbox == READ_ONLY_SANDBOX else "--bind"
+    sandbox_command = list(codex_command)
+    codex_mount: list[str] = []
+    if sandbox_command[0] == "codex":
+        executable = shutil.which("codex")
+        if executable is None:
+            raise RuntimeError("routing trials require the Codex executable")
+        resolved_executable = Path(executable).resolve()
+        runtime_root = (
+            resolved_executable.parent.parent
+            if resolved_executable.parent.name == "bin"
+            else resolved_executable.parent
+        )
+        sandbox_command[0] = str(
+            Path("/opt/codex") / resolved_executable.relative_to(runtime_root)
+        )
+        codex_mount = [
+            "--dir",
+            "/opt",
+            "--ro-bind",
+            str(runtime_root),
+            "/opt/codex",
+        ]
     return [
         "bwrap",
         "--unshare-all",
@@ -430,6 +488,7 @@ def _subject_sandbox_command(
         "/codex-home",
         "--dir",
         "/schema",
+        *codex_mount,
         "--ro-bind",
         str(resolved_auth_path),
         "/codex-home/auth.json",
@@ -444,7 +503,7 @@ def _subject_sandbox_command(
         "/receipt",
         "--chdir",
         "/workspace",
-        *codex_command,
+        *sandbox_command,
     ]
 
 
@@ -460,7 +519,7 @@ def execution_contract(rubric: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("routing changed-path prefixes must be non-empty strings")
     typst_proof = rubric.get("typst_proof", False)
     if not isinstance(typst_proof, bool):
-        raise ValueError("routing typst_proof must be boolean")
+        raise TypeError("routing typst_proof must be boolean")
     if sandbox == WORKSPACE_WRITE_SANDBOX and (not prefixes or not typst_proof):
         raise ValueError(
             "workspace-write routing trials require a source path and Typst proof"
@@ -525,7 +584,7 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
     commands = (
         ["typst", "compile", "docs/typst/thesis/main.typ", str(pdf), "--root", "docs"],
         [
-            ".agents/skills/typst-authoring/scripts/render_png.sh",
+            str(TRUSTED_RENDER_SCRIPT),
             "-i",
             "docs/typst/thesis/main.typ",
             "-o",
@@ -770,6 +829,7 @@ def run_verifier(
             "verdict": None,
             "artifacts": artifacts,
         }
+    verifier_report.unlink(missing_ok=True)
     command = _build_codex_command(
         checkout=checkout,
         output_schema=VERIFIER_SCHEMA,
@@ -1228,9 +1288,11 @@ def run_trial(
 ) -> dict[str, Any]:
     trial_dir = output_dir / trial_id
     trial_dir.mkdir(parents=True, exist_ok=False)
+    subject_receipt_dir = trial_dir / "subject-receipt"
+    subject_receipt_dir.mkdir()
     events_path = trial_dir / "events.jsonl"
     stderr_path = trial_dir / "stderr.txt"
-    trial_response_path = trial_dir / "trial-response.json"
+    trial_response_path = subject_receipt_dir / "trial-response.json"
     final_report = trial_dir / "report.json"
     contract = execution_contract(rubric)
     codex_command = _build_codex_command(
@@ -1244,7 +1306,7 @@ def run_trial(
     command = _subject_sandbox_command(
         codex_command=codex_command,
         checkout=checkout,
-        receipt_dir=trial_dir,
+        receipt_dir=subject_receipt_dir,
         schema_path=REPORT_SCHEMA,
         sandbox=contract["sandbox"],
     )
@@ -1268,9 +1330,7 @@ def run_trial(
             for prefix in contract["required_changed_path_prefixes"]
         )
         proof = (
-            _typst_proof(checkout, trial_dir)
-            if expected_change
-            else {"passed": False}
+            _typst_proof(checkout, trial_dir) if expected_change else {"passed": False}
         )
     runtime = {
         "codex_version": codex_version,
@@ -1305,7 +1365,7 @@ def run_trial(
         "artifacts": {
             "events": events_path.name,
             "stderr": stderr_path.name,
-            "trial_response": trial_response_path.name,
+            "trial_response": str(trial_response_path.relative_to(trial_dir)),
         },
         "trial_response": trial_response,
     }
@@ -1369,11 +1429,15 @@ def remove_subject_checkout(
     if not resolved_checkout.is_relative_to(subject_root.resolve()):
         raise ValueError("routing subject escapes its temporary directory")
     common_dir = Path(
-        run_git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=repository)
+        run_git(
+            "rev-parse", "--path-format=absolute", "--git-common-dir", cwd=repository
+        )
     ).resolve()
     expected_parent = common_dir / "worktrees"
     if worktree_admin_dir.parent != expected_parent:
-        raise ValueError("routing subject registration escapes the repository worktree area")
+        raise ValueError(
+            "routing subject registration escapes the repository worktree area"
+        )
     if checkout.exists():
         if not checkout.is_dir():
             raise ValueError(f"routing subject is not a directory: {checkout}")

@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from io import BytesIO
 from pathlib import Path
 from threading import Event, Lock
@@ -15,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "scaffold"))
 
-import run_routing_trials as trials  # noqa: E402
+import run_routing_trials as trials
 
 
 def _complete_event_evidence() -> dict[str, object]:
@@ -198,7 +199,9 @@ def test_academic_authoring_prompts_are_natural_and_cover_composed_edits() -> No
         required = rubric[trial_id]["required_outcomes"]
         assert any("ordered route:" in outcome for outcome in required)
         assert any("active Typst source is changed" in outcome for outcome in required)
-        assert any("compile and affected-page render proof" in outcome for outcome in required)
+        assert any(
+            "compile and affected-page render proof" in outcome for outcome in required
+        )
 
 
 def test_academic_authoring_selector_runs_only_its_focused_suite() -> None:
@@ -276,6 +279,25 @@ def test_verifier_process_receipt_fails_closed_on_output_overflow(
     assert result["stream_capture"]["events"]["overflowed"] is True  # type: ignore[index]
 
 
+def test_bounded_process_kills_a_term_resistant_process_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(trials, "PROCESS_TERMINATE_GRACE_SECONDS", 0.1)
+    started = time.monotonic()
+    result = trials._run_bounded_process(
+        command=["/bin/sh", "-c", "trap '' TERM; while :; do sleep 1; done"],
+        prompt="",
+        cwd=tmp_path,
+        events_path=tmp_path / "events.jsonl",
+        stderr_path=tmp_path / "stderr.txt",
+        timeout_seconds=0.1,
+    )
+
+    assert result["timed_out"] is True
+    assert result["returncode"] == 124
+    assert time.monotonic() - started < 2
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,
@@ -349,7 +371,12 @@ def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
         auth_path=auth_path,
     )
 
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    sandboxed = subprocess.run(command, check=True, capture_output=True, text=True)
+    host_version = subprocess.run(
+        ["codex", "--version"], check=True, capture_output=True, text=True
+    )
+
+    assert sandboxed.stdout == host_version.stdout
 
 
 def test_workspace_write_contract_requires_source_change_and_typst_proof() -> None:
@@ -365,14 +392,16 @@ def test_workspace_write_contract_requires_source_change_and_typst_proof() -> No
         trials.execution_contract({"execution_mode": trials.WORKSPACE_WRITE_SANDBOX})
 
 
-def test_subject_checkout_removes_evaluator_fixtures_and_history(tmp_path: Path) -> None:
+def test_subject_checkout_removes_evaluator_fixtures_and_history(
+    tmp_path: Path,
+) -> None:
     checkout = tmp_path / "checkout"
-    prompts = checkout / trials.PROMPTS_RELATIVE
-    rubric = checkout / trials.RUBRIC_RELATIVE
-    prompts.parent.mkdir(parents=True)
+    checkout.mkdir()
     (checkout / "README.md").write_text("subject\n", encoding="utf-8")
-    prompts.write_text('{"id":"trial","task":"answer"}\n', encoding="utf-8")
-    rubric.write_text('{"fixtures":[{"id":"trial","answer":"leaked"}]}\n', encoding="utf-8")
+    for relative_path in trials.EVALUATOR_FIXTURE_PATHS:
+        path = checkout / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("evaluator\n", encoding="utf-8")
     (checkout / "scripts" / "tests").mkdir(parents=True)
     (checkout / "scripts" / "tests" / "routing.py").write_text(
         "evaluator\n", encoding="utf-8"
@@ -387,8 +416,6 @@ def test_subject_checkout_removes_evaluator_fixtures_and_history(tmp_path: Path)
 
     trials.prepare_subject_checkout(checkout)
 
-    assert not prompts.exists()
-    assert not rubric.exists()
     for relative_path in trials.EVALUATOR_EXCLUDED_PATHS:
         assert not (checkout / relative_path).exists()
     result = subprocess.run(
@@ -478,7 +505,9 @@ def test_detached_subject_worktree_is_pruned_after_isolation(tmp_path: Path) -> 
     )
 
 
-def test_subject_cleanup_rejects_a_path_outside_its_temporary_root(tmp_path: Path) -> None:
+def test_subject_cleanup_rejects_a_path_outside_its_temporary_root(
+    tmp_path: Path,
+) -> None:
     with pytest.raises(ValueError, match="escapes its temporary directory"):
         trials.remove_subject_checkout(
             tmp_path / "outside",
@@ -606,6 +635,13 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     prompts.parent.mkdir(parents=True)
     prompts.write_text('{"id":"trial","task":"first"}\n', encoding="utf-8")
     rubric.write_text('{"fixtures":[{"id":"trial"}]}\n', encoding="utf-8")
+    for relative_path in (
+        trials.REPORT_SCHEMA_RELATIVE,
+        trials.VERIFIER_SCHEMA_RELATIVE,
+    ):
+        path = repo / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("schema\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "rubric"], cwd=repo, check=True)
     rubric_commit = subprocess.run(
@@ -1026,20 +1062,27 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     checkout.mkdir()
     trial_dir.mkdir()
 
-    def write_verdict(verdict: dict[str, object]) -> object:
-        (trial_dir / "verifier-report.json").write_text(
-            json.dumps(verdict), encoding="utf-8"
-        )
-        return type("Result", (), {"returncode": 0})()
+    def complete_with_verdict(verdict: dict[str, object]) -> object:
+        def run_process(**_: object) -> dict[str, object]:
+            (trial_dir / "verifier-report.json").write_text(
+                json.dumps(verdict), encoding="utf-8"
+            )
+            return _bounded_process_result()
 
-    write_verdict(_verdict())
-    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
+        return run_process
+
+    with patch.object(
+        trials, "_run_bounded_process", side_effect=complete_with_verdict(_verdict())
+    ):
         passed = _run_verifier(report, checkout, trial_dir)
     assert passed["passed"] is True
 
     failing_verdict = _verdict(verdict="fail", missing_requirements=["owner"])
-    write_verdict(failing_verdict)
-    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
+    with patch.object(
+        trials,
+        "_run_bounded_process",
+        side_effect=complete_with_verdict(failing_verdict),
+    ):
         failed = _run_verifier(report, checkout, trial_dir)
     assert failed["passed"] is False
     assert failed["reason"] == "semantic fail"
@@ -1054,24 +1097,22 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
     checkout.mkdir()
     trial_dir.mkdir()
 
-    def write_invalid(*args: object, **kwargs: object) -> object:
+    def invalid_result(**_: object) -> dict[str, object]:
         (trial_dir / "verifier-report.json").write_bytes(b"\xff")
-        return type("Result", (), {"returncode": 0})()
+        return _bounded_process_result()
 
-    write_invalid()
-    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
+    with patch.object(trials, "_run_bounded_process", side_effect=invalid_result):
         invalid_utf8 = _run_verifier(report, checkout, trial_dir)
     assert invalid_utf8["passed"] is False
     assert "unreadable" in invalid_utf8["reason"]
 
-    def write_oversized(*args: object, **kwargs: object) -> object:
+    def oversized_result(**_: object) -> dict[str, object]:
         (trial_dir / "verifier-report.json").write_bytes(
             b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1)
         )
-        return type("Result", (), {"returncode": 0})()
+        return _bounded_process_result()
 
-    write_oversized()
-    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
+    with patch.object(trials, "_run_bounded_process", side_effect=oversized_result):
         oversized = _run_verifier(report, checkout, trial_dir)
     assert oversized["passed"] is False
     assert "byte bound" in oversized["reason"]
@@ -1084,7 +1125,9 @@ def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:
 
     missing_dir = tmp_path / "missing"
     missing_dir.mkdir()
-    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
+    with patch.object(
+        trials, "_run_bounded_process", return_value=_bounded_process_result()
+    ):
         missing = _run_verifier(report, checkout, missing_dir)
     assert missing["passed"] is False
 
@@ -1098,3 +1141,23 @@ def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:
         timeout = _run_verifier(report, checkout, timeout_dir)
     assert timeout["passed"] is False
     assert timeout["timed_out"] is True
+
+
+def test_run_verifier_discards_a_preexisting_subject_receipt(tmp_path: Path) -> None:
+    report = _trial_report()
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    checkout.mkdir()
+    trial_dir.mkdir()
+    (trial_dir / "verifier-report.json").write_text(
+        json.dumps(_verdict()), encoding="utf-8"
+    )
+
+    with patch.object(
+        trials, "_run_bounded_process", return_value=_bounded_process_result()
+    ):
+        result = _run_verifier(report, checkout, trial_dir)
+
+    assert result["passed"] is False
+    assert result["verdict"] is None
+    assert not (trial_dir / "verifier-report.json").exists()
