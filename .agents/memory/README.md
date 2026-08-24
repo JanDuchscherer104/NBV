@@ -47,6 +47,10 @@ Keep the body to task, method, findings, verification, and canonical-state
 impact. Add `files_touched`, `source_legacy_path`, `artifacts`, or assumptions
 only when they make the record materially easier to audit.
 
+For a completed implementation workpackage, add `## Commits` with its full
+immutable implementation commit link. Planning or read-only debriefs say
+`none`; the debrief/index commit is not substituted for the workpackage commit.
+
 Existing records with `status: legacy-imported` are grandfathered archive
 evidence and do not need backfilling unless a task explicitly requests it.
 Use absolute ISO dates (`2026-05-08`) in frontmatter and prose; debriefs outlive

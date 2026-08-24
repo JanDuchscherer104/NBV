@@ -10,7 +10,11 @@ detail.
 
 ## Core Rules
 - Config classes should inherit from `BaseConfig` where appropriate.
-- Instantiate runtime objects through config `.setup_target()` factories instead of constructing them ad hoc.
+- Construct a config `.setup_target()` once at its composition root, then inject
+  the dependency into domain, `forward`, and scoring hot paths.
+- Keep a single-consumer private helper local and inline a trivial helper.
+  Promote behavior only after demonstrated consumers establish the lowest shared
+  domain owner; do not create a speculative generic utility bucket.
 - Prefer vectorized implementations over functional helpers, comprehensions, or explicit loops when readability remains acceptable.
 - All path-handling should be done through `PathConfig` objects that validate existence and absoluteness. Use `pathlib.Path` for filesystem paths.
 - Prefer `Enum` for categorical values and `match-case` when it improves multi-branch clarity.
@@ -26,7 +30,10 @@ detail.
 - Keep helper dataclasses and typed containers explicit rather than passing around untyped dict payloads.
 
 ## Config-as-Factory and Validators
-Runtime objects are created through config `.setup_target()` methods. Use `field_validator` and `model_validator` when validation logic belongs in the config rather than in runtime classes.
+The composition root owns reuse and teardown for the dependency it constructs.
+Framework lifecycle hooks may construct there only when the framework owns that
+lifecycle. Use `field_validator` and `model_validator` when validation logic
+belongs in the config rather than in runtime classes.
 
 ```python
 from pydantic import Field, field_validator, model_validator

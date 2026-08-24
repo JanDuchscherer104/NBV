@@ -118,6 +118,9 @@ worktree_kind: {provenance["worktree_kind"]}
 ## Findings
 <what changed; cite file paths>
 
+## Commits
+- none — add full immutable implementation commit link after a completed workpackage
+
 ## Verification
 <commands; pass/fail; blockers>
 

@@ -203,6 +203,7 @@ def test_title_round_trips_generator_and_canonical_parser(
         },
     )
     assert path.name == f"2026-08-22_{expected_slug}.md"
+    assert "## Commits\n- none — add full immutable implementation commit link" in body
     payload = body.split("\n---\n", 1)[0].removeprefix("---\n")
     assert yaml.safe_load(payload)["title"] == title
     source = tmp_path / "record.md"

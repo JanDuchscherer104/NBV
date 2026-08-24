@@ -791,6 +791,32 @@ def test_capture_and_routing_contracts() -> None:
     )
     assert "## Local Git Scope" in external_actions
     assert "## External Boundary" in external_actions
+    for requirement in (
+        "immutable commit link",
+        "resolvable review threads",
+        "exact-head proof",
+        "verdict, architecture,\n  verification, and residual risk",
+        "open a draft pull\n  request after its first coherent verified workpackage",
+    ):
+        assert requirement in external_actions
+
+    conventions = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "python-standards"
+        / "references"
+        / "general_conventions.md"
+    )
+    for requirement in (
+        "composition root",
+        "single-consumer private helper local",
+        "speculative generic utility bucket",
+    ):
+        assert requirement in conventions
+
+    skill_style = _read(ROOT / ".agents" / "skills" / "README.md")
+    assert "preserve a direct activation condition" in skill_style
 
     root_guidance = _read(ROOT / "AGENTS.md")
     assert "Failure-first diagnosis uses `agent-behavior`" in root_guidance
