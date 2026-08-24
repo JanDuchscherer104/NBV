@@ -15,6 +15,7 @@ from typing import Any
 from .configs.wandb_config import WandbConfig
 
 _CHECKPOINT_STATUSES = frozenset({"pass", "fail", "blocked"})
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _REQUIRED_FIELDS = frozenset(
     {
         "schema_version",
@@ -159,7 +160,13 @@ def record_checkpoint(
         "--evidence",
         evidence,
     ]
-    completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    completed = subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=_REPOSITORY_ROOT,
+    )
     outcome["omx_stdout"] = completed.stdout
     if wandb_config is not None:
         try:
