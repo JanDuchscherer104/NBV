@@ -19,6 +19,7 @@ import run_routing_trials as trials  # noqa: E402
 def _complete_event_evidence() -> dict[str, object]:
     items = [
         {
+            "event_index": 0,
             "event_type": "item.completed",
             "item_type": "command_execution",
             "command": "rg -n owner AGENTS.md",
@@ -69,9 +70,7 @@ def _verdict(**overrides: object) -> dict[str, object]:
     return verdict
 
 
-def _validate_verdict(
-    payload: object, event_evidence: object
-) -> tuple[bool, str]:
+def _validate_verdict(payload: object, event_evidence: object) -> tuple[bool, str]:
     return trials.validate_verdict(
         payload,
         trial_id="trial",
@@ -159,7 +158,9 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
 
     verdict_schema = json.loads(trials.VERIFIER_SCHEMA.read_text(encoding="utf-8"))
     evidence_item = verdict_schema["properties"]["evidence"]["items"]
-    assert verdict_schema["properties"]["evidence"]["maxItems"] == trials.VERDICT_MAX_ITEMS
+    assert (
+        verdict_schema["properties"]["evidence"]["maxItems"] == trials.VERDICT_MAX_ITEMS
+    )
     assert evidence_item["additionalProperties"] is False
     assert set(evidence_item["required"]) == {
         "event_index",
@@ -169,7 +170,9 @@ def test_trial_and_verdict_schemas_are_strict() -> None:
     }
     for field in ("missing_requirements", "forbidden_observations"):
         items = verdict_schema["properties"][field]["items"]
-        assert verdict_schema["properties"][field]["maxItems"] == trials.VERDICT_MAX_ITEMS
+        assert (
+            verdict_schema["properties"][field]["maxItems"] == trials.VERDICT_MAX_ITEMS
+        )
         assert items["maxLength"] == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
 
 
@@ -184,9 +187,7 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
         cwd=repo,
         check=True,
     )
-    subprocess.run(
-        ["git", "config", "user.name", "Routing Test"], cwd=repo, check=True
-    )
+    subprocess.run(["git", "config", "user.name", "Routing Test"], cwd=repo, check=True)
     prompts = repo / trials.PROMPTS_RELATIVE
     rubric = repo / trials.RUBRIC_RELATIVE
     prompts.parent.mkdir(parents=True)
@@ -195,14 +196,22 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "rubric"], cwd=repo, check=True)
     rubric_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
     (repo / "candidate.py").write_text("VALUE = 1\n", encoding="utf-8")
     subprocess.run(["git", "add", "candidate.py"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "candidate"], cwd=repo, check=True)
     matching_tested_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
     fixture_bytes = trials.attest_evaluator_fixtures(
         tested_commit=matching_tested_commit,
@@ -215,7 +224,11 @@ def test_cross_commit_fixture_attestation_accepts_equal_and_rejects_drift(
     subprocess.run(["git", "add", str(trials.PROMPTS_RELATIVE)], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "fixture drift"], cwd=repo, check=True)
     tested_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
 
     with pytest.raises(ValueError, match="differs from rubric commit"):
@@ -369,12 +382,66 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
 
 def test_event_evidence_rejects_oversized_raw_stream(tmp_path: Path) -> None:
     events = tmp_path / "events.jsonl"
-    events.write_bytes(b"x" * (trials.EVENT_EVIDENCE_MAX_RAW_BYTES + 1))
+    events.write_bytes(b"x" * (trials.EVENT_EVIDENCE_MAX_RAW_LINE_BYTES + 1))
 
     evidence = trials.extract_event_evidence(events)
 
     assert evidence["items"] == []
-    assert evidence["dropped_items"] == 1
+    assert evidence["dropped_items"] >= 1
+    assert evidence["truncated"] is True
+    assert trials.validate_event_evidence(evidence)[0] is False
+
+
+def test_event_evidence_streams_large_jsonl_without_retaining_ignored_output(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    records = [
+        {
+            "type": "item.completed",
+            "item": {
+                "type": "command_execution",
+                "command": f"rg owner path-{index}",
+                "aggregated_output": "x" * 120_000,
+                "status": "completed",
+                "exit_code": 0,
+            },
+        }
+        for index in range(20)
+    ]
+    events.write_text("\n".join(json.dumps(record) for record in records))
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert events.stat().st_size < trials.EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES
+    assert len(evidence["items"]) == len(records)
+    assert [item["event_index"] for item in evidence["items"]] == list(
+        range(len(records))
+    )
+    assert evidence["truncated"] is False
+    assert trials.validate_event_evidence(evidence)[0] is True
+
+
+def test_event_evidence_rejects_aggregate_raw_stream_overflow(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    record = {
+        "type": "item.completed",
+        "item": {
+            "type": "command_execution",
+            "command": "rg owner path",
+            "status": "completed",
+            "exit_code": 0,
+        },
+    }
+    line = (json.dumps(record) + "\n").encode()
+    events.write_bytes(
+        line * (trials.EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES // len(line) + 1)
+    )
+
+    evidence = trials.extract_event_evidence(events)
+
+    assert events.stat().st_size > trials.EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES
+    assert evidence["dropped_items"] >= 1
     assert evidence["truncated"] is True
     assert trials.validate_event_evidence(evidence)[0] is False
 
@@ -446,7 +513,9 @@ def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
         evidence,
     )[0]
     assert not _validate_verdict(
-        _verdict(forbidden_observations=["x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS + 1)]),
+        _verdict(
+            forbidden_observations=["x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS + 1)]
+        ),
         evidence,
     )[0]
 
@@ -529,7 +598,9 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
         return type("Result", (), {"returncode": 0})()
 
     with patch.object(
-        trials.subprocess, "run", side_effect=lambda *args, **kwargs: write_verdict(_verdict())
+        trials.subprocess,
+        "run",
+        side_effect=lambda *args, **kwargs: write_verdict(_verdict()),
     ):
         passed = _run_verifier(report, checkout, trial_dir)
     assert passed["passed"] is True
@@ -545,7 +616,9 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     assert failed["reason"] == "semantic fail"
 
 
-def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(tmp_path: Path) -> None:
+def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
+    tmp_path: Path,
+) -> None:
     report = _trial_report()
     checkout = tmp_path / "checkout"
     trial_dir = tmp_path / "trial"

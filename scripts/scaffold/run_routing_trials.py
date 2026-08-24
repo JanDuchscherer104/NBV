@@ -30,7 +30,11 @@ EVALUATOR_FIXTURE_PATHS = (PROMPTS_RELATIVE, RUBRIC_RELATIVE)
 EVENT_EVIDENCE_MAX_ITEMS = 64
 EVENT_EVIDENCE_MAX_FIELD_CHARS = 2_048
 EVENT_EVIDENCE_MAX_TOTAL_CHARS = 32_768
-EVENT_EVIDENCE_MAX_RAW_BYTES = 131_072
+# Bound both a single JSONL record and the complete untrusted event stream.
+# Codex can emit one large event containing tool output, but evidence extraction
+# must not scan an unbounded stream just because every individual line fits.
+EVENT_EVIDENCE_MAX_RAW_LINE_BYTES = 2_097_152
+EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES = 4_194_304
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
 VERDICT_MAX_ITEMS = 64
@@ -289,7 +293,10 @@ def validate_verdict(
     events = event_evidence["items"]
     required_reference_fields = {"event_index", "event_type", "item_type", "claim"}
     for reference in verdict_evidence:
-        if not isinstance(reference, dict) or set(reference) != required_reference_fields:
+        if (
+            not isinstance(reference, dict)
+            or set(reference) != required_reference_fields
+        ):
             return False, "verdict evidence reference fields are malformed"
         event_index = reference["event_index"]
         if isinstance(event_index, bool) or not isinstance(event_index, int):
@@ -444,7 +451,9 @@ def trial_passed(report: dict[str, Any]) -> bool:
     )
 
 
-def _truncate_evidence_field(value: Any) -> tuple[str | int | float | bool | None, bool]:
+def _truncate_evidence_field(
+    value: Any,
+) -> tuple[str | int | float | bool | None, bool]:
     if value is None or isinstance(value, (int, float, bool)):
         return value, False
     if isinstance(value, str):
@@ -502,7 +511,7 @@ def _event_evidence_record(
 
 
 def extract_event_evidence(path: Path) -> dict[str, Any]:
-    """Extract deterministic execution evidence under explicit size bounds."""
+    """Extract deterministic execution evidence from a bounded raw stream."""
     items: list[dict[str, Any]] = []
     malformed_lines = 0
     invalid_items = 0
@@ -512,47 +521,69 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
     read_error = False
     try:
         with path.open("rb") as stream:
-            raw_events = stream.read(EVENT_EVIDENCE_MAX_RAW_BYTES + 1)
-        if len(raw_events) > EVENT_EVIDENCE_MAX_RAW_BYTES:
-            lines = []
-            dropped_items = 1
-        else:
-            lines = raw_events.decode("utf-8").splitlines()
-    except (OSError, UnicodeError):
-        lines = []
+            raw_bytes = 0
+            while True:
+                remaining = EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES - raw_bytes
+                if remaining <= 0:
+                    if stream.read(1):
+                        dropped_items += 1
+                    break
+                raw_line = stream.readline(
+                    min(remaining, EVENT_EVIDENCE_MAX_RAW_LINE_BYTES) + 1
+                )
+                if not raw_line:
+                    break
+                if (
+                    len(raw_line) > EVENT_EVIDENCE_MAX_RAW_LINE_BYTES
+                    or len(raw_line) > remaining
+                ):
+                    dropped_items += 1
+                    break
+                raw_bytes += len(raw_line)
+                try:
+                    line = raw_line.decode("utf-8")
+                except UnicodeError:
+                    read_error = True
+                    break
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    malformed_lines += 1
+                    continue
+                record, truncated_fields, invalid = _event_evidence_record(event)
+                field_truncations += truncated_fields
+                invalid_items += int(invalid)
+                if record is None:
+                    continue
+                serialized = json.dumps(record, sort_keys=True, separators=(",", ":"))
+                item_chars = len(serialized) + int(bool(items))
+                if (
+                    len(items) >= EVENT_EVIDENCE_MAX_ITEMS
+                    or payload_chars + item_chars > EVENT_EVIDENCE_MAX_TOTAL_CHARS
+                ):
+                    dropped_items += 1
+                    continue
+                items.append(record)
+                payload_chars += item_chars
+    except OSError:
         read_error = True
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            malformed_lines += 1
-            continue
-        record, truncated_fields, invalid = _event_evidence_record(event)
-        field_truncations += truncated_fields
-        invalid_items += int(invalid)
-        if record is None:
-            continue
-        serialized = json.dumps(record, sort_keys=True, separators=(",", ":"))
-        item_chars = len(serialized) + int(bool(items))
-        if (
-            len(items) >= EVENT_EVIDENCE_MAX_ITEMS
-            or payload_chars + item_chars > EVENT_EVIDENCE_MAX_TOTAL_CHARS
-        ):
-            dropped_items += 1
-            continue
-        items.append(record)
-        payload_chars += item_chars
     while True:
+        indexed_items = [
+            {**item, "event_index": index} for index, item in enumerate(items)
+        ]
+        indexed_payload = json.dumps(
+            indexed_items, sort_keys=True, separators=(",", ":")
+        )
         result = {
             "bounds": {
                 "max_items": EVENT_EVIDENCE_MAX_ITEMS,
                 "max_field_chars": EVENT_EVIDENCE_MAX_FIELD_CHARS,
                 "max_total_chars": EVENT_EVIDENCE_MAX_TOTAL_CHARS,
             },
-            "items": items,
-            "payload_chars": payload_chars,
+            "items": indexed_items,
+            "payload_chars": len(indexed_payload),
             "malformed_lines": malformed_lines,
             "invalid_items": invalid_items,
             "dropped_items": dropped_items,
@@ -560,9 +591,7 @@ def extract_event_evidence(path: Path) -> dict[str, Any]:
             "truncated": bool(dropped_items or field_truncations),
             "read_error": read_error,
         }
-        serialized_result = json.dumps(
-            result, sort_keys=True, separators=(",", ":")
-        )
+        serialized_result = json.dumps(result, sort_keys=True, separators=(",", ":"))
         if len(serialized_result) <= EVENT_EVIDENCE_MAX_TOTAL_CHARS or not items:
             return result
         items.pop()
@@ -614,12 +643,14 @@ def validate_event_evidence(evidence: Any) -> tuple[bool, str]:
         return False, "raw event evidence is empty"
     if len(items) > EVENT_EVIDENCE_MAX_ITEMS:
         return False, "raw event evidence exceeds the item bound"
-    allowed_item_fields = {"event_type", "item_type", *_EVIDENCE_FIELDS}
-    for item in items:
+    allowed_item_fields = {"event_index", "event_type", "item_type", *_EVIDENCE_FIELDS}
+    for event_index, item in enumerate(items):
         if not isinstance(item, dict) or not {"event_type", "item_type"} <= set(item):
             return False, "raw event evidence item identity is malformed"
         if not set(item) <= allowed_item_fields:
             return False, "raw event evidence item fields are malformed"
+        if item.get("event_index") != event_index:
+            return False, "raw event evidence item index is malformed"
         for value in item.values():
             if not isinstance(value, (str, int, float, bool, type(None))):
                 return False, "raw event evidence field type is malformed"
@@ -652,7 +683,9 @@ def validate_event_evidence(evidence: Any) -> tuple[bool, str]:
     return True, "complete raw event evidence"
 
 
-def bound_trial_response(value: Any, *, force_truncated: bool = False) -> dict[str, Any]:
+def bound_trial_response(
+    value: Any, *, force_truncated: bool = False
+) -> dict[str, Any]:
     if isinstance(value, str):
         text = value
         response_format = "text"
@@ -821,11 +854,7 @@ def main() -> int:
     short_head = tested_commit[:12]
     short_rubric = rubric_commit[:12]
     output_dir = (
-        ROOT
-        / ".agents"
-        / "work"
-        / "routing-trials"
-        / f"{short_head}-{short_rubric}"
+        ROOT / ".agents" / "work" / "routing-trials" / f"{short_head}-{short_rubric}"
     )
     if output_dir.exists():
         raise SystemExit(f"trial output already exists: {output_dir}")
@@ -883,9 +912,7 @@ def main() -> int:
                     json.dumps(report, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8",
                 )
-                print(
-                    f"{report['trial_id']}: verdict={adjudication['reason']}"
-                )
+                print(f"{report['trial_id']}: verdict={adjudication['reason']}")
         finally:
             run_git("worktree", "remove", "--force", str(checkout))
 
@@ -911,11 +938,7 @@ def main() -> int:
         json.dumps(index, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    return (
-        0
-        if all(trial_passed(report) for report in reports)
-        else 1
-    )
+    return 0 if all(trial_passed(report) for report in reports) else 1
 
 
 if __name__ == "__main__":

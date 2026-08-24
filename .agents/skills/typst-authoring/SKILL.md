@@ -29,9 +29,10 @@ use `scientific-review`.
      [`scripting.md`](references/scripting.md), and [`layout.md`](references/layout.md);
    - slides or package-backed content: [`slides.md`](references/slides.md) or
      [`packages/index.md`](references/packages/index.md), then only its needed leaf;
-   - accepted claim/citation or empirical-result realization:
-     [`claim-citation-discipline.md`](references/claim-citation-discipline.md)
-     or [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md);
+   - accepted claim/citation realization: the academic-writing
+     [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md),
+     or empirical-result realization:
+     [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md);
    - compile, render, or page QA: [`workflow.md`](references/workflow.md).
 3. Make the smallest source edit. Shared notation, glossary terms, equations,
    bibliography identities, and active thesis content remain with their exact

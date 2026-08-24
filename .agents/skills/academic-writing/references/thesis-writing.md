@@ -12,7 +12,8 @@ authority over this thesis. Keep the practices that improve CS/ML thesis prose:
 - Treat IMRAD as reader flow: motivation and gap, reproducible method, factual
   results, bounded interpretation.
 - Ground claims in repository artifacts, cited literature, experiments, or
-  explicit hypothesis wording. Use `claim-citation-discipline.md` for the claim
+  explicit hypothesis wording. Use
+  [`claim-citation-discipline.md`](claim-citation-discipline.md) for the claim
   taxonomy and evidence gate.
 - Prefer primary sources for specific method, dataset, benchmark, and metric
   claims. Use reviews only for broad context.
