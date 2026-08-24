@@ -51,6 +51,11 @@ from torch import Tensor, nn
 
 from ...utils import TargetConfig
 from ..encoders import R6dLffPoseEncoder, R6dLffPoseEncoderConfig
+from ..modules.qh_history_encoders import (
+    QhCausalTransformerHistoryEncoderConfig,
+    QhHistoryEncoderConfig,
+    QhMeanPoolHistoryEncoderConfig,
+)
 from ..modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
     QhStateFusionConfig,
@@ -113,7 +118,19 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     """Ordered compact root-EVL fields pooled into the state token."""
 
     representation_semantics: Literal["root_moments_v1"] = "root_moments_v1"
-    """Versioned meaning of the scene token: root-frame moments plus support."""
+    """Versioned scene-token meaning only: root-frame moments plus support."""
+
+    history_encoder: QhHistoryEncoderConfig | None = Field(default=None, exclude_if=lambda value: value is None)
+    """H0/H1 representation of the strictly causal selected-pose prefix.
+
+    ``None`` is the checkpoint-compatible H0 ``mean_pool_v1`` default and is
+    omitted from serialized legacy-equivalent configuration. Explicit H0 has
+    the same runtime semantics but records the named control; H1
+    ``causal_transformer_v1`` adds relative-age encoding and causal temporal
+    attention behind the same one-token boundary. The versioned nested
+    discriminator is history representation identity; the separate
+    ``representation_semantics`` field names only the scene carrier.
+    """
 
     state_fusion: QhStateFusionConfig = Field(default_factory=QhCrossAttentionStateFusionConfig)
     """A0/A1 interaction over the identical candidate query and state tokens.
@@ -158,6 +175,12 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
             and self.hidden_dim % self.state_fusion.attention_heads != 0
         ):
             raise ValueError("hidden_dim must be divisible by state_fusion.attention_heads.")
+        pose_dim = int(self.pose_encoder.pose_encoder_lff.output_dim)
+        if (
+            isinstance(self.history_encoder, QhCausalTransformerHistoryEncoderConfig)
+            and pose_dim % self.history_encoder.attention_heads != 0
+        ):
+            raise ValueError("pose-encoder output width must be divisible by history_encoder.attention_heads.")
         if not self.scene_channels:
             raise ValueError("scene_channels must contain at least one root-EVL field.")
         if len(set(self.scene_channels)) != len(self.scene_channels):
@@ -210,9 +233,13 @@ class TargetFiniteHorizonScorer(nn.Module):
         The target token encodes the root-relative target pose plus metric
         extents. Target source is an experiment-profile fact rather than
         something inferred from tensor shape. Scene context is the deliberately
-        lossy ``root_moments_v1`` carrier. Causal history is the mean of past
-        selected poses expressed from the current camera; it discards order so
-        ordered history remains an honest representation ablation.
+        lossy ``root_moments_v1`` carrier. Causal history first expresses the
+        exact selected-pose prefix from the current camera. H0 takes its masked
+        mean; the optional H1 carrier adds relative age and causal temporal
+        attention before returning the same one-token interface. H1 remains an
+        ``S0-pose`` trajectory ablation: it does not invent selected
+        observations or make compact root moments a sufficient dynamic
+        reconstruction state.
 
     Notes:
         Syntactic admission does not assert empirical support. Lightning owns
@@ -250,6 +277,12 @@ class TargetFiniteHorizonScorer(nn.Module):
             nn.Linear(pose_dim, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
+        )
+        history_encoder = config.history_encoder or QhMeanPoolHistoryEncoderConfig()
+        self.history_encoder = history_encoder.setup_target(
+            feature_dim=pose_dim,
+            max_horizon=int(config.max_horizon),
+            dropout=float(config.dropout),
         )
         self.budget_projection = nn.Sequential(
             nn.Linear(1, hidden_dim),
@@ -356,11 +389,8 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         current_from_history = self._expand_pose(current_pose.inverse(), steps) @ history_pose
         history_features = self.pose_encoder.encode(current_from_history).pose_enc
-        history_sum = torch.where(history_mask.unsqueeze(-1), history_features, torch.zeros_like(history_features)).sum(
-            dim=-2
-        )
-        history_count = history_mask.sum(dim=-1, keepdim=True).clamp_min(1)
-        history_token = self.history_projection(history_sum / history_count)
+        history_summary = self.history_encoder(history_features, history_mask, actor.step_mask)
+        history_token = self.history_projection(history_summary)
 
         budget = actor.horizon_remaining.float().unsqueeze(-1) / float(self.config.max_horizon)
         budget_token = self.budget_projection(budget)
