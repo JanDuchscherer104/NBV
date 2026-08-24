@@ -12,6 +12,7 @@ from efm3d.aria import CameraTW, PoseTW
 from aria_nbv.pose_generation.plotting import (
     plot_candidate_centers_simple,
     plot_candidate_frusta_simple,
+    plot_paired_gaze_support,
     plot_position_sphere,
     plot_proposal_sequence_support,
     plot_view_jitter_support,
@@ -121,6 +122,30 @@ def test_plot_proposal_sequence_support_encodes_order_replica_and_validity() -> 
     assert fig.layout.coloraxis.cmin == pytest.approx(4.0)
     assert fig.layout.coloraxis.cmax == pytest.approx(6.0)
     assert fig.layout.xaxis.scaleanchor == "y"
+
+
+def test_plot_paired_gaze_support_shows_shared_centers_and_two_variants() -> None:
+    candidates = _make_candidates(num=4)
+    candidates.component_name = ("target", "target", "forward", "forward")
+    candidates.extras.update(
+        {
+            "position_pair_id": torch.tensor([0, 1, 0, 1]),
+            "gaze_variant_id": torch.tensor([0, 0, 1, 1]),
+        }
+    )
+
+    fig = plot_paired_gaze_support(candidates)
+
+    assert isinstance(fig, go.Figure)
+    assert {trace.name for trace in fig.data} == {
+        "gaze variant 0",
+        "gaze variant 0 endpoint",
+        "gaze variant 1",
+        "gaze variant 1 endpoint",
+        "shared center",
+        "reference pose",
+    }
+    assert list(fig.data[-2].customdata) == [0, 1]
 
 
 def test_plot_position_sphere_with_dirs() -> None:

@@ -26,6 +26,7 @@ from ...pose_generation.plotting import (
     plot_euler_reference,
     plot_euler_world,
     plot_min_distance_to_mesh,
+    plot_paired_gaze_support,
     plot_path_collision_segments,
     plot_position_polar,
     plot_position_sphere,
@@ -347,6 +348,16 @@ def _render_live_candidates_page(
             "Circles are hard-valid actions, crosses are retained rejected proposals, and the white cross is the reference pose."
         )
         st.plotly_chart(plot_proposal_sequence_support(candidates), width="stretch")
+
+    pair_ids = candidates.extras.get("position_pair_id")
+    if isinstance(pair_ids, torch.Tensor) and bool((pair_ids >= 0).any().item()):
+        with st.container(border=True):
+            st.subheader("Sampling behavior: paired gaze hypotheses")
+            st.caption(
+                "Open circles are shared camera centres. Each coloured ray is a distinct gaze family evaluated "
+                "at that exact position; endpoint hover data retains pair, component, and hard-validity provenance."
+            )
+            st.plotly_chart(plot_paired_gaze_support(candidates), width="stretch")
 
     with st.expander("Frame orthonormality", expanded=False):
         _info_popover(

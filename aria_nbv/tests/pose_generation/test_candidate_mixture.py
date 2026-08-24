@@ -216,6 +216,41 @@ def test_rich_local_five_family_is_named_ablation() -> None:
     assert [component.count for component in cfg.components] == [18, 18, 12, 6, 6]
 
 
+def test_paired_component_reuses_centers_and_retains_gaze_variants() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig(
+        base=_base_cfg(),
+        components=[
+            CandidateMixtureComponentConfig(
+                name="target_forward_pair",
+                count=4,
+                view_mode=ViewDirectionMode.TARGET_POINT,
+                paired_view_mode=ViewDirectionMode.FORWARD_RIG,
+                position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
+            )
+        ],
+    )
+
+    result = _run_generate(cfg)
+
+    assert cfg.total_count == 8
+    assert result.mask_valid.numel() == 8
+    assert result.extras["position_pair_id"].cpu().tolist() == [0, 1, 2, 3, 0, 1, 2, 3]
+    assert result.extras["gaze_variant_id"].cpu().tolist() == [0, 0, 0, 0, 1, 1, 1, 1]
+    centers = result.shell_poses.t.reshape(-1, 3)
+    assert torch.allclose(centers[:4], centers[4:])
+    forward = result.shell_poses.R[:, :, 2]
+    assert not torch.allclose(forward[:4], forward[4:])
+    assert result.component_name == ("target_forward_pair",) * 4 + ("target_forward_pair__paired_forward_rig",) * 4
+    assert torch.allclose(result.sampler_probability, torch.full_like(result.sampler_probability, 1.0 / 8.0))
+
+
+def test_paired_center_gaze_preset_keeps_sixty_candidate_rows() -> None:
+    cfg = CandidateMixtureViewGeneratorConfig.paired_center_gaze_family()
+
+    assert cfg.total_count == 60
+    assert cfg.components[0].paired_view_mode is ViewDirectionMode.FORWARD_RIG
+
+
 def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
     writer_target_bearing = CandidateMixtureComponentConfig(
         name="target_bearing_local",
