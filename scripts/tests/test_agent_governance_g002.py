@@ -28,17 +28,9 @@ from scaffold_audit import (  # noqa: E402
     repository_pointers,
 )
 
-
 CUSTOM_SKILLS = tuple(sorted(custom_skill_paths()))
 GRAPHIFY_BUNDLE = ROOT / ".agents" / "skills" / "graphify"
-CONTEXT7_REGISTRY = (
-    ROOT
-    / ".agents"
-    / "skills"
-    / "aria-nbv-context"
-    / "references"
-    / "context7_library_ids.md"
-)
+CONTEXT7_REGISTRY = ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context7_library_ids.md"
 CONTEXT7_PLUGIN_CALLS = {
     "mcp__codex_apps__context7_resolve_library_id",
     "mcp__codex_apps__context7_query_docs",
@@ -71,9 +63,7 @@ def _context7_ids(text: str) -> set[str]:
     return {
         token.strip()
         for token in re.findall(r"`([^`\n]+)`", text)
-        if re.fullmatch(
-            r"/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", token.strip()
-        )
+        if re.fullmatch(r"/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?", token.strip())
     }
 
 
@@ -177,9 +167,7 @@ def test_mempalace_runtime_and_owner_path_negative_fixtures() -> None:
     with tempfile.TemporaryDirectory(prefix="g002-negative-") as tmp:
         root = Path(tmp)
         runtime = root / ".mcp.json"
-        runtime.write_text(
-            '{"mcpServers":{"mempalace":{"command":"mempalace"}}}', encoding="utf-8"
-        )
+        runtime.write_text('{"mcpServers":{"mempalace":{"command":"mempalace"}}}', encoding="utf-8")
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
         subprocess.run(["git", "add", ".mcp.json"], cwd=root, check=True)
         assert _mempalace_runtime_offenders(root) == [".mcp.json"]
@@ -200,15 +188,11 @@ def test_direct_skill_discovery_shape() -> None:
 def test_custom_skill_discovery_is_dynamic_with_explicit_upstream_exemption() -> None:
     discovered = custom_skill_paths()
     expected = {
-        path.resolve()
-        for path in (ROOT / ".agents" / "skills").glob("*/SKILL.md")
-        if path.parent.name != "graphify"
+        path.resolve() for path in (ROOT / ".agents" / "skills").glob("*/SKILL.md") if path.parent.name != "graphify"
     }
     assert discovered == expected
     assert (GRAPHIFY_BUNDLE / "SKILL.md").resolve() not in discovered
-    assert "APPROVED_CUSTOM_SKILL_PATHS" not in _read(
-        ROOT / "scripts/scaffold_audit.py"
-    )
+    assert "APPROVED_CUSTOM_SKILL_PATHS" not in _read(ROOT / "scripts/scaffold_audit.py")
 
 
 def test_custom_skills_use_only_native_name_and_description_frontmatter() -> None:
@@ -251,16 +235,13 @@ def test_repository_pointer_discovery_and_integrity_boundaries() -> None:
         bare_path = root / "bare" / "SKILL.md"
         bare_path.parent.mkdir()
         bare_path.write_text(
-            "---\nname: bare\ndescription: Test fixture.\n---\n"
-            "See `references/guide.md`.\n",
+            "---\nname: bare\ndescription: Test fixture.\n---\nSee `references/guide.md`.\n",
             encoding="utf-8",
         )
         references = bare_path.parent / "references"
         references.mkdir()
         guide = references / "guide.md"
-        guide.write_text(
-            "See `orphan.md` or [the leaf](./orphan.md).\n", encoding="utf-8"
-        )
+        guide.write_text("See `orphan.md` or [the leaf](./orphan.md).\n", encoding="utf-8")
         orphan = references / "orphan.md"
         orphan.write_text("# Orphan\n", encoding="utf-8")
         pointers = local_markdown_pointers(guide, _read(guide))
@@ -281,9 +262,7 @@ def test_repository_pointer_discovery_and_integrity_boundaries() -> None:
         package_index.write_text("See [booktabs](./booktabs.md).\n", encoding="utf-8")
         booktabs = package_index.parent / "booktabs.md"
         booktabs.write_text("# Booktabs\n", encoding="utf-8")
-        assert "./booktabs.md" in local_markdown_pointers(
-            package_index, _read(package_index)
-        )
+        assert "./booktabs.md" in local_markdown_pointers(package_index, _read(package_index))
 
         source = root / "owners.md"
         source.write_text(
@@ -303,31 +282,20 @@ def test_repository_pointer_discovery_and_integrity_boundaries() -> None:
             "scripts/check.py",
         }
         missing = next(
-            pointer
-            for pointer in repository_pointers(source, _read(source))
-            if pointer.raw == "./missing.qmd"
+            pointer for pointer in repository_pointers(source, _read(source)) if pointer.raw == "./missing.qmd"
         )
-        assert any(
-            "does not exist" in error for error in audit_repository_pointer(missing)[1]
-        )
+        assert any("does not exist" in error for error in audit_repository_pointer(missing)[1])
         absolute = next(
-            pointer
-            for pointer in repository_pointers(source, _read(source))
-            if pointer.raw == "/tmp/outside.md"
+            pointer for pointer in repository_pointers(source, _read(source)) if pointer.raw == "/tmp/outside.md"
         )
-        assert any(
-            "escapes repo root" in error
-            for error in audit_repository_pointer(absolute)[1]
-        )
+        assert any("escapes repo root" in error for error in audit_repository_pointer(absolute)[1])
 
         markdown = root / "anchor.md"
         markdown.write_text("# Present\n", encoding="utf-8")
         typst = root / "anchor.typ"
         typst.write_text("= Present <ssec:present>\n", encoding="utf-8")
         for target in (
-            RepositoryPointer(
-                source, "./anchor.md#present", "./anchor.md", "present", "markdown"
-            ),
+            RepositoryPointer(source, "./anchor.md#present", "./anchor.md", "present", "markdown"),
             RepositoryPointer(
                 source,
                 "./anchor.typ#ssec:present",
@@ -340,40 +308,26 @@ def test_repository_pointer_discovery_and_integrity_boundaries() -> None:
 
         outside = root / "outside.md"
         outside.symlink_to("/tmp")
-        escaped = RepositoryPointer(
-            source, "./outside.md", "./outside.md", "", "markdown"
-        )
-        assert any(
-            "escapes repo root" in error
-            for error in audit_repository_pointer(escaped)[1]
-        )
+        escaped = RepositoryPointer(source, "./outside.md", "./outside.md", "", "markdown")
+        assert any("escapes repo root" in error for error in audit_repository_pointer(escaped)[1])
 
 
 def test_context7_ids_and_plugin_calls_have_one_owner() -> None:
-    skill_files = tuple(
-        path
-        for path in (ROOT / ".agents" / "skills").rglob("*.md")
-        if "graphify" not in path.parts
-    )
+    skill_files = tuple(path for path in (ROOT / ".agents" / "skills").rglob("*.md") if "graphify" not in path.parts)
     registry_text = _read(CONTEXT7_REGISTRY)
     registry_ids = _context7_ids(registry_text)
     assert registry_ids
-    assert "/facebookresearch/efm3d" not in _context7_ids(
-        "https://github.com/facebookresearch/efm3d"
-    )
+    assert "/facebookresearch/efm3d" not in _context7_ids("https://github.com/facebookresearch/efm3d")
 
     for library_id in registry_ids:
-        owners = [
-            path for path in skill_files if library_id in _context7_ids(_read(path))
-        ]
+        owners = [path for path in skill_files if library_id in _context7_ids(_read(path))]
         assert owners == [CONTEXT7_REGISTRY], (library_id, owners)
 
     collision = f"`{next(iter(CONTEXT7_PLUGIN_CALLS))}_suffix`"
     assert not (CONTEXT7_PLUGIN_CALLS & explicit_tool_ids(collision))
 
     call_owners = {
-        call: [path for path in skill_files if call in explicit_tool_ids(_read(path))]
-        for call in CONTEXT7_PLUGIN_CALLS
+        call: [path for path in skill_files if call in explicit_tool_ids(_read(path))] for call in CONTEXT7_PLUGIN_CALLS
     }
     assert call_owners == {call: [CONTEXT7_REGISTRY] for call in CONTEXT7_PLUGIN_CALLS}
 
@@ -385,35 +339,26 @@ def test_active_skill_routes_contain_no_deprecated_docker_context7_calls() -> No
     }
     positive_routes = {
         fixture["id"]: fixture
-        for fixture in json.loads(
-            _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-        )["fixtures"]
+        for fixture in json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))["fixtures"]
         if fixture.get("expected_tool_refs")
     }
     for fixture_id, fixture in positive_routes.items():
         assert not deprecated.intersection(fixture["expected_tool_refs"]), fixture_id
         if CONTEXT7_PLUGIN_CALLS.intersection(fixture["expected_tool_refs"]):
             assert (
-                ".agents/skills/aria-nbv-context/references/context7_library_ids.md"
-                in fixture["expected_owner_paths"]
+                ".agents/skills/aria-nbv-context/references/context7_library_ids.md" in fixture["expected_owner_paths"]
             ), fixture_id
     assert not deprecated_context7_calls(active_custom_reference_files())
 
     with tempfile.TemporaryDirectory(prefix="g002-context7-") as tmp:
         reference = Path(tmp) / "references" / "active.md"
         reference.parent.mkdir()
-        reference.write_text(
-            "Call mcp__MCP_DOCKER.get_library_docs here.\n", encoding="utf-8"
-        )
-        assert deprecated_context7_calls((reference,)) == {
-            reference: {"mcp__MCP_DOCKER.get_library_docs"}
-        }
+        reference.write_text("Call mcp__MCP_DOCKER.get_library_docs here.\n", encoding="utf-8")
+        assert deprecated_context7_calls((reference,)) == {reference: {"mcp__MCP_DOCKER.get_library_docs"}}
 
 
 def test_existing_routing_families_remain_declared() -> None:
-    routing = json.loads(
-        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-    )
+    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
     fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
     expected_families = {
         "graphify-codebase-navigation",
@@ -443,9 +388,7 @@ def test_existing_routing_families_remain_declared() -> None:
 
 
 def test_mempalace_routing_scenarios() -> None:
-    data = json.loads(
-        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-    )
+    data = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
     fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
     expected = {
         "semantic-recall-current-thesis",
@@ -461,13 +404,9 @@ def test_mempalace_routing_scenarios() -> None:
         assert fixture["required_outcomes"]
         assert fixture["forbidden_outcomes"]
         assert (
-            ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md"
-            in fixture["expected_owner_paths"]
+            ".agents/skills/aria-nbv-context/references/semantic-memory-boundary.md" in fixture["expected_owner_paths"]
         )
-    assert (
-        "primary-source route is available"
-        in fixtures["semantic-recall-literature-primary"]["required_outcomes"]
-    )
+    assert "primary-source route is available" in fixtures["semantic-recall-literature-primary"]["required_outcomes"]
     assert (
         "MemPalace owns code, tests, symbols, or active configuration"
         in fixtures["semantic-recall-code-direct-source"]["forbidden_outcomes"]
@@ -475,9 +414,7 @@ def test_mempalace_routing_scenarios() -> None:
 
 
 def test_mandatory_graphify_routing_scenarios() -> None:
-    data = json.loads(
-        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-    )
+    data = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
     fixtures = {fixture["id"]: fixture for fixture in data["fixtures"]}
     expected = {
         "graphify-codebase-navigation",
@@ -516,9 +453,7 @@ def test_mandatory_graphify_routing_scenarios() -> None:
 def test_context7_graphify_api_route_keeps_installed_authority() -> None:
     fixtures = {
         fixture["id"]: fixture
-        for fixture in json.loads(
-            _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-        )["fixtures"]
+        for fixture in json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))["fixtures"]
     }
     fixture = fixtures["context7-graphify-api-change"]
     assert _fixture_owner_paths_exist(ROOT, fixture)
@@ -530,26 +465,12 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
         "mcp__MCP_DOCKER.get_library_docs",
     ]
     assert "supplied exact Context7 ID skips resolution" in fixture["required_outcomes"]
-    assert (
-        "one focused seed query is issued per external concept"
-        in fixture["required_outcomes"]
-    )
-    assert (
-        "Context7 is required for local owner lookup" in fixture["forbidden_outcomes"]
-    )
+    assert "one focused seed query is issued per external concept" in fixture["required_outcomes"]
+    assert "Context7 is required for local owner lookup" in fixture["forbidden_outcomes"]
 
     context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
-    registry = _read(
-        ROOT
-        / ".agents"
-        / "skills"
-        / "aria-nbv-context"
-        / "references"
-        / "context7_library_ids.md"
-    )
-    provenance = _read(
-        ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md"
-    )
+    registry = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context7_library_ids.md")
+    provenance = _read(ROOT / ".agents" / "skills" / "agents-db" / "references" / "provenance.md")
     assert "Use a supplied exact ID directly; otherwise call" in context
     assert "Do not use Docker MCP Context7" in context
     assert "/graphify-labs/graphify" in registry
@@ -559,21 +480,12 @@ def test_context7_graphify_api_route_keeps_installed_authority() -> None:
 
 
 def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
-    spec = _read(
-        ROOT
-        / ".omx"
-        / "specs"
-        / "deep-interview-aria-nbv-agent-scaffold-target-state.md"
-    )
+    spec = _read(ROOT / ".omx" / "specs" / "deep-interview-aria-nbv-agent-scaffold-target-state.md")
     amendment = "### Accepted 2026-08-01 Graphify remediation amendment"
     supersession = "## Accepted 2026-08-14 Mandatory Graphify Supersession"
     lifecycle = "## Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession"
-    context_hierarchy = (
-        "## Accepted 2026-08-19 Context Hierarchy And Context7 Plugin Supersession"
-    )
-    pointer_retirement = (
-        "## Accepted 2026-08-21 Source-Order Compatibility Pointer Retirement"
-    )
+    context_hierarchy = "## Accepted 2026-08-19 Context Hierarchy And Context7 Plugin Supersession"
+    pointer_retirement = "## Accepted 2026-08-21 Source-Order Compatibility Pointer Retirement"
     assert spec.index(amendment) < spec.index(supersession)
     assert spec.index(supersession) < spec.index(lifecycle)
     assert spec.index(lifecycle) < spec.index(context_hierarchy)
@@ -602,10 +514,7 @@ def test_mandatory_graphify_contract_is_later_and_source_subordinate() -> None:
     assert "## Branch Index" in context
     assert "## Graphify Branch" not in context
     assert "## Context7 Plugin Branch" not in context
-    assert (
-        "Require the Graphify executable and usable graph artifacts as navigation"
-        in intent
-    )
+    assert "Require the Graphify executable and usable graph artifacts as navigation" in intent
     assert "direct-source-only degraded route" in intent
 
 
@@ -647,9 +556,7 @@ Rules:
 
 def test_route_only_domain_skill_contract() -> None:
     audit = _read(ROOT / "scripts" / "scaffold_audit.py")
-    routing = json.loads(
-        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-    )
+    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
 
     assert "NATIVE_MINIMAL_SKILLS" not in audit
     retired = {
@@ -690,10 +597,7 @@ def test_route_only_domain_skill_contract() -> None:
     }
     for fixture_id, owner in oracle_routes.items():
         assert owner in fixtures[fixture_id]["expected_owner_paths"]
-        assert (
-            "aria_nbv/aria_nbv/oracle/README.md"
-            in fixtures[fixture_id]["expected_owner_paths"]
-        )
+        assert "aria_nbv/aria_nbv/oracle/README.md" in fixtures[fixture_id]["expected_owner_paths"]
     geometry_routes = {
         "geometry-pose-generation": "aria_nbv/aria_nbv/pose_generation",
         "geometry-rendering-camera": "aria_nbv/aria_nbv/rendering",
@@ -701,27 +605,16 @@ def test_route_only_domain_skill_contract() -> None:
     }
     for fixture_id, owner in geometry_routes.items():
         assert owner in fixtures[fixture_id]["expected_owner_paths"]
-    assert fixtures["rri-metric-semantics"]["expected_owner_paths"] == [
-        "aria_nbv/aria_nbv/rri_metrics/AGENTS.md"
-    ]
-    assert fixtures["vin-scorer-input-fields"]["expected_owner_paths"] == [
-        "aria_nbv/aria_nbv/vin/AGENTS.md"
-    ]
-    assert fixtures["python-docstring-contract"]["stable_skill_ids"] == [
-        "python-standards"
-    ]
+    assert fixtures["rri-metric-semantics"]["expected_owner_paths"] == ["aria_nbv/aria_nbv/rri_metrics/AGENTS.md"]
+    assert fixtures["vin-scorer-input-fields"]["expected_owner_paths"] == ["aria_nbv/aria_nbv/vin/AGENTS.md"]
+    assert fixtures["python-docstring-contract"]["stable_skill_ids"] == ["python-standards"]
     for fixture_id in (
         "rerun-offline-inspection",
         "rerun-rollout-zarr-inspection",
         "rerun-sdk-api-change",
     ):
-        assert (
-            ".agents/skills/rerun-nbv-inspector/SKILL.md"
-            in fixtures[fixture_id]["expected_owner_paths"]
-        )
-    assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == [
-        "mcp__codex_apps__context7_query_docs"
-    ]
+        assert ".agents/skills/rerun-nbv-inspector/SKILL.md" in fixtures[fixture_id]["expected_owner_paths"]
+    assert fixtures["rerun-sdk-api-change"]["expected_tool_refs"] == ["mcp__codex_apps__context7_query_docs"]
     for fixture in fixtures.values():
         assert "expected_skills" not in fixture
         assert "non_goals" not in fixture
@@ -750,10 +643,7 @@ def test_capture_and_routing_contracts() -> None:
     descriptor = _read(agent_behavior_path.parent / "agents" / "openai.yaml")
     assert 'short_description: "Owner-first ARIA-NBV preflight"' in descriptor
     assert "scope one traceable lane" in descriptor
-    reference_paths = {
-        link.split("#", 1)[0]
-        for link in re.findall(r"\]\((references/[^)]+)\)", agent_behavior)
-    }
+    reference_paths = {link.split("#", 1)[0] for link in re.findall(r"\]\((references/[^)]+)\)", agent_behavior)}
     assert reference_paths == {
         "references/durable-capture.md",
         "references/execution-branches.md",
@@ -762,15 +652,11 @@ def test_capture_and_routing_contracts() -> None:
     for reference_path in reference_paths:
         assert (agent_behavior_path.parent / reference_path).is_file()
 
-    execution_branches = _read(
-        agent_behavior_path.parent / "references" / "execution-branches.md"
-    )
+    execution_branches = _read(agent_behavior_path.parent / "references" / "execution-branches.md")
     assert "## Failure-First Diagnosis" in execution_branches
     assert "## Reversible Learning" in execution_branches
 
-    external_actions = _read(
-        agent_behavior_path.parent / "references" / "external-actions.md"
-    )
+    external_actions = _read(agent_behavior_path.parent / "references" / "external-actions.md")
     assert "## Local Git Scope" in external_actions
     assert "## External Boundary" in external_actions
 
@@ -778,26 +664,17 @@ def test_capture_and_routing_contracts() -> None:
     assert "Failure-first diagnosis uses `agent-behavior`" in root_guidance
     assert "establish the smallest red reproducer" not in root_guidance
 
-    retired_manifest = (
-        ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml"
-    )
+    retired_manifest = ROOT / ".agents" / "references" / "mattpocock_skills_manifest.toml"
     assert not retired_manifest.exists()
     for owner in (
         ROOT / ".agents" / "references" / "README.md",
         ROOT / ".agents" / "skills" / "README.md",
         ROOT / ".codex" / "config.example.toml",
-        ROOT
-        / ".agents"
-        / "skills"
-        / "typst-authoring"
-        / "references"
-        / "upstream-matt-writing.md",
+        ROOT / ".agents" / "skills" / "typst-authoring" / "references" / "upstream-matt-writing.md",
     ):
         assert "mattpocock_skills_manifest" not in _read(owner)
 
-    routing = json.loads(
-        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-    )
+    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
     fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
     completion = fixtures["durable-workpackage-completion"]
     assert completion["expected_owner_paths"] == [
@@ -815,10 +692,7 @@ def test_capture_and_routing_contracts() -> None:
         ".agents/skills/agent-behavior/references/durable-capture.md",
         ".agents/skills/aria-nbv-context/SKILL.md",
     ]
-    assert (
-        "deliberate user-authored angle-bracket prose activates durable capture"
-        in (capture["required_outcomes"])
-    )
+    assert "deliberate user-authored angle-bracket prose activates durable capture" in (capture["required_outcomes"])
     assert "read-only wording disables capture routing" in capture["forbidden_outcomes"]
     assert "Deliberate user-authored `<...>` prose" in root_guidance
     assert "including a read-only capture request" in root_guidance
@@ -835,9 +709,7 @@ def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
     ]
     for relative_path, anchor in anchors:
         assert f"<{anchor}>" in _read(ROOT / relative_path)
-    assert "privileged V0/GT target path is only a sanity or upper-bound route" in (
-        docs_guidance
-    )
+    assert "privileged V0/GT target path is only a sanity or upper-bound route" in (docs_guidance)
     assert "conditional online bridge is RQ5" in docs_guidance
     assert "M6 scope decision pending M5 evidence" in docs_guidance
     assert "V0 GT actor-visible-target runs as main V1 performance" not in docs_guidance
@@ -845,20 +717,12 @@ def test_qh_guidance_points_to_typst_owners_without_duplicate_policy() -> None:
 
     fixtures = {
         fixture["id"]: fixture
-        for fixture in json.loads(
-            _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-        )["fixtures"]
+        for fixture in json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))["fixtures"]
     }
     hazard = fixtures["docs-qh-scientific-hazard-routing"]
     assert _fixture_owner_paths_exist(ROOT, hazard)
-    assert (
-        "privileged V0/GT routes to RQ3 as a sanity or upper-bound path"
-        in (hazard["required_outcomes"])
-    )
-    assert (
-        "a stale milestone anchor substitutes for the promotion queue"
-        in (hazard["forbidden_outcomes"])
-    )
+    assert "privileged V0/GT routes to RQ3 as a sanity or upper-bound path" in (hazard["required_outcomes"])
+    assert "a stale milestone anchor substitutes for the promotion queue" in (hazard["forbidden_outcomes"])
 
     context = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "SKILL.md")
     assert "## Owner Hierarchy" in context
@@ -912,33 +776,22 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         capture_output=True,
         text=True,
     ).stdout.split("\0")
-    tracked_role_reviews = [
-        path for path in tracked if _is_session_local_review_artifact(path)
-    ]
+    tracked_role_reviews = [path for path in tracked if _is_session_local_review_artifact(path)]
     assert not tracked_role_reviews
     eligible_debrief = ".agents/memory/history/2026/08/eligible-architecture-review.md"
     assert not _is_session_local_review_artifact(eligible_debrief)
     assert not _is_session_local_review_artifact(".omx/reviews")
     assert _is_session_local_review_artifact(".omx/reviews/architect-review.md")
-    assert _is_session_local_review_artifact(
-        ".omx/reviews/nested/peer-review/report.md"
-    )
-    assert not _is_session_local_review_artifact(
-        ".omx/specs/nested/accepted-architecture-review/report.md"
-    )
-    assert not _is_session_local_review_artifact(
-        ".omx/specs/nested/accepted-peer-review/report.md"
-    )
+    assert _is_session_local_review_artifact(".omx/reviews/nested/peer-review/report.md")
+    assert not _is_session_local_review_artifact(".omx/specs/nested/accepted-architecture-review/report.md")
+    assert not _is_session_local_review_artifact(".omx/specs/nested/accepted-peer-review/report.md")
 
     migrated_review_pointers = {
         ROOT / ".omx" / "plans" / "ralplan-handoff-online-oracle-mvp.md": (
             ".omx/reviews/ralplan-architect-review-online-oracle-mvp-iteration-6.md",
             ".omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md",
         ),
-        ROOT
-        / ".omx"
-        / "plans"
-        / "ralplan-handoff-aria-nbv-domain-skill-distillation.md": (
+        ROOT / ".omx" / "plans" / "ralplan-handoff-aria-nbv-domain-skill-distillation.md": (
             ".omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-consensus-loop-3-iteration-2.md",
             ".omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-approved.md",
             ".omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-amendment-20260801.md",
@@ -952,10 +805,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
             ".omx/reviews/thin-root-nested-agents-rewrite-architect-review.md",
             ".omx/reviews/thin-root-nested-agents-rewrite-critic-review.md",
         ),
-        ROOT
-        / ".omx"
-        / "plans"
-        / "test-spec-thin-root-nested-agents-rewrite.md": (
+        ROOT / ".omx" / "plans" / "test-spec-thin-root-nested-agents-rewrite.md": (
             ".omx/reviews/thin-root-nested-agents-rewrite-architect-review.md",
             ".omx/reviews/thin-root-nested-agents-rewrite-critic-review.md",
         ),
@@ -981,10 +831,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ],
         cwd=ROOT,
         check=True,
-        input=(
-            ".omx/reviews/architect-review.md\n"
-            ".omx/reviews/nested/peer-review/report.md\n"
-        ),
+        input=(".omx/reviews/architect-review.md\n.omx/reviews/nested/peer-review/report.md\n"),
         capture_output=True,
         text=True,
     ).stdout.splitlines()
@@ -1026,27 +873,13 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
-    conventions = _read(
-        ROOT
-        / ".agents"
-        / "skills"
-        / "python-standards"
-        / "references"
-        / "general_conventions.md"
-    )
+    conventions = _read(ROOT / ".agents" / "skills" / "python-standards" / "references" / "general_conventions.md")
     assert "python-standards` owns generic Python" in package_guidance
     assert "`pyproject.toml` owns executable formatter/linter" in package_guidance
     assert "Binding short-form rules live in" not in conventions
     assert "This file owns the generic non-docstring Python" in conventions
     python_skill = _read(ROOT / ".agents" / "skills" / "python-standards" / "SKILL.md")
-    examples_path = (
-        ROOT
-        / ".agents"
-        / "skills"
-        / "python-standards"
-        / "references"
-        / "canonical-examples.md"
-    )
+    examples_path = ROOT / ".agents" / "skills" / "python-standards" / "references" / "canonical-examples.md"
     examples = _read(examples_path)
     assert "references/canonical-examples.md" in python_skill
     for example in (
@@ -1072,9 +905,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     ):
         assert contract in package_guidance
 
-    data_guidance = _read(
-        ROOT / "aria_nbv" / "aria_nbv" / "data_handling" / "AGENTS.md"
-    )
+    data_guidance = _read(ROOT / "aria_nbv" / "aria_nbv" / "data_handling" / "AGENTS.md")
     assert "including PyTorch3D" in data_guidance
     assert "efm3d.aria.aria_constants" in data_guidance
 
@@ -1109,14 +940,7 @@ def test_thesis_context_and_context7_routing() -> None:
     assert "context_map.md" in context
     assert "semantic-memory-boundary.md" in context
 
-    context_map = _read(
-        ROOT
-        / ".agents"
-        / "skills"
-        / "aria-nbv-context"
-        / "references"
-        / "context_map.md"
-    )
+    context_map = _read(ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context_map.md")
     assert "scripts/nbv_typst_includes.py --thesis --mode outline" in context_map
     assert "Derived Context Route Index" in context_map
     assert "never owns the facts it locates" in context_map
@@ -1165,12 +989,7 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
         assert not any(ref in text for ref in forbidden), skill
 
     context7_registry = _read(
-        ROOT
-        / ".agents"
-        / "skills"
-        / "aria-nbv-context"
-        / "references"
-        / "context7_library_ids.md"
+        ROOT / ".agents" / "skills" / "aria-nbv-context" / "references" / "context7_library_ids.md"
     )
     for library_id in (
         "/websites/hydra_cc",
@@ -1238,22 +1057,15 @@ def test_active_skills_use_context7_plugin_not_docker_mcp() -> None:
         text=True,
     )
     assert "# docs/typst/seminar_slides/slides_1.typ" in slides_result.stdout
-    assert (
-        "# docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ"
-        in slides_result.stdout
-    )
+    assert "# docs/typst/thesis_slides/advisor_meeting_2026_05_22.typ" in slides_result.stdout
 
 
 def test_fixture_tool_and_lrz_regressions_follow_owner_boundaries() -> None:
-    routing = json.loads(
-        _read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json")
-    )
+    routing = json.loads(_read(ROOT / "scripts" / "scaffold" / "fixtures" / "routing.json"))
     fixtures = {fixture["id"]: fixture for fixture in routing["fixtures"]}
     for fixture in fixtures.values():
         if fixture.get("expected_tool_refs"):
-            owner_text = "\n".join(
-                _read(ROOT / owner) for owner in fixture["expected_owner_paths"]
-            )
+            owner_text = "\n".join(_read(ROOT / owner) for owner in fixture["expected_owner_paths"])
             for tool_ref in fixture["expected_tool_refs"]:
                 assert f"`{tool_ref}`" in owner_text, fixture["id"]
             for tool_ref in fixture.get("forbidden_tool_refs", []):
@@ -1262,19 +1074,14 @@ def test_fixture_tool_and_lrz_regressions_follow_owner_boundaries() -> None:
     lrz_fixtures = [
         fixture
         for fixture in fixtures.values()
-        if "lrz" in fixture["id"].lower()
-        or any("lrz-ai-systems" in path for path in fixture["expected_owner_paths"])
+        if "lrz" in fixture["id"].lower() or any("lrz-ai-systems" in path for path in fixture["expected_owner_paths"])
     ]
     for fixture in lrz_fixtures:
-        assert (
-            ".agents/skills/lrz-ai-systems/SKILL.md" in fixture["expected_owner_paths"]
-        ), fixture["id"]
+        assert ".agents/skills/lrz-ai-systems/SKILL.md" in fixture["expected_owner_paths"], fixture["id"]
 
 
 if __name__ == "__main__":
-    tests = [
-        value for name, value in sorted(globals().items()) if name.startswith("test_")
-    ]
+    tests = [value for name, value in sorted(globals().items()) if name.startswith("test_")]
     for test in tests:
         test()
     print(f"G002 governance migration tests passed: {len(tests)}")
