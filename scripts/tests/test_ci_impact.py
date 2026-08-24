@@ -7,17 +7,94 @@ import os
 from pathlib import Path
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from ci_impact import FAMILIES, parse_nul_paths, select_families  # noqa: E402
+from git_env_contract import (  # noqa: E402
+    GIT_ENV_OVERRIDES,
+    environment_without_inherited_git_overrides,
+    inherited_git_override_names,
+)
 
 ALL = set(FAMILIES)
+ADVERSARIAL_GIT_ENV = {
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_CONFIG",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_KEY_0",
+    "GIT_CONFIG_KEY_1",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_VALUE_0",
+    "GIT_CONFIG_VALUE_1",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_NAMESPACE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_OBJECT_DIRECTORY_RELATIVE",
+    "GIT_WORK_TREE",
+}
+
+
+def _poisoned_env(guard: Path) -> dict[str, str]:
+    """Route every relevant Git override at the isolated guard repository."""
+    return {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(guard / ".git/objects"),
+        "GIT_COMMON_DIR": str(guard / ".git"),
+        "GIT_CONFIG": str(guard / ".git/config"),
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_GLOBAL": str(guard / ".git/config"),
+        "GIT_CONFIG_KEY_0": "core.bare",
+        "GIT_CONFIG_KEY_1": "core.repositoryformatversion",
+        "GIT_CONFIG_NOSYSTEM": "0",
+        "GIT_CONFIG_PARAMETERS": "'core.bare'='true'",
+        "GIT_CONFIG_SYSTEM": str(guard / ".git/config"),
+        "GIT_CONFIG_VALUE_0": "true",
+        "GIT_CONFIG_VALUE_1": "99",
+        "GIT_DIR": str(guard / ".git"),
+        "GIT_INDEX_FILE": str(guard / "poisoned-index"),
+        "GIT_NAMESPACE": "poisoned",
+        "GIT_OBJECT_DIRECTORY": str(guard / ".git/objects"),
+        "GIT_OBJECT_DIRECTORY_RELATIVE": "objects",
+        "GIT_WORK_TREE": str(guard),
+    }
+
+
+def filesystem_snapshot(paths: list[Path]) -> dict[str, tuple[Any, ...]]:
+    """Snapshot bytes and metadata for the Git state a poisoned command could touch."""
+    snapshot: dict[str, tuple[Any, ...]] = {}
+    for base in paths:
+        base = base.resolve()
+        if not base.exists() and not base.is_symlink():
+            snapshot[str(base)] = ("missing",)
+            continue
+        pending = [base]
+        while pending:
+            path = pending.pop()
+            info = path.lstat()
+            mode = stat.S_IFMT(info.st_mode)
+            common = (info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            if stat.S_ISREG(mode):
+                snapshot[str(path)] = (*common, path.read_bytes())
+            elif stat.S_ISLNK(mode):
+                snapshot[str(path)] = (*common, os.readlink(path))
+            elif stat.S_ISDIR(mode):
+                snapshot[str(path)] = common
+                pending.extend(path.iterdir())
+            else:
+                snapshot[str(path)] = common
+    return snapshot
 
 
 class SelectionTests(unittest.TestCase):
@@ -28,14 +105,27 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertIsNotNone(clean_match)
         assert clean_match is not None
-        for variable in (
-            "GIT_DIR",
-            "GIT_WORK_TREE",
-            "GIT_COMMON_DIR",
-            "GIT_INDEX_FILE",
-        ):
+        clean_wrapper = REPO_ROOT / "scripts/clean_git_env.sh"
+        wrapper = clean_wrapper.read_text(encoding="utf-8")
+        self.assertIn("git_env_contract.py", wrapper)
+        self.assertTrue(
+            ADVERSARIAL_GIT_ENV
+            <= inherited_git_override_names(
+                {key: "poison" for key in ADVERSARIAL_GIT_ENV}
+            )
+        )
+        for variable in ADVERSARIAL_GIT_ENV:
             with self.subTest(variable=variable):
-                self.assertIn(f"-u {variable}", clean_match.group("command"))
+                self.assertIn(
+                    variable,
+                    GIT_ENV_OVERRIDES
+                    | {
+                        "GIT_CONFIG_KEY_0",
+                        "GIT_CONFIG_KEY_1",
+                        "GIT_CONFIG_VALUE_0",
+                        "GIT_CONFIG_VALUE_1",
+                    },
+                )
 
         expected_recipes = {
             "graphify-projection-self-test": (
@@ -69,12 +159,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_ci_target_cannot_mutate_an_isolated_guard_repo(self) -> None:
         clean_env = os.environ.copy()
-        for variable in (
-            "GIT_DIR",
-            "GIT_WORK_TREE",
-            "GIT_COMMON_DIR",
-            "GIT_INDEX_FILE",
-        ):
+        for variable in inherited_git_override_names(clean_env):
             clean_env.pop(variable, None)
 
         with tempfile.TemporaryDirectory(prefix="ci-impact-git-guard-") as tmp:
@@ -95,12 +180,7 @@ class SelectionTests(unittest.TestCase):
                     env=clean_env,
                 )
 
-            poisoned_env = clean_env | {
-                "GIT_DIR": str(guard / ".git"),
-                "GIT_WORK_TREE": str(guard),
-                "GIT_COMMON_DIR": str(guard / ".git"),
-                "GIT_INDEX_FILE": str(guard / "poisoned-index"),
-            }
+            poisoned_env = clean_env | _poisoned_env(guard)
             makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
             clean_match = re.search(
                 r"^GIT_ENV_CLEAN := (?P<command>.+)$", makefile, re.MULTILINE
@@ -165,6 +245,166 @@ class SelectionTests(unittest.TestCase):
                     env=clean_env,
                 ).stdout.strip()
                 self.assertEqual(actual, expected, key)
+
+    def test_workflow_commands_cover_git_clean_boundary(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        scaffold_step = workflow.split(
+            "      - name: Validate agent scaffold and memory\n", 1
+        )[1].split("\n      - name:", 1)[0]
+        run_block = scaffold_step.split("        run: |\n", 1)[1]
+        fixture_commands = [
+            line.strip() for line in run_block.splitlines() if line.strip()
+        ]
+        self.assertTrue(fixture_commands)
+        self.assertTrue(
+            all(
+                command.startswith("./scripts/clean_git_env.sh ")
+                for command in fixture_commands
+            ),
+            fixture_commands,
+        )
+        direct_fixture_commands = [
+            command
+            for command in fixture_commands
+            if not command.startswith("./scripts/clean_git_env.sh make ")
+        ]
+        self.assertTrue(
+            any(
+                command.endswith("python3 scripts/tests/test_agent_status.py")
+                for command in direct_fixture_commands
+            )
+        )
+        workflow_make_commands = [
+            line.strip().split("run:", 1)[-1].strip()
+            for line in workflow.splitlines()
+            if "make " in line
+        ]
+        self.assertEqual(
+            workflow_make_commands,
+            [
+                "./scripts/clean_git_env.sh make ci-impact-self-test PYTHON_INTERPRETER=python",
+                "./scripts/clean_git_env.sh make agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test",
+                "./scripts/clean_git_env.sh make ownership-consolidation-contract PYTHON_INTERPRETER=python",
+                "./scripts/clean_git_env.sh make ruff-full package-smoke",
+                "./scripts/clean_git_env.sh make qmd-frontmatter-check api-docs-self-test docs-render-core",
+            ],
+        )
+        self.assertIn(
+            "./scripts/clean_git_env.sh make agents-db-validate check-agent-memory scaffold-audit scaffold-audit-self-test",
+            workflow,
+        )
+
+        # Agent-status fixture setup performs raw Git init/config before the
+        # production GitBoundary is constructed, reproducing the reported leak.
+        direct_command = next(
+            command
+            for command in direct_fixture_commands
+            if command.endswith("python3 scripts/tests/test_agent_status.py")
+        )
+        clean_env = os.environ.copy()
+        for variable in inherited_git_override_names(clean_env):
+            clean_env.pop(variable, None)
+
+        with tempfile.TemporaryDirectory(prefix="ci-workflow-git-guard-") as tmp:
+            guard = Path(tmp) / "guard"
+            subprocess.run(
+                ["git", "init", "-q", "-b", "guard", str(guard)],
+                check=True,
+                env=clean_env,
+            )
+            for key, value in (
+                ("core.bare", "true"),
+                ("user.name", "Guard Owner"),
+                ("user.email", "guard@example.invalid"),
+            ):
+                subprocess.run(
+                    ["git", "-C", str(guard), "config", "--local", key, value],
+                    check=True,
+                    env=clean_env,
+                )
+            (guard / "poisoned-index").write_bytes(b"poisoned index\n")
+            guard_state_before = filesystem_snapshot(
+                [
+                    guard / ".git/config",
+                    guard / ".git/objects",
+                    guard / "poisoned-index",
+                    guard / ".git/refs",
+                ]
+            )
+            poisoned_env = clean_env | _poisoned_env(guard)
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-euo",
+                    "pipefail",
+                    "-c",
+                    f"{direct_command}\n",
+                ],
+                cwd=REPO_ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=poisoned_env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                filesystem_snapshot(
+                    [
+                        guard / ".git/config",
+                        guard / ".git/objects",
+                        guard / "poisoned-index",
+                        guard / ".git/refs",
+                    ]
+                ),
+                guard_state_before,
+            )
+
+    def test_clean_git_env_fails_closed_when_contract_execution_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="git-env-wrapper-failure-") as tmp:
+            fixture_dir = Path(tmp)
+            wrapper = fixture_dir / "clean_git_env.sh"
+            wrapper.write_bytes((REPO_ROOT / "scripts/clean_git_env.sh").read_bytes())
+            wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
+            (fixture_dir / "git_env_contract.py").write_text(
+                "raise SystemExit(23)\n", encoding="utf-8"
+            )
+            marker = fixture_dir / "payload-ran"
+
+            result = subprocess.run(
+                [
+                    str(wrapper),
+                    sys.executable,
+                    "-c",
+                    f"open({str(marker)!r}, 'w').close()",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(marker.exists())
+
+    def test_git_boundary_removes_newline_containing_variable_atomically(self) -> None:
+        poisoned_name = "GIT_BAD\nGIT_OK"
+        cleaned = environment_without_inherited_git_overrides(
+            {"PATH": os.environ["PATH"], poisoned_name: "poisoned"}
+        )
+        self.assertNotIn(poisoned_name, cleaned)
+
+        result = subprocess.run(
+            [
+                str(REPO_ROOT / "scripts/clean_git_env.sh"),
+                sys.executable,
+                "-c",
+                f"import os; raise SystemExit({poisoned_name!r} in os.environ)",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=os.environ | {poisoned_name: "poisoned"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_g006_hardening_inputs_select_scaffold_validation(self) -> None:
         self.assertEqual(
@@ -308,6 +548,7 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(f'"{path}"', workflow)
         self.assertIn('"scripts/agent_status.py"', workflow)
+        self.assertIn('"scripts/git_env_contract.py"', workflow)
         self.assertIn('"scripts/tests/test_agent_status.py"', workflow)
         self.assertIn("python3 scripts/tests/test_agent_status.py", workflow)
         self.assertIn('"scripts/scaffold/fixtures/routing.json"', workflow)

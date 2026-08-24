@@ -44,7 +44,7 @@ PYTHON_INTERPRETER ?= $(VENV_PYTHON)
 AGENT_STATUS_PYTHON ?= python3
 AGENT_STATUS_ARGS ?=
 # Nested fixture repositories must not inherit the caller's repository routing.
-GIT_ENV_CLEAN := env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR -u GIT_INDEX_FILE
+GIT_ENV_CLEAN := ./scripts/clean_git_env.sh
 CONTEXT_DIR ?= docs/_generated/context
 CONTEXT_OUT ?= $(CONTEXT_DIR)/context_snapshot.md
 CONTEXT_INDEX_OUT ?= $(CONTEXT_DIR)/source_index.md

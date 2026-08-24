@@ -24,9 +24,11 @@ on:
       - "scripts/debrief_nudge.sh"
       - "scripts/new_debrief.py"
       - "scripts/agent_status.py"
+      - "scripts/git_env_contract.py"
       - "scripts/scaffold_audit.py"
       - "scripts/skill_sources.py"
       - "scripts/scaffold/run_routing_trials.py"
+      - "scripts/clean_git_env.sh"
       - "scripts/scaffold/fixtures/routing_prompts.jsonl"
       - "scripts/scaffold/fixtures/routing.json"
       - "scripts/scaffold/fixtures/routing_trial_report.schema.json"
@@ -100,7 +102,7 @@ jobs:
           fi
 
       - name: Verify CI impact routing
-        run: make ci-impact-self-test PYTHON_INTERPRETER=python
+        run: ./scripts/clean_git_env.sh make ci-impact-self-test PYTHON_INTERPRETER=python
 
       - name: Initialize EFM3D submodule
         if: steps.impact.outputs.package == 'true'
@@ -178,7 +180,7 @@ jobs:
         if: >-
           steps.impact.outputs.scaffold == 'true' ||
           steps.impact.outputs.docs == 'true'
-        run: make ownership-consolidation-contract PYTHON_INTERPRETER=python
+        run: ./scripts/clean_git_env.sh make ownership-consolidation-contract PYTHON_INTERPRETER=python
 
       - name: Validate package contracts
         if: steps.impact.outputs.package == 'true'
@@ -191,4 +193,4 @@ jobs:
         if: steps.impact.outputs.docs == 'true'
         env:
           CI_RENDER_DIR: ${{ runner.temp }}/aria-nbv-ci-renders
-        run: make qmd-frontmatter-check api-docs-self-test docs-render-core
+        run: ./scripts/clean_git_env.sh make qmd-frontmatter-check api-docs-self-test docs-render-core
