@@ -10,8 +10,8 @@ planning_artifacts:
   - .omx/plans/prd-online-oracle-mvp.md
   - .omx/plans/test-spec-online-oracle-mvp.md
   - .omx/specs/online-oracle-issue-acceptance.md
-ralplan_architect_review: .omx/plans/ralplan-architect-review-online-oracle-mvp-iteration-6.md
-ralplan_critic_review: .omx/plans/ralplan-critic-review-online-oracle-mvp-iteration-3.md
+ralplan_architect_review: .omx/reviews/ralplan-architect-review-online-oracle-mvp-iteration-6.md
+ralplan_critic_review: .omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md
 review_artifact_publication: session-local-ignored-by-repository-policy
 ralplan_consensus_gate:
   complete: false
@@ -29,8 +29,8 @@ The local deliberate planning lifecycle is complete: Architect iteration 6 and
 Critic iteration 3 both approved the PRD and test specification. This completes
 planning only.
 
-Raw Architect/Critic review files remain session-local under the repository's
-review-artifact ignore policy. Their accepted decisions, repair changelog, final
+Raw Architect/Critic review files remain session-local below `.omx/reviews/`
+under the repository's location-based review-artifact ignore policy. Their accepted decisions, repair changelog, final
 verdicts, and remaining gates are folded into the published PRD, test spec,
 handoff, issue ledger, and debrief.
 

@@ -10,6 +10,7 @@ touched_owner_paths:
   - .gitignore
   - scripts/tests/test_agent_governance_g002.py
   - .agents/memory/README.md
+  - .omx/plans/ralplan-handoff-online-oracle-mvp.md
 codex_thread: codex://threads/019fff4c-cc77-7351-bb81-9759852617c6
 repo_object_format: sha1
 repo_head: 3d4c7544733f6fcb637bad395ea9698ac07d0368
@@ -26,7 +27,8 @@ Removed the tracked `.omx/specs/autoresearch-thesis-peer-review-20260816/report.
 and its obsolete pointer from the 2026-08-16 debrief. Established
 `.omx/reviews/` as the explicit ignored root for raw session-local review output
 and extended the G002 governance contract to test that boundary against retained
-durable artifacts.
+durable artifacts. The active online-oracle handoff now points to its raw
+Architect/Critic artifacts below `.omx/reviews/`, not `.omx/plans/`.
 
 ## Findings
 The implementation from
@@ -45,8 +47,9 @@ and peer-review specs therefore remain discoverable regardless of filename.
 ## Canonical Owner Impact
 The retirement updated `.gitignore`,
 `scripts/tests/test_agent_governance_g002.py`, and
-`.agents/memory/README.md`; the stale `.omx` report was deleted and the
-historical artifact pointer was removed. No Typst, Python package,
+`.agents/memory/README.md`, and the active
+`.omx/plans/ralplan-handoff-online-oracle-mvp.md`; the stale `.omx` report was
+deleted and the historical artifact pointer was removed. No Typst, Python package,
 configuration, setup, or scientific owner changed. This debrief is episodic
 evidence, and `.agents/memory/index/debriefs.jsonl` remains a derived navigation
 index rather than canonical state.
