@@ -1135,8 +1135,9 @@ def test_event_receipt_requires_a_terminal_turn(tmp_path: Path) -> None:
     assert trials.read_last_agent_message(events) == (None, False)
 
 
+@pytest.mark.parametrize("activity", ("command_execution", "web_search"))
 def test_event_receipt_rejects_tool_activity_after_final_message(
-    tmp_path: Path,
+    tmp_path: Path, activity: str
 ) -> None:
     events = tmp_path / "events.jsonl"
     events.write_text(
@@ -1149,7 +1150,7 @@ def test_event_receipt_rejects_tool_activity_after_final_message(
                 },
                 {
                     "type": "item.completed",
-                    "item": {"type": "command_execution", "command": "touch later"},
+                    "item": {"type": activity, "command": "touch later"},
                 },
                 {"type": "turn.completed"},
             )

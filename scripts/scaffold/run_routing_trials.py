@@ -1531,8 +1531,7 @@ def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
             if any(
                 isinstance(trailing_event, dict)
                 and isinstance(trailing_event.get("item"), dict)
-                and trailing_event["item"].get("type")
-                in {"command_execution", "function_call", "mcp_tool_call", "tool_call"}
+                and trailing_event["item"].get("type") in _EXECUTION_IDENTITY_FIELDS
                 for trailing_event in trailing
             ):
                 return None, stream_truncated
