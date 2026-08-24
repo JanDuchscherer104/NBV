@@ -979,7 +979,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
                 ".omx/specs/nested/thesis-peer-review/report.md\n"
                 ".omx/specs/nested/thesis-review-peer/report.md\n"
                 ".omx/specs/nested/accepted-spec/report.md\n"
-                ".omx/specs/nested/ordinary-report.md\n"
+                ".omx/specs/nested/ordinary/report.md\n"
                 ".omx/specs/accepted-spec.md\n"
                 ".omx/plans/accepted-plan.md\n"
                 ".agents/memory/history/2026/08/eligible-debrief.md\n"
