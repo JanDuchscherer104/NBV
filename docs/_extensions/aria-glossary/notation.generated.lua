@@ -284,6 +284,24 @@ return {
       description = "Action-mask-independent conditional candidate value emitted by the scorer.",
       thesis_list = true,
     },
+    ["rl.coral_q_edge"] = {
+      tex = "e_k^Q",
+      typst = "#symb.rl.coral_q_edge",
+      description = "Fixed continuous fitted-Q boundary between adjacent CORAL classes.",
+      thesis_list = true,
+    },
+    ["rl.coral_q_label"] = {
+      tex = "c_n^Q",
+      typst = "#symb.rl.coral_q_label",
+      description = "Ordinal class assigned to one continuous fitted-Q target.",
+      thesis_list = true,
+    },
+    ["rl.coral_q_value"] = {
+      tex = "u_k^Q",
+      typst = "#symb.rl.coral_q_value",
+      description = "Fixed continuous-Q representative used to decode one CORAL class.",
+      thesis_list = true,
+    },
     ["rl.feasibility_logits"] = {
       tex = "\\ell_{t,i}^{\\mathrm{feas}}",
       typst = "#symb.rl.feasibility_logits",
@@ -857,9 +875,9 @@ return {
       thesis_list = false,
     },
     ["rl.qh_coral_interface"] = {
-      tex = "\\begin{gathered}p_{t,i,k}^{\\mathrm{CORAL}}=\\sigma(o_{t,i,k}^{\\mathrm{CORAL}}),\\quad k=0,\\ldots,K-2;\\\\ \\pi_{t,i,k}^{\\mathrm{CORAL}}=p_{t,i,k-1}^{\\mathrm{CORAL}}-p_{t,i,k}^{\\mathrm{CORAL}},\\quad p_{t,i,-1}^{\\mathrm{CORAL}}=1,\\quad p_{t,i,K-1}^{\\mathrm{CORAL}}=0;\\\\ \\hat{r}_\\psi^e(s_t^{\\mathrm{cf0}},\\boldsymbol{\\phi}_e,q_{t,i})=\\sum_{k=0}^{K-1}\\pi_{t,i,k}^{\\mathrm{CORAL}}u_k\\end{gathered}",
+      tex = "\\begin{gathered}c_n^Q=\\sum_{k=0}^{K-2}\\mathbb{1}[y_n>e_k^Q],\\quad l_{n,k}=\\mathbb{1}[c_n^Q>k];\\\\ \\mathcal{L}_Q^{\\mathrm{CORAL}}=-\\sum_n\\sum_{k=0}^{K-2}\\left(l_{n,k}\\log p_{n,k}+(1-l_{n,k})\\log(1-p_{n,k})\\right),\\quad p_{n,k}=\\sigma(o_{n,k});\\\\ \\pi_{n,k}^{\\mathrm{raw}}=p_{n,k-1}-p_{n,k},\\quad \\widetilde{\\pi}_{n,k}=\\frac{\\max(\\pi_{n,k}^{\\mathrm{raw}},0)}{\\sum_j\\max(\\pi_{n,j}^{\\mathrm{raw}},0)+\\varepsilon},\\quad Q_n^{\\mathrm{cond}}=\\sum_{k=0}^{K-1}\\widetilde{\\pi}_{n,k}u_k^Q\\end{gathered}",
       typst = "#eqs.rl.qh_coral_interface",
-      description = "",
+      description = "Fixed-support CORAL loss and continuous conditional-Q decoding.",
       thesis_list = false,
     },
     ["rl.qh_doubleq_index"] = {
