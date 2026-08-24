@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 348ccd1271d902ea2c409de63bb0d4bb53175c2b
+repo_head: 320e47354a533a9f8a60859a634da7486687a3fa
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -128,6 +128,15 @@ duplicating it in all three skills.
   overflow cannot satisfy the gate.
 - Malformed JSONL whose decoded agent message contains an unencodable UTF-8
   surrogate fails verifier receipt validation rather than raising an exception.
+- Submission-gate diagnostics must decode as UTF-8 and contain the exact
+  assertion record followed by its `experiment_data.typ` source location;
+  invalid bytes and phrase-only unrelated errors fail closed.
+- Workspace-write subjects receive a read-only `.git` overlay, preserving the
+  host-owned baseline index used for post-run changed-path attestation; a
+  sandbox regression proves `git update-index --assume-unchanged` cannot hide
+  a protected path.
+- An unknown completed item type is incomplete evidence unless it is explicitly
+  classified as a benign non-execution item, preventing silent protocol drift.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -156,6 +165,8 @@ duplicating it in all three skills.
 - [996223bfe01d4a991aca72ca540a0135d9a8bfba](https://github.com/JanDuchscherer104/ARIA-NBV/commit/996223bfe01d4a991aca72ca540a0135d9a8bfba) — implementation: fail closed on terminal receipts
 - [3126875ea0bb46cda63c37e25db3b08ff3db8f2d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3126875ea0bb46cda63c37e25db3b08ff3db8f2d) — implementation: seal routing runtime boundary
 - [348ccd1271d902ea2c409de63bb0d4bb53175c2b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/348ccd1271d902ea2c409de63bb0d4bb53175c2b) — implementation: prove routing gates explicitly
+- [c053a112619621932aadad55878b042d0dbf617a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c053a112619621932aadad55878b042d0dbf617a) — implementation: validate submission gate diagnostics
+- [320e47354a533a9f8a60859a634da7486687a3fa](https://github.com/JanDuchscherer104/ARIA-NBV/commit/320e47354a533a9f8a60859a634da7486687a3fa) — implementation: protect routing change attestations
 
 ## Verification
 
@@ -175,6 +186,8 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py` — 83 passed, 51 subtests passed; receipt-terminal and UTF-8 byte-bound regressions passed.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 71 passed, including unfinished-message and home-level-runtime mount regressions; Ruff and `git diff --check` passed.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 75 passed, including late top-level events, UTF-8 surrogates, and submission timeout/wrong-diagnostic regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
+- `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 76 passed, including invalid UTF-8 and phrase-only submission-diagnostic regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
+- `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 77 passed, including `.git` index-tampering and unknown-item protocol-drift regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
 
 ## Canonical Owner Impact
 
