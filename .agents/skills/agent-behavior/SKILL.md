@@ -77,6 +77,11 @@ explicit.
   capability, use the `simplification` workflow and preserve the outcome until
   comparative evidence supports its retained, replaced, removed, deferred, or
   open status.
+- **External research scaffold adoption:** Before adopting behavior from an
+  external research harness, read
+  [`references/senpai-adoption.md`](references/senpai-adoption.md). Reuse only
+  its demonstrated mechanics through an ARIA owner; keep the external runtime
+  separate and follow its pinned upstream-update route.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
