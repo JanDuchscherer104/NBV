@@ -779,6 +779,17 @@ def test_capture_and_routing_contracts() -> None:
     assert "Its `Open Choices` are unresolved evidence" in intent_reference
     assert "overrides neither" in intent_reference
     assert "persist it at the smallest exact owner" in intent_reference
+    for requirement in (
+        "## Candidate Owner Intent",
+        "direct user\ninstruction or repeated task evidence",
+        "precise, reusable\ncross-task preference",
+        "proposed for current-user review",
+        "Omit this section for one-off instructions",
+        "do not add it to\n`.agents/references/human_owner_intent.md` automatically",
+        "current-user\nacceptance",
+        "implementation commit from the debrief",
+    ):
+        assert requirement in intent_reference
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
