@@ -1,6 +1,6 @@
 ---
 name: agent-behavior
-description: Use before non-trivial ARIA-NBV work to locate the authoritative owner, scope one traceable lane, preserve concurrent work, and verify the result.
+description: Use before non-trivial ARIA-NBV work to locate the authoritative owner, consult reviewed intent only when a material choice remains unsettled, scope one traceable lane, preserve concurrent work, and verify the result.
 ---
 
 # Agent Behavior
@@ -16,6 +16,10 @@ explicit.
    implementation in sync. When a change affects an implemented scientific or
    behavioral claim, update and verify both owning surfaces together; do not let
    thesis prose describe behavior unsupported by current code and tests.
+- **Lowest shared owner.** Put behavior used by demonstrated consumers at their
+  lowest shared domain owner. Use exact sources to prove consumers and Graphify
+  for non-obvious relationships; add a generic utility owner only after
+  demonstrated variation.
 
 ## Owner-first loop
 
@@ -46,6 +50,10 @@ explicit.
 
 ## Conditional branches
 
+- **Unsettled policy choice:** When accepted scoped requirements, exact owners,
+  and accepted sequencing leave a material choice unsettled, read
+  [`references/reviewed-intent.md`](references/reviewed-intent.md) before
+  applying general human intent.
 - **Durable capture:** When the user directly requests persistence in deliberate
   angle-bracket prose, read
  [`references/durable-capture.md`](references/durable-capture.md) and apply

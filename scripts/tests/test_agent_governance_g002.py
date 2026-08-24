@@ -738,6 +738,8 @@ def test_capture_and_routing_contracts() -> None:
         "Surface conflicting interpretations, terminology, and",
         "current owner's smallest interface",
         "demonstrated variation",
+        "Lowest shared owner.",
+        "consult reviewed intent only when a material choice remains unsettled",
         "remove only debris created by this change",
         "report pre-existing cleanup separately",
         "second source of truth",
@@ -748,6 +750,7 @@ def test_capture_and_routing_contracts() -> None:
     descriptor = _read(agent_behavior_path.parent / "agents" / "openai.yaml")
     assert 'short_description: "Owner-first ARIA-NBV preflight"' in descriptor
     assert "scope one traceable lane" in descriptor
+    assert "consult reviewed intent only for unsettled choices" in descriptor
     reference_paths = {
         link.split("#", 1)[0]
         for link in re.findall(r"\]\((references/[^)]+)\)", agent_behavior)
@@ -756,9 +759,26 @@ def test_capture_and_routing_contracts() -> None:
         "references/durable-capture.md",
         "references/execution-branches.md",
         "references/external-actions.md",
+        "references/reviewed-intent.md",
     }
     for reference_path in reference_paths:
         assert (agent_behavior_path.parent / reference_path).is_file()
+
+    intent_reference = _read(
+        agent_behavior_path.parent / "references" / "reviewed-intent.md"
+    )
+    precedence = (
+        "1. **Accepted scoped specification.**",
+        "2. **Exact owner.**",
+        "3. **Accepted plan.**",
+        "4. **Reviewed human intent.**",
+    )
+    offsets = [intent_reference.index(marker) for marker in precedence]
+    assert offsets == sorted(offsets)
+    assert ".agents/references/human_owner_intent.md" in intent_reference
+    assert "Its `Open Choices` are unresolved evidence" in intent_reference
+    assert "overrides neither" in intent_reference
+    assert "persist it at the smallest exact owner" in intent_reference
 
     execution_branches = _read(
         agent_behavior_path.parent / "references" / "execution-branches.md"
