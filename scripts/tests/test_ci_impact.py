@@ -67,24 +67,18 @@ class SelectionTests(unittest.TestCase):
             "sudo apt-get install --no-install-recommends --yes poppler-utils",
             pdf_validator,
         )
-        self.assertIn(
-            "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0",
-            workflow,
-        )
-        self.assertEqual(workflow.count("astral-sh/setup-uv@"), 1)
-        self.assertEqual(workflow.count("enable-cache: true"), 1)
-        self.assertNotIn("uses: actions/cache@", workflow)
-        self.assertIn('version: "0.12.5"', workflow)
-        self.assertIn("enable-cache: true", workflow)
-        self.assertIn("prune-cache: false", workflow)
-        self.assertIn("cache-suffix: uv-0.12.5", workflow)
-        self.assertIn("aria_nbv/pyproject.toml", workflow)
-        self.assertIn("aria_nbv/uv.lock", workflow)
-        self.assertEqual(workflow.count("cache-dependency-glob:"), 1)
         setup_uv = workflow.split("      - name: Set up uv\n", 1)[1].split(
             "      - name: Sync package validation environment\n", 1
         )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
+        self.assertIn(
+            'python -m pip install --disable-pip-version-check --no-input '
+            '"uv==0.12.5"',
+            setup_uv,
+        )
+        self.assertIn('test "$(uv --version)" = "uv 0.12.5"', setup_uv)
+        self.assertNotIn("astral-sh/setup-uv@", workflow)
+        self.assertNotIn("uses: actions/cache@", workflow)
         self.assertEqual(workflow.count("uv sync --locked --extra dev"), 1)
         sync = workflow.split("      - name: Sync package validation environment\n", 1)[
             1
