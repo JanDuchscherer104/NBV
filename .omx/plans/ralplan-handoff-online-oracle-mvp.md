@@ -30,7 +30,8 @@ Critic iteration 3 both approved the PRD and test specification. This completes
 planning only.
 
 Raw Architect/Critic review files remain session-local below `.omx/reviews/`
-under the repository's location-based review-artifact ignore policy. Their accepted decisions, repair changelog, final
+under the repository's location-based review-artifact ignore policy. Their
+accepted decisions, repair changelog, final
 verdicts, and remaining gates are folded into the published PRD, test spec,
 handoff, issue ledger, and debrief.
 
