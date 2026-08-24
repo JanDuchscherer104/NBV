@@ -51,6 +51,17 @@ For a completed implementation workpackage, add `## Commits` with its full
 immutable implementation commit link. Planning or read-only debriefs say
 `none`; the debrief/index commit is not substituted for the workpackage commit.
 
+### Candidate Owner Intent
+
+When the `agent-behavior` [candidate-intent branch](../skills/agent-behavior/references/reviewed-intent.md#candidate-owner-intent)
+is eligible, add `## Candidate Owner Intent` to the debrief with the exact
+statement, direct or bounded recurring evidence, scope and target owner, and
+`Status: proposed for current-user review`. Omit the section otherwise. It is
+episodic evidence, not a policy record: only explicit current-user acceptance
+promotes the stated preference into
+`.agents/references/human_owner_intent.md`. Link that owner-update commit from
+the debrief's `## Commits` section after promotion.
+
 Existing records with `status: legacy-imported` are grandfathered archive
 evidence and do not need backfilling unless a task explicitly requests it.
 Use absolute ISO dates (`2026-05-08`) in frontmatter and prose; debriefs outlive
