@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from io import BytesIO
@@ -96,6 +97,29 @@ def _run_verifier(
     )
 
 
+def _bounded_process_result(**overrides: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "returncode": 0,
+        "timed_out": False,
+        "output_overflow": False,
+        "launch_error": False,
+        "stream_capture": {
+            "events": {
+                "observed_bytes": 0,
+                "maximum_bytes": trials.EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+                "overflowed": False,
+            },
+            "stderr": {
+                "observed_bytes": 0,
+                "maximum_bytes": trials.TRIAL_STDERR_MAX_BYTES,
+                "overflowed": False,
+            },
+        },
+    }
+    result.update(overrides)
+    return result
+
+
 def _trial_report() -> dict[str, object]:
     return {
         "trial_id": "trial",
@@ -127,6 +151,7 @@ def _trial_report() -> dict[str, object]:
             },
         },
         "trial_response": trials.bound_trial_response({"outcome": "bounded"}),
+        "trial_response_valid": True,
         "event_evidence": _complete_event_evidence(),
     }
 
@@ -216,6 +241,41 @@ def test_bounded_stream_capture_terminates_on_overflow() -> None:
     assert terminated == [True]
 
 
+def test_verifier_process_receipt_fails_closed_on_output_overflow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdin = BytesIO()
+            self.stdout = BytesIO(b"overflow")
+            self.stderr = BytesIO()
+            self.returncode = 0
+
+        def wait(self, timeout: int | None = None) -> int:
+            return self.returncode
+
+        def poll(self) -> int:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 125
+
+    monkeypatch.setattr(trials, "EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES", 4)
+    monkeypatch.setattr(trials, "TRIAL_STDERR_MAX_BYTES", 4)
+    with patch.object(trials.subprocess, "Popen", return_value=FakeProcess()):
+        result = trials._run_bounded_process(
+            command=["codex", "exec"],
+            prompt="route",
+            cwd=tmp_path,
+            events_path=tmp_path / "events.jsonl",
+            stderr_path=tmp_path / "stderr.txt",
+            timeout_seconds=1,
+        )
+
+    assert result["output_overflow"] is True
+    assert result["stream_capture"]["events"]["overflowed"] is True  # type: ignore[index]
+
+
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:
     command = trials._build_codex_command(
         checkout=tmp_path,
@@ -231,6 +291,28 @@ def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) ->
     assert "expected_owner_paths" not in " ".join(command)
 
 
+def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    receipt_dir = tmp_path / "receipt"
+    checkout.mkdir()
+    receipt_dir.mkdir()
+    auth_path = tmp_path / "auth.json"
+    auth_path.write_text("{}\n", encoding="utf-8")
+    command = trials._subject_sandbox_command(
+        codex_command=["codex", "exec"],
+        checkout=checkout,
+        receipt_dir=receipt_dir,
+        schema_path=trials.REPORT_SCHEMA,
+        sandbox=trials.READ_ONLY_SANDBOX,
+        auth_path=auth_path,
+    )
+
+    assert str(trials.REPORT_SCHEMA) in command
+    assert "/schema/routing_trial_report.schema.json" in command
+    assert str(receipt_dir / trials.REPORT_SCHEMA.name) not in command
+
+
+@pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
 def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
     checkout = tmp_path / "checkout"
     receipt_dir = tmp_path / "receipt"
@@ -243,13 +325,14 @@ def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
         codex_command=["/usr/bin/test", "!", "-e", str(evaluator_fixture)],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
         auth_path=auth_path,
     )
-
     subprocess.run(command, check=True)
 
 
+@pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
 def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
     checkout = tmp_path / "checkout"
     receipt_dir = tmp_path / "receipt"
@@ -261,6 +344,7 @@ def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
         codex_command=["codex", "--version"],
         checkout=checkout,
         receipt_dir=receipt_dir,
+        schema_path=trials.REPORT_SCHEMA,
         sandbox=trials.READ_ONLY_SANDBOX,
         auth_path=auth_path,
     )
@@ -806,23 +890,48 @@ def test_trial_response_is_bounded_and_never_observed_evidence() -> None:
     assert payload["rubric_commit"] == "rubric"
 
 
-def test_read_trial_response_reads_bounded_stream_once(tmp_path: Path) -> None:
-    class CountingBytesIO(BytesIO):
-        def __init__(self, value: bytes) -> None:
-            super().__init__(value)
-            self.read_calls = 0
+def test_read_trial_response_bounds_and_marks_invalid_schema(tmp_path: Path) -> None:
+    response_path = tmp_path / "trial-response.json"
+    response_path.write_bytes(b'{"outcome":"kept"}')
+    response, valid = trials.read_trial_response(response_path)
 
-        def read(self, size: int | None = -1) -> bytes:
-            self.read_calls += 1
-            return super().read(size)
-
-    stream = CountingBytesIO(b'{"outcome":"kept"}')
-    with patch.object(Path, "open", return_value=stream):
-        response = trials.read_trial_response(tmp_path / "trial-response.json")
-
-    assert stream.read_calls == 1
     assert response["content"] == '{"outcome":"kept"}'
     assert response["truncated"] is False
+    assert valid is False
+
+
+def test_trial_response_validation_requires_the_canonical_schema() -> None:
+    valid = {
+        "loaded_guides": [".agents/skills/agent-behavior/SKILL.md"],
+        "selected_skill": "agent-behavior",
+        "opened_references": [],
+        "tool_calls": [],
+        "exact_owner": ".agents/skills/agent-behavior/SKILL.md",
+        "handoff": None,
+        "selected_verification": "pytest -q",
+        "outcome": "complete",
+    }
+    assert trials.validate_trial_response(valid)
+    assert not trials.validate_trial_response({**valid, "unexpected": "receipt"})
+    assert not trials.validate_trial_response(valid, truncated=True)
+
+
+def test_verifier_rejects_an_invalid_trial_response_before_execution(
+    tmp_path: Path,
+) -> None:
+    report = _trial_report()
+    report["trial_response_valid"] = False
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    checkout.mkdir()
+    trial_dir.mkdir()
+
+    with patch.object(trials, "_run_bounded_process") as run_process:
+        result = _run_verifier(report, checkout, trial_dir)
+
+    assert result["passed"] is False
+    assert "canonical schema" in result["reason"]
+    run_process.assert_not_called()
 
 
 def test_verdict_validation_covers_pass_semantic_fail_and_identity() -> None:
@@ -923,20 +1032,14 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
         )
         return type("Result", (), {"returncode": 0})()
 
-    with patch.object(
-        trials.subprocess,
-        "run",
-        side_effect=lambda *args, **kwargs: write_verdict(_verdict()),
-    ):
+    write_verdict(_verdict())
+    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
         passed = _run_verifier(report, checkout, trial_dir)
     assert passed["passed"] is True
 
     failing_verdict = _verdict(verdict="fail", missing_requirements=["owner"])
-    with patch.object(
-        trials.subprocess,
-        "run",
-        side_effect=lambda *args, **kwargs: write_verdict(failing_verdict),
-    ):
+    write_verdict(failing_verdict)
+    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
         failed = _run_verifier(report, checkout, trial_dir)
     assert failed["passed"] is False
     assert failed["reason"] == "semantic fail"
@@ -955,7 +1058,8 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
         (trial_dir / "verifier-report.json").write_bytes(b"\xff")
         return type("Result", (), {"returncode": 0})()
 
-    with patch.object(trials.subprocess, "run", side_effect=write_invalid):
+    write_invalid()
+    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
         invalid_utf8 = _run_verifier(report, checkout, trial_dir)
     assert invalid_utf8["passed"] is False
     assert "unreadable" in invalid_utf8["reason"]
@@ -966,7 +1070,8 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
         )
         return type("Result", (), {"returncode": 0})()
 
-    with patch.object(trials.subprocess, "run", side_effect=write_oversized):
+    write_oversized()
+    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
         oversized = _run_verifier(report, checkout, trial_dir)
     assert oversized["passed"] is False
     assert "byte bound" in oversized["reason"]
@@ -979,17 +1084,16 @@ def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:
 
     missing_dir = tmp_path / "missing"
     missing_dir.mkdir()
-    result = type("Result", (), {"returncode": 0})()
-    with patch.object(trials.subprocess, "run", return_value=result):
+    with patch.object(trials, "_run_bounded_process", return_value=_bounded_process_result()):
         missing = _run_verifier(report, checkout, missing_dir)
     assert missing["passed"] is False
 
     timeout_dir = tmp_path / "timeout"
     timeout_dir.mkdir()
     with patch.object(
-        trials.subprocess,
-        "run",
-        side_effect=trials.subprocess.TimeoutExpired("codex", 1),
+        trials,
+        "_run_bounded_process",
+        return_value=_bounded_process_result(returncode=124, timed_out=True),
     ):
         timeout = _run_verifier(report, checkout, timeout_dir)
     assert timeout["passed"] is False

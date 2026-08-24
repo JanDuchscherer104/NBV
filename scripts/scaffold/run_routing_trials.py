@@ -140,6 +140,109 @@ def _copy_bounded_stream(
                 return
 
 
+def _run_bounded_process(
+    *,
+    command: list[str],
+    prompt: str,
+    cwd: Path,
+    events_path: Path,
+    stderr_path: Path,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    """Run one model process while preserving bounded stdout and stderr receipts."""
+    output_overflow = Event()
+    events_overflow = Event()
+    stderr_overflow = Event()
+    output_lock = Lock()
+    event_bytes = [0]
+    stderr_bytes = [0]
+    returncode = 125
+    timed_out = False
+    launch_error = False
+    with events_path.open("wb") as events, stderr_path.open("wb") as stderr:
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=os.environ.copy(),
+            )
+            assert process.stdin is not None
+            assert process.stdout is not None
+            assert process.stderr is not None
+            process.stdin.write(prompt.encode("utf-8"))
+            process.stdin.close()
+
+            def terminate_for(overflow: Event) -> None:
+                overflow.set()
+                output_overflow.set()
+                process.terminate()
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                copies = (
+                    executor.submit(
+                        _copy_bounded_stream,
+                        process.stdout,
+                        events,
+                        maximum_bytes=EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+                        overflow=events_overflow,
+                        on_overflow=lambda: terminate_for(events_overflow),
+                        lock=output_lock,
+                        written=event_bytes,
+                    ),
+                    executor.submit(
+                        _copy_bounded_stream,
+                        process.stderr,
+                        stderr,
+                        maximum_bytes=TRIAL_STDERR_MAX_BYTES,
+                        overflow=stderr_overflow,
+                        on_overflow=lambda: terminate_for(stderr_overflow),
+                        lock=output_lock,
+                        written=stderr_bytes,
+                    ),
+                )
+                try:
+                    returncode = process.wait(timeout=timeout_seconds)
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    process.wait()
+                    returncode = 124
+                    timed_out = True
+                if output_overflow.is_set() and process.poll() is None:
+                    process.terminate()
+                    process.wait()
+                    returncode = 125
+                for copy in copies:
+                    copy.result()
+        except subprocess.TimeoutExpired:
+            launch_error = True
+            timed_out = True
+            returncode = 124
+        except OSError:
+            launch_error = True
+            returncode = 125
+    return {
+        "returncode": returncode,
+        "timed_out": timed_out,
+        "output_overflow": output_overflow.is_set(),
+        "launch_error": launch_error,
+        "stream_capture": {
+            "events": {
+                "observed_bytes": event_bytes[0],
+                "maximum_bytes": EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+                "overflowed": events_overflow.is_set(),
+            },
+            "stderr": {
+                "observed_bytes": stderr_bytes[0],
+                "maximum_bytes": TRIAL_STDERR_MAX_BYTES,
+                "overflowed": stderr_overflow.is_set(),
+            },
+        },
+    }
+
+
 def run_git(*args: str, cwd: Path = ROOT) -> str:
     result = subprocess.run(
         ["git", *args],
@@ -267,15 +370,18 @@ def _subject_sandbox_command(
     codex_command: list[str],
     checkout: Path,
     receipt_dir: Path,
+    schema_path: Path,
     sandbox: str,
     auth_path: Path | None = None,
 ) -> list[str]:
-    """Run Codex where only the sanitized subject and receipt mount are visible."""
+    """Run Codex with a sanitized subject and immutable evaluator schema."""
     resolved_auth_path = auth_path or (
         Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
     )
     if not resolved_auth_path.is_file():
         raise RuntimeError("routing trials require a readable Codex auth file")
+    if not schema_path.is_file():
+        raise RuntimeError("routing trials require the canonical report schema")
     subject_bind = "--ro-bind" if sandbox == READ_ONLY_SANDBOX else "--bind"
     return [
         "bwrap",
@@ -322,9 +428,14 @@ def _subject_sandbox_command(
         "/home/codex",
         "--dir",
         "/codex-home",
+        "--dir",
+        "/schema",
         "--ro-bind",
         str(resolved_auth_path),
         "/codex-home/auth.json",
+        "--ro-bind",
+        str(schema_path),
+        "/schema/routing_trial_report.schema.json",
         subject_bind,
         str(checkout),
         "/workspace",
@@ -513,6 +624,7 @@ def build_verifier_prompt(
         },
         "execution": report["execution"],
         "stream_capture": report["stream_capture"],
+        "trial_response_valid": report["trial_response_valid"],
         "trial_response": report["trial_response"],
         "event_evidence": report["event_evidence"],
     }
@@ -641,6 +753,8 @@ def run_verifier(
     failure_reason: str | None = None
     if report.get("rubric_commit") != rubric_commit:
         failure_reason = "trial report rubric commit mismatch"
+    elif report.get("trial_response_valid") is not True:
+        failure_reason = "trial response does not match the canonical schema"
     else:
         evidence_valid, evidence_reason = validate_event_evidence(
             report.get("event_evidence")
@@ -663,31 +777,20 @@ def run_verifier(
         model=model,
         effort=effort,
     )
-    timed_out = False
-    returncode = 124
-    with (
-        verifier_events.open("w", encoding="utf-8") as events,
-        verifier_stderr.open("w", encoding="utf-8") as stderr,
-    ):
-        try:
-            result = subprocess.run(
-                command,
-                input=build_verifier_prompt(
-                    rubric=rubric[report["trial_id"]],
-                    report=report,
-                    rubric_commit=rubric_commit,
-                ),
-                cwd=ROOT,
-                stdout=events,
-                stderr=stderr,
-                text=True,
-                check=False,
-                timeout=timeout_seconds,
-                env=os.environ.copy(),
-            )
-            returncode = result.returncode
-        except subprocess.TimeoutExpired:
-            timed_out = True
+    process_result = _run_bounded_process(
+        command=command,
+        prompt=build_verifier_prompt(
+            rubric=rubric[report["trial_id"]],
+            report=report,
+            rubric_commit=rubric_commit,
+        ),
+        cwd=ROOT,
+        events_path=verifier_events,
+        stderr_path=verifier_stderr,
+        timeout_seconds=timeout_seconds,
+    )
+    timed_out = process_result["timed_out"]
+    returncode = process_result["returncode"]
     payload: Any = None
     verdict_read_error: str | None = None
     if not timed_out and verifier_report.is_file():
@@ -700,7 +803,9 @@ def run_verifier(
                 payload = json.loads(raw_verdict.decode("utf-8"))
         except (json.JSONDecodeError, OSError, UnicodeError):
             verdict_read_error = "verifier report is unreadable or malformed"
-    if returncode != 0 or timed_out:
+    if process_result["output_overflow"]:
+        valid, reason = False, "verifier output exceeded its byte bound"
+    elif returncode != 0 or timed_out:
         valid, reason = False, "verifier timed out or failed"
     elif verdict_read_error is not None:
         valid, reason = False, verdict_read_error
@@ -720,6 +825,7 @@ def run_verifier(
         "timed_out": timed_out,
         "returncode": returncode,
         "verdict": payload,
+        "stream_capture": process_result["stream_capture"],
         "artifacts": artifacts,
     }
 
@@ -776,6 +882,7 @@ def trial_passed(report: dict[str, Any]) -> bool:
         and report.get("checkout_clean_before")
         and not report.get("output_overflow", False)
         and validate_stream_capture(report.get("stream_capture"))
+        and report.get("trial_response_valid") is True
         and execution_valid
         and evidence_valid
         and report.get("adjudication", {}).get("passed", False)
@@ -1036,22 +1143,73 @@ def bound_trial_response(
     }
 
 
-def read_trial_response(path: Path) -> dict[str, Any]:
+def read_trial_response(path: Path) -> tuple[dict[str, Any], bool]:
+    """Read one bounded model receipt and say whether it matches its schema."""
     try:
         with path.open("rb") as stream:
             raw = stream.read(TRIAL_RESPONSE_MAX_CHARS + 1)
     except OSError:
-        return bound_trial_response({"unavailable": True})
+        return bound_trial_response({"unavailable": True}), False
     force_truncated = len(raw) > TRIAL_RESPONSE_MAX_CHARS
     try:
         text = raw.decode("utf-8")
     except UnicodeError:
-        return bound_trial_response({"unavailable": True})
+        return bound_trial_response({"unavailable": True}), False
     try:
         value: Any = json.loads(text)
     except json.JSONDecodeError:
-        value = text
-    return bound_trial_response(value, force_truncated=force_truncated)
+        return bound_trial_response(text, force_truncated=force_truncated), False
+    response = bound_trial_response(value, force_truncated=force_truncated)
+    return response, validate_trial_response(value, truncated=force_truncated)
+
+
+def validate_trial_response(value: Any, *, truncated: bool = False) -> bool:
+    """Validate the untrusted model receipt against the canonical local contract."""
+    try:
+        schema = json.loads(REPORT_SCHEMA.read_text(encoding="utf-8"))
+        required = set(schema["required"])
+        properties = schema["properties"]
+    except (json.JSONDecodeError, KeyError, OSError, TypeError):
+        return False
+    if (
+        truncated
+        or schema.get("additionalProperties") is not False
+        or not isinstance(value, dict)
+        or set(value) != required
+        or set(properties) != required
+    ):
+        return False
+    for field, definition in properties.items():
+        if not isinstance(definition, dict):
+            return False
+        allowed_types = definition.get("type")
+        if isinstance(allowed_types, str):
+            allowed = {allowed_types}
+        elif isinstance(allowed_types, list) and all(
+            isinstance(kind, str) for kind in allowed_types
+        ):
+            allowed = set(allowed_types)
+        else:
+            return False
+        item = value[field]
+        if item is None:
+            if "null" not in allowed:
+                return False
+        elif isinstance(item, str):
+            if "string" not in allowed:
+                return False
+        elif isinstance(item, list):
+            items = definition.get("items")
+            if (
+                "array" not in allowed
+                or not isinstance(items, dict)
+                or items.get("type") != "string"
+                or not all(isinstance(member, str) for member in item)
+            ):
+                return False
+        else:
+            return False
+    return True
 
 
 def run_trial(
@@ -1074,12 +1232,10 @@ def run_trial(
     stderr_path = trial_dir / "stderr.txt"
     trial_response_path = trial_dir / "trial-response.json"
     final_report = trial_dir / "report.json"
-    trial_schema_path = trial_dir / REPORT_SCHEMA.name
-    shutil.copyfile(REPORT_SCHEMA, trial_schema_path)
     contract = execution_contract(rubric)
     codex_command = _build_codex_command(
         checkout=Path("/workspace"),
-        output_schema=Path("/receipt") / trial_schema_path.name,
+        output_schema=Path("/schema/routing_trial_report.schema.json"),
         output_report=Path("/receipt") / trial_response_path.name,
         model=model,
         effort=effort,
@@ -1089,81 +1245,20 @@ def run_trial(
         codex_command=codex_command,
         checkout=checkout,
         receipt_dir=trial_dir,
+        schema_path=REPORT_SCHEMA,
         sandbox=contract["sandbox"],
     )
     baseline_head = run_git("rev-parse", "HEAD", cwd=checkout)
     changed_before = _changed_paths(checkout, baseline_head)
     started = time.time()
-    output_overflow = Event()
-    events_overflow = Event()
-    stderr_overflow = Event()
-    output_lock = Lock()
-    event_bytes = [0]
-    stderr_bytes = [0]
-    with (
-        events_path.open("wb") as events,
-        stderr_path.open("wb") as stderr,
-    ):
-        try:
-            process = subprocess.Popen(
-                command,
-                cwd=checkout,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=os.environ.copy(),
-            )
-            assert process.stdin is not None
-            assert process.stdout is not None
-            assert process.stderr is not None
-            process.stdin.write(task.encode("utf-8"))
-            process.stdin.close()
-
-            def terminate_for(overflow: Event) -> None:
-                overflow.set()
-                output_overflow.set()
-                process.terminate()
-
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                copies = (
-                    executor.submit(
-                        _copy_bounded_stream,
-                        process.stdout,
-                        events,
-                        maximum_bytes=EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
-                        overflow=events_overflow,
-                        on_overflow=lambda: terminate_for(events_overflow),
-                        lock=output_lock,
-                        written=event_bytes,
-                    ),
-                    executor.submit(
-                        _copy_bounded_stream,
-                        process.stderr,
-                        stderr,
-                        maximum_bytes=TRIAL_STDERR_MAX_BYTES,
-                        overflow=stderr_overflow,
-                        on_overflow=lambda: terminate_for(stderr_overflow),
-                        lock=output_lock,
-                        written=stderr_bytes,
-                    ),
-                )
-                try:
-                    returncode = process.wait(timeout=timeout_seconds)
-                    timed_out = False
-                except subprocess.TimeoutExpired:
-                    process.terminate()
-                    process.wait()
-                    returncode = 124
-                    timed_out = True
-                if output_overflow.is_set() and process.poll() is None:
-                    process.terminate()
-                    process.wait()
-                    returncode = 125
-                for copy in copies:
-                    copy.result()
-        except subprocess.TimeoutExpired:
-            returncode = 124
-            timed_out = True
+    process_result = _run_bounded_process(
+        command=command,
+        prompt=task,
+        cwd=checkout,
+        events_path=events_path,
+        stderr_path=stderr_path,
+        timeout_seconds=timeout_seconds,
+    )
     head_after = run_git("rev-parse", "HEAD", cwd=checkout)
     changed_after = _changed_paths(checkout, baseline_head)
     proof = None
@@ -1183,6 +1278,7 @@ def run_trial(
         "requested_effort": effort,
         "command_flags": codex_command[1:-1],
     }
+    trial_response, trial_response_valid = read_trial_response(trial_response_path)
     report = {
         "trial_id": trial_id,
         "prompt_sha256": hashlib.sha256(task.encode()).hexdigest(),
@@ -1192,23 +1288,13 @@ def run_trial(
         "event_evidence": extract_event_evidence(events_path),
         "started_unix": started,
         "elapsed_seconds": time.time() - started,
-        "returncode": returncode,
-        "timed_out": timed_out,
-        "output_overflow": output_overflow.is_set(),
+        "returncode": process_result["returncode"],
+        "timed_out": process_result["timed_out"],
+        "output_overflow": process_result["output_overflow"],
         "checkout_clean_before": not changed_before,
         "checkout_clean_after": head_after == baseline_head and not changed_after,
-        "stream_capture": {
-            "events": {
-                "observed_bytes": event_bytes[0],
-                "maximum_bytes": EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
-                "overflowed": events_overflow.is_set(),
-            },
-            "stderr": {
-                "observed_bytes": stderr_bytes[0],
-                "maximum_bytes": TRIAL_STDERR_MAX_BYTES,
-                "overflowed": stderr_overflow.is_set(),
-            },
-        },
+        "stream_capture": process_result["stream_capture"],
+        "trial_response_valid": trial_response_valid,
         "execution": {
             **contract,
             "baseline_head": baseline_head,
@@ -1221,7 +1307,7 @@ def run_trial(
             "stderr": stderr_path.name,
             "trial_response": trial_response_path.name,
         },
-        "trial_response": read_trial_response(trial_response_path),
+        "trial_response": trial_response,
     }
     final_report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report
@@ -1349,6 +1435,8 @@ def main() -> int:
         return 0
     if args.jobs < 1:
         raise SystemExit("--jobs must be positive")
+    if shutil.which("bwrap") is None:
+        raise SystemExit("routing trials require Bubblewrap (bwrap)")
     if run_git("status", "--porcelain"):
         raise SystemExit("commit the candidate before routing trials")
 
