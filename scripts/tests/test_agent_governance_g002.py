@@ -115,23 +115,7 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
 
 def _is_session_local_review_artifact(path: str) -> bool:
     relative = Path(path)
-    leaf = relative.name.lower()
-    role_review = (
-        relative.parts[:1] == (".omx",)
-        and "review" in leaf
-        and any(
-            role in leaf for role in ("architect", "architecture", "critic", "critique")
-        )
-    )
-    nested_peer_review = (
-        relative.parts[:2] == (".omx", "specs")
-        and leaf == "report.md"
-        and any(
-            "peer" in part.lower() and "review" in part.lower()
-            for part in relative.parts[2:-1]
-        )
-    )
-    return role_review or nested_peer_review
+    return relative.parts[:2] == (".omx", "reviews")
 
 
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
@@ -924,13 +908,19 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     assert not tracked_role_reviews
     eligible_debrief = ".agents/memory/history/2026/08/eligible-architecture-review.md"
     assert not _is_session_local_review_artifact(eligible_debrief)
+    assert _is_session_local_review_artifact(".omx/reviews/architect-review.md")
+    assert _is_session_local_review_artifact(
+        ".omx/reviews/nested/peer-review/report.md"
+    )
+    assert not _is_session_local_review_artifact(
+        ".omx/specs/nested/accepted-architecture-review/report.md"
+    )
+    assert not _is_session_local_review_artifact(
+        ".omx/specs/nested/accepted-peer-review/report.md"
+    )
 
     ignored = _read(ROOT / ".gitignore")
-    for role in ("architect", "architecture", "critic", "critique"):
-        assert f".omx/**/*{role}*review*" in ignored
-        assert f".omx/**/*review*{role}*" in ignored
-    assert ".omx/specs/**/*peer*review*/report.md" in ignored
-    assert ".omx/specs/**/*review*peer*/report.md" in ignored
+    assert ".omx/reviews/" in ignored.splitlines()
     assert ".omx/specs/**" not in ignored.splitlines()
     ignored_role_reviews = subprocess.run(
         [
@@ -942,29 +932,15 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         cwd=ROOT,
         check=True,
         input=(
-            ".omx/plans/example-architect-review.md\n"
-            ".omx/plans/example-review-architect.md\n"
-            ".omx/interviews/example-architecture-review.md\n"
-            ".omx/specs/example-review-architecture.md\n"
-            ".omx/plans/nested/example-critic-review-iteration-1.md\n"
-            ".omx/plans/nested/example-review-critic.md\n"
-            ".omx/plans/example-critique-review.md\n"
-            ".omx/plans/example-review-critique.md\n"
-            ".omx/specs/nested/thesis-peer-review/report.md\n"
+            ".omx/reviews/architect-review.md\n"
+            ".omx/reviews/nested/peer-review/report.md\n"
         ),
         capture_output=True,
         text=True,
     ).stdout.splitlines()
     assert ignored_role_reviews == [
-        ".omx/plans/example-architect-review.md",
-        ".omx/plans/example-review-architect.md",
-        ".omx/interviews/example-architecture-review.md",
-        ".omx/specs/example-review-architecture.md",
-        ".omx/plans/nested/example-critic-review-iteration-1.md",
-        ".omx/plans/nested/example-review-critic.md",
-        ".omx/plans/example-critique-review.md",
-        ".omx/plans/example-review-critique.md",
-        ".omx/specs/nested/thesis-peer-review/report.md",
+        ".omx/reviews/architect-review.md",
+        ".omx/reviews/nested/peer-review/report.md",
     ]
 
     with tempfile.TemporaryDirectory(prefix="g002-review-ignore-") as tmp:
@@ -976,8 +952,11 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
             cwd=root,
             check=True,
             input=(
-                ".omx/specs/nested/thesis-peer-review/report.md\n"
-                ".omx/specs/nested/thesis-review-peer/report.md\n"
+                ".omx/reviews/architect-review.md\n"
+                ".omx/reviews/nested/peer-review/report.md\n"
+                ".omx/specs/nested/accepted-architecture-review/report.md\n"
+                ".omx/specs/nested/accepted-peer-review/report.md\n"
+                ".omx/specs/nested/peer/review/report.md\n"
                 ".omx/specs/nested/accepted-spec/report.md\n"
                 ".omx/specs/nested/ordinary/report.md\n"
                 ".omx/specs/accepted-spec.md\n"
@@ -989,8 +968,8 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
             text=True,
         ).stdout.splitlines()
         assert isolated_ignored_paths == [
-            ".omx/specs/nested/thesis-peer-review/report.md",
-            ".omx/specs/nested/thesis-review-peer/report.md",
+            ".omx/reviews/architect-review.md",
+            ".omx/reviews/nested/peer-review/report.md",
         ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
