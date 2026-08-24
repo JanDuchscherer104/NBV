@@ -28,7 +28,6 @@ from scaffold_audit import (  # noqa: E402
     repository_pointers,
 )
 
-
 CUSTOM_SKILLS = tuple(sorted(custom_skill_paths()))
 GRAPHIFY_BUNDLE = ROOT / ".agents" / "skills" / "graphify"
 CONTEXT7_REGISTRY = (
@@ -111,6 +110,21 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
         for path in _tracked_live_runtime_configs(root)
         if "mempalace" in _read(path).lower()
     ]
+
+
+def _is_session_local_review_artifact(path: str) -> bool:
+    relative = Path(path)
+    return relative.parts[:2] == (".omx", "reviews") and len(relative.parts) > 2
+
+
+def _raw_review_plan_pointers(text: str) -> list[str]:
+    role = r"(?:architect(?:ure)?|critic|critique)"
+    path = r"\.omx/plans/[^\s`\"']*"
+    return re.findall(
+        rf"{path}(?:{role}[^\s`\"']*review|review[^\s`\"']*{role})[^\s`\"']*",
+        text,
+        flags=re.IGNORECASE,
+    )
 
 
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
@@ -236,8 +250,7 @@ def test_repository_pointer_discovery_and_integrity_boundaries() -> None:
         bare_path = root / "bare" / "SKILL.md"
         bare_path.parent.mkdir()
         bare_path.write_text(
-            "---\nname: bare\ndescription: Test fixture.\n---\n"
-            "See `references/guide.md`.\n",
+            "---\nname: bare\ndescription: Test fixture.\n---\nSee `references/guide.md`.\n",
             encoding="utf-8",
         )
         references = bare_path.parent / "references"
@@ -898,20 +911,73 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         text=True,
     ).stdout.split("\0")
     tracked_role_reviews = [
-        path
-        for path in tracked
-        if "review" in Path(path).name.lower()
-        and any(
-            role in Path(path).name.lower()
-            for role in ("architect", "architecture", "critic", "critique")
-        )
+        path for path in tracked if _is_session_local_review_artifact(path)
     ]
     assert not tracked_role_reviews
+    retired_review = (
+        ROOT / ".omx/specs/autoresearch-thesis-peer-review-20260816/report.md"
+    )
+    retired_review_owner = (
+        ROOT
+        / ".agents/memory/history/2026/08/2026-08-16_thesis_peer_review_and_mode_contract.md"
+    )
+    assert not retired_review.exists()
+    assert ".omx/specs/autoresearch-thesis-peer-review-20260816/report.md" not in _read(
+        retired_review_owner
+    )
+    eligible_debrief = ".agents/memory/history/2026/08/eligible-architecture-review.md"
+    assert not _is_session_local_review_artifact(eligible_debrief)
+    assert not _is_session_local_review_artifact(".omx/reviews")
+    assert _is_session_local_review_artifact(".omx/reviews/architect-review.md")
+    assert _is_session_local_review_artifact(
+        ".omx/reviews/nested/peer-review/report.md"
+    )
+    assert not _is_session_local_review_artifact(
+        ".omx/specs/nested/accepted-architecture-review/report.md"
+    )
+    assert not _is_session_local_review_artifact(
+        ".omx/specs/nested/accepted-peer-review/report.md"
+    )
+
+    migrated_review_pointers = {
+        ROOT / ".omx" / "plans" / "ralplan-handoff-online-oracle-mvp.md": (
+            ".omx/reviews/ralplan-architect-review-online-oracle-mvp-iteration-6.md",
+            ".omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md",
+        ),
+        ROOT
+        / ".omx"
+        / "plans"
+        / "ralplan-handoff-aria-nbv-domain-skill-distillation.md": (
+            ".omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-consensus-loop-3-iteration-2.md",
+            ".omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-approved.md",
+            ".omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-amendment-20260801.md",
+            ".omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-amendment-20260801.md",
+        ),
+        ROOT / ".omx" / "plans" / "ralplan-handoff-graphify-typst-projection.md": (
+            ".omx/reviews/ralplan-architect-review-graphify-typst-projection.md",
+            ".omx/reviews/ralplan-critic-review-graphify-typst-projection.md",
+        ),
+        ROOT / ".omx" / "plans" / "prd-thin-root-nested-agents-rewrite.md": (
+            ".omx/reviews/thin-root-nested-agents-rewrite-architect-review.md",
+            ".omx/reviews/thin-root-nested-agents-rewrite-critic-review.md",
+        ),
+        ROOT / ".omx" / "plans" / "test-spec-thin-root-nested-agents-rewrite.md": (
+            ".omx/reviews/thin-root-nested-agents-rewrite-architect-review.md",
+            ".omx/reviews/thin-root-nested-agents-rewrite-critic-review.md",
+        ),
+    }
+    for owner, expected_pointers in migrated_review_pointers.items():
+        owner_text = _read(owner)
+        assert not _raw_review_plan_pointers(owner_text), owner
+        for pointer in expected_pointers:
+            assert pointer in owner_text, (owner, pointer)
 
     ignored = _read(ROOT / ".gitignore")
+    assert ".omx/reviews/" in ignored.splitlines()
+    assert ".omx/specs/**" not in ignored.splitlines()
     for role in ("architect", "architecture", "critic", "critique"):
-        assert f".omx/**/*{role}*review*" in ignored
-        assert f".omx/**/*review*{role}*" in ignored
+        assert f".omx/**/*{role}*review*" not in ignored.splitlines()
+        assert f".omx/**/*review*{role}*" not in ignored.splitlines()
     ignored_role_reviews = subprocess.run(
         [
             "git",
@@ -922,28 +988,47 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         cwd=ROOT,
         check=True,
         input=(
-            ".omx/plans/example-architect-review.md\n"
-            ".omx/plans/example-review-architect.md\n"
-            ".omx/interviews/example-architecture-review.md\n"
-            ".omx/specs/example-review-architecture.md\n"
-            ".omx/plans/nested/example-critic-review-iteration-1.md\n"
-            ".omx/plans/nested/example-review-critic.md\n"
-            ".omx/plans/example-critique-review.md\n"
-            ".omx/plans/example-review-critique.md\n"
+            ".omx/reviews/architect-review.md\n.omx/reviews/nested/peer-review/report.md\n"
         ),
         capture_output=True,
         text=True,
     ).stdout.splitlines()
     assert ignored_role_reviews == [
-        ".omx/plans/example-architect-review.md",
-        ".omx/plans/example-review-architect.md",
-        ".omx/interviews/example-architecture-review.md",
-        ".omx/specs/example-review-architecture.md",
-        ".omx/plans/nested/example-critic-review-iteration-1.md",
-        ".omx/plans/nested/example-review-critic.md",
-        ".omx/plans/example-critique-review.md",
-        ".omx/plans/example-review-critique.md",
+        ".omx/reviews/architect-review.md",
+        ".omx/reviews/nested/peer-review/report.md",
     ]
+
+    with tempfile.TemporaryDirectory(prefix="g002-review-ignore-") as tmp:
+        root = Path(tmp)
+        (root / ".gitignore").write_text(ignored, encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        isolated_ignored_paths = subprocess.run(
+            ["git", "check-ignore", "--no-index", "--stdin"],
+            cwd=root,
+            check=True,
+            input=(
+                ".omx/reviews/architect-review.md\n"
+                ".omx/reviews/nested/peer-review/report.md\n"
+                ".omx/specs/nested/accepted-architecture-review/report.md\n"
+                ".omx/specs/nested/accepted-peer-review/report.md\n"
+                ".omx/specs/nested/peer/review/report.md\n"
+                ".omx/specs/nested/review/peer/report.md\n"
+                ".omx/specs/nested/accepted-spec/report.md\n"
+                ".omx/specs/nested/ordinary/report.md\n"
+                ".omx/context/accepted-architecture-review.md\n"
+                ".omx/interviews/accepted-peer-review.md\n"
+                ".omx/specs/accepted-spec.md\n"
+                ".omx/plans/accepted-critic-review.md\n"
+                ".agents/memory/history/2026/08/eligible-debrief.md\n"
+                f"{eligible_debrief}\n"
+            ),
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        assert isolated_ignored_paths == [
+            ".omx/reviews/architect-review.md",
+            ".omx/reviews/nested/peer-review/report.md",
+        ]
 
     package_guidance = _read(ROOT / "aria_nbv" / "AGENTS.md")
     conventions = _read(

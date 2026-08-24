@@ -23,13 +23,13 @@ ralplan_consensus_gate:
 - Approved test specification:
   `.omx/plans/test-spec-aria-nbv-domain-skill-distillation.md`
 - Prior approving Architect review:
-  `.omx/plans/ralplan-architect-review-aria-nbv-domain-skill-distillation-consensus-loop-3-iteration-2.md`
+  `.omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-consensus-loop-3-iteration-2.md`
 - Prior approving Critic review:
-  `.omx/plans/ralplan-critic-review-aria-nbv-domain-skill-distillation-approved.md`
+  `.omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-approved.md`
 - Approving amendment Architect review:
-  `.omx/plans/ralplan-architect-review-aria-nbv-domain-skill-distillation-amendment-20260801.md`
+  `.omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-amendment-20260801.md`
 - Approving amendment Critic review:
-  `.omx/plans/ralplan-critic-review-aria-nbv-domain-skill-distillation-amendment-20260801.md`
+  `.omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-amendment-20260801.md`
 
 ## Consensus outcome
 

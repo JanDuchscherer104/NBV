@@ -246,22 +246,15 @@ docs/_freeze/**/*.html
 graphify-out/
 /graphify-input/
 
-# OMX accepted specs and implementation plans may be selected for version
-# control. Runtime, generated sidecars, and role-review outputs remain
-# operator-local.
+# OMX context, interviews, accepted specs, and implementation plans may be
+# selected for version control. Runtime, generated sidecars, and raw review
+# outputs remain operator-local.
 .omx/*
 !.omx/context/
 !.omx/interviews/
 !.omx/specs/
 !.omx/plans/
-.omx/**/*architect*review*
-.omx/**/*review*architect*
-.omx/**/*architecture*review*
-.omx/**/*review*architecture*
-.omx/**/*critic*review*
-.omx/**/*review*critic*
-.omx/**/*critique*review*
-.omx/**/*review*critique*
+.omx/reviews/
 .omx/specs/**/mission.md
 .omx/specs/**/sandbox.md
 .omx/specs/**/result.json
