@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: f15c60aa964dad2b0073b51bb877743f98b01977
+repo_head: 3519b15512c3199c9a4a3b225f5679fd6b26ea3c
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -146,6 +146,9 @@ duplicating it in all three skills.
   thesis prefix instead of forcing a gratuitous `main.typ` edit.
 - The diff must attest every discovered changed path, and a passing
   workspace-write verdict must cite its matching host-diff SHA-256.
+- Root Verification installs the existing pinned uv version through pip rather
+  than the runner-stalled setup action; the package validation contract and
+  uv-version assertion remain unchanged.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -178,6 +181,7 @@ duplicating it in all three skills.
 - [320e47354a533a9f8a60859a634da7486687a3fa](https://github.com/JanDuchscherer104/ARIA-NBV/commit/320e47354a533a9f8a60859a634da7486687a3fa) — implementation: protect routing change attestations
 - [5cf6c5006c63e3623a19041957f5c56f0bd22991](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5cf6c5006c63e3623a19041957f5c56f0bd22991) — implementation: attest routing mutations from host state
 - [f15c60aa964dad2b0073b51bb877743f98b01977](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f15c60aa964dad2b0073b51bb877743f98b01977) — implementation: bind verdicts to attested mutations
+- [3519b15512c3199c9a4a3b225f5679fd6b26ea3c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3519b15512c3199c9a4a3b225f5679fd6b26ea3c) — CI: avoid stalled uv setup action
 
 ## Verification
 
