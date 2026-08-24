@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 320e47354a533a9f8a60859a634da7486687a3fa
+repo_head: 5cf6c5006c63e3623a19041957f5c56f0bd22991
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -137,6 +137,13 @@ duplicating it in all three skills.
   a protected path.
 - An unknown completed item type is incomplete evidence unless it is explicitly
   classified as a benign non-execution item, preventing silent protocol drift.
+- Execution evidence accepts only `item.completed` records whose item type is
+  in the explicit execution allowlist; started records and unknown identity-
+  bearing records are invalid rather than silently admitted.
+- Workspace-write verdicts receive a bounded host-generated Git diff and may
+  use it, rather than the subject response, for semantic required outcomes.
+  Active-thesis fixture contracts allow any changed source below the canonical
+  thesis prefix instead of forcing a gratuitous `main.typ` edit.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -167,6 +174,7 @@ duplicating it in all three skills.
 - [348ccd1271d902ea2c409de63bb0d4bb53175c2b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/348ccd1271d902ea2c409de63bb0d4bb53175c2b) — implementation: prove routing gates explicitly
 - [c053a112619621932aadad55878b042d0dbf617a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c053a112619621932aadad55878b042d0dbf617a) — implementation: validate submission gate diagnostics
 - [320e47354a533a9f8a60859a634da7486687a3fa](https://github.com/JanDuchscherer104/ARIA-NBV/commit/320e47354a533a9f8a60859a634da7486687a3fa) — implementation: protect routing change attestations
+- [5cf6c5006c63e3623a19041957f5c56f0bd22991](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5cf6c5006c63e3623a19041957f5c56f0bd22991) — implementation: attest routing mutations from host state
 
 ## Verification
 
@@ -188,6 +196,7 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 75 passed, including late top-level events, UTF-8 surrogates, and submission timeout/wrong-diagnostic regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 76 passed, including invalid UTF-8 and phrase-only submission-diagnostic regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 77 passed, including `.git` index-tampering and unknown-item protocol-drift regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
+- `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py` — 92 passed, 51 subtests passed, including host-final-diff and completed-event protocol regressions; scaffold audit, CI-impact self-test, and `git diff --check` passed.
 
 ## Canonical Owner Impact
 
