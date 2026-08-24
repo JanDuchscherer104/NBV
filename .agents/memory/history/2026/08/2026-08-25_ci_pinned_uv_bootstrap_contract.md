@@ -12,7 +12,7 @@ touched_owner_paths:
   - .github/workflows/ci.yml
   - scripts/tests/test_ci_impact.py
 repo_object_format: sha1
-repo_head: 47e67f352834c634ab45759edc5e54e4d5198f65
+repo_head: 4c43acd32e9738cf9198afe5a48e86add3c2b19d
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -47,9 +47,12 @@ platform suffix while rejecting any other semantic version.
 
 The CI workflow remains the executable owner; its topology regression now
 locks the intentional pinned-pip bootstrap rather than the retired action.
+The root Makefile exposes the same interpreter-bound command through `UV`, so
+the package-validation gate cannot silently fall back to an older runner `uv`.
 
 ## Commits
 
 - [6621b463ba55a905c91d61a432eb85a72bca8834](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6621b463ba55a905c91d61a432eb85a72bca8834) — test: lock pinned uv bootstrap
 - [40e9c39734139b2d04378999886f7c408ae7d34e](https://github.com/JanDuchscherer104/ARIA-NBV/commit/40e9c39734139b2d04378999886f7c408ae7d34e) — implementation: bind uv commands to pinned module
 - [47e67f352834c634ab45759edc5e54e4d5198f65](https://github.com/JanDuchscherer104/ARIA-NBV/commit/47e67f352834c634ab45759edc5e54e4d5198f65) — implementation: accept uv platform version suffix
+- [4c43acd32e9738cf9198afe5a48e86add3c2b19d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4c43acd32e9738cf9198afe5a48e86add3c2b19d) — implementation: propagate the pinned module through package validation
