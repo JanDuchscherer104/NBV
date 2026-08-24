@@ -76,7 +76,8 @@ class SelectionTests(unittest.TestCase):
             '"uv==0.12.5"',
             setup_uv,
         )
-        self.assertIn('test "$(python -m uv --version)" = "uv 0.12.5"', setup_uv)
+        self.assertIn('uv_version="$(python -m uv --version)"', setup_uv)
+        self.assertIn('"uv 0.12.5"|"uv 0.12.5 "*', setup_uv)
         self.assertNotIn("astral-sh/setup-uv@", workflow)
         self.assertNotIn("uses: actions/cache@", workflow)
         self.assertEqual(workflow.count("python -m uv sync --locked --extra dev"), 1)

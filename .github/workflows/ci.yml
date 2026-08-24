@@ -116,7 +116,11 @@ jobs:
         if: steps.impact.outputs.package == 'true'
         run: |
           python -m pip install --disable-pip-version-check --no-input "uv==0.12.5"
-          test "$(python -m uv --version)" = "uv 0.12.5"
+          uv_version="$(python -m uv --version)"
+          case "$uv_version" in
+            "uv 0.12.5"|"uv 0.12.5 "*) ;;
+            *) exit 1 ;;
+          esac
 
       - name: Sync package validation environment
         if: steps.impact.outputs.package == 'true'
