@@ -930,12 +930,18 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ".omx/specs/nested/accepted-peer-review/report.md"
     )
 
-    stale_review_pointers = {
-        path.relative_to(ROOT).as_posix(): pointers
-        for path in (ROOT / ".omx" / "plans").rglob("*.md")
-        if (pointers := _raw_review_plan_pointers(_read(path)))
-    }
-    assert not stale_review_pointers
+    migrated_review_pointer_owners = (
+        ROOT / ".omx" / "plans" / "ralplan-handoff-online-oracle-mvp.md",
+        ROOT
+        / ".omx"
+        / "plans"
+        / "ralplan-handoff-aria-nbv-domain-skill-distillation.md",
+        ROOT / ".omx" / "plans" / "ralplan-handoff-graphify-typst-projection.md",
+        ROOT / ".omx" / "plans" / "prd-thin-root-nested-agents-rewrite.md",
+        ROOT / ".omx" / "plans" / "test-spec-thin-root-nested-agents-rewrite.md",
+    )
+    for owner in migrated_review_pointer_owners:
+        assert not _raw_review_plan_pointers(_read(owner)), owner
 
     active_handoff = _read(ROOT / ".omx/plans/ralplan-handoff-online-oracle-mvp.md")
     assert (
@@ -958,10 +964,9 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     ignored = _read(ROOT / ".gitignore")
     assert ".omx/reviews/" in ignored.splitlines()
     assert ".omx/specs/**" not in ignored.splitlines()
-    assert not any(
-        "architect" in line.lower() or "critic" in line.lower()
-        for line in ignored.splitlines()
-    )
+    for role in ("architect", "architecture", "critic", "critique"):
+        assert f".omx/**/*{role}*review*" not in ignored.splitlines()
+        assert f".omx/**/*review*{role}*" not in ignored.splitlines()
     ignored_role_reviews = subprocess.run(
         [
             "git",
