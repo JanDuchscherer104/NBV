@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import subprocess
@@ -89,11 +90,20 @@ def _run_verifier(report: dict[str, object], trial_dir: Path) -> dict[str, Any]:
     # Unit tests mock process execution. Supply a stable mounted executable so
     # command construction stays portable on CI runners without Codex.
     real_which = trials.shutil.which
-    with patch.object(
-        trials.shutil,
-        "which",
-        side_effect=lambda name: (
-            "/usr/bin/true" if name == "codex" else real_which(name)
+    broker_socket = trial_dir / "broker" / "proxy.sock"
+    broker_socket.parent.mkdir(exist_ok=True)
+    with (
+        patch.object(
+            trials.shutil,
+            "which",
+            side_effect=lambda name: (
+                "/usr/bin/true" if name == "codex" else real_which(name)
+            ),
+        ),
+        patch.object(
+            trials,
+            "broker_socket_relay",
+            return_value=contextlib.nullcontext(broker_socket),
         ),
     ):
         return trials.run_verifier(
@@ -408,6 +418,23 @@ def test_routing_trial_proxy_is_required(
 
     with pytest.raises(ValueError, match=trials.ROUTING_TRIAL_PROXY_URL_ENV):
         trials.routing_trial_proxy_url()
+
+
+def test_broker_socket_relay_fails_closed_without_socat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_which = trials.shutil.which
+    monkeypatch.setattr(
+        trials.shutil,
+        "which",
+        lambda name: None if name == "socat" else real_which(name),
+    )
+
+    with (
+        pytest.raises(RuntimeError, match="require socat"),
+        trials.broker_socket_relay(ROUTING_PROXY_URL),
+    ):
+        pass
 
 
 def test_subject_sandbox_mounts_only_the_canonical_schema(tmp_path: Path) -> None:
