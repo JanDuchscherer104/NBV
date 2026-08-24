@@ -28,6 +28,7 @@ _REQUIRED_FIELDS = frozenset(
         "evaluator_fingerprint",
         "metrics",
         "hard_gates",
+        "series_axis",
     }
 )
 
@@ -56,7 +57,15 @@ def load_result_snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
         raise ResultContractError(f"result is missing required fields: {', '.join(missing)}")
     if raw["schema_version"] != 1:
         raise ResultContractError("result.schema_version must be 1")
-    for field in ("goal_slug", "title", "summary", "baseline_revision", "candidate_revision", "evaluator_fingerprint"):
+    for field in (
+        "goal_slug",
+        "title",
+        "summary",
+        "baseline_revision",
+        "candidate_revision",
+        "evaluator_fingerprint",
+        "series_axis",
+    ):
         if not isinstance(raw[field], str) or not raw[field].strip():
             raise ResultContractError(f"result.{field} must be a non-empty string")
     if raw["checkpoint_status"] not in _CHECKPOINT_STATUSES:
@@ -87,6 +96,7 @@ def _validate_evidence_series(value: Any) -> None:
     if not isinstance(value, list):
         raise ResultContractError("result.evidence_series must be a list")
     previous_step = 0
+    metric_keys: frozenset[str] | None = None
     for index, point in enumerate(value):
         if not isinstance(point, Mapping):
             raise ResultContractError(f"result.evidence_series[{index}] must be an object")
@@ -97,6 +107,10 @@ def _validate_evidence_series(value: Any) -> None:
         _validate_scalar_mapping(metrics, field=f"evidence_series[{index}].metrics", boolean=False)
         if not metrics:
             raise ResultContractError(f"result.evidence_series[{index}].metrics must not be empty")
+        point_metric_keys = frozenset(metrics)
+        if metric_keys is not None and point_metric_keys != metric_keys:
+            raise ResultContractError("result.evidence_series points must use the same metric keys")
+        metric_keys = point_metric_keys
         previous_step = step
 
 
@@ -114,6 +128,30 @@ def checkpoint_evidence(result: Mapping[str, Any], digest: str) -> str:
         f"baseline={result['baseline_revision']}; gates={gates}/{total_gates}; "
         f"summary={result['summary']}"
     )
+
+
+def _verify_wandb_publication(
+    wandb: Any,
+    *,
+    run_path: Sequence[str],
+    result: Mapping[str, Any],
+    digest: str,
+) -> None:
+    """Read back the published run identity and immutable-result provenance."""
+    published = wandb.Api().run("/".join(run_path))
+    expected_config = {
+        "goal_slug": result["goal_slug"],
+        "checkpoint_status": result["checkpoint_status"],
+        "baseline_revision": result["baseline_revision"],
+        "candidate_revision": result["candidate_revision"],
+        "evaluator_fingerprint": result["evaluator_fingerprint"],
+        "result_sha256": digest,
+    }
+    if published.name != f"[senpai] {result['title']}" or published.group != "senpai":
+        raise RuntimeError("published W&B run does not have the required SENPAI identity")
+    observed_config = published.config.get("aria_autoresearch", {})
+    if observed_config != expected_config:
+        raise RuntimeError("published W&B run does not preserve immutable evaluator provenance")
 
 
 def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str, config: WandbConfig) -> str:
@@ -136,9 +174,11 @@ def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str
             }
         },
     )
+    run_id = str(run.id)
+    run_path = tuple(str(component) for component in run.path)
     try:
         series = result.get("evidence_series", [])
-        acquisition_number = "aria_autoresearch/acquisition_number"
+        acquisition_number = f"aria_autoresearch/{result['series_axis']}"
         run.define_metric(acquisition_number, hidden=True)
         for point in series:
             for key in point["metrics"]:
@@ -160,9 +200,10 @@ def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str
         with artifact.new_file("result.json", mode="wb") as result_file:
             result_file.write(result_bytes)
         run.log_artifact(artifact)
-        return str(run.id)
     finally:
         run.finish()
+    _verify_wandb_publication(wandb, run_path=run_path, result=result, digest=digest)
+    return run_id
 
 
 def record_checkpoint(
@@ -186,6 +227,8 @@ def record_checkpoint(
     if dry_run:
         outcome["dry_run"] = True
         return outcome
+    if wandb_config is None:
+        raise ResultContractError("formal SENPAI checkpoints require W&B configuration")
     command = [
         "omx",
         "performance-goal",
@@ -205,11 +248,7 @@ def record_checkpoint(
         cwd=_REPOSITORY_ROOT,
     )
     outcome["omx_stdout"] = completed.stdout
-    if wandb_config is not None:
-        try:
-            outcome["wandb_run_id"] = log_wandb_result(result, result_bytes, digest, wandb_config)
-        except Exception as exc:  # W&B is an optional mirror, never the gate.
-            outcome["wandb_error"] = str(exc)
+    outcome["wandb_run_id"] = log_wandb_result(result, result_bytes, digest, wandb_config)
     return outcome
 
 
@@ -217,19 +256,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the immutable-result bridge as a small, explicit CLI."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("result", type=Path, help="Immutable evaluator result.json")
-    parser.add_argument("--wandb-project", help="Mirror evidence to this W&B project")
+    parser.add_argument("--wandb-project", default="aria-nbv", help="W&B project for the formal SENPAI run")
     parser.add_argument("--wandb-entity")
-    parser.add_argument("--wandb-offline", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Validate without W&B or OMX side effects")
     args = parser.parse_args(argv)
-    config = None
-    if args.wandb_project:
-        config = WandbConfig(
-            project=args.wandb_project,
-            entity=args.wandb_entity,
-            job_type="performance-goal",
-            offline=args.wandb_offline,
-        )
+    config = WandbConfig(project=args.wandb_project, entity=args.wandb_entity, job_type="performance-goal")
     try:
         print(json.dumps(record_checkpoint(args.result, wandb_config=config, dry_run=args.dry_run), sort_keys=True))
     except ResultContractError as exc:

@@ -87,6 +87,7 @@ explicit.
   [`references/performance-goal-reporting.md`](references/performance-goal-reporting.md)
   before recording an evaluator result; do not create a second autoresearch
   sidecar or treat W&B as promotion authority.
+- **Formal SENPAI performance experiment:** Use `$oh-my-codex:performance-goal` and the reporting reference. Complete only after the immutable result has a published, read-back W&B run; its evaluator verdict remains OMX-owned.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
