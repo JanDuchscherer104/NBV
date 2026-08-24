@@ -115,9 +115,7 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
 
 def _is_session_local_review_artifact(path: str) -> bool:
     relative = Path(path)
-    return (
-        relative.parts[:2] == (".omx", "reviews") and len(relative.parts) > 2
-    )
+    return relative.parts[:2] == (".omx", "reviews") and len(relative.parts) > 2
 
 
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
