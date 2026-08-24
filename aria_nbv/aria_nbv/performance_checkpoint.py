@@ -138,15 +138,20 @@ def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str
     )
     try:
         series = result.get("evidence_series", [])
+        acquisition_number = "aria_autoresearch/acquisition_number"
+        run.define_metric(acquisition_number, hidden=True)
+        for point in series:
+            for key in point["metrics"]:
+                run.define_metric(f"aria_autoresearch/{key}", step_metric=acquisition_number)
         for point in series:
             run.log(
                 {
-                    "aria_autoresearch/acquisition_number": point["step"],
+                    acquisition_number: point["step"],
                     **{f"aria_autoresearch/{key}": value for key, value in point["metrics"].items()},
                 },
                 step=point["step"],
             )
-        run.log({f"aria_autoresearch/{key}": value for key, value in result["metrics"].items()})
+        run.summary.update({f"aria_autoresearch/{key}": value for key, value in result["metrics"].items()})
         artifact = wandb.Artifact(
             name=f"performance-goal-{result['goal_slug']}-{digest[:12]}",
             type="aria-performance-result",
