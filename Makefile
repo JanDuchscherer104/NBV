@@ -102,6 +102,7 @@ QH_CI_RUFF_PATHS := \
 	aria_nbv/lightning/qh_datamodule.py \
 	aria_nbv/lightning/qh_experiment.py \
 	aria_nbv/lightning/qh_module.py \
+	aria_nbv/lightning/qh_q2_certification.py \
 	aria_nbv/oracle/environment.py \
 	aria_nbv/oracle/pipelines/online_qh.py \
 	aria_nbv/rollouts/qh_reader.py \
@@ -124,6 +125,7 @@ QH_CI_RUFF_PATHS := \
 	tests/lightning/test_qh_dense_valid.py \
 	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_module.py \
+	tests/lightning/test_qh_q2_certification.py \
 	tests/lightning/test_qh_fast_dev_run.py \
 	tests/lightning/test_qh_torchrun_smoke.py \
 	tests/lightning/qh_torchrun_worker.py \
@@ -144,6 +146,7 @@ QH_CI_TESTS := \
 	tests/lightning/test_qh_dense_valid.py \
 	tests/lightning/test_qh_experiment.py \
 	tests/lightning/test_qh_module.py \
+	tests/lightning/test_qh_q2_certification.py \
 	tests/lightning/test_qh_fast_dev_run.py \
 	tests/lightning/test_qh_torchrun_smoke.py \
 	tests/oracle/test_online_qh.py \

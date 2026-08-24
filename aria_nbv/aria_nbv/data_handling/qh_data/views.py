@@ -268,7 +268,13 @@ class QhSupervision:
 
 @dataclass(frozen=True, slots=True)
 class QhChainKey:
-    """CPU-only identity for one joined rollout chain and actor-store sample."""
+    """CPU-only identity and generation support for one joined rollout chain.
+
+    These fields remain outside :class:`QhActorTensors`: they may stratify
+    diagnostics and bind receipts, but must never become learned scorer inputs.
+    Candidate widths describe realized finite tables rather than nodes in a
+    planning tree.
+    """
 
     store_index: int
     """Zero-based ordinal of the rollout store within the configured reader sequence."""
@@ -284,6 +290,24 @@ class QhChainKey:
 
     target_row_id: int
     """Persistent target-entity row identifier for this chain within the rollout record."""
+
+    configured_horizon: int = 0
+    """Acquisition budget configured for this factual rollout chain."""
+
+    candidate_width_min: int = 0
+    """Smallest materialized candidate-table width across realized states."""
+
+    candidate_width_max: int = 0
+    """Largest materialized candidate-table width across realized states."""
+
+    candidate_config_hash: str = ""
+    """Exact persisted candidate-generator configuration digest."""
+
+    rollout_config_hash: str = ""
+    """Exact persisted rollout-recipe configuration digest."""
+
+    selection_policy: str = ""
+    """Factual behavior-policy identifier used to collect the chain."""
 
 
 @dataclass(frozen=True, slots=True)

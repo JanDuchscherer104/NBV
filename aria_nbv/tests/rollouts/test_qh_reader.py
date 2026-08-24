@@ -167,8 +167,20 @@ def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> Non
     assert first.rollout_row_id != last.rollout_row_id
     assert first.store_index == last.store_index == 0
     assert first.source_ref in reader.source_refs
+    identity = reader.chain_identity(0)
+    assert identity.rollout_row_id == first.rollout_row_id
+    assert identity.source_sample_index == first.source_ref.source_sample_index
+    assert identity.scene_id == first.source_ref.scene_id
+    assert identity.configured_horizon == int(first.horizon_remaining[0])
+    assert identity.candidate_width_min == min(len(row) for row in first.candidate_pose_relative_root)
+    assert identity.candidate_width_max == max(len(row) for row in first.candidate_pose_relative_root)
+    assert identity.candidate_config_hash
+    assert identity.rollout_config_hash
+    assert identity.selection_policy
     with pytest.raises(IndexError, match="outside corpus length"):
         _ = reader[2]
+    with pytest.raises(IndexError, match="outside corpus length"):
+        reader.chain_identity(2)
 
 
 def test_reader_normalizes_validation_campaign_split_without_changing_source_split(tmp_path: Path) -> None:

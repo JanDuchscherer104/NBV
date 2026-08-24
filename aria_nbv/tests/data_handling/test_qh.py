@@ -560,6 +560,12 @@ def _stored(source_ref: _QhSourceRef) -> _StoredChain:
         store_index=0,
         rollout_row_id=4,
         target_row_id=5,
+        configured_horizon=2,
+        candidate_width_min=1,
+        candidate_width_max=2,
+        candidate_config_hash="candidate-config",
+        rollout_config_hash="rollout-config",
+        selection_policy="oracle_greedy",
         source_ref=source_ref,
     )
 
@@ -598,7 +604,19 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     )
     chain = dataset[0]
 
-    assert chain.key == QhChainKey(0, 4, 0, "scene-0", 5)
+    assert chain.key == QhChainKey(
+        0,
+        4,
+        0,
+        "scene-0",
+        5,
+        configured_horizon=2,
+        candidate_width_min=1,
+        candidate_width_max=2,
+        candidate_config_hash="candidate-config",
+        rollout_config_hash="rollout-config",
+        selection_policy="oracle_greedy",
+    )
     assert isinstance(chain.actor.root_pose_world, PoseTW)
     assert isinstance(chain.actor.target_pose_relative_root, PoseTW)
     assert isinstance(chain.actor.candidate_pose_relative_root, PoseTW)

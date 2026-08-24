@@ -23,7 +23,7 @@ from aria_nbv.data_handling.qh_data import (
 from aria_nbv.data_handling.qh_data.views import QhActorStateContract, QhStaticContext
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.rollouts.qh_geometry import QhGeometryContract
-from aria_nbv.rollouts.qh_reader import QhDataContract
+from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutChainIdentity
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
 from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
@@ -174,6 +174,24 @@ class _ChainDataset(Dataset[QhChain]):
 
     def __getitem__(self, index: int) -> QhChain:
         return _cf0_chain(self.chains[index])
+
+    def chain_identity(self, index: int) -> QhRolloutChainIdentity:
+        """Return the fixture's CPU-only rollout identity without actor mutation."""
+
+        key = self.chains[index].key
+        return QhRolloutChainIdentity(
+            store_index=key.store_index,
+            rollout_row_id=key.rollout_row_id,
+            source_sample_index=key.source_sample_index,
+            scene_id=key.scene_id,
+            target_row_id=key.target_row_id,
+            configured_horizon=key.configured_horizon,
+            candidate_width_min=key.candidate_width_min,
+            candidate_width_max=key.candidate_width_max,
+            candidate_config_hash=key.candidate_config_hash,
+            rollout_config_hash=key.rollout_config_hash,
+            selection_policy=key.selection_policy,
+        )
 
 
 def _training_chain(*, bootstrap: bool = True) -> QhChain:
