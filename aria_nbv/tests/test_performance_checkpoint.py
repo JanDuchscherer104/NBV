@@ -79,6 +79,7 @@ def test_record_checkpoint_invokes_omx_with_digest_backed_evidence(tmp_path: Pat
     command = run.call_args.args[0]
     assert command[:3] == ["omx", "performance-goal", "checkpoint"]
     assert command[command.index("--status") + 1] == "pass"
+    assert run.call_args.kwargs["cwd"].name == "ARIA-NBV"
     assert outcome["omx_stdout"] == "recorded"
 
 
