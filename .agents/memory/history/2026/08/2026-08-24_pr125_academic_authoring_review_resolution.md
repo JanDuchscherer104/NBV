@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 5cf6c5006c63e3623a19041957f5c56f0bd22991
+repo_head: f15c60aa964dad2b0073b51bb877743f98b01977
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -144,6 +144,8 @@ duplicating it in all three skills.
   use it, rather than the subject response, for semantic required outcomes.
   Active-thesis fixture contracts allow any changed source below the canonical
   thesis prefix instead of forcing a gratuitous `main.typ` edit.
+- The diff must attest every discovered changed path, and a passing
+  workspace-write verdict must cite its matching host-diff SHA-256.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -175,6 +177,7 @@ duplicating it in all three skills.
 - [c053a112619621932aadad55878b042d0dbf617a](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c053a112619621932aadad55878b042d0dbf617a) — implementation: validate submission gate diagnostics
 - [320e47354a533a9f8a60859a634da7486687a3fa](https://github.com/JanDuchscherer104/ARIA-NBV/commit/320e47354a533a9f8a60859a634da7486687a3fa) — implementation: protect routing change attestations
 - [5cf6c5006c63e3623a19041957f5c56f0bd22991](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5cf6c5006c63e3623a19041957f5c56f0bd22991) — implementation: attest routing mutations from host state
+- [f15c60aa964dad2b0073b51bb877743f98b01977](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f15c60aa964dad2b0073b51bb877743f98b01977) — implementation: bind verdicts to attested mutations
 
 ## Verification
 
@@ -197,6 +200,7 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 76 passed, including invalid UTF-8 and phrase-only submission-diagnostic regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 77 passed, including `.git` index-tampering and unknown-item protocol-drift regressions; Ruff, scaffold audit, CI-impact self-test, G002 governance, and `git diff --check` passed.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py` — 92 passed, 51 subtests passed, including host-final-diff and completed-event protocol regressions; scaffold audit, CI-impact self-test, and `git diff --check` passed.
+- `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py` — 93 passed, 51 subtests passed, including unattested-path rejection and mandatory host-diff verdict citation regressions.
 
 ## Canonical Owner Impact
 
