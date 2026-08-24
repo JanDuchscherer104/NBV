@@ -930,36 +930,41 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         ".omx/specs/nested/accepted-peer-review/report.md"
     )
 
-    migrated_review_pointer_owners = (
-        ROOT / ".omx" / "plans" / "ralplan-handoff-online-oracle-mvp.md",
+    migrated_review_pointers = {
+        ROOT / ".omx" / "plans" / "ralplan-handoff-online-oracle-mvp.md": (
+            ".omx/reviews/ralplan-architect-review-online-oracle-mvp-iteration-6.md",
+            ".omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md",
+        ),
         ROOT
         / ".omx"
         / "plans"
-        / "ralplan-handoff-aria-nbv-domain-skill-distillation.md",
-        ROOT / ".omx" / "plans" / "ralplan-handoff-graphify-typst-projection.md",
-        ROOT / ".omx" / "plans" / "prd-thin-root-nested-agents-rewrite.md",
-        ROOT / ".omx" / "plans" / "test-spec-thin-root-nested-agents-rewrite.md",
-    )
-    for owner in migrated_review_pointer_owners:
-        assert not _raw_review_plan_pointers(_read(owner)), owner
-
-    active_handoff = _read(ROOT / ".omx/plans/ralplan-handoff-online-oracle-mvp.md")
-    assert (
-        "ralplan_architect_review: "
-        ".omx/reviews/ralplan-architect-review-online-oracle-mvp-iteration-6.md"
-    ) in active_handoff
-    assert (
-        "ralplan_critic_review: "
-        ".omx/reviews/ralplan-critic-review-online-oracle-mvp-iteration-3.md"
-    ) in active_handoff
-    assert (
-        ".omx/plans/ralplan-architect-review-online-oracle-mvp-iteration-6.md"
-        not in active_handoff
-    )
-    assert (
-        ".omx/plans/ralplan-critic-review-online-oracle-mvp-iteration-3.md"
-        not in active_handoff
-    )
+        / "ralplan-handoff-aria-nbv-domain-skill-distillation.md": (
+            ".omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-consensus-loop-3-iteration-2.md",
+            ".omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-approved.md",
+            ".omx/reviews/ralplan-architect-review-aria-nbv-domain-skill-distillation-amendment-20260801.md",
+            ".omx/reviews/ralplan-critic-review-aria-nbv-domain-skill-distillation-amendment-20260801.md",
+        ),
+        ROOT / ".omx" / "plans" / "ralplan-handoff-graphify-typst-projection.md": (
+            ".omx/reviews/ralplan-architect-review-graphify-typst-projection.md",
+            ".omx/reviews/ralplan-critic-review-graphify-typst-projection.md",
+        ),
+        ROOT / ".omx" / "plans" / "prd-thin-root-nested-agents-rewrite.md": (
+            ".omx/reviews/thin-root-nested-agents-rewrite-architect-review.md",
+            ".omx/reviews/thin-root-nested-agents-rewrite-critic-review.md",
+        ),
+        ROOT
+        / ".omx"
+        / "plans"
+        / "test-spec-thin-root-nested-agents-rewrite.md": (
+            ".omx/reviews/thin-root-nested-agents-rewrite-architect-review.md",
+            ".omx/reviews/thin-root-nested-agents-rewrite-critic-review.md",
+        ),
+    }
+    for owner, expected_pointers in migrated_review_pointers.items():
+        owner_text = _read(owner)
+        assert not _raw_review_plan_pointers(owner_text), owner
+        for pointer in expected_pointers:
+            assert pointer in owner_text, (owner, pointer)
 
     ignored = _read(ROOT / ".gitignore")
     assert ".omx/reviews/" in ignored.splitlines()
