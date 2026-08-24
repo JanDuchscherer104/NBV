@@ -760,6 +760,7 @@ def test_capture_and_routing_contracts() -> None:
         "references/execution-branches.md",
         "references/external-actions.md",
         "references/reviewed-intent.md",
+        "references/performance-goal-reporting.md",
         "references/senpai-adoption.md",
     }
     for reference_path in reference_paths:

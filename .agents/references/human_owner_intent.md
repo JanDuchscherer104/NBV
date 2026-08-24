@@ -124,9 +124,9 @@ or repeatable workflows.
   Codex-authored commit only when a repository-owned provenance workflow
   enforces the corresponding sanitization and commit-binding contract. Any
   retained slice is provenance evidence, not a distillation or truth owner.
-- Preserve `measured-autoresearch` as a bounded, measurement-gated companion to
-  generic research loops. It must support research-only, evaluator-design,
-  measured implementation, and keep-or-discard iterations.
+- Replace the standalone `measured-autoresearch` sidecar with the existing
+  `$performance-goal` evaluator-gated lifecycle, using a small immutable-result
+  bridge for optional W&B reporting and read-only inspection.
 - Keep `agents-db` as the actionable-work owner for now. Keep debriefs concise
   and episodic rather than loading them as default project state. Debriefs
   retain reusable diagnoses, failed approaches, measurements, and handoffs.

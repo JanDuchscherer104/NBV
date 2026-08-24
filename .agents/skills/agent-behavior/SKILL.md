@@ -82,6 +82,11 @@ explicit.
   [`references/senpai-adoption.md`](references/senpai-adoption.md). Reuse only
   its demonstrated mechanics through an ARIA owner; keep the external runtime
   separate and follow its pinned upstream-update route.
+- **Measured performance experiment:** Use `$oh-my-codex:performance-goal` for
+  its evaluator-gated lifecycle. Read
+  [`references/performance-goal-reporting.md`](references/performance-goal-reporting.md)
+  before recording an evaluator result; do not create a second autoresearch
+  sidecar or treat W&B as promotion authority.
 - **Unknown local owner:** Route to `aria-nbv-context` for hierarchical owner
   localization before editing.
 - **Ambiguous high-impact decision:** Route to `aria-grill` before choosing a
