@@ -268,11 +268,13 @@ def _subject_sandbox_command(
     checkout: Path,
     receipt_dir: Path,
     sandbox: str,
+    auth_path: Path | None = None,
 ) -> list[str]:
     """Run Codex where only the sanitized subject and receipt mount are visible."""
-    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
-    auth_path = codex_home / "auth.json"
-    if not auth_path.is_file():
+    resolved_auth_path = auth_path or (
+        Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
+    )
+    if not resolved_auth_path.is_file():
         raise RuntimeError("routing trials require a readable Codex auth file")
     subject_bind = "--ro-bind" if sandbox == READ_ONLY_SANDBOX else "--bind"
     return [
@@ -321,7 +323,7 @@ def _subject_sandbox_command(
         "--dir",
         "/codex-home",
         "--ro-bind",
-        str(auth_path),
+        str(resolved_auth_path),
         "/codex-home/auth.json",
         subject_bind,
         str(checkout),

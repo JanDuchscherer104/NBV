@@ -236,12 +236,15 @@ def test_subject_sandbox_hides_the_evaluator_root(tmp_path: Path) -> None:
     receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
     receipt_dir.mkdir()
+    auth_path = tmp_path / "auth.json"
+    auth_path.write_text("{}\n", encoding="utf-8")
     evaluator_fixture = ROOT / trials.RUBRIC_RELATIVE
     command = trials._subject_sandbox_command(
         codex_command=["/usr/bin/test", "!", "-e", str(evaluator_fixture)],
         checkout=checkout,
         receipt_dir=receipt_dir,
         sandbox=trials.READ_ONLY_SANDBOX,
+        auth_path=auth_path,
     )
 
     subprocess.run(command, check=True)
@@ -252,11 +255,14 @@ def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
     receipt_dir = tmp_path / "receipt"
     checkout.mkdir()
     receipt_dir.mkdir()
+    auth_path = tmp_path / "auth.json"
+    auth_path.write_text("{}\n", encoding="utf-8")
     command = trials._subject_sandbox_command(
         codex_command=["codex", "--version"],
         checkout=checkout,
         receipt_dir=receipt_dir,
         sandbox=trials.READ_ONLY_SANDBOX,
+        auth_path=auth_path,
     )
 
     subprocess.run(command, check=True, capture_output=True, text=True)
