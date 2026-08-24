@@ -19,12 +19,14 @@ from torch.optim import Optimizer
 
 from ..data_handling.qh_data import QhActorTensors, QhBatch
 from ..data_handling.qh_data.views import (
+    QhActionMaskSemantics,
     QhExperimentProfile,
     QhRootEvlProfile,
     QhSelectedObservationProtocol,
     validate_experiment_profile,
 )
 from ..utils import Stage, TargetConfig
+from ..vin.models.target_finite_horizon import QhScoreOutput
 from .optimizers import AdamWConfig, OneCycleSchedulerConfig
 
 
@@ -39,6 +41,12 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
 
     huber_delta: FiniteFloat = Field(default=1.0, gt=0.0)
     """Positive transition point for selected-action Huber loss."""
+
+    feasibility_loss_weight: FiniteFloat = Field(default=0.0, ge=0.0)
+    """Auxiliary binary-feasibility loss weight; zero preserves the A1 control."""
+
+    action_mask_semantics: QhActionMaskSemantics = "oracle_action_mask_v1"
+    """Named hard-validity teacher used by the auxiliary feasibility loss."""
 
     target_sync_interval: int = Field(default=100, ge=1)
     """Hard target-copy cadence measured in completed optimizer updates."""
@@ -89,8 +97,7 @@ class QhLightningModule(pl.LightningModule):
 
     Args:
         config: Optimizer, scheduler, Huber, and target-sync policy.
-        scorer: Required actor-only module returning
-            ``Tensor["B S N", float]`` for the input actor tensors.
+        scorer: Required actor-only module returning :class:`QhScoreOutput`.
     """
 
     optimizer_updates: Tensor
@@ -124,6 +131,11 @@ class QhLightningModule(pl.LightningModule):
         )
         if config.experiment_profile == "qh_cfplus_gt_depth_v1" and config.geometry_contract_hash is None:
             raise ValueError("CF+ Q_H modules require an exact geometry_contract_hash.")
+        if config.action_mask_semantics == "learned_feasibility_v1":
+            raise ValueError(
+                "The deployable Q_H core rejects learned_feasibility_v1; "
+                "learned-only selection requires a separately versioned calibrated profile."
+            )
         self.config = config
         self.automatic_optimization = False
         self.online_scorer = scorer
@@ -140,19 +152,24 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
         self.save_hyperparameters({"config": config.model_dump_jsonable()})
 
-    def forward(self, actor: QhActorTensors) -> Tensor:
-        """Return online candidate values with the actor's exact batch shape.
+    def forward(self, actor: QhActorTensors) -> QhScoreOutput:
+        """Return raw online predictions with the actor's exact batch shape.
 
         Args:
             actor: Actor-visible chain tensors whose `action_mask` defines the
                 required ``Tensor["B S N", bool]`` output shape.
 
         Returns:
-            ``Tensor["B S N", float]`` candidate values.
+            Candidate-aligned conditional Q and feasibility logits. Policy
+            masks are intentionally not applied to this raw result.
         """
 
         self._validate_actor_profile(actor)
-        return self._score(self.online_scorer, actor)
+        return self._score(
+            self.online_scorer,
+            actor,
+            requested_horizon=actor.horizon_remaining,
+        )
 
     def _validate_actor_profile(self, actor: QhActorTensors) -> None:
         """Fail closed when scorer configuration and materialized actor carriers differ."""
@@ -218,6 +235,10 @@ class QhLightningModule(pl.LightningModule):
             raise ValueError("Q_H module and DataModule actor-state contract hashes must match exactly.")
         if getattr(data_module, "learning_contract_hash", None) != self.config.learning_contract_hash:
             raise ValueError("Q_H module and DataModule learning contract hashes must match exactly.")
+        learning_contract = getattr(data_module, "learning_contract", None)
+        data_contract = getattr(learning_contract, "data_contract", None)
+        if getattr(data_contract, "action_mask_semantics", None) != self.config.action_mask_semantics:
+            raise ValueError("Q_H module and DataModule action-mask semantics must match exactly.")
         if self.config.experiment_profile == "qh_cfplus_gt_depth_v1":
             expected = self.config.geometry_contract_hash
             actual = getattr(data_module, "geometry_contract_hash", None)
@@ -230,16 +251,25 @@ class QhLightningModule(pl.LightningModule):
         del batch_idx
         admitted = self._fitted_q_admission_mask(batch)
         global_count = self._global_admitted_count(admitted)
-        if int(global_count.item()) == 0:
+        feasibility_support = self._feasibility_label_mask(batch)
+        global_feasibility_count = self._global_admitted_count(feasibility_support)
+        if int(global_count.item()) == 0 and int(global_feasibility_count.item()) == 0:
             selected_global_count = self._global_admitted_count(batch.selected_train_mask)
             if int(selected_global_count.item()) > 0:
                 self._log_unsupported_backup_metrics(Stage.TRAIN, batch=batch)
             return None
 
-        losses, targets, admitted, online_values, target_values = self._fitted_q_components(batch)
+        losses, targets, admitted, online_output, target_output = self._fitted_q_components(batch)
         local_loss_sum = losses.sum() if bool(admitted.any()) else self._parameter_connected_zero()
         world_size = torch.distributed.get_world_size() if self._distributed() else 1
-        loss = local_loss_sum * world_size / global_count.to(dtype=local_loss_sum.dtype)
+        loss = self._parameter_connected_zero()
+        if int(global_count.item()) > 0:
+            loss = loss + local_loss_sum * world_size / global_count.to(dtype=local_loss_sum.dtype)
+        feasibility_loss_sum = self._feasibility_losses(batch, online_output).sum()
+        if int(global_feasibility_count.item()) > 0:
+            loss = loss + float(self.config.feasibility_loss_weight) * (
+                feasibility_loss_sum * world_size / global_feasibility_count.to(dtype=feasibility_loss_sum.dtype)
+            )
 
         optimizer = self.optimizers()
         if isinstance(optimizer, list):
@@ -253,13 +283,22 @@ class QhLightningModule(pl.LightningModule):
         self.training_loss_sum.add_(local_loss_sum.detach().double())
         self.training_row_count.add_(admitted.sum())
         self.log("train/loss", loss.detach(), on_step=True, prog_bar=True, sync_dist=True)
+        if int(global_feasibility_count.item()) > 0:
+            self.log(
+                "train/feasibility_loss",
+                (
+                    feasibility_loss_sum * world_size / global_feasibility_count.to(dtype=feasibility_loss_sum.dtype)
+                ).detach(),
+                on_step=True,
+                sync_dist=True,
+            )
         self.log("train/admitted_rows", global_count.float(), on_step=True, sync_dist=False)
         self._log_infrastructure_metrics(
             Stage.TRAIN,
             batch=batch,
             admitted=admitted,
-            online_values=online_values,
-            target_values=target_values,
+            online_values=online_output.conditional_q,
+            target_values=target_output.conditional_q,
         )
         return loss.detach()
 
@@ -309,6 +348,53 @@ class QhLightningModule(pl.LightningModule):
         losses, targets, admitted, _online, _target = self._fitted_q_components(batch)
         return losses.sum() / admitted.sum().clamp_min(1), targets, admitted
 
+    def compute_feasibility_loss(self, batch: QhBatch) -> tuple[Tensor, Tensor]:
+        """Return auxiliary BCE over materialized valid and invalid rows."""
+
+        output = self(batch.actor)
+        support = self._feasibility_label_mask(batch, enabled_only=False)
+        losses = self._feasibility_losses(batch, output, enabled_only=False)
+        return losses.sum() / support.sum().clamp_min(1), support
+
+    def compute_exact_q2_targets(self, batch: QhBatch) -> tuple[Tensor, Tensor]:
+        """Return dense-successor exact-Q2 targets and their factual support.
+
+        This diagnostic contains no learned successor value: the second-step
+        maximum comes directly from persisted one-step candidate rewards.
+        """
+
+        selected = batch.supervision.selected_index.long()
+        width = batch.actor.candidate_mask.shape[-1]
+        safe_selected = selected.clamp(0, max(width - 1, 0))
+        selected_reward = batch.supervision.candidate_reward.gather(
+            -1,
+            safe_selected.unsqueeze(-1),
+        ).squeeze(-1)
+        support = (
+            batch.selected_train_mask
+            & batch.actor.horizon_remaining.eq(2)
+            & ~batch.supervision.terminal
+            & batch.successor_present
+        )
+        if bool(support.any()):
+            self._validate_horizon_recursion(batch, support)
+        successor_reward = torch.zeros_like(batch.supervision.candidate_reward)
+        successor_reward[:, :-1] = batch.supervision.candidate_reward[:, 1:]
+        supported_successor = successor_reward[support][batch.successor_backup_mask[support]]
+        self._require_finite(supported_successor, "one-step successor rewards used for exact Q2")
+        targets = selected_reward.float().clone()
+        if bool(support.any()):
+            next_reward = (
+                successor_reward[support]
+                .masked_fill(
+                    ~batch.successor_backup_mask[support],
+                    -torch.inf,
+                )
+                .amax(dim=-1)
+            )
+            targets[support] += batch.supervision.discount.float()[support] * next_reward
+        return targets.detach(), support
+
     def configure_optimizers(self) -> Optimizer | dict[str, Any]:
         """Construct AdamW over the online scorer and its optional scheduler."""
 
@@ -324,18 +410,30 @@ class QhLightningModule(pl.LightningModule):
             ),
         }
 
-    def _fitted_q_components(self, batch: QhBatch) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def _fitted_q_components(
+        self,
+        batch: QhBatch,
+    ) -> tuple[Tensor, Tensor, Tensor, QhScoreOutput, QhScoreOutput]:
         admitted = self._fitted_q_admission_mask(batch)
-        online_values = self(batch.actor)
+        online_output = self(batch.actor)
         with torch.no_grad():
-            target_values = self._score(self.target_scorer, batch.actor)
+            target_output = self._score(
+                self.target_scorer,
+                batch.actor,
+                requested_horizon=batch.actor.horizon_remaining,
+            )
+        online_values = online_output.conditional_q
+        target_values = target_output.conditional_q
 
         selected = batch.supervision.selected_index.long()
         safe_selected = selected.clamp(0, max(online_values.shape[-1] - 1, 0))
         selected_reward = batch.supervision.candidate_reward.gather(-1, safe_selected.unsqueeze(-1)).squeeze(-1)
         targets = selected_reward.float().clone()
-        bootstrap = admitted & ~batch.supervision.terminal & batch.successor_present
+        bootstrap = (
+            admitted & batch.actor.horizon_remaining.gt(1) & ~batch.supervision.terminal & batch.successor_present
+        )
         if bool(bootstrap.any()):
+            self._validate_horizon_recursion(batch, bootstrap)
             successor_support = batch.successor_backup_mask
             online_next = torch.zeros_like(online_values)
             target_next = torch.zeros_like(target_values)
@@ -358,12 +456,12 @@ class QhLightningModule(pl.LightningModule):
             delta=self.config.huber_delta,
             reduction="none",
         )
-        return losses, targets.detach(), admitted, online_values, target_values
+        return losses, targets.detach(), admitted, online_output, target_output
 
     def _evaluation_step(self, batch: QhBatch, stage: Stage) -> Tensor:
         if self._effective_world_size() != 1:
             raise ValueError("Q_H validation and test require single-device execution.")
-        losses, _targets, admitted, online_values, target_values = self._fitted_q_components(batch)
+        losses, _targets, admitted, online_output, target_output = self._fitted_q_components(batch)
         loss_sum = losses.detach().double().sum()
         row_count = admitted.sum()
         if stage is Stage.VAL:
@@ -377,8 +475,8 @@ class QhLightningModule(pl.LightningModule):
                 stage,
                 batch=batch,
                 admitted=admitted,
-                online_values=online_values,
-                target_values=target_values,
+                online_values=online_output.conditional_q,
+                target_values=target_output.conditional_q,
             )
         elif bool(batch.selected_train_mask.any()):
             self._log_unsupported_backup_metrics(stage, batch=batch)
@@ -490,6 +588,40 @@ class QhLightningModule(pl.LightningModule):
     def _fitted_q_admission_mask(cls, batch: QhBatch) -> Tensor:
         return batch.selected_train_mask & ~cls._unsupported_backup_mask(batch)
 
+    def _feasibility_label_mask(self, batch: QhBatch, *, enabled_only: bool = True) -> Tensor:
+        """Return hard-validity supervision support without treating padding as invalid."""
+
+        if enabled_only and float(self.config.feasibility_loss_weight) == 0.0:
+            return torch.zeros_like(batch.actor.candidate_mask)
+        if self.config.action_mask_semantics == "learned_feasibility_v1":  # guarded at construction
+            raise ValueError("learned_feasibility_v1 cannot supervise the feasibility head.")
+        return batch.actor.candidate_mask & batch.actor.step_mask.unsqueeze(-1)
+
+    def _feasibility_losses(
+        self,
+        batch: QhBatch,
+        output: QhScoreOutput,
+        *,
+        enabled_only: bool = True,
+    ) -> Tensor:
+        """Return per-row BCE for the named hard-validity teacher."""
+
+        support = self._feasibility_label_mask(batch, enabled_only=enabled_only)
+        logits = output.feasibility_logits[support]
+        self._require_finite(logits, "feasibility logits used for binary supervision")
+        targets = batch.actor.action_mask[support].to(dtype=logits.dtype)
+        return functional.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+
+    @staticmethod
+    def _validate_horizon_recursion(batch: QhBatch, bootstrap: Tensor) -> None:
+        """Require every admitted backup to query the factual successor at ``h-1``."""
+
+        horizon = batch.actor.horizon_remaining
+        successor_horizon = torch.zeros_like(horizon)
+        successor_horizon[:, :-1] = horizon[:, 1:]
+        if bool((bootstrap & successor_horizon.ne(horizon - 1)).any()):
+            raise ValueError("Q_H recursive backup requires the successor requested horizon to equal h-1 exactly.")
+
     @staticmethod
     def _require_finite(values: Tensor, description: str) -> None:
         if not bool(torch.isfinite(values).all()):
@@ -497,13 +629,28 @@ class QhLightningModule(pl.LightningModule):
             raise ValueError(f"Q_H scorer produced {count} non-finite {description}.")
 
     @staticmethod
-    def _score(scorer: nn.Module, actor: QhActorTensors) -> Tensor:
-        values = scorer(actor)
+    def _score(
+        scorer: nn.Module,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: Tensor,
+    ) -> QhScoreOutput:
+        output = scorer(actor, requested_horizon=requested_horizon)
         expected = actor.action_mask.shape
-        if not isinstance(values, Tensor) or values.shape != expected:
-            actual = getattr(values, "shape", type(values).__name__)
-            raise ValueError(f"Q_H scorer must return shape {tuple(expected)}, got {actual}.")
-        return values
+        if not isinstance(output, QhScoreOutput):
+            raise ValueError(f"Q_H scorer must return QhScoreOutput, got {type(output).__name__}.")
+        for name, values in (
+            ("conditional_q", output.conditional_q),
+            ("feasibility_logits", output.feasibility_logits),
+        ):
+            if not isinstance(values, Tensor) or values.shape != expected:
+                actual = getattr(values, "shape", type(values).__name__)
+                raise ValueError(f"Q_H scorer {name} must have shape {tuple(expected)}, got {actual}.")
+            if values.dtype is not torch.float32:
+                raise ValueError(f"Q_H scorer {name} must use float32 dtype, got {values.dtype}.")
+            if values.device != actor.action_mask.device:
+                raise ValueError(f"Q_H scorer {name} must remain on the actor device.")
+        return output
 
     @staticmethod
     def _global_admitted_count(admitted: Tensor) -> Tensor:

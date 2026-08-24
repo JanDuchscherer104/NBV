@@ -41,13 +41,16 @@ class _QhCandidateScoreAdapter:
         scorer_device = _module_device(self.runtime.scorer)
         actor = move_qh_actor_tensors(actor, scorer_device)
         with torch.inference_mode():
-            values = self.runtime.scorer(actor)
+            output = self.runtime.scorer(
+                actor,
+                requested_horizon=actor.horizon_remaining,
+            )
         realized = torch.nonzero(actor.step_mask[0], as_tuple=False).reshape(-1)
         if realized.numel() == 0:
             raise ValueError("Online Q_H scoring requires one realized actor state.")
         state_index = int(realized[-1].item())
         action_mask = actor.action_mask[0, state_index]
-        valid_values = values[0, state_index][action_mask]
+        valid_values = output.conditional_q[0, state_index][action_mask]
         device = candidates.poses_world_cam().t.device
         dtype = candidates.poses_world_cam().t.dtype
         return CandidateScores.from_valid_values(

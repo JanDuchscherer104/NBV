@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -16,6 +17,22 @@ if TYPE_CHECKING:
     from ...data_handling.qh_data import QhActorTensors
 
 QhSceneChannel = Literal["occ_pr", "occ_input", "free_input", "counts", "cent_pr"]
+
+
+@dataclass(frozen=True, slots=True)
+class QhScoreOutput:
+    """Candidate-aligned predictions before policy masking.
+
+    Attributes:
+        conditional_q: ``Tensor["B S N", float32]`` values conditional on an
+            action being feasible. Materialized invalid rows are deliberately
+            finite but are neither Q-supervised nor deployable.
+        feasibility_logits: ``Tensor["B S N", float32]`` binary-validity
+            logits. Positive values denote greater predicted feasibility.
+    """
+
+    conditional_q: Tensor
+    feasibility_logits: Tensor
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
@@ -69,14 +86,14 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
 
 class TargetFiniteHorizonScorer(nn.Module):
-    """Rank finite candidate rows from actor-visible EVL, target, and history.
+    """Predict candidate feasibility and conditional finite-horizon value.
 
     The module exposes one deep interface: a batched
     :class:`~aria_nbv.data_handling.qh_data.QhActorTensors` enters and one
-    candidate-aligned value table leaves. Candidate rows never attend to one
-    another, so jointly permuting candidate poses and masks permutes the output
-    identically. Invalid and padded rows are zeroed after scoring and cannot
-    influence admitted rows.
+    candidate-aligned :class:`QhScoreOutput` leaves. Every materialized row is
+    encoded independently of ``action_mask``. Candidate rows never attend to
+    one another, so jointly permuting candidate poses and masks permutes both
+    outputs identically and invalid rows cannot influence valid rows.
     """
 
     def __init__(self, config: TargetFiniteHorizonScorerConfig) -> None:
@@ -87,8 +104,14 @@ class TargetFiniteHorizonScorer(nn.Module):
         hidden_dim = int(config.hidden_dim)
         scene_dim = 4 * len(config.scene_channels) + 8
 
-        self.candidate_projection = nn.Sequential(
-            nn.Linear(pose_dim, hidden_dim),
+        self.physical_projection = nn.Sequential(
+            nn.Linear(2 * pose_dim + scene_dim, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+        )
+        self.feasibility_head = nn.Linear(hidden_dim, 1)
+        self.value_query_projection = nn.Sequential(
+            nn.Linear(hidden_dim + pose_dim, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
         )
@@ -103,6 +126,11 @@ class TargetFiniteHorizonScorer(nn.Module):
             nn.LayerNorm(hidden_dim),
         )
         self.budget_projection = nn.Sequential(
+            nn.Linear(1, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+        )
+        self.horizon_projection = nn.Sequential(
             nn.Linear(1, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
@@ -125,26 +153,33 @@ class TargetFiniteHorizonScorer(nn.Module):
             nn.Linear(hidden_dim, 1),
         )
 
-    def forward(self, actor: QhActorTensors) -> Tensor:
-        """Return continuous candidate values aligned with ``action_mask``.
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: Tensor | None = None,
+    ) -> QhScoreOutput:
+        """Return mask-independent candidate predictions in stored order.
 
         Args:
             actor: Batched actor-visible chain with candidate support
                 ``Tensor["B S N", bool]`` and compact root EVL evidence.
+            requested_horizon: Optional ``Tensor["B S", int64]`` value query.
+                ``None`` means :attr:`QhActorTensors.horizon_remaining`.
 
         Returns:
-            values ``Tensor["B S N", float32]``: Finite values on admitted
-                rows and zero outside realized actor-valid support.
+            Candidate-aligned conditional Q and feasibility logits. Both are
+            finite on materialized realized rows and zero only on padding.
         """
 
         self._validate_actor(actor)
-        action_mask = actor.action_mask & actor.step_mask.unsqueeze(-1)
-        batch_size, steps, width = action_mask.shape
+        horizon = self._validated_requested_horizon(actor, requested_horizon)
+        candidate_mask = actor.candidate_mask & actor.step_mask.unsqueeze(-1)
+        batch_size, steps, width = candidate_mask.shape
 
-        candidate_active = action_mask
         candidate_pose = self._sanitize_pose(
             actor.candidate_pose_relative_root,
-            candidate_active,
+            candidate_mask,
             name="candidate",
         )
         history_mask = actor.history_mask & actor.step_mask.unsqueeze(-1)
@@ -154,14 +189,27 @@ class TargetFiniteHorizonScorer(nn.Module):
         if bool((target_active.unsqueeze(-1) & ~torch.isfinite(actor.target_extents)).any()):
             raise ValueError("Q_H active target extents must be finite.")
 
-        candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
-        candidate_tokens = self.candidate_projection(candidate_features)
-        candidate_tokens = torch.where(action_mask.unsqueeze(-1), candidate_tokens, torch.zeros_like(candidate_tokens))
+        current_pose = self._current_pose_relative_root(actor, history_pose)
+        root_candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
+        current_from_candidate = self._expand_pose(current_pose.inverse(), width) @ candidate_pose
+        current_candidate_features = self.pose_encoder.encode(current_from_candidate).pose_enc
+        scene_summary = self._scene_summary(actor)
+        candidate_scene = scene_summary[:, None, None, :].expand(-1, steps, width, -1)
+        physical_tokens = self.physical_projection(
+            torch.cat((root_candidate_features, current_candidate_features, candidate_scene), dim=-1)
+        )
+        physical_tokens = torch.where(
+            candidate_mask.unsqueeze(-1),
+            physical_tokens,
+            torch.zeros_like(physical_tokens),
+        )
+        feasibility_logits = self.feasibility_head(physical_tokens).squeeze(-1)
 
         target_features = self.pose_encoder.encode(target_pose).pose_enc
         target_token = self.target_projection(torch.cat((target_features, actor.target_extents.float()), dim=-1))
 
-        history_features = self.pose_encoder.encode(history_pose).pose_enc
+        current_from_history = self._expand_pose(current_pose.inverse(), steps) @ history_pose
+        history_features = self.pose_encoder.encode(current_from_history).pose_enc
         history_sum = torch.where(history_mask.unsqueeze(-1), history_features, torch.zeros_like(history_features)).sum(
             dim=-2
         )
@@ -170,11 +218,18 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         budget = actor.horizon_remaining.float().unsqueeze(-1) / float(self.config.max_horizon)
         budget_token = self.budget_projection(budget)
-        scene_token = self.scene_projection(self._scene_summary(actor)).unsqueeze(1).expand(-1, steps, -1)
+        horizon_token = self.horizon_projection(horizon.float().unsqueeze(-1) / float(self.config.max_horizon))
+        scene_token = self.scene_projection(scene_summary).unsqueeze(1).expand(-1, steps, -1)
         target_token = target_token.unsqueeze(1).expand(-1, steps, -1)
 
-        state_tokens = torch.stack((scene_token, target_token, history_token, budget_token), dim=-2)
-        flat_candidates = candidate_tokens.reshape(batch_size * steps, width, -1)
+        target_by_candidate = self._expand_pose(target_pose, steps, width)
+        candidate_from_target = candidate_pose.inverse() @ target_by_candidate
+        candidate_target_features = self.pose_encoder.encode(candidate_from_target).pose_enc
+        value_queries = self.value_query_projection(torch.cat((physical_tokens, candidate_target_features), dim=-1))
+        value_queries = torch.where(candidate_mask.unsqueeze(-1), value_queries, torch.zeros_like(value_queries))
+
+        state_tokens = torch.stack((scene_token, target_token, history_token, budget_token, horizon_token), dim=-2)
+        flat_candidates = value_queries.reshape(batch_size * steps, width, -1)
         flat_state = state_tokens.reshape(batch_size * steps, state_tokens.shape[-2], -1)
         attended, _weights = self.state_attention(
             flat_candidates,
@@ -183,13 +238,71 @@ class TargetFiniteHorizonScorer(nn.Module):
             need_weights=False,
         )
         attended = attended.reshape(batch_size, steps, width, -1)
-        values = self.value_head(torch.cat((candidate_tokens, attended, candidate_tokens * attended), dim=-1)).squeeze(
+        conditional_q = self.value_head(torch.cat((value_queries, attended, value_queries * attended), dim=-1)).squeeze(
             -1
         )
-        values = torch.where(action_mask, values, torch.zeros_like(values))
-        if not bool(torch.isfinite(values[action_mask]).all()):
-            raise ValueError("TargetFiniteHorizonScorer produced nonfinite values on actor-valid rows.")
-        return values
+        conditional_q = torch.where(candidate_mask, conditional_q, torch.zeros_like(conditional_q))
+        feasibility_logits = torch.where(candidate_mask, feasibility_logits, torch.zeros_like(feasibility_logits))
+        if not bool(torch.isfinite(conditional_q[candidate_mask]).all()):
+            raise ValueError("TargetFiniteHorizonScorer produced nonfinite conditional Q on materialized rows.")
+        if not bool(torch.isfinite(feasibility_logits[candidate_mask]).all()):
+            raise ValueError("TargetFiniteHorizonScorer produced nonfinite feasibility logits on materialized rows.")
+        return QhScoreOutput(
+            conditional_q=conditional_q.float(),
+            feasibility_logits=feasibility_logits.float(),
+        )
+
+    def _validated_requested_horizon(
+        self,
+        actor: QhActorTensors,
+        requested_horizon: Tensor | None,
+    ) -> Tensor:
+        """Return the scalar per-state query after fail-closed validation."""
+
+        horizon = actor.horizon_remaining if requested_horizon is None else requested_horizon
+        expected = actor.step_mask.shape
+        if horizon.shape != expected:
+            raise ValueError(f"Q_H requested_horizon must have shape {tuple(expected)}, got {tuple(horizon.shape)}.")
+        if horizon.dtype is not torch.int64:
+            raise ValueError("Q_H requested_horizon must use int64 dtype.")
+        if horizon.device != actor.step_mask.device:
+            raise ValueError("Q_H requested_horizon must be on the actor device.")
+        realized = actor.step_mask
+        invalid_realized = realized & (horizon.lt(1) | horizon.gt(actor.horizon_remaining))
+        if bool(invalid_realized.any()):
+            raise ValueError("Q_H realized requested horizons must satisfy 1 <= h <= horizon_remaining.")
+        if bool((realized & horizon.gt(self.config.max_horizon)).any()):
+            raise ValueError(f"Q_H requested_horizon exceeds configured H_max={self.config.max_horizon}.")
+        if bool((~realized & horizon.ne(0)).any()):
+            raise ValueError("Q_H padded requested horizons must be zero.")
+        return horizon
+
+    def _current_pose_relative_root(self, actor: QhActorTensors, history_pose: PoseTW) -> PoseTW:
+        """Return root-from-current-camera for every realized state."""
+
+        batch_size, steps = actor.step_mask.shape
+        history_index = torch.arange(steps, device=actor.step_mask.device).sub(1).clamp_min(0)
+        gather_index = history_index.view(1, steps, 1, 1).expand(batch_size, -1, 1, 12)
+        gathered = history_pose.tensor().gather(-2, gather_index).squeeze(-2)
+        predecessor_present = actor.history_mask.gather(
+            -1,
+            history_index.view(1, steps, 1).expand(batch_size, -1, 1),
+        ).squeeze(-1)
+        requires_predecessor = actor.step_mask & torch.arange(steps, device=actor.step_mask.device).gt(0)
+        if bool((requires_predecessor & ~predecessor_present).any()):
+            raise ValueError("Q_H every realized non-root state requires its immediate predecessor pose in history.")
+        identity = PoseTW().tensor().to(device=gathered.device, dtype=gathered.dtype).expand_as(gathered)
+        use_history = requires_predecessor & predecessor_present
+        return PoseTW(torch.where(use_history.unsqueeze(-1), gathered, identity))
+
+    @staticmethod
+    def _expand_pose(pose: PoseTW, *sizes: int) -> PoseTW:
+        """Insert and expand pose axes without copying pose storage."""
+
+        values = pose.tensor()
+        for _ in sizes:
+            values = values.unsqueeze(-2)
+        return PoseTW(values.expand(*values.shape[: -len(sizes) - 1], *sizes, 12))
 
     def _scene_summary(self, actor: QhActorTensors) -> Tensor:
         """Pool detached root EVL and semidense evidence into one chain token."""
@@ -264,14 +377,26 @@ class TargetFiniteHorizonScorer(nn.Module):
             )
         if actor.candidate_mask.shape != actor.action_mask.shape:
             raise ValueError("Q_H candidate_mask and action_mask shapes must match exactly.")
+        if actor.candidate_mask.dtype is not torch.bool or actor.action_mask.dtype is not torch.bool:
+            raise ValueError("Q_H candidate_mask and action_mask must use bool dtype.")
         if actor.step_mask.shape != actor.action_mask.shape[:2]:
             raise ValueError("Q_H step_mask must match the actor batch/state axes.")
+        if actor.step_mask.dtype is not torch.bool:
+            raise ValueError("Q_H step_mask must use bool dtype.")
         if actor.history_mask.shape != (*actor.action_mask.shape[:2], actor.action_mask.shape[1]):
             raise ValueError("Q_H history_mask must have shape (B,S,S).")
         if bool((actor.action_mask & ~actor.candidate_mask).any()):
             raise ValueError("Q_H action_mask must imply candidate_mask.")
-        if bool((actor.horizon_remaining < 0).any() or (actor.horizon_remaining > self.config.max_horizon).any()):
-            raise ValueError(f"Q_H horizon_remaining must be in [0,{self.config.max_horizon}].")
+        if bool((actor.candidate_mask & ~actor.step_mask.unsqueeze(-1)).any()):
+            raise ValueError("Q_H padded states cannot contain materialized candidate rows.")
+        if actor.horizon_remaining.shape != actor.step_mask.shape or actor.horizon_remaining.dtype is not torch.int64:
+            raise ValueError("Q_H horizon_remaining must be int64 with shape (B,S).")
+        realized = actor.step_mask
+        invalid_budget = (realized & actor.horizon_remaining.lt(1)) | (~realized & actor.horizon_remaining.ne(0))
+        if bool(invalid_budget.any() or actor.horizon_remaining.gt(self.config.max_horizon).any()):
+            raise ValueError(
+                f"Q_H realized horizon_remaining must be in [1,{self.config.max_horizon}] and padding must be zero."
+            )
         causal = torch.arange(actor.history_mask.shape[-1], device=actor.history_mask.device).view(1, 1, -1)
         state = torch.arange(actor.history_mask.shape[-2], device=actor.history_mask.device).view(1, -1, 1)
         if bool((actor.history_mask & causal.ge(state)).any()):
@@ -286,4 +411,4 @@ class TargetFiniteHorizonScorer(nn.Module):
             raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 requires all eight root EVL fields.")
 
 
-__all__ = ["TargetFiniteHorizonScorer", "TargetFiniteHorizonScorerConfig"]
+__all__ = ["QhScoreOutput", "TargetFiniteHorizonScorer", "TargetFiniteHorizonScorerConfig"]
