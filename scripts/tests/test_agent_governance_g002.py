@@ -1339,6 +1339,55 @@ def test_fixture_tool_and_lrz_regressions_follow_owner_boundaries() -> None:
         ), fixture["id"]
 
 
+def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> None:
+    typst_skill = _read(ROOT / ".agents" / "skills" / "typst-authoring" / "SKILL.md")
+    academic_skill = _read(
+        ROOT / ".agents" / "skills" / "academic-writing" / "SKILL.md"
+    )
+    scientific_skill = _read(
+        ROOT / ".agents" / "skills" / "scientific-review" / "SKILL.md"
+    )
+    claim_discipline = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "references"
+        / "claim-citation-discipline.md"
+    )
+
+    assert "Typst source edits" in typst_skill
+    assert "references/workflow.md" in typst_skill
+    assert "../../../docs/typst/shared/style.typ" in typst_skill
+    assert (
+        "../scientific-review/references/empirical-reporting-and-reproducibility.md"
+        in typst_skill
+    )
+    assert "ready-for-realization" in academic_skill
+    assert (
+        "../scientific-review/references/empirical-reporting-and-reproducibility.md"
+        in academic_skill
+    )
+    assert "empirical-reporting-and-reproducibility.md" in scientific_skill
+    assert "generated context artifact" not in claim_discipline
+    assert (
+        ROOT
+        / ".agents"
+        / "skills"
+        / "scientific-review"
+        / "references"
+        / "empirical-reporting-and-reproducibility.md"
+    ).is_file()
+    assert not (
+        ROOT
+        / ".agents"
+        / "skills"
+        / "typst-authoring"
+        / "references"
+        / "empirical-reporting-and-reproducibility.md"
+    ).exists()
+
+
 if __name__ == "__main__":
     tests = [
         value for name, value in sorted(globals().items()) if name.startswith("test_")

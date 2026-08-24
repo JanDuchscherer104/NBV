@@ -14,8 +14,11 @@ literature, bibliography, or Typst sources.
 
 1. Capture the candidate identity, scope, and review question; read its nearest
    owner guidance.
-2. Read [`review-protocol.md`](references/review-protocol.md), then load only
-   the applicable checks in [`empirical-validity.md`](references/empirical-validity.md).
+2. Read [`review-protocol.md`](references/review-protocol.md) and the shared
+   scientific evidence contract in
+   [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md),
+   then load only the applicable checks in
+   [`empirical-validity.md`](references/empirical-validity.md).
 3. Inspect exact evidence owners and report each finding with severity, locator,
    rationale, and repair action. Separate evidence from inference.
 4. Return findings to the owning author or implementation lane. The owner, not

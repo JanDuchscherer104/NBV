@@ -12,8 +12,9 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Event, Lock
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_RELATIVE = Path("scripts/scaffold/fixtures/routing_prompts.jsonl")
@@ -35,6 +36,7 @@ EVENT_EVIDENCE_MAX_TOTAL_CHARS = 32_768
 # must not scan an unbounded stream just because every individual line fits.
 EVENT_EVIDENCE_MAX_RAW_LINE_BYTES = 2_097_152
 EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES = 4_194_304
+TRIAL_STDERR_MAX_BYTES = 1_048_576
 TRIAL_RESPONSE_MAX_CHARS = 16_384
 VERIFIER_REPORT_MAX_BYTES = 1_048_576
 VERDICT_MAX_ITEMS = 64
@@ -101,6 +103,32 @@ ACADEMIC_AUTHORING_TRIAL_IDS = (
 )
 
 
+def _copy_bounded_stream(
+    stream: BinaryIO,
+    destination: BinaryIO,
+    *,
+    maximum_bytes: int,
+    overflow: Event,
+    on_overflow: Callable[[], None],
+    lock: Any,
+    written: list[int],
+) -> None:
+    """Copy one process stream under its byte bound and flag overflow."""
+    while chunk := stream.read(64 * 1024):
+        with lock:
+            remaining = maximum_bytes - written[0]
+            if remaining <= 0:
+                overflow.set()
+                on_overflow()
+                return
+            destination.write(chunk[:remaining])
+            written[0] += min(len(chunk), remaining)
+            if len(chunk) > remaining:
+                overflow.set()
+                on_overflow()
+                return
+
+
 def run_git(*args: str, cwd: Path = ROOT) -> str:
     result = subprocess.run(
         ["git", *args],
@@ -147,6 +175,19 @@ def load_rubric(source: bytes | Path = RUBRIC_PATH) -> dict[str, dict[str, Any]]
             raise ValueError(f"duplicate rubric fixture id {trial_id!r}")
         rubric[trial_id] = fixture
     return rubric
+
+
+def select_trial_ids(
+    args: argparse.Namespace, prompts: dict[str, str]
+) -> tuple[str, ...]:
+    """Return one explicit routing suite without silently combining suites."""
+    if args.all and args.academic_authoring:
+        raise ValueError("--all and --academic-authoring cannot be combined")
+    if args.all:
+        return tuple(prompts)
+    if args.academic_authoring:
+        return ACADEMIC_AUTHORING_TRIAL_IDS
+    return tuple(args.ids or DEFAULT_TRIAL_IDS)
 
 
 def read_git_blob(commit: str, path: Path, *, root: Path = ROOT) -> bytes:
@@ -446,6 +487,7 @@ def trial_passed(report: dict[str, Any]) -> bool:
     return bool(
         report.get("returncode") == 0
         and report.get("checkout_clean_after")
+        and not report.get("output_overflow", False)
         and evidence_valid
         and report.get("adjudication", {}).get("passed", False)
     )
@@ -751,24 +793,65 @@ def run_trial(
     )
     clean_before = run_git("status", "--porcelain", cwd=checkout)
     started = time.time()
+    output_overflow = Event()
+    output_lock = Lock()
+    event_bytes = [0]
+    stderr_bytes = [0]
     with (
-        events_path.open("w", encoding="utf-8") as events,
-        stderr_path.open("w", encoding="utf-8") as stderr,
+        events_path.open("wb") as events,
+        stderr_path.open("wb") as stderr,
     ):
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 command,
-                input=task,
                 cwd=ROOT,
-                stdout=events,
-                stderr=stderr,
-                text=True,
-                check=False,
-                timeout=timeout_seconds,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 env=os.environ.copy(),
             )
-            returncode = result.returncode
-            timed_out = False
+            assert process.stdin is not None
+            assert process.stdout is not None
+            assert process.stderr is not None
+            process.stdin.write(task.encode("utf-8"))
+            process.stdin.close()
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                copies = (
+                    executor.submit(
+                        _copy_bounded_stream,
+                        process.stdout,
+                        events,
+                        maximum_bytes=EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES,
+                        overflow=output_overflow,
+                        on_overflow=process.terminate,
+                        lock=output_lock,
+                        written=event_bytes,
+                    ),
+                    executor.submit(
+                        _copy_bounded_stream,
+                        process.stderr,
+                        stderr,
+                        maximum_bytes=TRIAL_STDERR_MAX_BYTES,
+                        overflow=output_overflow,
+                        on_overflow=process.terminate,
+                        lock=output_lock,
+                        written=stderr_bytes,
+                    ),
+                )
+                try:
+                    returncode = process.wait(timeout=timeout_seconds)
+                    timed_out = False
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    process.wait()
+                    returncode = 124
+                    timed_out = True
+                if output_overflow.is_set() and process.poll() is None:
+                    process.terminate()
+                    process.wait()
+                    returncode = 125
+                for copy in copies:
+                    copy.result()
         except subprocess.TimeoutExpired:
             returncode = 124
             timed_out = True
@@ -790,6 +873,7 @@ def run_trial(
         "elapsed_seconds": time.time() - started,
         "returncode": returncode,
         "timed_out": timed_out,
+        "output_overflow": output_overflow.is_set(),
         "checkout_clean_before": clean_before == "",
         "checkout_clean_after": clean_after == "",
         "artifacts": {
@@ -810,6 +894,11 @@ def parse_args() -> argparse.Namespace:
         "--id", action="append", dest="ids", help="Trial ID; repeat to select several."
     )
     parser.add_argument("--all", action="store_true", help="Run every frozen prompt.")
+    parser.add_argument(
+        "--academic-authoring",
+        action="store_true",
+        help="Run the focused academic-authoring routing suite.",
+    )
     parser.add_argument("--list", action="store_true", help="List default trial IDs.")
     parser.add_argument(
         "--model", help="Explicit Codex model; otherwise inherit config."
@@ -839,7 +928,10 @@ def main() -> int:
     rubric = load_rubric(fixture_bytes[RUBRIC_RELATIVE])
     if set(prompts) != set(rubric):
         raise SystemExit("routing prompt and rubric ID sets differ")
-    selected = tuple(prompts) if args.all else tuple(args.ids or DEFAULT_TRIAL_IDS)
+    try:
+        selected = select_trial_ids(args, prompts)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     unknown = sorted(set(selected) - set(prompts))
     if unknown:
         raise SystemExit(f"unknown trial IDs: {unknown}")

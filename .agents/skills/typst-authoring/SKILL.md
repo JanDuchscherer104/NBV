@@ -1,6 +1,6 @@
 ---
 name: typst-authoring
-description: Use when accepted scientific content must be realized in Typst, including notation, equations, figures, tables, citations, compilation, rendering, or page QA; hand off argument construction and independent review.
+description: Use for Typst source edits or accepted-content realization, including notation, equations, figures, tables, citations, source links, compilation, rendering, or page QA; hand off argument construction and independent review.
 ---
 
 # Typst Authoring
@@ -14,7 +14,9 @@ use `scientific-review`.
 
 1. Read the nearest docs guide, identify the exact Typst owner, and inspect
    adjacent imports, shared notation, labels, and bibliography use.
-2. Load only the branch required by the change:
+2. For every non-trivial meaning- or layout-affecting edit, read
+   [`workflow.md`](references/workflow.md). Load only the additional branch
+   required by the change:
    - notation or equation attachment: [`aria-nbv-notation.md`](references/aria-nbv-notation.md),
      [`math-attachments.md`](references/math-attachments.md), or
      [`notation-migration.md`](references/notation-migration.md);
@@ -29,11 +31,12 @@ use `scientific-review`.
      [`scripting.md`](references/scripting.md), and [`layout.md`](references/layout.md);
    - slides or package-backed content: [`slides.md`](references/slides.md) or
      [`packages/index.md`](references/packages/index.md), then only its needed leaf;
+   - code-reference anchors or draft/final link behavior:
+     [`style.typ`](../../../docs/typst/shared/style.typ);
    - accepted claim/citation realization: the academic-writing
      [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md),
      or empirical-result realization:
-     [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md);
-   - compile, render, or page QA: [`workflow.md`](references/workflow.md).
+     [`empirical-reporting-and-reproducibility.md`](../scientific-review/references/empirical-reporting-and-reproducibility.md).
 3. Make the smallest source edit. Shared notation, glossary terms, equations,
    bibliography identities, and active thesis content remain with their exact
    owners.

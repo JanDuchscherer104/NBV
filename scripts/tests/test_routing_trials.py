@@ -5,6 +5,7 @@ import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
+from threading import Event, Lock
 from typing import Any
 from unittest.mock import patch
 
@@ -131,6 +132,46 @@ def test_academic_authoring_trial_selection_is_a_small_disjoint_suite() -> None:
     )
     rubric = trials.load_rubric()
     assert set(trials.ACADEMIC_AUTHORING_TRIAL_IDS) <= set(rubric)
+
+
+def test_academic_authoring_selector_runs_only_its_focused_suite() -> None:
+    prompts = trials.load_prompts()
+    args = type(
+        "Args",
+        (),
+        {"all": False, "academic_authoring": True, "ids": None},
+    )()
+    assert trials.select_trial_ids(args, prompts) == trials.ACADEMIC_AUTHORING_TRIAL_IDS
+
+
+def test_academic_authoring_selector_rejects_ambiguous_all_selection() -> None:
+    args = type(
+        "Args",
+        (),
+        {"all": True, "academic_authoring": True, "ids": None},
+    )()
+    with pytest.raises(ValueError, match="cannot be combined"):
+        trials.select_trial_ids(args, trials.load_prompts())
+
+
+def test_bounded_stream_capture_terminates_on_overflow() -> None:
+    destination = BytesIO()
+    overflow = Event()
+    terminated: list[bool] = []
+
+    trials._copy_bounded_stream(
+        BytesIO(b"abcdef"),
+        destination,
+        maximum_bytes=4,
+        overflow=overflow,
+        on_overflow=lambda: terminated.append(True),
+        lock=Lock(),
+        written=[0],
+    )
+
+    assert destination.getvalue() == b"abcd"
+    assert overflow.is_set()
+    assert terminated == [True]
 
 
 def test_codex_command_is_ephemeral_read_only_and_prompt_free(tmp_path: Path) -> None:

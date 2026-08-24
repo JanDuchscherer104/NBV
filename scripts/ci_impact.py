@@ -73,12 +73,24 @@ def select_families(paths: list[str]) -> set[str]:
         matched = False
         if (
             path.startswith(".agents/")
-            and not path.startswith(".agents/skills/typst-authoring/")
+            and not path.startswith(
+                (
+                    ".agents/skills/typst-authoring/",
+                    ".agents/skills/academic-writing/",
+                    ".agents/skills/scientific-review/",
+                )
+            )
             or path in SCAFFOLD_PATHS
         ):
             selected.add("scaffold")
             matched = True
-        if path.startswith(".agents/skills/typst-authoring/"):
+        if path.startswith(
+            (
+                ".agents/skills/typst-authoring/",
+                ".agents/skills/academic-writing/",
+                ".agents/skills/scientific-review/",
+            )
+        ):
             # Authoring guidance changes can alter docs behavior even though
             # the skill itself lives under the scaffold namespace.
             selected.add("docs")

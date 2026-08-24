@@ -57,7 +57,7 @@ derived Graphify edges after resolving the bibliography key through
 For each non-obvious claim, verify at least one evidence path:
 
 - `@bib_key` in `docs/references.bib`;
-- code path or generated context artifact;
+- defining code path with its focused tests and active configuration;
 - table/figure/result in `docs/typst/shared/data`;
 - explicit limitation or hypothesis wording.
 
@@ -67,7 +67,8 @@ For advisor-facing scientific claims, complete this direct-source check:
 2. Resolve every literature citation in `docs/references.bib` and inspect the
    cited paper, authoritative TeX source, or PDF at the exact relevant locator.
 3. For implementation facts, inspect the defining code, its tests, and active
-   configuration. For results, inspect the immutable measurement manifest,
+   configuration; generated context may locate these owners but cannot establish
+   the fact. For results, inspect the immutable measurement manifest,
    table, or figure source.
 4. Downgrade unsupported wording, add the missing evidence, or mark the claim
    as a hypothesis or limitation before treating it as supported.

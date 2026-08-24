@@ -72,8 +72,8 @@ Use a compact ABT/CARS structure:
 - BUT / niche: handheld AR needs target-aware view choice, efficient
   counterfactual candidate evaluation, and leakage-safe oracle supervision.
 - THEREFORE / contribution: ARIA-NBV proposes a target-conditioned,
-  quality-driven finite-candidate NBV stack and validates it under fixed
-  acquisition budgets.
+  quality-driven finite-candidate NBV stack and specifies its fixed-budget
+  evaluation contract.
 
 The gap must follow from the context. Do not bolt on "semantic relevance" as a
 slogan; state the concrete failure mode it addresses.

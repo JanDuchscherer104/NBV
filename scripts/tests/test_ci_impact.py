@@ -218,6 +218,8 @@ class SelectionTests(unittest.TestCase):
             ".agents/example.qmd": {"scaffold"},
             ".agents/skills/typst-authoring/SKILL.md": {"docs"},
             ".agents/skills/typst-authoring/references/workflow.md": {"docs"},
+            ".agents/skills/academic-writing/SKILL.md": {"docs"},
+            ".agents/skills/scientific-review/SKILL.md": {"docs"},
             "aria_nbv/aria_nbv/__init__.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/candidate_generation.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/geometry.py": {"package"},
