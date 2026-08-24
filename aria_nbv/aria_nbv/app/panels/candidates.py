@@ -32,6 +32,7 @@ from ...pose_generation.plotting import (
     plot_radius_hist,
     plot_rule_masks,
     plot_rule_rejection_bar,
+    plot_view_jitter_support,
 )
 from ...pose_generation.utils import (
     rejected_pose_tensor,
@@ -329,6 +330,14 @@ def _render_live_candidates_page(
         st.info(
             "This candidate result does not carry target-conditioned mixture provenance or a configured target point."
         )
+
+    with st.container(border=True):
+        st.subheader("Sampling behavior: view jitter")
+        st.caption(
+            "Each marker is one generated full-shell candidate. The dotted box is the resolved yaw/pitch "
+            "sampling contract; crosses are proposals rejected by downstream hard rules."
+        )
+        st.plotly_chart(plot_view_jitter_support(candidates), width="stretch")
 
     with st.expander("Frame orthonormality", expanded=False):
         _info_popover(

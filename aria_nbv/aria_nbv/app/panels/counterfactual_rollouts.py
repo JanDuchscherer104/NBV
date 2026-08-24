@@ -487,24 +487,18 @@ def _target_mixture_config(
             count=int(counts["target_bearing_local"]),
             view_mode=ViewDirectionMode.TARGET_POINT,
             position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
-            view_max_azimuth_deg=0.0,
-            view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
             name="forward_local",
             count=int(counts["forward_local"]),
             view_mode=ViewDirectionMode.FORWARD_RIG,
             position_mode=CandidatePositionMode.FORWARD_LOCAL,
-            view_max_azimuth_deg=0.0,
-            view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
             name="lateral_target_bypass",
             count=int(counts["lateral_target_bypass"]),
             view_mode=ViewDirectionMode.TARGET_POINT,
             position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
-            view_max_azimuth_deg=0.0,
-            view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
             name="local_refinement",
@@ -513,8 +507,6 @@ def _target_mixture_config(
             position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
             min_radius=0.2,
             max_radius=0.7,
-            view_max_azimuth_deg=0.0,
-            view_max_elevation_deg=0.0,
         ),
         CandidateMixtureComponentConfig(
             name="revisit_backtrack",
@@ -523,8 +515,6 @@ def _target_mixture_config(
             position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
             min_radius=0.25,
             max_radius=0.9,
-            view_max_azimuth_deg=0.0,
-            view_max_elevation_deg=0.0,
         ),
     ]
     return CandidateMixtureViewGeneratorConfig(base=base, components=components)

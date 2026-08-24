@@ -1161,6 +1161,91 @@ def plot_direction_marginals(dirs: torch.Tensor, bins: int = 60, *, fixed_ranges
     return fig
 
 
+def plot_view_jitter_support(candidates: "CandidateSamplingResult") -> go.Figure:
+    """Plot full-shell yaw/pitch jitter by component and action validity.
+
+    The plot is expressed in the local camera frame before composition with the
+    component's base gaze. Filled circles are valid actor actions; crosses are
+    retained invalid proposals. The dotted rectangle is the resolved sampling
+    envelope, not an empirical confidence interval.
+    """
+
+    yaw = candidates.extras.get("view_jitter_yaw_deg")
+    pitch = candidates.extras.get("view_jitter_pitch_deg")
+    azimuth_limit = candidates.extras.get("view_jitter_azimuth_limit_deg")
+    elevation_limit = candidates.extras.get("view_jitter_elevation_limit_deg")
+    if not all(isinstance(value, torch.Tensor) for value in (yaw, pitch, azimuth_limit, elevation_limit)):
+        fig = go.Figure()
+        fig.add_annotation(
+            text="View-jitter provenance is unavailable for this candidate table.",
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+        )
+        return fig
+
+    yaw_np = yaw.detach().cpu().numpy().reshape(-1)
+    pitch_np = pitch.detach().cpu().numpy().reshape(-1)
+    valid_np = candidates.mask_valid.detach().cpu().numpy().reshape(-1).astype(bool, copy=False)
+    azimuth_np = azimuth_limit.detach().cpu().numpy().reshape(-1)
+    elevation_np = elevation_limit.detach().cpu().numpy().reshape(-1)
+    components = candidates.component_name or tuple("candidate" for _ in range(yaw_np.shape[0]))
+
+    fig = go.Figure()
+    component_order = tuple(dict.fromkeys(components))
+    for component in component_order:
+        component_mask = np.asarray([name == component for name in components], dtype=bool)
+        for is_valid, symbol, suffix in ((True, "circle", "valid"), (False, "x", "invalid")):
+            mask = component_mask & (valid_np == is_valid)
+            if not mask.any():
+                continue
+            indices = np.flatnonzero(mask)
+            fig.add_trace(
+                go.Scatter(
+                    x=yaw_np[mask],
+                    y=pitch_np[mask],
+                    mode="markers",
+                    marker={"size": 8, "symbol": symbol, "opacity": 0.82},
+                    name=f"{component} · {suffix}",
+                    customdata=indices,
+                    hovertemplate=(
+                        "row=%{customdata}<br>component="
+                        + component
+                        + "<br>yaw=%{x:.2f}°<br>pitch=%{y:.2f}°<extra></extra>"
+                    ),
+                )
+            )
+
+    azimuth_bound = float(np.nanmax(np.abs(azimuth_np)))
+    elevation_bound = float(np.nanmax(np.abs(elevation_np)))
+    fig.add_shape(
+        type="rect",
+        x0=-azimuth_bound,
+        x1=azimuth_bound,
+        y0=-elevation_bound,
+        y1=elevation_bound,
+        line={"color": "#AAB2BF", "width": 2, "dash": "dot"},
+    )
+    fig.add_hline(y=0.0, line={"color": "#6B7280", "width": 1})
+    fig.add_vline(x=0.0, line={"color": "#6B7280", "width": 1})
+    fig.update_layout(
+        title="Candidate gaze jitter in the local camera frame",
+        xaxis={"title": "yaw jitter (deg)", "range": [-1.08 * azimuth_bound, 1.08 * azimuth_bound]},
+        yaxis={
+            "title": "pitch jitter (deg)",
+            "range": [-1.12 * elevation_bound, 1.12 * elevation_bound],
+            "scaleanchor": "x",
+            "scaleratio": 1,
+        },
+        legend_title="component · validity",
+        height=620,
+        margin={"l": 70, "r": 30, "t": 70, "b": 60},
+    )
+    return fig
+
+
 def plot_radius_hist(
     offsets: np.ndarray,
     *,

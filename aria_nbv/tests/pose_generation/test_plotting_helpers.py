@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import plotly.graph_objects as go  # type: ignore[import-untyped]
+import pytest
 import torch
 from efm3d.aria import CameraTW, PoseTW
 
@@ -12,6 +13,7 @@ from aria_nbv.pose_generation.plotting import (
     plot_candidate_centers_simple,
     plot_candidate_frusta_simple,
     plot_position_sphere,
+    plot_view_jitter_support,
 )
 from aria_nbv.pose_generation.types import CandidateSamplingResult
 from aria_nbv.pose_generation.utils import rejected_pose_tensor
@@ -72,6 +74,28 @@ def test_plot_candidate_frusta_simple() -> None:
     candidates = _make_candidates(num=2)
     fig = plot_candidate_frusta_simple(candidates, scale=0.5, max_frustums=2)
     assert isinstance(fig, go.Figure)
+
+
+def test_plot_view_jitter_support_shows_components_validity_and_bounds() -> None:
+    candidates = _make_candidates(num=3)
+    candidates.mask_valid = torch.tensor([True, False, True])
+    candidates.component_name = ("forward", "forward", "target")
+    candidates.extras.update(
+        {
+            "view_jitter_yaw_deg": torch.tensor([-60.0, 0.0, 60.0]),
+            "view_jitter_pitch_deg": torch.tensor([-30.0, 0.0, 30.0]),
+            "view_jitter_azimuth_limit_deg": torch.full((3,), 60.0),
+            "view_jitter_elevation_limit_deg": torch.full((3,), 30.0),
+        }
+    )
+
+    fig = plot_view_jitter_support(candidates)
+
+    assert isinstance(fig, go.Figure)
+    assert {trace.name for trace in fig.data} == {"forward · valid", "forward · invalid", "target · valid"}
+    assert len(fig.layout.shapes) == 3
+    assert fig.layout.xaxis.range == pytest.approx((-64.8, 64.8))
+    assert fig.layout.yaxis.range == pytest.approx((-33.6, 33.6))
 
 
 def test_plot_position_sphere_with_dirs() -> None:

@@ -32,36 +32,36 @@ min_distance_to_mesh = 0.2
 device = "cpu"
 verbosity = 1
 collect_rule_masks = true
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [[candidate_mixture.components]]
 name = "target_point"
 count = 12
 strategy = "target_point"
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [[candidate_mixture.components]]
 name = "radial_towards"
 count = 8
 strategy = "radial_towards"
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [[candidate_mixture.components]]
 name = "radial_away"
 count = 8
 strategy = "radial_away"
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [[candidate_mixture.components]]
 name = "forward_rig"
 count = 4
 strategy = "forward_rig"
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [target_scorer]
 backprojection_stride = 12

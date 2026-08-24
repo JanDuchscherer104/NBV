@@ -65,8 +65,8 @@ def _base_cfg() -> CandidateViewGeneratorConfig:
         ensure_collision_free=False,
         ensure_free_space=False,
         min_distance_to_mesh=0.0,
-        view_max_azimuth_deg=0.0,
-        view_max_elevation_deg=0.0,
+        view_max_azimuth_deg=60.0,
+        view_max_elevation_deg=30.0,
         verbosity=0,
         seed=0,
         is_debug=True,
@@ -134,19 +134,20 @@ def test_target_point_component_requires_runtime_target_context() -> None:
         )
 
 
-def test_target_point_component_orients_towards_actor_visible_target_center() -> None:
+def test_target_point_component_applies_nonzero_seminar_jitter_around_target_gaze() -> None:
     cfg = CandidateMixtureViewGeneratorConfig(
         base=_base_cfg(),
         components=[CandidateMixtureComponentConfig(name="target", count=4, strategy=ViewDirectionMode.TARGET_POINT)],
     )
 
     result = _run_generate(cfg)
-    centers = result.shell_poses.t.reshape(-1, 3)
-    forward = result.shell_poses.R[:, :, 2]
-    to_target = torch.nn.functional.normalize(-centers, dim=1)
-    cosine = (forward * to_target).sum(dim=1)
+    yaw = result.extras["view_jitter_yaw_deg"]
+    pitch = result.extras["view_jitter_pitch_deg"]
 
-    assert torch.all(cosine > 0.99)
+    assert torch.max(yaw.abs()) <= 60.0
+    assert torch.max(pitch.abs()) <= 30.0
+    assert torch.any(yaw.abs() > 1e-6)
+    assert torch.any(pitch.abs() > 1e-6)
 
 
 def test_default_mixture_uses_realistic_position_families_without_free_shell() -> None:
@@ -184,6 +185,22 @@ def test_default_mixture_uses_realistic_position_families_without_free_shell() -
     assert candidate_position_id(CandidatePositionMode.LATERAL_TARGET_BYPASS) in result.position_id.tolist()
     assert "motion_step_length_m" in result.extras
     assert "target_bearing_yaw_rad" in result.extras
+
+
+def test_mixture_rejects_zero_resolved_view_jitter() -> None:
+    with pytest.raises(ValueError, match="nonzero resolved azimuth and elevation view jitter"):
+        CandidateMixtureViewGeneratorConfig(
+            base=_base_cfg(),
+            components=[
+                CandidateMixtureComponentConfig(
+                    name="invalid_zero_jitter",
+                    count=6,
+                    view_mode=ViewDirectionMode.FORWARD_RIG,
+                    view_max_azimuth_deg=0.0,
+                    view_max_elevation_deg=30.0,
+                )
+            ],
+        )
 
 
 def test_rich_local_five_family_is_named_ablation() -> None:
@@ -245,10 +262,12 @@ def test_reviewed_component_templates_preserve_rich_family_fields() -> None:
     assert by_name["revisit_backtrack"].min_radius == pytest.approx(0.25)
     assert by_name["revisit_backtrack"].max_radius == pytest.approx(0.25)
     assert all(
-        component.view_max_azimuth_deg == 0.0 for name, component in by_name.items() if name != "target_bearing_local"
+        component.view_max_azimuth_deg is None for name, component in by_name.items() if name != "target_bearing_local"
     )
     assert all(
-        component.view_max_elevation_deg == 0.0 for name, component in by_name.items() if name != "target_bearing_local"
+        component.view_max_elevation_deg is None
+        for name, component in by_name.items()
+        if name != "target_bearing_local"
     )
 
     with pytest.raises(ValueError, match="unsupported reviewed candidate component schedule"):

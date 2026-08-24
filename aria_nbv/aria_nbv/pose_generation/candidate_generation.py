@@ -50,7 +50,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from math import radians
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import torch
 import trimesh  # type: ignore[import-untyped]
@@ -498,6 +498,26 @@ class CandidateViewGenerator:
                 centers_world,
             )
 
+        jitter_debug: dict[str, Any] = {}
+        if view_dirs_delta is not None:
+            delta_rotation = view_dirs_delta.R
+            delta_forward = delta_rotation[:, :, 2]
+            jitter_debug = {
+                "view_dirs_delta": view_dirs_delta,
+                "view_jitter_yaw_deg": torch.rad2deg(torch.atan2(delta_forward[:, 0], delta_forward[:, 2])),
+                "view_jitter_pitch_deg": torch.rad2deg(torch.asin(delta_forward[:, 1].clamp(-1.0, 1.0))),
+                "view_jitter_azimuth_limit_deg": torch.full(
+                    (centers_world.shape[0],),
+                    float(self.config.view_max_azimuth_deg),
+                    device=device,
+                ),
+                "view_jitter_elevation_limit_deg": torch.full(
+                    (centers_world.shape[0],),
+                    float(self.config.view_max_elevation_deg),
+                    device=device,
+                ),
+            }
+
         ctx = CandidateContext(
             cfg=self.config,
             reference_pose=reference_pose,
@@ -515,7 +535,7 @@ class CandidateViewGenerator:
                 dtype=torch.bool,
                 device=device,
             ),
-            debug={"view_dirs_delta": view_dirs_delta} if view_dirs_delta is not None else {},
+            debug=jitter_debug,
         )
         if self.config.collect_debug_stats:
             collision_enabled = bool(
@@ -573,6 +593,11 @@ class CandidateViewGenerator:
 
         poses_cam = CameraTW(template_data)
 
+        extras = (
+            ctx.debug
+            if ctx.cfg.collect_debug_stats
+            else {name: value for name, value in ctx.debug.items() if name.startswith("view_jitter_")}
+        )
         return CandidateSamplingResult(
             views=poses_cam,
             reference_pose=reference_pose,
@@ -581,7 +606,7 @@ class CandidateViewGenerator:
             masks=ctx.rule_masks if ctx.cfg.collect_rule_masks else {},
             shell_poses=shell_poses,
             shell_offsets_ref=ctx.shell_offsets_ref,
-            extras=ctx.debug if ctx.cfg.collect_debug_stats else {},
+            extras=extras,
         )
 
 
