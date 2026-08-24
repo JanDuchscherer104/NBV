@@ -549,20 +549,17 @@ def _sandboxed_codex_command(
         if executable is None:
             raise RuntimeError("routing trials require the Codex executable")
         resolved_executable = Path(executable).resolve()
-        runtime_root = (
-            resolved_executable.parent.parent
-            if resolved_executable.parent.name == "bin"
-            else resolved_executable.parent
-        )
-        sandbox_command[0] = str(
-            Path("/opt/codex") / resolved_executable.relative_to(runtime_root)
-        )
+        if not resolved_executable.is_file():
+            raise RuntimeError("routing trials require a regular Codex executable")
+        sandbox_command[0] = "/opt/codex/codex"
         codex_mount = [
             "--dir",
             "/opt",
-            "--ro-bind",
-            str(runtime_root),
+            "--dir",
             "/opt/codex",
+            "--ro-bind",
+            str(resolved_executable),
+            "/opt/codex/codex",
         ]
     relay_command = [
         "/bin/sh",
@@ -1526,7 +1523,8 @@ def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
             continue
         item = event.get("item") if isinstance(event, dict) else None
         if (
-            isinstance(item, dict)
+            event.get("type") == "item.completed"
+            and isinstance(item, dict)
             and item.get("type") == "agent_message"
             and isinstance(item.get("text"), str)
         ):

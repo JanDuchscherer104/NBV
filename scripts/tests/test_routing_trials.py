@@ -530,6 +530,50 @@ def test_subject_sandbox_can_execute_codex_binary(tmp_path: Path) -> None:
     assert sandboxed.stdout == host_version.stdout
 
 
+def test_subject_sandbox_binds_only_the_resolved_codex_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home_bin = tmp_path / "home" / "bin"
+    home_bin.mkdir(parents=True)
+    executable = home_bin / "codex"
+    executable.write_text("placeholder", encoding="utf-8")
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.setattr(trials.shutil, "which", lambda name: str(executable))
+
+    command = trials._sandboxed_codex_command(
+        codex_command=["codex", "--version"],
+        checkout=checkout,
+        broker_socket=tmp_path / "proxy.sock",
+        schema_path=trials.REPORT_SCHEMA,
+        sandbox=trials.READ_ONLY_SANDBOX,
+    )
+
+    target_index = command.index("/opt/codex/codex")
+    assert command[target_index - 1] == str(executable.resolve())
+    assert command[target_index - 1] != str(home_bin.parent)
+
+
+def test_event_receipt_requires_a_completed_agent_message(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "item.started",
+                    "item": {"type": "agent_message", "text": "{}"},
+                },
+                {"type": "turn.completed"},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert trials.read_last_agent_message(events) == (None, False)
+
+
 def test_workspace_write_contract_requires_source_change_and_typst_proof() -> None:
     contract = trials.execution_contract(
         {
