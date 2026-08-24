@@ -63,8 +63,8 @@ verbosity = 1
 collect_rule_masks = true
 collect_debug_stats = true
 view_max_angle_deg = 0.0
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 view_roll_jitter_deg = 0.0
 seed = 0
 
@@ -73,8 +73,8 @@ name = "forward_local"
 count = 24
 view_mode = "forward_rig"
 position_mode = "forward_local"
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [[candidate_mixture.components]]
 name = "target_bearing_local"
@@ -83,16 +83,16 @@ view_mode = "target_point"
 position_mode = "target_bearing_local"
 min_radius = 0.4
 max_radius = 1.1
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [[candidate_mixture.components]]
 name = "lateral_target_bypass"
 count = 12
 view_mode = "target_point"
 position_mode = "lateral_target_bypass"
-view_max_azimuth_deg = 0.0
-view_max_elevation_deg = 0.0
+view_max_azimuth_deg = 60.0
+view_max_elevation_deg = 30.0
 
 [target_scorer]
 backprojection_stride = 2

@@ -103,6 +103,29 @@ def test_sampling_orients_away_and_zero_roll():
     assert torch.all(roll_component < 1e-3)
 
 
+def test_zero_cap_legacy_spherical_view_sampling_retains_unbounded_residuals() -> None:
+    cfg = CandidateViewGeneratorConfig(
+        num_samples=64,
+        oversample_factor=1.0,
+        min_radius=0.5,
+        max_radius=0.8,
+        ensure_collision_free=False,
+        ensure_free_space=False,
+        min_distance_to_mesh=0.0,
+        view_sampling_strategy=SamplingStrategy.UNIFORM_SPHERE,
+        view_max_azimuth_deg=0.0,
+        view_max_elevation_deg=0.0,
+        verbosity=0,
+        seed=11,
+    )
+
+    result = _run_generate(cfg)
+
+    assert not result.extras["view_jitter_is_bounded"].any()
+    assert torch.any(result.extras["view_jitter_yaw_deg"].abs() > 1e-3)
+    assert torch.any(result.extras["view_jitter_pitch_deg"].abs() > 1e-3)
+
+
 def test_shell_sampling_uniform_area():
     cfg = CandidateViewGeneratorConfig(
         num_samples=2048,

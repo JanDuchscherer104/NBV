@@ -18,6 +18,16 @@ $
   #eqs.rl.finite_action_set
 $
 
+Candidate orientations factor a component-specific base gaze from a local
+yaw--pitch perturbation. Production rollout mixtures resolve every component
+to the final seminar support: symmetric yaw and pitch caps of $60 degree$ and
+$30 degree$, respectively, with zero roll jitter. A zero resolved yaw or pitch
+cap is rejected as a configuration error. The sampled residuals and their
+resolved bounds and a per-row bounded-support flag remain attached to the full
+shell for visual and statistical audit. Legacy zero-cap spherical samplers are
+explicitly unbounded rather than being misrepresented by a zero-area box; view
+jitter changes proposal support but does not bypass hard validity rules.
+
 Invalid rows remain available for diagnostics and dense replay, but cannot be selected. A row enters the training mask only when it is actor-selectable and has a finite oracle target. Invalid rows have false masks and undefined labels; scene RRI is never substituted for a missing target-specific label. `valid_action_mask`, `q_train_mask`, padding, and any deployable feasibility estimate are distinct fields with distinct owners.
 
 === Implemented replay transition

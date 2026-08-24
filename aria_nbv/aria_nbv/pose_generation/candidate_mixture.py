@@ -161,24 +161,18 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 count=24,
                 view_mode=ViewDirectionMode.FORWARD_RIG,
                 position_mode=CandidatePositionMode.FORWARD_LOCAL,
-                view_max_azimuth_deg=0.0,
-                view_max_elevation_deg=0.0,
             ),
             CandidateMixtureComponentConfig(
                 name="target_bearing_local",
                 count=24,
                 view_mode=ViewDirectionMode.TARGET_POINT,
                 position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
-                view_max_azimuth_deg=0.0,
-                view_max_elevation_deg=0.0,
             ),
             CandidateMixtureComponentConfig(
                 name="lateral_target_bypass",
                 count=12,
                 view_mode=ViewDirectionMode.TARGET_POINT,
                 position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
-                view_max_azimuth_deg=0.0,
-                view_max_elevation_deg=0.0,
             ),
         ]
     )
@@ -188,6 +182,22 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
     def _nonempty_components(self) -> "CandidateMixtureViewGeneratorConfig":
         if not self.components:
             raise ValueError("Candidate mixture requires at least one component.")
+        for component in self.components:
+            azimuth_deg = (
+                self.base.view_max_azimuth_deg
+                if component.view_max_azimuth_deg is None
+                else component.view_max_azimuth_deg
+            )
+            elevation_deg = (
+                self.base.view_max_elevation_deg
+                if component.view_max_elevation_deg is None
+                else component.view_max_elevation_deg
+            )
+            if azimuth_deg is None or azimuth_deg <= 0.0 or elevation_deg is None or elevation_deg <= 0.0:
+                raise ValueError(
+                    "Candidate mixture components require nonzero resolved azimuth and elevation view jitter; "
+                    f"component={component.name!r}, azimuth_deg={azimuth_deg}, elevation_deg={elevation_deg}."
+                )
         return self
 
     @property
@@ -272,24 +282,18 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     count=18,
                     view_mode=ViewDirectionMode.TARGET_POINT,
                     position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="forward_local",
                     count=18,
                     view_mode=ViewDirectionMode.FORWARD_RIG,
                     position_mode=CandidatePositionMode.FORWARD_LOCAL,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="lateral_target_bypass",
                     count=12,
                     view_mode=ViewDirectionMode.TARGET_POINT,
                     position_mode=CandidatePositionMode.LATERAL_TARGET_BYPASS,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="local_refinement",
@@ -298,8 +302,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     position_mode=CandidatePositionMode.LOCAL_REFINEMENT,
                     min_radius=0.25,
                     max_radius=0.7,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
@@ -308,8 +310,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
                     min_radius=0.25,
                     max_radius=0.25,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
             ],
         )
@@ -356,8 +356,8 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                 collect_rule_masks=True,
                 collect_debug_stats=True,
                 view_max_angle_deg=0.0,
-                view_max_azimuth_deg=0.0,
-                view_max_elevation_deg=0.0,
+                view_max_azimuth_deg=60.0,
+                view_max_elevation_deg=30.0,
                 view_roll_jitter_deg=0.0,
                 seed=0,
             ),
@@ -369,8 +369,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                     min_radius=0.35,
                     max_radius=1.1,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="radial_away_target_bearing",
@@ -379,8 +377,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                     min_radius=0.35,
                     max_radius=1.1,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="revisit_backtrack",
@@ -389,8 +385,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     position_mode=CandidatePositionMode.REVISIT_BACKTRACK,
                     min_radius=0.25,
                     max_radius=0.25,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
                 CandidateMixtureComponentConfig(
                     name="target_point_anchor",
@@ -399,8 +393,6 @@ class CandidateMixtureViewGeneratorConfig(TargetConfig["CandidateMixtureViewGene
                     position_mode=CandidatePositionMode.TARGET_BEARING_LOCAL,
                     min_radius=0.35,
                     max_radius=0.9,
-                    view_max_azimuth_deg=0.0,
-                    view_max_elevation_deg=0.0,
                 ),
             ],
         )
