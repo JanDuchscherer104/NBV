@@ -30,7 +30,7 @@ touched_owner_paths:
   - scripts/tests/test_ci_impact.py
   - scripts/tests/test_routing_trials.py
 repo_object_format: sha1
-repo_head: 996223bfe01d4a991aca72ca540a0135d9a8bfba
+repo_head: 3126875ea0bb46cda63c37e25db3b08ff3db8f2d
 repo_branch: "codex/pr109-academic-scaffold-salvage"
 worktree_kind: linked
 codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
@@ -116,6 +116,11 @@ duplicating it in all three skills.
   late tool, search, file-change, reasoning, and todo activity.
 - The verifier's declared report byte bound is enforced on UTF-8 encoded text,
   not Python character count, so multi-byte output cannot exceed the contract.
+- A receipt response is trusted only from an `item.completed` agent-message
+  event; an unfinished `item.started` message cannot become terminal evidence.
+- Bubblewrap binds the resolved Codex executable itself, never its parent
+  runtime directory, so a user-level `~/bin/codex` cannot expose the home
+  directory to the sandboxed model.
 - PR #104 had no unresolved review threads at its exact live head, so it needed
   no retrospective patch.
 
@@ -142,6 +147,7 @@ duplicating it in all three skills.
 - [39b828b5a6a5f442ca803fd1a84049c5e62b1c4b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/39b828b5a6a5f442ca803fd1a84049c5e62b1c4b) — implementation: validate exact routing write paths
 - [8ca4b57d129ae3da376e5ed4d5e7df75683762f3](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8ca4b57d129ae3da376e5ed4d5e7df75683762f3) — implementation: reject all late routing activity
 - [996223bfe01d4a991aca72ca540a0135d9a8bfba](https://github.com/JanDuchscherer104/ARIA-NBV/commit/996223bfe01d4a991aca72ca540a0135d9a8bfba) — implementation: fail closed on terminal receipts
+- [3126875ea0bb46cda63c37e25db3b08ff3db8f2d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3126875ea0bb46cda63c37e25db3b08ff3db8f2d) — implementation: seal routing runtime boundary
 
 ## Verification
 
@@ -159,6 +165,7 @@ duplicating it in all three skills.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py` — 57 passed, including Bubblewrap proof that the subject cannot access `/codex-home/auth.json`; routing listing remains available without a broker and live execution fails closed when one is absent.
 - `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 64 passed, including a real isolated compile and render of the active thesis; Ruff and `git diff --check` passed.
 - `uv run --no-project --with pytest pytest -q scripts/tests/test_routing_trials.py scripts/tests/test_ci_impact.py` — 83 passed, 51 subtests passed; receipt-terminal and UTF-8 byte-bound regressions passed.
+- `uv run --no-project --with pytest --with ruff pytest -q scripts/tests/test_routing_trials.py` — 71 passed, including unfinished-message and home-level-runtime mount regressions; Ruff and `git diff --check` passed.
 
 ## Canonical Owner Impact
 
