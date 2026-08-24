@@ -94,7 +94,22 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(workflow.count('UV_NO_SYNC: "1"'), 1)
         self.assertEqual(package_validation.count('UV_NO_SYNC: "1"'), 1)
         self.assertIn('PYTEST_WORKERS: "0"', package_validation)
-        self.assertIn("make ruff-full package-smoke", package_validation)
+        self.assertIn(
+            'make UV="python -m uv" ruff-full package-smoke', package_validation
+        )
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("UV ?= uv", makefile)
+        self.assertIn("QH_CI_PYTHON ?= $(UV) run --extra dev python", makefile)
+        for command in (
+            "$(UV) run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)",
+            "$(UV) run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)",
+            "$(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)",
+            "$(UV) run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py",
+            "$(UV) run --extra dev ruff format --check --quiet aria_nbv tests",
+            "$(UV) run --extra dev ruff check --output-format \"$(RUFF_CHECK_OUTPUT_FORMAT)\" $(RUFF_FIX_FLAG) aria_nbv tests",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, makefile)
         self.assertNotIn("aria_nbv/.venv", workflow)
         self.assertIn("TYPST_VERSION: 0.14.2", workflow)
         self.assertIn("TYPST_EXPECTED_VERSION: typst 0.14.2 (b33de9de)", workflow)

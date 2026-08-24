@@ -176,7 +176,7 @@ jobs:
         env:
           UV_NO_SYNC: "1"
           PYTEST_WORKERS: "0"
-        run: make ruff-full package-smoke
+        run: make UV="python -m uv" ruff-full package-smoke
 
       - name: Validate documentation
         if: steps.impact.outputs.docs == 'true'
