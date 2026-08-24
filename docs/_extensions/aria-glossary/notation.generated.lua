@@ -242,6 +242,12 @@ return {
       description = "Planning or rollout horizon length.",
       thesis_list = true,
     },
+    ["rl.H_max"] = {
+      tex = "H_{\\mathrm{max}}",
+      typst = "#symb.rl.H_max",
+      description = "Maximum residual horizon admitted by a scorer/data contract.",
+      thesis_list = true,
+    },
     ["rl.a"] = {
       tex = "a",
       typst = "#symb.rl.a",
@@ -272,6 +278,18 @@ return {
       description = "Finite candidate-view table at rollout step t.",
       thesis_list = true,
     },
+    ["rl.conditional_q"] = {
+      tex = "Q_{h,\\theta,e,i}^{\\mathrm{cond}}",
+      typst = "#symb.rl.conditional_q",
+      description = "Action-mask-independent conditional candidate value emitted by the scorer.",
+      thesis_list = true,
+    },
+    ["rl.feasibility_logits"] = {
+      tex = "\\ell_{t,i}^{\\mathrm{feas}}",
+      typst = "#symb.rl.feasibility_logits",
+      description = "Physical or observed feasibility logit emitted by the scorer's feasibility head.",
+      thesis_list = true,
+    },
     ["rl.gamma"] = {
       tex = "\\gamma",
       typst = "#symb.rl.gamma",
@@ -300,6 +318,12 @@ return {
       tex = "r",
       typst = "#symb.rl.r",
       description = "Scalar reward or immediate gain.",
+      thesis_list = true,
+    },
+    ["rl.requested_horizon"] = {
+      tex = "h",
+      typst = "#symb.rl.requested_horizon",
+      description = "Scalar residual horizon requested for one scorer query; it must satisfy 1 <= h <= b_t <= H_max.",
       thesis_list = true,
     },
     ["rl.return_h"] = {

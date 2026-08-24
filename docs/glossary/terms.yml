@@ -834,17 +834,16 @@
   tier: core
   lookup_rank: 190
   definition_short: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
-  definition_long: 'The mandatory M5 learned policy-like result is Q_H over finite candidate
-    sets. The first-path architecture uses candidate-to-state query attention: encode s_t^{cf0},
-    actor-visible target descriptor phi_e, selected-view history, budget state, scene-memory
-    summaries, and candidate tokens, then emit one continuous return value per candidate.
-    DQN contributes replayed transition learning and Bellman-style finite-action value targets;
-    Double DQN contributes the masked online-selector / target-evaluator backup to reduce
-    max-over-candidate overestimation; IQL contributes the offline support rule that value
-    learning must not query invalid, ungenerated, or unavailable actions. Q_H must respect
-    validity masks and beat one-step greedy or model scoring on cumulative root-normalized
-    target gain under equal acquisition budget, with bounded oracle lookahead as an upper
-    bound.'
+  definition_long: The thesis-core Q_H interface is one shared scalar-requested-horizon scorer
+    over finite candidate sets. The current A1 interaction reads actor-visible S0-pose/root-moments
+    context, target descriptor, candidate geometry, and causal budget/history, then emits
+    conditional Q values and feasibility logits without reading the action mask. Lightning
+    and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision
+    and bootstrap, and select only hard-valid candidates. DQN contributes replayed transition
+    learning and Bellman-style finite-action value targets; Double DQN contributes the selector/evaluator
+    backup as an optional estimator control. Exact-Q2 parity and positive held-out headroom
+    gate claims for longer horizons. Learned-only feasibility and P(valid) times Q ranking
+    are not thesis-core behavior.
   formula:
     label: Finite-horizon candidate value
     tex: Q_H(s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t,\boldsymbol{\phi}_e\right]
@@ -894,15 +893,15 @@
   tier: core
   lookup_rank: 200
   definition_short: Hard mask that separates feasible candidate actions from invalid candidates.
-  definition_long: The action mask $m_{t,i}$ gates selectable candidate rows, while actor
+  definition_long: 'The action mask $m_{t,i}$ gates selectable candidate rows, while actor
     evidence/support, target validity, oracle-label validity, and Q-training eligibility remain
     distinct fields. Only physical or explicitly contracted admissibility failures clear action
-    validity. No target visibility or no depth hits clear action validity only when the executable
-    feasibility contract explicitly requires that gate; otherwise they remain support fields.
-    Outside-EVL extent and missing semidense or appearance support remain evidence fields
-    unless the executable feasibility contract says otherwise; failed oracle evaluation clears
-    oracle_label_mask and q_train_mask rather than action validity. Invalid reason codes $\rho_{t,i}$
-    preserve physical rejection causes, and invalidity is not a low target-RRI class.
+    validity. The scorer must not read this mask: changing it cannot change raw conditional
+    Q or feasibility logits. Lightning and online adapters apply it to selection, Q supervision,
+    and bootstrap; invalid rows receive no fabricated Q targets. Learned-only feasibility
+    is deferred until calibration, threshold, candidate-generator, source-population, abstention,
+    and false-valid evidence are versioned. Invalid reason codes $\rho_{t,i}$ preserve physical
+    rejection causes, and invalidity is not a low target-RRI class.'
   notation:
     typst: $m_(t,i)$
   symbol_refs:

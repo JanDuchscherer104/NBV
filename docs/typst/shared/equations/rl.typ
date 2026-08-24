@@ -192,7 +192,8 @@
   finite_horizon_return: $
     G_(t,e)^((h))
     =
-    sum_(k=0)^(min(h, b_t) - 1) #symb.rl.gamma^k r_(t+k)^e
+    sum_(k=0)^(h - 1) #symb.rl.gamma^k r_(t+k)^e,
+    quad 1 <= h <= b_t <= #symb.rl.H_max
   $,
   q_h: $
     Q_(h,e) (s_t, i)
@@ -201,9 +202,37 @@
     quad
     i in cal(A)_t,
     quad
-    1 <= h <= b_t,
+    1 <= h <= b_t <= #symb.rl.H_max,
     quad
     Q_(0,e) (s, i) = 0
+  $,
+  qh_scorer_interface: $
+    (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
+    =
+    f_theta (s_t, e, q_(t,i), h),
+    quad
+    h = #symb.rl.budget "if omitted";
+    quad
+    1 <= h <= b_t <= #symb.rl.H_max
+  $,
+  qh_conditional_mask_independence: $
+    (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
+    (s_t,e,q_(t,i),h, bold(m)_t)
+    =
+    (#symb.rl.conditional_q, #symb.rl.feasibility_logits)
+    (s_t,e,q_(t,i),h,bold(m)'_t)
+  $,
+  qh_huber_loss: $
+    cal(L)_Q
+    =
+    (1)/(N_Q)
+    sum_(n in cal(D)_Q)
+    rho_1 (Q_(n)^"cond" - y_n),
+    quad
+    rho_1(e) = cases(
+      0.5 e^2 & "if" abs(e) <= 1,
+      abs(e) - 0.5 & "otherwise"
+    )
   $,
   qh_residual_decomposition: $
     b_(psi,i)
