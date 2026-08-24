@@ -616,12 +616,13 @@ def test_workspace_write_contract_requires_source_change_and_typst_proof() -> No
         {
             "execution_mode": trials.WORKSPACE_WRITE_SANDBOX,
             "required_changed_path_prefixes": ["docs/typst/thesis/"],
-            "required_changed_paths": ["docs/typst/thesis/main.typ"],
             "typst_proof": True,
         }
     )
     assert contract["sandbox"] == trials.WORKSPACE_WRITE_SANDBOX
-    with pytest.raises(ValueError, match="require exact source paths and Typst proof"):
+    with pytest.raises(
+        ValueError, match="require active-source prefixes and Typst proof"
+    ):
         trials.execution_contract({"execution_mode": trials.WORKSPACE_WRITE_SANDBOX})
 
 
@@ -759,12 +760,40 @@ def test_editable_trial_requires_changed_source_and_passing_proof() -> None:
         "required_changed_path_prefixes": ["docs/typst/thesis/"],
         "required_changed_paths": ["docs/typst/thesis/main.typ"],
         "changed_paths": ["docs/typst/thesis/main.typ"],
+        "final_diff": {"valid": True, "content": "diff --git a/main.typ b/main.typ"},
         "typst_proof": {"passed": True},
     }
     report["adjudication"] = {"passed": True}
     assert trials.trial_passed(report)
     report["execution"]["typst_proof"] = {"passed": False}  # type: ignore[index]
     assert not trials.trial_passed(report)
+
+
+def test_final_diff_evidence_is_host_generated_and_bounded(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    trial_dir = tmp_path / "trial"
+    source = checkout / "docs" / "typst" / "thesis" / "section.typ"
+    source.parent.mkdir(parents=True)
+    source.write_text("before\n", encoding="utf-8")
+    trial_dir.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=checkout,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=checkout, check=True)
+    subprocess.run(["git", "add", "--all"], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-qm", "baseline"], cwd=checkout, check=True)
+    baseline = trials.run_git("rev-parse", "HEAD", cwd=checkout)
+    source.write_text("after\n", encoding="utf-8")
+
+    evidence = trials._final_diff_evidence(checkout, baseline, trial_dir)
+
+    assert evidence["valid"] is True
+    assert "-before" in evidence["content"]
+    assert "+after" in evidence["content"]
+    assert len(evidence["content"].encode()) <= trials.FINAL_DIFF_MAX_BYTES
 
 
 def test_trial_rejects_committed_or_out_of_scope_workspace_changes() -> None:
@@ -776,6 +805,7 @@ def test_trial_rejects_committed_or_out_of_scope_workspace_changes() -> None:
         "required_changed_path_prefixes": ["docs/typst/thesis/"],
         "required_changed_paths": ["docs/typst/thesis/main.typ"],
         "changed_paths": ["docs/typst/thesis/main.typ"],
+        "final_diff": {"valid": True, "content": "diff --git a/main.typ b/main.typ"},
         "typst_proof": {"passed": True},
     }
     report["adjudication"] = {"passed": True}
@@ -1166,6 +1196,32 @@ def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
     assert unknown_evidence["invalid_items"] == 1
     assert not trials.validate_event_evidence(unknown_evidence)[0]
 
+    protocol_drift = tmp_path / "protocol-drift.jsonl"
+    protocol_drift.write_text(
+        "\n".join(
+            json.dumps(event)
+            for event in (
+                {
+                    "type": "item.started",
+                    "item": {
+                        "type": "command_execution",
+                        "command": "rg owner AGENTS.md",
+                    },
+                },
+                {
+                    "type": "item.completed",
+                    "item": {"type": "future_tool", "name": "new-tool"},
+                },
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    drift_evidence = trials.extract_event_evidence(protocol_drift)
+    assert drift_evidence["items"] == []
+    assert drift_evidence["invalid_items"] == 2
+    assert not trials.validate_event_evidence(drift_evidence)[0]
+
 
 def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     tmp_path: Path,
@@ -1174,9 +1230,9 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     long_text = "x" * (trials.EVENT_EVIDENCE_MAX_FIELD_CHARS * 2)
     records = [
         {
-            "type": long_text,
+            "type": "item.completed",
             "item": {
-                "type": long_text,
+                "type": "command_execution",
                 "command": long_text,
                 "status": "completed",
                 "exit_code": 0,
@@ -1200,11 +1256,10 @@ def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
     evidence = trials.extract_event_evidence(events)
 
     assert len(evidence["items"]) <= trials.EVENT_EVIDENCE_MAX_ITEMS
-    assert evidence["field_truncations"] == 3
+    assert evidence["field_truncations"] == 1
     assert evidence["dropped_items"] > 0
     assert evidence["truncated"] is True
-    for field in ("event_type", "item_type", "command"):
-        assert len(evidence["items"][0][field]) == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
+    assert len(evidence["items"][0]["command"]) == trials.EVENT_EVIDENCE_MAX_FIELD_CHARS
     serialized = json.dumps(evidence, sort_keys=True, separators=(",", ":"))
     assert len(serialized) <= trials.EVENT_EVIDENCE_MAX_TOTAL_CHARS
     assert trials.validate_event_evidence(evidence)[0] is False

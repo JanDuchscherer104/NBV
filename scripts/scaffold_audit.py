@@ -747,10 +747,10 @@ def audit_routing_fixtures(
                 f"{rel(path)} fixture {fixture_id or index}: typst_proof must be boolean"
             )
         if execution_mode == "workspace-write" and (
-            not changed_prefixes or not changed_paths or typst_proof is not True
+            not changed_prefixes or typst_proof is not True
         ):
             errors.append(
-                f"{rel(path)} fixture {fixture_id or index}: workspace-write requires changed paths and typst_proof"
+                f"{rel(path)} fixture {fixture_id or index}: workspace-write requires changed path prefixes and typst_proof"
             )
         if execution_mode == "read-only" and (
             changed_prefixes or changed_paths or typst_proof
