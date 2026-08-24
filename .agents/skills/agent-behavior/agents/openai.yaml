@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Behavior"
   short_description: "Owner-first ARIA-NBV preflight"
-  default_prompt: "Use $agent-behavior before non-trivial ARIA-NBV work to locate the owner, scope one traceable lane, preserve concurrent work, and verify the result."
+  default_prompt: "Use $agent-behavior before non-trivial ARIA-NBV work to locate the owner, consult reviewed intent only for unsettled choices, scope one traceable lane, preserve concurrent work, and verify the result."

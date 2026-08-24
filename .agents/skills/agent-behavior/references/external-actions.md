@@ -14,6 +14,9 @@ or another action that changes external state.
   contract, and verification rather than an implementation chronology.
 - Keep one reviewable concern and an independent rollback boundary per commit or
   pull request.
+- For a completed implementation workpackage, record its immutable commit link
+  in the matching native debrief before regenerating the derived memory index.
+  The later debrief/index commit is a separate provenance step.
 
 ## External Boundary
 
@@ -28,6 +31,13 @@ or another action that changes external state.
   local commit and name the publication boundary.
 - Report the resulting URL, identifier, or exact blocker. Do not describe a
   local draft or successful command preparation as a completed external action.
+- Publish actionable code-review findings as resolvable review threads. After a
+  fix, reply with what changed and exact-head proof, then resolve the thread.
+- A code review also leaves one concise handoff covering verdict, architecture,
+  verification, and residual risk.
+- For an Ultragoal with continuing authorization to publish, open a draft pull
+  request after its first coherent verified workpackage and push later completed
+  workpackages to that same branch.
 
 ## Completion
 
