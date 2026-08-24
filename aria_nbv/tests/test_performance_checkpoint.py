@@ -5,13 +5,21 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aria_nbv.configs.wandb_config import WandbConfig
-from aria_nbv.performance_checkpoint import ResultContractError, load_result_snapshot, record_checkpoint, result_sha256
+from aria_nbv.performance_checkpoint import (
+    ResultContractError,
+    load_result_snapshot,
+    log_wandb_result,
+    record_checkpoint,
+    result_sha256,
+)
 
 
 def _result(path: Path, *, status: str = "pass") -> Path:
@@ -128,3 +136,25 @@ def test_record_checkpoint_mirrors_to_wandb_only_after_omx_accepts(tmp_path: Pat
 
     assert events == ["omx", "wandb"]
     assert outcome["wandb_run_id"] == "wandb-run"
+
+
+def test_wandb_series_uses_acquisition_axis_and_scalar_summary(tmp_path: Path) -> None:
+    result, result_bytes = load_result_snapshot(_result(tmp_path / "result.json"))
+    run = MagicMock()
+    run.id = "wandb-run"
+    artifact = MagicMock()
+    result_file = MagicMock()
+    artifact.new_file.return_value.__enter__.return_value = result_file
+    wandb = SimpleNamespace(init=MagicMock(return_value=run), Artifact=MagicMock(return_value=artifact))
+
+    with patch.dict(sys.modules, {"wandb": wandb}):
+        run_id = log_wandb_result(result, result_bytes, result_sha256(result_bytes), WandbConfig())
+
+    assert run_id == "wandb-run"
+    assert wandb.init.call_args.kwargs["name"] == "[senpai] Startup latency evaluator"
+    assert wandb.init.call_args.kwargs["group"] == "senpai"
+    assert run.define_metric.call_args_list[0].args == ("aria_autoresearch/acquisition_number",)
+    assert run.define_metric.call_args_list[0].kwargs == {"hidden": True}
+    assert run.define_metric.call_args_list[1].kwargs == {"step_metric": "aria_autoresearch/acquisition_number"}
+    assert run.log.call_count == 2
+    assert run.summary.update.call_args.args[0] == {"aria_autoresearch/p95_ms": 12.5}
