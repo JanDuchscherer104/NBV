@@ -86,6 +86,7 @@ _EXECUTION_IDENTITY_FIELDS = {
     "tool_call": ("tool", "tool_name", "name"),
     "web_search": ("query", "path"),
 }
+_BENIGN_ITEM_TYPES = frozenset({"agent_message", "reasoning"})
 _GENERIC_EXECUTION_IDENTITY_FIELDS = (
     "command",
     "server",
@@ -546,6 +547,12 @@ def _sandboxed_codex_command(
     if not schema_path.is_file():
         raise RuntimeError("routing trials require the canonical report schema")
     subject_bind = "--ro-bind" if sandbox == READ_ONLY_SANDBOX else "--bind"
+    git_metadata_mount: list[str] = []
+    if sandbox == WORKSPACE_WRITE_SANDBOX:
+        git_dir = checkout / ".git"
+        if not git_dir.is_dir():
+            raise RuntimeError("workspace-write routing trials require a Git directory")
+        git_metadata_mount = ["--ro-bind", str(git_dir), "/workspace/.git"]
     sandbox_command = list(codex_command)
     codex_mount: list[str] = []
     if sandbox_command[0] == "codex":
@@ -633,6 +640,7 @@ def _sandboxed_codex_command(
         subject_bind,
         str(checkout),
         "/workspace",
+        *git_metadata_mount,
         "--chdir",
         "/workspace",
         *relay_command,
@@ -1303,7 +1311,7 @@ def _event_evidence_record(
         return None, 0, False
     present_fields = [field for field in _EVIDENCE_FIELDS if field in source]
     if not _has_observed_identity(item_type, source):
-        return None, 0, item_type in _EXECUTION_IDENTITY_FIELDS
+        return None, 0, (isinstance(item, dict) and item_type not in _BENIGN_ITEM_TYPES)
 
     record: dict[str, Any] = {}
     if isinstance(event.get("type"), str):

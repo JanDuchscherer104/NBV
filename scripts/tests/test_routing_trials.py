@@ -561,6 +561,36 @@ def test_subject_sandbox_binds_only_the_resolved_codex_executable(
     assert command[target_index - 1] != str(home_bin.parent)
 
 
+@pytest.mark.skipif(shutil.which("bwrap") is None, reason="Bubblewrap is unavailable")
+def test_workspace_write_sandbox_keeps_git_index_read_only(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    (checkout / "protected.txt").write_text("protected", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+    subprocess.run(["git", "add", "protected.txt"], cwd=checkout, check=True)
+    command = trials._sandboxed_codex_command(
+        codex_command=[
+            "/bin/sh",
+            "-ec",
+            "! git update-index --assume-unchanged protected.txt",
+        ],
+        checkout=checkout,
+        broker_socket=tmp_path / "proxy.sock",
+        schema_path=trials.REPORT_SCHEMA,
+        sandbox=trials.WORKSPACE_WRITE_SANDBOX,
+    )
+
+    subprocess.run(command, check=True)
+
+    assert subprocess.run(
+        ["git", "ls-files", "-v", "protected.txt"],
+        cwd=checkout,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.startswith("H ")
+
+
 def test_event_receipt_requires_a_completed_agent_message(tmp_path: Path) -> None:
     events = tmp_path / "events.jsonl"
     events.write_text(
@@ -1120,6 +1150,21 @@ def test_event_evidence_keeps_commands_tools_paths_and_omits_noise(
             "adjudication": {"passed": True},
         }
     )
+
+    unknown = tmp_path / "unknown.jsonl"
+    unknown.write_text(
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {"type": "future_tool", "operation": "new"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    unknown_evidence = trials.extract_event_evidence(unknown)
+    assert unknown_evidence["invalid_items"] == 1
+    assert not trials.validate_event_evidence(unknown_evidence)[0]
 
 
 def test_event_evidence_bounds_all_fields_and_fails_closed_when_truncated(
