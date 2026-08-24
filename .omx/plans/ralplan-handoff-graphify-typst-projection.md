@@ -10,10 +10,10 @@ planning_artifacts:
   - .omx/plans/test-spec-graphify-typst-projection.md
 approving_reviews:
   - role: architect
-    artifact: .omx/plans/ralplan-architect-review-graphify-typst-projection.md
+    artifact: .omx/reviews/ralplan-architect-review-graphify-typst-projection.md
     verdict: APPROVE
   - role: critic
-    artifact: .omx/plans/ralplan-critic-review-graphify-typst-projection.md
+    artifact: .omx/reviews/ralplan-critic-review-graphify-typst-projection.md
     verdict: APPROVE
 ralplan_consensus_gate:
   complete: true
