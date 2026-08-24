@@ -329,8 +329,8 @@ def test_canonical_worker_argv_uses_current_python_module_and_carries_writer_con
     manifest = json.loads((REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8"))
     assert writer.max_samples == writer.source.limit == 100
     assert writer.source_manifest_path == REPO_ROOT / ".configs/rollout_campaign100_source_manifest.json"
-    assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v8_rebuilt"
-    assert writer.store.source_offline_store_version == manifest["source_cache_version"] == "8"
+    assert writer.source.store.store_dir.name == "vin_offline_rollout_campaign100_v10_rebuilt"
+    assert writer.store.source_offline_store_version == manifest["source_cache_version"] == "10"
     assert writer.store.split_manifest_hash == manifest["split_manifest_hash"]
     assert writer.min_valid_root_candidates == 15
     assert {
@@ -406,13 +406,19 @@ def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineag
     assert entry.rows[0].source_shard_row == unit.source_row_payload["source_shard_row"]
 
 
-def test_corrected_v10_pilot_has_fresh_identity_and_unchanged_paired_contract():
-    config = CudaRolloutCampaignConfig.from_toml(
-        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v10.toml"
+def test_corrected_v11_pilot_has_v10_source_identity_and_unchanged_paired_contract(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        "aria_nbv.oracle.pipelines.campaign.current_generation_revision",
+        lambda: GenerationRevision("g003-v1", "commit", "tree", "lock", "bundle", "generation"),
     )
-    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v10"
+    config = CudaRolloutCampaignConfig.from_toml(
+        REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected_v11.toml"
+    )
+    assert config.campaign_id == "cuda-rollouts-v1-pilot-corrected-v11"
     assert not (REPO_ROOT / ".configs/build_rollouts_v1_cuda_campaign_pilot_corrected.toml").exists()
-    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v10")
+    assert config.output_root == Path(".campaign/cuda-rollouts-v1-pilot-corrected-v11")
     assert config.mode.value == "pilot"
     assert config.pilot_scene_count == 5
     assert config.temperatures == (0.5, 1.0, 2.0, 4.0)

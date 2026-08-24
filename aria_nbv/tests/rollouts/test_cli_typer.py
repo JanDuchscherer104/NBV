@@ -94,10 +94,10 @@ def test_source_manifest_parser_accepts_writer_source_without_manifest(tmp_path:
     assert source.store.store_dir.name == "local-store"
 
 
-def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> None:
+def test_campaign100_v10_freezes_manifest_order_and_current_store_identity() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     config = tomllib.loads(
-        (repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml").read_text(encoding="utf-8")
+        (repo_root / ".configs/build_vin_offline_rollout_campaign100_v10.toml").read_text(encoding="utf-8")
     )
     manifest = json.loads((repo_root / ".configs/rollout_campaign100_source_manifest.json").read_text(encoding="utf-8"))
     rows = manifest["rows"]
@@ -113,9 +113,9 @@ def test_campaign100_v8_freezes_manifest_order_and_fresh_store_identity() -> Non
     assert len(tar_paths) == len(sample_keys) == 100
     assert all(Path(tar).parts[-2] == row["scene_id"] for tar, row in zip(tar_paths, rows, strict=True))
     assert len(set(tar_paths)) == 100
-    assert config["store"]["store_dir"] == "vin_offline_rollout_campaign100_v8_rebuilt"
+    assert config["store"]["store_dir"] == "vin_offline_rollout_campaign100_v10_rebuilt"
     assert config["store"]["store_dir"] != "vin_offline_rollout_campaign100_v7"
-    resolved = VinOfflineWriterConfig.from_toml(repo_root / ".configs/build_vin_offline_rollout_campaign100_v8.toml")
+    resolved = VinOfflineWriterConfig.from_toml(repo_root / ".configs/build_vin_offline_rollout_campaign100_v10.toml")
     assert len(resolved.dataset.tar_urls) == 100
     assert all(Path(tar).is_absolute() and Path(tar).is_file() for tar in resolved.dataset.tar_urls)
     assert len(resolved.dataset.snippet_key_filter) == 100
