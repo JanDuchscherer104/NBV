@@ -115,7 +115,9 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
 
 def _is_session_local_review_artifact(path: str) -> bool:
     relative = Path(path)
-    return relative.parts[:2] == (".omx", "reviews")
+    return (
+        relative.parts[:2] == (".omx", "reviews") and len(relative.parts) > 2
+    )
 
 
 def _fixture_owner_paths_exist(root: Path, fixture: dict[str, object]) -> bool:
@@ -908,6 +910,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
     assert not tracked_role_reviews
     eligible_debrief = ".agents/memory/history/2026/08/eligible-architecture-review.md"
     assert not _is_session_local_review_artifact(eligible_debrief)
+    assert not _is_session_local_review_artifact(".omx/reviews")
     assert _is_session_local_review_artifact(".omx/reviews/architect-review.md")
     assert _is_session_local_review_artifact(
         ".omx/reviews/nested/peer-review/report.md"
@@ -957,10 +960,13 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
                 ".omx/specs/nested/accepted-architecture-review/report.md\n"
                 ".omx/specs/nested/accepted-peer-review/report.md\n"
                 ".omx/specs/nested/peer/review/report.md\n"
+                ".omx/specs/nested/review/peer/report.md\n"
                 ".omx/specs/nested/accepted-spec/report.md\n"
                 ".omx/specs/nested/ordinary/report.md\n"
+                ".omx/context/accepted-architecture-review.md\n"
+                ".omx/interviews/accepted-peer-review.md\n"
                 ".omx/specs/accepted-spec.md\n"
-                ".omx/plans/accepted-plan.md\n"
+                ".omx/plans/accepted-critic-review.md\n"
                 ".agents/memory/history/2026/08/eligible-debrief.md\n"
                 f"{eligible_debrief}\n"
             ),
