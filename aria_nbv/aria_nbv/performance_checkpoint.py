@@ -20,6 +20,7 @@ _REQUIRED_FIELDS = frozenset(
     {
         "schema_version",
         "goal_slug",
+        "title",
         "checkpoint_status",
         "summary",
         "baseline_revision",
@@ -55,7 +56,7 @@ def load_result_snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
         raise ResultContractError(f"result is missing required fields: {', '.join(missing)}")
     if raw["schema_version"] != 1:
         raise ResultContractError("result.schema_version must be 1")
-    for field in ("goal_slug", "summary", "baseline_revision", "candidate_revision", "evaluator_fingerprint"):
+    for field in ("goal_slug", "title", "summary", "baseline_revision", "candidate_revision", "evaluator_fingerprint"):
         if not isinstance(raw[field], str) or not raw[field].strip():
             raise ResultContractError(f"result.{field} must be a non-empty string")
     if raw["checkpoint_status"] not in _CHECKPOINT_STATUSES:
@@ -116,11 +117,14 @@ def checkpoint_evidence(result: Mapping[str, Any], digest: str) -> str:
 
 
 def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str, config: WandbConfig) -> str:
-    """Log a result mirror and its source file as a W&B artifact, returning the run id."""
+    """Log a checkpointed result as a consistently named SENPAI observation."""
     import wandb
 
+    init_kwargs = config.init_kwargs()
+    init_kwargs["name"] = f"[senpai] {result['title']}"
+    init_kwargs["group"] = "senpai"
     run = wandb.init(
-        **config.init_kwargs(),
+        **init_kwargs,
         config={
             "aria_autoresearch": {
                 "goal_slug": result["goal_slug"],
@@ -210,7 +214,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("result", type=Path, help="Immutable evaluator result.json")
     parser.add_argument("--wandb-project", help="Mirror evidence to this W&B project")
     parser.add_argument("--wandb-entity")
-    parser.add_argument("--wandb-group")
     parser.add_argument("--wandb-offline", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Validate without W&B or OMX side effects")
     args = parser.parse_args(argv)
@@ -219,7 +222,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = WandbConfig(
             project=args.wandb_project,
             entity=args.wandb_entity,
-            group=args.wandb_group or None,
             job_type="performance-goal",
             offline=args.wandb_offline,
         )

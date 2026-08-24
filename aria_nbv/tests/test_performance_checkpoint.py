@@ -20,6 +20,7 @@ def _result(path: Path, *, status: str = "pass") -> Path:
             {
                 "schema_version": 1,
                 "goal_slug": "startup-latency",
+                "title": "Startup latency evaluator",
                 "checkpoint_status": status,
                 "summary": "p95 improved",
                 "baseline_revision": "base123",
@@ -54,6 +55,16 @@ def test_record_checkpoint_rejects_nonfinite_metric(tmp_path: Path) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(ResultContractError, match="finite number"):
+        record_checkpoint(path, dry_run=True)
+
+
+def test_record_checkpoint_requires_senpai_title(tmp_path: Path) -> None:
+    path = _result(tmp_path / "result.json")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    del payload["title"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ResultContractError, match="title"):
         record_checkpoint(path, dry_run=True)
 
 
