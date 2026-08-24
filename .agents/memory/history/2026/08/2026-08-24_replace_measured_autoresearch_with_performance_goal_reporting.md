@@ -40,9 +40,13 @@ Validated one immutable version-one evaluator result, derived a SHA-256 evidence
 - [821a9309ccb01c4c5639ce92bafc14b975f41d92](https://github.com/jdgalviss/ARIA-NBV/commit/821a9309ccb01c4c5639ce92bafc14b975f41d92) — immutable-result bridge, W&B inspection, and sidecar retirement
 - [92ba133873ba80d741b67c2d8aefca71b003076d](https://github.com/jdgalviss/ARIA-NBV/commit/92ba133873ba80d741b67c2d8aefca71b003076d) — preserve hard-gate, checkpoint, and byte-snapshot invariants
 - [e61562e8fc9dcb2d9e98f026e9acf8d5a58f18b0](https://github.com/jdgalviss/ARIA-NBV/commit/e61562e8fc9dcb2d9e98f026e9acf8d5a58f18b0) — anchor OMX checkpointing at the repository root
+- [3b842bc8dbd510adc00c63eee27b1322280ff877](https://github.com/jdgalviss/ARIA-NBV/commit/3b842bc8dbd510adc00c63eee27b1322280ff877) — validate and mirror immutable evaluator series points
+- [99218e61d54b0b5dd21084129037c82420cd5422](https://github.com/jdgalviss/ARIA-NBV/commit/99218e61d54b0b5dd21084129037c82420cd5422) — enforce SENPAI W&B names and group
+- [b4d64562671e5633b30442cc7a0964eb6457aedd](https://github.com/jdgalviss/ARIA-NBV/commit/b4d64562671e5633b30442cc7a0964eb6457aedd) — bind series plots to acquisition number and log endpoints as summaries
+- [4d7edec6565df0920f8de33c7362f896c540a986](https://github.com/jdgalviss/ARIA-NBV/commit/4d7edec6565df0920f8de33c7362f896c540a986) — document formal SENPAI chart semantics
 
 ## Verification
-Passed focused Ruff and pytest checks (14 tests), `scripts/tests/test_agent_governance_g002.py`, and `make check-agent-memory`. An authenticated smoke evaluator read one persisted rollout shard, checkpointed its verified 17-link/1,920-candidate provenance result, and logged that result plus two inspection Plotly figures to W&B.
+Passed focused Ruff and pytest checks (16 tests), `scripts/tests/test_agent_governance_g002.py`, and `make check-agent-memory`. An authenticated smoke evaluator read one persisted rollout shard, checkpointed its verified 17-link/1,920-candidate provenance result, and logged that result plus two inspection Plotly figures to W&B. Completed OMX performance goals then emitted immutable eight-point cumulative target-RRI series only after checkpoint acceptance: the initial [formal SENPAI run](https://wandb.ai/aria-nbv/aria-nbv/runs/r8cyezwn), followed by a [format-corrected successor](https://wandb.ai/aria-nbv/aria-nbv/runs/837udqr0) whose four series use acquisition number as their x-axis and whose endpoint metrics are summary-only.
 
 ## Canonical Owner Impact
 Updated the explicit human intent, agent-behavior routing, W&B configuration and inspection owners, plus their focused tests. No thesis claim changed.
