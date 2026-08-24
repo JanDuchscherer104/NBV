@@ -14,15 +14,19 @@ object represented by its root-relative pose and metric extents, and
 horizon ``h`` selects an estimand; it is not a substitute for ``b_t`` and does
 not reveal future observations. Supervision, oracle lineage, and policy masks
 remain outside this module.
-The model implements the ``A1--S0-pose--root-moments`` control. For each
-materialized candidate row it separates three information paths:
+
+The model implements the shared ``A0/A1--S0-pose--root-moments`` scorer. A1
+candidate-to-state attention remains the default; A0 is its identical-input
+independent-row MLP control. For each materialized candidate row the scorer
+separates four information paths:
 
 * a physical trunk encodes the candidate in the rollout-root and current-camera
   frames together with compact root-scene evidence; it is independent of the
   target, requested horizon, labels, and authoritative ``action_mask``;
-* a conditional-value query adds the target expressed in the candidate frame
-  and cross-attends to five state tokens: scene, target, causal pose history,
-  remaining budget :math:`b_t`, and requested residual horizon :math:`h`;
+* a conditional-value query adds the target expressed in the candidate frame;
+* the configured A0/A1 fusion combines that query with exactly five shared
+  state tokens: scene, target, causal pose history, remaining budget
+  :math:`b_t`, and requested residual horizon :math:`h`;
 * a modular terminal decoder maps the shared feature to one continuous
   conditional value. Regression predicts it directly; CORAL discretizes the
   same fitted-Q target and decodes fixed continuous representatives.
@@ -47,6 +51,10 @@ from torch import Tensor, nn
 
 from ...utils import TargetConfig
 from ..encoders import R6dLffPoseEncoder, R6dLffPoseEncoderConfig
+from ..modules.qh_state_fusion import (
+    QhCrossAttentionStateFusionConfig,
+    QhStateFusionConfig,
+)
 from ..modules.qh_value_decoders import (
     QhCoralAuxiliary,
     QhCoralValueDecoder,
@@ -107,11 +115,16 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     representation_semantics: Literal["root_moments_v1"] = "root_moments_v1"
     """Versioned meaning of the scene token: root-frame moments plus support."""
 
-    attention_heads: int = Field(default=4, gt=0)
-    """Heads in candidate-to-state attention."""
+    state_fusion: QhStateFusionConfig = Field(default_factory=QhCrossAttentionStateFusionConfig)
+    """A0/A1 interaction over the identical candidate query and state tokens.
+
+    The default preserves A1 candidate-to-state cross-attention. A0 replaces
+    only that interaction with a fixed-order independent-row MLP; target,
+    scene, history, budget, horizon, decoder, and mask semantics stay fixed.
+    """
 
     dropout: float = Field(default=0.05, ge=0.0, lt=1.0)
-    """Training-only dropout in attention and the value head."""
+    """Training-only dropout in state fusion and the value decoder."""
 
     value_decoder: QhValueDecoderConfig = Field(default_factory=QhRegressionValueDecoderConfig)
     """Terminal scalar-Q decoder over the shared candidate-state feature.
@@ -138,8 +151,13 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
     @model_validator(mode="after")
     def _validate_architecture(self) -> "TargetFiniteHorizonScorerConfig":
-        if self.hidden_dim % self.attention_heads != 0:
-            raise ValueError("hidden_dim must be divisible by attention_heads.")
+        """Reject incompatible shared widths and ambiguous scene channels."""
+
+        if (
+            isinstance(self.state_fusion, QhCrossAttentionStateFusionConfig)
+            and self.hidden_dim % self.state_fusion.attention_heads != 0
+        ):
+            raise ValueError("hidden_dim must be divisible by state_fusion.attention_heads.")
         if not self.scene_channels:
             raise ValueError("scene_channels must contain at least one root-EVL field.")
         if len(set(self.scene_channels)) != len(self.scene_channels):
@@ -248,11 +266,10 @@ class TargetFiniteHorizonScorer(nn.Module):
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
         )
-        self.state_attention = nn.MultiheadAttention(
-            hidden_dim,
-            int(config.attention_heads),
+        self.state_fusion = config.state_fusion.setup_target(
+            hidden_dim=hidden_dim,
+            state_token_count=5,
             dropout=float(config.dropout),
-            batch_first=True,
         )
         self.value_decoder = config.value_decoder.setup_target(
             in_dim=3 * hidden_dim,
@@ -358,16 +375,10 @@ class TargetFiniteHorizonScorer(nn.Module):
         value_queries = torch.where(candidate_mask.unsqueeze(-1), value_queries, torch.zeros_like(value_queries))
 
         state_tokens = torch.stack((scene_token, target_token, history_token, budget_token, horizon_token), dim=-2)
-        flat_candidates = value_queries.reshape(batch_size * steps, width, -1)
-        flat_state = state_tokens.reshape(batch_size * steps, state_tokens.shape[-2], -1)
-        attended, _weights = self.state_attention(
-            flat_candidates,
-            flat_state,
-            flat_state,
-            need_weights=False,
+        state_context = self.state_fusion(value_queries, state_tokens)
+        decoded_value = self.value_decoder(
+            torch.cat((value_queries, state_context, value_queries * state_context), dim=-1)
         )
-        attended = attended.reshape(batch_size, steps, width, -1)
-        decoded_value = self.value_decoder(torch.cat((value_queries, attended, value_queries * attended), dim=-1))
         conditional_q = decoded_value.conditional_q
         conditional_q = torch.where(candidate_mask, conditional_q, torch.zeros_like(conditional_q))
         feasibility_logits = torch.where(candidate_mask, feasibility_logits, torch.zeros_like(feasibility_logits))

@@ -18,6 +18,10 @@ from aria_nbv.vin.models.target_finite_horizon import (
     TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
 )
+from aria_nbv.vin.modules.qh_state_fusion import (
+    QhCrossAttentionStateFusionConfig,
+    QhIndependentMlpStateFusionConfig,
+)
 from aria_nbv.vin.modules.qh_value_decoders import (
     QhCoralValueDecoderConfig,
     QhPredeclaredPhysicalCoralSupport,
@@ -47,7 +51,6 @@ def _scorer() -> TargetFiniteHorizonScorer:
     torch.manual_seed(11)
     scorer = TargetFiniteHorizonScorerConfig(
         hidden_dim=32,
-        attention_heads=4,
         dropout=0.0,
         max_horizon=4,
     ).setup_target()
@@ -61,7 +64,6 @@ def _coral_scorer() -> TargetFiniteHorizonScorer:
     torch.manual_seed(11)
     scorer = TargetFiniteHorizonScorerConfig(
         hidden_dim=32,
-        attention_heads=4,
         dropout=0.0,
         max_horizon=4,
         value_decoder=QhCoralValueDecoderConfig(
@@ -311,6 +313,70 @@ def test_qh_scorer_is_candidate_permutation_equivariant() -> None:
     assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
 
 
+def test_qh_a0_identical_feature_control_preserves_public_candidate_invariants() -> None:
+    actor = _actor()
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        state_fusion=QhIndependentMlpStateFusionConfig(),
+    ).setup_target()
+    scorer.eval()
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+    changed_action_mask = actor.action_mask.clone()
+    changed_action_mask[..., 0] = ~changed_action_mask[..., 0]
+
+    expected = scorer(actor)
+    actual = scorer(permuted)
+    mask_changed = scorer(replace(actor, action_mask=changed_action_mask))
+    candidate_mask = actor.candidate_mask.clone()
+    candidate_mask[..., -1] = False
+    valid_mask = actor.action_mask.clone()
+    valid_mask[..., -1] = False
+    masked = replace(actor, candidate_mask=candidate_mask, action_mask=valid_mask)
+    mutated_pose = actor.candidate_pose_relative_root.tensor().clone()
+    mutated_pose[..., -1, :] = 1.0e6
+    invalid_changed = scorer(replace(masked, candidate_pose_relative_root=PoseTW(mutated_pose)))
+    invalid_baseline = scorer(masked)
+
+    assert torch.allclose(actual.conditional_q, expected.conditional_q[:, :, permutation], atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        actual.feasibility_logits,
+        expected.feasibility_logits[:, :, permutation],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert torch.equal(mask_changed.conditional_q, expected.conditional_q)
+    assert torch.equal(mask_changed.feasibility_logits, expected.feasibility_logits)
+    assert torch.allclose(
+        invalid_changed.conditional_q[candidate_mask],
+        invalid_baseline.conditional_q[candidate_mask],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert torch.allclose(
+        invalid_changed.feasibility_logits[candidate_mask],
+        invalid_baseline.feasibility_logits[candidate_mask],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert torch.equal(
+        invalid_changed.conditional_q[~candidate_mask],
+        torch.zeros_like(invalid_changed.conditional_q[~candidate_mask]),
+    )
+    assert torch.equal(
+        invalid_changed.feasibility_logits[~candidate_mask],
+        torch.zeros_like(invalid_changed.feasibility_logits[~candidate_mask]),
+    )
+
+
 def test_qh_scorer_invalid_rows_are_isolated() -> None:
     actor = _actor()
     scorer = _scorer()
@@ -504,7 +570,7 @@ def test_qh_scorer_backward_updates_parameters_only() -> None:
 
 
 def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
-    config = TargetFiniteHorizonScorerConfig(hidden_dim=32, attention_heads=4, max_horizon=4)
+    config = TargetFiniteHorizonScorerConfig(hidden_dim=32, max_horizon=4)
 
     assert config.model_dump()["horizon_query_semantics"] == "bounded_scalar_v1"
     assert config.target_type is TargetFiniteHorizonScorer
@@ -517,6 +583,31 @@ def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
         assert "EVL" in str(error)
     else:  # pragma: no cover - assertion branch
         raise AssertionError("scorer accepted an actor without required EVL context")
+
+
+@pytest.mark.parametrize(
+    "state_fusion",
+    [QhIndependentMlpStateFusionConfig(), QhCrossAttentionStateFusionConfig(attention_heads=2)],
+)
+def test_qh_scorer_config_round_trips_discriminated_state_fusion(state_fusion) -> None:
+    config = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        max_horizon=4,
+        state_fusion=state_fusion,
+    )
+
+    restored = TargetFiniteHorizonScorerConfig.model_validate(config.model_dump_jsonable())
+
+    assert restored == config
+    assert type(restored.state_fusion) is type(state_fusion)
+
+
+def test_qh_scorer_config_rejects_incompatible_attention_width() -> None:
+    with pytest.raises(ValueError, match="divisible"):
+        TargetFiniteHorizonScorerConfig(
+            hidden_dim=31,
+            state_fusion=QhCrossAttentionStateFusionConfig(attention_heads=4),
+        )
 
 
 def test_qh_scorer_module_has_no_oracle_or_supervision_dependency() -> None:
