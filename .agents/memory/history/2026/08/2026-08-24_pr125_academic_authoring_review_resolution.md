@@ -1,0 +1,70 @@
+---
+id: 2026-08-24_pr125_academic_authoring_review_resolution
+date: 2026-08-24
+title: "PR 125 academic authoring review resolution"
+status: done
+topics: [scaffold, academic-writing, scientific-review, typst, routing]
+confidence: high
+canonical_updates_needed:
+  - .agents/skills/README.md
+  - .agents/skills/academic-writing/SKILL.md
+  - .agents/skills/scientific-review/SKILL.md
+  - .agents/skills/typst-authoring/SKILL.md
+  - scripts/scaffold/fixtures/routing.json
+touched_owner_paths:
+  - .agents/skills/README.md
+  - .agents/skills/academic-writing/SKILL.md
+  - .agents/skills/academic-writing/references/source-grounded-workflow.md
+  - .agents/skills/scientific-review/SKILL.md
+  - .agents/skills/scientific-review/references/review-protocol.md
+  - .agents/skills/typst-authoring/SKILL.md
+  - scripts/scaffold/fixtures/routing.json
+  - scripts/scaffold/fixtures/routing_prompts.jsonl
+  - scripts/scaffold/run_routing_trials.py
+  - scripts/tests/test_agent_governance_g002.py
+  - scripts/tests/test_routing_trials.py
+repo_object_format: sha1
+repo_head: 679a830ced9015a488e9d03b11d391e4e6c7f424
+repo_branch: "codex/pr109-academic-scaffold-salvage"
+worktree_kind: linked
+codex_thread: codex://threads/01a02ab6-c75e-7313-be12-e5f90ae0cde3
+---
+
+## Task
+
+Resolve the remaining valid review findings for the academic-authoring skill
+split while retaining separate authoring, review, and Typst realization owners.
+
+## Decision
+
+Keep `scientific-review` as a broad advisory review skill, but route each
+review kind to existing claim, section, notation, empirical, and active-thesis
+owners. Keep the shared phase transition in the skills style guide rather than
+duplicating it in all three skills.
+
+## Findings
+
+- Independent review requires a fresh candidate-bound context; otherwise its
+  result is advisory.
+- A repository-edit request can compose authoring, optional review, and Typst
+  realization, but scientific release remains a separate human/evidence gate.
+- The focused routing suite now uses natural synthesis, mechanical-repair,
+  frozen-review, claim-revision, empirical-revision, and non-writing cases.
+- PR #104 had no unresolved review threads at its exact live head, so it needed
+  no retrospective patch.
+
+## Commits
+
+- [679a830ced9015a488e9d03b11d391e4e6c7f424](https://github.com/JanDuchscherer104/ARIA-NBV/commit/679a830ced9015a488e9d03b11d391e4e6c7f424) — implementation: compose academic authoring phases
+
+## Verification
+
+- `uv run --no-project --with pytest --with pyyaml pytest -q scripts/tests/test_agent_governance_g002.py scripts/tests/test_routing_trials.py scripts/tests/test_scientific_review_trials.py` — 68 passed.
+- The three modified skills passed the skill validator.
+- `git diff --check` and routing fixture JSON/JSONL parsing passed.
+
+## Canonical Owner Impact
+
+The skills style guide owns cross-skill phase states. Individual skills retain
+only their own workflow branches, and routing fixtures remain the tested
+navigation contract rather than a source of scientific truth.
