@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import build_graphify_projection as projection  # noqa: E402
+import check_graphify_freshness as freshness  # noqa: E402
 from build_graphify_projection import (  # noqa: E402
     ProjectionConfig,
     ProjectionError,
@@ -893,14 +894,10 @@ class ProjectionTests(unittest.TestCase):
         ledger = self.fixture.root / "docs/typst/thesis/data/principal-claims.toml"
         ledger.parent.mkdir(parents=True, exist_ok=True)
         ledger.write_text("not = [valid\n", encoding="utf-8")
-        invalid_index = self.build().files["index.md"]
-        self.assertIn("claim_extension_status: invalid", invalid_index)
-        self.assertIn("claim_extension_errors: 1", invalid_index)
-        self.assertIn("owner_worktree_state: dirty", invalid_index)
-        self.assertRegex(
-            invalid_index,
-            r"docs/typst/thesis/data/principal-claims\.toml: sha256:[0-9a-f]{64}",
-        )
+        with self.assertRaisesRegex(
+            ProjectionError, "principal claim ledger is invalid"
+        ):
+            self.build()
         ledger.unlink()
 
         bibliography = self.fixture.root / "docs/references.bib"
@@ -910,6 +907,21 @@ class ProjectionTests(unittest.TestCase):
         )
         dirty_index = self.build().files["index.md"]
         self.assertIn("owner_worktree_state: dirty", dirty_index)
+
+    def test_invalid_claim_ledger_cannot_emit_freshness_projection(self) -> None:
+        ledger = self.fixture.root / "docs/typst/thesis/data/principal-claims.toml"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text("not = [valid\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(
+            ProjectionError, "principal claim ledger is invalid"
+        ):
+            self.build()
+
+        payload = freshness.check(self.fixture.root)
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("projection index", " ".join(payload["reasons"]))
+        self.assertFalse((self.fixture.root / "graphify-input/index.md").exists())
 
     def test_shared_typst_entities_and_section_usage_render_stably(self) -> None:
         first = self.build()

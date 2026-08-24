@@ -434,24 +434,34 @@ def _active_typst_source(text: str) -> str:
     return "".join(active)
 
 
+def _canonical_text(text: str) -> str:
+    """Return the ledger's canonical UTF-8 source representation."""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _accepted_bytes(text: str, match: re.Match[str]) -> bytes:
+    start = text.rfind("\n\n", 0, match.start())
+    start = 0 if start < 0 else start + 2
+    end = text.find("\n\n", match.end())
+    end = len(text) if end < 0 else end
+    accepted_text = (text[start : match.start()] + text[match.end() : end]).strip()
+    return accepted_text.encode("utf-8") + b"\n"
+
+
 def _anchor_slice(locator: Locator, root: Path, claim_id: str) -> Occurrence:
     resolved, canonical = _resource(locator.path, root, "claim anchor")
-    text = (
-        resolved.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
-    )
+    with resolved.open("r", encoding="utf-8", newline="") as source:
+        text = _canonical_text(source.read())
     token = f"<{locator.identity}>"
     matches = list(re.finditer(re.escape(token), _active_typst_source(text)))
     if len(matches) != 1:
         _fail(f"{canonical} must contain exactly one {token} anchor occurrence")
     match = matches[0]
+    accepted = _accepted_bytes(text, match)
     start = text.rfind("\n\n", 0, match.start())
     start = 0 if start < 0 else start + 2
     end = text.find("\n\n", match.end())
     end = len(text) if end < 0 else end
-    accepted_text = (
-        text[start : match.start()] + text[match.end() : end]
-    ).strip()
-    accepted = accepted_text.encode("utf-8") + b"\n"
     start_byte = len(text[:start].encode("utf-8"))
     end_byte = len(text[:end].encode("utf-8"))
     anchor_match = ANCHOR.fullmatch(locator.raw)
@@ -468,6 +478,31 @@ def _anchor_slice(locator: Locator, root: Path, claim_id: str) -> Occurrence:
         end_byte,
         hashlib.sha256(accepted).hexdigest(),
     )
+
+
+def _accepted_sha256_at_revision(
+    locator: Locator, root: Path, claim_id: str, revision: str
+) -> str:
+    result = subprocess.run(
+        ["git", "show", f"{revision}:{locator.path}"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode:
+        _fail(f"reviewed revision for {claim_id} does not contain {locator.path}")
+    try:
+        text = _canonical_text(result.stdout.decode("utf-8"))
+    except UnicodeDecodeError:
+        _fail(f"reviewed revision for {claim_id} has invalid UTF-8 in {locator.path}")
+    token = f"<{locator.identity}>"
+    matches = list(re.finditer(re.escape(token), _active_typst_source(text)))
+    if len(matches) != 1:
+        _fail(
+            f"reviewed revision for {claim_id} must contain exactly one {token} anchor"
+        )
+    match = matches[0]
+    return hashlib.sha256(_accepted_bytes(text, match)).hexdigest()
 
 
 def _occurrences(claims: tuple[Claim, ...], root: Path) -> tuple[Occurrence, ...]:
@@ -499,7 +534,6 @@ def _receipt(
     occurrences: Mapping[tuple[str, str], Occurrence],
     index: int,
     verifier: ReceiptVerifier | None,
-    repository_revision: str | None,
 ) -> Receipt:
     allowed = {
         "id",
@@ -560,8 +594,36 @@ def _receipt(
     if state_changing:
         if authentication == "manual":
             _fail(f"{rid} manual assertions cannot promote or release")
-        if repository_revision is None or revision != repository_revision:
-            _fail(f"{rid} is not bound to the current repository revision")
+        current_revision = _repository_revision(root)
+        commit_type = subprocess.run(
+            ["git", "cat-file", "-t", "--end-of-options", revision],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if commit_type.returncode or commit_type.stdout.strip() != "commit":
+            _fail(f"{rid} reviewed repository revision is not an existing commit")
+        ancestor = subprocess.run(
+            [
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                "--",
+                revision,
+                current_revision,
+            ],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if ancestor.returncode != 0:
+            _fail(
+                f"{rid} is not bound to an ancestor of the current repository revision"
+            )
+        if _accepted_sha256_at_revision(locator, root, claim_id, revision) != digest:
+            _fail(f"{rid} accepted bytes changed at its reviewed repository revision")
         attestation = ReceiptAttestation(
             claim_id,
             kind,
@@ -601,7 +663,6 @@ def validate_ledger(
     root: Path = ROOT,
     *,
     receipt_verifier: ReceiptVerifier | None = None,
-    repository_revision: str | None = None,
 ) -> PrincipalClaims:
     """Validate the ledger and return the typed consumer model."""
     if set(data) != {"schema", "claims", "receipts"} or data.get("schema") != SCHEMA:
@@ -627,11 +688,12 @@ def validate_ledger(
     }
     for claim in claims:
         if any(
-            evidence.role == "empirical"
-            and evidence.locator.path in prose_resources
+            evidence.role == "empirical" and evidence.locator.path in prose_resources
             for evidence in claim.evidence
         ):
-            _fail(f"{claim.id} empirical evidence must not alias a claim prose resource")
+            _fail(
+                f"{claim.id} empirical evidence must not alias a claim prose resource"
+            )
     occurrences = _occurrences(claims, root)
     occurrence_map = {(item.surface, item.anchor): item for item in occurrences}
     receipts = tuple(
@@ -642,7 +704,6 @@ def validate_ledger(
             occurrence_map,
             index,
             receipt_verifier,
-            repository_revision,
         )
         for index, item in enumerate(raw_receipts)
     )
@@ -700,18 +761,13 @@ def read_principal_claims(
     root: Path = ROOT,
     *,
     receipt_verifier: ReceiptVerifier | None = None,
-    repository_revision: str | None = None,
 ) -> PrincipalClaims:
     """Read and validate the TOML ledger."""
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    receipts = data.get("receipts")
-    if repository_revision is None and isinstance(receipts, list) and receipts:
-        repository_revision = _repository_revision(root)
     return validate_ledger(
         data,
         root,
         receipt_verifier=receipt_verifier,
-        repository_revision=repository_revision,
     )
 
 

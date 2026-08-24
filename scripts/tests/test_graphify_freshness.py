@@ -91,8 +91,30 @@ class FreshnessTests(unittest.TestCase):
             ["git", "config", "user.name", "Test"], cwd=self.root, check=True
         )
         for relative, content in {
-            self.OWNER: "owner\n",
-            self.CLAIM_OWNER: 'schema = "fixture"\n',
+            self.OWNER: (
+                "Fixture owner. <claim-owner:pc-fixture>\n\n"
+                "Fixture falsifier. <claim-falsifier:pc-fixture>\n\n"
+                "Fixture limitation. <claim-limitation:pc-fixture>\n"
+            ),
+            self.CLAIM_OWNER: (
+                'schema = "aria-nbv-principal-claims-v2"\n\n'
+                "receipts = []\n\n"
+                "[[claims]]\n"
+                'id = "pc-fixture"\n'
+                'class = "result"\n'
+                'rqs = ["rq1"]\n'
+                'release_applicability = "required"\n'
+                'maturity = "planned"\n'
+                'outcome = "missing"\n'
+                'review_state = "unreviewed"\n'
+                'release_state = "withheld"\n'
+                'owner = "typst:docs/thesis/main.md#claim-owner:pc-fixture"\n'
+                'falsifier = "typst:docs/thesis/main.md#claim-falsifier:pc-fixture"\n'
+                'limitations = ["typst:docs/thesis/main.md#claim-limitation:pc-fixture"]\n\n'
+                "[[claims.evidence]]\n"
+                'role = "implementation"\n'
+                'locator = "code:src/example.py"\n'
+            ),
             "src/example.py": "def example(): return 1\n",
             "seed.md": "seed\n",
         }.items():
@@ -215,6 +237,45 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         payload = self.payload()
         self.assertEqual(payload["state"], "unusable", payload)
         self.assertIn("projection owner is unavailable", " ".join(payload["reasons"]))
+
+    def test_invalid_claim_extension_status_makes_projection_unusable(self) -> None:
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "claim_extension_status: current", "claim_extension_status: invalid"
+            ),
+            encoding="utf-8",
+        )
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("claim_extension_status is invalid", " ".join(payload["reasons"]))
+
+    def test_valid_projection_with_corrupt_current_claim_ledger_is_unusable(
+        self,
+    ) -> None:
+        ledger = self.root / self.CLAIM_OWNER
+        ledger.write_text("schema = [broken\n", encoding="utf-8")
+
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("principal claim ledger is invalid", " ".join(payload["reasons"]))
+        usable = self.run_checker("--quiet", "--usable")
+        self.assertNotEqual(usable.returncode, 0)
+
+    def test_legacy_projection_without_claim_extension_status_requires_rebuild(
+        self,
+    ) -> None:
+        index = self.root / "graphify-input/index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8").replace(
+                "\nclaim_extension_status: current", ""
+            ),
+            encoding="utf-8",
+        )
+
+        payload = self.payload()
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("claim_extension_status", " ".join(payload["reasons"]))
 
     def test_ast_and_semantic_drift_use_their_respective_upstream_hashes(self) -> None:
         code = self.root / "src/example.py"
@@ -552,7 +613,9 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         )
         (self.root / "linked-asset").symlink_to(asset.name)
         subprocess.run(["git", "add", "."], cwd=self.root, check=True)
-        subprocess.run(["git", "commit", "-qm", "filtered asset"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "commit", "-qm", "filtered asset"], cwd=self.root, check=True
+        )
         marker = self.root / "filter-ran"
         subprocess.run(
             [

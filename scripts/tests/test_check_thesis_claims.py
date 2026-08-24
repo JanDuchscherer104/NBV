@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 from itertools import product
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
 
@@ -20,7 +21,12 @@ assert SPEC and SPEC.loader
 CHECK = importlib.util.module_from_spec(SPEC)
 sys.modules["check_thesis_claims"] = CHECK
 SPEC.loader.exec_module(CHECK)
-REVISION = "1" * 40
+
+
+def _current_revision(root: Path) -> str:
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
 
 
 def test_real_ledger_is_typed_and_withheld() -> None:
@@ -70,6 +76,15 @@ def _fixture(
                 "locator": f"artifact:result.json@sha256:{artifact_digest}",
             }
         ]
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=tmp_path, check=True)
     return {"schema": CHECK.SCHEMA, "claims": [claim], "receipts": []}, tmp_path
 
 
@@ -100,7 +115,7 @@ def _receipt(
         "verdict": "advisory" if kind == "advisory" else target,
         "locator": "typst:surface.typ#claim-owner:pc-test",
         "accepted_sha256": _accepted(root),
-        "repository_revision": REVISION,
+        "repository_revision": _current_revision(root),
         "reviewed_at": "2026-08-23T10:00:00Z",
     }
 
@@ -165,7 +180,6 @@ def test_outcome_release_boundary(
             data,
             root,
             receipt_verifier=lambda _attestation: True,
-            repository_revision=REVISION,
         )
         assert model.claims[0].release_state == "admissible"
     else:
@@ -174,7 +188,6 @@ def test_outcome_release_boundary(
                 data,
                 root,
                 receipt_verifier=lambda _attestation: True,
-                repository_revision=REVISION,
             )
 
 
@@ -192,7 +205,6 @@ def test_conditional_and_non_release_claims_remain_withheld(tmp_path: Path) -> N
                 data,
                 root,
                 receipt_verifier=lambda _attestation: True,
-                repository_revision=REVISION,
             )
 
 
@@ -326,6 +338,33 @@ def test_inactive_identical_anchor_bytes_remain_digest_bound(
     assert _accepted(root) == expected
 
 
+def test_accepted_hash_uses_canonical_newlines_for_current_and_historical_source(
+    tmp_path: Path,
+) -> None:
+    data, root = _fixture(tmp_path)
+    surface = root / "surface.typ"
+    original = _accepted(root)
+    surface.write_bytes(surface.read_bytes().replace(b"\n", b"\r\n"))
+    assert _accepted(root) == original
+
+    data["claims"][0]["maturity"] = "implemented"
+    data["receipts"] = [
+        _receipt(
+            root,
+            rid="canonical-newlines",
+            kind="maturity",
+            source="planned",
+            target="implemented",
+        )
+    ]
+    data["receipts"][0]["repository_revision"] = _current_revision(root)
+    CHECK.validate_ledger(
+        data,
+        root,
+        receipt_verifier=lambda _attestation: True,
+    )
+
+
 def test_empirical_artifact_cannot_alias_claim_prose_resource(tmp_path: Path) -> None:
     data, root = _fixture(tmp_path)
     thesis_surface = root / "docs/typst/surface.typ"
@@ -396,7 +435,7 @@ def test_spoofed_authentication_label_cannot_promote_without_verifier(
     with pytest.raises(
         CHECK.ClaimValidationError, match="verified immutable authentication"
     ):
-        CHECK.validate_ledger(data, root, repository_revision=REVISION)
+        CHECK.validate_ledger(data, root)
 
 
 def test_non_boolean_verifier_result_fails_closed(tmp_path: Path) -> None:
@@ -419,7 +458,6 @@ def test_non_boolean_verifier_result_fails_closed(tmp_path: Path) -> None:
             data,
             root,
             receipt_verifier=lambda _attestation: "DENIED",
-            repository_revision=REVISION,
         )
 
 
@@ -446,15 +484,67 @@ def test_verifier_backed_promotion_receives_bound_attestation(tmp_path: Path) ->
             "implemented",
             _accepted(root),
             "github:review-123",
-            REVISION,
+            _current_revision(root),
             "github-review",
         )
 
     model = CHECK.validate_ledger(
-        data, root, receipt_verifier=verifier, repository_revision=REVISION
+        data,
+        root,
+        receipt_verifier=verifier,
     )
     assert model.receipts[0].authenticated is True
     assert len(seen) == 1
+
+
+def test_tracked_receipt_binds_to_prior_source_commit_after_ledger_commit(
+    tmp_path: Path,
+) -> None:
+    data, root = _fixture(tmp_path)
+    reviewed_revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    data["claims"][0]["maturity"] = "implemented"
+    data["receipts"] = [
+        _receipt(
+            root,
+            rid="tracked-promotion",
+            kind="maturity",
+            source="planned",
+            target="implemented",
+        )
+    ]
+    data["receipts"][0]["repository_revision"] = reviewed_revision
+    ledger = root / "principal-claims.toml"
+    ledger.write_text(
+        'schema = "aria-nbv-principal-claims-v2"\n\n'
+        "[[claims]]\n"
+        'id = "pc-test"\nclass = "result"\nrqs = ["rq1"]\n'
+        'release_applicability = "required"\nmaturity = "implemented"\n'
+        'outcome = "missing"\nreview_state = "unreviewed"\n'
+        'release_state = "withheld"\n'
+        'owner = "typst:surface.typ#claim-owner:pc-test"\n'
+        'falsifier = "typst:surface.typ#claim-falsifier:pc-test"\n'
+        'limitations = ["typst:surface.typ#claim-limitation:pc-test"]\n\n'
+        '[[claims.evidence]]\nrole = "implementation"\nlocator = "code:code.py"\n\n'
+        "[[receipts]]\n"
+        + "\n".join(
+            f"{key} = {value!r}" for key, value in data["receipts"][0].items()
+        ).replace("'", '"')
+        + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "principal-claims.toml"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "track promotion receipt"], cwd=root, check=True
+    )
+
+    model = CHECK.read_principal_claims(
+        ledger,
+        root,
+        receipt_verifier=lambda _attestation: True,
+    )
+    assert model.receipts[0].repository_revision == reviewed_revision
 
 
 def test_manual_assertion_is_recordable_but_non_promoting(tmp_path: Path) -> None:
@@ -483,7 +573,7 @@ def test_manual_assertion_is_recordable_but_non_promoting(tmp_path: Path) -> Non
         )
     ]
     with pytest.raises(CHECK.ClaimValidationError, match="manual assertions"):
-        CHECK.validate_ledger(promoted, root, repository_revision=REVISION)
+        CHECK.validate_ledger(promoted, root)
 
 
 def test_changed_bytes_wrong_revision_and_wrong_section_replay_are_rejected(
@@ -525,12 +615,12 @@ def test_changed_bytes_wrong_revision_and_wrong_section_replay_are_rejected(
             target="implemented",
         )
     ]
-    with pytest.raises(CHECK.ClaimValidationError, match="current repository revision"):
+    promoted["receipts"][0]["repository_revision"] = "2" * 40
+    with pytest.raises(CHECK.ClaimValidationError, match="existing commit"):
         CHECK.validate_ledger(
             promoted,
             root,
             receipt_verifier=lambda _attestation: True,
-            repository_revision="2" * 40,
         )
 
 

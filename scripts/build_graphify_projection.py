@@ -1080,7 +1080,10 @@ def _make_pages(config: ProjectionConfig, data: _RenderData) -> _Pages:
         key: _Page(f"equation:{key}", "equations") for key in data.notation["equations"]
     }
     claims = (
-        {claim.id: _Page(f"principal-claim:{claim.id}", "claims") for claim in data.claims.claims}
+        {
+            claim.id: _Page(f"principal-claim:{claim.id}", "claims")
+            for claim in data.claims.claims
+        }
         if data.claims is not None
         else {}
     )
@@ -1194,7 +1197,8 @@ def _populate_claim_pages(
         )
         page.lines.extend(f"limitation: {locator.raw}" for locator in claim.limitations)
         page.lines.extend(
-            f"evidence: {evidence.role} {evidence.locator.raw}" for evidence in claim.evidence
+            f"evidence: {evidence.role} {evidence.locator.raw}"
+            for evidence in claim.evidence
         )
 
 
@@ -1660,9 +1664,15 @@ def build_projection(
         try:
             claims = read_principal_claims(claim_path, config.repo_root)
             claim_extension_status = "current"
-        except (ClaimValidationError, OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
-            claim_extension_status = "invalid"
-            claim_extension_error = str(error)
+        except (
+            ClaimValidationError,
+            OSError,
+            UnicodeDecodeError,
+            tomllib.TOMLDecodeError,
+        ) as error:
+            raise ProjectionError(
+                f"principal claim ledger is invalid: {error}"
+            ) from error
     output, temporary, backup = _validate_output(
         config, (*owner_paths, *notation_owners.values())
     )

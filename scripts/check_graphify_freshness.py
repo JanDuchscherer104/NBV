@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from typing import Any
 
 PROJECTION_INDEX = Path("graphify-input/index.md")
@@ -183,7 +184,7 @@ def _contained_existing(root: Path, value: str) -> str:
 
 def _projection_metadata(
     index: Path,
-) -> tuple[str, str | None, str, dict[str, str]]:
+) -> tuple[str, str | None, str, str, dict[str, str]]:
     try:
         text = index.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as error:
@@ -215,6 +216,9 @@ def _projection_metadata(
     owner_state = single_value("owner_worktree_state")
     if owner_state not in {"clean", "dirty"}:
         raise ValueError("invalid projection index: owner_worktree_state is invalid")
+    claim_extension_status = single_value("claim_extension_status")
+    if claim_extension_status not in {"missing", "current"}:
+        raise ValueError("invalid projection index: claim_extension_status is invalid")
     try:
         start = text.splitlines().index("## Owner digests") + 1
     except ValueError as error:
@@ -235,7 +239,7 @@ def _projection_metadata(
         owners[normalized] = digest
     if not owners:
         raise ValueError("invalid projection index: Owner digests must not be empty")
-    return revision, source_tree, owner_state, owners
+    return revision, source_tree, owner_state, claim_extension_status, owners
 
 
 def _graph_revision(root: Path) -> str:
@@ -286,6 +290,22 @@ def _owner_reasons(root: Path, owners: dict[str, str]) -> list[str]:
     if status.stdout.strip():
         reasons.append("projection owner worktree is dirty")
     return reasons
+
+
+def _validate_claim_ledger(root: Path) -> None:
+    """Require the current principal-claims source to remain contract-valid."""
+    ledger = root / CLAIM_LEDGER_PATH
+    try:
+        from check_thesis_claims import ClaimValidationError, read_principal_claims
+
+        read_principal_claims(ledger, root)
+    except (
+        ClaimValidationError,
+        OSError,
+        UnicodeDecodeError,
+        tomllib.TOMLDecodeError,
+    ) as error:
+        raise ValueError(f"principal claim ledger is invalid: {error}") from error
 
 
 def _graphify_interpreter(root: Path) -> str:
@@ -495,6 +515,7 @@ def _detector_stale_sources(
                 raise ValueError(f"Graphify detector has invalid {key}")
             if key == "unclassified":
                 claim_owner = (root / CLAIM_LEDGER_PATH).resolve()
+
                 def is_claim_owner(value: object) -> bool:
                     if not isinstance(value, str):
                         return False
@@ -503,11 +524,7 @@ def _detector_stale_sources(
                         candidate = root / candidate
                     return candidate.resolve() == claim_owner
 
-                values = [
-                    value
-                    for value in values
-                    if not is_claim_owner(value)
-                ]
+                values = [value for value in values if not is_claim_owner(value)]
             if values:
                 raise ValueError(f"Graphify detector reported {key}")
         files = result.get("new_files")
@@ -593,9 +610,18 @@ def check(root: Path) -> dict[str, Any]:
             (INTERPRETER, "Graphify interpreter marker"),
         ):
             _local_regular(root, relative, label)
-        projection_revision, projection_tree, owner_state, owners = (
-            _projection_metadata(projection_index)
-        )
+        (
+            projection_revision,
+            projection_tree,
+            owner_state,
+            claim_extension_status,
+            owners,
+        ) = _projection_metadata(projection_index)
+        if claim_extension_status != "current":
+            raise ValueError(
+                "claim_extension_status is missing; rebuild the projection with "
+                "scripts/build_graphify_projection.py"
+            )
         graph_revision = _graph_revision(root)
         if (root / NEEDS_UPDATE).exists() or (root / NEEDS_UPDATE).is_symlink():
             raise ValueError(
@@ -604,6 +630,7 @@ def check(root: Path) -> dict[str, Any]:
         if owner_state == "dirty":
             raise ValueError("projection was built from a dirty owner worktree")
         reasons.extend(_owner_reasons(root, owners))
+        _validate_claim_ledger(root)
         head_tree = _tree_oid(root, head, "HEAD")
         projection_commit_tree = _tree_oid(root, projection_revision, "projection")
         if projection_tree is not None and projection_commit_tree != projection_tree:
@@ -617,9 +644,7 @@ def check(root: Path) -> dict[str, Any]:
         overlay_stale = _detector_stale_sources(root, ast, semantic)
         committed_stale: list[str] = []
         if projection_commit_tree != head_tree or graph_commit_tree != head_tree:
-            snapshot = _raw_commit_snapshot(
-                root, head, root / PROJECTION_INDEX.parent
-            )
+            snapshot = _raw_commit_snapshot(root, head, root / PROJECTION_INDEX.parent)
             try:
                 committed_ast, committed_semantic = _detect_incremental(
                     Path(snapshot.name), interpreter_root=root
