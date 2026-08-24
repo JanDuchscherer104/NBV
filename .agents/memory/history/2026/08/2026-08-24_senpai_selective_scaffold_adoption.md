@@ -7,10 +7,12 @@ topics: [scaffold, senpai, autoresearch, upstream]
 confidence: high
 canonical_updates_needed:
   - .agents/skills/agent-behavior/SKILL.md
-  - .agents/skills/agent-behavior/references/senpai-adoption.md
+  - .agents/skills/agent-behavior/references/senpai-performance.md
+  - .agents/skills/agent-behavior/references/senpai-adoption-updates.md
 touched_owner_paths:
   - .agents/skills/agent-behavior/SKILL.md
-  - .agents/skills/agent-behavior/references/senpai-adoption.md
+  - .agents/skills/agent-behavior/references/senpai-performance.md
+  - .agents/skills/agent-behavior/references/senpai-adoption-updates.md
   - scripts/tests/test_agent_governance_g002.py
 codex_thread: codex://threads/01a0347c-583c-74c1-ad74-b67d5f78326a
 repo_object_format: sha1
@@ -38,6 +40,7 @@ provides the standard `git ls-remote` plus compare-review update route.
 
 ## Commits
 - `a1399a4772d71fa90d106b25d72ac684bf57bfba` — selective SENPAI adoption
+- `5b72103f778bbe93932d0df417325b28e8e3e9fe` — consolidate the SENPAI routing and upstream-update references
 
 ## Verification
 `python3 scripts/tests/test_agent_governance_g002.py`; `make check-agent-memory`;
