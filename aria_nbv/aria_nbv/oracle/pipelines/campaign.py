@@ -437,7 +437,12 @@ class CampaignPlan:
         return plan
 
 
-def bounded_scene_stratified_plan(plan: CampaignPlan, *, scenes_per_split: int = 1) -> CampaignPlan:
+def bounded_scene_stratified_plan(
+    plan: CampaignPlan,
+    *,
+    scenes_per_split: int = 1,
+    required_splits: tuple[str, ...] = ("train", "validation", "test"),
+) -> CampaignPlan:
     """Return a deterministic train/validation/test evidence slice.
 
     The full :class:`CampaignPlan` remains the population owner: scene-level
@@ -452,7 +457,12 @@ def bounded_scene_stratified_plan(plan: CampaignPlan, *, scenes_per_split: int =
         plan: Fully validated broad campaign plan containing persisted
             ``train``, ``validation``, and ``test`` scene assignments.
         scenes_per_split: Positive number of distinct scenes retained from each
-            required campaign split. One work unit is selected per scene.
+            requested campaign split. One work unit is selected per scene.
+        required_splits: Ordered, nonempty subset of ``train``, ``validation``,
+            and ``test``. The default constructs a complete three-stage smoke
+            population. A stage-only plan supports deterministic replacement
+            acquisition after input-side feasibility rejection without
+            regenerating already admitted stages or inspecting Q labels.
 
     Returns:
         A new hash-valid plan ordered by train, validation, and test split. Its
@@ -460,8 +470,9 @@ def bounded_scene_stratified_plan(plan: CampaignPlan, *, scenes_per_split: int =
         all parent provenance and admission summaries remain bound.
 
     Raises:
-        ValueError: If the bound is non-positive, a work unit lacks scene
-            lineage, or any required split has insufficient distinct scenes.
+        ValueError: If the bound is non-positive, the requested splits are
+            empty, duplicated, or unknown, a work unit lacks scene lineage, or
+            a requested split has insufficient distinct scenes.
 
     Notes:
         This is an infrastructure/smoke surface, not a statistically powered
@@ -471,8 +482,14 @@ def bounded_scene_stratified_plan(plan: CampaignPlan, *, scenes_per_split: int =
 
     if scenes_per_split < 1:
         raise ValueError("bounded campaign scenes_per_split must be positive")
+    known_splits = {"train", "validation", "test"}
+    if not required_splits or len(set(required_splits)) != len(required_splits):
+        raise ValueError("bounded campaign required_splits must be nonempty and unique")
+    unknown_splits = set(required_splits) - known_splits
+    if unknown_splits:
+        raise ValueError(f"bounded campaign required_splits are unknown: {sorted(unknown_splits)}")
     selected: list[CampaignWorkUnit] = []
-    for split in ("train", "validation", "test"):
+    for split in required_splits:
         by_scene: dict[str, list[CampaignWorkUnit]] = {}
         for unit in plan.work_units:
             if unit.campaign_split != split:

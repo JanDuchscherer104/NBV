@@ -415,6 +415,14 @@ def test_canonical_broad_plan_assigns_disjoint_scene_splits_and_preserves_lineag
     assert bounded.plan_hash != plan.plan_hash
     assert CudaRolloutCampaign.load_plan(campaign.write_plan(bounded, tmp_path / "bounded-plan.json")) == bounded
 
+    test_only = bounded_scene_stratified_plan(plan, scenes_per_split=3, required_splits=("test",))
+    assert len(test_only.work_units) == 3
+    assert {unit.campaign_split for unit in test_only.work_units} == {"test"}
+    assert len({unit.source_row_payload["scene_id"] for unit in test_only.work_units}) == 3
+    assert (
+        CudaRolloutCampaign.load_plan(campaign.write_plan(test_only, tmp_path / "bounded-test-plan.json")) == test_only
+    )
+
 
 def test_corrected_v10_pilot_has_fresh_identity_and_unchanged_paired_contract():
     config = CudaRolloutCampaignConfig.from_toml(
