@@ -39,9 +39,10 @@ Validated one immutable version-one evaluator result, derived a SHA-256 evidence
 ## Commits
 - [821a9309ccb01c4c5639ce92bafc14b975f41d92](https://github.com/jdgalviss/ARIA-NBV/commit/821a9309ccb01c4c5639ce92bafc14b975f41d92) — immutable-result bridge, W&B inspection, and sidecar retirement
 - [92ba133873ba80d741b67c2d8aefca71b003076d](https://github.com/jdgalviss/ARIA-NBV/commit/92ba133873ba80d741b67c2d8aefca71b003076d) — preserve hard-gate, checkpoint, and byte-snapshot invariants
+- [e61562e8fc9dcb2d9e98f026e9acf8d5a58f18b0](https://github.com/jdgalviss/ARIA-NBV/commit/e61562e8fc9dcb2d9e98f026e9acf8d5a58f18b0) — anchor OMX checkpointing at the repository root
 
 ## Verification
-Passed focused Ruff and pytest checks (11 tests), `scripts/tests/test_agent_governance_g002.py`, and `make check-agent-memory` before the debrief index update.
+Passed focused Ruff and pytest checks (14 tests), `scripts/tests/test_agent_governance_g002.py`, and `make check-agent-memory`. An authenticated smoke evaluator read one persisted rollout shard, checkpointed its verified 17-link/1,920-candidate provenance result, and logged that result plus two inspection Plotly figures to W&B.
 
 ## Canonical Owner Impact
 Updated the explicit human intent, agent-behavior routing, W&B configuration and inspection owners, plus their focused tests. No thesis claim changed.
