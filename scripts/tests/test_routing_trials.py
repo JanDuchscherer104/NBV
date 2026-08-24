@@ -85,9 +85,7 @@ def _validate_verdict(payload: object, event_evidence: object) -> tuple[bool, st
     )
 
 
-def _run_verifier(
-    report: dict[str, object], checkout: Path, trial_dir: Path
-) -> dict[str, Any]:
+def _run_verifier(report: dict[str, object], trial_dir: Path) -> dict[str, Any]:
     # Unit tests mock process execution. Supply a stable mounted executable so
     # command construction stays portable on CI runners without Codex.
     with patch.object(trials.shutil, "which", return_value="/usr/bin/true"):
@@ -95,7 +93,6 @@ def _run_verifier(
             report=report,
             rubric={"trial": {"id": "trial"}},
             rubric_commit="rubric",
-            checkout=checkout,
             trial_dir=trial_dir,
             model=None,
             effort=None,
@@ -691,6 +688,8 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
+        if "aria-thesis-mode=submission" in command:
+            return subprocess.CompletedProcess(command, 1)
         if command[0] == "bwrap" and "compile" in command:
             (trial_dir / "thesis.pdf").write_bytes(b"pdf")
         elif command[0] == "pdfinfo":
@@ -708,7 +707,9 @@ def test_typst_proof_renders_every_page_and_requires_png(tmp_path: Path) -> None
     assert proof["passed"] is True
     assert proof["artifacts"]["page_count"] == 2
     assert proof["artifacts"]["rendered_pages"] == ("01.png", "02.png")
+    assert proof["submission_gate_returncode"] == 1
     assert "--pages" not in calls[1]
+    assert "aria-thesis-mode=submission" in calls[2]
     assert calls[0][0] == "bwrap"
     assert "--unshare-all" in calls[0]
     assert "--share-net" not in calls[0]
@@ -1143,7 +1144,7 @@ def test_verifier_rejects_an_invalid_trial_response_before_execution(
     trial_dir.mkdir()
 
     with patch.object(trials, "_run_bounded_process") as run_process:
-        result = _run_verifier(report, checkout, trial_dir)
+        result = _run_verifier(report, trial_dir)
 
     assert result["passed"] is False
     assert "canonical schema" in result["reason"]
@@ -1160,7 +1161,7 @@ def test_verifier_uses_the_credentialless_sandbox(tmp_path: Path) -> None:
     with patch.object(
         trials, "_run_bounded_process", return_value=_bounded_process_result()
     ) as run_process:
-        _run_verifier(report, checkout, trial_dir)
+        _run_verifier(report, trial_dir)
 
     command = run_process.call_args.kwargs["command"]
     assert command[0] == "bwrap"
@@ -1260,11 +1261,21 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     trial_dir = tmp_path / "trial"
     checkout.mkdir()
     trial_dir.mkdir()
-    verifier_report = trial_dir / "verifier-receipt" / "verifier-report.json"
 
     def complete_with_verdict(verdict: dict[str, object]) -> object:
-        def run_process(**_: object) -> dict[str, object]:
-            verifier_report.write_text(json.dumps(verdict), encoding="utf-8")
+        def run_process(**kwargs: object) -> dict[str, object]:
+            events_path = kwargs["events_path"]
+            assert isinstance(events_path, Path)
+            events_path.write_text(
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {"type": "agent_message", "text": json.dumps(verdict)},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             return _bounded_process_result()
 
         return run_process
@@ -1272,7 +1283,7 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
     with patch.object(
         trials, "_run_bounded_process", side_effect=complete_with_verdict(_verdict())
     ):
-        passed = _run_verifier(report, checkout, trial_dir)
+        passed = _run_verifier(report, trial_dir)
     assert passed["passed"] is True
 
     failing_verdict = _verdict(verdict="fail", missing_requirements=["owner"])
@@ -1281,7 +1292,7 @@ def test_run_verifier_pass_and_semantic_fail_without_live_model(tmp_path: Path) 
         "_run_bounded_process",
         side_effect=complete_with_verdict(failing_verdict),
     ):
-        failed = _run_verifier(report, checkout, trial_dir)
+        failed = _run_verifier(report, trial_dir)
     assert failed["passed"] is False
     assert failed["reason"] == "semantic fail"
 
@@ -1294,23 +1305,37 @@ def test_run_verifier_rejects_invalid_utf8_and_oversized_reports(
     trial_dir = tmp_path / "trial"
     checkout.mkdir()
     trial_dir.mkdir()
-    verifier_report = trial_dir / "verifier-receipt" / "verifier-report.json"
 
-    def invalid_result(**_: object) -> dict[str, object]:
-        verifier_report.write_bytes(b"\xff")
+    def invalid_result(**kwargs: object) -> dict[str, object]:
+        events_path = kwargs["events_path"]
+        assert isinstance(events_path, Path)
+        events_path.write_bytes(b"\xff")
         return _bounded_process_result()
 
     with patch.object(trials, "_run_bounded_process", side_effect=invalid_result):
-        invalid_utf8 = _run_verifier(report, checkout, trial_dir)
+        invalid_utf8 = _run_verifier(report, trial_dir)
     assert invalid_utf8["passed"] is False
     assert "unreadable" in invalid_utf8["reason"]
 
-    def oversized_result(**_: object) -> dict[str, object]:
-        verifier_report.write_bytes(b"x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1))
+    def oversized_result(**kwargs: object) -> dict[str, object]:
+        events_path = kwargs["events_path"]
+        assert isinstance(events_path, Path)
+        events_path.write_text(
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "agent_message",
+                        "text": "x" * (trials.VERIFIER_REPORT_MAX_BYTES + 1),
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         return _bounded_process_result()
 
     with patch.object(trials, "_run_bounded_process", side_effect=oversized_result):
-        oversized = _run_verifier(report, checkout, trial_dir)
+        oversized = _run_verifier(report, trial_dir)
     assert oversized["passed"] is False
     assert "byte bound" in oversized["reason"]
 
@@ -1325,7 +1350,7 @@ def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:
     with patch.object(
         trials, "_run_bounded_process", return_value=_bounded_process_result()
     ):
-        missing = _run_verifier(report, checkout, missing_dir)
+        missing = _run_verifier(report, missing_dir)
     assert missing["passed"] is False
 
     timeout_dir = tmp_path / "timeout"
@@ -1335,12 +1360,12 @@ def test_run_verifier_missing_and_timeout_fail_closed(tmp_path: Path) -> None:
         "_run_bounded_process",
         return_value=_bounded_process_result(returncode=124, timed_out=True),
     ):
-        timeout = _run_verifier(report, checkout, timeout_dir)
+        timeout = _run_verifier(report, timeout_dir)
     assert timeout["passed"] is False
     assert timeout["timed_out"] is True
 
 
-def test_run_verifier_discards_a_preexisting_subject_receipt(tmp_path: Path) -> None:
+def test_run_verifier_ignores_a_preexisting_subject_receipt(tmp_path: Path) -> None:
     report = _trial_report()
     checkout = tmp_path / "checkout"
     trial_dir = tmp_path / "trial"
@@ -1355,8 +1380,8 @@ def test_run_verifier_discards_a_preexisting_subject_receipt(tmp_path: Path) -> 
     with patch.object(
         trials, "_run_bounded_process", return_value=_bounded_process_result()
     ):
-        result = _run_verifier(report, checkout, trial_dir)
+        result = _run_verifier(report, trial_dir)
 
     assert result["passed"] is False
     assert result["verdict"] is None
-    assert not (receipt_dir / "verifier-report.json").exists()
+    assert (receipt_dir / "verifier-report.json").exists()

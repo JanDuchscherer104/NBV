@@ -401,7 +401,7 @@ def _build_codex_command(
     *,
     checkout: Path,
     output_schema: Path,
-    output_report: Path,
+    output_report: Path | None,
     model: str | None,
     effort: str | None,
     proxy_url: str,
@@ -417,8 +417,6 @@ def _build_codex_command(
         "--json",
         "--output-schema",
         str(output_schema),
-        "--output-last-message",
-        str(output_report),
         "-C",
         str(checkout),
         "-c",
@@ -433,6 +431,11 @@ def _build_codex_command(
             "requires_openai_auth=false}"
         ),
     ]
+    if output_report is not None:
+        command[command.index("-C") : command.index("-C")] = [
+            "--output-last-message",
+            str(output_report),
+        ]
     if model:
         command.extend(["--model", model])
     if effort:
@@ -498,7 +501,7 @@ def _sandboxed_codex_command(
     *,
     codex_command: list[str],
     checkout: Path,
-    receipt_dir: Path,
+    receipt_dir: Path | None,
     schema_path: Path,
     sandbox: str,
 ) -> list[str]:
@@ -528,6 +531,9 @@ def _sandboxed_codex_command(
             str(runtime_root),
             "/opt/codex",
         ]
+    receipt_mount = (
+        ["--bind", str(receipt_dir), "/receipt"] if receipt_dir is not None else []
+    )
     return [
         "bwrap",
         "--unshare-all",
@@ -582,9 +588,7 @@ def _sandboxed_codex_command(
         subject_bind,
         str(checkout),
         "/workspace",
-        "--bind",
-        str(receipt_dir),
-        "/receipt",
+        *receipt_mount,
         "--chdir",
         "/workspace",
         *sandbox_command,
@@ -746,10 +750,10 @@ def _typst_proof_sandbox_command(
 
 
 def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
-    """Compile and render the edited thesis in a network-isolated proof sandbox."""
+    """Prove development rendering and the default submission evidence gate."""
     pdf = trial_dir / "thesis.pdf"
     pages = trial_dir / "thesis-pages"
-    commands = (
+    development_commands = (
         [
             "typst",
             "compile",
@@ -771,7 +775,7 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
         ],
     )
     returncodes: list[int] = []
-    for command in commands:
+    for command in development_commands:
         try:
             result = subprocess.run(
                 _typst_proof_sandbox_command(
@@ -789,6 +793,33 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
         except (OSError, subprocess.TimeoutExpired):
             returncodes.append(125)
             break
+    submission_gate_returncode = 125
+    if returncodes == [0, 0]:
+        try:
+            result = subprocess.run(
+                _typst_proof_sandbox_command(
+                    checkout=checkout,
+                    proof_dir=trial_dir,
+                    command=[
+                        "typst",
+                        "compile",
+                        "docs/typst/thesis/main.typ",
+                        "/tmp/submission-gate.pdf",
+                        "--root",
+                        "/project/docs",
+                        "--input",
+                        "aria-thesis-mode=submission",
+                    ],
+                ),
+                cwd=checkout,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=180,
+            )
+            submission_gate_returncode = result.returncode
+        except (OSError, subprocess.TimeoutExpired):
+            pass
     page_count = _pdf_page_count(pdf) if pdf.is_file() else None
     rendered_pages = tuple(sorted(path.name for path in pages.glob("*.png")))
     rendered_page_numbers = {
@@ -797,10 +828,12 @@ def _typst_proof(checkout: Path, trial_dir: Path) -> dict[str, Any]:
     return {
         "passed": (
             returncodes == [0, 0]
+            and submission_gate_returncode != 0
             and page_count is not None
             and rendered_page_numbers == set(range(1, page_count + 1))
         ),
         "returncodes": returncodes,
+        "submission_gate_returncode": submission_gate_returncode,
         "artifacts": {
             "pdf": pdf.name,
             "pages": pages.name,
@@ -974,22 +1007,17 @@ def run_verifier(
     report: dict[str, Any],
     rubric: dict[str, Any],
     rubric_commit: str,
-    checkout: Path,
     trial_dir: Path,
     model: str | None,
     effort: str | None,
     proxy_url: str,
     timeout_seconds: int,
 ) -> dict[str, Any]:
-    verifier_receipt_dir = trial_dir / "verifier-receipt"
-    verifier_receipt_dir.mkdir(exist_ok=True)
-    verifier_report = verifier_receipt_dir / "verifier-report.json"
     verifier_events = trial_dir / "verifier-events.jsonl"
     verifier_stderr = trial_dir / "verifier-stderr.txt"
     artifacts = {
         "events": verifier_events.name,
         "stderr": verifier_stderr.name,
-        "report": str(verifier_report.relative_to(trial_dir)),
     }
     failure_reason: str | None = None
     if report.get("rubric_commit") != rubric_commit:
@@ -1011,49 +1039,49 @@ def run_verifier(
             "verdict": None,
             "artifacts": artifacts,
         }
-    verifier_report.unlink(missing_ok=True)
     command = _build_codex_command(
         checkout=Path("/workspace"),
         output_schema=Path("/schema/routing_verdict.schema.json"),
-        output_report=Path("/receipt") / verifier_report.name,
+        output_report=None,
         model=model,
         effort=effort,
         proxy_url=proxy_url,
     )
-    command = _sandboxed_codex_command(
-        codex_command=command,
-        checkout=checkout,
-        receipt_dir=verifier_receipt_dir,
-        schema_path=VERIFIER_SCHEMA,
-        sandbox=READ_ONLY_SANDBOX,
-    )
-    process_result = _run_bounded_process(
-        command=command,
-        prompt=build_verifier_prompt(
-            rubric=rubric[report["trial_id"]],
-            report=report,
-            rubric_commit=rubric_commit,
-        ),
-        cwd=ROOT,
-        events_path=verifier_events,
-        stderr_path=verifier_stderr,
-        timeout_seconds=timeout_seconds,
-    )
+    with tempfile.TemporaryDirectory(prefix="aria-routing-evaluator-") as temporary:
+        evaluator_checkout = Path(temporary) / "workspace"
+        evaluator_checkout.mkdir()
+        command = _sandboxed_codex_command(
+            codex_command=command,
+            checkout=evaluator_checkout,
+            receipt_dir=None,
+            schema_path=VERIFIER_SCHEMA,
+            sandbox=READ_ONLY_SANDBOX,
+        )
+        process_result = _run_bounded_process(
+            command=command,
+            prompt=build_verifier_prompt(
+                rubric=rubric[report["trial_id"]],
+                report=report,
+                rubric_commit=rubric_commit,
+            ),
+            cwd=ROOT,
+            events_path=verifier_events,
+            stderr_path=verifier_stderr,
+            timeout_seconds=timeout_seconds,
+        )
     timed_out = process_result["timed_out"]
     returncode = process_result["returncode"]
     payload: Any = None
     verdict_read_error: str | None = None
     if not timed_out:
-        raw_verdict = _read_bounded_regular_file(
-            verifier_report, maximum_bytes=VERIFIER_REPORT_MAX_BYTES
-        )
-        if raw_verdict is None:
+        verdict_text, stream_truncated = read_last_agent_message(verifier_events)
+        if verdict_text is None:
             verdict_read_error = "verifier report is unreadable or malformed"
-        elif len(raw_verdict) > VERIFIER_REPORT_MAX_BYTES:
+        elif stream_truncated or len(verdict_text) > VERIFIER_REPORT_MAX_BYTES:
             verdict_read_error = "verifier report exceeds the byte bound"
         else:
             try:
-                payload = json.loads(raw_verdict.decode("utf-8"))
+                payload = json.loads(verdict_text)
             except (json.JSONDecodeError, UnicodeError):
                 verdict_read_error = "verifier report is unreadable or malformed"
     if process_result["output_overflow"]:
@@ -1414,6 +1442,47 @@ def read_trial_response(path: Path) -> tuple[dict[str, Any], bool]:
     return response, validate_trial_response(value, truncated=force_truncated)
 
 
+def read_last_agent_message(path: Path) -> tuple[str | None, bool]:
+    """Return the bounded terminal agent message from host-captured JSONL."""
+    raw = _read_bounded_regular_file(
+        path, maximum_bytes=EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES
+    )
+    if raw is None:
+        return None, False
+    stream_truncated = len(raw) > EVENT_EVIDENCE_MAX_RAW_STREAM_BYTES
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeError:
+        return None, stream_truncated
+    for line in reversed(lines):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        item = event.get("item") if isinstance(event, dict) else None
+        if (
+            isinstance(item, dict)
+            and item.get("type") == "agent_message"
+            and isinstance(item.get("text"), str)
+        ):
+            return item["text"], stream_truncated
+    return None, stream_truncated
+
+
+def read_trial_response_from_events(path: Path) -> tuple[dict[str, Any], bool]:
+    """Validate the terminal model message without a model-writable receipt."""
+    text, stream_truncated = read_last_agent_message(path)
+    if text is None:
+        return bound_trial_response({"unavailable": True}), False
+    force_truncated = stream_truncated or len(text) > TRIAL_RESPONSE_MAX_CHARS
+    try:
+        value: Any = json.loads(text)
+    except json.JSONDecodeError:
+        return bound_trial_response(text, force_truncated=force_truncated), False
+    response = bound_trial_response(value, force_truncated=force_truncated)
+    return response, validate_trial_response(value, truncated=force_truncated)
+
+
 def validate_trial_response(value: Any, *, truncated: bool = False) -> bool:
     """Validate the untrusted model receipt against the canonical local contract."""
     try:
@@ -1480,17 +1549,14 @@ def run_trial(
 ) -> dict[str, Any]:
     trial_dir = output_dir / trial_id
     trial_dir.mkdir(parents=True, exist_ok=False)
-    subject_receipt_dir = trial_dir / "subject-receipt"
-    subject_receipt_dir.mkdir()
     events_path = trial_dir / "events.jsonl"
     stderr_path = trial_dir / "stderr.txt"
-    trial_response_path = subject_receipt_dir / "trial-response.json"
     final_report = trial_dir / "report.json"
     contract = execution_contract(rubric)
     codex_command = _build_codex_command(
         checkout=Path("/workspace"),
         output_schema=Path("/schema/routing_trial_report.schema.json"),
-        output_report=Path("/receipt") / trial_response_path.name,
+        output_report=None,
         model=model,
         effort=effort,
         proxy_url=proxy_url,
@@ -1499,7 +1565,7 @@ def run_trial(
     command = _sandboxed_codex_command(
         codex_command=codex_command,
         checkout=checkout,
-        receipt_dir=subject_receipt_dir,
+        receipt_dir=None,
         schema_path=REPORT_SCHEMA,
         sandbox=contract["sandbox"],
     )
@@ -1539,7 +1605,7 @@ def run_trial(
         "requested_effort": effort,
         "command_flags": codex_command[1:-1],
     }
-    trial_response, trial_response_valid = read_trial_response(trial_response_path)
+    trial_response, trial_response_valid = read_trial_response_from_events(events_path)
     report = {
         "trial_id": trial_id,
         "prompt_sha256": hashlib.sha256(task.encode()).hexdigest(),
@@ -1566,7 +1632,7 @@ def run_trial(
         "artifacts": {
             "events": events_path.name,
             "stderr": stderr_path.name,
-            "trial_response": str(trial_response_path.relative_to(trial_dir)),
+            "trial_response": events_path.name,
         },
         "trial_response": trial_response,
     }
@@ -1767,7 +1833,6 @@ def main() -> int:
                     report=report,
                     rubric=rubric,
                     rubric_commit=rubric_commit,
-                    checkout=checkouts[report["trial_id"]],
                     trial_dir=output_dir / report["trial_id"],
                     model=args.model,
                     effort=args.effort,
