@@ -116,8 +116,12 @@ def _mempalace_runtime_offenders(root: Path = ROOT) -> list[str]:
 def _is_session_local_review_artifact(path: str) -> bool:
     relative = Path(path)
     leaf = relative.name.lower()
-    role_review = relative.parts[:1] == (".omx",) and "review" in leaf and any(
-        role in leaf for role in ("architect", "architecture", "critic", "critique")
+    role_review = (
+        relative.parts[:1] == (".omx",)
+        and "review" in leaf
+        and any(
+            role in leaf for role in ("architect", "architecture", "critic", "critique")
+        )
     )
     nested_peer_review = (
         relative.parts[:2] == (".omx", "specs")
@@ -918,9 +922,7 @@ def test_thin_guidance_routes_retain_review_and_package_contracts() -> None:
         path for path in tracked if _is_session_local_review_artifact(path)
     ]
     assert not tracked_role_reviews
-    eligible_debrief = (
-        ".agents/memory/history/2026/08/eligible-architecture-review.md"
-    )
+    eligible_debrief = ".agents/memory/history/2026/08/eligible-architecture-review.md"
     assert not _is_session_local_review_artifact(eligible_debrief)
 
     ignored = _read(ROOT / ".gitignore")
