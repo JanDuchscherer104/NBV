@@ -8,6 +8,7 @@ distributed admission, one optimizer transaction, metrics, and target sync.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 import pytorch_lightning as pl
@@ -52,6 +53,9 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
     target_sync_interval: int = Field(default=100, ge=1)
     """Hard target-copy cadence measured in completed optimizer updates."""
 
+    max_horizon: int = Field(default=5, gt=0)
+    """Largest fitted horizon used to allocate exact horizon-wise sufficient statistics."""
+
     root_evl_profile: QhRootEvlProfile = "evl_v1"
     """Exact root-EVL carrier the injected scorer accepts."""
 
@@ -78,6 +82,65 @@ class QhLightningModuleConfig(TargetConfig["QhLightningModule"]):
         """Return the runtime module type used by config-as-factory setup."""
 
         return QhLightningModule
+
+
+@dataclass(frozen=True, slots=True)
+class QhFittedQObjective:
+    r"""Horizon-balanced dense-Q1 and recursive fitted-Q objective.
+
+    The two target domains remain separate because they answer different
+    counterfactual questions. ``dense_q1_targets`` supervises every labelled
+    hard-valid candidate with its immediate reward at an explicit ``h=1``
+    query. ``recursive_targets`` supervises only the factual selected action
+    at ``h>1`` and may include a masked ``h-1`` bootstrap. Collapsing them into
+    one candidate table would erase the requested-horizon index and can assign
+    two different targets to the same state-candidate pair.
+
+    Dense candidate losses are averaged within each factual state first. State
+    means are then averaged within horizon, and non-empty horizons receive
+    equal weight. Thus a wider candidate table cannot dominate a scene, and
+    abundant one-step labels cannot silently drown out the sparser recursive
+    horizons.
+    """
+
+    loss: Tensor
+    """``Tensor["", float32]`` horizon-balanced optimization scalar."""
+
+    dense_q1_targets: Tensor
+    """``Tensor["B S N", float32]`` immediate rewards for explicit ``h=1`` queries."""
+
+    dense_q1_support: Tensor
+    """``Tensor["B S N", bool]`` finite hard-valid candidate support for dense Q1."""
+
+    recursive_targets: Tensor
+    """``Tensor["B S", float32]`` selected-action fitted targets at factual ``h>1``."""
+
+    recursive_support: Tensor
+    """``Tensor["B S", bool]`` factual selected-transition support at ``h>1``."""
+
+    loss_sum_by_horizon: Tensor
+    """``Tensor["H_max", float64]`` local state-normalized loss sums."""
+
+    state_count_by_horizon: Tensor
+    """``Tensor["H_max", int64]`` local independent state contributions."""
+
+    candidate_count_by_horizon: Tensor
+    """``Tensor["H_max", int64]`` local raw candidate-label contributions."""
+
+
+@dataclass(frozen=True, slots=True)
+class _QhLearningComponents:
+    """Internal predictions and losses needed to assemble one optimizer transaction."""
+
+    dense_losses: Tensor
+    dense_targets: Tensor
+    dense_support: Tensor
+    dense_output: QhScoreOutput
+    recursive_losses: Tensor
+    recursive_targets: Tensor
+    recursive_support: Tensor
+    recursive_output: QhScoreOutput
+    target_output: QhScoreOutput
 
 
 class QhLightningModule(pl.LightningModule):
@@ -113,16 +176,16 @@ class QhLightningModule(pl.LightningModule):
     """``Tensor["", int64]`` local admitted-row count for the current epoch."""
 
     validation_loss_sum: Tensor
-    """``Tensor["", float64]`` single-device validation loss sum."""
+    """``Tensor["", float64]`` sum of non-empty validation horizon means."""
 
     validation_row_count: Tensor
-    """``Tensor["", int64]`` single-device validation admitted-row count."""
+    """``Tensor["", int64]`` number of non-empty validation horizons."""
 
     test_loss_sum: Tensor
-    """``Tensor["", float64]`` single-device test loss sum."""
+    """``Tensor["", float64]`` sum of non-empty held-out horizon means."""
 
     test_row_count: Tensor
-    """``Tensor["", int64]`` single-device test admitted-row count."""
+    """``Tensor["", int64]`` number of non-empty held-out horizons."""
 
     def __init__(self, config: QhLightningModuleConfig, *, scorer: nn.Module) -> None:
         super().__init__()
@@ -147,12 +210,43 @@ class QhLightningModule(pl.LightningModule):
         self.register_buffer("optimizer_updates", torch.zeros((), dtype=torch.int64), persistent=True)
         self.register_buffer("training_loss_sum", torch.zeros((), dtype=torch.float64), persistent=False)
         self.register_buffer("training_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
+        self.register_buffer(
+            "training_horizon_state_count",
+            torch.zeros(config.max_horizon, dtype=torch.int64),
+            persistent=False,
+        )
+        self.register_buffer(
+            "training_horizon_candidate_count",
+            torch.zeros(config.max_horizon, dtype=torch.int64),
+            persistent=False,
+        )
         # Persist exact validation aggregates so experiment-level checkpoint
         # selection can implement the closed loss/update tie-break itself.
         self.register_buffer("validation_loss_sum", torch.zeros((), dtype=torch.float64), persistent=True)
         self.register_buffer("validation_row_count", torch.zeros((), dtype=torch.int64), persistent=True)
         self.register_buffer("test_loss_sum", torch.zeros((), dtype=torch.float64), persistent=False)
         self.register_buffer("test_row_count", torch.zeros((), dtype=torch.int64), persistent=False)
+        horizon_shape = (config.max_horizon,)
+        self.register_buffer(
+            "validation_horizon_loss_sum",
+            torch.zeros(horizon_shape, dtype=torch.float64),
+            persistent=False,
+        )
+        self.register_buffer(
+            "validation_horizon_state_count",
+            torch.zeros(horizon_shape, dtype=torch.int64),
+            persistent=False,
+        )
+        self.register_buffer(
+            "test_horizon_loss_sum",
+            torch.zeros(horizon_shape, dtype=torch.float64),
+            persistent=False,
+        )
+        self.register_buffer(
+            "test_horizon_state_count",
+            torch.zeros(horizon_shape, dtype=torch.int64),
+            persistent=False,
+        )
         self.save_hyperparameters({"config": config.model_dump_jsonable()})
 
     def forward(self, actor: QhActorTensors) -> QhScoreOutput:
@@ -252,8 +346,9 @@ class QhLightningModule(pl.LightningModule):
         """Execute one globally admitted optimizer transaction or an exact no-op."""
 
         del batch_idx
-        admitted = self._fitted_q_admission_mask(batch)
-        global_count = self._global_admitted_count(admitted)
+        dense_state_support = self._dense_q1_admission_mask(batch).any(dim=-1)
+        recursive_support = self._recursive_q_admission_mask(batch)
+        global_count = self._global_admitted_count(dense_state_support) + self._global_admitted_count(recursive_support)
         feasibility_support = self._feasibility_label_mask(batch)
         global_feasibility_count = self._global_admitted_count(feasibility_support)
         if int(global_count.item()) == 0 and int(global_feasibility_count.item()) == 0:
@@ -262,13 +357,12 @@ class QhLightningModule(pl.LightningModule):
                 self._log_unsupported_backup_metrics(Stage.TRAIN, batch=batch)
             return None
 
-        losses, targets, admitted, online_output, target_output = self._fitted_q_components(batch)
-        local_loss_sum = losses.sum() if bool(admitted.any()) else self._parameter_connected_zero()
+        components = self._learning_components(batch)
+        objective = self._assemble_learning_objective(components, batch=batch, distributed=True)
+        local_loss_sum = objective.loss_sum_by_horizon.sum().to(dtype=objective.loss.dtype)
         world_size = torch.distributed.get_world_size() if self._distributed() else 1
-        loss = self._parameter_connected_zero()
-        if int(global_count.item()) > 0:
-            loss = loss + local_loss_sum * world_size / global_count.to(dtype=local_loss_sum.dtype)
-        feasibility_loss_sum = self._feasibility_losses(batch, online_output).sum()
+        loss = objective.loss
+        feasibility_loss_sum = self._feasibility_losses(batch, components.recursive_output).sum()
         if int(global_feasibility_count.item()) > 0:
             loss = loss + float(self.config.feasibility_loss_weight) * (
                 feasibility_loss_sum * world_size / global_feasibility_count.to(dtype=feasibility_loss_sum.dtype)
@@ -284,7 +378,9 @@ class QhLightningModule(pl.LightningModule):
         self._record_optimizer_update()
 
         self.training_loss_sum.add_(local_loss_sum.detach().double())
-        self.training_row_count.add_(admitted.sum())
+        self.training_row_count.add_(objective.state_count_by_horizon.sum())
+        self.training_horizon_state_count.add_(objective.state_count_by_horizon)
+        self.training_horizon_candidate_count.add_(objective.candidate_count_by_horizon)
         self.log("train/loss", loss.detach(), on_step=True, prog_bar=True, sync_dist=True)
         if int(global_feasibility_count.item()) > 0:
             self.log(
@@ -299,17 +395,18 @@ class QhLightningModule(pl.LightningModule):
         self._log_infrastructure_metrics(
             Stage.TRAIN,
             batch=batch,
-            admitted=admitted,
-            online_values=online_output.conditional_q,
-            target_values=target_output.conditional_q,
+            admitted=objective.recursive_support,
+            online_values=components.recursive_output.conditional_q,
+            target_values=components.target_output.conditional_q,
         )
         self._log_coral_metrics(
             Stage.TRAIN,
             batch=batch,
-            output=online_output,
-            targets=targets,
-            admitted=admitted,
+            output=components.recursive_output,
+            targets=objective.recursive_targets,
+            admitted=objective.recursive_support,
         )
+        self._log_horizon_objective(Stage.TRAIN, objective)
         return loss.detach()
 
     def on_train_epoch_start(self) -> None:
@@ -317,6 +414,16 @@ class QhLightningModule(pl.LightningModule):
 
         self.training_loss_sum.zero_()
         self.training_row_count.zero_()
+        self.training_horizon_state_count.zero_()
+        self.training_horizon_candidate_count.zero_()
+
+    def on_train_epoch_end(self) -> None:
+        """Make realized per-horizon support exact across distributed ranks."""
+
+        if not self._distributed():
+            return
+        torch.distributed.all_reduce(self.training_horizon_state_count, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(self.training_horizon_candidate_count, op=torch.distributed.ReduceOp.SUM)
 
     def validation_step(self, batch: QhBatch, batch_idx: int) -> Tensor:
         """Accumulate exact single-device validation loss."""
@@ -335,10 +442,18 @@ class QhLightningModule(pl.LightningModule):
 
         self.validation_loss_sum.zero_()
         self.validation_row_count.zero_()
+        self.validation_horizon_loss_sum.zero_()
+        self.validation_horizon_state_count.zero_()
 
     def on_validation_epoch_end(self) -> None:
-        """Log admitted-row-weighted validation loss."""
+        """Finalize and log the equal-horizon validation loss."""
 
+        self._finalize_horizon_aggregate(
+            self.validation_horizon_loss_sum,
+            self.validation_horizon_state_count,
+            output_loss_sum=self.validation_loss_sum,
+            output_count=self.validation_row_count,
+        )
         self._log_aggregate(Stage.VAL, self.validation_loss_sum, self.validation_row_count)
 
     def on_test_epoch_start(self) -> None:
@@ -346,17 +461,47 @@ class QhLightningModule(pl.LightningModule):
 
         self.test_loss_sum.zero_()
         self.test_row_count.zero_()
+        self.test_horizon_loss_sum.zero_()
+        self.test_horizon_state_count.zero_()
 
     def on_test_epoch_end(self) -> None:
-        """Log admitted-row-weighted held-out loss."""
+        """Finalize and log the equal-horizon held-out loss."""
 
+        self._finalize_horizon_aggregate(
+            self.test_horizon_loss_sum,
+            self.test_horizon_state_count,
+            output_loss_sum=self.test_loss_sum,
+            output_count=self.test_row_count,
+        )
         self._log_aggregate(Stage.TEST, self.test_loss_sum, self.test_row_count)
 
     def compute_fitted_q_loss(self, batch: QhBatch) -> tuple[Tensor, Tensor, Tensor]:
-        """Return selected-action decoder loss, fitted-Q targets, and support."""
+        """Return the historical selected-diagonal diagnostic component.
+
+        This compatibility diagnostic includes selected ``h=1`` rows. Actual
+        optimization is owned by :meth:`compute_learning_objective`, which
+        replaces selected ``h=1`` with the complete dense candidate table and
+        keeps selected recursion only for ``h>1``.
+        """
 
         losses, targets, admitted, _online, _target = self._fitted_q_components(batch)
         return losses.sum() / admitted.sum().clamp_min(1), targets, admitted
+
+    def compute_learning_objective(self, batch: QhBatch) -> QhFittedQObjective:
+        """Return the executable dense-Q1 plus selected-recursion objective.
+
+        This pure helper performs the same actor-only scorer calls, target
+        construction, candidate/state normalization, and equal-horizon
+        aggregation used by training. It does not mutate optimizer or target
+        network state and is therefore the narrow inspection seam for tests and
+        experiment diagnostics.
+        """
+
+        return self._assemble_learning_objective(
+            self._learning_components(batch),
+            batch=batch,
+            distributed=False,
+        )
 
     def compute_feasibility_loss(self, batch: QhBatch) -> tuple[Tensor, Tensor]:
         """Return auxiliary BCE over materialized valid and invalid rows."""
@@ -432,8 +577,10 @@ class QhLightningModule(pl.LightningModule):
     def _fitted_q_components(
         self,
         batch: QhBatch,
+        *,
+        minimum_horizon: int = 1,
     ) -> tuple[Tensor, Tensor, Tensor, QhScoreOutput, QhScoreOutput]:
-        admitted = self._fitted_q_admission_mask(batch)
+        admitted = self._fitted_q_admission_mask(batch) & batch.actor.horizon_remaining.ge(minimum_horizon)
         online_output = self(batch.actor)
         with torch.no_grad():
             target_output = self._score(
@@ -477,6 +624,137 @@ class QhLightningModule(pl.LightningModule):
             selected=safe_selected,
         )
         return losses, targets.detach(), admitted, online_output, target_output
+
+    def _learning_components(self, batch: QhBatch) -> _QhLearningComponents:
+        """Materialize the two disjoint supervision domains exactly once."""
+
+        dense_support = self._dense_q1_admission_mask(batch)
+        requested_horizon = torch.where(
+            batch.actor.step_mask,
+            torch.ones_like(batch.actor.horizon_remaining),
+            torch.zeros_like(batch.actor.horizon_remaining),
+        )
+        dense_output = self._score(
+            self.online_scorer,
+            batch.actor,
+            requested_horizon=requested_horizon,
+        )
+        dense_targets = batch.supervision.candidate_reward.float().detach()
+        dense_losses = self._dense_q1_losses(
+            dense_output,
+            targets=dense_targets,
+            support=dense_support,
+        )
+        recursive_losses, recursive_targets, recursive_support, recursive_output, target_output = (
+            self._fitted_q_components(batch, minimum_horizon=2)
+        )
+        return _QhLearningComponents(
+            dense_losses=dense_losses,
+            dense_targets=dense_targets,
+            dense_support=dense_support,
+            dense_output=dense_output,
+            recursive_losses=recursive_losses,
+            recursive_targets=recursive_targets,
+            recursive_support=recursive_support,
+            recursive_output=recursive_output,
+            target_output=target_output,
+        )
+
+    def _assemble_learning_objective(
+        self,
+        components: _QhLearningComponents,
+        *,
+        batch: QhBatch,
+        distributed: bool,
+    ) -> QhFittedQObjective:
+        """Normalize candidates within state and states within horizon.
+
+        The returned sufficient statistics are local. When ``distributed`` is
+        true, only the denominator vector is all-reduced and the differentiable
+        local numerator is scaled so DDP's gradient average equals the global
+        horizon-balanced objective exactly.
+        """
+
+        dense_loss_table = torch.zeros_like(components.dense_targets)
+        dense_loss_table[components.dense_support] = components.dense_losses
+        dense_candidate_count = components.dense_support.sum(dim=-1)
+        dense_state_support = dense_candidate_count.gt(0)
+        dense_state_loss = dense_loss_table.sum(dim=-1) / dense_candidate_count.clamp_min(1)
+
+        recursive_state_loss = torch.zeros_like(components.recursive_targets)
+        recursive_state_loss[components.recursive_support] = components.recursive_losses
+
+        loss_sum = torch.zeros(
+            self.config.max_horizon,
+            dtype=torch.float64,
+            device=components.dense_targets.device,
+        )
+        state_count = torch.zeros_like(loss_sum, dtype=torch.int64)
+        candidate_count = torch.zeros_like(loss_sum, dtype=torch.int64)
+        loss_sum[0] = dense_state_loss[dense_state_support].double().sum()
+        state_count[0] = dense_state_support.sum()
+        candidate_count[0] = components.dense_support.sum()
+        for horizon in range(2, self.config.max_horizon + 1):
+            support = components.recursive_support & batch.actor.horizon_remaining.eq(horizon)
+            loss_sum[horizon - 1] = recursive_state_loss[support].double().sum()
+            state_count[horizon - 1] = support.sum()
+            candidate_count[horizon - 1] = support.sum()
+
+        global_state_count = state_count.clone()
+        if distributed and self._distributed():
+            torch.distributed.all_reduce(global_state_count, op=torch.distributed.ReduceOp.SUM)
+        active = global_state_count.gt(0)
+        if bool(active.any()):
+            normalized = (
+                loss_sum[active].to(dtype=components.dense_targets.dtype)
+                / global_state_count[active].to(dtype=components.dense_targets.dtype)
+            ).sum() / active.sum().to(dtype=components.dense_targets.dtype)
+            if distributed and self._distributed():
+                normalized = normalized * torch.distributed.get_world_size()
+            objective_loss = normalized + self._parameter_connected_zero()
+        else:
+            objective_loss = self._parameter_connected_zero()
+        return QhFittedQObjective(
+            loss=objective_loss,
+            dense_q1_targets=components.dense_targets,
+            dense_q1_support=components.dense_support,
+            recursive_targets=components.recursive_targets,
+            recursive_support=components.recursive_support,
+            loss_sum_by_horizon=loss_sum.detach(),
+            state_count_by_horizon=state_count.detach(),
+            candidate_count_by_horizon=candidate_count.detach(),
+        )
+
+    def _dense_q1_losses(
+        self,
+        output: QhScoreOutput,
+        *,
+        targets: Tensor,
+        support: Tensor,
+    ) -> Tensor:
+        """Return per-candidate one-step loss over exact hard-valid labels."""
+
+        predictions = output.conditional_q[support]
+        fitted_targets = targets[support]
+        self._require_finite(predictions, "dense Q1 predictions used for fitted-Q loss")
+        self._require_finite(fitted_targets, "dense Q1 targets used for fitted-Q loss")
+        auxiliary = output.value_auxiliary
+        if auxiliary is None:
+            return functional.huber_loss(
+                predictions,
+                fitted_targets,
+                delta=self.config.huber_delta,
+                reduction="none",
+            )
+        logits = auxiliary.logits[support]
+        self._require_finite(logits, "dense Q1 CORAL logits used for fitted-Q loss")
+        labels = torch.bucketize(fitted_targets, auxiliary.bin_edges).to(dtype=torch.int64)
+        return coral_loss(
+            logits,
+            labels,
+            num_classes=logits.shape[-1] + 1,
+            reduction="none",
+        )
 
     def _value_losses(
         self,
@@ -522,33 +800,34 @@ class QhLightningModule(pl.LightningModule):
     def _evaluation_step(self, batch: QhBatch, stage: Stage) -> Tensor:
         if self._effective_world_size() != 1:
             raise ValueError("Q_H validation and test require single-device execution.")
-        losses, _targets, admitted, online_output, target_output = self._fitted_q_components(batch)
-        loss_sum = losses.detach().double().sum()
-        row_count = admitted.sum()
+        components = self._learning_components(batch)
+        objective = self._assemble_learning_objective(components, batch=batch, distributed=False)
+        row_count = objective.state_count_by_horizon.sum()
         if stage is Stage.VAL:
-            self.validation_loss_sum.add_(loss_sum)
-            self.validation_row_count.add_(row_count)
+            self.validation_horizon_loss_sum.add_(objective.loss_sum_by_horizon)
+            self.validation_horizon_state_count.add_(objective.state_count_by_horizon)
         else:
-            self.test_loss_sum.add_(loss_sum)
-            self.test_row_count.add_(row_count)
+            self.test_horizon_loss_sum.add_(objective.loss_sum_by_horizon)
+            self.test_horizon_state_count.add_(objective.state_count_by_horizon)
         if int(row_count.item()) > 0:
             self._log_infrastructure_metrics(
                 stage,
                 batch=batch,
-                admitted=admitted,
-                online_values=online_output.conditional_q,
-                target_values=target_output.conditional_q,
+                admitted=objective.recursive_support,
+                online_values=components.recursive_output.conditional_q,
+                target_values=components.target_output.conditional_q,
             )
             self._log_coral_metrics(
                 stage,
                 batch=batch,
-                output=online_output,
-                targets=_targets,
-                admitted=admitted,
+                output=components.recursive_output,
+                targets=objective.recursive_targets,
+                admitted=objective.recursive_support,
             )
         elif bool(batch.selected_train_mask.any()):
             self._log_unsupported_backup_metrics(stage, batch=batch)
-        return losses.sum() / row_count.clamp_min(1)
+        self._log_horizon_objective(stage, objective)
+        return objective.loss
 
     def _log_infrastructure_metrics(
         self,
@@ -682,11 +961,60 @@ class QhLightningModule(pl.LightningModule):
                 reduce_fx=reduce_fx,
             )
 
+    def _log_horizon_objective(self, stage: Stage, objective: QhFittedQObjective) -> None:
+        """Expose non-pooled loss and support sufficient statistics by horizon."""
+
+        training = stage is Stage.TRAIN
+        loss_sum = objective.loss_sum_by_horizon.clone()
+        state_count = objective.state_count_by_horizon.clone()
+        candidate_count = objective.candidate_count_by_horizon.clone()
+        if training and self._distributed():
+            for values in (loss_sum, state_count, candidate_count):
+                torch.distributed.all_reduce(values, op=torch.distributed.ReduceOp.SUM)
+        for index in range(self.config.max_horizon):
+            if int(state_count[index].item()) == 0:
+                continue
+            horizon = index + 1
+            batch_size = int(state_count[index].item())
+            for name, value, reduce_fx in (
+                ("loss", loss_sum[index] / state_count[index].clamp_min(1), "mean"),
+                ("state_count", state_count[index].float(), "sum"),
+                ("candidate_count", candidate_count[index].float(), "sum"),
+            ):
+                self.log(
+                    f"{stage.value}/h{horizon}_{name}",
+                    value.float(),
+                    on_step=training,
+                    on_epoch=not training,
+                    sync_dist=False,
+                    batch_size=max(batch_size, 1),
+                    reduce_fx=reduce_fx,
+                )
+
     def _log_aggregate(self, stage: Stage, loss_sum: Tensor, row_count: Tensor) -> None:
         if int(row_count.item()) == 0:
             return
         self.log(f"{stage.value}/loss", (loss_sum / row_count).float(), sync_dist=False)
         self.log(f"{stage.value}/admitted_rows", row_count.float(), sync_dist=False)
+
+    @staticmethod
+    def _finalize_horizon_aggregate(
+        horizon_loss_sum: Tensor,
+        horizon_state_count: Tensor,
+        *,
+        output_loss_sum: Tensor,
+        output_count: Tensor,
+    ) -> None:
+        """Store equal-horizon means in the legacy scalar checkpoint seam."""
+
+        active = horizon_state_count.gt(0)
+        output_loss_sum.zero_()
+        output_count.zero_()
+        if not bool(active.any()):
+            return
+        horizon_means = horizon_loss_sum[active] / horizon_state_count[active]
+        output_loss_sum.copy_(horizon_means.sum())
+        output_count.copy_(active.sum())
 
     def _step_learning_rate_schedulers(self) -> None:
         if not self.trainer.lr_scheduler_configs:
@@ -730,6 +1058,31 @@ class QhLightningModule(pl.LightningModule):
     @classmethod
     def _fitted_q_admission_mask(cls, batch: QhBatch) -> Tensor:
         return batch.selected_train_mask & ~cls._unsupported_backup_mask(batch)
+
+    @classmethod
+    def _recursive_q_admission_mask(cls, batch: QhBatch) -> Tensor:
+        """Return factual selected-transition support reserved for ``h>1``."""
+
+        return cls._fitted_q_admission_mask(batch) & batch.actor.horizon_remaining.gt(1)
+
+    @staticmethod
+    def _dense_q1_admission_mask(batch: QhBatch) -> Tensor:
+        """Return every finite labelled hard-valid candidate at realized states.
+
+        This mask is intentionally candidate-aligned and independent of the
+        factual selected action. Padding, materialized invalid candidates, and
+        unlabelled rows remain outside Q supervision. Under the deployable
+        ``dense_valid`` population contract it equals the realized hard action
+        mask; retaining the explicit finite/label checks keeps this module
+        fail-closed at its own optimization boundary.
+        """
+
+        return (
+            batch.actor.step_mask.unsqueeze(-1)
+            & batch.actor.action_mask
+            & batch.supervision.label_mask
+            & torch.isfinite(batch.supervision.candidate_reward)
+        )
 
     def _feasibility_label_mask(self, batch: QhBatch, *, enabled_only: bool = True) -> Tensor:
         """Return hard-validity supervision support without treating padding as invalid."""
@@ -844,4 +1197,4 @@ class QhLightningModule(pl.LightningModule):
         return torch.distributed.is_available() and torch.distributed.is_initialized()
 
 
-__all__ = ["QhLightningModule", "QhLightningModuleConfig"]
+__all__ = ["QhFittedQObjective", "QhLightningModule", "QhLightningModuleConfig"]

@@ -29,7 +29,7 @@ from ..data_handling.qh_data.views import QhActorStateContract, QhExperimentProf
 from ..rollouts.qh_reader import QhDataContract
 from ..utils.fingerprints import stable_msgspec_hash
 
-QH_HORIZON_WEIGHTING = "uniform-admitted-selected-row-huber-mean-v1"
+QH_HORIZON_WEIGHTING = "uniform-horizon-state-balanced-dense-q1-selected-recursion-v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +43,7 @@ class QhLearningContract:
     """Largest acquisition horizon shared by the admitted stages."""
 
     horizon_weighting: str = QH_HORIZON_WEIGHTING
-    """Selected-row loss aggregation identity."""
+    """Candidate-within-state, state-within-horizon, equal-horizon aggregation identity."""
 
     objective_profile: QhObjectiveProfile = "legacy_selected_rows_v1"
     """Closed fitted-Q support and padding semantics."""

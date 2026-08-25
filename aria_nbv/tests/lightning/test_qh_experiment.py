@@ -196,6 +196,7 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
     assert runtime.scorer.training is False
     assert runtime.scorer_state_sha256 == manifest["artifacts"]["scorer-state.pt"]["sha256"]
     assert runtime.representation_semantics == "root_moments_v1"
+    assert runtime.trained_horizons == (1, 2)
     assert torch.equal(actual.conditional_q, expected.conditional_q)
     assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
     assert torch.equal(
@@ -475,6 +476,28 @@ def test_qh_bundle_rejects_learning_horizon_beyond_scorer_capacity(tmp_path) -> 
         QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
+@pytest.mark.parametrize(
+    "support",
+    [
+        {},
+        {"2": {"state_count": 1, "candidate_count": 1}},
+        {"1": {"state_count": 2, "candidate_count": 1}},
+        {"1": {"state_count": 1, "candidate_count": 1}, "5": {"state_count": 1, "candidate_count": 1}},
+    ],
+)
+def test_qh_bundle_rejects_invalid_trained_horizon_support(tmp_path, support: dict[str, object]) -> None:
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["identity"]["trained_horizon_support"] = support
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="trained horizon|h=1 training support"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
 def test_qh_bundle_rejects_learned_feasibility_from_deployable_core(tmp_path) -> None:
     _experiment_instance, ref = _bundle(tmp_path)
     manifest_path = ref.bundle_path / "manifest.json"
@@ -660,6 +683,7 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
             "actor_state_contract_hash": actor_hash,
             "learning_contract_hash": learning_hash,
             "geometry_contract_hash": actor_contract.geometry_contract_hash,
+            "max_horizon": experiment.config.scorer.max_horizon,
         },
     )
     stages = {"train": {"kind": "test"}, "validation": {"kind": "test"}, "test": {"kind": "test"}}
@@ -676,6 +700,10 @@ def _publish_contracts(experiment: QhExperiment) -> tuple[QhLightningModuleConfi
         "warm_start_parent_manifest_sha256": None,
         "action_mask_semantics": dataset.contract.action_mask_semantics,
         "representation_semantics": experiment.config.scorer.representation_semantics,
+        "trained_horizon_support": {
+            "1": {"state_count": 2, "candidate_count": 6},
+            "2": {"state_count": 1, "candidate_count": 1},
+        },
         "seed": 0,
     }
 

@@ -57,16 +57,17 @@ _IDENTITY_FIELDS = {
     "warm_start_parent_manifest_sha256",
     "action_mask_semantics",
     "representation_semantics",
+    "trained_horizon_support",
     "seed",
 }
 
 
 @dataclass(frozen=True, slots=True)
 class QhCheckpointSelectionSpec:
-    """Closed V1 validation-checkpoint selection rule."""
+    """Closed validation-checkpoint selection rule."""
 
     monitor: Literal["val/loss"] = "val/loss"
-    """Existing admitted-row-weighted Q_H validation metric."""
+    """Equal-horizon Q_H validation metric under the bound learning contract."""
 
     mode: Literal["min"] = "min"
     """Validation loss is minimized."""
@@ -286,6 +287,7 @@ class QhExperiment:
                     "root_evl_profile": train.actor_state_contract.root_evl_profile,
                     "selected_observation_protocol": train.actor_state_contract.selected_observation_protocol,
                     "experiment_profile": self.config.scorer.experiment_profile,
+                    "max_horizon": self.config.scorer.max_horizon,
                     "action_mask_semantics": data.learning_contract.data_contract.action_mask_semantics,
                     "actor_state_contract_hash": data.actor_state_contract_hash,
                     "learning_contract_hash": data.learning_contract_hash,
@@ -311,6 +313,16 @@ class QhExperiment:
             trainer_config = self._trainer_config(temporary, request.checkpoint_selection)
             trainer = trainer_config.setup_target()
             trainer.fit(module, datamodule=data)
+            trained_horizon_support = {
+                str(horizon): {
+                    "state_count": int(module.training_horizon_state_count[horizon - 1].item()),
+                    "candidate_count": int(module.training_horizon_candidate_count[horizon - 1].item()),
+                }
+                for horizon in range(1, module_config.max_horizon + 1)
+                if int(module.training_horizon_state_count[horizon - 1].item()) > 0
+            }
+            if not trained_horizon_support:
+                raise RuntimeError("Q_H fit completed without any realized fitted-horizon support.")
             selected_checkpoint, selected_validation_loss, selected_optimizer_updates = self._selected_checkpoint(
                 temporary
             )
@@ -322,11 +334,12 @@ class QhExperiment:
             if int(module.optimizer_updates.item()) != selected_optimizer_updates:
                 raise ValueError("Selected Q_H checkpoint optimizer-update identity is inconsistent.")
             selection_receipt = {
-                "schema_version": "qh-checkpoint-selection-receipt-v1",
+                "schema_version": "qh-checkpoint-selection-receipt-v2",
                 "selection": asdict(request.checkpoint_selection),
                 "selected_checkpoint_sha256": _sha256_file(selected_checkpoint),
                 "validation_loss_sum": float(torch.as_tensor(selected_state["validation_loss_sum"]).item()),
-                "validation_row_count": int(torch.as_tensor(selected_state["validation_row_count"]).item()),
+                "validation_horizon_count": int(torch.as_tensor(selected_state["validation_row_count"]).item()),
+                "aggregation_semantics": data.learning_contract.horizon_weighting,
                 "selected_validation_loss": selected_validation_loss,
                 "optimizer_updates": selected_optimizer_updates,
             }
@@ -334,7 +347,7 @@ class QhExperiment:
             _write_json(selection_path, selection_receipt)
 
             training_receipt = {
-                "schema_version": "qh-training-receipt-v1",
+                "schema_version": "qh-training-receipt-v2",
                 "seed": int(request.seed),
                 "warm_start_parent_manifest_sha256": (
                     None if warm_start_parent is None else warm_start_parent.manifest_sha256
@@ -345,6 +358,7 @@ class QhExperiment:
                 "test_provenance": _jsonable(test.provenance),
                 "learning_contract_hash": data.learning_contract_hash,
                 "actor_state_contract_hash": data.actor_state_contract_hash,
+                "trained_horizon_support": trained_horizon_support,
             }
             training_path = temporary / _TRAINING_RECEIPT_FILENAME
             _write_json(training_path, training_receipt)
@@ -388,6 +402,7 @@ class QhExperiment:
                     "representation_semantics": str(
                         getattr(self.config.scorer, "representation_semantics", "root_moments_v1")
                     ),
+                    "trained_horizon_support": trained_horizon_support,
                     "seed": int(request.seed),
                 },
                 artifact_hashes={
@@ -478,7 +493,7 @@ class QhExperiment:
         )
         trainer_config.setup_target().test(module, datamodule=data)
         receipt = {
-            "schema_version": "qh-held-out-diagnostic-receipt-v1",
+            "schema_version": "qh-held-out-diagnostic-receipt-v2",
             "diagnostic_only": True,
             "endpoint_policy_evidence": False,
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
@@ -492,7 +507,8 @@ class QhExperiment:
                 "geometry_contract_hash": identity["geometry_contract_hash"],
             },
             "test_loss_sum": float(module.test_loss_sum.item()),
-            "test_row_count": int(module.test_row_count.item()),
+            "test_horizon_count": int(module.test_row_count.item()),
+            "aggregation_semantics": data.learning_contract.horizon_weighting,
         }
         output.parent.mkdir(parents=True, exist_ok=True)
         _write_json(output, receipt)
@@ -659,6 +675,7 @@ class QhExperiment:
             representation_semantics=str(
                 manifest["scorer_config"].get("representation_semantics", identity["representation_semantics"])
             ),
+            trained_horizons=tuple(sorted(int(value) for value in identity["trained_horizon_support"])),
         )
 
     def _publish_bundle(
@@ -927,6 +944,33 @@ class QhExperiment:
                 "Q_H bundle learning-contract max_horizon exceeds scorer max_horizon: "
                 f"{learning_contract.max_horizon} > {scorer.max_horizon}."
             )
+        if module.max_horizon != scorer.max_horizon:
+            raise ValueError("Q_H bundle module and scorer max_horizon must match exactly.")
+        trained_support = identity["trained_horizon_support"]
+        if not isinstance(trained_support, dict) or not trained_support:
+            raise ValueError("Q_H bundle requires non-empty manifest-bound trained horizon support.")
+        trained_horizons: set[int] = set()
+        for key, support in trained_support.items():
+            try:
+                horizon = int(key)
+            except (TypeError, ValueError) as error:
+                raise ValueError("Q_H trained horizon keys must be canonical positive integers.") from error
+            if str(horizon) != key or horizon < 1 or horizon > learning_contract.max_horizon:
+                raise ValueError("Q_H trained horizon support exceeds the admitted learning contract.")
+            if (
+                not isinstance(support, dict)
+                or set(support) != {"state_count", "candidate_count"}
+                or isinstance(support["state_count"], bool)
+                or not isinstance(support["state_count"], int)
+                or support["state_count"] < 1
+                or isinstance(support["candidate_count"], bool)
+                or not isinstance(support["candidate_count"], int)
+                or support["candidate_count"] < support["state_count"]
+            ):
+                raise ValueError("Q_H trained horizon support requires positive state and candidate counts.")
+            trained_horizons.add(horizon)
+        if 1 not in trained_horizons:
+            raise ValueError("Q_H dense-valid bundles require realized h=1 training support.")
         geometry_hash = identity.get("geometry_contract_hash")
         if module.geometry_contract_hash != geometry_hash or actor_contract.geometry_contract_hash != geometry_hash:
             raise ValueError("Q_H bundle geometry identity is inconsistent across actor, module, and manifest.")
