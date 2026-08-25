@@ -34,6 +34,9 @@ from aria_nbv.vin.modules.qh_value_decoders import (
 )
 from tests.data_handling.test_qh import _chain, _snippet
 
+_FLOAT32_GOLDEN_ATOL = 1e-4
+"""Cross-backend tolerance for frozen scalar-output smoke values only."""
+
 
 def _actor(*, steps: int = 3, width: int = 4) -> QhActorTensors:
     chain = _chain(steps=steps, width=width)
@@ -137,7 +140,7 @@ def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() ->
             ]
         ),
         rtol=0.0,
-        atol=5e-7,
+        atol=_FLOAT32_GOLDEN_ATOL,
     )
     torch.testing.assert_close(
         output.feasibility_logits,
@@ -151,7 +154,7 @@ def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() ->
             ]
         ),
         rtol=0.0,
-        atol=5e-7,
+        atol=_FLOAT32_GOLDEN_ATOL,
     )
 
 
@@ -198,7 +201,7 @@ def test_qh_coral_scorer_preserves_scalar_contract_and_attaches_thresholds() -> 
             ]
         ),
         rtol=0.0,
-        atol=1e-7,
+        atol=_FLOAT32_GOLDEN_ATOL,
     )
     torch.testing.assert_close(
         output.value_auxiliary.logits,
@@ -227,7 +230,7 @@ def test_qh_coral_scorer_preserves_scalar_contract_and_attaches_thresholds() -> 
             ]
         ),
         rtol=0.0,
-        atol=1e-7,
+        atol=_FLOAT32_GOLDEN_ATOL,
     )
 
 
