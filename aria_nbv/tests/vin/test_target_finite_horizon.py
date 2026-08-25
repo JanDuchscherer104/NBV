@@ -114,6 +114,47 @@ def test_qh_scorer_output_matches_actor_candidate_axes_and_is_deterministic() ->
     assert torch.isfinite(first.conditional_q[actor.action_mask]).all()
 
 
+def test_qh_scene_encoder_extraction_preserves_legacy_identity_and_outputs() -> None:
+    """Lock the parameter-free module extraction to the pre-seam control."""
+
+    config = TargetFiniteHorizonScorerConfig(hidden_dim=32, dropout=0.0, max_horizon=4)
+    scorer = _scorer()
+    output = scorer(_actor())
+
+    assert stable_config_hash(config) == "12e4990ecd334017"
+    assert len(scorer.state_dict()) == 44
+    assert not scorer.scene_encoder.state_dict()
+    assert not any(key.startswith("scene_encoder.") for key in scorer.state_dict())
+    torch.testing.assert_close(
+        output.conditional_q,
+        torch.tensor(
+            [
+                [
+                    [-0.0111854225, -0.0080969334, -0.0088586658, -0.0080592483],
+                    [-0.0085932389, -0.0064415932, -0.0055623800, -0.0082657412],
+                    [-0.0083224773, -0.0050708354, -0.0052963421, -0.0028626025],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=1e-7,
+    )
+    torch.testing.assert_close(
+        output.feasibility_logits,
+        torch.tensor(
+            [
+                [
+                    [-1.2504171133, -1.2618308067, -1.2461163998, -1.2615814209],
+                    [-1.2496248484, -1.2496305704, -1.2499766350, -1.2494469881],
+                    [-1.2460227013, -1.2493461370, -1.2373200655, -1.2411725521],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=1e-7,
+    )
+
+
 def test_qh_scorer_returns_conditional_q_and_feasibility_logits() -> None:
     actor = _actor()
     output = _scorer()(actor)
@@ -145,6 +186,49 @@ def test_qh_coral_scorer_preserves_scalar_contract_and_attaches_thresholds() -> 
     )
     assert bool((output.conditional_q[materialized] >= -1.0).all())
     assert bool((output.conditional_q[materialized] <= 1.0).all())
+    torch.testing.assert_close(
+        output.conditional_q,
+        torch.tensor(
+            [
+                [
+                    [-0.0339741707, -0.0324316025, -0.0328121185, -0.0324127674],
+                    [-0.0326795280, -0.0316047966, -0.0311655998, -0.0325159729],
+                    [-0.0325441658, -0.0309200287, -0.0310328007, -0.0298169851],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=1e-7,
+    )
+    torch.testing.assert_close(
+        output.value_auxiliary.logits,
+        torch.tensor(
+            [
+                [
+                    [
+                        [-0.0679745078, -0.0679745078],
+                        [-0.0648860186, -0.0648860186],
+                        [-0.0656477511, -0.0656477511],
+                        [-0.0648483336, -0.0648483336],
+                    ],
+                    [
+                        [-0.0653823242, -0.0653823242],
+                        [-0.0632306784, -0.0632306784],
+                        [-0.0623514652, -0.0623514652],
+                        [-0.0650548264, -0.0650548264],
+                    ],
+                    [
+                        [-0.0651115626, -0.0651115626],
+                        [-0.0618599206, -0.0618599206],
+                        [-0.0620854273, -0.0620854273],
+                        [-0.0596516877, -0.0596516877],
+                    ],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=1e-7,
+    )
 
 
 def test_qh_scorer_explicit_remaining_horizon_matches_default_query() -> None:
@@ -492,35 +576,6 @@ def test_qh_scorer_rejects_nonfinite_active_pose_rows() -> None:
     extents[..., 0] = float("inf")
     with pytest.raises(ValueError, match="active target extents"):
         scorer(replace(actor, target_extents=extents))
-
-
-def test_qh_scene_summary_is_root_frame_invariant_and_tracks_raw_support() -> None:
-    actor = _actor()
-    scorer = _scorer()
-    points = actor.vin_snippet.points_world.clone()
-    root = actor.root_pose_world.tensor().clone()
-    root[0, -3:] = torch.tensor([2.0, -1.0, 0.5])
-    shifted = replace(
-        actor,
-        root_pose_world=PoseTW(root),
-        vin_snippet=replace(actor.vin_snippet, points_world=points + root[:, -3:]),
-    )
-    assert torch.allclose(scorer._scene_summary(actor), scorer._scene_summary(shifted))
-
-    empty = replace(actor, vin_snippet=replace(actor.vin_snippet, lengths=torch.tensor([0])))
-    zero = replace(actor, vin_snippet=replace(actor.vin_snippet, points_world=torch.zeros_like(points)))
-    empty_summary = scorer._scene_summary(empty)
-    zero_summary = scorer._scene_summary(zero)
-    assert empty_summary[0, -2:].tolist() == [0.0, 0.0]
-    assert zero_summary[0, -2:].tolist() == [1.0, 1.0]
-
-
-def test_qh_scene_summary_rejects_out_of_range_point_lengths() -> None:
-    actor = _actor()
-    scorer = _scorer()
-    invalid = replace(actor, vin_snippet=replace(actor.vin_snippet, lengths=torch.tensor([99])))
-    with pytest.raises(ValueError, match=r"lengths must be in \[0,"):
-        scorer._scene_summary(invalid)
 
 
 def test_qh_candidate_relative_transforms_compose_in_the_declared_direction() -> None:

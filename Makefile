@@ -112,6 +112,7 @@ QH_CI_RUFF_PATHS := \
 	aria_nbv/vin/encoders/fourier.py \
 	aria_nbv/vin/encoders/pose.py \
 	aria_nbv/vin/modules/qh_history_encoders.py \
+	aria_nbv/vin/modules/qh_scene_encoders.py \
 	aria_nbv/vin/modules/qh_state_fusion.py \
 	aria_nbv/vin/modules/qh_value_decoders.py \
 	aria_nbv/vin/qh_bundle.py \
@@ -137,6 +138,7 @@ QH_CI_RUFF_PATHS := \
 	tests/rollouts/test_replay_oracle_golden_parity.py \
 	tests/targets/test_protocol.py \
 	tests/vin/test_qh_history_encoders.py \
+	tests/vin/test_qh_scene_encoders.py \
 	tests/vin/test_qh_state_fusion.py \
 	tests/vin/test_qh_value_decoders.py \
 	tests/vin/test_target_finite_horizon.py \
@@ -167,6 +169,7 @@ QH_CI_TESTS := \
 	tests/lightning/test_candidate_scorer_contract.py \
 	tests/lightning/test_optimizer_finite_values.py \
 	tests/vin/test_qh_history_encoders.py \
+	tests/vin/test_qh_scene_encoders.py \
 	tests/vin/test_qh_state_fusion.py \
 	tests/vin/test_qh_value_decoders.py \
 	tests/vin/test_target_finite_horizon.py \

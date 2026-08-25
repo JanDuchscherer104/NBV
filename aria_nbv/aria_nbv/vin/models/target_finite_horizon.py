@@ -56,6 +56,7 @@ from ..modules.qh_history_encoders import (
     QhHistoryEncoderConfig,
     QhMeanPoolHistoryEncoderConfig,
 )
+from ..modules.qh_scene_encoders import QhRootMomentsSceneEncoder, QhSceneChannel
 from ..modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
     QhStateFusionConfig,
@@ -69,8 +70,6 @@ from ..modules.qh_value_decoders import (
 
 if TYPE_CHECKING:
     from ...data_handling.qh_data import QhActorTensors
-
-QhSceneChannel = Literal["occ_pr", "occ_input", "free_input", "counts", "cent_pr"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,7 +254,8 @@ class TargetFiniteHorizonScorer(nn.Module):
         self.pose_encoder: R6dLffPoseEncoder = config.pose_encoder.setup_target()
         pose_dim = self.pose_encoder.out_dim
         hidden_dim = int(config.hidden_dim)
-        scene_dim = 4 * len(config.scene_channels) + 8
+        self.scene_encoder = QhRootMomentsSceneEncoder(scene_channels=config.scene_channels)
+        scene_dim = self.scene_encoder.output_dim
 
         self.physical_projection = nn.Sequential(
             nn.Linear(2 * pose_dim + scene_dim, hidden_dim),
@@ -372,7 +372,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         root_candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
         current_from_candidate = self._expand_pose(current_pose.inverse(), width) @ candidate_pose
         current_candidate_features = self.pose_encoder.encode(current_from_candidate).pose_enc
-        scene_summary = self._scene_summary(actor)
+        scene_summary = self.scene_encoder(actor)
         candidate_scene = scene_summary[:, None, None, :].expand(-1, steps, width, -1)
         physical_tokens = self.physical_projection(
             torch.cat((root_candidate_features, current_candidate_features, candidate_scene), dim=-1)
@@ -495,49 +495,6 @@ class TargetFiniteHorizonScorer(nn.Module):
             values = values.unsqueeze(-2)
         return PoseTW(values.expand(*values.shape[: -len(sizes) - 1], *sizes, 12))
 
-    def _scene_summary(self, actor: QhActorTensors) -> Tensor:
-        r"""Pool the versioned ``root_moments_v1`` scene carrier.
-
-        Every configured EVL field contributes global mean, standard
-        deviation, minimum, and maximum. Semidense world points are transformed
-        by :math:`T_{r\leftarrow w}` into the rollout-root frame and contribute
-        coordinate-wise mean and standard deviation plus explicit presence and
-        valid-support fraction. Source tensors are detached because these are
-        persisted actor observations, not an end-to-end EFM3D training path.
-
-        The summary is shared across all states and candidates in one chain.
-        It records broad occupancy/free-space statistics but no query-local
-        topology, visibility ray, or selected-observation update; richer point
-        and ray memories must be evaluated as separately named carriers.
-        """
-
-        context = actor.static_context
-        if context is None:  # guarded by _validate_actor
-            raise ValueError("TargetFiniteHorizonScorer requires compact root EVL context.")
-        pooled = [self._pool_channel(getattr(context, name)) for name in self.config.scene_channels]
-
-        points = actor.vin_snippet.points_world.detach().float()[..., :3]
-        if points.ndim != 3:
-            raise ValueError(f"Q_H batched semidense points must have shape (B,P,C), got {tuple(points.shape)}.")
-        lengths = actor.vin_snippet.lengths.reshape(points.shape[0], -1)[:, 0].long()
-        if bool((lengths < 0).any() or (lengths > points.shape[1]).any()):
-            raise ValueError(f"Q_H semidense lengths must be in [0,{points.shape[1]}].")
-        point_mask = torch.arange(points.shape[1], device=points.device).unsqueeze(0) < lengths.unsqueeze(1)
-        finite = torch.isfinite(points).all(dim=-1)
-        point_mask &= finite
-        root_active = actor.step_mask.any(dim=-1)
-        root_from_world = self._sanitize_pose(actor.root_pose_world, root_active, name="root").inverse()
-        points_root = root_from_world.transform(points)
-        safe_points = torch.where(point_mask.unsqueeze(-1), points_root, torch.zeros_like(points_root))
-        valid_count = point_mask.sum(dim=1, keepdim=True)
-        count = valid_count.clamp_min(1)
-        mean = safe_points.sum(dim=1) / count
-        centered = torch.where(point_mask.unsqueeze(-1), points_root - mean.unsqueeze(1), torch.zeros_like(points_root))
-        std = (centered.square().sum(dim=1) / count).sqrt()
-        support = (valid_count.float() / max(points.shape[1], 1)).clamp(0.0, 1.0)
-        present = valid_count.gt(0).float()
-        return torch.cat((*pooled, mean, std, present, support), dim=-1)
-
     @staticmethod
     def _sanitize_pose(pose: PoseTW, active: Tensor, *, name: str) -> PoseTW:
         """Reject active non-finite poses and replace inactive rows by identity."""
@@ -548,28 +505,6 @@ class TargetFiniteHorizonScorer(nn.Module):
             raise ValueError(f"Q_H active {name} poses must be finite.")
         identity = PoseTW().tensor().to(device=values.device, dtype=values.dtype).expand_as(values)
         return PoseTW(torch.where(active.unsqueeze(-1), values, identity))
-
-    @staticmethod
-    def _pool_channel(value: Tensor | None) -> Tensor:
-        """Return mean, standard deviation, minimum, and maximum per batch row."""
-
-        if value is None:
-            raise ValueError("TargetFiniteHorizonScorer requires every configured root EVL field.")
-        detached = value.detach().float()
-        if detached.ndim < 2:
-            raise ValueError(f"Q_H root EVL fields require a batch axis, got {tuple(detached.shape)}.")
-        flat = detached.reshape(detached.shape[0], -1)
-        if not bool(torch.isfinite(flat).all()):
-            raise ValueError("TargetFiniteHorizonScorer root EVL fields must be finite.")
-        return torch.stack(
-            (
-                flat.mean(dim=-1),
-                flat.std(dim=-1, unbiased=False),
-                flat.amin(dim=-1),
-                flat.amax(dim=-1),
-            ),
-            dim=-1,
-        )
 
     def _validate_actor(self, actor: QhActorTensors) -> None:
         """Fail before scoring when the actor profile or padded axes drift."""

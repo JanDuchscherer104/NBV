@@ -17,6 +17,7 @@ from .qh_history_encoders import (
     QhMeanPoolHistoryEncoder,
     QhMeanPoolHistoryEncoderConfig,
 )
+from .qh_scene_encoders import QhRootMomentsSceneEncoder, QhSceneChannel
 from .qh_state_fusion import (
     QhCrossAttentionStateFusion,
     QhCrossAttentionStateFusionConfig,
@@ -53,6 +54,8 @@ __all__ = [
     "QhPredeclaredPhysicalCoralSupport",
     "QhRegressionValueDecoder",
     "QhRegressionValueDecoderConfig",
+    "QhRootMomentsSceneEncoder",
+    "QhSceneChannel",
     "QhTrainFittedCoralSupport",
     "QhValueDecoderConfig",
     "QhCrossAttentionStateFusion",
