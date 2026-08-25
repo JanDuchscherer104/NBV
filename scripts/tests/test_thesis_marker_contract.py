@@ -62,6 +62,19 @@ def _query_metadata(
     return values if isinstance(values, list) else [values]
 
 
+def _pdf_text(path: Path) -> str:
+    result = subprocess.run(
+        [os.environ.get("PDFTOTEXT", "pdftotext"), str(path), "-"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        raise AssertionError(f"PDF text extraction failed for {path.name}:\n{output}")
+    return " ".join(result.stdout.split())
+
+
 def main() -> None:
     positive = (("marker-development", None), ("marker-submission", "submission"))
     invalid = (
@@ -91,6 +104,15 @@ def main() -> None:
             mode="submission",
             expect_success=False,
         )
+        _compile("declaration", output_dir, expect_success=True)
+        declaration_text = _pdf_text(output_dir / "declaration.pdf")
+        for clause in (
+            "selbstständig verfasst",
+            "noch nicht anderweitig für Prüfungszwecke vorgelegt",
+            "keine anderen als die angegebenen Quellen oder Hilfsmittel benutzt",
+            "wörtliche oder sinngemäße Zitate als solche gekennzeichnet",
+        ):
+            assert clause in declaration_text, clause
         assert _query_metadata("marker-development", "<marker-development>") == [
             "development-present"
         ]
