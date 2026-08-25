@@ -25,6 +25,7 @@ from aria_nbv.vin.modules.qh_history_encoders import (
     QhCausalTransformerHistoryEncoderConfig,
     QhMeanPoolHistoryEncoderConfig,
 )
+from aria_nbv.vin.modules.qh_scene_encoders import QhSelectedSurfacePointSceneEncoderConfig
 from aria_nbv.vin.modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
     QhIndependentMlpStateFusionConfig,
@@ -73,15 +74,35 @@ def _cfplus_actor(*, steps: int = 3, width: int = 4) -> QhActorTensors:
 
     actor = _actor(steps=steps, width=width)
     batch_size = actor.step_mask.shape[0]
-    depth = torch.arange(
-        batch_size * steps * steps * 6,
-        dtype=torch.float16,
-    ).reshape(batch_size, steps, steps, 2, 3)
+    history_pose = PoseTW().tensor().reshape(1, 1, 1, 12).expand(batch_size, steps, steps, -1).clone()
+    actor = replace(actor, history_pose_relative_root=PoseTW(history_pose))
+    depth = (
+        1.0
+        + torch.arange(
+            batch_size * steps * steps * 6,
+            dtype=torch.float32,
+        ).reshape(batch_size, steps, steps, 2, 3)
+        / 20.0
+    )
+    camera_row = CameraTW.from_parameters(
+        width=torch.tensor([3.0]),
+        height=torch.tensor([2.0]),
+        fx=torch.tensor([4.0]),
+        fy=torch.tensor([4.0]),
+        cx=torch.tensor([1.5]),
+        cy=torch.tensor([1.0]),
+        gain=torch.tensor([0.0]),
+        exposure_s=torch.tensor([0.0]),
+        valid_radiusx=torch.tensor([3.0]),
+        valid_radiusy=torch.tensor([2.0]),
+        T_camera_rig=PoseTW().tensor().reshape(1, 12),
+        dist_params=torch.empty((1, 0)),
+    ).tensor()
     prefix = QhSelectedObservationPrefix(
-        depth_m=depth,
+        depth_m=depth.to(torch.float16),
         valid_mask=torch.ones_like(depth, dtype=torch.bool),
-        camera=CameraTW(torch.zeros((batch_size, steps, steps, 22), dtype=torch.float32)),
-        camera_pose_relative_root=PoseTW(actor.history_pose_relative_root.tensor().clone()),
+        camera=CameraTW(camera_row.reshape(1, 1, 1, 22).expand(batch_size, steps, steps, -1).clone()),
+        camera_pose_relative_root=PoseTW(history_pose.clone()),
         prefix_mask=actor.history_mask.clone(),
     )
     return replace(actor, selected_observation_prefix=prefix)
@@ -96,6 +117,27 @@ def _cfplus_scorer() -> TargetFiniteHorizonScorer:
         dropout=0.0,
         max_horizon=4,
         experiment_profile="qh_cfplus_gt_depth_v1",
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
+def _s1_scorer(*, view_chunk_size: int = 16) -> TargetFiniteHorizonScorer:
+    """Return the fixed-width selected-surface S1 scorer."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        representation_semantics="root_moments_plus_selected_surface_points_v1",
+        scene_encoder=QhSelectedSurfacePointSceneEncoderConfig(
+            pixel_stride=1,
+            view_chunk_size=view_chunk_size,
+            point_hidden_dim=16,
+            coordinate_scale_m=2.0,
+        ),
     ).setup_target()
     scorer.eval()
     return scorer
@@ -238,6 +280,118 @@ def test_qh_cfplus_h0_preserves_action_mask_independence_and_invalid_row_isolati
         invalid_changed.feasibility_logits[candidate_mask],
         invalid_baseline.feasibility_logits[candidate_mask],
     )
+
+
+def test_qh_s1_keeps_every_common_downstream_weight_equal_to_h0() -> None:
+    """Fixed scene width and late S1 construction isolate downstream initialization."""
+
+    h0 = _cfplus_scorer()
+    s1 = _s1_scorer()
+    h0_state = h0.state_dict()
+    s1_state = s1.state_dict()
+    common_keys = [key for key in h0_state if not key.startswith("scene_encoder.")]
+
+    assert common_keys
+    assert all(key in s1_state for key in common_keys)
+    for key in common_keys:
+        assert torch.equal(s1_state[key], h0_state[key]), key
+    assert s1.scene_encoder.output_dim == h0.scene_encoder.output_dim == 28
+
+
+def test_qh_s1_consumes_selected_surface_values_without_reading_action_mask() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _s1_scorer()
+    baseline = scorer(actor)
+    changed_depth = prefix.depth_m.clone()
+    changed_depth[prefix.prefix_mask[..., None, None].expand_as(changed_depth)] += 0.75
+    changed = scorer(replace(actor, selected_observation_prefix=replace(prefix, depth_m=changed_depth)))
+    action_mask = actor.action_mask.clone()
+    action_mask[..., 0] = ~action_mask[..., 0]
+    mask_changed = scorer(replace(actor, action_mask=action_mask))
+
+    assert not torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert not torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
+    assert torch.equal(mask_changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(mask_changed.feasibility_logits, baseline.feasibility_logits)
+
+
+def test_qh_s1_view_chunking_is_numerically_equivalent() -> None:
+    actor = _cfplus_actor()
+    one_view = _s1_scorer(view_chunk_size=1)
+    all_views = _s1_scorer(view_chunk_size=32)
+    all_views.load_state_dict(one_view.state_dict())
+
+    first = one_view(actor)
+    second = all_views(actor)
+
+    torch.testing.assert_close(second.conditional_q, first.conditional_q, rtol=0.0, atol=1e-7)
+    torch.testing.assert_close(second.feasibility_logits, first.feasibility_logits, rtol=0.0, atol=1e-7)
+
+
+def test_qh_s1_ignores_future_payload_values_and_preserves_candidate_equivariance() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _s1_scorer()
+    baseline = scorer(actor)
+    inactive = ~prefix.prefix_mask
+    future_depth = prefix.depth_m.clone()
+    future_depth[inactive[..., None, None].expand_as(future_depth)] = 60000.0
+    future_camera = prefix.camera.tensor().clone()
+    future_camera[inactive] = 1.0e6
+    future_pose = prefix.camera_pose_relative_root.tensor().clone()
+    future_pose[inactive] = -1.0e6
+    changed = scorer(
+        replace(
+            actor,
+            selected_observation_prefix=replace(
+                prefix,
+                depth_m=future_depth,
+                camera=CameraTW(future_camera),
+                camera_pose_relative_root=PoseTW(future_pose),
+            ),
+        )
+    )
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+    permuted_output = scorer(permuted)
+
+    assert torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
+    torch.testing.assert_close(
+        permuted_output.conditional_q,
+        baseline.conditional_q[:, :, permutation],
+        rtol=0.0,
+        atol=1e-6,
+    )
+    torch.testing.assert_close(
+        permuted_output.feasibility_logits,
+        baseline.feasibility_logits[:, :, permutation],
+        rtol=0.0,
+        atol=1e-6,
+    )
+
+
+def test_qh_s1_configuration_is_profile_and_semantics_bound() -> None:
+    scene_encoder = QhSelectedSurfacePointSceneEncoderConfig()
+
+    with pytest.raises(ValueError, match="representation_semantics"):
+        TargetFiniteHorizonScorerConfig(
+            experiment_profile="qh_cfplus_gt_depth_v1",
+            scene_encoder=scene_encoder,
+        )
+    with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
+        TargetFiniteHorizonScorerConfig(
+            representation_semantics="root_moments_plus_selected_surface_points_v1",
+            scene_encoder=scene_encoder,
+        )
 
 
 def test_qh_cf0_rejects_any_selected_observation_carrier() -> None:

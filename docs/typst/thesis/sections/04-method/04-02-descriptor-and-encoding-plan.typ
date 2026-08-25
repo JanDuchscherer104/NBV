@@ -41,7 +41,7 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
   citation: [@GeometricDeepLearning-bronstein2021 @zhou2023query @FixedHorizonTD-deAsis2020 @UVFA-schaul2015],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/lightning/qh_module.py; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [typed selected-observation state, positive-width actor-visible target path, source masks, leakage tests, and scientific policy evidence],
-)[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The scalar requested-horizon scorer returns a typed conditional-Q/feasibility result, with optional objective-specific CORAL training tensors that never participate in masking. Static scene context, target state, candidate rows, and causal history are implemented; dynamic selected-observation state remains a richer protocol.]
+)[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The scalar requested-horizon scorer returns a typed conditional-Q/feasibility result, with optional objective-specific CORAL training tensors that never participate in masking. Static scene context, target state, candidate rows, and causal history are implemented; privileged selected depth can now form the S1 point-set residual, while ray-aware dynamic state remains richer planned work.]
 
 The intended input for target $e$ at step $t$ is
 

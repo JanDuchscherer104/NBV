@@ -1006,6 +1006,12 @@ equations:
     description: 'Source-matched CF+ H0 validates selected-observation structure while remaining exactly invariant to its numeric payload.'
     thesis_list: false
     order: 9999
+  model.qh_s1_selected_surface:
+    tex: '\boldsymbol{p}_{t,j,u}^{c_t}=T_{c_t\leftarrow r}T_{r\leftarrow c_j}\pi^{-1}(u,D_{j,u}^{\mathrm{sel}}),\ j<t;\quad \boldsymbol{z}_{t,j,u}=\phi_{\mathrm{pt}}(\boldsymbol{p}_{t,j,u}^{c_t}/\sigma_{\mathrm{xyz}});\quad \boldsymbol{g}_t^{\mathrm{S1}}=[\operatorname{Mean}\boldsymbol{z},\operatorname{Max}\boldsymbol{z},\rho_t^{\mathrm{present}},\rho_t^{\mathrm{pixel}},\rho_t^{\mathrm{view}}];\quad \boldsymbol{\Phi}_t^{\mathrm{S1}}=\boldsymbol{\Phi}_t^{\mathrm{root}}+W_{\mathrm{pt}}\boldsymbol{g}_t^{\mathrm{S1}}'
+    typst: '#eqs.model.qh_s1_selected_surface'
+    description: 'Fixed-width privileged S1 selected-surface residual over current-camera point sets.'
+    thesis_list: false
+    order: 9999
   model.candidate_row_features:
     tex: '\boldsymbol{x}_{t,i}=\operatorname{concat}(\boldsymbol{h}_{t,i}^{\mathrm{pose+rel}},\boldsymbol{h}_{t,i}^{\mathrm{geom}},\boldsymbol{h}_{t,i}^{\mathrm{valid}},\boldsymbol{h}_{t,i}^{\mathrm{prov}},\boldsymbol{H}_t)'
     typst: '#eqs.model.candidate_row_features'

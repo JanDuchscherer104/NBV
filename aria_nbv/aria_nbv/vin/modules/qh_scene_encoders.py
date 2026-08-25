@@ -20,6 +20,15 @@ actor state is invariant to batch composition and DDP partitioning.  A later
 dynamic carrier must introduce its state axis explicitly rather than hiding a
 semantic change in this control.
 
+``QhSelectedSurfacePointSceneEncoder`` is the first ``S1-points`` carrier.  It
+uses the canonical rendering backprojection for strictly causal selected
+CF-GT depth, expresses the resulting surface points from the factual current
+camera, and applies a bounded Deep-Sets-style shared point map followed by
+masked mean and maximum pooling.  Its learned residual has exactly the root
+carrier width.  Adding it therefore leaves the scorer's physical and scene
+projection widths unchanged; under the same seed every downstream H0/S1
+weight is identical and only the named scene carrier adds parameters.
+
 Global moments are intentionally lossy.  They discard topology, occlusion,
 view direction, free-versus-unknown geometry, and selected-observation
 updates.  The module is therefore a checkpoint-compatible control, not a
@@ -30,17 +39,75 @@ this shared-carrier interface.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
 
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
+from pydantic import Field
 from torch import Tensor, nn
+
+from ...data_handling.qh_contracts import validate_selected_observation_prefix
+from ...rendering.unproject import backproject_depths_camera_tw_batch
+from ...utils import TargetConfig
 
 if TYPE_CHECKING:
     from ...data_handling.qh_data import QhActorTensors
 
 QhSceneChannel: TypeAlias = Literal["occ_pr", "occ_input", "free_input", "counts", "cent_pr"]
 """Persisted root-EVL channels admitted by ``root_moments_v1``."""
+
+
+class QhRootMomentsSceneEncoderConfig(TargetConfig["QhRootMomentsSceneEncoder"]):
+    """Configure the explicit parameter-free S0 root-moments control."""
+
+    kind: Literal["root_moments_v1"] = "root_moments_v1"
+    """Versioned scene-carrier discriminator persisted with the scorer."""
+
+    @property
+    def target_type(self) -> type["QhRootMomentsSceneEncoder"]:
+        """Return the runtime root-moments encoder class."""
+
+        return QhRootMomentsSceneEncoder
+
+
+class QhSelectedSurfacePointSceneEncoderConfig(TargetConfig["QhSelectedSurfacePointSceneEncoder"]):
+    r"""Configure the privileged S1 selected-surface point memory.
+
+    The raster stride and view-chunk bound are representation identity.  They
+    determine which stored pixels become set elements and the largest number
+    of selected views backprojected at once.  ``coordinate_scale_m`` only
+    nondimensionalizes current-camera XYZ before the shared point MLP; it is
+    neither a clipping radius nor an asserted scene extent.
+    """
+
+    kind: Literal["root_moments_plus_selected_surface_points_v1"] = "root_moments_plus_selected_surface_points_v1"
+    """Versioned S1 carrier and scorer ``representation_semantics`` value."""
+
+    pixel_stride: int = Field(default=8, gt=0)
+    """Deterministic row/column stride applied before canonical depth backprojection."""
+
+    view_chunk_size: int = Field(default=16, gt=0)
+    """Maximum flattened selected-view rows backprojected in one call."""
+
+    point_hidden_dim: int = Field(default=64, gt=0)
+    """Shared point-feature width before invariant mean/maximum pooling."""
+
+    coordinate_scale_m: float = Field(default=2.0, gt=0.0)
+    """Metric divisor for current-camera XYZ supplied to the point MLP."""
+
+    @property
+    def target_type(self) -> type["QhSelectedSurfacePointSceneEncoder"]:
+        """Return the runtime selected-surface encoder class."""
+
+        return QhSelectedSurfacePointSceneEncoder
+
+
+QhSceneEncoderConfig: TypeAlias = Annotated[
+    QhRootMomentsSceneEncoderConfig | QhSelectedSurfacePointSceneEncoderConfig,
+    Field(discriminator="kind"),
+]
+"""Versioned S0/S1 scene-carrier configurations persisted with the scorer."""
 
 
 class QhRootMomentsSceneEncoder(nn.Module):
@@ -67,7 +134,13 @@ class QhRootMomentsSceneEncoder(nn.Module):
     over states and downstream candidate and step masks.
     """
 
-    def __init__(self, *, scene_channels: tuple[QhSceneChannel, ...]) -> None:
+    def __init__(
+        self,
+        config: QhRootMomentsSceneEncoderConfig | None = None,
+        *,
+        scene_channels: tuple[QhSceneChannel, ...],
+        dropout: float = 0.0,
+    ) -> None:
         """Construct the parameter-free root-moments control.
 
         Args:
@@ -79,6 +152,7 @@ class QhRootMomentsSceneEncoder(nn.Module):
         """
 
         super().__init__()
+        del config, dropout
         if not scene_channels:
             raise ValueError("Q_H root-moments scene_channels must contain at least one field.")
         if len(set(scene_channels)) != len(scene_channels):
@@ -156,4 +230,253 @@ class QhRootMomentsSceneEncoder(nn.Module):
         )
 
 
-__all__ = ["QhRootMomentsSceneEncoder", "QhSceneChannel"]
+class QhSelectedSurfacePointSceneEncoder(nn.Module):
+    r"""Add a bounded causal selected-surface residual to root moments.
+
+    For state :math:`s_t`, the carrier admits only selected observations
+    :math:`j<t`.  The persisted camera and pose define
+    :math:`T_{r\leftarrow c_j}`; canonical backprojection therefore returns
+    root-frame points.  The scorer supplies factual
+    :math:`T_{r\leftarrow c_t}`, and the encoder forms
+    :math:`p^{c_t}=T_{c_t\leftarrow r}p^r`.  Dividing XYZ by the configured
+    metric scale yields each set element; no target, candidate, budget,
+    horizon, reward, label, or authoritative action mask enters this path.
+
+    A shared MLP maps every valid sampled point independently.  Masked mean
+    and elementwise maximum are invariant to point order.  They are not
+    generally invariant to partial duplication: overlapping observations
+    receive one vote per valid sampled pixel, so S1 is explicitly a
+    density-weighted surface-set control.  Three diagnostics remain learned
+    inputs: presence, valid sampled pixels divided by causal sampled-pixel
+    capacity, and observations with any valid point divided by causal
+    observation count.  Empty prefixes produce an exact zero residual.
+
+    The output is ``Tensor["B S F_root", float32]``.  It adds a learned point
+    update to the unchanged static root moments and zeros padded states.  The
+    fixed width prevents S1 from changing any downstream scorer layer shape.
+    This carrier still cannot distinguish observed free space from unknown
+    space or retain ray direction after fusion; those are S2 responsibilities.
+    """
+
+    def __init__(
+        self,
+        config: QhSelectedSurfacePointSceneEncoderConfig,
+        *,
+        scene_channels: tuple[QhSceneChannel, ...],
+        dropout: float,
+    ) -> None:
+        """Construct the root control, shared point map, and fixed-width residual.
+
+        Args:
+            config: Persisted sampling, chunking, metric-scale, and width
+                identity for the S1 carrier.
+            scene_channels: Ordered root-EVL fields whose width fixes both H0
+                and S1 scorer inputs.
+            dropout: Training-only point-feature dropout inherited from the
+                top-level scorer configuration.
+        """
+
+        super().__init__()
+        if not 0.0 <= float(dropout) < 1.0:
+            raise ValueError("Q_H S1 scene-encoder dropout must lie in [0, 1).")
+        self.config = config
+        self.root_encoder = QhRootMomentsSceneEncoder(scene_channels=scene_channels)
+        self.output_dim = self.root_encoder.output_dim
+        point_hidden_dim = int(config.point_hidden_dim)
+        self.point_encoder = nn.Sequential(
+            nn.Linear(3, point_hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(point_hidden_dim),
+            nn.Linear(point_hidden_dim, point_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(float(dropout)),
+        )
+        self.point_update = nn.Linear(2 * point_hidden_dim + 3, self.output_dim, bias=False)
+
+    def forward(self, actor: QhActorTensors, *, current_pose_relative_root: PoseTW) -> Tensor:
+        """Return fixed-width state features for every realized decision state.
+
+        Args:
+            actor: Batched CF+ actor whose selected-observation prefix has
+                exact ``[B,S,S,H,W]`` causal support.
+            current_pose_relative_root: ``PoseTW["B S 12"]`` storing
+                root-from-current-camera poses derived once by the scorer.
+
+        Returns:
+            ``Tensor["B S F_root", float32]`` equal to repeated root moments
+            plus the selected-surface residual on realized states, and zero on
+            padded states.
+        """
+
+        prefix = actor.selected_observation_prefix
+        if prefix is None:
+            raise ValueError("Q_H S1 scene encoder requires the causal selected-observation prefix.")
+        validate_selected_observation_prefix(
+            prefix,
+            history_mask=actor.history_mask,
+            step_mask=actor.step_mask,
+        )
+        self._validate_selected_geometry(actor)
+        if current_pose_relative_root.tensor().shape[:-1] != actor.step_mask.shape:
+            raise ValueError("Q_H S1 current pose must share the actor B,S axes.")
+        current_values = current_pose_relative_root.tensor()
+        current_finite = torch.isfinite(current_values).all(dim=-1)
+        if bool((actor.step_mask & ~current_finite).any()):
+            raise ValueError("Q_H S1 realized current-camera poses must be finite.")
+
+        root = self.root_encoder(actor).unsqueeze(1).expand(-1, actor.step_mask.shape[1], -1)
+        update = self._selected_surface_update(
+            actor,
+            current_pose_relative_root=current_pose_relative_root,
+        )
+        encoded = root + update
+        return torch.where(actor.step_mask.unsqueeze(-1), encoded, torch.zeros_like(encoded)).float()
+
+    @staticmethod
+    def _validate_selected_geometry(actor: QhActorTensors) -> None:
+        """Reject malformed active metric depth, pinholes, and rigid poses.
+
+        The dependency-light carrier validator intentionally checks structure
+        only so H0 can prove value independence.  S1 interprets numeric
+        geometry and therefore strengthens the boundary before PyTorch3D:
+        valid pixels carry finite positive metres, active camera rows are
+        finite positive-focal pinholes matching the raster, camera-to-rig is
+        identity, and root-from-camera transforms are proper rigid poses.
+        """
+
+        prefix = actor.selected_observation_prefix
+        assert prefix is not None
+        active_views = prefix.prefix_mask
+        active_pixels = active_views[..., None, None] & prefix.valid_mask
+        active_depth = prefix.depth_m[active_pixels].float()
+        if not bool(torch.isfinite(active_depth).all() and active_depth.gt(0).all()):
+            raise ValueError("Q_H S1 valid selected depth must contain finite positive metres.")
+
+        camera_values = prefix.camera.tensor()[active_views]
+        if not bool(torch.isfinite(camera_values).all()):
+            raise ValueError("Q_H S1 active selected cameras must be finite.")
+        focal = prefix.camera.f[active_views]
+        principal = prefix.camera.c[active_views]
+        raster_size = prefix.camera.size[active_views]
+        expected_size = torch.tensor(
+            [prefix.depth_m.shape[-1], prefix.depth_m.shape[-2]],
+            dtype=raster_size.dtype,
+            device=raster_size.device,
+        )
+        if not bool(focal.gt(0).all() and torch.isfinite(principal).all()):
+            raise ValueError("Q_H S1 active selected cameras require finite positive pinhole intrinsics.")
+        if not bool(torch.equal(raster_size, expected_size.expand_as(raster_size))):
+            raise ValueError("Q_H S1 selected camera raster size must match the depth raster.")
+        camera_rig = prefix.camera.T_camera_rig.tensor()[active_views]
+        identity = PoseTW().tensor().to(device=camera_rig.device, dtype=camera_rig.dtype)
+        if not bool(torch.equal(camera_rig, identity.expand_as(camera_rig))):
+            raise ValueError("Q_H S1 selected pinholes require identity camera-to-rig extrinsics.")
+
+        pose_values = prefix.camera_pose_relative_root.tensor()[active_views]
+        if not bool(torch.isfinite(pose_values).all()):
+            raise ValueError("Q_H S1 active root-from-camera poses must be finite.")
+        rotations = pose_values[..., :9].reshape(-1, 3, 3)
+        rotation_identity = torch.eye(3, dtype=rotations.dtype, device=rotations.device).expand_as(rotations)
+        orthogonality = rotations @ rotations.transpose(-1, -2)
+        determinant = torch.linalg.det(rotations)
+        if not bool(
+            torch.allclose(orthogonality, rotation_identity, rtol=1e-4, atol=1e-5)
+            and torch.allclose(determinant, torch.ones_like(determinant), rtol=1e-4, atol=1e-5)
+        ):
+            raise ValueError("Q_H S1 active root-from-camera poses must be proper rigid transforms.")
+
+    def _selected_surface_update(
+        self,
+        actor: QhActorTensors,
+        *,
+        current_pose_relative_root: PoseTW,
+    ) -> Tensor:
+        """Backproject causal views in bounded chunks and pool their point set."""
+
+        prefix = actor.selected_observation_prefix
+        assert prefix is not None
+        depth = prefix.depth_m.detach().float()
+        batch_size, steps, history_slots, height, width = depth.shape
+        group_count = batch_size * steps
+        view_count = group_count * history_slots
+        flat_depth = depth.reshape(view_count, height, width)
+        flat_valid = prefix.valid_mask.reshape(view_count, height, width)
+        flat_view_mask = prefix.prefix_mask.reshape(view_count)
+        flat_camera = prefix.camera.tensor().reshape(view_count, -1)
+        flat_pose = prefix.camera_pose_relative_root.tensor().reshape(view_count, -1)
+        current_from_root = current_pose_relative_root.inverse().tensor().reshape(group_count, -1)
+
+        hidden_dim = int(self.config.point_hidden_dim)
+        point_sum = torch.zeros((group_count, hidden_dim), dtype=torch.float32, device=depth.device)
+        point_max = torch.full_like(point_sum, -torch.inf)
+        valid_count = torch.zeros((group_count, 1), dtype=torch.float32, device=depth.device)
+        valid_view_count = torch.zeros_like(valid_count)
+        sampled_height = (height + int(self.config.pixel_stride) - 1) // int(self.config.pixel_stride)
+        sampled_width = (width + int(self.config.pixel_stride) - 1) // int(self.config.pixel_stride)
+        sampled_pixels_per_view = sampled_height * sampled_width
+
+        active_view_indices = torch.nonzero(flat_view_mask, as_tuple=False).flatten()
+        for start in range(0, active_view_indices.numel(), int(self.config.view_chunk_size)):
+            stop = min(start + int(self.config.view_chunk_size), active_view_indices.numel())
+            view_indices = active_view_indices[start:stop]
+            group_indices = torch.div(view_indices, history_slots, rounding_mode="floor")
+            valid_pixels = flat_valid[view_indices]
+            points_root, lengths = backproject_depths_camera_tw_batch(
+                flat_depth[view_indices],
+                valid_pixels,
+                CameraTW(flat_camera[view_indices]),
+                PoseTW(flat_pose[view_indices]),
+                stride=int(self.config.pixel_stride),
+            )
+            valid_view_count.index_add_(0, group_indices, lengths.gt(0).float().unsqueeze(-1))
+            if points_root.shape[1] == 0:
+                continue
+            point_mask = torch.arange(points_root.shape[1], device=depth.device).unsqueeze(0) < lengths.unsqueeze(1)
+            safe_root = torch.where(point_mask.unsqueeze(-1), points_root, torch.zeros_like(points_root))
+            points_current = PoseTW(current_from_root[group_indices]).transform(safe_root)
+            normalized = points_current.float() / float(self.config.coordinate_scale_m)
+            point_features = self.point_encoder(normalized)
+            selected_features = point_features[point_mask]
+            selected_groups = group_indices.unsqueeze(1).expand_as(point_mask)[point_mask]
+            if selected_features.numel() == 0:
+                continue
+            # Rebind differentiable accumulators rather than mutating the
+            # output of an earlier chunk's autograd node. CUDA backward keeps
+            # those prior versions to route gradients to every point chunk.
+            point_sum = point_sum.index_add(0, selected_groups, selected_features)
+            valid_count.index_add_(
+                0,
+                selected_groups,
+                torch.ones((selected_groups.shape[0], 1), dtype=torch.float32, device=depth.device),
+            )
+            point_max = point_max.scatter_reduce(
+                0,
+                selected_groups.unsqueeze(-1).expand(-1, hidden_dim),
+                selected_features,
+                reduce="amax",
+                include_self=True,
+            )
+
+        mean = point_sum / valid_count.clamp_min(1.0)
+        maximum = torch.where(torch.isfinite(point_max), point_max, torch.zeros_like(point_max))
+        causal_views = prefix.prefix_mask.sum(dim=-1).reshape(group_count, 1).float()
+        capacity = causal_views * float(sampled_pixels_per_view)
+        presence = valid_count.gt(0).float()
+        support = torch.where(capacity.gt(0), valid_count / capacity.clamp_min(1.0), torch.zeros_like(valid_count))
+        view_support = torch.where(
+            causal_views.gt(0),
+            valid_view_count / causal_views.clamp_min(1.0),
+            torch.zeros_like(valid_view_count),
+        )
+        pooled = torch.cat((mean, maximum, presence, support.clamp(0.0, 1.0), view_support), dim=-1)
+        return self.point_update(pooled).reshape(batch_size, steps, self.output_dim)
+
+
+__all__ = [
+    "QhRootMomentsSceneEncoder",
+    "QhRootMomentsSceneEncoderConfig",
+    "QhSceneChannel",
+    "QhSceneEncoderConfig",
+    "QhSelectedSurfacePointSceneEncoder",
+    "QhSelectedSurfacePointSceneEncoderConfig",
+]

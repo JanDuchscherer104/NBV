@@ -589,9 +589,13 @@
     source identity, and support for views that have already been selected; it never includes
     renders for unselected candidates. The source-matched CF+ H0 control validates this carrier
     but is exactly invariant to its numeric payload, so it remains an S0-pose-conditioned
-    null model. S1 begins only when an encoder deterministically consumes the carrier, for
-    example by backprojecting selected surfaces before pooling. CF+ H0 and S1 must use matched
-    source populations and seeds before their difference can be attributed to geometry consumption.
+    null model. The implemented S1-points control consumes only causal selected views through
+    canonical float32 backprojection, expresses their surface points from the factual current
+    camera, and adds a fixed-width density-weighted mean/max point-set residual to the unchanged
+    root moments. It preserves no source-view or free/unknown ray identity and remains a privileged,
+    non-deployable research profile. CF+ H0 and S1 must use matched source populations, seeds,
+    and common downstream initialization before their difference can be attributed to geometry
+    consumption.
   notation:
     typst: $s_t^"cf+"$
   symbol_refs:
