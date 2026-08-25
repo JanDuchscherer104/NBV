@@ -18,7 +18,7 @@ touched_owner_paths:
   - scripts/tests/test_graphify_session_readiness.py
 codex_thread: codex://threads/01a038aa-8929-7621-9832-0e7f9aea953f
 repo_object_format: sha1
-repo_head: 4390cf8024810cc81daa38be1851da41253156eb
+repo_head: 49356b9a2b2b9cc3bf191dfa6c058307dc6d673f
 repo_branch: "codex/graphify-parent-session-readiness"
 worktree_kind: linked
 ---
@@ -46,6 +46,8 @@ to interpret Graphify's legacy unbounded semantic detector result.
 - [7ba6faad3e1214a5c22dd55d1bbbf1211a5350df](https://github.com/JanDuchscherer104/ARIA-NBV/commit/7ba6faad3e1214a5c22dd55d1bbbf1211a5350df)
 - [40bec20bfcc522b71ec22e98a2c11f1eebe933d6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/40bec20bfcc522b71ec22e98a2c11f1eebe933d6)
 - [4390cf8024810cc81daa38be1851da41253156eb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4390cf8024810cc81daa38be1851da41253156eb)
+- [a9d9b6d012f8a75d291bb647731b19742c880875](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a9d9b6d012f8a75d291bb647731b19742c880875)
+- [49356b9a2b2b9cc3bf191dfa6c058307dc6d673f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/49356b9a2b2b9cc3bf191dfa6c058307dc6d673f)
 
 ## Verification
 Passed the focused freshness, setup, reconciler, and linked-worktree
