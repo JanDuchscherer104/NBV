@@ -164,6 +164,7 @@
     #symb.scene.scene_memory_t^"S1"
     &=
     #symb.scene.scene_memory_t^"root"
-    + W_"pt" bold(g)_t^"S1"
+    + W_"pt" bold(g)_t^"S1",
+    quad W_"pt"^(0) = 0
   $,
 )

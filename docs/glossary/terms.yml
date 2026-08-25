@@ -592,10 +592,12 @@
     null model. The implemented S1-points control consumes only causal selected views through
     canonical float32 backprojection, expresses their surface points from the factual current
     camera, and adds a fixed-width density-weighted mean/max point-set residual to the unchanged
-    root moments. It preserves no source-view or free/unknown ray identity and remains a privileged,
+    root moments. Its final residual projection starts at zero, making fresh S1 predictions
+    exactly equal to matched H0 while leaving that projection trainable on the first backward
+    pass. It preserves no source-view or free/unknown ray identity and remains a privileged,
     non-deployable research profile. CF+ H0 and S1 must use matched source populations, seeds,
-    and common downstream initialization before their difference can be attributed to geometry
-    consumption.
+    common downstream initialization, and the named identity-start rule before their difference
+    can be attributed to geometry consumption.
   notation:
     typst: $s_t^"cf+"$
   symbol_refs:
