@@ -114,14 +114,14 @@ def test_qh_scorer_output_matches_actor_candidate_axes_and_is_deterministic() ->
     assert torch.isfinite(first.conditional_q[actor.action_mask]).all()
 
 
-def test_qh_scene_encoder_extraction_preserves_legacy_identity_and_outputs() -> None:
-    """Lock the parameter-free module extraction to the pre-seam control."""
+def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() -> None:
+    """Lock extraction while including the manifest-bound horizon semantics."""
 
     config = TargetFiniteHorizonScorerConfig(hidden_dim=32, dropout=0.0, max_horizon=4)
     scorer = _scorer()
     output = scorer(_actor())
 
-    assert stable_config_hash(config) == "12e4990ecd334017"
+    assert stable_config_hash(config) == "b6da0976784a81bd"
     assert len(scorer.state_dict()) == 44
     assert not scorer.scene_encoder.state_dict()
     assert not any(key.startswith("scene_encoder.") for key in scorer.state_dict())
