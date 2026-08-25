@@ -500,6 +500,22 @@ def test_recursive_q2_target_matches_dense_successor_exact_q2_control() -> None:
     assert torch.equal(recursive_targets[exact_support], exact_targets[exact_support])
 
 
+def test_exact_q2_rejects_incomplete_hard_valid_successor_labels() -> None:
+    batch = _batch()
+    label_mask = batch.supervision.label_mask.clone()
+    label_mask[:, 1, 0] = False
+    batch = replace(
+        batch,
+        supervision=replace(batch.supervision, label_mask=label_mask),
+    )
+
+    exact_targets, exact_support = _module().compute_exact_q2_targets(batch)
+
+    assert batch.successor_present.tolist() == [[True, False]]
+    assert exact_support.tolist() == [[False, False]]
+    assert exact_targets[0, 0].item() == pytest.approx(0.5)
+
+
 def test_terminal_rows_do_not_bootstrap() -> None:
     batch = _batch(bootstrap=False)
 

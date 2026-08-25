@@ -360,7 +360,10 @@ class QhLightningModule(pl.LightningModule):
         """Return dense-successor exact-Q2 targets and their factual support.
 
         This diagnostic contains no learned successor value: the second-step
-        maximum comes directly from persisted one-step candidate rewards.
+        maximum comes directly from persisted one-step candidate rewards.  A
+        row is exact only when every hard-valid successor action has a label;
+        partial successor support cannot certify the maximum over the factual
+        action set.
         """
 
         selected = batch.supervision.selected_index.long()
@@ -370,24 +373,30 @@ class QhLightningModule(pl.LightningModule):
             -1,
             safe_selected.unsqueeze(-1),
         ).squeeze(-1)
+        successor_action_mask = batch.successor_action_mask
+        successor_backup_mask = batch.successor_backup_mask
+        complete_successor_support = successor_action_mask.any(dim=-1) & torch.eq(
+            successor_backup_mask,
+            successor_action_mask,
+        ).all(dim=-1)
         support = (
             batch.selected_train_mask
             & batch.actor.horizon_remaining.eq(2)
             & ~batch.supervision.terminal
-            & batch.successor_present
+            & complete_successor_support
         )
         if bool(support.any()):
             self._validate_horizon_recursion(batch, support)
         successor_reward = torch.zeros_like(batch.supervision.candidate_reward)
         successor_reward[:, :-1] = batch.supervision.candidate_reward[:, 1:]
-        supported_successor = successor_reward[support][batch.successor_backup_mask[support]]
+        supported_successor = successor_reward[support][successor_backup_mask[support]]
         self._require_finite(supported_successor, "one-step successor rewards used for exact Q2")
         targets = selected_reward.float().clone()
         if bool(support.any()):
             next_reward = (
                 successor_reward[support]
                 .masked_fill(
-                    ~batch.successor_backup_mask[support],
+                    ~successor_backup_mask[support],
                     -torch.inf,
                 )
                 .amax(dim=-1)
