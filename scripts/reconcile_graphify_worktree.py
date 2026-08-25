@@ -16,6 +16,7 @@ import tempfile
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 GRAPH = Path("graphify-out/graph.json")
 PROJECTION = Path("graphify-input")
+SEED = Path("graphify-out/.aria-worktree-seed.json")
 
 
 def fail(message: str) -> None:
@@ -121,6 +122,57 @@ def semantic_counts(root: Path) -> tuple[int, int]:
     )
 
 
+def graph_revision(root: Path) -> str:
+    """Return the provenance revision carried by the seeded graph."""
+    path = root / GRAPH
+    if path.is_symlink() or not path.is_file():
+        fail("Graphify graph is missing or unsafe")
+    try:
+        graph = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"Graphify graph is invalid: {error}")
+    revision = graph.get("built_at_commit")
+    if not isinstance(revision, str) or not revision:
+        fail("Graphify graph provenance is missing or invalid")
+    return revision
+
+
+def commit_tree(root: Path, revision: str) -> str:
+    """Resolve one commit to its tree, failing before any child mutation."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{revision}^{{tree}}"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode or not result.stdout.strip():
+        fail(f"Graphify Git tree is unavailable for {revision}")
+    return result.stdout.strip()
+
+
+def graph_tree_matches_head(root: Path, graph_revision: str, revision: str) -> bool:
+    """Whether the inherited graph was built from the destination's exact tree."""
+    return commit_tree(root, graph_revision) == commit_tree(root, revision)
+
+
+def seeded_tree_matches_head(root: Path, revision: str) -> bool:
+    """Keep an inherited graph when its trusted seed has the destination tree."""
+    path = root / SEED
+    if not path.exists():
+        return False
+    if path.is_symlink() or not path.is_file():
+        fail("Graphify worktree seed is missing or unsafe")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"Graphify worktree seed is invalid: {error}")
+    source_revision = payload.get("source_worktree_head")
+    if not isinstance(source_revision, str) or not source_revision:
+        fail("Graphify worktree seed source revision is invalid")
+    return commit_tree(root, source_revision) == commit_tree(root, revision)
+
+
 def stamp_graph_provenance(root: Path, revision: str) -> None:
     """Make the trusted Graphify output portable and bind it to this revision."""
     path = root / GRAPH
@@ -153,7 +205,7 @@ def stamp_graph_provenance(root: Path, revision: str) -> None:
             if candidate.is_absolute():
                 try:
                     relative = candidate.resolve(strict=True).relative_to(root)
-                except (OSError, RuntimeError, ValueError) as error:
+                except (OSError, RuntimeError, ValueError):
                     fail(
                         f"Graphify graph source_file escapes repository: {source}"
                     )
@@ -197,7 +249,12 @@ def run(root: Path) -> None:
         fail(f"Graphify reconciliation root is not a Git worktree: {root}")
     cli, interpreter = trusted_graphify_runtime(root)
     revision = head(root)
+    inherited_revision = graph_revision(root)
     before_counts = semantic_counts(root)
+    equivalent_tree = (
+        graph_tree_matches_head(root, inherited_revision, revision)
+        or seeded_tree_matches_head(root, revision)
+    )
 
     scripts = Path(__file__).resolve().parent
     with tempfile.TemporaryDirectory(prefix="aria-graphify-reconcile-backup-") as temporary:
@@ -216,11 +273,12 @@ def run(root: Path) -> None:
                 cwd=root,
                 check=True,
             )
-            subprocess.run([str(cli), "update", str(root)], cwd=root, check=True)
-            after_counts = semantic_counts(root)
-            if after_counts != before_counts:
-                fail("Graphify AST reconciliation changed inherited semantic graph content")
-            stamp_graph_provenance(root, revision)
+            if not equivalent_tree:
+                subprocess.run([str(cli), "update", str(root)], cwd=root, check=True)
+                after_counts = semantic_counts(root)
+                if after_counts != before_counts:
+                    fail("Graphify AST reconciliation changed inherited semantic graph content")
+                stamp_graph_provenance(root, revision)
             subprocess.run(
                 [
                     str(interpreter),
