@@ -25,9 +25,13 @@ uses the canonical rendering backprojection for strictly causal selected
 CF-GT depth, expresses the resulting surface points from the factual current
 camera, and applies a bounded Deep-Sets-style shared point map followed by
 masked mean and maximum pooling.  Its learned residual has exactly the root
-carrier width.  Adding it therefore leaves the scorer's physical and scene
-projection widths unchanged; under the same seed every downstream H0/S1
-weight is identical and only the named scene carrier adds parameters.
+carrier width and its final projection is initialized to zero.  S1 therefore
+starts as the exact H0 function under a matched seed rather than perturbing the
+control merely because another carrier exists.  The projection itself can
+learn on the first backward pass; gradients reach the upstream point map only
+after that projection opens.  Adding S1 leaves the scorer's physical and scene
+projection widths unchanged, so every common downstream H0/S1 weight remains
+identical and only the named scene carrier adds parameters.
 
 Global moments are intentionally lossy.  They discard topology, occlusion,
 view direction, free-versus-unknown geometry, and selected-observation
@@ -78,7 +82,10 @@ class QhSelectedSurfacePointSceneEncoderConfig(TargetConfig["QhSelectedSurfacePo
     determine which stored pixels become set elements and the largest number
     of selected views backprojected at once.  ``coordinate_scale_m`` only
     nondimensionalizes current-camera XYZ before the shared point MLP; it is
-    neither a clipping radius nor an asserted scene extent.
+    neither a clipping radius nor an asserted scene extent.  The residual's
+    zero-output initialization is part of this versioned architecture: a fresh
+    S1 model is exactly its source-matched H0 control, without adding a config
+    switch or a second initialization profile.
     """
 
     kind: Literal["root_moments_plus_selected_surface_points_v1"] = "root_moments_plus_selected_surface_points_v1"
@@ -258,10 +265,22 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
     float32 sum/max accumulators dtype-incompatible.
 
     The output is ``Tensor["B S F_root", float32]``.  It adds a learned point
-    update to the unchanged static root moments and zeros padded states.  The
-    fixed width prevents S1 from changing any downstream scorer layer shape.
-    This carrier still cannot distinguish observed free space from unknown
-    space or retain ray direction after fusion; those are S2 responsibilities.
+    update to the unchanged static root moments and zeros padded states.  Let
+    :math:`g_t^{\mathrm{S1}}` denote the pooled point statistic and
+    :math:`W_{\mathrm{pt}}` the bias-free final projection.  Initializing
+    :math:`W_{\mathrm{pt}}^{(0)}=0` makes
+    :math:`\Phi_t^{\mathrm{S1},(0)}=\Phi_t^{\mathrm{root}}` exactly.  This is
+    an experimental-control property, not a claim that the surface branch is
+    initially useless: for downstream loss :math:`L`,
+    :math:`\partial L/\partial W_{\mathrm{pt}}` can be nonzero immediately
+    because :math:`g_t^{\mathrm{S1}}` is already nonzero.  The upstream point
+    MLP receives zero gradient on that first step through the zero projection
+    and begins learning once the projection departs from zero.
+
+    The fixed width and identity start prevent S1 from changing downstream
+    scorer shapes or initial predictions.  This carrier still cannot
+    distinguish observed free space from unknown space or retain ray direction
+    after fusion; those are S2 responsibilities.
     """
 
     def __init__(
@@ -271,7 +290,14 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
         scene_channels: tuple[QhSceneChannel, ...],
         dropout: float,
     ) -> None:
-        """Construct the root control, shared point map, and fixed-width residual.
+        """Construct the root control and an identity-start point residual.
+
+        Only the residual's final bias-free projection is zeroed.  The shared
+        point map keeps its ordinary random initialization so its pooled
+        statistic can drive a first-step gradient into that projection.  This
+        preserves exact H0 predictions at construction while allowing the S1
+        branch to open under ordinary gradient descent without a special
+        training phase, gate parameter, checkpoint field, or optimizer rule.
 
         Args:
             config: Persisted sampling, chunking, metric-scale, and width
@@ -298,6 +324,7 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
             nn.Dropout(float(dropout)),
         )
         self.point_update = nn.Linear(2 * point_hidden_dim + 3, self.output_dim, bias=False)
+        nn.init.zeros_(self.point_update.weight)
 
     def forward(self, actor: QhActorTensors, *, current_pose_relative_root: PoseTW) -> Tensor:
         """Return fixed-width state features for every realized decision state.

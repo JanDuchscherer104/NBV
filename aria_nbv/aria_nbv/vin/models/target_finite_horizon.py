@@ -284,8 +284,12 @@ class TargetFiniteHorizonScorer(nn.Module):
         backprojection and a fixed-width, density-weighted point-set residual.
         Its scene feature remains shared across candidate rows and target
         independent; candidate-relative point queries are deliberately
-        deferred. Neither CF+ role is deployable, and comparing CF0 with CF+
-        H0 does not identify an S1 representation gain.
+        deferred. Its final bias-free residual projection starts at zero, and
+        dynamic scene rows traverse the same per-state linear path as static
+        H0. Thus matched zero-residual S1 and H0 predictions are bitwise equal
+        at initialization rather than merely close despite shape-dependent GEMM
+        rounding. Neither CF+ role is deployable, and comparing CF0 with CF+ H0
+        does not identify an S1 representation gain.
 
     Notes:
         Syntactic admission does not assert empirical support. Lightning owns
@@ -462,10 +466,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         budget = actor.horizon_remaining.float().unsqueeze(-1) / float(self.config.max_horizon)
         budget_token = self.budget_projection(budget)
         horizon_token = self.horizon_projection(horizon.float().unsqueeze(-1) / float(self.config.max_horizon))
-        projected_scene = self.scene_projection(scene_summary)
-        scene_token = (
-            projected_scene.unsqueeze(1).expand(-1, steps, -1) if projected_scene.ndim == 2 else projected_scene
-        )
+        scene_token = self._project_scene_summary(scene_summary, steps=steps)
         target_token = target_token.unsqueeze(1).expand(-1, steps, -1)
 
         target_by_candidate = self._expand_pose(target_pose, steps, width)
@@ -504,6 +505,41 @@ class TargetFiniteHorizonScorer(nn.Module):
             conditional_q=conditional_q.float(),
             feasibility_logits=feasibility_logits.float(),
             value_auxiliary=value_auxiliary,
+        )
+
+    def _project_scene_summary(self, scene_summary: Tensor, *, steps: int) -> Tensor:
+        """Project static or dynamic scene rows through one numeric path.
+
+        The H0 carrier returns ``[B,F]`` because root evidence is static, while
+        S1 returns ``[B,S,F]`` after adding a causal state residual.  Applying
+        the same linear layer once to those differently ranked tensors can
+        select different BLAS kernels and introduce small rounding differences
+        even when every S1 residual is exactly zero.  Projecting each dynamic
+        state as ``[B,F]`` preserves the H0 operation exactly and makes S1 a
+        genuinely nested control at initialization.  This changes neither
+        learned parameters nor gradients: nonzero residual rows still pass
+        through the same shared projection and stack back to ``[B,S,H]``.
+
+        Args:
+            scene_summary: Static ``Tensor["B F"]`` root features or dynamic
+                ``Tensor["B S F"]`` scene features.
+            steps: Padded scorer state width ``S``.
+
+        Returns:
+            ``Tensor["B S H"]`` scene tokens aligned with scorer states.
+
+        Raises:
+            ValueError: If the scene carrier returns an unsupported rank or a
+                dynamic step width inconsistent with the actor.
+        """
+
+        if scene_summary.ndim == 2:
+            return self.scene_projection(scene_summary).unsqueeze(1).expand(-1, steps, -1)
+        if scene_summary.ndim != 3 or scene_summary.shape[1] != steps:
+            raise ValueError("Q_H scene summary must have shape (B,F) or actor-aligned (B,S,F).")
+        return torch.stack(
+            tuple(self.scene_projection(state_summary) for state_summary in scene_summary.unbind(dim=1)),
+            dim=1,
         )
 
     def _validated_requested_horizon(

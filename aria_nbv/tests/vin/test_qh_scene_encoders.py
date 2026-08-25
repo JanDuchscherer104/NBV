@@ -251,11 +251,30 @@ def test_qh_s1_applies_root_to_current_transform_once(monkeypatch: pytest.Monkey
     assert torch.equal(point_inputs[1][..., 0], torch.zeros_like(point_inputs[1][..., 0]))
 
 
-def test_qh_s1_point_path_receives_gradients() -> None:
+def test_qh_s1_projection_opens_before_upstream_point_path_receives_gradients() -> None:
+    """Identity start delays only the point MLP, not the residual projection."""
+
     actor = _cfplus_actor()
     # Force repeated differentiable accumulator updates across chunks.
     encoder = _s1_encoder(view_chunk_size=1)
     encoder.train()
+    optimizer = torch.optim.SGD(encoder.parameters(), lr=0.1)
+
+    encoder(actor, current_pose_relative_root=_identity_current_pose(actor)).sum().backward()
+
+    first_gradients = dict(encoder.named_parameters())
+    projection_gradient = first_gradients["point_update.weight"].grad
+    assert projection_gradient is not None
+    assert torch.isfinite(projection_gradient).all()
+    assert bool(projection_gradient.abs().sum().gt(0))
+    for name, parameter in first_gradients.items():
+        if name.startswith("point_encoder."):
+            assert parameter.grad is not None
+            assert torch.count_nonzero(parameter.grad) == 0
+
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    assert torch.count_nonzero(encoder.point_update.weight) > 0
 
     encoder(actor, current_pose_relative_root=_identity_current_pose(actor)).sum().backward()
 

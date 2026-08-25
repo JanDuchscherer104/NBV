@@ -298,11 +298,36 @@ def test_qh_s1_keeps_every_common_downstream_weight_equal_to_h0() -> None:
     assert s1.scene_encoder.output_dim == h0.scene_encoder.output_dim == 28
 
 
+def test_qh_s1_identity_start_matches_h0_and_can_open_on_first_backward() -> None:
+    """A fresh S1 is the exact H0 function, but its output projection can learn."""
+
+    actor = _cfplus_actor()
+    h0 = _cfplus_scorer()
+    s1 = _s1_scorer()
+
+    h0_output = h0(actor)
+    s1_output = s1(actor)
+
+    assert torch.count_nonzero(s1.scene_encoder.point_update.weight) == 0
+    assert torch.equal(s1_output.conditional_q, h0_output.conditional_q)
+    assert torch.equal(s1_output.feasibility_logits, h0_output.feasibility_logits)
+
+    loss = s1_output.conditional_q[actor.candidate_mask].square().sum()
+    loss.backward()
+    projection_gradient = s1.scene_encoder.point_update.weight.grad
+
+    assert projection_gradient is not None
+    assert torch.isfinite(projection_gradient).all()
+    assert torch.count_nonzero(projection_gradient) > 0
+
+
 def test_qh_s1_consumes_selected_surface_values_without_reading_action_mask() -> None:
     actor = _cfplus_actor()
     prefix = actor.selected_observation_prefix
     assert prefix is not None
     scorer = _s1_scorer()
+    with torch.no_grad():
+        scorer.scene_encoder.point_update.weight.fill_(0.1)
     baseline = scorer(actor)
     changed_depth = prefix.depth_m.clone()
     changed_depth[prefix.prefix_mask[..., None, None].expand_as(changed_depth)] += 0.75
