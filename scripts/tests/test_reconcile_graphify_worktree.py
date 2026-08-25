@@ -114,9 +114,20 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             )
 
             self.assertTrue(reconcile.seeded_tree_matches_head(root, revision))
-            self.git(source, "commit", "--allow-empty", "-m", "advance source")
+            (root / "tracked.txt").write_text("destination changed\n", encoding="utf-8")
+            self.git(root, "commit", "-am", "advance destination")
+            tampered_destination_head = self.git(root, "rev-parse", "HEAD")
+            seed.write_text(
+                json.dumps(
+                    {
+                        "source_worktree": str(source),
+                        "source_worktree_head": tampered_destination_head,
+                    }
+                ),
+                encoding="utf-8",
+            )
             with self.assertRaisesRegex(ValueError, "does not match"):
-                reconcile.seeded_tree_matches_head(root, revision)
+                reconcile.seeded_tree_matches_head(root, tampered_destination_head)
 
     def test_runs_projection_incremental_update_then_usable_admission(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
