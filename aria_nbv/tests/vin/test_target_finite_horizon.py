@@ -124,7 +124,7 @@ def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() ->
     scorer = _scorer()
     output = scorer(_actor())
 
-    assert stable_config_hash(config) == "b6da0976784a81bd"
+    assert stable_config_hash(config) == "f1940a233c7ea5b7"
     assert len(scorer.state_dict()) == 44
     assert not scorer.scene_encoder.state_dict()
     assert not any(key.startswith("scene_encoder.") for key in scorer.state_dict())
