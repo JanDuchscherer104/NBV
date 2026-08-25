@@ -8,12 +8,15 @@ repository owners remain authoritative for behavior and scientific claims.
 
 1. When Codex supplies `CODEX_SOURCE_WORKSPACE_PATH`, setup uses that exact fork
    parent. Project-created worktrees may omit it, so the Codex bridge resolves
-   only Git's canonical primary checkout (never Git's first registered
-   worktree). Before running a parent executable or mutating the child, the
-   setup owner proves that both paths are registered, distinct worktrees in the
-   same Git common directory and that the selected parent's graph is
-   query-admissible. It then copies that generation locally, links the selected
-   parent's content-addressed `semantic` and `semantic-deep` namespaces,
+   the query-admissible canonical primary. If that primary is unusable, the
+   bridge considers only registered, non-prunable same-repository siblings that
+   are ancestors of the destination: an exact destination `HEAD` wins, then the
+   nearest ancestor; equally ranked usable siblings fail as ambiguous. It never
+   selects by worktree-list order. Before running a parent executable or
+   mutating the child, the setup owner proves that both paths are registered,
+   distinct worktrees in the same Git common directory and that the selected
+   parent's graph is query-admissible. It then copies that generation locally,
+   links the selected parent's content-addressed `semantic` and `semantic-deep` namespaces,
    regenerates the deterministic child projection, then runs upstream
    incremental `graphify update` before reporting readiness.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and

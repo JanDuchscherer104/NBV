@@ -10,6 +10,7 @@ WORKTREE_ROOT="${SANDBOX}/worktree"
 SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 EXPLICIT_CHILD_ROOT="${SANDBOX}/explicit-child"
 STALE_CHILD_ROOT="${SANDBOX}/stale-child"
+AMBIGUOUS_CHILD_ROOT="${SANDBOX}/ambiguous-child"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
@@ -18,6 +19,7 @@ NON_GIT_SHARED_ROOT="${SANDBOX}/non-git-shared"
 FOREIGN_WORKTREE_ROOT="${SANDBOX}/foreign-worktree"
 FOREIGN_SHARED_ROOT="${SANDBOX}/foreign-shared"
 FAKE_BIN="${SANDBOX}/bin"
+HOST_PYTHON="$(command -v python3)"
 
 GRAPHIFY_CLI="$(command -v graphify)"
 [[ -n "${GRAPHIFY_CLI}" && -f "${GRAPHIFY_CLI}" ]] || {
@@ -51,10 +53,25 @@ Path("${SANDBOX}/reconcile.log").open("a", encoding="utf-8").write(" ".join(sys.
 EOF
 cat >"${SHARED_ROOT}/scripts/check_graphify_freshness.py" <<EOF
 #!/usr/bin/env python3
+import os
 from pathlib import Path
 import sys
 Path("${SANDBOX}/freshness.log").open("a", encoding="utf-8").write(" ".join(sys.argv[1:]) + "\\n")
-raise SystemExit(1 if Path.cwd() == Path("${SECOND_WORKTREE_ROOT}") else 0)
+root = Path.cwd()
+admitted = root == Path("${WORKTREE_ROOT}")
+admitted = admitted or (
+    root == Path("${SHARED_ROOT}")
+    and os.environ.get("ARIA_TEST_PRIMARY_UNUSABLE") != "1"
+)
+admitted = admitted or (
+    root == Path("${SECOND_WORKTREE_ROOT}")
+    and os.environ.get("ARIA_TEST_ADMIT_SECOND") == "1"
+)
+admitted = admitted or (
+    root == Path("${EXPLICIT_CHILD_ROOT}")
+    and os.environ.get("ARIA_TEST_ADMIT_EXPLICIT") == "1"
+)
+raise SystemExit(0 if admitted else 1)
 EOF
 chmod +x "${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" \
   "${SHARED_ROOT}/scripts/check_graphify_freshness.py"
@@ -72,6 +89,7 @@ git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-explicit-child "${EXPLICIT_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-stale-child "${STALE_CHILD_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-ambiguous-child "${AMBIGUOUS_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
@@ -138,6 +156,9 @@ chmod +x "${FAKE_BIN}/mamba"
 cat >"${FAKE_BIN}/python3" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >>"${SANDBOX}/source-admission.log"
+if [[ "\$*" == *"check_graphify_freshness.py"* ]]; then
+  exec "${HOST_PYTHON}" "\$@"
+fi
 exit 0
 EOF
 chmod +x "${FAKE_BIN}/python3"
@@ -169,6 +190,9 @@ PY
 
 run_codex_setup() {
   CODEX_WORKTREE_PATH="$1" CODEX_SOURCE_WORKSPACE_PATH="$2" \
+    ARIA_TEST_PRIMARY_UNUSABLE="${ARIA_TEST_PRIMARY_UNUSABLE:-}" \
+    ARIA_TEST_ADMIT_SECOND="${ARIA_TEST_ADMIT_SECOND:-}" \
+    ARIA_TEST_ADMIT_EXPLICIT="${ARIA_TEST_ADMIT_EXPLICIT:-}" \
     PATH="${FAKE_BIN}:${PATH}" bash -c "${CODEX_SETUP_SCRIPT}"
 }
 
@@ -298,17 +322,45 @@ done
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
 
 # Execute the exact Codex environment bridge with the source variable empty.
-# The resolver must use Git's canonical primary checkout, not the first entry
-# from `git worktree list` and not an unvalidated filesystem default.
-run_codex_setup "${SECOND_WORKTREE_ROOT}" ""
+# When the canonical primary is unusable, it must choose the nearest admitted
+# ancestor sibling rather than worktree-list order. Advance the destination by
+# one empty commit so the seeded worktree is its only admitted ancestor.
+git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
+  --work-tree="${SECOND_WORKTREE_ROOT}" commit --allow-empty -qm "destination ahead"
+ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" ""
+python3 - "${SECOND_WORKTREE_ROOT}/graphify-out/.aria-worktree-seed.json" "${WORKTREE_ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
+PY
 [[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
 [[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic-deep")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
 [[ ! -e "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 [[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 
+# Equally ranked admitted ancestor siblings are ambiguous; the resolver must
+# not select whichever worktree happened to appear first, and must not mutate
+# the child.
+git --git-dir="$(git -C "${AMBIGUOUS_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
+  --work-tree="${AMBIGUOUS_CHILD_ROOT}" merge --ff-only \
+  "$(git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
+    --work-tree="${SECOND_WORKTREE_ROOT}" rev-parse HEAD)"
+ambiguous_before="$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")"
+if ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
+  run_codex_setup "${AMBIGUOUS_CHILD_ROOT}" "" \
+  >"${SANDBOX}/ambiguous.out" 2>"${SANDBOX}/ambiguous.err"; then
+  echo "Codex setup unexpectedly selected an ambiguous parent" >&2
+  exit 1
+fi
+grep -Fq "ambiguous query-admissible Graphify parent candidates" "${SANDBOX}/ambiguous.err"
+[[ "$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")" == "${ambiguous_before}" ]]
+
 # A real Codex fork parent remains authoritative even though the canonical
-# primary checkout is also available as a parentless fallback.
-run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}"
+# primary checkout and an admitted sibling are also available.
+ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}"
 python3 - "${EXPLICIT_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" "${SECOND_WORKTREE_ROOT}" <<'PY'
 import json
 import sys

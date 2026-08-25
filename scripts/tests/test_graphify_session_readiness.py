@@ -102,7 +102,7 @@ class GraphifySessionReadinessTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(
-                "shared parent Graphify generation is not query-admissible",
+                "no query-admissible registered Graphify parent",
                 result.stderr,
             )
             self.assertFalse((child / "graphify-out").exists())
