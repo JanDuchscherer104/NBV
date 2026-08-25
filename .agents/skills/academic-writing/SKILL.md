@@ -24,6 +24,10 @@ realization or certify scientific validity.
    [`empirical-reporting-and-reproducibility.md`](references/empirical-reporting-and-reproducibility.md)
    and obtain scientific-review findings before marking the candidate
    `ready-for-realization`.
+   For HM/FK07 assessment work involving research methods, data or software
+   documentation, access or licensing, AI-generated programs, or declaration
+   compliance, read the dated
+   [`HM scientific-practice overlay`](references/hm-scientific-practice.md).
    For a candidate that may continue into realization, read the shared
    [academic work phase transition](../README.md#academic-work-phase-transition).
 3. For Related Work or a concept-centred comparison, read

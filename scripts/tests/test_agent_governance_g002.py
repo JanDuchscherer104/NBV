@@ -1386,6 +1386,8 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
         "references/empirical-reporting-and-reproducibility.md"
         in academic_skill
     )
+    assert "references/hm-scientific-practice.md" in academic_skill
+    assert "HM/FK07 assessment work" in academic_skill
     assert (
         "../academic-writing/references/empirical-reporting-and-reproducibility.md"
         in scientific_skill
