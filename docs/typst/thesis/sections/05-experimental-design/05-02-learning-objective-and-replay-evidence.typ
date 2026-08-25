@@ -112,7 +112,7 @@ before taking another chain from an already represented scene. This rule improve
 scene coverage without pretending that several rows from one scene are independent
 replications.
 
-The V2 receipt binds the scorer and module configuration, actor-state and learning
+The `qh-exact-q2-certification-receipt-v2` receipt binds the scorer and module configuration, actor-state and learning
 contracts, ordered test-store manifests and paths, test provenance, selection seed
 and bounds, and absolute and relative tolerances. Its independent unit is the pair
 of ordered-store-manifest digest and scene identity. Thesis-core promotion requires
@@ -121,7 +121,7 @@ Q2 row in every selected unit, and the same error gate to pass in every unit. Po
 row-level error remains diagnostic and cannot compensate for a failing scene. The
 receipt exposes a denominator ladder from eligible census chains through materialized
 successors and complete hard-valid successor labels to factual selected-action exact
-Q2 rows. It also reports per-stratum support and fixed-support CORAL saturation
+Q2 rows. It also reports per-stratum support and provenance-bound fixed-support CORAL saturation
 separately from recursion error. Missing support is a failed gate rather than zero
 error. Development-schema `qh-exact-q2-certification-receipt-v1` receipts remain
 readable historical evidence but cannot promote a claim.
