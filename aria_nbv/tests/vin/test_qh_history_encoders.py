@@ -88,6 +88,28 @@ def test_qh_ordered_history_ignores_numeric_contents_of_padding() -> None:
     )
 
 
+def test_qh_ordered_history_one_step_shift_adds_only_the_new_selected_pose() -> None:
+    """A newly selected pose becomes causal evidence only at the next state."""
+
+    torch.manual_seed(13)
+    features = torch.randn(1, 4, 4, 8)
+    history_mask, step_mask = _support(batch_size=1)
+    encoder = QhCausalTransformerHistoryEncoderConfig(attention_heads=2).setup_target(
+        feature_dim=8,
+        max_horizon=4,
+        dropout=0.0,
+    )
+    encoder.eval()
+    baseline = encoder(features, history_mask, step_mask)
+    changed = features.clone()
+    changed[:, 3, 2, 0] += 5.0
+
+    shifted = encoder(changed, history_mask, step_mask)
+
+    assert torch.equal(shifted[:, :3], baseline[:, :3])
+    assert not torch.allclose(shifted[:, 3], baseline[:, 3])
+
+
 def test_qh_ordered_history_distinguishes_realized_empty_root_from_padding() -> None:
     features = torch.zeros(1, 4, 4, 8)
     history_mask, step_mask = _support(batch_size=1, realized_steps=2)
