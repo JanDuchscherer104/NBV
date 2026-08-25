@@ -113,9 +113,25 @@ def projection_hashes(root: Path) -> dict[str, str]:
     for path in projection.rglob("*.md"):
         if path.is_symlink() or not path.is_file():
             fail(f"Graphify projection source is unsafe: {path}")
-        hashes[path.relative_to(root).as_posix()] = hashlib.sha256(
-            path.read_bytes()
-        ).hexdigest()
+        content = path.read_bytes()
+        relative = path.relative_to(root).as_posix()
+        if relative == "graphify-input/index.md":
+            dynamic = (
+                "source_revision:",
+                "source_tree:",
+                "aria_code_ref:",
+                "aria_code_ref_source:",
+                "aria_code_ref_pin_kind:",
+                "aria_code_ref_resolved_oid:",
+                "owner_worktree_state:",
+                "asset_inventory_sha256:",
+            )
+            content = "\n".join(
+                line
+                for line in content.decode("utf-8").splitlines()
+                if not line.startswith(dynamic)
+            ).encode("utf-8")
+        hashes[relative] = hashlib.sha256(content).hexdigest()
     if not hashes:
         fail("Graphify projection has no Markdown sources")
     return hashes
