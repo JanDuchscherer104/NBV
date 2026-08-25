@@ -129,6 +129,24 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match"):
                 reconcile.seeded_tree_matches_head(root, tampered_destination_head)
 
+    def test_recognizes_nonancestor_commits_with_the_same_tree(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            destination = self.initialized_repository(root)
+            tree = self.git(root, "rev-parse", "HEAD^{tree}")
+            alternate = self.git(root, "commit-tree", tree, "-m", "other history")
+
+            self.assertNotEqual(destination, alternate)
+            self.assertNotEqual(
+                subprocess.run(
+                    ["git", "merge-base", "--is-ancestor", alternate, destination],
+                    cwd=root,
+                    check=False,
+                ).returncode,
+                0,
+            )
+            self.assertTrue(reconcile.graph_tree_matches_head(root, alternate, destination))
+
     def test_runs_projection_incremental_update_then_usable_admission(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
@@ -196,7 +214,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
         self.assertEqual(recorded[-1][-2:], ("--usable", "--quiet"))
         self.assertNotIn("extract", update)
 
-    def test_skips_update_for_an_equivalent_tree_at_a_different_commit(self) -> None:
+    def test_stamps_destination_for_an_equivalent_tree_at_a_different_commit(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
             (root / ".git").mkdir()
@@ -243,7 +261,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             self.assertNotIn((str(cli), "update", str(root.resolve())), recorded)
             self.assertEqual(
                 json.loads(graph.read_text(encoding="utf-8"))["built_at_commit"],
-                "b" * 40,
+                "a" * 40,
             )
 
     def test_rejects_a_marker_that_differs_from_the_cli_interpreter(self) -> None:

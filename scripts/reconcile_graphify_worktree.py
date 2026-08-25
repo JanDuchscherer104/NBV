@@ -374,7 +374,10 @@ def run(root: Path) -> None:
                 after_counts = semantic_counts(root)
                 if after_counts != before_counts:
                     fail("Graphify AST reconciliation changed inherited semantic graph content")
-                stamp_graph_provenance(root, revision)
+            # A tree-equivalent inherited graph has the same source corpus even
+            # across unrelated commit histories. Stamp the destination commit
+            # after that proof so freshness does not reject portable seeds.
+            stamp_graph_provenance(root, revision)
             subprocess.run(
                 [
                     str(interpreter),
