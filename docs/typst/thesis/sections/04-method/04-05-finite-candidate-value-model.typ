@@ -136,7 +136,7 @@ The objective-design comparison is therefore:
 6. behavior-policy Monte-Carlo return regression as a separate estimand;
 7. an uncentred one-step-plus-residual decomposition.
 
-Because dense one-step rows vastly outnumber selected transitions at longer horizons, training and evaluation must report support, loss, calibration, ranking, and selected-action regret separately by horizon under either interface. If requested horizons share one learner, their sampling or weighting must be explicit; an aggregate loss must not allow $Q_1$ to hide longer-horizon failure.
+Because dense one-step rows vastly outnumber selected transitions at longer horizons, training and evaluation report state-normalized loss and continuous-unit mean absolute calibration error separately by horizon. Dense $h=1$ additionally reports within-state pairwise ranking accuracy over unequal-target candidate pairs and greedy selected-action regret. The factual selected-transition labels at $h>1$ do not identify either counterfactual quantity, so their per-horizon ranking-pair and regret-state support remains explicitly zero instead of fabricating a metric. Exact or independently oracle-rescored longer-horizon candidate tables are required before those fields can become nonzero. If requested horizons share one learner, their sampling or weighting must be explicit; an aggregate loss must not allow $Q_1$ to hide longer-horizon failure.
 
 === Modular continuous-value decoding
 
