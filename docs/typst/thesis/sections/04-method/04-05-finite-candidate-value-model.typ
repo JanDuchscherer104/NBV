@@ -27,7 +27,7 @@ The H0 scorer has two source roles. Deployable `qh_cf0_v1` requires the selected
 
 #eqs.model.qh_cfplus_h0_control
 
-This invariance makes CF+ H0 the correct null model for a later S1 encoder: H0 and S1 can share the CF+ population, seed, optimizer, and carrier contract, so their difference isolates consumption of selected geometry. It does not make CF+ H0 a selected-depth value estimator, and CF0-versus-CF+ H0 differences would primarily confound source population rather than identify a representation gain. Lightning must explicitly mark the run privileged; the deployable bundle validator rejects the CF+ profile even if a manifest falsely clears that boolean marker.
+This invariance makes CF+ H0 the correct null model for a later S1 encoder: H0 and S1 can share the CF+ population, seed, optimizer, and carrier contract, so their difference isolates consumption of selected geometry. It does not make CF+ H0 a selected-depth value estimator, and CF0-versus-CF+ H0 differences would primarily confound source population rather than identify a representation gain. Dataset provenance reports admitted CF+ source rows and scenes relative to the immutable actor split. It also reports distinct admitted source--target tasks, but leaves their coverage fraction undefined because the actor store does not enumerate the complete target-task denominator. H0/S1 results therefore estimate performance conditional on CF-GT carrier availability and cannot silently become a claim about the complete root--target population. Lightning must explicitly mark the run privileged; the deployable bundle validator rejects the CF+ profile even if a manifest falsely clears that boolean marker.
 
 The scorer emits two policy-facing tensors before masking:
 
