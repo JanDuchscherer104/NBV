@@ -13,6 +13,7 @@ from efm3d.aria.pose import PoseTW
 
 import aria_nbv.vin.modules.qh_scene_encoders as scene_encoders
 from aria_nbv.data_handling.qh_data import QhActorTensors
+from aria_nbv.data_handling.qh_data.batching import move_qh_actor_tensors
 from aria_nbv.vin.modules.qh_scene_encoders import (
     QhRootMomentsSceneEncoder,
     QhSelectedSurfacePointSceneEncoder,
@@ -51,7 +52,9 @@ def _s1_encoder(
 def _identity_current_pose(actor: QhActorTensors) -> PoseTW:
     """Return root-from-current identities over the actor B,S axes."""
 
-    values = PoseTW().tensor().reshape(1, 1, 12).expand(*actor.step_mask.shape, -1).clone()
+    values = (
+        PoseTW().tensor().to(device=actor.step_mask.device).reshape(1, 1, 12).expand(*actor.step_mask.shape, -1).clone()
+    )
     return PoseTW(values)
 
 
@@ -260,6 +263,24 @@ def test_qh_s1_point_path_receives_gradients() -> None:
     assert gradients
     assert all(gradient is not None and torch.isfinite(gradient).all() for gradient in gradients)
     assert all(bool(gradient.abs().sum().gt(0)) for gradient in gradients if gradient is not None)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA autocast requires a GPU")
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_qh_s1_cuda_autocast_preserves_float32_reductions_and_gradients(dtype: torch.dtype) -> None:
+    if dtype is torch.bfloat16 and not torch.cuda.is_bf16_supported():
+        pytest.skip("CUDA device does not support bfloat16")
+    actor = move_qh_actor_tensors(_cfplus_actor(), "cuda", non_blocking=False)
+    encoder = _s1_encoder(view_chunk_size=1).cuda().train()
+
+    with torch.autocast(device_type="cuda", dtype=dtype):
+        encoded = encoder(actor, current_pose_relative_root=_identity_current_pose(actor))
+        loss = encoded.square().mean()
+    loss.backward()
+
+    assert encoded.dtype is torch.float32
+    gradients = [parameter.grad for parameter in encoder.parameters()]
+    assert all(gradient is not None and torch.isfinite(gradient).all() for gradient in gradients)
 
 
 @pytest.mark.parametrize("field", ["depth", "camera", "pose"])

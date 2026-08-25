@@ -251,6 +251,12 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
     capacity, and observations with any valid point divided by causal
     observation count.  Empty prefixes produce an exact zero residual.
 
+    Geometry validation, backprojection, frame transforms, and point-set
+    reductions remain float32 under mixed-precision training.  Autocast is
+    retained for the learned point encoder and final residual projection, so
+    reduced-precision execution cannot change geometric support or make the
+    float32 sum/max accumulators dtype-incompatible.
+
     The output is ``Tensor["B S F_root", float32]``.  It adds a learned point
     update to the unchanged static root moments and zeros padded states.  The
     fixed width prevents S1 from changing any downstream scorer layer shape.
@@ -375,10 +381,11 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
         pose_values = prefix.camera_pose_relative_root.tensor()[active_views]
         if not bool(torch.isfinite(pose_values).all()):
             raise ValueError("Q_H S1 active root-from-camera poses must be finite.")
-        rotations = pose_values[..., :9].reshape(-1, 3, 3)
-        rotation_identity = torch.eye(3, dtype=rotations.dtype, device=rotations.device).expand_as(rotations)
-        orthogonality = rotations @ rotations.transpose(-1, -2)
-        determinant = torch.linalg.det(rotations)
+        with torch.autocast(device_type=pose_values.device.type, enabled=False):
+            rotations = pose_values[..., :9].reshape(-1, 3, 3).float()
+            rotation_identity = torch.eye(3, dtype=rotations.dtype, device=rotations.device).expand_as(rotations)
+            orthogonality = rotations @ rotations.transpose(-1, -2)
+            determinant = torch.linalg.det(rotations)
         if not bool(
             torch.allclose(orthogonality, rotation_identity, rtol=1e-4, atol=1e-5)
             and torch.allclose(determinant, torch.ones_like(determinant), rtol=1e-4, atol=1e-5)
@@ -404,7 +411,8 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
         flat_view_mask = prefix.prefix_mask.reshape(view_count)
         flat_camera = prefix.camera.tensor().reshape(view_count, -1)
         flat_pose = prefix.camera_pose_relative_root.tensor().reshape(view_count, -1)
-        current_from_root = current_pose_relative_root.inverse().tensor().reshape(group_count, -1)
+        with torch.autocast(device_type=depth.device.type, enabled=False):
+            current_from_root = current_pose_relative_root.inverse().tensor().float().reshape(group_count, -1)
 
         hidden_dim = int(self.config.point_hidden_dim)
         point_sum = torch.zeros((group_count, hidden_dim), dtype=torch.float32, device=depth.device)
@@ -421,22 +429,26 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
             view_indices = active_view_indices[start:stop]
             group_indices = torch.div(view_indices, history_slots, rounding_mode="floor")
             valid_pixels = flat_valid[view_indices]
-            points_root, lengths = backproject_depths_camera_tw_batch(
-                flat_depth[view_indices],
-                valid_pixels,
-                CameraTW(flat_camera[view_indices]),
-                PoseTW(flat_pose[view_indices]),
-                stride=int(self.config.pixel_stride),
-            )
+            with torch.autocast(device_type=depth.device.type, enabled=False):
+                points_root, lengths = backproject_depths_camera_tw_batch(
+                    flat_depth[view_indices],
+                    valid_pixels,
+                    CameraTW(flat_camera[view_indices]),
+                    PoseTW(flat_pose[view_indices]),
+                    stride=int(self.config.pixel_stride),
+                )
             valid_view_count.index_add_(0, group_indices, lengths.gt(0).float().unsqueeze(-1))
             if points_root.shape[1] == 0:
                 continue
             point_mask = torch.arange(points_root.shape[1], device=depth.device).unsqueeze(0) < lengths.unsqueeze(1)
-            safe_root = torch.where(point_mask.unsqueeze(-1), points_root, torch.zeros_like(points_root))
-            points_current = PoseTW(current_from_root[group_indices]).transform(safe_root)
-            normalized = points_current.float() / float(self.config.coordinate_scale_m)
+            with torch.autocast(device_type=depth.device.type, enabled=False):
+                safe_root = torch.where(point_mask.unsqueeze(-1), points_root, torch.zeros_like(points_root))
+                points_current = PoseTW(current_from_root[group_indices]).transform(safe_root)
+                normalized = points_current.float() / float(self.config.coordinate_scale_m)
             point_features = self.point_encoder(normalized)
-            selected_features = point_features[point_mask]
+            # Reductions intentionally accumulate in float32 under autocast;
+            # the learned point MLP and final projection remain autocast-aware.
+            selected_features = point_features[point_mask].float()
             selected_groups = group_indices.unsqueeze(1).expand_as(point_mask)[point_mask]
             if selected_features.numel() == 0:
                 continue
