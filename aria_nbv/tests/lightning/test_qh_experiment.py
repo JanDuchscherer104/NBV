@@ -747,6 +747,9 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
             spec=QhExactQ2CertificationSpec(
                 absolute_tolerance=1e-5,
                 relative_tolerance=1e-5,
+                minimum_independent_units=5,
+                minimum_exact_rows_per_independent_unit=1,
+                independent_unit_aggregation="all_units_v1",
                 minimum_population_coverage=1.0,
             ),
             output_receipt_path=tmp_path / "exact-q2.json",
@@ -755,7 +758,10 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     certification_receipt = json.loads(certification.receipt_path.read_text(encoding="utf-8"))
     assert certification_receipt["bundle_manifest_sha256"] == result.bundle.manifest_sha256
     assert certification_receipt["exact_q2"]["population_census"]["near_exhaustive"] is True
-    assert certification_receipt["exact_q2"]["aggregate"]["exact_q2_row_count"] == 1
+    assert certification_receipt["exact_q2"]["aggregate"]["factual_selected_action_exact_q2_row_count"] == 1
+    assert certification_receipt["schema_version"] == "qh-exact-q2-certification-receipt-v2"
+    assert certification_receipt["exact_q2"]["independent_unit_gate"]["selected_independent_unit_count"] == 1
+    assert certification_receipt["exact_q2"]["independent_unit_gate"]["minimum_independent_units_met"] is False
     assert certification_receipt["oracle_headroom"]["available"] is False
     assert certification_receipt["longer_horizon_gate"]["independent_positive_headroom"] is False
     assert certification_receipt["longer_horizon_gate"]["passed"] is False
@@ -764,7 +770,13 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
             QhExactQ2CertificationRequest(
                 bundle=result.bundle,
                 test=request.test,
-                spec=QhExactQ2CertificationSpec(absolute_tolerance=1e-5, relative_tolerance=1e-5),
+                spec=QhExactQ2CertificationSpec(
+                    absolute_tolerance=1e-5,
+                    relative_tolerance=1e-5,
+                    minimum_independent_units=5,
+                    minimum_exact_rows_per_independent_unit=1,
+                    independent_unit_aggregation="all_units_v1",
+                ),
                 output_receipt_path=certification.receipt_path,
             )
         )

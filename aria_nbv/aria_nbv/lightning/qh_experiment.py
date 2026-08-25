@@ -551,6 +551,7 @@ class QhExperiment:
             module=module,
             dataset=test,
             device=device,
+            ordered_store_manifest_sha256=_json_payload_hash(identity["ordered_store_manifests"]["test"]),
             decoder_support=_decoder_support(manifest["scorer_config"]),
         )
         headroom = _headroom_diagnostic(
@@ -562,7 +563,10 @@ class QhExperiment:
             and headroom.get("positive_lookahead_headroom", False)
         )
         receipt = {
-            "schema_version": "qh-exact-q2-certification-receipt-v1",
+            "schema_version": "qh-exact-q2-certification-receipt-v2",
+            "historical_compatibility": {
+                "qh-exact-q2-certification-receipt-v1": "inspection_only_not_promotable",
+            },
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
             "test_provenance_sha256": _json_payload_hash(test.provenance),

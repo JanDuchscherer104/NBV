@@ -20,10 +20,13 @@ matches the factual finite-support control
    r_{t+1}(a).
 
 The resulting error is model evidence: it measures the learned ``Q_1`` path
-inside the recursion. It is distinct from implementation-recursion parity,
-which injects an exact one-step table and belongs in unit tests. Positive
-oracle-lookahead headroom is also distinct and remains an independently owned
-endpoint-policy prerequisite for claims about horizons above two.
+inside the recursion. Candidate and selected-action rows from one scene are
+correlated observations, not independent replications. V2 therefore aggregates
+the row ledger by ``(ordered_store_manifest_sha256, scene_id)`` and requires
+every selected unit to pass. It is distinct from implementation-recursion
+parity, which injects an exact one-step table and belongs in unit tests.
+Positive oracle-lookahead headroom is also distinct and remains an
+independently owned endpoint-policy prerequisite for claims above horizon two.
 """
 
 from __future__ import annotations
@@ -33,7 +36,7 @@ import json
 import math
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 import torch
 from torch import Tensor
@@ -42,8 +45,10 @@ from ..data_handling.qh_data import QhBatch, QhChain, collate_qh_chains
 from ..rollouts.qh_reader import QhRolloutChainIdentity
 from .qh_module import QhLightningModule
 
-QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v1"
-QH_EXACT_Q2_SELECTION_SEMANTICS = "balanced-hash-within-scene-target-support-strata-v1"
+QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION = "qh-exact-q2-certification-v2"
+QH_EXACT_Q2_SELECTION_SEMANTICS = "balanced-hash-within-scene-target-support-strata-v2"
+QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS = "ordered-store-manifest-and-scene-v1"
+QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION = "all_units_v1"
 QH_CANDIDATE_BRANCH_BINS = (1, 4, 8, 16, 32, 64)
 
 
@@ -66,8 +71,12 @@ class QhExactQ2CertificationSpec:
             ``Q_2`` row, in root-normalized return units.
         relative_tolerance: Additional tolerance proportional to the absolute
             exact target value. This is never used to divide near-zero targets.
-        minimum_exact_q2_rows: Smallest selected held-out support on which a
-            learned-recursion conclusion is allowed.
+        minimum_independent_units: Smallest number of selected scene-level
+            units with exact evidence allowed to support promotion.
+        minimum_exact_rows_per_independent_unit: Smallest exact factual
+            selected-action support required within every selected unit.
+        independent_unit_aggregation: Closed policy requiring every selected
+            unit to pass its row support and numeric tolerances.
         minimum_population_coverage: Minimum fraction of census chains selected
             by the bounded stratified sampler. Coverage is over chain identity,
             not over unobserved eligible ``Q_2`` rows.
@@ -86,13 +95,34 @@ class QhExactQ2CertificationSpec:
     """
 
     absolute_tolerance: float
+    """Finite nonnegative absolute error allowance in additive return units."""
+
     relative_tolerance: float
-    minimum_exact_q2_rows: int = 1
+    """Finite nonnegative allowance scaled by the absolute exact target."""
+
+    minimum_independent_units: int
+    """Required number of selected scene units with exact factual support."""
+
+    minimum_exact_rows_per_independent_unit: int
+    """Required factual selected-action exact rows within every selected unit."""
+
+    independent_unit_aggregation: Literal["all_units_v1"]
+    """Closed policy under which no pooled statistic may hide a failed unit."""
+
     minimum_population_coverage: float = 0.95
+    """Minimum selected fraction of the metadata-visible chain population."""
+
     max_selected_chains: int = 4096
+    """Global upper bound on chain materialization and scorer calls."""
+
     max_chains_per_stratum: int = 64
+    """Per-stratum chain cap before balanced allocation."""
+
     selection_seed: int = 0
+    """Seed mixed into deterministic chain-identity ranking."""
+
     positive_headroom_threshold: float = 1e-8
+    """Separate oracle-headroom diagnostic threshold; never an error tolerance."""
 
     def __post_init__(self) -> None:
         """Reject meaningless or unbounded certification settings."""
@@ -101,8 +131,12 @@ class QhExactQ2CertificationSpec:
             raise ValueError("Q_H exact-Q2 absolute_tolerance must be finite and nonnegative.")
         if not math.isfinite(self.relative_tolerance) or self.relative_tolerance < 0.0:
             raise ValueError("Q_H exact-Q2 relative_tolerance must be finite and nonnegative.")
-        if self.minimum_exact_q2_rows < 1:
-            raise ValueError("Q_H exact-Q2 minimum_exact_q2_rows must be positive.")
+        if self.minimum_independent_units < 5:
+            raise ValueError("Q_H exact-Q2 minimum_independent_units must be at least the frozen core floor of five.")
+        if self.minimum_exact_rows_per_independent_unit < 1:
+            raise ValueError("Q_H exact-Q2 minimum_exact_rows_per_independent_unit must be positive.")
+        if self.independent_unit_aggregation != QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION:
+            raise ValueError("Q_H exact-Q2 independent-unit aggregation is unsupported.")
         if not 0.0 < self.minimum_population_coverage <= 1.0:
             raise ValueError("Q_H exact-Q2 minimum_population_coverage must lie in (0, 1].")
         if self.max_selected_chains < 1 or self.max_chains_per_stratum < 1:
@@ -123,10 +157,19 @@ class QhDecoderSupport:
     """
 
     kind: str
+    """Decoder family; V2 admits only ``"coral"`` on this finite-support path."""
+
     lower_representative: float
+    """Lowest decoded continuous-Q representative."""
+
     upper_representative: float
+    """Highest decoded continuous-Q representative."""
+
     lower_edge: float
+    """Lowest ordinal label boundary."""
+
     upper_edge: float
+    """Highest ordinal label boundary."""
 
     def __post_init__(self) -> None:
         values = (
@@ -146,7 +189,7 @@ class QhDecoderSupport:
 
 
 class QhExactQ2Certifier:
-    """Certify one frozen scorer against selected factual exact-``Q_2`` rows.
+    r"""Certify one frozen scorer against selected factual exact-``Q_2`` rows.
 
     The certifier first performs a metadata-only census through
     ``dataset.chain_identity``. It then materializes at most
@@ -155,6 +198,23 @@ class QhExactQ2Certifier:
     remain owned by :class:`QhLightningModule`; this class consumes its public
     admitted and exact-support tensors and never substitutes a learned
     feasibility decision.
+
+    Theory:
+        Rows within one scene share geometry, target-generation conditions,
+        candidate policy, and rollout lineage. Treating them as independent
+        would create pseudoreplication: increasing candidate or chain count
+        could manufacture apparent evidence without increasing scene diversity.
+        V2 therefore uses
+
+        $$
+        u=(\operatorname{sha256}(M_1,\ldots,M_K),\;\mathrm{scene\_id})
+        $$
+
+        as the independent unit, where the ordered manifest digest binds the
+        complete store population. Row errors remain auditable, but promotion
+        requires the predeclared minimum number of units and an ``all_units_v1``
+        pass. Five units are a minimum diversity/admissibility floor, not a
+        statistical-power or generalization guarantee.
     """
 
     def __init__(self, spec: QhExactQ2CertificationSpec) -> None:
@@ -166,6 +226,7 @@ class QhExactQ2Certifier:
         module: QhLightningModule,
         dataset: _QhCertificationDataset,
         device: torch.device,
+        ordered_store_manifest_sha256: str,
         decoder_support: QhDecoderSupport | None = None,
     ) -> dict[str, object]:
         """Return deterministic exact-``Q_2`` population evidence.
@@ -176,6 +237,9 @@ class QhExactQ2Certifier:
             dataset: Frozen held-out chain population with metadata-only chain
                 identities and dense-valid fitted-Q supervision.
             device: Device used only for scorer and target computation.
+            ordered_store_manifest_sha256: Digest of the ordered rollout-store
+                manifest tuple bound by the evaluated bundle. Together with
+                ``scene_id`` it defines one independent evidence unit.
             decoder_support: Fixed CORAL scalar support, or ``None`` for direct
                 continuous regression.
 
@@ -191,8 +255,10 @@ class QhExactQ2Certifier:
                 learner's admitted support, or numeric evidence is non-finite.
         """
 
+        _validate_sha256(ordered_store_manifest_sha256, name="ordered_store_manifest_sha256")
         identities = [dataset.chain_identity(index) for index in range(len(dataset))]
         selected, census = self._select(identities)
+        census.update(_population_denominators(identities, ordered_store_manifest_sha256))
         module = module.to(device).eval()
         rows: list[dict[str, object]] = []
         selected_chain_support: list[dict[str, object]] = []
@@ -209,12 +275,17 @@ class QhExactQ2Certifier:
                 if bool((exact_support & ~admitted).any()):
                     raise ValueError("Q_H exact-Q2 support must be a subset of fitted-Q admission.")
                 step_indices = torch.nonzero(exact_support[0], as_tuple=False).flatten()
+                chain_denominators = _chain_denominators(batch, exact_support)
                 selected_chain_support.append(
                     {
                         "selection_rank": selection_rank,
                         "dataset_index": index,
                         "identity": asdict(identity),
-                        "exact_q2_row_count": int(step_indices.numel()),
+                        "independent_unit": _independent_unit(
+                            ordered_store_manifest_sha256,
+                            identity.scene_id,
+                        ),
+                        **chain_denominators,
                     }
                 )
                 rows.extend(
@@ -226,14 +297,25 @@ class QhExactQ2Certifier:
                         step_indices=step_indices,
                         recursive_targets=recursive_targets,
                         exact_targets=exact_targets,
+                        ordered_store_manifest_sha256=ordered_store_manifest_sha256,
                     )
                 )
 
-        aggregate = _aggregate_rows(rows, minimum_rows=self.spec.minimum_exact_q2_rows)
+        aggregate = _aggregate_rows(rows, minimum_rows=1)
         coverage_passed = float(census["selected_chain_fraction"]) >= self.spec.minimum_population_coverage
         decoder = _decoder_support_evidence(rows, decoder_support)
         support_strata = _support_stratum_aggregates(selected_chain_support)
-        support_coverage_passed = all(int(row["exact_q2_row_count"]) > 0 for row in support_strata)
+        support_coverage_passed = all(
+            int(row["factual_selected_action_exact_q2_row_count"]) > 0 for row in support_strata
+        )
+        independent_units = _independent_unit_aggregates(
+            identities=identities,
+            selected_chain_support=selected_chain_support,
+            rows=rows,
+            ordered_store_manifest_sha256=ordered_store_manifest_sha256,
+            minimum_rows=self.spec.minimum_exact_rows_per_independent_unit,
+        )
+        independent_unit_gate = _independent_unit_gate(independent_units, self.spec)
         return {
             "schema_version": QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION,
             "evidence_semantics": {
@@ -246,14 +328,20 @@ class QhExactQ2Certifier:
             "population_census": census,
             "selection_coverage_passed": coverage_passed,
             "selected_chain_support": selected_chain_support,
+            "evidence_denominators": _sum_chain_denominators(selected_chain_support),
             "support_stratum_aggregates": support_strata,
             "support_coverage_passed": support_coverage_passed,
-            "exact_q2_rows": rows,
+            "factual_selected_action_exact_q2_rows": rows,
             "aggregate": aggregate,
             "stratum_aggregates": _stratum_aggregates(rows),
+            "independent_unit_aggregates": independent_units,
+            "independent_unit_gate": independent_unit_gate,
             "decoder_support": decoder,
             "learned_recursion_passed": bool(
-                coverage_passed and support_coverage_passed and aggregate["tolerance_passed"]
+                coverage_passed
+                and support_coverage_passed
+                and aggregate["tolerance_passed"]
+                and independent_unit_gate["passed"]
             ),
         }
 
@@ -287,20 +375,32 @@ class QhExactQ2Certifier:
 
         capped = {key: sorted(values)[: self.spec.max_chains_per_stratum] for key, values in sorted(grouped.items())}
         allocated: list[tuple[int, QhRolloutChainIdentity]] = []
+        selected_scenes: set[str] = set()
         depth = 0
         while len(allocated) < self.spec.max_selected_chains:
-            added = False
+            wave: list[tuple[int, QhRolloutChainIdentity]] = []
             for key in sorted(capped):
                 values = capped[key]
                 if depth >= len(values):
                     continue
                 _rank_hash, index, identity = values[depth]
+                wave.append((index, identity))
+            if not wave:
+                break
+            deferred: list[tuple[int, QhRolloutChainIdentity]] = []
+            for index, identity in wave:
+                if identity.scene_id in selected_scenes:
+                    deferred.append((index, identity))
+                    continue
                 allocated.append((index, identity))
-                added = True
+                selected_scenes.add(identity.scene_id)
                 if len(allocated) == self.spec.max_selected_chains:
                     break
-            if not added:
-                break
+            if len(allocated) < self.spec.max_selected_chains:
+                for index, identity in deferred:
+                    allocated.append((index, identity))
+                    if len(allocated) == self.spec.max_selected_chains:
+                        break
             depth += 1
         selected_keys = {(identity.store_index, identity.rollout_row_id) for _index, identity in allocated}
         stratum_rows: list[dict[str, object]] = []
@@ -338,6 +438,7 @@ class QhExactQ2Certifier:
         step_indices: Tensor,
         recursive_targets: Tensor,
         exact_targets: Tensor,
+        ordered_store_manifest_sha256: str,
     ) -> list[dict[str, object]]:
         """Materialize finite row-level error and support evidence."""
 
@@ -369,6 +470,11 @@ class QhExactQ2Certifier:
                     "rollout_row_id": identity.rollout_row_id,
                     "source_sample_index": identity.source_sample_index,
                     "scene_id": identity.scene_id,
+                    "ordered_store_manifest_sha256": ordered_store_manifest_sha256,
+                    "independent_unit": _independent_unit(
+                        ordered_store_manifest_sha256,
+                        identity.scene_id,
+                    ),
                     "target_row_id": identity.target_row_id,
                     "step_index": step,
                     "configured_horizon": identity.configured_horizon,
@@ -434,6 +540,140 @@ def _validate_materialized_identity(chain: QhChain, identity: QhRolloutChainIden
         raise ValueError("Q_H exact-Q2 materialized chain identity drifted after population census.")
 
 
+def _validate_sha256(value: str, *, name: str) -> None:
+    """Require one lowercase hexadecimal SHA-256 identity."""
+
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError(f"Q_H exact-Q2 {name} must be a lowercase SHA-256 digest.")
+
+
+def _independent_unit(ordered_store_manifest_sha256: str, scene_id: str) -> dict[str, str]:
+    """Return the frozen scene-level independent-unit identity."""
+
+    return {
+        "ordered_store_manifest_sha256": ordered_store_manifest_sha256,
+        "scene_id": scene_id,
+    }
+
+
+def _population_denominators(
+    identities: list[QhRolloutChainIdentity],
+    ordered_store_manifest_sha256: str,
+) -> dict[str, int | str]:
+    """Count metadata-visible corpus units without materializing scorer inputs."""
+
+    scenes = {identity.scene_id for identity in identities}
+    targets = {(ordered_store_manifest_sha256, identity.scene_id, identity.target_row_id) for identity in identities}
+    return {
+        "eligible_scene_count": len(scenes),
+        "eligible_target_count": len(targets),
+        "eligible_chain_count": len(identities),
+        "independent_unit_count": len(scenes),
+        "independent_unit_semantics": QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS,
+    }
+
+
+def _chain_denominators(batch: QhBatch, exact_support: Tensor) -> dict[str, int]:
+    """Count the factual state-to-exact-row support ladder for one chain."""
+
+    materialized_successor = torch.zeros_like(batch.actor.step_mask)
+    materialized_successor[:, :-1] = batch.actor.candidate_mask[:, 1:].any(dim=-1) & batch.actor.step_mask[:, 1:]
+    successor_action_mask = batch.successor_action_mask
+    complete_successor_labels = successor_action_mask.any(dim=-1) & torch.eq(
+        batch.successor_backup_mask,
+        successor_action_mask,
+    ).all(dim=-1)
+    return {
+        "factual_state_count": int(batch.actor.step_mask.sum().item()),
+        "states_with_materialized_successors_count": int(materialized_successor.sum().item()),
+        "states_with_complete_hard_valid_successor_labels_count": int(complete_successor_labels.sum().item()),
+        "factual_selected_action_exact_q2_row_count": int(exact_support.sum().item()),
+    }
+
+
+def _sum_chain_denominators(rows: list[dict[str, object]]) -> dict[str, int]:
+    """Sum selected-chain support without fabricating missing population states."""
+
+    fields = (
+        "factual_state_count",
+        "states_with_materialized_successors_count",
+        "states_with_complete_hard_valid_successor_labels_count",
+        "factual_selected_action_exact_q2_row_count",
+    )
+    return {field: sum(int(row[field]) for row in rows) for field in fields}
+
+
+def _independent_unit_aggregates(
+    *,
+    identities: list[QhRolloutChainIdentity],
+    selected_chain_support: list[dict[str, object]],
+    rows: list[dict[str, object]],
+    ordered_store_manifest_sha256: str,
+    minimum_rows: int,
+) -> list[dict[str, object]]:
+    """Aggregate selected evidence over every metadata-visible scene unit."""
+
+    population: dict[str, list[QhRolloutChainIdentity]] = defaultdict(list)
+    selected: dict[str, list[dict[str, object]]] = defaultdict(list)
+    exact: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for identity in identities:
+        unit = _independent_unit(ordered_store_manifest_sha256, identity.scene_id)
+        population[_canonical_json(unit)].append(identity)
+    for row in selected_chain_support:
+        selected[_canonical_json(row["independent_unit"])].append(row)
+    for row in rows:
+        exact[_canonical_json(row["independent_unit"])].append(row)
+
+    aggregates: list[dict[str, object]] = []
+    for key, population_rows in sorted(population.items()):
+        selected_rows = selected.get(key, [])
+        exact_rows = exact.get(key, [])
+        error = _aggregate_rows(exact_rows, minimum_rows=minimum_rows)
+        admitted = bool(selected_rows)
+        aggregates.append(
+            {
+                "independent_unit": json.loads(key),
+                "population_chain_count": len(population_rows),
+                "selected_chain_count": len(selected_rows),
+                "admitted": admitted,
+                **_sum_chain_denominators(selected_rows),
+                "error": error,
+                "unit_gate_passed": bool(admitted and error["tolerance_passed"]),
+            }
+        )
+    return aggregates
+
+
+def _independent_unit_gate(
+    aggregates: list[dict[str, object]],
+    spec: QhExactQ2CertificationSpec,
+) -> dict[str, object]:
+    """Apply the frozen all-selected-units promotion policy."""
+
+    selected = [row for row in aggregates if bool(row["admitted"])]
+    supported = [
+        row
+        for row in selected
+        if int(row["factual_selected_action_exact_q2_row_count"]) >= spec.minimum_exact_rows_per_independent_unit
+    ]
+    passing = [row for row in selected if bool(row["unit_gate_passed"])]
+    minimum_met = len(supported) >= spec.minimum_independent_units
+    all_selected_passed = bool(selected) and len(passing) == len(selected)
+    return {
+        "independent_unit_semantics": QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS,
+        "aggregation": spec.independent_unit_aggregation,
+        "population_independent_unit_count": len(aggregates),
+        "selected_independent_unit_count": len(selected),
+        "supported_independent_unit_count": len(supported),
+        "passing_independent_unit_count": len(passing),
+        "minimum_independent_units": spec.minimum_independent_units,
+        "minimum_exact_rows_per_independent_unit": spec.minimum_exact_rows_per_independent_unit,
+        "minimum_independent_units_met": minimum_met,
+        "all_selected_units_passed": all_selected_passed,
+        "passed": bool(minimum_met and all_selected_passed),
+    }
+
+
 def _selection_stratum(identity: QhRolloutChainIdentity) -> dict[str, object]:
     """Return the versioned census stratum for one chain."""
 
@@ -467,7 +707,7 @@ def _aggregate_rows(rows: list[dict[str, object]], *, minimum_rows: int) -> dict
 
     if not rows:
         return {
-            "exact_q2_row_count": 0,
+            "factual_selected_action_exact_q2_row_count": 0,
             "within_tolerance_count": 0,
             "within_tolerance_fraction": None,
             "mean_absolute_error": None,
@@ -482,7 +722,7 @@ def _aggregate_rows(rows: list[dict[str, object]], *, minimum_rows: int) -> dict
     passed = sum(bool(row["within_tolerance"]) for row in rows)
     support_met = len(rows) >= minimum_rows
     return {
-        "exact_q2_row_count": len(rows),
+        "factual_selected_action_exact_q2_row_count": len(rows),
         "within_tolerance_count": passed,
         "within_tolerance_fraction": passed / len(rows),
         "mean_absolute_error": sum(absolute) / len(absolute),
@@ -533,8 +773,12 @@ def _support_stratum_aggregates(rows: list[dict[str, object]]) -> list[dict[str,
         {
             "stratum": json.loads(key),
             "selected_chain_count": len(values),
-            "chains_with_exact_q2_count": sum(int(row["exact_q2_row_count"]) > 0 for row in values),
-            "exact_q2_row_count": sum(int(row["exact_q2_row_count"]) for row in values),
+            "chains_with_factual_selected_action_exact_q2_count": sum(
+                int(row["factual_selected_action_exact_q2_row_count"]) > 0 for row in values
+            ),
+            "factual_selected_action_exact_q2_row_count": sum(
+                int(row["factual_selected_action_exact_q2_row_count"]) for row in values
+            ),
         }
         for key, values in sorted(grouped.items())
     ]
@@ -557,7 +801,7 @@ def _decoder_support_evidence(
     return {
         "applicable": True,
         **asdict(support),
-        "exact_q2_row_count": count,
+        "factual_selected_action_exact_q2_row_count": count,
         "below_representative_count": below,
         "above_representative_count": above,
         "outside_representative_fraction": None if count == 0 else (below + above) / count,
@@ -575,6 +819,9 @@ def _canonical_json(value: object) -> str:
 
 __all__ = [
     "QH_EXACT_Q2_CERTIFICATION_SCHEMA_VERSION",
+    "QH_EXACT_Q2_INDEPENDENT_UNIT_AGGREGATION",
+    "QH_EXACT_Q2_INDEPENDENT_UNIT_SEMANTICS",
+    "QH_EXACT_Q2_SELECTION_SEMANTICS",
     "QhDecoderSupport",
     "QhExactQ2CertificationSpec",
     "QhExactQ2Certifier",
