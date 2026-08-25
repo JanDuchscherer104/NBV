@@ -6,16 +6,23 @@ repository owners remain authoritative for behavior and scientific claims.
 
 ## Mandatory Worktree Route
 
-1. Initialize every Codex worktree through `scripts/setup_worktree_env.sh`.
-   Mutable projection, graph, manifest, stat, interpreter, root, run, and
-   provenance state must be worktree-local regular-file copies. Only
-   content-addressed `semantic` and `semantic-deep` caches are shared.
-2. Before an eligible architecture, relationship, ownership, or project-content
-   question, run `scripts/check_graphify_freshness.py --json`.
-3. Query the byte-identical upstream Graphify skill first for `fresh` and
+1. Codex passes the fork parent through `CODEX_SOURCE_WORKSPACE_PATH`; setup
+   requires that exact parent as `ARIA_NBV_SHARED_ROOT` and never substitutes
+   Git's first registered worktree. It copies the parent generation locally,
+   links the parent-resolved content-addressed `semantic` and `semantic-deep`
+   namespaces, then runs upstream incremental `graphify update` before
+   reporting readiness.
+2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
+   provenance state are worktree-local regular-file copies. Only the two
+   content-addressed cache namespaces are shared; neither cache identity nor a
+   matching commit alone proves graph validity.
+3. Setup admits a session only after `scripts/check_graphify_freshness.py
+   --usable` succeeds. Models query the admitted graph and do not perform
+   freshness repair. `--check` verifies that admission without writing.
+4. Query the byte-identical upstream Graphify skill first for `fresh` and
    `usable-stale`. Then open exact repository owners; for `usable-stale`, verify
    every consequential path in the exact bounded `stale_sources` list.
-4. For `unusable`, repair or reinitialize the bootstrap before the eligible
+5. For `unusable`, repair or reinitialize the bootstrap before the eligible
    query. If repair still cannot produce a usable artifact, report the state and
    use direct sources only. Never query the unusable artifact.
 
@@ -40,14 +47,18 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 
 ## Freshness And Refresh
 
-Freshness validates rather than globally gating reads: `make graphify-state-check`
-is strict for scaffold and pre-push validation, while `make graphify-usable-check`
-proves ordinary query safety. A Git HEAD mismatch alone is not staleness when the
+Setup owns the ordinary session reconciliation: it keeps the inherited semantic
+projection intact and invokes upstream's no-LLM incremental code update against
+the child generation. Rebuilding the generated projection changes its provenance
+on every commit and therefore belongs to an explicit semantic refresh, not cheap
+worktree admission. `make graphify-state-check` remains
+strict for scaffold and pre-push validation, while `make graphify-usable-check`
+proves navigation safety. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still
-match. Refreshes regenerate the deterministic projection first; semantic refreshes
-use `fork_turns="none"` and account for every dispatched file. Incomplete or
-unreconciled refreshes remain strict-gate stale, retain the last valid snapshot for
-navigation, and require direct verification of affected sources.
+match. Semantic refreshes use `fork_turns="none"` and account for every
+dispatched file. Incomplete or unreconciled semantic refreshes remain strict-gate
+stale, retain the last valid snapshot for navigation, and require direct
+verification of affected sources.
 
 ## Upstream Lifecycle And Hooks
 

@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir)"
-shared_root="${ARIA_NBV_SHARED_ROOT:-$(git --git-dir="$repo_git_dir" worktree list --porcelain | awk '/^worktree / { print substr($0, 10); exit }')}"
+shared_root="${ARIA_NBV_SHARED_ROOT:-}"
 check_only=false
 
 usage() {
@@ -15,9 +15,8 @@ Links this worktree to the source checkout's Python runtime, ignored data cache,
 downloaded literature PDFs, and content-addressed Graphify semantic caches,
 then initializes the exact submodules recorded by this worktree.
 
-Set ARIA_NBV_SHARED_ROOT to use a primary checkout other than Git's first
-registered worktree. Source .env afterwards to use the linked virtual
-environment.
+ARIA_NBV_SHARED_ROOT must identify the worktree from which this worktree was
+forked. Source .env afterwards to use the linked virtual environment.
 EOF
 }
 
@@ -43,6 +42,8 @@ git_in_worktree() {
 }
 
 [[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
+[[ -n "$shared_root" ]] || fail "ARIA_NBV_SHARED_ROOT must identify the parent worktree"
+[[ -d "$shared_root" ]] || fail "shared root does not exist: $shared_root"
 git -C "$shared_root" rev-parse --git-common-dir >/dev/null 2>&1 || \
   fail "shared root is not a Git worktree; cannot seed Graphify"
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
@@ -52,18 +53,18 @@ shared_python="$shared_root/aria_nbv/.venv/bin/python"
   >/dev/null 2>&1 || fail "shared Python cannot run: $shared_python"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
 
-shared_graphify_cache_root="$shared_root/.data/graphify-semantic-cache"
-shared_graphify_semantic_cache="$shared_graphify_cache_root/semantic"
-shared_graphify_semantic_deep_cache="$shared_graphify_cache_root/semantic-deep"
+shared_graphify_semantic_cache="$shared_root/graphify-out/cache/semantic"
+shared_graphify_semantic_deep_cache="$shared_root/graphify-out/cache/semantic-deep"
 
 if [[ "$check_only" == false ]]; then
   "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
     --prepare-cache --destination "$repo_root"
-  mkdir -p "$shared_graphify_semantic_cache" "$shared_graphify_semantic_deep_cache"
-else
-  [[ -d "$shared_graphify_semantic_cache" ]] || fail "shared Graphify semantic cache is missing: $shared_graphify_semantic_cache"
-  [[ -d "$shared_graphify_semantic_deep_cache" ]] || fail "shared Graphify semantic-deep cache is missing: $shared_graphify_semantic_deep_cache"
 fi
+
+shared_graphify_semantic_cache="$(realpath_portable "$shared_graphify_semantic_cache")"
+shared_graphify_semantic_deep_cache="$(realpath_portable "$shared_graphify_semantic_deep_cache")"
+[[ -d "$shared_graphify_semantic_cache" ]] || fail "shared Graphify semantic cache is missing: $shared_root/graphify-out/cache/semantic"
+[[ -d "$shared_graphify_semantic_deep_cache" ]] || fail "shared Graphify semantic-deep cache is missing: $shared_root/graphify-out/cache/semantic-deep"
 
 link_or_check() {
   local source="$1"
@@ -98,6 +99,13 @@ seed_args=(--source "$shared_root" --destination "$repo_root")
 seed_args+=(--destination-git-dir "$repo_git_dir")
 [[ "$check_only" == true ]] && seed_args+=(--check)
 "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
+
+if [[ "$check_only" == false ]]; then
+  "$shared_python" "$repo_root/scripts/reconcile_graphify_worktree.py" --root "$repo_root"
+else
+  "$shared_python" "$repo_root/scripts/check_graphify_freshness.py" --usable --quiet || \
+    fail "seeded Graphify generation is not query-admissible"
+fi
 
 # Download manifests are tracked; every other top-level .data directory is an
 # ignored cache and can be shared without copying it into each worktree. The

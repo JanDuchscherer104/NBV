@@ -22,6 +22,7 @@ CORE = (
 ROOT = Path("graphify-out/.graphify_root")
 SENTINEL = Path("graphify-out/.aria-worktree-seed.json")
 CACHE = Path("graphify-out/cache")
+CACHE_NAMES = ("semantic", "semantic-deep")
 GRAPHIFY_DISTRIBUTION = "graphifyy"
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 OID = re.compile(r"^[0-9a-f]+$")
@@ -240,7 +241,7 @@ def validate_interpreter(root: Path) -> None:
 
 def validate_source(
     source: Path, source_git_dir: Path | None
-) -> tuple[list[Path], str]:
+) -> tuple[list[Path], str, dict[str, str]]:
     for path in (*CORE, Path("graphify-out/needs_update")):
         validate_parent_chain(source, path, "source", require_existing=True)
     if (source / "graphify-out/needs_update").exists() or (
@@ -250,11 +251,27 @@ def validate_source(
     graph_revision = validate_graph(source, source_git_dir, "source")
     markdown = manifest_markdown(source)
     validate_interpreter(source)
-    return markdown, graph_revision
+    cache_targets: dict[str, str] = {}
+    for name in CACHE_NAMES:
+        cache = CACHE / name
+        validate_parent_chain(source, cache, "source", require_existing=True)
+        source_cache = source / cache
+        if not source_cache.exists():
+            fail(f"source Graphify {name} cache target is unavailable")
+        if not source_cache.is_dir():
+            fail(f"source Graphify {name} cache must be a directory: {source / cache}")
+        try:
+            target = source_cache.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            fail(f"source Graphify {name} cache target is unavailable: {error}")
+        if not target.is_dir():
+            fail(f"source Graphify {name} cache target must be a directory: {target}")
+        cache_targets[name] = str(target)
+    return markdown, graph_revision, cache_targets
 
 
 def owned_files(payload: dict[str, Any]) -> list[Path]:
-    if payload.get("schema_version") != 1:
+    if payload.get("schema_version") != 2:
         fail("invalid worktree seed sentinel schema")
     raw = payload.get("files")
     if not isinstance(raw, list) or not raw:
@@ -288,6 +305,23 @@ def validate_owned(
         fail("child .graphify_root is not bound to this worktree")
     validate_graph(destination, destination_git_dir, "destination")
     manifest_markdown(destination)
+    cache_targets = payload.get("source_cache_targets")
+    if not isinstance(cache_targets, dict) or set(cache_targets) != set(CACHE_NAMES):
+        fail("invalid worktree seed sentinel source cache targets")
+    for name in CACHE_NAMES:
+        expected = cache_targets.get(name)
+        if not isinstance(expected, str) or not Path(expected).is_absolute():
+            fail(f"invalid worktree seed sentinel {name} cache target")
+        cache = destination / CACHE / name
+        validate_parent_chain(destination, CACHE / name, "destination", require_existing=True)
+        if not cache.is_symlink():
+            fail(f"destination Graphify {name} cache is not linked")
+        try:
+            actual = cache.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            fail(f"destination Graphify {name} cache target is unavailable: {error}")
+        if str(actual) != expected or not actual.is_dir():
+            fail(f"destination Graphify {name} cache points somewhere else")
 
 
 def seed(
@@ -302,15 +336,15 @@ def seed(
     if not source.is_dir() or not destination.is_dir():
         fail("source and destination must be directories")
     common = validate_topology(source, destination, source_git_dir, destination_git_dir)
-    for path in (*CORE, ROOT, SENTINEL, Path("graphify-input/index.md")):
+    for path in (*CORE, ROOT, SENTINEL, Path("graphify-input/index.md"), CACHE):
         validate_parent_chain(destination, path, "destination", require_existing=False)
     sentinel = destination / SENTINEL
     if sentinel.exists() or sentinel.is_symlink():
         validate_owned(destination, common, destination_git_dir)
         return
-    markdown, graph_revision = validate_source(source, source_git_dir)
+    markdown, graph_revision, cache_targets = validate_source(source, source_git_dir)
     source_head = git(source, source_git_dir, "rev-parse", "HEAD")
-    targets = [*CORE, *markdown, ROOT, SENTINEL]
+    targets = [*CORE, *markdown, ROOT, SENTINEL, *(CACHE / name for name in CACHE_NAMES)]
     for path in targets:
         validate_parent_chain(destination, path, "destination", require_existing=False)
     if any(
@@ -333,8 +367,9 @@ def seed(
         provenance = {
             "files": [str(path) for path in [*files, ROOT]],
             "git_common_dir": str(common),
-            "schema_version": 1,
+            "schema_version": 2,
             "source_graph_revision": graph_revision,
+            "source_cache_targets": cache_targets,
             "source_worktree": str(source),
             "source_worktree_head": source_head,
             "target_root": str(destination),
@@ -347,6 +382,12 @@ def seed(
             target = destination / path
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(staged / path, target)
+        for name, cache_target in cache_targets.items():
+            cache = destination / CACHE / name
+            if cache.exists() or cache.is_symlink():
+                fail(f"destination Graphify {name} cache already exists")
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.symlink_to(cache_target, target_is_directory=True)
     finally:
         shutil.rmtree(staged, ignore_errors=True)
 

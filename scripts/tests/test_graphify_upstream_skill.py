@@ -83,13 +83,17 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
 
         self.assertIn("## Graphify And Context7 Plugin", root_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary)
+        self.assertIn("CODEX_SOURCE_WORKSPACE_PATH", boundary)
+        self.assertIn("graphify update", boundary)
+        self.assertIn("Models query the admitted graph", boundary)
         self.assertIn("## Branch Index", context)
         self.assertNotIn("## Graphify Branch", context)
         self.assertIn(
             "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
             context,
         )
-        self.assertIn("scripts/check_graphify_freshness.py --json", boundary)
+        self.assertIn("scripts/check_graphify_freshness.py", boundary)
+        self.assertIn("--usable", boundary)
         self.assertIn(
             "Accepted 2026-08-19 Graphify Lifecycle And Routing Supersession",
             target_state,

@@ -36,6 +36,20 @@ mkdir -p \
   "${SHARED_ROOT}/scripts" "${FAKE_BIN}"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${SHARED_ROOT}/scripts/"
 cp "${REPO_ROOT}/scripts/graphify_worktree_seed.py" "${SHARED_ROOT}/scripts/"
+cat >"${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" <<EOF
+#!/usr/bin/env python3
+from pathlib import Path
+import sys
+Path("${SANDBOX}/reconcile.log").open("a", encoding="utf-8").write(" ".join(sys.argv[1:]) + "\\n")
+EOF
+cat >"${SHARED_ROOT}/scripts/check_graphify_freshness.py" <<EOF
+#!/usr/bin/env python3
+from pathlib import Path
+import sys
+Path("${SANDBOX}/freshness.log").open("a", encoding="utf-8").write(" ".join(sys.argv[1:]) + "\\n")
+EOF
+chmod +x "${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" \
+  "${SHARED_ROOT}/scripts/check_graphify_freshness.py"
 cp "${REPO_ROOT}/.env.example" "${SHARED_ROOT}/"
 touch "${SHARED_ROOT}/aria_nbv/.gitkeep" "${SHARED_ROOT}/docs/literature/.gitkeep"
 
@@ -78,6 +92,10 @@ title: fixture
 EOF
 # These are explicitly never inherited.
 mkdir -p "${SHARED_ROOT}/graphify-out/cache"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
+  "${SHARED_ROOT}/graphify-out/cache/semantic"
+ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
+  "${SHARED_ROOT}/graphify-out/cache/semantic-deep"
 printf '{}\n' >"${SHARED_ROOT}/graphify-out/cache/stat-index.json"
 printf '{}\n' >"${SHARED_ROOT}/graphify-out/.graphify_detect.json"
 printf 'report\n' >"${SHARED_ROOT}/graphify-out/report.md"
@@ -109,6 +127,17 @@ run_setup() {
   ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
     bash "$1/scripts/setup_worktree_env.sh" "${@:2}"
 }
+
+# Parent selection is explicit; setup must never silently choose Git's first
+# registered worktree when the Codex-provided parent is absent.
+if ARIA_NBV_SHARED_ROOT= PATH="${FAKE_BIN}:${PATH}" \
+  bash "${WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/missing-parent.out" 2>"${SANDBOX}/missing-parent.err"; then
+  echo "setup unexpectedly accepted a missing explicit parent" >&2
+  exit 1
+fi
+grep -Fq "ARIA_NBV_SHARED_ROOT must identify the parent worktree" \
+  "${SANDBOX}/missing-parent.err"
 
 snapshot_tree() {
   local root="$1"
@@ -169,6 +198,7 @@ grep -Fq ".venv is not linked" "${SANDBOX}/fresh.err"
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/graph.json" ]]
 
 run_setup "${WORKTREE_ROOT}"
+grep -Fqx -- "--root ${WORKTREE_ROOT}" "${SANDBOX}/reconcile.log"
 [[ -d "${WORKTREE_ROOT}/.data" ]]
 [[ -L "${WORKTREE_ROOT}/.data/ase_efm" ]]
 [[ -L "${WORKTREE_ROOT}/.data/offline_cache" ]]
@@ -206,6 +236,7 @@ run_setup "${WORKTREE_ROOT}"
 [[ "$(sha256sum "${WORKTREE_ROOT}/graphify-out/graph.json")" == "${before}" ]]
 run_setup "${WORKTREE_ROOT}" --check
 [[ "$(sha256sum "${WORKTREE_ROOT}/graphify-out/graph.json")" == "${before}" ]]
+grep -Fqx -- "--usable --quiet" "${SANDBOX}/freshness.log"
 
 # The same directory guards apply to normal idempotent and --check paths after
 # a child is fully seeded.
@@ -245,7 +276,7 @@ if run_setup "${WORKTREE_ROOT}" >"${SANDBOX}/wrong-semantic.out" 2>"${SANDBOX}/w
   echo "setup unexpectedly replaced a wrong semantic cache link" >&2
   exit 1
 fi
-grep -Fq "graphify-out/cache/semantic points somewhere else" "${SANDBOX}/wrong-semantic.err"
+grep -Fq "semantic cache points somewhere else" "${SANDBOX}/wrong-semantic.err"
 [[ "$(readlink -f "${WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/offline_cache" ]]
 unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic"
 ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" "${WORKTREE_ROOT}/graphify-out/cache/semantic"
@@ -255,7 +286,7 @@ if run_setup "${WORKTREE_ROOT}" --check >"${SANDBOX}/missing-semantic.out" 2>"${
   echo "--check unexpectedly accepted a missing semantic cache link" >&2
   exit 1
 fi
-grep -Fq "graphify-out/cache/semantic is not linked" "${SANDBOX}/missing-semantic.err"
+grep -Fq "semantic cache is not linked" "${SANDBOX}/missing-semantic.err"
 ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" "${WORKTREE_ROOT}/graphify-out/cache/semantic"
 
 unlink "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
@@ -265,7 +296,7 @@ if run_setup "${WORKTREE_ROOT}" >"${SANDBOX}/semantic-collision.out" 2>"${SANDBO
   echo "setup unexpectedly replaced a semantic-deep cache collision" >&2
   exit 1
 fi
-grep -Fq "graphify-out/cache/semantic-deep already exists" "${SANDBOX}/semantic-collision.err"
+grep -Fq "semantic-deep cache is not linked" "${SANDBOX}/semantic-collision.err"
 [[ -f "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep/keep" ]]
 rm "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep/keep"
 rmdir "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
@@ -277,7 +308,7 @@ if run_setup "${WORKTREE_ROOT}" >"${SANDBOX}/semantic-deep-file.out" 2>"${SANDBO
   echo "setup unexpectedly replaced a semantic-deep cache file" >&2
   exit 1
 fi
-grep -Fq "graphify-out/cache/semantic-deep already exists" "${SANDBOX}/semantic-deep-file.err"
+grep -Fq "semantic-deep cache is not linked" "${SANDBOX}/semantic-deep-file.err"
 grep -Fqx do-not-overwrite "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
 rm "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
 ln -s "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep"
