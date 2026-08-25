@@ -446,7 +446,7 @@ class QhExperiment:
             raise ValueError("Q_H scorer-state payload hash does not match the bundle manifest.")
         state = torch.load(state_path, map_location="cpu", weights_only=True)
         scorer.load_state_dict(state, strict=True)
-        scorer.validate_value_decoder_state()
+        scorer.validate_value_decoder_state(require_publishable=True)
         scorer.to(device=device)
         scorer.eval()
         identity = manifest["identity"]
@@ -486,7 +486,7 @@ class QhExperiment:
             raise FileExistsError(f"Q_H bundle payload already exists in {bundle_dir}.")
         if stable_config_hash(scorer.config, length=64) != stable_config_hash(self.config.scorer, length=64):
             raise ValueError("Q_H scorer runtime configuration does not match the experiment configuration.")
-        scorer.validate_value_decoder_state()
+        scorer.validate_value_decoder_state(require_publishable=True)
         torch.save(scorer.state_dict(), state_path)
         artifacts = {
             _SCORER_STATE_FILENAME: {
@@ -618,7 +618,7 @@ class QhExperiment:
         state_path = _verified_artifact_path(ref.bundle_path, manifest, _SCORER_STATE_FILENAME)
         state = torch.load(state_path, map_location="cpu", weights_only=True)
         scorer.load_state_dict(state, strict=True)
-        scorer.validate_value_decoder_state()
+        scorer.validate_value_decoder_state(require_publishable=True)
         return QhInferenceBundleRef(ref.bundle_path, ref.schema_version, ref.manifest_sha256)
 
     @staticmethod

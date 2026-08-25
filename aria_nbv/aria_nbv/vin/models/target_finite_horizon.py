@@ -260,7 +260,7 @@ class TargetFiniteHorizonScorer(nn.Module):
             dropout=float(config.dropout),
         )
 
-    def validate_value_decoder_state(self) -> None:
+    def validate_value_decoder_state(self, *, require_publishable: bool = False) -> None:
         """Validate non-learned decoder state against scorer configuration.
 
         Learned weights may vary while the scorer configuration stays fixed,
@@ -273,6 +273,8 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         if isinstance(self.value_decoder, QhCoralValueDecoder):
             self.value_decoder.validate_configured_support()
+            if require_publishable:
+                self.value_decoder.require_publishable_support()
 
     def forward(
         self,

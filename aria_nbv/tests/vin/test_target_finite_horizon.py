@@ -18,7 +18,10 @@ from aria_nbv.vin.models.target_finite_horizon import (
     TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
 )
-from aria_nbv.vin.modules.qh_value_decoders import QhCoralValueDecoderConfig
+from aria_nbv.vin.modules.qh_value_decoders import (
+    QhCoralValueDecoderConfig,
+    QhPredeclaredPhysicalCoralSupport,
+)
 from tests.data_handling.test_qh import _chain, _snippet
 
 
@@ -62,8 +65,13 @@ def _coral_scorer() -> TargetFiniteHorizonScorer:
         dropout=0.0,
         max_horizon=4,
         value_decoder=QhCoralValueDecoderConfig(
-            bin_edges=(-0.5, 0.5),
-            bin_values=(-1.0, 0.0, 1.0),
+            support=QhPredeclaredPhysicalCoralSupport.create(
+                source_population_digest="population-v1",
+                ordered_input_digest="physical-rule-inputs-v1",
+                physical_rule="symmetric-root-gain-support-v1",
+                bin_edges=(-0.5, 0.5),
+                bin_values=(-1.0, 0.0, 1.0),
+            ),
             preinit_bias=False,
         ),
     ).setup_target()
