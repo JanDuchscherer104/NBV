@@ -148,6 +148,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/literature_catalog.py"', workflow)
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
+        self.assertIn('"scripts/reconcile_graphify_worktree.py"', workflow)
         self.assertIn('"scripts/scaffold_audit.py"', workflow)
         for path in (
             "scripts/scaffold/run_routing_trials.py",
@@ -175,6 +176,8 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/tests/test_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_upstream_skill.py"', workflow)
         self.assertIn('"scripts/tests/test_graphify_worktree_seed.py"', workflow)
+        self.assertIn('"scripts/tests/test_reconcile_graphify_worktree.py"', workflow)
+        self.assertIn('"scripts/tests/test_graphify_session_readiness.py"', workflow)
         self.assertIn(
             '"scripts/tests/test_ownership_consolidation_contract.py"', workflow
         )
@@ -188,6 +191,8 @@ class SelectionTests(unittest.TestCase):
             "python3 scripts/tests/test_graphify_upstream_skill.py",
             workflow,
         )
+        self.assertIn("python3 scripts/tests/test_reconcile_graphify_worktree.py", workflow)
+        self.assertIn("python3 scripts/tests/test_graphify_session_readiness.py", workflow)
         self.assertIn(
             "make qmd-frontmatter-check api-docs-self-test docs-render-core", workflow
         )
@@ -248,6 +253,7 @@ class SelectionTests(unittest.TestCase):
             "scripts/tests/test_thesis_literature_provenance.py": {"docs"},
             "scripts/check_graphify_freshness.py": {"scaffold"},
             "scripts/graphify_worktree_seed.py": {"scaffold"},
+            "scripts/reconcile_graphify_worktree.py": {"scaffold"},
             "scripts/scaffold_audit.py": {"scaffold"},
             "scripts/scaffold/fixtures/routing.json": {"scaffold"},
             "scripts/scaffold/run_routing_trials.py": {"scaffold"},
@@ -264,6 +270,8 @@ class SelectionTests(unittest.TestCase):
             "scripts/tests/test_graphify_freshness.py": {"scaffold"},
             "scripts/tests/test_graphify_upstream_skill.py": {"scaffold"},
             "scripts/tests/test_graphify_worktree_seed.py": {"scaffold"},
+            "scripts/tests/test_reconcile_graphify_worktree.py": {"scaffold"},
+            "scripts/tests/test_graphify_session_readiness.py": {"scaffold"},
             "scripts/tests/test_setup_worktree_env.sh": {"scaffold"},
             "scripts/tests/test_validate_agent_memory_threads.py": {"scaffold"},
             "docs/literature/sources.jsonl": {"docs"},

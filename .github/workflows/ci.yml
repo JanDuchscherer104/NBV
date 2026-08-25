@@ -35,6 +35,7 @@ on:
       - "scripts/ci_impact.py"
       - "scripts/check_graphify_freshness.py"
       - "scripts/graphify_worktree_seed.py"
+      - "scripts/reconcile_graphify_worktree.py"
       - "scripts/setup_worktree_env.sh"
       - "scripts/templates/lrz/**"
       - "scripts/tests/test_build_graphify_projection.py"
@@ -47,6 +48,8 @@ on:
       - "scripts/tests/test_graphify_freshness.py"
       - "scripts/tests/test_graphify_upstream_skill.py"
       - "scripts/tests/test_graphify_worktree_seed.py"
+      - "scripts/tests/test_reconcile_graphify_worktree.py"
+      - "scripts/tests/test_graphify_session_readiness.py"
       - "scripts/tests/test_ownership_consolidation_contract.py"
       - "scripts/tests/test_routing_trials.py"
       - "scripts/tests/test_setup_worktree_env.sh"
@@ -161,6 +164,8 @@ jobs:
           python3 scripts/tests/test_agent_governance_g002.py
           python3 -m pytest -q scripts/tests/test_routing_trials.py
           python3 scripts/tests/test_graphify_worktree_seed.py
+          python3 scripts/tests/test_reconcile_graphify_worktree.py
+          python3 scripts/tests/test_graphify_session_readiness.py
           bash scripts/tests/test_setup_worktree_env.sh
           python3 scripts/tests/test_graphify_freshness.py
           python3 scripts/tests/test_graphify_upstream_skill.py
