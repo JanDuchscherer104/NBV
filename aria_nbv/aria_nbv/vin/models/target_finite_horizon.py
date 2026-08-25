@@ -1,4 +1,20 @@
-"""Actor-only finite-horizon scorer for persisted Q_H chain views."""
+r"""Actor-only finite-horizon scorer for persisted :math:`Q_H` chain views.
+
+The scorer estimates a scalar member of the bounded conditional-value family
+
+$$
+Q_h(s_t,e,q_{t,i}\mid b_t),\qquad 1 \le h \le b_t \le H_{\max}.
+$$
+
+Here ``s_t`` is the actor-visible state before selecting action ``t``: immutable
+root evidence, the strictly causal selected-pose prefix, the current finite
+candidate table, and factual remaining budget ``b_t``. ``e`` is the target
+object represented by its root-relative pose and metric extents, and
+``q_{t,i}`` is one materialized candidate camera. The requested residual
+horizon ``h`` selects an estimand; it is not a substitute for ``b_t`` and does
+not reveal future observations. Supervision, oracle lineage, and policy masks
+remain outside this module.
+"""
 
 from __future__ import annotations
 
@@ -32,7 +48,10 @@ class QhScoreOutput:
     """
 
     conditional_q: Tensor
+    """``Tensor["B S N", float32]`` action-mask-independent conditional values."""
+
     feasibility_logits: Tensor
+    """``Tensor["B S N", float32]`` binary-validity logits from the physical trunk."""
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
@@ -65,8 +84,8 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     max_horizon: int = Field(default=5, gt=0)
     """Largest admitted acquisition horizon; remaining budget is normalized by this value."""
 
-    horizon_query_semantics: Literal["remaining_budget_diagonal_v1"] = "remaining_budget_diagonal_v1"
-    """Versioned query support: V1 admits only the trained diagonal ``h = b_t``."""
+    horizon_query_semantics: Literal["bounded_scalar_v1"] = "bounded_scalar_v1"
+    """Scalar query family admitting every realized ``1 <= h <= b_t <= H_max``."""
 
     experiment_profile: Literal["qh_cf0_v1"] = "qh_cf0_v1"
     """Closed deployable actor profile; privileged CF+ observations are not accepted."""
@@ -89,7 +108,7 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
 
 class TargetFiniteHorizonScorer(nn.Module):
-    """Predict candidate feasibility and conditional finite-horizon value.
+    r"""Predict candidate feasibility and conditional finite-horizon value.
 
     The module exposes one deep interface: a batched
     :class:`~aria_nbv.data_handling.qh_data.QhActorTensors` enters and one
@@ -98,14 +117,34 @@ class TargetFiniteHorizonScorer(nn.Module):
     one another, so jointly permuting candidate poses and masks permutes both
     outputs identically and invalid rows cannot influence valid rows.
 
-    V1 intentionally exposes a scalar query without pretending to support an
-    untrained function family.  Realized states admit only the remaining-budget
-    diagonal ``h = b_t``; padded states use ``h = 0``.  The explicit argument
-    preserves the eventual off-diagonal extension point, while fail-closed
-    validation prevents evaluation or deployment from treating extrapolated
-    horizon embeddings as learned conditional values.  Fitted-Q recursion
-    remains exact because a successor state has factual budget ``b_{t+1} =
-    b_t - 1`` and is therefore queried on its own trained diagonal.
+    Theory:
+        The public family is
+
+        $$
+        Q_h(s_t,e,q_{t,i}\mid b_t),\qquad 1\le h\le b_t\le H_{\max}.
+        $$
+
+        ``b_t`` is the factual number of acquisitions still available in the
+        stored state; ``h`` is the number of rewards represented by this query.
+        They are separately normalized by ``H_max`` and encoded by separate
+        MLPs, so an off-diagonal query changes the value estimand without
+        falsifying the actor state. ``None`` means the factual diagonal
+        ``h=b_t``. Realized rows reject ``h=0`` or ``h>b_t``; padded states use
+        ``h=0`` only. ``Q_0=0`` is a mathematical backup boundary and has no
+        learned output.
+
+        The physical trunk reads candidate root/current-relative pose and a
+        compact root-scene summary. Its feasibility head therefore cannot read
+        the target, requested horizon, remaining budget, labels, or
+        ``action_mask``. Conditional Q additionally reads candidate-to-target
+        geometry and five shared state tokens: root scene, target, causal pose
+        history, budget, and requested horizon. Candidate rows are independent
+        queries over those shared tokens; no attention axis crosses candidates.
+
+    Notes:
+        Syntactic admission does not assert empirical support. Lightning owns
+        which horizons receive targets, while a verified inference bundle owns
+        the manifest-bound set of horizons that may be deployed.
     """
 
     def __init__(self, config: TargetFiniteHorizonScorerConfig) -> None:
@@ -171,16 +210,16 @@ class TargetFiniteHorizonScorer(nn.Module):
         *,
         requested_horizon: Tensor | None = None,
     ) -> QhScoreOutput:
-        """Return mask-independent candidate predictions in stored order.
+        r"""Return mask-independent candidate predictions in stored order.
 
         Args:
             actor: Batched actor-visible chain with candidate support
                 ``Tensor["B S N", bool]`` and compact root EVL evidence.
             requested_horizon: Optional ``Tensor["B S", int64]`` value query.
-                ``None`` means :attr:`QhActorTensors.horizon_remaining`. V1
-                accepts only that remaining-budget diagonal on realized rows;
-                off-diagonal queries fail closed until they have direct target
-                support.
+                ``None`` means :attr:`QhActorTensors.horizon_remaining`.
+                Realized rows admit ``1 <= h <= b_t <= H_max``; padding must be
+                zero. This scalar selects one bounded value estimand per state,
+                not a public horizon axis.
 
         Returns:
             Candidate-aligned conditional Q and feasibility logits. Both are
@@ -272,7 +311,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         actor: QhActorTensors,
         requested_horizon: Tensor | None,
     ) -> Tensor:
-        """Return the scalar per-state query after fail-closed validation."""
+        """Return one bounded scalar query per state after fail-closed validation."""
 
         horizon = actor.horizon_remaining if requested_horizon is None else requested_horizon
         expected = actor.step_mask.shape
@@ -283,12 +322,10 @@ class TargetFiniteHorizonScorer(nn.Module):
         if horizon.device != actor.step_mask.device:
             raise ValueError("Q_H requested_horizon must be on the actor device.")
         realized = actor.step_mask
-        invalid_realized = realized & horizon.ne(actor.horizon_remaining)
-        if bool(invalid_realized.any()):
-            raise ValueError(
-                "Q_H horizon_query_semantics='remaining_budget_diagonal_v1' requires "
-                "requested_horizon == horizon_remaining on realized states."
-            )
+        if bool((realized & horizon.lt(1)).any()):
+            raise ValueError("Q_H realized requested_horizon must be at least one.")
+        if bool((realized & horizon.gt(actor.horizon_remaining)).any()):
+            raise ValueError("Q_H requested_horizon cannot exceed factual horizon_remaining.")
         if bool((realized & horizon.gt(self.config.max_horizon)).any()):
             raise ValueError(f"Q_H requested_horizon exceeds configured H_max={self.config.max_horizon}.")
         if bool((~realized & horizon.ne(0)).any()):

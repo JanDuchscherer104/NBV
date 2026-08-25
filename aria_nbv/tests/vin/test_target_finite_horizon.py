@@ -88,21 +88,43 @@ def test_qh_scorer_explicit_remaining_horizon_matches_default_query() -> None:
     assert torch.equal(default.feasibility_logits, queried.feasibility_logits)
 
 
-def test_qh_scorer_rejects_untrained_off_diagonal_horizon_query() -> None:
+def test_qh_scorer_accepts_bounded_off_diagonal_horizon_query() -> None:
     actor = _actor()
     scorer = _scorer()
     shorter = actor.horizon_remaining.clone()
     shorter[:, 0] = 1
 
-    with pytest.raises(ValueError, match="remaining_budget_diagonal_v1"):
-        scorer(actor, requested_horizon=shorter)
+    output = scorer(actor, requested_horizon=shorter)
+
+    assert output.conditional_q.shape == actor.action_mask.shape
+    assert torch.isfinite(output.conditional_q[actor.candidate_mask]).all()
+    assert torch.equal(output.feasibility_logits, scorer(actor).feasibility_logits)
 
 
-@pytest.mark.parametrize("invalid_horizon", [-1, 5])
+@pytest.mark.parametrize("invalid_horizon", [-1, 0, 5])
 def test_qh_scorer_rejects_requested_horizon_outside_supported_range(invalid_horizon: int) -> None:
     actor = _actor()
     with pytest.raises(ValueError, match="horizon"):
         _scorer()(actor, requested_horizon=torch.full(actor.action_mask.shape[:2], invalid_horizon))
+
+
+def test_qh_scorer_rejects_requested_horizon_above_factual_budget_without_clamping() -> None:
+    actor = _actor()
+    horizon = actor.horizon_remaining.clone()
+    horizon[:, -1] = 2
+
+    with pytest.raises(ValueError, match="factual horizon_remaining"):
+        _scorer()(actor, requested_horizon=horizon)
+
+
+def test_qh_scorer_rejects_requested_horizon_shape_and_dtype_drift() -> None:
+    actor = _actor()
+    scorer = _scorer()
+
+    with pytest.raises(ValueError, match="shape"):
+        scorer(actor, requested_horizon=actor.horizon_remaining.unsqueeze(-1))
+    with pytest.raises(ValueError, match="int64"):
+        scorer(actor, requested_horizon=actor.horizon_remaining.float())
 
 
 def test_qh_scorer_raw_outputs_are_independent_of_action_mask() -> None:
@@ -127,6 +149,26 @@ def test_qh_scorer_materialized_candidate_rows_are_finite_when_not_action_select
     materialized = actor.candidate_mask & actor.step_mask.unsqueeze(-1)
     assert torch.isfinite(output.conditional_q[materialized]).all()
     assert torch.isfinite(output.feasibility_logits[materialized]).all()
+
+
+def test_qh_scorer_materialized_invalid_candidate_is_isolated_from_other_rows() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    action_mask = actor.action_mask.clone()
+    action_mask[..., -1] = False
+    invalid = replace(actor, action_mask=action_mask)
+    baseline = scorer(invalid)
+    poses = actor.candidate_pose_relative_root.tensor().clone()
+    poses[..., -1, 9:12] += 1000.0
+    changed = scorer(replace(invalid, candidate_pose_relative_root=PoseTW(poses)))
+
+    assert torch.allclose(changed.conditional_q[..., :-1], baseline.conditional_q[..., :-1], atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        changed.feasibility_logits[..., :-1],
+        baseline.feasibility_logits[..., :-1],
+        atol=1e-6,
+        rtol=1e-6,
+    )
 
 
 def test_qh_scorer_candidate_permutation_preserves_both_output_heads() -> None:
@@ -342,6 +384,24 @@ def test_qh_scorer_uses_target_history_and_budget_without_future_history() -> No
     assert not torch.allclose(scorer(replace(actor, horizon_remaining=budget)).conditional_q, baseline)
 
 
+def test_qh_feasibility_is_independent_of_target_budget_and_requested_horizon() -> None:
+    actor = _actor()
+    scorer = _scorer()
+    baseline = scorer(actor).feasibility_logits
+    target = actor.target_extents + 0.75
+    budget = actor.horizon_remaining.clone()
+    budget[:, 0] -= 1
+    requested_horizon = budget.clone()
+    requested_horizon[:, 0] = 1
+
+    changed = scorer(
+        replace(actor, target_extents=target, horizon_remaining=budget),
+        requested_horizon=requested_horizon,
+    ).feasibility_logits
+
+    assert torch.equal(changed, baseline)
+
+
 def test_qh_scorer_backward_updates_parameters_only() -> None:
     actor = _actor()
     scorer = _scorer()
@@ -358,7 +418,7 @@ def test_qh_scorer_backward_updates_parameters_only() -> None:
 def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
     config = TargetFiniteHorizonScorerConfig(hidden_dim=32, attention_heads=4, max_horizon=4)
 
-    assert config.model_dump()["horizon_query_semantics"] == "remaining_budget_diagonal_v1"
+    assert config.model_dump()["horizon_query_semantics"] == "bounded_scalar_v1"
     assert config.target_type is TargetFiniteHorizonScorer
     assert isinstance(config.setup_target(), TargetFiniteHorizonScorer)
 
