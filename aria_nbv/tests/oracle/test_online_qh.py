@@ -29,6 +29,7 @@ from aria_nbv.pose_generation import CandidateSamplingResult
 from aria_nbv.rollouts.replay.policy import RolloutPolicySpec
 from aria_nbv.rollouts.replay.state import CounterfactualTrajectory
 from aria_nbv.targets.protocol import ORACLE_GT_TARGET_SOURCE, TargetDescriptorProvenance
+from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
 from aria_nbv.vin.qh_bundle import QhInferenceBundleRef, QhInferenceRuntime
 
 
@@ -248,12 +249,35 @@ def test_oracle_query_rejects_unknown_mode() -> None:
 
 
 class _Scorer(nn.Module):
-    def forward(self, actor: QhActorTensors) -> torch.Tensor:
-        return torch.tensor(
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: torch.Tensor | None = None,
+    ) -> QhScoreOutput:
+        del requested_horizon
+        values = torch.tensor(
             [[[1.0, 2.0, 3.0]]],
             device=actor.action_mask.device,
             requires_grad=True,
         )
+        return QhScoreOutput(conditional_q=values, feasibility_logits=torch.zeros_like(values))
+
+
+class _NegativeScorer(nn.Module):
+    def forward(
+        self,
+        actor: QhActorTensors,
+        *,
+        requested_horizon: torch.Tensor | None = None,
+    ) -> QhScoreOutput:
+        del requested_horizon
+        values = torch.tensor(
+            [[[-3.0, -2.0, -1.0]]],
+            device=actor.action_mask.device,
+            requires_grad=True,
+        )
+        return QhScoreOutput(conditional_q=values, feasibility_logits=torch.zeros_like(values))
 
 
 def test_qh_candidate_score_adapter_returns_detached_values_in_full_shell_alignment() -> None:
@@ -265,6 +289,17 @@ def test_qh_candidate_score_adapter_returns_detached_values_in_full_shell_alignm
     assert torch.equal(scores.candidate_shell_indices, torch.tensor([0, 2]))
     assert torch.equal(scores.values, torch.tensor([1.0, 3.0]))
     assert not scores.values.requires_grad
+
+
+def test_qh_candidate_score_adapter_preserves_negative_values_for_hard_selection() -> None:
+    adapter = _QhCandidateScoreAdapter(_runtime(scorer=_NegativeScorer().eval()))
+
+    scores = adapter(_context())
+
+    assert torch.equal(scores.action_mask, torch.tensor([True, False, True]))
+    assert torch.equal(scores.candidate_shell_indices, torch.tensor([0, 2]))
+    assert torch.equal(scores.values, torch.tensor([-3.0, -1.0]))
+    assert int(scores.values.argmax()) == 1
 
 
 @pytest.mark.parametrize(

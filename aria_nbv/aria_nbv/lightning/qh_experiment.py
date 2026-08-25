@@ -241,6 +241,7 @@ class QhExperiment:
                     "root_evl_profile": train.actor_state_contract.root_evl_profile,
                     "selected_observation_protocol": train.actor_state_contract.selected_observation_protocol,
                     "experiment_profile": self.config.scorer.experiment_profile,
+                    "action_mask_semantics": data.learning_contract.data_contract.action_mask_semantics,
                     "actor_state_contract_hash": data.actor_state_contract_hash,
                     "learning_contract_hash": data.learning_contract_hash,
                     "geometry_contract_hash": data.geometry_contract_hash,
@@ -254,6 +255,7 @@ class QhExperiment:
                 scorer_config=self.config.scorer,
                 module_config=module_config,
                 actor_state_contract_hash=data.actor_state_contract_hash,
+                learning_contract_hash=data.learning_contract_hash,
                 target_protocol=data.learning_contract.data_contract.target_protocol,
                 action_mask_semantics=data.learning_contract.data_contract.action_mask_semantics,
                 geometry_contract_hash=data.geometry_contract_hash,
@@ -565,10 +567,20 @@ class QhExperiment:
         scorer_config: TargetFiniteHorizonScorerConfig,
         module_config: QhLightningModuleConfig,
         actor_state_contract_hash: str,
+        learning_contract_hash: str,
         target_protocol: str,
         action_mask_semantics: str,
         geometry_contract_hash: str | None,
     ) -> QhInferenceBundleRef | None:
+        """Load weights only from an exactly compatible learning identity.
+
+        Warm starting is continuation, not representation transfer. The
+        parent must therefore agree on the complete learning-contract hash in
+        addition to scorer, actor, target, mask, observation, and geometry
+        identities. A future cross-objective transfer policy requires its own
+        versioned profile rather than weakening this fail-closed path.
+        """
+
         if ref is None:
             return None
         manifest = cls._read_verified_manifest(ref)
@@ -576,6 +588,7 @@ class QhExperiment:
         expected = {
             "scorer_config_hash": stable_config_hash(scorer_config, length=64),
             "actor_state_contract_hash": actor_state_contract_hash,
+            "learning_contract_hash": learning_contract_hash,
             "target_protocol": target_protocol,
             "action_mask_semantics": action_mask_semantics,
             "root_evl_profile": module_config.root_evl_profile,
@@ -586,6 +599,7 @@ class QhExperiment:
         actual = {
             "scorer_config_hash": manifest["scorer_config_hash"],
             "actor_state_contract_hash": identity["actor_state_contract_hash"],
+            "learning_contract_hash": identity["learning_contract_hash"],
             "target_protocol": identity["learning_contract"]["data_contract"]["target_protocol"],
             "action_mask_semantics": identity["action_mask_semantics"],
             "root_evl_profile": manifest["module_config"]["root_evl_profile"],
@@ -647,7 +661,14 @@ class QhExperiment:
 
     @staticmethod
     def _validate_manifest_contract(manifest: dict[str, Any]) -> None:
-        """Validate the closed bundle schema and its cross-field identities."""
+        """Validate the closed bundle schema and cross-field identities.
+
+        The learning contract may cover a strict subset of the scorer's
+        configured horizon support, but it may never claim a horizon the
+        persisted scorer cannot query. This binds the dataset horizon,
+        ``H_max`` model capacity, and checkpoint manifest at load time as well
+        as at fit admission.
+        """
 
         required_manifest_fields = {
             "schema_version",
@@ -702,6 +723,11 @@ class QhExperiment:
             raise ValueError("Q_H bundle learning contract hash does not match its payload.")
         if module.actor_state_contract_hash != actor_hash or module.learning_contract_hash != learning_hash:
             raise ValueError("Q_H bundle module config is not bound to the manifest contracts.")
+        if learning_contract.max_horizon > scorer.max_horizon:
+            raise ValueError(
+                "Q_H bundle learning-contract max_horizon exceeds scorer max_horizon: "
+                f"{learning_contract.max_horizon} > {scorer.max_horizon}."
+            )
         geometry_hash = identity.get("geometry_contract_hash")
         if module.geometry_contract_hash != geometry_hash or actor_contract.geometry_contract_hash != geometry_hash:
             raise ValueError("Q_H bundle geometry identity is inconsistent across actor, module, and manifest.")
@@ -737,12 +763,18 @@ class QhExperiment:
                 raise ValueError(f"Q_H bundle {field} must be one non-empty string.")
         if identity["action_mask_semantics"] != data_contract.action_mask_semantics:
             raise ValueError("Q_H bundle action-mask semantics do not match the learning contract.")
+        if identity["action_mask_semantics"] == "learned_feasibility_v1":
+            raise ValueError(
+                "Q_H deployable core bundles reject learned_feasibility_v1 until a separately versioned "
+                "calibrated learned-only profile exists."
+            )
         if identity["action_mask_semantics"] not in {
             "oracle_action_mask_v1",
             "actor_observed_action_mask_v1",
-            "learned_feasibility_v1",
         }:
             raise ValueError("Q_H bundle action-mask semantics are unsupported.")
+        if module.action_mask_semantics != identity["action_mask_semantics"]:
+            raise ValueError("Q_H bundle module and identity action-mask semantics differ.")
         if identity["representation_semantics"] != scorer.representation_semantics:
             raise ValueError("Q_H bundle representation semantics do not match the scorer configuration.")
         required_artifacts = {

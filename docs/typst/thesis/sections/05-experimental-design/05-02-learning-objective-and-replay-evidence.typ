@@ -39,16 +39,16 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
     [held-out coverage, source-role audit, and matched endpoint evaluation],
     [Myopic control], [scene-level VIN substrate],
     [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
-    [Finite-horizon scorer], [selected-transition training seam; no production scorer yet],
-    [source-owner interface decision, exact-Q2 control, state-protocol freeze, compatible checkpoint, and oracle-rescored policy],
-    [Requested-horizon alternative], [selected transitions; explicit horizon-query contract remains proposed],
-    [comparison against fixed-H, certified recursion, supported horizons through $H$, and per-horizon validation],
+    [Finite-horizon scorer], [A1--S0-pose/root-moments scalar-horizon scorer and fitted-Q seam],
+    [exact-Q2 certification, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
+    [Requested horizons], [fail-closed scalar query and exact $h arrow.l h-1$ recursion tests],
+    [supported targets through $H_"max"$, positive headroom, and per-horizon validation],
     [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
     [typed dynamic-state reader, deterministic fusion, source masks, and held-out policy evaluation],
     [Policy claim], [train-only feasibility pilots],
     [completed held-out paired comparison under equal budget], bottomrule(),
   ),
-  caption: [Learning-readiness gates. Scorer-independent training infrastructure does not establish a runnable finite-horizon scorer or policy.],
+  caption: [Learning-readiness gates. A runnable scorer establishes executable readiness, not a scientific policy result.],
 ) <tab:thesis-learning-readiness>
 
 #thesis_status(
@@ -56,8 +56,8 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   evidence: "pending",
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_datamodule.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
-  gate: [fixed-H versus requested-horizon source-owner decision, production scorer, exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
-)[A masked selected-transition Double-Q learner for an injected scorer is implemented. No H=2 oracle-task pose-history scorer, shared requested-horizon scorer, task-sufficient dynamic state, or policy evidence is available.]
+  gate: [exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
+)[The scalar requested-horizon A1 scorer, hard-masked selected-transition Double-Q learner, feasibility auxiliary, and exact-Q2 diagnostic are implemented. Task-sufficient dynamic state and policy evidence remain unavailable.]
 
 The finite-candidate value model decodes actions only over valid candidate rows:
 
@@ -71,9 +71,9 @@ $
 
 The masked argmax is already the discrete decision rule. A separate actor network and online data collection are not required to train or execute this finite-candidate policy. Batch fitted Q iteration explicitly learns a greedy Q function from a fixed collection of transitions by repeatedly solving supervised regression problems @FittedQIteration-ernst2005.
 
-=== Requested-horizon target candidate
+=== Scalar requested-horizon targets
 
-If the source-owner decision selects an explicit requested-horizon interface, one candidate model is $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H$. The boundary target is
+The scorer represents $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H_"max"$. The boundary target is
 
 #eqs.rl.target_root_gain_reward
 
@@ -81,9 +81,9 @@ and the recursive target is
 
 #eqs.rl.qh_doubleq_target
 
-The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. For this candidate, the defining recursion is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
+The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining recursion is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$, and the executable learner rejects a successor whose factual horizon is not exactly $h-1$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
 
-For the requested-horizon candidate, the clearest initial schedule is staged backward induction with one shared horizon-conditioned network:
+The clearest initial schedule is staged backward induction with one shared horizon-conditioned network:
 
 1. fit $Q_1$ from dense one-step labels for every candidate admitted by `q_train_mask`;
 2. freeze or snapshot the lower-horizon target path;
@@ -91,7 +91,7 @@ For the requested-horizon candidate, the clearest initial schedule is staged bac
 4. continue through $Q_H$, always requesting $h-1$ from the successor target path;
 5. optionally fine-tune all horizons jointly after the staged model passes per-horizon regression and ranking gates.
 
-This schedule preserves one inference interface and shared encoders while making target lineage explicit. Fixed-H networks and separate per-horizon heads remain competing designs, not merely controls, until the scorer interface decision is complete.
+This schedule preserves one inference interface and shared encoders while making target lineage explicit. Fixed-H networks and separate per-horizon heads are matched ablations, not alternate runtime contracts.
 
 For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
 
@@ -101,7 +101,7 @@ This target uses no learned successor value or target network. Agreement between
 
 === Double-Q and behavior-return controls
 
-Double Q changes how a noisy learned successor maximum is estimated; it does not decide between fixed-H and requested-horizon scorer interfaces. In the requested-horizon candidate, the online path selects
+Double Q changes how a noisy learned successor maximum is estimated; it does not define the scalar horizon interface. The online path selects
 
 #eqs.rl.qh_doubleq_index
 

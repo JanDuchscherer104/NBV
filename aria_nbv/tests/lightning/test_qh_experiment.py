@@ -28,7 +28,7 @@ from aria_nbv.lightning.qh_experiment import (
 )
 from aria_nbv.lightning.qh_module import QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
-from aria_nbv.utils.fingerprints import stable_msgspec_hash
+from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from aria_nbv.vin.models.target_finite_horizon import TargetFiniteHorizonScorerConfig
 from tests.data_handling.test_qh import _chain
 from tests.lightning.test_qh_module import _ChainDataset
@@ -77,7 +77,7 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
     scorer = experiment.config.scorer.setup_target().eval()
     actor = _actor()
     expected = scorer(actor)
-    expected_rank = expected.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1)
+    expected_rank = expected.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1)
     bundle_dir = tmp_path / "bundle"
     bundle_dir.mkdir()
     module_config, identity = _publish_contracts(experiment)
@@ -101,8 +101,12 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
     assert runtime.scorer.training is False
     assert runtime.scorer_state_sha256 == manifest["artifacts"]["scorer-state.pt"]["sha256"]
     assert runtime.representation_semantics == "root_moments_v1"
-    assert torch.equal(actual, expected)
-    assert torch.equal(actual.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1), expected_rank)
+    assert torch.equal(actual.conditional_q, expected.conditional_q)
+    assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
+    assert torch.equal(
+        actual.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1),
+        expected_rank,
+    )
 
     probe = subprocess.run(
         [
@@ -114,8 +118,8 @@ def test_qh_bundle_round_trip_preserves_values_and_ranking(tmp_path) -> None:
                 "from tests.vin.test_target_finite_horizon import _actor; "
                 f"ref=QhInferenceBundleRef(Path({str(bundle_dir)!r}), {ref.schema_version!r}, {ref.manifest_sha256!r}); "
                 "actor=_actor(); runtime=QhExperiment.load_for_inference(ref, device='cpu'); "
-                "values=runtime.scorer(actor); "
-                "print(values.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1).tolist())"
+                "output=runtime.scorer(actor); "
+                "print(output.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1).tolist())"
             ),
         ],
         check=True,
@@ -200,6 +204,37 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
         QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
+def test_qh_bundle_rejects_learning_horizon_beyond_scorer_capacity(tmp_path) -> None:
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["scorer_config"]["max_horizon"] = 1
+    scorer_config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])
+    manifest["scorer_config_hash"] = stable_config_hash(scorer_config, length=64)
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="learning-contract max_horizon exceeds scorer max_horizon"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
+def test_qh_bundle_rejects_learned_feasibility_from_deployable_core(tmp_path) -> None:
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["identity"]["action_mask_semantics"] = "learned_feasibility_v1"
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(
+        ValueError,
+        match="learned_feasibility_v1|learned feasibility|deployable|action-mask semantics",
+    ):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
 @pytest.mark.parametrize(
     ("module_update", "message"),
     [
@@ -235,6 +270,26 @@ def test_qh_experiment_config_is_factory_without_running_fit() -> None:
     experiment = _experiment()
     assert isinstance(experiment, QhExperiment)
     assert experiment.config.target_type is QhExperiment
+
+
+def test_qh_warm_start_requires_exact_learning_contract_hash(tmp_path) -> None:
+    experiment, ref = _bundle(tmp_path)
+    manifest = json.loads((ref.bundle_path / "manifest.json").read_text(encoding="utf-8"))
+    identity = manifest["identity"]
+    module_config = QhLightningModuleConfig.model_validate(manifest["module_config"])
+
+    with pytest.raises(ValueError, match="learning_contract_hash"):
+        experiment._warm_start_weights(  # noqa: SLF001
+            ref,
+            scorer=experiment.config.scorer.setup_target(),
+            scorer_config=experiment.config.scorer,
+            module_config=module_config,
+            actor_state_contract_hash=identity["actor_state_contract_hash"],
+            learning_contract_hash="different-learning-contract",
+            target_protocol=identity["learning_contract"]["data_contract"]["target_protocol"],
+            action_mask_semantics=identity["action_mask_semantics"],
+            geometry_contract_hash=identity["geometry_contract_hash"],
+        )
 
 
 def test_qh_checkpoint_selection_breaks_exact_loss_tie_by_earliest_update(tmp_path) -> None:
