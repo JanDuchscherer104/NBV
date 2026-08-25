@@ -123,7 +123,8 @@ receipt exposes a denominator ladder from eligible census chains through materia
 successors and complete hard-valid successor labels to factual selected-action exact
 Q2 rows. It also reports per-stratum support and fixed-support CORAL saturation
 separately from recursion error. Missing support is a failed gate rather than zero
-error. V1 receipts remain readable historical evidence but cannot promote a claim.
+error. Development-schema `qh-exact-q2-certification-receipt-v1` receipts remain
+readable historical evidence but cannot promote a claim.
 Agreement with the exact control remains necessary but insufficient for
 interpreting longer horizons: positive oracle-lookahead headroom must come from
 independent held-out endpoint evaluation. A persisted terminal-step role
