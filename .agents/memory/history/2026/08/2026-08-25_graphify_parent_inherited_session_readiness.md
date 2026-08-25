@@ -14,48 +14,59 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
   - scripts/graphify_worktree_seed.py
   - scripts/reconcile_graphify_worktree.py
+  - scripts/setup_codex_worktree_env.sh
   - scripts/setup_worktree_env.sh
+  - scripts/tests/test_graphify_freshness.py
+  - scripts/tests/test_reconcile_graphify_worktree.py
   - scripts/tests/test_graphify_session_readiness.py
+  - scripts/tests/test_setup_worktree_env.sh
 codex_thread: codex://threads/01a038aa-8929-7621-9832-0e7f9aea953f
 repo_object_format: sha1
-repo_head: 49356b9a2b2b9cc3bf191dfa6c058307dc6d673f
+repo_head: 00d4f91787cc5ef57009e440041e6749dca52d13
 repo_branch: "codex/graphify-parent-session-readiness"
 worktree_kind: linked
 ---
 
 ## Task
-Make every Codex-created linked worktree inherit its actual parent Graphify
-generation and admit the session only when that child graph is query-usable.
+Make Codex-created linked worktrees inherit Graphify state only from a valid,
+query-admissible parent, without treating inherited semantic artifacts as proof
+of current freshness.
 
 ## Method
-Required the Codex-provided parent, copied only local graph artifacts, linked
-the parent's resolved content-addressed semantic caches, rebuilt the
-deterministic child projection, and ran upstream's no-LLM incremental update.
-The reconciliation receipt records semantic-input hashes, bounded projection
-drift, and retained semantic-node/edge counts so legacy missing manifest stamps
-cannot be confused with real source drift.
+The Codex bridge resolves either the explicit fork parent or Git's canonical
+primary checkout. Before it runs a parent executable or changes the child,
+setup proves both paths are registered worktrees in the same Git common
+directory and checks the selected source with the repository-owned usable gate.
+The former reconciliation receipt bypass was removed because its counts and
+input hashes did not prove semantic graph content. Reconciliation preserves
+semantic item counts across an upstream incremental update and restores the
+projection and Graphify output after an ordinary failure.
 
 ## Findings
-The seed sentinel now binds both inherited cache targets. Setup no longer
-guesses a sibling parent, links PDFs before projection generation, and verifies
-the retained semantic graph before accepting its child-local receipt. A fresh
-child can therefore admit a bounded `usable-stale` graph without asking a model
-to interpret Graphify's legacy unbounded semantic detector result.
+The selected parent's content-addressed semantic and semantic-deep caches remain
+the only shared Graphify state; generated projection, graph, manifest, and run
+state stay child-local. Setup never invokes a foreign or Graphify-unusable
+parent runtime. It fails before child seeding when the source gate is unusable;
+it does not manufacture freshness from a receipt, matching counts, or matching
+Git revisions.
 
 ## Commits
-- [7ba6faad3e1214a5c22dd55d1bbbf1211a5350df](https://github.com/JanDuchscherer104/ARIA-NBV/commit/7ba6faad3e1214a5c22dd55d1bbbf1211a5350df)
-- [40bec20bfcc522b71ec22e98a2c11f1eebe933d6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/40bec20bfcc522b71ec22e98a2c11f1eebe933d6)
-- [4390cf8024810cc81daa38be1851da41253156eb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/4390cf8024810cc81daa38be1851da41253156eb)
-- [a9d9b6d012f8a75d291bb647731b19742c880875](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a9d9b6d012f8a75d291bb647731b19742c880875)
-- [49356b9a2b2b9cc3bf191dfa6c058307dc6d673f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/49356b9a2b2b9cc3bf191dfa6c058307dc6d673f)
+- [c9676277eb01c95ef9029d6ac27015a7abe2999e](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c9676277eb01c95ef9029d6ac27015a7abe2999e)
+- [00d4f91787cc5ef57009e440041e6749dca52d13](https://github.com/JanDuchscherer104/ARIA-NBV/commit/00d4f91787cc5ef57009e440041e6749dca52d13)
 
 ## Verification
-Passed the focused freshness, setup, reconciler, and linked-worktree
-session-readiness tests. A disposable child at `4390cf80` then completed real
-setup and `check_graphify_freshness.py --usable`; its standard and deep caches
-resolved to the selected parent, while all 443 semantic nodes and 150 semantic
-edges were retained.
+Passed `bash scripts/tests/test_setup_worktree_env.sh`, the focused freshness,
+session-readiness, reconciler, seed, upstream-skill, and CI-impact tests, plus
+shell syntax, Ruff, and diff checks. A real disposable worktree executed the
+exact empty-source Codex bridge and correctly failed before creating
+`graphify-out`, `graphify-input`, or a child venv: the canonical parent
+`/home/jd/repos/ARIA-NBV` is currently Graphify-unusable because its detector
+reports an unbounded stale-source set (alongside local projection-owner drift).
+An externally completed, verified semantic refresh of that parent remains the
+prerequisite for an admitted parentless session.
 
 ## Canonical Owner Impact
-Updated the ARIA Graphify boundary guidance and the setup, seed, reconciliation,
-and focused test owners listed in the front matter.
+Updated the ARIA Graphify boundary guidance, setup, freshness, reconciliation,
+and focused test owners listed in the front matter. The earlier receipt-based
+admission evidence and its reported retained semantic counts are superseded and
+must not be used as final readiness evidence.
