@@ -18,7 +18,9 @@ repository owners remain authoritative for behavior and scientific claims.
    matching commit alone proves graph validity.
 3. Setup admits a session only after `scripts/check_graphify_freshness.py
    --usable` succeeds. Models query the admitted graph and do not perform
-   freshness repair. `--check` verifies that admission without writing.
+   freshness repair. `scripts/check_graphify_freshness.py --json` remains the
+   read-only diagnostic view; `--check` verifies setup admission without
+   writing.
 4. Query the byte-identical upstream Graphify skill first for `fresh` and
    `usable-stale`. Then open exact repository owners; for `usable-stale`, verify
    every consequential path in the exact bounded `stale_sources` list.
