@@ -50,6 +50,23 @@ def test_qh_state_fusion_duplicate_queries_have_identical_context(config) -> Non
     assert torch.equal(output[:, :, 0], output[:, :, 1])
 
 
+@pytest.mark.parametrize(
+    "config",
+    [QhIndependentMlpStateFusionConfig(), QhCrossAttentionStateFusionConfig(attention_heads=4)],
+)
+def test_qh_state_fusion_candidate_query_rows_are_strictly_isolated(config) -> None:
+    queries, state = _inputs()
+    torch.manual_seed(18)
+    fusion = config.setup_target(hidden_dim=16, state_token_count=5, dropout=0.0).eval()
+    baseline = fusion(queries, state)
+    changed_queries = queries.clone()
+    changed_queries[:, :, 2] += 1000.0
+    changed = fusion(changed_queries, state)
+    unaffected = torch.tensor([0, 1, 3])
+
+    assert torch.equal(changed[:, :, unaffected], baseline[:, :, unaffected])
+
+
 def test_qh_a0_reads_every_named_state_token_without_candidate_interaction() -> None:
     queries, state = _inputs()
     torch.manual_seed(19)
