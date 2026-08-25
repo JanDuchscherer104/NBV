@@ -61,7 +61,7 @@ This equation is an information contract rather than one flat tensor. The corres
     [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
     [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [oracle-task instruction or actor-visible target],
     [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
-    [`ValueQuery`], [scalar requested residual horizon $h$ per state; omission means $h=b_t$], [model-visible query with $1 <= h <= b_t <= H_"max"$],
+    [`ValueQuery`], [scalar requested residual horizon $h$ per state; omission means $h=b_t$], [V1 admits only the trained diagonal $h=b_t$; off-diagonal support is planned],
     [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
     [`SelectedTransition`], [factual action index and row id, reward, discount, terminal and successor identity], [training linkage only],
     [`AuditLineage`], [source/store/config hashes, policy, seed and reason vocabulary], [CPU audit data; not a learned feature],
@@ -70,11 +70,11 @@ This equation is an information contract rather than one flat tensor. The corres
   caption: [Finite-horizon scorer DTO roles. Model inputs, scalar horizon queries, supervision, transition linkage, and provenance remain distinct even when collated in one training batch.],
 ) <tab:thesis-qh-dto-contract>
 
-The maximum supported horizon $H_"max"$ is a scorer, data, and checkpoint contract. Remaining budget $b_t$ is a factual rollout-state field, whereas requested horizon $h$ is a scalar query with $1 <= h <= b_t <= H_"max"$. The public output remains $[B,S,N_q]$; several horizons use separate calls until measured callers justify a vectorized public axis. The step index $t$ remains lineage by default and becomes a learned feature only in a named non-stationarity ablation.
+The maximum supported horizon $H_"max"$ is a scorer, data, and checkpoint contract. Remaining budget $b_t$ is a factual rollout-state field, whereas requested horizon $h$ names the more general scalar family $1 <= h <= b_t <= H_"max"$. Implemented V1 binds `horizon_query_semantics = remaining_budget_diagonal_v1`: realized calls require $h=b_t$, padding requires $h=0$, and the serialized scorer configuration preserves that restriction. The public output remains $[B,S,N_q]$; off-diagonal targets must be introduced and validated before separate calls at $h < b_t$ become admissible, while a public vectorized horizon axis remains evidence-gated. The step index $t$ remains lineage by default and becomes a learned feature only in a named non-stationarity ablation.
 
 The executable boundary is `score(actor, requested_horizon=None)`. It hides scene, target, candidate, history, and time encoding behind one deep module and returns conditional Q plus feasibility logits in stored candidate order. Static encodings may be reused privately, but the interface exposes no cache lifecycle, encoder handles, candidate sorting, or public horizon axis.
 
-Padding masks, modality-presence masks, source-role masks, action masks, and training masks remain distinct. Unsupported requested horizons fail closed and are never clamped to the available budget. A missing modality must never be encoded as an ordinary zero observation or confused with padding.
+Padding masks, modality-presence masks, source-role masks, action masks, and training masks remain distinct. Unsupported requested horizons fail closed and are never clamped to the available budget. This does not break $h\mapsto h-1$ recursion: the successor's factual remaining budget is itself $b_t-1$, so its diagonal query supplies the required lower-horizon backup. A missing modality must never be encoded as an ordinary zero observation or confused with padding.
 
 The target descriptor separates identity, geometry, observed support, confidence, and source:
 

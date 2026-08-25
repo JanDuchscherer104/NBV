@@ -211,9 +211,9 @@
     =
     f_theta (s_t, e, q_(t,i), h),
     quad
-    h = #symb.rl.budget "if omitted";
+    h = #symb.rl.budget "in implemented V1";
     quad
-    1 <= h <= b_t <= #symb.rl.H_max
+    1 <= b_t <= #symb.rl.H_max
   $,
   qh_conditional_mask_independence: $
     (#symb.rl.conditional_q, #symb.rl.feasibility_logits)

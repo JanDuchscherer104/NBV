@@ -88,17 +88,14 @@ def test_qh_scorer_explicit_remaining_horizon_matches_default_query() -> None:
     assert torch.equal(default.feasibility_logits, queried.feasibility_logits)
 
 
-def test_qh_scorer_requested_horizon_changes_only_conditional_q() -> None:
+def test_qh_scorer_rejects_untrained_off_diagonal_horizon_query() -> None:
     actor = _actor()
     scorer = _scorer()
     shorter = actor.horizon_remaining.clone()
     shorter[:, 0] = 1
 
-    factual = scorer(actor)
-    queried = scorer(actor, requested_horizon=shorter)
-
-    assert not torch.equal(factual.conditional_q[:, 0], queried.conditional_q[:, 0])
-    assert torch.equal(factual.feasibility_logits, queried.feasibility_logits)
+    with pytest.raises(ValueError, match="remaining_budget_diagonal_v1"):
+        scorer(actor, requested_horizon=shorter)
 
 
 @pytest.mark.parametrize("invalid_horizon", [-1, 5])
@@ -360,6 +357,8 @@ def test_qh_scorer_backward_updates_parameters_only() -> None:
 
 def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
     config = TargetFiniteHorizonScorerConfig(hidden_dim=32, attention_heads=4, max_horizon=4)
+
+    assert config.model_dump()["horizon_query_semantics"] == "remaining_budget_diagonal_v1"
     assert config.target_type is TargetFiniteHorizonScorer
     assert isinstance(config.setup_target(), TargetFiniteHorizonScorer)
 

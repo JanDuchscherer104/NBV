@@ -65,6 +65,9 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     max_horizon: int = Field(default=5, gt=0)
     """Largest admitted acquisition horizon; remaining budget is normalized by this value."""
 
+    horizon_query_semantics: Literal["remaining_budget_diagonal_v1"] = "remaining_budget_diagonal_v1"
+    """Versioned query support: V1 admits only the trained diagonal ``h = b_t``."""
+
     experiment_profile: Literal["qh_cf0_v1"] = "qh_cf0_v1"
     """Closed deployable actor profile; privileged CF+ observations are not accepted."""
 
@@ -94,6 +97,15 @@ class TargetFiniteHorizonScorer(nn.Module):
     encoded independently of ``action_mask``. Candidate rows never attend to
     one another, so jointly permuting candidate poses and masks permutes both
     outputs identically and invalid rows cannot influence valid rows.
+
+    V1 intentionally exposes a scalar query without pretending to support an
+    untrained function family.  Realized states admit only the remaining-budget
+    diagonal ``h = b_t``; padded states use ``h = 0``.  The explicit argument
+    preserves the eventual off-diagonal extension point, while fail-closed
+    validation prevents evaluation or deployment from treating extrapolated
+    horizon embeddings as learned conditional values.  Fitted-Q recursion
+    remains exact because a successor state has factual budget ``b_{t+1} =
+    b_t - 1`` and is therefore queried on its own trained diagonal.
     """
 
     def __init__(self, config: TargetFiniteHorizonScorerConfig) -> None:
@@ -165,7 +177,10 @@ class TargetFiniteHorizonScorer(nn.Module):
             actor: Batched actor-visible chain with candidate support
                 ``Tensor["B S N", bool]`` and compact root EVL evidence.
             requested_horizon: Optional ``Tensor["B S", int64]`` value query.
-                ``None`` means :attr:`QhActorTensors.horizon_remaining`.
+                ``None`` means :attr:`QhActorTensors.horizon_remaining`. V1
+                accepts only that remaining-budget diagonal on realized rows;
+                off-diagonal queries fail closed until they have direct target
+                support.
 
         Returns:
             Candidate-aligned conditional Q and feasibility logits. Both are
@@ -268,9 +283,12 @@ class TargetFiniteHorizonScorer(nn.Module):
         if horizon.device != actor.step_mask.device:
             raise ValueError("Q_H requested_horizon must be on the actor device.")
         realized = actor.step_mask
-        invalid_realized = realized & (horizon.lt(1) | horizon.gt(actor.horizon_remaining))
+        invalid_realized = realized & horizon.ne(actor.horizon_remaining)
         if bool(invalid_realized.any()):
-            raise ValueError("Q_H realized requested horizons must satisfy 1 <= h <= horizon_remaining.")
+            raise ValueError(
+                "Q_H horizon_query_semantics='remaining_budget_diagonal_v1' requires "
+                "requested_horizon == horizon_remaining on realized states."
+            )
         if bool((realized & horizon.gt(self.config.max_horizon)).any()):
             raise ValueError(f"Q_H requested_horizon exceeds configured H_max={self.config.max_horizon}.")
         if bool((~realized & horizon.ne(0)).any()):
