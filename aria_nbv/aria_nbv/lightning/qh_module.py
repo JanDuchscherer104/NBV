@@ -127,6 +127,24 @@ class QhFittedQObjective:
     candidate_count_by_horizon: Tensor
     """``Tensor["H_max", int64]`` local raw candidate-label contributions."""
 
+    absolute_error_sum_by_horizon: Tensor
+    """``Tensor["H_max", float64]`` state-normalized absolute-error sums."""
+
+    ranking_accuracy_sum_by_horizon: Tensor
+    """``Tensor["H_max", float64]`` sums of within-state pairwise accuracies."""
+
+    ranking_state_count_by_horizon: Tensor
+    """``Tensor["H_max", int64]`` states with at least one unequal-target pair."""
+
+    ranking_pair_count_by_horizon: Tensor
+    """``Tensor["H_max", int64]`` raw unequal-target candidate pairs."""
+
+    selected_regret_sum_by_horizon: Tensor
+    """``Tensor["H_max", float64]`` state-level greedy selected-action regret sums."""
+
+    selected_regret_state_count_by_horizon: Tensor
+    """``Tensor["H_max", int64]`` states with complete counterfactual regret support."""
+
 
 @dataclass(frozen=True, slots=True)
 class _QhLearningComponents:
@@ -691,14 +709,49 @@ class QhLightningModule(pl.LightningModule):
         )
         state_count = torch.zeros_like(loss_sum, dtype=torch.int64)
         candidate_count = torch.zeros_like(loss_sum, dtype=torch.int64)
+        absolute_error_sum = torch.zeros_like(loss_sum)
+        ranking_accuracy_sum = torch.zeros_like(loss_sum)
+        ranking_state_count = torch.zeros_like(loss_sum, dtype=torch.int64)
+        ranking_pair_count = torch.zeros_like(loss_sum, dtype=torch.int64)
+        selected_regret_sum = torch.zeros_like(loss_sum)
+        selected_regret_state_count = torch.zeros_like(loss_sum, dtype=torch.int64)
         loss_sum[0] = dense_state_loss[dense_state_support].double().sum()
         state_count[0] = dense_state_support.sum()
         candidate_count[0] = components.dense_support.sum()
+        dense_prediction = components.dense_output.conditional_q
+        dense_absolute_error = torch.zeros_like(components.dense_targets)
+        dense_absolute_error[components.dense_support] = (
+            dense_prediction[components.dense_support] - components.dense_targets[components.dense_support]
+        ).abs()
+        dense_state_absolute_error = dense_absolute_error.sum(dim=-1) / dense_candidate_count.clamp_min(1)
+        absolute_error_sum[0] = dense_state_absolute_error[dense_state_support].double().sum()
+        (
+            ranking_accuracy_sum[0],
+            ranking_state_count[0],
+            ranking_pair_count[0],
+            selected_regret_sum[0],
+            selected_regret_state_count[0],
+        ) = self._dense_q1_decision_metrics(
+            predictions=dense_prediction,
+            targets=components.dense_targets,
+            support=components.dense_support,
+        )
+
+        selected = batch.supervision.selected_index.long().clamp(
+            0, components.recursive_output.conditional_q.shape[-1] - 1
+        )
+        recursive_prediction = components.recursive_output.conditional_q.gather(
+            -1,
+            selected.unsqueeze(-1),
+        ).squeeze(-1)
         for horizon in range(2, self.config.max_horizon + 1):
             support = components.recursive_support & batch.actor.horizon_remaining.eq(horizon)
             loss_sum[horizon - 1] = recursive_state_loss[support].double().sum()
             state_count[horizon - 1] = support.sum()
             candidate_count[horizon - 1] = support.sum()
+            absolute_error_sum[horizon - 1] = (
+                (recursive_prediction[support] - components.recursive_targets[support]).abs().double().sum()
+            )
 
         global_state_count = state_count.clone()
         if distributed and self._distributed():
@@ -723,7 +776,68 @@ class QhLightningModule(pl.LightningModule):
             loss_sum_by_horizon=loss_sum.detach(),
             state_count_by_horizon=state_count.detach(),
             candidate_count_by_horizon=candidate_count.detach(),
+            absolute_error_sum_by_horizon=absolute_error_sum.detach(),
+            ranking_accuracy_sum_by_horizon=ranking_accuracy_sum.detach(),
+            ranking_state_count_by_horizon=ranking_state_count.detach(),
+            ranking_pair_count_by_horizon=ranking_pair_count.detach(),
+            selected_regret_sum_by_horizon=selected_regret_sum.detach(),
+            selected_regret_state_count_by_horizon=selected_regret_state_count.detach(),
         )
+
+    @staticmethod
+    def _dense_q1_decision_metrics(
+        *,
+        predictions: Tensor,
+        targets: Tensor,
+        support: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        r"""Return state-clustered ranking and greedy-regret sufficient statistics.
+
+        Dense one-step labels are the only horizon surface with counterfactual
+        targets for every hard-valid candidate. For each factual state, ranking
+        accuracy considers each unordered candidate pair whose targets differ;
+        prediction ties count as errors. State accuracies are summed before any
+        cross-state aggregation so a wide candidate table cannot dominate.
+        Greedy regret is the best labelled immediate reward minus the reward of
+        the candidate selected by decoded continuous Q. Horizons above one have
+        only the factual selected-transition target and therefore report zero
+        ranking/regret support instead of fabricating counterfactual metrics.
+
+        Returns:
+            Ranking-accuracy sum, contributing-state count, raw pair count,
+            selected-action regret sum, and regret-state count as scalar
+            tensors on the prediction device.
+        """
+
+        with torch.no_grad():
+            prediction = torch.where(support, predictions.detach(), torch.zeros_like(predictions))
+            target = torch.where(support, targets.detach(), torch.zeros_like(targets))
+            prediction_difference = prediction.unsqueeze(-1) - prediction.unsqueeze(-2)
+            target_difference = target.unsqueeze(-1) - target.unsqueeze(-2)
+            width = support.shape[-1]
+            unordered = torch.triu(
+                torch.ones((width, width), dtype=torch.bool, device=support.device),
+                diagonal=1,
+            )
+            pair_support = support.unsqueeze(-1) & support.unsqueeze(-2) & unordered & target_difference.ne(0)
+            pair_count = pair_support.sum(dim=(-2, -1))
+            correct_count = (pair_support & prediction_difference.mul(target_difference).gt(0)).sum(dim=(-2, -1))
+            ranking_state_support = pair_count.gt(0)
+            ranking_accuracy = correct_count.float() / pair_count.clamp_min(1).float()
+
+            regret_state_support = support.any(dim=-1)
+            chosen = prediction.masked_fill(~support, -torch.inf).argmax(dim=-1)
+            best_target = target.masked_fill(~support, -torch.inf).amax(dim=-1)
+            chosen_target = target.gather(-1, chosen.unsqueeze(-1)).squeeze(-1)
+            regret = (best_target - chosen_target).clamp_min(0)
+
+            return (
+                ranking_accuracy[ranking_state_support].double().sum(),
+                ranking_state_support.sum(),
+                pair_count.sum(),
+                regret[regret_state_support].double().sum(),
+                regret_state_support.sum(),
+            )
 
     def _dense_q1_losses(
         self,
@@ -962,14 +1076,30 @@ class QhLightningModule(pl.LightningModule):
             )
 
     def _log_horizon_objective(self, stage: Stage, objective: QhFittedQObjective) -> None:
-        """Expose non-pooled loss and support sufficient statistics by horizon."""
+        """Expose state-clustered loss, calibration, ranking, and regret by horizon."""
 
         training = stage is Stage.TRAIN
         loss_sum = objective.loss_sum_by_horizon.clone()
         state_count = objective.state_count_by_horizon.clone()
         candidate_count = objective.candidate_count_by_horizon.clone()
+        absolute_error_sum = objective.absolute_error_sum_by_horizon.clone()
+        ranking_accuracy_sum = objective.ranking_accuracy_sum_by_horizon.clone()
+        ranking_state_count = objective.ranking_state_count_by_horizon.clone()
+        ranking_pair_count = objective.ranking_pair_count_by_horizon.clone()
+        selected_regret_sum = objective.selected_regret_sum_by_horizon.clone()
+        selected_regret_state_count = objective.selected_regret_state_count_by_horizon.clone()
         if training and self._distributed():
-            for values in (loss_sum, state_count, candidate_count):
+            for values in (
+                loss_sum,
+                state_count,
+                candidate_count,
+                absolute_error_sum,
+                ranking_accuracy_sum,
+                ranking_state_count,
+                ranking_pair_count,
+                selected_regret_sum,
+                selected_regret_state_count,
+            ):
                 torch.distributed.all_reduce(values, op=torch.distributed.ReduceOp.SUM)
         for index in range(self.config.max_horizon):
             if int(state_count[index].item()) == 0:
@@ -978,8 +1108,24 @@ class QhLightningModule(pl.LightningModule):
             batch_size = int(state_count[index].item())
             for name, value, reduce_fx in (
                 ("loss", loss_sum[index] / state_count[index].clamp_min(1), "mean"),
+                (
+                    "calibration_mae",
+                    absolute_error_sum[index] / state_count[index].clamp_min(1),
+                    "mean",
+                ),
                 ("state_count", state_count[index].float(), "sum"),
                 ("candidate_count", candidate_count[index].float(), "sum"),
+                ("ranking_pair_count", ranking_pair_count[index].float(), "sum"),
+                (
+                    "ranking_state_count",
+                    ranking_state_count[index].float(),
+                    "sum",
+                ),
+                (
+                    "selected_regret_state_count",
+                    selected_regret_state_count[index].float(),
+                    "sum",
+                ),
             ):
                 self.log(
                     f"{stage.value}/h{horizon}_{name}",
@@ -989,6 +1135,26 @@ class QhLightningModule(pl.LightningModule):
                     sync_dist=False,
                     batch_size=max(batch_size, 1),
                     reduce_fx=reduce_fx,
+                )
+            if int(ranking_state_count[index].item()) > 0:
+                self.log(
+                    f"{stage.value}/h{horizon}_pairwise_ranking_accuracy",
+                    (ranking_accuracy_sum[index] / ranking_state_count[index]).float(),
+                    on_step=training,
+                    on_epoch=not training,
+                    sync_dist=False,
+                    batch_size=int(ranking_state_count[index].item()),
+                    reduce_fx="mean",
+                )
+            if int(selected_regret_state_count[index].item()) > 0:
+                self.log(
+                    f"{stage.value}/h{horizon}_selected_action_regret",
+                    (selected_regret_sum[index] / selected_regret_state_count[index]).float(),
+                    on_step=training,
+                    on_epoch=not training,
+                    sync_dist=False,
+                    batch_size=int(selected_regret_state_count[index].item()),
+                    reduce_fx="mean",
                 )
 
     def _log_aggregate(self, stage: Stage, loss_sum: Tensor, row_count: Tensor) -> None:

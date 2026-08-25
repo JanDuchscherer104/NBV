@@ -641,6 +641,36 @@ def test_learning_objective_uses_every_dense_q1_candidate_and_selected_h2() -> N
     assert objective.loss.item() == pytest.approx((17.0 / 12.0 + 16.0) / 2.0)
 
 
+def test_learning_objective_reports_state_clustered_horizon_metrics() -> None:
+    """Dense Q1 owns ranking/regret; selected recursion owns calibration only."""
+
+    objective = _module().compute_learning_objective(_batch())
+
+    assert objective.absolute_error_sum_by_horizon.tolist() == pytest.approx([5.5 / 3.0 + 2.0, 1.2, 0.0, 0.0, 0.0])
+    assert objective.ranking_accuracy_sum_by_horizon.tolist() == pytest.approx([1.0, 0.0, 0.0, 0.0, 0.0])
+    assert objective.ranking_state_count_by_horizon.tolist() == [2, 0, 0, 0, 0]
+    assert objective.ranking_pair_count_by_horizon.tolist() == [4, 0, 0, 0, 0]
+    assert objective.selected_regret_sum_by_horizon.tolist() == pytest.approx([2.0, 0.0, 0.0, 0.0, 0.0])
+    assert objective.selected_regret_state_count_by_horizon.tolist() == [2, 0, 0, 0, 0]
+
+
+def test_coral_and_regression_report_metrics_in_the_same_continuous_units() -> None:
+    """Decoder-specific losses do not change decoded-Q evaluation semantics."""
+
+    regression = _module().compute_learning_objective(_batch())
+    coral = _coral_module().compute_learning_objective(_batch())
+
+    for field in (
+        "absolute_error_sum_by_horizon",
+        "ranking_accuracy_sum_by_horizon",
+        "ranking_state_count_by_horizon",
+        "ranking_pair_count_by_horizon",
+        "selected_regret_sum_by_horizon",
+        "selected_regret_state_count_by_horizon",
+    ):
+        assert torch.equal(getattr(coral, field), getattr(regression, field)), field
+
+
 def test_dense_q1_is_candidate_mean_then_state_mean() -> None:
     batch = _batch()
     action_mask = batch.actor.action_mask.clone()
@@ -1038,6 +1068,10 @@ def test_single_device_validation_logs_exact_weighted_loss_and_only_infrastructu
 
     assert logged["val/loss"].item() == pytest.approx((17.0 / 12.0 + 16.0) / 2.0)
     assert logged["val/admitted_rows"].item() == 2
+    assert logged["val/h1_calibration_mae"].item() == pytest.approx((5.5 / 3.0 + 2.0) / 2.0)
+    assert logged["val/h1_pairwise_ranking_accuracy"].item() == pytest.approx(0.5)
+    assert logged["val/h1_selected_action_regret"].item() == pytest.approx(1.0)
+    assert logged["val/h2_calibration_mae"].item() == pytest.approx(16.5)
     assert set(logged) == {
         "val/loss",
         "val/admitted_rows",
@@ -1048,11 +1082,21 @@ def test_single_device_validation_logs_exact_weighted_loss_and_only_infrastructu
         "val/unsupported_backup_rows",
         "val/unsupported_backup_fraction",
         "val/h1_loss",
+        "val/h1_calibration_mae",
         "val/h1_state_count",
         "val/h1_candidate_count",
+        "val/h1_ranking_pair_count",
+        "val/h1_ranking_state_count",
+        "val/h1_selected_regret_state_count",
+        "val/h1_pairwise_ranking_accuracy",
+        "val/h1_selected_action_regret",
         "val/h2_loss",
+        "val/h2_calibration_mae",
         "val/h2_state_count",
         "val/h2_candidate_count",
+        "val/h2_ranking_pair_count",
+        "val/h2_ranking_state_count",
+        "val/h2_selected_regret_state_count",
     }
 
 
