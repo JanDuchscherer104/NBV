@@ -12,7 +12,7 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.qh_data import QhActorTensors
 from aria_nbv.vin.modules.qh_scene_encoders import QhRootMomentsSceneEncoder
-from tests.vin.test_target_finite_horizon import _actor
+from tests.vin.test_target_finite_horizon import _actor, _scorer
 
 
 def _encoder() -> QhRootMomentsSceneEncoder:
@@ -21,8 +21,8 @@ def _encoder() -> QhRootMomentsSceneEncoder:
     return QhRootMomentsSceneEncoder(scene_channels=("occ_pr", "occ_input", "free_input", "counts", "cent_pr"))
 
 
-def _legacy_root_moments(actor: QhActorTensors) -> torch.Tensor:
-    """Reproduce the pre-extraction inline control for parity evidence."""
+def _expected_root_moments(actor: QhActorTensors) -> torch.Tensor:
+    """Compute the versioned per-chain root-moments contract directly."""
 
     context = actor.static_context
     assert context is not None
@@ -51,7 +51,7 @@ def _legacy_root_moments(actor: QhActorTensors) -> torch.Tensor:
     mean = safe_points.sum(dim=1) / count
     centered = torch.where(point_mask.unsqueeze(-1), points_root - mean.unsqueeze(1), torch.zeros_like(points_root))
     std = (centered.square().sum(dim=1) / count).sqrt()
-    support = (valid_count.float() / max(points.shape[1], 1)).clamp(0.0, 1.0)
+    support = (valid_count.float() / lengths.unsqueeze(-1).clamp_min(1)).clamp(0.0, 1.0)
     present = valid_count.gt(0).float()
     return torch.cat((*pooled, mean, std, present, support), dim=-1)
 
@@ -66,7 +66,7 @@ def test_qh_root_moments_is_parameter_free_with_exact_control_width() -> None:
     assert not encoder.state_dict()
     assert encoded.shape == (1, 28)
     assert encoded.dtype is torch.float32
-    assert torch.equal(encoded, _legacy_root_moments(actor))
+    assert torch.equal(encoded, _expected_root_moments(actor))
 
 
 def test_qh_root_moments_is_root_frame_invariant_and_tracks_raw_support() -> None:
@@ -98,8 +98,8 @@ def test_qh_root_moments_rejects_out_of_range_point_lengths() -> None:
         _encoder()(invalid)
 
 
-def test_qh_root_moments_support_retains_batch_padded_capacity_semantics() -> None:
-    """Make the inherited batch-dependent denominator explicit and auditable."""
+def test_qh_root_moments_and_scores_ignore_batch_point_padding() -> None:
+    """Collation capacity cannot alter one chain's scene state or predictions."""
 
     actor = _actor()
     points = actor.vin_snippet.points_world
@@ -111,14 +111,15 @@ def test_qh_root_moments_support_retains_batch_padded_capacity_semantics() -> No
     )
     padded_points[:, : points.shape[1]] = points
     padded = replace(actor, vin_snippet=replace(actor.vin_snippet, points_world=padded_points))
-    length = int(actor.vin_snippet.lengths.reshape(-1)[0])
+    original_features = _encoder()(actor)
+    padded_features = _encoder()(padded)
+    scorer = _scorer()
+    original_scores = scorer(actor)
+    padded_scores = scorer(padded)
 
-    original_support = _encoder()(actor)[0, -1]
-    padded_support = _encoder()(padded)[0, -1]
-
-    assert original_support.item() == pytest.approx(length / points.shape[1])
-    assert padded_support.item() == pytest.approx(length / padded_points.shape[1])
-    assert padded_support < original_support
+    assert torch.equal(padded_features, original_features)
+    assert torch.equal(padded_scores.conditional_q, original_scores.conditional_q)
+    assert torch.equal(padded_scores.feasibility_logits, original_scores.feasibility_logits)
 
 
 @pytest.mark.parametrize("scene_channels", [(), ("occ_pr", "occ_pr")])

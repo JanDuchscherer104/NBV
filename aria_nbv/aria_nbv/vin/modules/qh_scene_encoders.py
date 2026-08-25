@@ -14,10 +14,11 @@ boundary keeps three scientific questions separable:
 control.  Every configured root EVL channel contributes global mean, standard
 deviation, minimum, and maximum.  Root semidense points contribute
 coordinate-wise mean and standard deviation in the rollout-root frame plus
-explicit presence and raw-capacity support.  Its exact
-``Tensor["B F", float32]`` output preserves the pre-extraction scorer contract;
-a later dynamic carrier must introduce its state axis explicitly rather than
-hiding a semantic change in this refactor.
+explicit presence and finite-support fraction.  The fraction is normalized by
+each chain's persisted point length, never by a collated batch width, so an
+actor state is invariant to batch composition and DDP partitioning.  A later
+dynamic carrier must introduce its state axis explicitly rather than hiding a
+semantic change in this control.
 
 Global moments are intentionally lossy.  They discard topology, occlusion,
 view direction, free-versus-unknown geometry, and selected-observation
@@ -52,10 +53,11 @@ class QhRootMomentsSceneEncoder(nn.Module):
     :math:`p_k^r=T_{r\leftarrow w}p_k^w` contribute coordinate-wise mean and
     population standard deviation.  Two final scalars distinguish no points
     from measured all-zero geometry: presence is
-    :math:`1[|P|>0]`, while support is the supported-count divided by the
-    batch-padded actor tensor's point-axis width.  That denominator is retained
-    for checkpoint parity; it is batch-composition dependent and must not be
-    interpreted as a per-chain sensor-density estimate.
+    :math:`1[|P|>0]`, while support is the finite supported-count divided by
+    that chain's persisted point length.  The latter is the pre-collation row
+    capacity carried by :attr:`VinSnippet.lengths`; batch padding is only a
+    storage detail and cannot change a physical state feature.  Empty chains
+    use support zero rather than dividing by zero.
 
     The resulting width is ``4 * len(scene_channels) + 8``.  Source tensors
     are detached because this carrier consumes persisted actor observations;
@@ -126,7 +128,8 @@ class QhRootMomentsSceneEncoder(nn.Module):
             torch.zeros_like(points_root),
         )
         std = (centered.square().sum(dim=1) / count).sqrt()
-        support = (valid_count.float() / max(points.shape[1], 1)).clamp(0.0, 1.0)
+        support_capacity = lengths.unsqueeze(-1).clamp_min(1)
+        support = (valid_count.float() / support_capacity).clamp(0.0, 1.0)
         present = valid_count.gt(0).float()
         return torch.cat((*pooled, mean, std, present, support), dim=-1)
 
