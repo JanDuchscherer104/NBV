@@ -105,6 +105,11 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         (projection / "owners.md").write_text("# owners\n", encoding="utf-8")
         (projection / "unlisted.md").write_text("# not seeded\n", encoding="utf-8")
         (output / "cache" / "stat-index.json").write_text("{}\n", encoding="utf-8")
+        for name in ("semantic", "semantic-deep"):
+            (output / "cache" / name).mkdir()
+            (output / "cache" / name / "parent-entry").write_text(
+                f"{name}\n", encoding="utf-8"
+            )
         (output / ".graphify_ast.json").write_text("{}\n", encoding="utf-8")
         (output / "GRAPH_REPORT.md").write_text("# report\n", encoding="utf-8")
 
@@ -185,7 +190,7 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual(sentinel["schema_version"], 1)
+        self.assertEqual(sentinel["schema_version"], 2)
         self.assertEqual(sentinel["source_worktree"], str(self.source.resolve()))
         self.assertEqual(sentinel["target_root"], str(self.destination.resolve()))
         self.assertEqual(
@@ -194,6 +199,16 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         self.assertEqual(
             sentinel["source_worktree_head"], self.git_output("rev-parse", "HEAD")
         )
+        for name in ("semantic", "semantic-deep"):
+            child_cache = self.destination / "graphify-out/cache" / name
+            self.assertTrue(child_cache.is_symlink())
+            self.assertEqual(
+                str(child_cache.resolve()), sentinel["source_cache_targets"][name]
+            )
+            self.assertEqual(
+                (child_cache / "parent-entry").read_text(encoding="utf-8"),
+                f"{name}\n",
+            )
         self.assertEqual(
             set(sentinel["files"]),
             {str(path) for path in copied} | {"graphify-out/.graphify_root"},
@@ -216,6 +231,8 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             Path("graphify-input/owners.md"),
             Path("graphify-out/.graphify_root"),
             Path("graphify-out/.aria-worktree-seed.json"),
+            Path("graphify-out/cache/semantic"),
+            Path("graphify-out/cache/semantic-deep"),
         ]
         before = {
             relative: (self.destination / relative).stat().st_mtime_ns
@@ -239,6 +256,31 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         )
         (self.source / "graphify-out/graph.json").unlink()
         self.seed("--check")
+
+    def test_check_rejects_rebound_inherited_cache(self) -> None:
+        self.seed()
+        cache = self.destination / "graphify-out/cache/semantic"
+        replacement = self.sandbox / "replacement-semantic"
+        replacement.mkdir()
+        cache.unlink()
+        cache.symlink_to(replacement, target_is_directory=True)
+
+        result = self.seed("--check", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("semantic cache points somewhere else", result.stderr)
+
+    def test_parent_cache_target_is_required_before_publishing(self) -> None:
+        (self.source / "graphify-out/cache/semantic-deep/parent-entry").unlink()
+        (self.source / "graphify-out/cache/semantic-deep").rmdir()
+
+        result = self.seed(check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("semantic-deep cache target is unavailable", result.stderr)
+        self.assertFalse(
+            (self.destination / "graphify-out/.aria-worktree-seed.json").exists()
+        )
 
     def test_source_graph_revision_requires_canonical_commit_oid(self) -> None:
         head = self.git_output("rev-parse", "HEAD")
