@@ -92,6 +92,19 @@ if [[ "$check_only" == false ]]; then
   mkdir -p .data docs/literature
 fi
 
+# Download manifests are tracked; every other top-level .data directory is an
+# ignored cache and can be shared before rebuilding the deterministic Graphify
+# projection. PDF presence participates in that projection, so link it before
+# reconciliation rather than after it.
+while IFS= read -r -d '' source; do
+  link_or_check "$source" ".data/$(basename "$source")"
+done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
+  ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
+
+if [[ -e "$shared_root/docs/literature/pdf" ]]; then
+  link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
+fi
+
 # Seed durable Graphify state from a sibling Git worktree. The helper copies a
 # strict allowlist and synthesizes child metadata; cache links below are the
 # only shared Graphify state.
@@ -105,21 +118,6 @@ if [[ "$check_only" == false ]]; then
 else
   "$shared_python" "$repo_root/scripts/check_graphify_freshness.py" --usable --quiet || \
     fail "seeded Graphify generation is not query-admissible"
-fi
-
-# Download manifests are tracked; every other top-level .data directory is an
-# ignored cache and can be shared without copying it into each worktree. The
-# Graphify semantic cache is intentionally excluded: only its two content-
-# addressed namespaces are linked under graphify-out/cache below.
-while IFS= read -r -d '' source; do
-  link_or_check "$source" ".data/$(basename "$source")"
-done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
-  ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
-
-# TeX and bibliography sources are tracked and Git checks them out normally.
-# PDFs are ignored downloads, so retain one shared read-only cache for them.
-if [[ -e "$shared_root/docs/literature/pdf" ]]; then
-  link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
 fi
 
 # These content-addressed semantic results are the only Graphify state shared

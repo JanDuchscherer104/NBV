@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -23,6 +24,18 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             (root / ".git").mkdir()
             output = root / "graphify-out"
             output.mkdir()
+            projection = root / "graphify-input"
+            projection.mkdir()
+            (projection / "index.md").write_text("# fixture\n", encoding="utf-8")
+            (output / "graph.json").write_text(
+                json.dumps(
+                    {
+                        "nodes": [{"_origin": "semantic"}],
+                        "links": [{"_origin": "semantic"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
             interpreter = root.parent / "trusted-python"
             interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
             interpreter.chmod(0o755)
@@ -36,7 +49,16 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
 
             def completed(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
                 recorded.append(tuple(command))
+                if command[:3] == ["git", "rev-parse", "--verify"]:
+                    return subprocess.CompletedProcess(command, 0, "a" * 40 + "\n", "")
                 if command[:3] == [str(interpreter), "-I", "-c"]:
+                    if "detect" in command[3]:
+                        return subprocess.CompletedProcess(
+                            command,
+                            0,
+                            '{"document": ["graphify-input/index.md"], "paper": [], "image": []}\n',
+                            "",
+                        )
                     return subprocess.CompletedProcess(
                         command, 0, f"{reconcile.PINNED_GRAPHIFY_VERSION}\n", ""
                     )
@@ -49,10 +71,16 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                 reconcile.run(root)
 
         self.assertEqual(recorded[0][:3], (str(interpreter), "-I", "-c"))
-        self.assertEqual(recorded[1], (str(graphify.resolve()), "update", str(root.resolve())))
-        self.assertEqual(recorded[2][-2:], ("--usable", "--quiet"))
-        self.assertNotIn("extract", recorded[1])
-        self.assertFalse(any("build_graphify_projection.py" in command for command in recorded))
+        self.assertTrue(
+            any(
+                any("build_graphify_projection.py" in item for item in command)
+                for command in recorded
+            )
+        )
+        update = (str(graphify.resolve()), "update", str(root.resolve()))
+        self.assertIn(update, recorded)
+        self.assertEqual(recorded[-1][-2:], ("--usable", "--quiet"))
+        self.assertNotIn("extract", update)
 
     def test_rejects_a_marker_that_differs_from_the_cli_interpreter(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:

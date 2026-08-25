@@ -51,6 +51,11 @@ class GraphifySessionReadinessTests(unittest.TestCase):
                 "check_graphify_freshness.py",
             ):
                 shutil.copy2(ROOT / "scripts" / script, parent / "scripts" / script)
+            (parent / "scripts/build_graphify_projection.py").write_text(
+                "#!/usr/bin/env python3\n"
+                "# Hermetic fixture: the parent projection already matches HEAD.\n",
+                encoding="utf-8",
+            )
             (parent / ".env.example").write_text("", encoding="utf-8")
             owner = parent / "docs/thesis/main.md"
             owner.write_text("fixture\n", encoding="utf-8")
