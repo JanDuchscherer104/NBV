@@ -850,7 +850,7 @@ def test_capture_and_routing_contracts() -> None:
         ROOT
         / ".agents"
         / "skills"
-        / "typst-authoring"
+        / "academic-writing"
         / "references"
         / "upstream-matt-writing.md",
     ):
@@ -1337,6 +1337,108 @@ def test_fixture_tool_and_lrz_regressions_follow_owner_boundaries() -> None:
         assert (
             ".agents/skills/lrz-ai-systems/SKILL.md" in fixture["expected_owner_paths"]
         ), fixture["id"]
+
+
+def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> None:
+    typst_skill = _read(ROOT / ".agents" / "skills" / "typst-authoring" / "SKILL.md")
+    academic_skill = _read(
+        ROOT / ".agents" / "skills" / "academic-writing" / "SKILL.md"
+    )
+    scientific_skill = _read(
+        ROOT / ".agents" / "skills" / "scientific-review" / "SKILL.md"
+    )
+    review_protocol = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "scientific-review"
+        / "references"
+        / "review-protocol.md"
+    )
+    thesis_writing = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "references"
+        / "thesis-writing.md"
+    )
+    claim_discipline = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "references"
+        / "claim-citation-discipline.md"
+    )
+
+    assert "Typst source edits" in typst_skill
+    assert "references/workflow.md" in typst_skill
+    assert "../../../docs/typst/shared/style.typ" in typst_skill
+    assert (
+        "references/empirical-reporting-and-reproducibility.md"
+        in typst_skill
+    )
+    assert "ready-for-realization" in academic_skill
+    assert "obtain scientific-review findings before marking" in academic_skill
+    assert "academic work phase transition" in academic_skill
+    assert (
+        "references/empirical-reporting-and-reproducibility.md"
+        in academic_skill
+    )
+    assert (
+        "../academic-writing/references/empirical-reporting-and-reproducibility.md"
+        in scientific_skill
+    )
+    for review_route in (
+        "claim/citation entailment",
+        "research-question/estimand alignment",
+        "mathematical, notation, or theoretical consistency",
+    ):
+        assert review_route in scientific_skill
+    skill_guide = _read(ROOT / ".agents" / "skills" / "README.md")
+    for phase in (
+        "`proposed`",
+        "`ready-for-realization`",
+        "`realized`",
+        "`scientifically released`",
+    ):
+        assert phase in skill_guide
+    for gate in ("`blocking`", "`advisory`", "`clear`"):
+        assert gate in review_protocol
+    assert "`independence: independent`" in review_protocol
+    assert "same-context advisory review cannot unlock" in review_protocol
+    assert "independent scientific review" in skill_guide
+    assert "prose-draft" not in thesis_writing
+    assert "prose-polish" not in thesis_writing
+    assert "generated context artifact" not in claim_discipline
+    claim_ledger = _read(
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "assets"
+        / "templates"
+        / "claim-ledger.md"
+    )
+    assert "defining code + focused tests + active configuration" in claim_ledger
+    assert "code path or generated context" not in claim_ledger
+    assert (
+        ROOT
+        / ".agents"
+        / "skills"
+        / "academic-writing"
+        / "references"
+        / "empirical-reporting-and-reproducibility.md"
+    ).is_file()
+    assert not (
+        ROOT
+        / ".agents"
+        / "skills"
+        / "scientific-review"
+        / "references"
+        / "empirical-reporting-and-reproducibility.md"
+    ).exists()
 
 
 if __name__ == "__main__":

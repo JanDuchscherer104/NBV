@@ -65,6 +65,29 @@ For an already-known exact owner, open that owner and its nearest `AGENTS.md`
 and stop retrieving. Use optional navigation, recall, or external-document
 references only when their branch condition is active.
 
+Academic work has three disjoint first owners: `academic-writing` constructs
+source-grounded arguments; `scientific-review` independently reviews an exact
+candidate without mutation; `typst-authoring` realizes ready content, notation,
+citations, and rendered pages. Handoffs carry only candidate identity, evidence
+pointers, limitations, phase state, destination, and required proof; active
+sources remain durable truth.
+
+## Academic work phase transition
+
+- `proposed`: argument construction is complete enough for owner review.
+- `ready-for-realization`: the authoring owner has confirmed the cited evidence,
+  limitation, and wording for this task; an empirical-result candidate also has
+  a candidate-bound, independent scientific review with no blocking finding.
+- `realized`: the exact Typst source changed and its required proof passed.
+- `scientifically released`: a separate human/evidence release gate passed; do
+  not infer this state from realization.
+
+One request may compose `academic-writing` → `scientific-review` when empirical
+results are involved → `typst-authoring` when it already authorizes the
+repository edit and no material claim escalation remains. Material escalation
+requires explicit current-user approval; advisory review never accepts or
+releases content.
+
 ## Upstream skills
 
 Byte-identical, separately pinned upstream bundles keep their upstream

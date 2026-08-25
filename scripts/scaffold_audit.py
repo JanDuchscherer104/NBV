@@ -673,6 +673,10 @@ def audit_routing_fixtures(
         "forbidden_tool_refs",
         "required_outcomes",
         "forbidden_outcomes",
+        "execution_mode",
+        "required_changed_path_prefixes",
+        "required_changed_paths",
+        "typst_proof",
     }
     for index, fixture in enumerate(fixtures, start=1):
         if not isinstance(fixture, dict):
@@ -714,6 +718,46 @@ def audit_routing_fixtures(
                     )
                 else:
                     resolved_owner_paths.append(owner_path)
+
+        execution_mode = fixture.get("execution_mode", "read-only")
+        changed_prefixes = fixture.get("required_changed_path_prefixes", [])
+        changed_paths = fixture.get("required_changed_paths", [])
+        typst_proof = fixture.get("typst_proof", False)
+        if not isinstance(execution_mode, str) or execution_mode not in {
+            "read-only",
+            "workspace-write",
+        }:
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: execution_mode must be read-only or workspace-write"
+            )
+        if not isinstance(changed_prefixes, list) or not all(
+            isinstance(prefix, str) and prefix.strip() for prefix in changed_prefixes
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: required_changed_path_prefixes must be a list of non-empty strings"
+            )
+        if not isinstance(changed_paths, list) or not all(
+            isinstance(path, str) and path.strip() for path in changed_paths
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: required_changed_paths must be a list of non-empty strings"
+            )
+        if not isinstance(typst_proof, bool):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: typst_proof must be boolean"
+            )
+        if execution_mode == "workspace-write" and (
+            not changed_prefixes or typst_proof is not True
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: workspace-write requires changed path prefixes and typst_proof"
+            )
+        if execution_mode == "read-only" and (
+            changed_prefixes or changed_paths or typst_proof
+        ):
+            errors.append(
+                f"{rel(path)} fixture {fixture_id or index}: read-only cannot require edit proof"
+            )
 
         stable_skill_ids = fixture.get("stable_skill_ids", [])
         if not isinstance(stable_skill_ids, list):
@@ -839,6 +883,10 @@ def load_routing_prompts(path: Path) -> tuple[dict[str, str], list[str]]:
         "forbidden_tool_refs",
         "required_outcomes",
         "forbidden_outcomes",
+        "execution_mode",
+        "required_changed_path_prefixes",
+        "required_changed_paths",
+        "typst_proof",
         "mcp__",
     )
     for line_number, raw_line in enumerate(
@@ -1175,6 +1223,11 @@ def run_self_tests() -> tuple[list[str], list[str]]:
                 "fixture-empty-outcomes",
                 lambda value: value["fixtures"][0].update(required_outcomes=[]),
                 "required_outcomes",
+            ),
+            (
+                "fixture-non-string-execution-mode",
+                lambda value: value["fixtures"][0].update(execution_mode=[]),
+                "execution_mode",
             ),
         ):
             mutated = json.loads(json.dumps(fixture))

@@ -114,20 +114,18 @@ jobs:
 
       - name: Set up uv
         if: steps.impact.outputs.package == 'true'
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          prune-cache: false
-          cache-suffix: uv-0.12.5
-          cache-dependency-glob: |
-            aria_nbv/pyproject.toml
-            aria_nbv/uv.lock
+        run: |
+          python -m pip install --disable-pip-version-check --no-input "uv==0.12.5"
+          uv_version="$(python -m uv --version)"
+          case "$uv_version" in
+            "uv 0.12.5"|"uv 0.12.5 "*) ;;
+            *) exit 1 ;;
+          esac
 
       - name: Sync package validation environment
         if: steps.impact.outputs.package == 'true'
         working-directory: aria_nbv
-        run: uv sync --locked --extra dev
+        run: python -m uv sync --locked --extra dev
 
       - name: Set up Quarto
         if: steps.impact.outputs.docs == 'true'
@@ -178,7 +176,7 @@ jobs:
         env:
           UV_NO_SYNC: "1"
           PYTEST_WORKERS: "0"
-        run: make ruff-full package-smoke
+        run: make UV="python -m uv" ruff-full package-smoke
 
       - name: Validate documentation
         if: steps.impact.outputs.docs == 'true'

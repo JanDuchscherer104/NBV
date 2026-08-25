@@ -12,7 +12,8 @@ authority over this thesis. Keep the practices that improve CS/ML thesis prose:
 - Treat IMRAD as reader flow: motivation and gap, reproducible method, factual
   results, bounded interpretation.
 - Ground claims in repository artifacts, cited literature, experiments, or
-  explicit hypothesis wording. Use `claim-citation-discipline.md` for the claim
+  explicit hypothesis wording. Use
+  [`claim-citation-discipline.md`](claim-citation-discipline.md) for the claim
   taxonomy and evidence gate.
 - Prefer primary sources for specific method, dataset, benchmark, and metric
   claims. Use reviews only for broad context.
@@ -40,8 +41,8 @@ Do not import generic defaults that conflict with ARIA-NBV:
 
 ## Writing Modes
 
-Use these nested modes only inside `prose-draft` or `prose-polish`; they are
-ARIA adaptations of Matt writing skills, not activated upstream owners. See
+Use these nested modes only while constructing or revising a source-grounded
+candidate; they are ARIA adaptations of Matt writing skills, not activated upstream owners. See
 [upstream-matt-writing](upstream-matt-writing.md) for the pinned source links and update policy.
 
 `fragment-capture`: use before structure exists. Collect scratch claims,
@@ -71,8 +72,8 @@ Use a compact ABT/CARS structure:
 - BUT / niche: handheld AR needs target-aware view choice, efficient
   counterfactual candidate evaluation, and leakage-safe oracle supervision.
 - THEREFORE / contribution: ARIA-NBV proposes a target-conditioned,
-  quality-driven finite-candidate NBV stack and validates it under fixed
-  acquisition budgets.
+  quality-driven finite-candidate NBV stack and specifies its fixed-budget
+  evaluation contract.
 
 The gap must follow from the context. Do not bolt on "semantic relevance" as a
 slogan; state the concrete failure mode it addresses.

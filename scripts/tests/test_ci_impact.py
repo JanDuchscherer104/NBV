@@ -67,30 +67,25 @@ class SelectionTests(unittest.TestCase):
             "sudo apt-get install --no-install-recommends --yes poppler-utils",
             pdf_validator,
         )
-        self.assertIn(
-            "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0",
-            workflow,
-        )
-        self.assertEqual(workflow.count("astral-sh/setup-uv@"), 1)
-        self.assertEqual(workflow.count("enable-cache: true"), 1)
-        self.assertNotIn("uses: actions/cache@", workflow)
-        self.assertIn('version: "0.12.5"', workflow)
-        self.assertIn("enable-cache: true", workflow)
-        self.assertIn("prune-cache: false", workflow)
-        self.assertIn("cache-suffix: uv-0.12.5", workflow)
-        self.assertIn("aria_nbv/pyproject.toml", workflow)
-        self.assertIn("aria_nbv/uv.lock", workflow)
-        self.assertEqual(workflow.count("cache-dependency-glob:"), 1)
         setup_uv = workflow.split("      - name: Set up uv\n", 1)[1].split(
             "      - name: Sync package validation environment\n", 1
         )[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", setup_uv)
-        self.assertEqual(workflow.count("uv sync --locked --extra dev"), 1)
+        self.assertIn(
+            'python -m pip install --disable-pip-version-check --no-input '
+            '"uv==0.12.5"',
+            setup_uv,
+        )
+        self.assertIn('uv_version="$(python -m uv --version)"', setup_uv)
+        self.assertIn('"uv 0.12.5"|"uv 0.12.5 "*', setup_uv)
+        self.assertNotIn("astral-sh/setup-uv@", workflow)
+        self.assertNotIn("uses: actions/cache@", workflow)
+        self.assertEqual(workflow.count("python -m uv sync --locked --extra dev"), 1)
         sync = workflow.split("      - name: Sync package validation environment\n", 1)[
             1
         ].split("      - name: Set up Quarto\n", 1)[0]
         self.assertIn("if: steps.impact.outputs.package == 'true'", sync)
-        self.assertIn("run: uv sync --locked --extra dev", workflow)
+        self.assertIn("run: python -m uv sync --locked --extra dev", workflow)
         self.assertNotIn("pip install --upgrade pip uv", workflow)
         package_validation = workflow.split(
             "      - name: Validate package contracts\n", 1
@@ -99,7 +94,22 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(workflow.count('UV_NO_SYNC: "1"'), 1)
         self.assertEqual(package_validation.count('UV_NO_SYNC: "1"'), 1)
         self.assertIn('PYTEST_WORKERS: "0"', package_validation)
-        self.assertIn("make ruff-full package-smoke", package_validation)
+        self.assertIn(
+            'make UV="python -m uv" ruff-full package-smoke', package_validation
+        )
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("UV ?= uv", makefile)
+        self.assertIn("QH_CI_PYTHON ?= $(UV) run --extra dev python", makefile)
+        for command in (
+            "$(UV) run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)",
+            "$(UV) run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)",
+            "$(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)",
+            "$(UV) run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py",
+            "$(UV) run --extra dev ruff format --check --quiet aria_nbv tests",
+            "$(UV) run --extra dev ruff check --output-format \"$(RUFF_CHECK_OUTPUT_FORMAT)\" $(RUFF_FIX_FLAG) aria_nbv tests",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, makefile)
         self.assertNotIn("aria_nbv/.venv", workflow)
         self.assertIn("TYPST_VERSION: 0.14.2", workflow)
         self.assertIn("TYPST_EXPECTED_VERSION: typst 0.14.2 (b33de9de)", workflow)
@@ -216,8 +226,14 @@ class SelectionTests(unittest.TestCase):
             "docs/index.qmd": {"docs"},
             ".agents/skills/aria-nbv-context/SKILL.md": {"scaffold"},
             ".agents/example.qmd": {"scaffold"},
-            ".agents/skills/typst-authoring/SKILL.md": {"docs"},
-            ".agents/skills/typst-authoring/references/workflow.md": {"docs"},
+            ".agents/skills/README.md": {"docs", "scaffold"},
+            ".agents/skills/typst-authoring/SKILL.md": {"docs", "scaffold"},
+            ".agents/skills/typst-authoring/references/workflow.md": {
+                "docs",
+                "scaffold",
+            },
+            ".agents/skills/academic-writing/SKILL.md": {"docs", "scaffold"},
+            ".agents/skills/scientific-review/SKILL.md": {"docs", "scaffold"},
             "aria_nbv/aria_nbv/__init__.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/candidate_generation.py": {"package"},
             "aria_nbv/aria_nbv/pose_generation/geometry.py": {"package"},

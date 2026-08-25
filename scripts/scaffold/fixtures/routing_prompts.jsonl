@@ -44,7 +44,13 @@
 {"id":"python-docstring-contract","task":"Write or refactor docstrings for Python public API contracts."}
 {"id":"typst-thesis-edit","task":"Edit Typst thesis prose, notation, citations, figures, or rendered-page QA."}
 {"id":"docs-literature-no-browser","task":"Plan a Quarto literature navigation cleanup with local bibliography evidence."}
-{"id":"typst-prose-no-python-analyzer","task":"Polish Typst thesis prose and citations without changing Python code."}
+{"id":"typst-prose-no-python-analyzer","task":"Polish the active Typst thesis prose and citations without changing Python code, then compile and inspect the affected page."}
 {"id":"typst-prose-matt-writing-modes","task":"Draft or polish ARIA thesis prose with writing mechanics."}
 {"id":"scaffold-cleanup","task":"Prune or simplify scaffold skills, metadata, or references while preserving behavior."}
 {"id":"lrz-failed-job-container-start","task":"Route a failed LRZ job or container-start failure to the exact troubleshooting owner."}
+{"id":"academic-writing-related-work-synthesis","task":"Develop a bounded Related Work argument from the repository's literature sources, retaining source locators and limitations for its eventual thesis placement."}
+{"id":"typst-authoring-layout-repair","task":"Repair the clipped table in the active thesis section and verify the affected rendered page without changing its scientific claim."}
+{"id":"scientific-review-frozen-claim","task":"Assess the frozen claim packet's evidence and wording for citation support, research-question alignment, and overclaiming; return findings only."}
+{"id":"thesis-claim-revision","task":"Revise the claim-bearing paragraph in the active thesis source so its literature support and limitation are accurate, then compile and inspect the affected page."}
+{"id":"empirical-result-revision","task":"Revise the active thesis result paragraph after an uncertain held-out comparison was found; preserve the result's evidence, obtain a critical validity assessment, and render the revised page."}
+{"id":"rollout-report-owner-not-writing-skill","task":"Change the rollout report schema and its producer/consumer contract to add an experimental-unit field while preserving serialized identity and focused tests."}

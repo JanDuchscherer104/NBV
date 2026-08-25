@@ -1,6 +1,6 @@
-# Upstream Matt Writing Modes For ARIA Typst Authoring
+# Upstream Matt Writing Modes For ARIA Academic Writing
 
-Use this as reference-only inspiration for `typst-authoring` prose work. Do not
+Use this as reference-only inspiration for `academic-writing` prose work. Do not
 activate raw Matt writing skills for ARIA-NBV thesis writing.
 
 ## Upstream Sources

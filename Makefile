@@ -38,6 +38,7 @@ SLIDES_SRC := $(if $(findstring /,$(SLIDES_FILE)),$(SLIDES_FILE),$(TYPST_SLIDES_
 SLIDES_PDF ?= $(SLIDES_SRC:.typ=.pdf)
 
 # Python interpreter (uv-managed .venv by default)
+UV ?= uv
 VENV_PYTHON ?= $(CURDIR)/aria_nbv/.venv/bin/python
 PYTHON_INTERPRETER ?= $(VENV_PYTHON)
 AGENT_STATUS_PYTHON ?= python3
@@ -155,7 +156,7 @@ QH_CI_TESTS := \
 	tests/vin/test_target_finite_horizon.py \
 	tests/test_config_field_constraints.py \
 	../scripts/tests/test_quartodoc_expand_config.py
-QH_CI_PYTHON ?= uv run --extra dev python
+QH_CI_PYTHON ?= $(UV) run --extra dev python
 PYTEST_WORKERS ?= auto
 PYTEST_WORKERS_FLAG = $(if $(filter auto,$(PYTEST_WORKERS)),-n auto,$(if $(filter 0,$(PYTEST_WORKERS)),,$(error PYTEST_WORKERS must be auto or 0)))
 RUFF_PATHS ?=
@@ -773,13 +774,13 @@ replay-oracle-golden: ## Verify the frozen deterministic CPU replay/oracle/store
 	@cd $(PKG_DIR) && uv run python ../scripts/check_replay_oracle_golden.py
 
 package-smoke: mypy-contract qh-ci ## Run CPU-only package lint and smoke tests for M1 contracts
-	@cd $(PKG_DIR) && uv run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
-	@cd $(PKG_DIR) && uv run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
-	@cd $(PKG_DIR) && uv run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)
+	@cd $(PKG_DIR) && $(UV) run --extra dev ruff format --check $(PACKAGE_SMOKE_RUFF_PATHS)
+	@cd $(PKG_DIR) && $(UV) run --extra dev ruff check $(PACKAGE_SMOKE_RUFF_PATHS)
+	@cd $(PKG_DIR) && $(UV) run --extra dev pytest --import-mode=importlib $(PYTEST_WORKERS_FLAG) $(PACKAGE_SMOKE_TESTS)
 
 ruff-full: ## Run Ruff format and lint across package and tests (set RUFF_FIX=1 for safe fixes; RUFF_CHECK_OUTPUT_FORMAT=json is machine-readable)
-	@cd $(PKG_DIR) && uv run --extra dev ruff format --check --quiet aria_nbv tests
-	@cd $(PKG_DIR) && uv run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests
+	@cd $(PKG_DIR) && $(UV) run --extra dev ruff format --check --quiet aria_nbv tests
+	@cd $(PKG_DIR) && $(UV) run --extra dev ruff check --output-format "$(RUFF_CHECK_OUTPUT_FORMAT)" $(RUFF_FIX_FLAG) aria_nbv tests
 
 ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
 	@set -f; paths="$$RUFF_PATHS"; \
@@ -801,7 +802,7 @@ ruff-targeted: ## Run Ruff on space-separated paths under aria_nbv/ or tests/
 	uv run --extra dev ruff check --output-format "$$RUFF_CHECK_OUTPUT_FORMAT" $(RUFF_FIX_FLAG) $$normalized
 
 mypy-contract: ## Run the passing public API typing contract
-	@cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py
+	@cd $(PKG_DIR) && $(UV) run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) tests/data_handling/public_api_typing_contract.py
 
 mypy-full: ## Run the full package typing check (currently informational)
 	@cd $(PKG_DIR) && uv run --extra dev mypy --no-incremental $(MYPY_JUNIT_FLAG) aria_nbv

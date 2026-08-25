@@ -19,17 +19,10 @@
       "type": "array",
       "minItems": 1,
       "maxItems": 64,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["event_index", "event_type", "item_type", "claim"],
-        "properties": {
-          "event_index": {"type": "integer", "minimum": 0},
-          "event_type": {"type": "string", "minLength": 1, "maxLength": 2048},
-          "item_type": {"type": "string", "minLength": 1, "maxLength": 2048},
-          "claim": {"type": "string", "minLength": 1, "maxLength": 2048}
-        }
-      }
+      "items": {"oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["event_index", "event_type", "item_type", "claim"], "properties": {"event_index": {"type": "integer", "minimum": 0}, "event_type": {"type": "string", "minLength": 1, "maxLength": 2048}, "item_type": {"type": "string", "minLength": 1, "maxLength": 2048}, "claim": {"type": "string", "minLength": 1, "maxLength": 2048}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "sha256", "claim"], "properties": {"kind": {"const": "final_diff"}, "sha256": {"type": "string", "minLength": 64, "maxLength": 64}, "claim": {"type": "string", "minLength": 1, "maxLength": 2048}}}
+      ]}
     },
     "missing_requirements": {
       "type": "array",
