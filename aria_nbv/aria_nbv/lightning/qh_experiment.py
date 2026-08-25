@@ -1159,7 +1159,7 @@ def _headroom_diagnostic(store_dir: Path | None, *, threshold: float) -> dict[st
         "metric_source": evidence["metric_source"],
         "endpoint_kind": evidence["endpoint_kind"],
         "independent_endpoint_evaluation": evidence["independent_endpoint_evaluation"],
-        "positive_lookahead_headroom": bool(values and all(value > threshold for value in values)),
+        "positive_lookahead_headroom": any(value > threshold for value in values),
         "positive_threshold": threshold,
         "included_delta_look_count": len(values),
         "delta_look_values": values,

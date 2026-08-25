@@ -10,10 +10,12 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
 
+import aria_nbv.lightning.qh_experiment as qh_experiment_module
 from aria_nbv.lightning.lit_trainer_factory import TrainerFactoryConfig
 from aria_nbv.lightning.qh_datamodule import QhLearningContract
 from aria_nbv.lightning.qh_experiment import (
@@ -26,6 +28,7 @@ from aria_nbv.lightning.qh_experiment import (
     QhFitRequest,
     QhHeldOutEvaluationRequest,
     QhInferenceBundleRef,
+    _headroom_diagnostic,
     _manifest_hash,
 )
 from aria_nbv.lightning.qh_module import QhLightningModuleConfig
@@ -96,6 +99,52 @@ def _a0_experiment() -> QhExperiment:
         update={"state_fusion": QhIndependentMlpStateFusionConfig()},
     )
     return base.model_copy(deep=True, update={"scorer": scorer}).setup_target()
+
+
+def test_headroom_diagnostic_accepts_any_positive_included_cohort(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Reader:
+        def __init__(self, store_dir: Path) -> None:
+            self.store_dir = store_dir
+
+        def validate(self, *, validate_selected_depth_payload: bool) -> SimpleNamespace:
+            assert validate_selected_depth_payload is False
+            return SimpleNamespace(
+                ok=True,
+                errors=(),
+                store_dir=self.store_dir,
+                num_rollouts=2,
+                num_steps=4,
+                num_candidates=12,
+            )
+
+        def manifest(self) -> dict[str, object]:
+            return {"root_attrs": {"manifest_sha256": "manifest"}}
+
+    evidence = {
+        "evidence_status": "diagnostic_only",
+        "metric_source": "oracle",
+        "endpoint_kind": "terminal_proxy",
+        "independent_endpoint_evaluation": False,
+        "contrast_rows": [
+            {"contrast": "delta_look", "status": "included", "value": 0.25},
+            {"contrast": "delta_look", "status": "included", "value": -0.10},
+        ],
+        "summary_rows": [],
+    }
+    monkeypatch.setattr(qh_experiment_module, "RolloutZarrStoreReader", _Reader)
+    monkeypatch.setattr(
+        qh_experiment_module,
+        "oracle_headroom_evidence",
+        lambda _reader, *, threshold: evidence,
+    )
+
+    diagnostic = _headroom_diagnostic(tmp_path / "headroom.zarr", threshold=0.0)
+
+    assert diagnostic["positive_lookahead_headroom"] is True
+    assert diagnostic["delta_look_values"] == [0.25, -0.10]
 
 
 def _bundle(tmp_path) -> tuple[QhExperiment, QhInferenceBundleRef]:
