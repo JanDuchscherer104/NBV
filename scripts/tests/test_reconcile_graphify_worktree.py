@@ -18,6 +18,22 @@ import reconcile_graphify_worktree as reconcile  # noqa: E402
 
 
 class ReconcileGraphifyWorktreeTests(unittest.TestCase):
+    @staticmethod
+    def git(root: Path, *arguments: str) -> str:
+        return subprocess.run(
+            ["git", *arguments], cwd=root, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    @classmethod
+    def initialized_repository(cls, root: Path) -> str:
+        cls.git(root, "init")
+        cls.git(root, "config", "user.email", "tests@example.invalid")
+        cls.git(root, "config", "user.name", "ARIA tests")
+        (root / "tracked.txt").write_text("fixture\n", encoding="utf-8")
+        cls.git(root, "add", "tracked.txt")
+        cls.git(root, "commit", "-m", "fixture")
+        return cls.git(root, "rev-parse", "HEAD")
+
     def test_stamps_revision_and_relativizes_trusted_graph_sources(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
@@ -63,6 +79,44 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                 reconcile.stamp_graph_provenance(root, "a" * 40)
 
             self.assertEqual(graph.read_text(encoding="utf-8"), original)
+
+    def test_rejects_hostile_or_noncommit_graph_provenance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            self.initialized_repository(root)
+            output = root / "graphify-out"
+            output.mkdir()
+            graph = output / "graph.json"
+            for revision, expected in (
+                ("--git-dir=/tmp/hostile", "canonical full commit OID"),
+                (self.git(root, "hash-object", "tracked.txt"), "commit object"),
+            ):
+                graph.write_text(json.dumps({"built_at_commit": revision}), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, expected):
+                    reconcile.graph_revision(root)
+
+    def test_seeded_tree_requires_registered_source_at_recorded_head(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            revision = self.initialized_repository(root)
+            source = root.parent / f"{root.name}-source"
+            self.git(root, "worktree", "add", "-b", "source", str(source), revision)
+            seed = root / "graphify-out/.aria-worktree-seed.json"
+            seed.parent.mkdir()
+            seed.write_text(
+                json.dumps(
+                    {
+                        "source_worktree": str(source),
+                        "source_worktree_head": revision,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertTrue(reconcile.seeded_tree_matches_head(root, revision))
+            self.git(source, "commit", "--allow-empty", "-m", "advance source")
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                reconcile.seeded_tree_matches_head(root, revision)
 
     def test_runs_projection_incremental_update_then_usable_admission(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
@@ -113,6 +167,8 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
 
             with (
                 mock.patch.object(reconcile.shutil, "which", return_value=str(graphify)),
+                mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile, "graph_revision", return_value="b" * 40),
                 mock.patch.object(reconcile, "graph_tree_matches_head", return_value=False),
                 mock.patch.object(reconcile.subprocess, "run", side_effect=completed),
             ):
@@ -167,6 +223,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                     reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
                 ),
                 mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile, "graph_revision", return_value="b" * 40),
                 mock.patch.object(reconcile, "graph_tree_matches_head", return_value=True),
                 mock.patch.object(reconcile.subprocess, "run", side_effect=completed),
             ):
@@ -230,6 +287,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                     reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
                 ),
                 mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile, "graph_revision", return_value="b" * 40),
                 mock.patch.object(reconcile, "graph_tree_matches_head", return_value=False),
                 mock.patch.object(
                     reconcile.subprocess, "run", side_effect=mutate_then_fail
@@ -276,6 +334,7 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
                     reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
                 ),
                 mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile, "graph_revision", return_value="b" * 40),
                 mock.patch.object(reconcile, "graph_tree_matches_head", return_value=False),
                 mock.patch.object(reconcile.subprocess, "run", side_effect=drop_semantic),
             ):

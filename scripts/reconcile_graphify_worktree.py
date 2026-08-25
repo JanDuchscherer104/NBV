@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ PINNED_GRAPHIFY_VERSION = "0.9.48"
 GRAPH = Path("graphify-out/graph.json")
 PROJECTION = Path("graphify-input")
 SEED = Path("graphify-out/.aria-worktree-seed.json")
+_HEX_OID = re.compile(r"[0-9a-f]+\Z")
 
 
 def fail(message: str) -> None:
@@ -92,15 +94,54 @@ def trusted_graphify_runtime(root: Path) -> tuple[Path, Path]:
     return cli, declared
 
 
-def head(root: Path) -> str:
-    """Return the exact revision for the child-local projection."""
-    return subprocess.run(
-        ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+def _object_format_length(root: Path) -> int:
+    """Return the exact Git object-ID length for this repository."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-object-format"],
         cwd=root,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
-    ).stdout.strip()
+    )
+    lengths = {"sha1": 40, "sha256": 64}
+    length = lengths.get(result.stdout.strip())
+    if result.returncode or length is None:
+        fail("Git object format is unavailable")
+    return length
+
+
+def commit_oid(root: Path, revision: object, label: str) -> str:
+    """Authenticate one canonical full commit object before it is used."""
+    if (
+        not isinstance(revision, str)
+        or len(revision) != _object_format_length(root)
+        or _HEX_OID.fullmatch(revision) is None
+    ):
+        fail(f"{label} must be a canonical full commit OID")
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode or result.stdout.strip() != revision:
+        fail(f"{label} must resolve as a commit object")
+    return revision
+
+
+def head(root: Path) -> str:
+    """Return the exact commit revision for the child-local projection."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        fail("current Git HEAD is unavailable")
+    return commit_oid(root, result.stdout.strip(), "current Git HEAD")
 
 
 def semantic_counts(root: Path) -> tuple[int, int]:
@@ -132,22 +173,21 @@ def graph_revision(root: Path) -> str:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         fail(f"Graphify graph is invalid: {error}")
     revision = graph.get("built_at_commit")
-    if not isinstance(revision, str) or not revision:
-        fail("Graphify graph provenance is missing or invalid")
-    return revision
+    return commit_oid(root, revision, "Graphify graph provenance")
 
 
 def commit_tree(root: Path, revision: str) -> str:
     """Resolve one commit to its tree, failing before any child mutation."""
+    commit = commit_oid(root, revision, "Graphify revision")
     result = subprocess.run(
-        ["git", "rev-parse", "--verify", f"{revision}^{{tree}}"],
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{commit}^{{tree}}"],
         cwd=root,
         check=False,
         capture_output=True,
         text=True,
     )
     if result.returncode or not result.stdout.strip():
-        fail(f"Graphify Git tree is unavailable for {revision}")
+        fail(f"Graphify Git tree is unavailable for {commit}")
     return result.stdout.strip()
 
 
@@ -157,7 +197,7 @@ def graph_tree_matches_head(root: Path, graph_revision: str, revision: str) -> b
 
 
 def seeded_tree_matches_head(root: Path, revision: str) -> bool:
-    """Keep an inherited graph when its trusted seed has the destination tree."""
+    """Keep an inherited graph only when its registered seed still matches."""
     path = root / SEED
     if not path.exists():
         return False
@@ -167,10 +207,66 @@ def seeded_tree_matches_head(root: Path, revision: str) -> bool:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         fail(f"Graphify worktree seed is invalid: {error}")
-    source_revision = payload.get("source_worktree_head")
-    if not isinstance(source_revision, str) or not source_revision:
-        fail("Graphify worktree seed source revision is invalid")
-    return commit_tree(root, source_revision) == commit_tree(root, revision)
+    source_value = payload.get("source_worktree")
+    if not isinstance(source_value, str):
+        fail("Graphify worktree seed source worktree is invalid")
+    source_candidate = Path(source_value)
+    if not source_candidate.is_absolute():
+        fail("Graphify worktree seed source worktree is invalid")
+    try:
+        source = source_candidate.resolve(strict=True)
+    except (OSError, RuntimeError):
+        fail("Graphify worktree seed source worktree is unavailable")
+    if not source.is_dir() or source == root:
+        fail("Graphify worktree seed source worktree is invalid")
+
+    def common_dir(worktree: Path) -> Path:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            cwd=worktree,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode or not result.stdout.strip():
+            fail("Graphify worktree seed Git common directory is unavailable")
+        candidate = Path(result.stdout.strip())
+        if not candidate.is_absolute():
+            candidate = worktree / candidate
+        try:
+            return candidate.resolve(strict=True)
+        except (OSError, RuntimeError):
+            fail("Graphify worktree seed Git common directory is unavailable")
+
+    if common_dir(source) != common_dir(root):
+        fail("Graphify worktree seed source worktree is foreign")
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if listed.returncode:
+        fail("Graphify worktree seed cannot enumerate registered worktrees")
+    registered: set[Path] = set()
+    for line in listed.stdout.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        try:
+            registered.add(Path(line.removeprefix("worktree ")).resolve(strict=True))
+        except (OSError, RuntimeError):
+            continue
+    if root not in registered or source not in registered:
+        fail("Graphify worktree seed source worktree is not registered")
+
+    recorded = commit_oid(
+        root, payload.get("source_worktree_head"), "Graphify worktree seed source revision"
+    )
+    actual = head(source)
+    if actual != recorded:
+        fail("Graphify worktree seed source revision does not match source worktree HEAD")
+    return commit_tree(root, actual) == commit_tree(root, revision)
 
 
 def stamp_graph_provenance(root: Path, revision: str) -> None:
