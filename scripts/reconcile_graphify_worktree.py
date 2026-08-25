@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
@@ -121,6 +121,57 @@ def semantic_counts(root: Path) -> tuple[int, int]:
     )
 
 
+def stamp_graph_provenance(root: Path, revision: str) -> None:
+    """Make the trusted Graphify output portable and bind it to this revision."""
+    path = root / GRAPH
+    if path.is_symlink() or not path.is_file():
+        fail("Graphify graph is missing or unsafe")
+    try:
+        graph = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"Graphify graph is invalid: {error}")
+    if not isinstance(graph, dict):
+        fail("Graphify graph is invalid")
+    root = root.resolve()
+    for bucket in ("nodes", "edges", "links", "hyperedges"):
+        items = graph.get(bucket, [])
+        if not isinstance(items, list):
+            fail(f"Graphify graph {bucket} must be a list")
+        for item in items:
+            if not isinstance(item, dict) or "source_file" not in item:
+                continue
+            source = item["source_file"]
+            if source == "":
+                # Graphify emits empty origins for synthetic AST symbols such as
+                # imported typing aliases. They are not file provenance, so do
+                # not preserve them as an unsafe path in the portable graph.
+                item.pop("source_file")
+                continue
+            if not isinstance(source, str):
+                fail("Graphify graph source_file is invalid")
+            candidate = Path(source)
+            if candidate.is_absolute():
+                try:
+                    relative = candidate.resolve(strict=True).relative_to(root)
+                except (OSError, RuntimeError, ValueError) as error:
+                    fail(
+                        f"Graphify graph source_file escapes repository: {source}"
+                    )
+            else:
+                relative = PurePosixPath(source)
+                if relative.is_absolute() or "." in relative.parts or ".." in relative.parts:
+                    fail(f"Graphify graph source_file is unsafe: {source}")
+            item["source_file"] = relative.as_posix()
+    graph["built_at_commit"] = revision
+    temporary = path.with_name(f".{path.name}.tmp")
+    try:
+        temporary.write_text(json.dumps(graph, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(path)
+    except OSError as error:
+        temporary.unlink(missing_ok=True)
+        fail(f"Graphify graph provenance cannot be written: {error}")
+
+
 def _backup_generation(root: Path, backup: Path) -> None:
     """Copy the two reconciliation outputs so a failed update can roll back."""
     for relative in (PROJECTION, GRAPH.parent):
@@ -169,6 +220,7 @@ def run(root: Path) -> None:
             after_counts = semantic_counts(root)
             if after_counts != before_counts:
                 fail("Graphify AST reconciliation changed inherited semantic graph content")
+            stamp_graph_provenance(root, revision)
             subprocess.run(
                 [
                     str(interpreter),

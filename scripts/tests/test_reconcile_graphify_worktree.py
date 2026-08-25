@@ -18,6 +18,36 @@ import reconcile_graphify_worktree as reconcile  # noqa: E402
 
 
 class ReconcileGraphifyWorktreeTests(unittest.TestCase):
+    def test_stamps_revision_and_relativizes_trusted_graph_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            source = root / "graphify-input/index.md"
+            source.parent.mkdir()
+            source.write_text("# fixture\n", encoding="utf-8")
+            output = root / "graphify-out"
+            output.mkdir()
+            graph = output / "graph.json"
+            graph.write_text(
+                json.dumps(
+                    {
+                        "nodes": [
+                            {"source_file": str(source)}, {"source_file": ""}
+                        ],
+                        "edges": [{"source_file": str(source)}],
+                        "hyperedges": [{"source_file": str(source)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            reconcile.stamp_graph_provenance(root, "a" * 40)
+
+            result = json.loads(graph.read_text(encoding="utf-8"))
+            self.assertEqual(result["built_at_commit"], "a" * 40)
+            for bucket in ("nodes", "edges", "hyperedges"):
+                self.assertEqual(result[bucket][0]["source_file"], "graphify-input/index.md")
+            self.assertNotIn("source_file", result["nodes"][1])
+
     def test_runs_projection_incremental_update_then_usable_admission(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
             root = Path(temporary)
