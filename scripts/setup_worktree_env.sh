@@ -41,11 +41,37 @@ git_in_worktree() {
   git --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
 }
 
-[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
 [[ -n "$shared_root" ]] || fail "ARIA_NBV_SHARED_ROOT must identify the parent worktree"
 [[ -d "$shared_root" ]] || fail "shared root does not exist: $shared_root"
-git -C "$shared_root" rev-parse --git-common-dir >/dev/null 2>&1 || \
+shared_root="$(cd "$shared_root" && pwd -P)"
+[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
+source_git_dir="$(git -C "$shared_root" rev-parse --absolute-git-dir 2>/dev/null)" || \
   fail "shared root is not a Git worktree; cannot seed Graphify"
+source_common_dir="$(git --git-dir="$source_git_dir" --work-tree="$shared_root" \
+  rev-parse --git-common-dir 2>/dev/null)" || fail "shared root Git metadata is unavailable"
+destination_common_dir="$(git_in_worktree rev-parse --git-common-dir)" || \
+  fail "destination Git metadata is unavailable"
+[[ "$source_common_dir" = /* ]] || source_common_dir="$shared_root/$source_common_dir"
+[[ "$destination_common_dir" = /* ]] || destination_common_dir="$repo_root/$destination_common_dir"
+source_common_dir="$(cd "$source_common_dir" && pwd -P)"
+destination_common_dir="$(cd "$destination_common_dir" && pwd -P)"
+[[ "$source_common_dir" == "$destination_common_dir" ]] || \
+  fail "source and destination must belong to the same Git common directory"
+registered_source=false
+registered_destination=false
+while IFS= read -r worktree_line; do
+  [[ "$worktree_line" == "worktree $shared_root" ]] && registered_source=true
+  [[ "$worktree_line" == "worktree $repo_root" ]] && registered_destination=true
+done < <(git --git-dir="$source_git_dir" --work-tree="$shared_root" worktree list --porcelain)
+[[ "$registered_source" == true && "$registered_destination" == true ]] || \
+  fail "source and destination must both be registered Git worktrees"
+
+# Everything above is Git metadata only. Do not invoke a parent-provided
+# executable or create child links until the source topology is proven.
+(
+  cd "$shared_root"
+  python3 -I "$repo_root/scripts/check_graphify_freshness.py" --usable --quiet
+) || fail "shared parent Graphify generation is not query-admissible; complete its semantic refresh first"
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
 shared_python="$shared_root/aria_nbv/.venv/bin/python"
 [[ -x "$shared_python" ]] || fail "shared Python is not executable: $shared_python"

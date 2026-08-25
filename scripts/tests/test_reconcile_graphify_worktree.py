@@ -70,7 +70,6 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             ):
                 reconcile.run(root)
 
-        self.assertEqual(recorded[0][:3], (str(interpreter), "-I", "-c"))
         self.assertTrue(
             any(
                 any("build_graphify_projection.py" in item for item in command)
@@ -100,6 +99,91 @@ class ReconcileGraphifyWorktreeTests(unittest.TestCase):
             with mock.patch.object(reconcile.shutil, "which", return_value=str(cli)):
                 with self.assertRaisesRegex(ValueError, "does not match"):
                     reconcile.trusted_graphify_runtime(root)
+
+    def test_restores_projection_and_graph_when_incremental_update_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            (root / ".git").mkdir()
+            projection = root / "graphify-input"
+            projection.mkdir()
+            index = projection / "index.md"
+            index.write_text("# original\n", encoding="utf-8")
+            output = root / "graphify-out"
+            output.mkdir()
+            graph = output / "graph.json"
+            graph.write_text(
+                json.dumps({"nodes": [], "links": []}), encoding="utf-8"
+            )
+            interpreter = root.parent / "trusted-python"
+            interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+            interpreter.chmod(0o755)
+            cli = root.parent / "trusted-graphify"
+            cli.write_text(f"#!{interpreter}\n", encoding="utf-8")
+            cli.chmod(0o755)
+
+            def mutate_then_fail(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+                if command[0] == str(cli):
+                    graph.write_text("{\"mutated\": true}\n", encoding="utf-8")
+                    raise subprocess.CalledProcessError(1, command)
+                index.write_text("# mutated\n", encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (
+                mock.patch.object(
+                    reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
+                ),
+                mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(
+                    reconcile.subprocess, "run", side_effect=mutate_then_fail
+                ),
+            ):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    reconcile.run(root)
+
+            self.assertEqual(index.read_text(encoding="utf-8"), "# original\n")
+            self.assertEqual(
+                graph.read_text(encoding="utf-8"),
+                json.dumps({"nodes": [], "links": []}),
+            )
+
+    def test_rejects_and_restores_total_semantic_item_removal(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:
+            root = Path(temporary)
+            (root / ".git").mkdir()
+            projection = root / "graphify-input"
+            projection.mkdir()
+            index = projection / "index.md"
+            index.write_text("# original\n", encoding="utf-8")
+            output = root / "graphify-out"
+            output.mkdir()
+            graph = output / "graph.json"
+            original = json.dumps(
+                {"nodes": [{"_origin": "semantic"}], "links": []}
+            )
+            graph.write_text(original, encoding="utf-8")
+            interpreter = root.parent / "trusted-python"
+            interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+            interpreter.chmod(0o755)
+            cli = root.parent / "trusted-graphify"
+            cli.write_text(f"#!{interpreter}\n", encoding="utf-8")
+            cli.chmod(0o755)
+
+            def drop_semantic(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+                if command[0] == str(cli):
+                    graph.write_text(json.dumps({"nodes": [], "links": []}), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (
+                mock.patch.object(
+                    reconcile, "trusted_graphify_runtime", return_value=(cli, interpreter)
+                ),
+                mock.patch.object(reconcile, "head", return_value="a" * 40),
+                mock.patch.object(reconcile.subprocess, "run", side_effect=drop_semantic),
+            ):
+                with self.assertRaisesRegex(ValueError, "changed inherited semantic"):
+                    reconcile.run(root)
+
+            self.assertEqual(graph.read_text(encoding="utf-8"), original)
 
     def test_rejects_an_unpinned_cli_before_update(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-reconcile-") as temporary:

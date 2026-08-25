@@ -20,7 +20,6 @@ MANIFEST = Path("graphify-out/manifest.json")
 INTERPRETER = Path("graphify-out/.graphify_python")
 ROOT_MARKER = Path("graphify-out/.graphify_root")
 NEEDS_UPDATE = Path("graphify-out/needs_update")
-RECONCILIATION_RECEIPT = Path("graphify-out/.aria-graphify-reconcile.json")
 INDEX_PATH = "graphify-input/index.md"
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 MAX_STALE_SOURCES = 128
@@ -479,11 +478,6 @@ def _raw_commit_snapshot(
     _regular(graph, "graph")
     (snapshot / GRAPH).parent.mkdir(parents=True, exist_ok=True)
     (snapshot / GRAPH).write_bytes(graph.read_bytes())
-    receipt = root / RECONCILIATION_RECEIPT
-    if receipt.exists() or receipt.is_symlink():
-        _regular(receipt, "Graphify reconciliation receipt")
-        (snapshot / RECONCILIATION_RECEIPT).parent.mkdir(parents=True, exist_ok=True)
-        (snapshot / RECONCILIATION_RECEIPT).write_bytes(receipt.read_bytes())
     return temporary
 
 
@@ -577,68 +571,6 @@ def _detector_sources(
     return stale, files
 
 
-def _semantic_receipt_sources(
-    root: Path, head: str, files: dict[str, list[str]]
-) -> set[str]:
-    """Classify inherited semantic inputs when legacy manifests lack stamps."""
-    receipt_path = _local_regular(
-        root, RECONCILIATION_RECEIPT, "Graphify reconciliation receipt"
-    )
-    payload = _json_object(receipt_path, "Graphify reconciliation receipt")
-    if payload.get("schema_version") != 1:
-        raise ValueError("Graphify reconciliation receipt is invalid")
-    receipt_head = payload.get("head")
-    if not isinstance(receipt_head, str) or not _OID.fullmatch(receipt_head):
-        raise ValueError("Graphify reconciliation receipt is invalid")
-    if (root / ".git").exists():
-        _commit_oid(root, receipt_head, "Graphify reconciliation receipt revision")
-    hashes = payload.get("semantic_source_hashes")
-    drift = payload.get("projection_semantic_drift")
-    nodes = payload.get("semantic_node_count")
-    edges = payload.get("semantic_edge_count")
-    if (
-        not isinstance(hashes, dict)
-        or not isinstance(drift, list)
-        or not isinstance(nodes, int)
-        or not isinstance(edges, int)
-        or nodes < 0
-        or edges < 0
-    ):
-        raise ValueError("Graphify reconciliation receipt is invalid")
-    graph = _json_object(root / GRAPH, "graph")
-    graph_nodes = graph.get("nodes")
-    graph_edges = graph.get("links", graph.get("edges"))
-    if not isinstance(graph_nodes, list) or not isinstance(graph_edges, list):
-        raise ValueError("graph is invalid")
-    if (
-        sum(isinstance(node, dict) and node.get("_origin") == "semantic" for node in graph_nodes)
-        != nodes
-        or sum(isinstance(edge, dict) and edge.get("_origin") == "semantic" for edge in graph_edges)
-        != edges
-    ):
-        raise ValueError("inherited semantic graph differs from reconciliation receipt")
-    stale: set[str] = set()
-    current: set[str] = set()
-    for kind in ("document", "paper", "image"):
-        for raw in files[kind]:
-            relative = _contained_existing(root, raw)
-            current.add(relative)
-            expected = hashes.get(relative)
-            if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
-                stale.add(relative)
-                continue
-            if hashlib.sha256((root / relative).read_bytes()).hexdigest() != expected:
-                stale.add(relative)
-    for raw in drift:
-        if not isinstance(raw, str):
-            raise ValueError("Graphify reconciliation receipt has invalid drift")
-        relative = _contained_existing(root, raw)
-        if relative not in current:
-            raise ValueError("Graphify reconciliation receipt drift is outside corpus")
-        stale.add(relative)
-    return stale
-
-
 def _result(
     state: str,
     head: str | None,
@@ -709,16 +641,12 @@ def check(root: Path) -> dict[str, Any]:
         graph_ancestor = _is_ancestor(root, graph_revision, head)
         graph_commit_tree = _tree_oid(root, graph_revision, "graph")
         ast, semantic = _detect_incremental(root)
-        receipt_used = False
         ast_stale, _ = _detector_sources(root, ast, {"code"})
-        semantic_stale, semantic_files = _detector_sources(
+        semantic_stale, _ = _detector_sources(
             root, semantic, {"document", "paper", "image"}
         )
         if len(ast_stale) > MAX_STALE_SOURCES:
             raise ValueError("Graphify detector reported an unbounded stale-source set")
-        if len(semantic_stale) > MAX_STALE_SOURCES:
-            semantic_stale = _semantic_receipt_sources(root, head, semantic_files)
-            receipt_used = True
         if len(semantic_stale) > MAX_STALE_SOURCES:
             raise ValueError("Graphify detector reported an unbounded stale-source set")
         overlay_stale = sorted(ast_stale | semantic_stale)
@@ -735,7 +663,7 @@ def check(root: Path) -> dict[str, Any]:
                 committed_ast_stale, _ = _detector_sources(
                     snapshot_root, committed_ast, {"code"}
                 )
-                committed_semantic_stale, committed_files = _detector_sources(
+                committed_semantic_stale, _ = _detector_sources(
                     snapshot_root,
                     committed_semantic,
                     {"document", "paper", "image"},
@@ -744,11 +672,6 @@ def check(root: Path) -> dict[str, Any]:
                     raise ValueError(
                         "Graphify detector reported an unbounded stale-source set"
                     )
-                if len(committed_semantic_stale) > MAX_STALE_SOURCES:
-                    committed_semantic_stale = _semantic_receipt_sources(
-                        snapshot_root, head, committed_files
-                    )
-                    receipt_used = True
                 if len(committed_semantic_stale) > MAX_STALE_SOURCES:
                     raise ValueError(
                         "Graphify detector reported an unbounded stale-source set"
@@ -773,7 +696,6 @@ def check(root: Path) -> dict[str, Any]:
     if (
         committed_stale
         and (not projection_ancestor or not graph_ancestor)
-        and not receipt_used
     ):
         return _result(
             "unusable",

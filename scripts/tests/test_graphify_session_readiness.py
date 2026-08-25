@@ -16,9 +16,6 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CHECKER = ROOT / "scripts/check_graphify_freshness.py"
-
-
 def graphify_interpreter() -> Path:
     cli = Path(shutil.which("graphify") or "").resolve()
     if not cli.is_file():
@@ -27,7 +24,7 @@ def graphify_interpreter() -> Path:
 
 
 class GraphifySessionReadinessTests(unittest.TestCase):
-    def test_setup_admits_a_real_child_worktree(self) -> None:
+    def test_parentless_setup_rejects_an_unadmitted_primary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-graphify-session-") as temporary:
             parent = Path(temporary) / "parent"
             child = Path(temporary) / "child"
@@ -75,6 +72,9 @@ class GraphifySessionReadinessTests(unittest.TestCase):
             self.git(parent, "commit", "-qm", "seed")
             head = self.git_output(parent, "rev-parse", "HEAD")
             self.write_parent_graph(parent, head)
+            (parent / "graphify-out/needs_update").write_text(
+                "semantic refresh required\n", encoding="utf-8"
+            )
             self.git(parent, "worktree", "add", "-qb", "session-child", str(child))
 
             environment = tomllib.loads(
@@ -100,28 +100,13 @@ class GraphifySessionReadinessTests(unittest.TestCase):
                 text=True,
             )
 
-            checked = subprocess.run(
-                [str(graphify_interpreter()), str(CHECKER), "--usable", "--json"],
-                cwd=child,
-                check=False,
-                capture_output=True,
-                text=True,
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "shared parent Graphify generation is not query-admissible",
+                result.stderr,
             )
-            self.assertEqual(result.returncode, 0, result.stderr + checked.stdout)
-            self.assertEqual(checked.returncode, 0, checked.stdout)
-            self.assertTrue(json.loads(checked.stdout)["usable"])
-            sentinel = json.loads(
-                (child / "graphify-out/.aria-worktree-seed.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            self.assertEqual(sentinel["source_worktree"], str(parent.resolve()))
-            for name in ("semantic", "semantic-deep"):
-                cache = child / "graphify-out/cache" / name
-                self.assertTrue(cache.is_symlink())
-                self.assertEqual(
-                    cache.resolve(), (parent / ".data" / name).resolve()
-                )
+            self.assertFalse((child / "graphify-out").exists())
+            self.assertFalse((child / "graphify-input").exists())
 
     def git(self, root: Path, *args: str) -> None:
         subprocess.run(["git", *args], cwd=root, check=True)

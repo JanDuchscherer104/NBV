@@ -9,10 +9,13 @@ repository owners remain authoritative for behavior and scientific claims.
 1. When Codex supplies `CODEX_SOURCE_WORKSPACE_PATH`, setup uses that exact fork
    parent. Project-created worktrees may omit it, so the Codex bridge resolves
    only Git's canonical primary checkout (never Git's first registered
-   worktree). It copies that generation locally, links the selected parent's
-   content-addressed `semantic` and `semantic-deep` namespaces, regenerates the
-   deterministic child projection, then runs upstream incremental `graphify update`
-   before reporting readiness.
+   worktree). Before running a parent executable or mutating the child, the
+   setup owner proves that both paths are registered, distinct worktrees in the
+   same Git common directory and that the selected parent's graph is
+   query-admissible. It then copies that generation locally, links the selected
+   parent's content-addressed `semantic` and `semantic-deep` namespaces,
+   regenerates the deterministic child projection, then runs upstream
+   incremental `graphify update` before reporting readiness.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
    provenance state are worktree-local regular-file copies. Only the two
    content-addressed cache namespaces are shared; neither cache identity nor a
@@ -51,10 +54,11 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 ## Freshness And Refresh
 
 Setup owns the ordinary session reconciliation: it regenerates the deterministic
-child projection, invokes upstream's no-LLM incremental code update, and records
-the exact semantic-input baseline plus any bounded projection drift. This keeps
-inherited semantic edges and cache hits while distinguishing Graphify's legacy
-missing manifest stamps from actual source changes. `make graphify-state-check` remains
+child projection and invokes upstream's no-LLM incremental code update. A
+receipt, matching semantic counts, or matching Git commit never substitutes for
+the pinned upstream detector and ancestry checks. A parent whose detector result
+is unbounded or otherwise unusable requires a factual semantic refresh before a
+new session can start. `make graphify-state-check` remains
 strict for scaffold and pre-push validation, while `make graphify-usable-check`
 proves navigation safety. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still

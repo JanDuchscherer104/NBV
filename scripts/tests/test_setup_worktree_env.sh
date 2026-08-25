@@ -9,11 +9,14 @@ SHARED_ROOT="${SANDBOX}/shared"
 WORKTREE_ROOT="${SANDBOX}/worktree"
 SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 EXPLICIT_CHILD_ROOT="${SANDBOX}/explicit-child"
+STALE_CHILD_ROOT="${SANDBOX}/stale-child"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
 NON_GIT_WORKTREE_ROOT="${SANDBOX}/non-git-worktree"
 NON_GIT_SHARED_ROOT="${SANDBOX}/non-git-shared"
+FOREIGN_WORKTREE_ROOT="${SANDBOX}/foreign-worktree"
+FOREIGN_SHARED_ROOT="${SANDBOX}/foreign-shared"
 FAKE_BIN="${SANDBOX}/bin"
 
 GRAPHIFY_CLI="$(command -v graphify)"
@@ -51,6 +54,7 @@ cat >"${SHARED_ROOT}/scripts/check_graphify_freshness.py" <<EOF
 from pathlib import Path
 import sys
 Path("${SANDBOX}/freshness.log").open("a", encoding="utf-8").write(" ".join(sys.argv[1:]) + "\\n")
+raise SystemExit(1 if Path.cwd() == Path("${SECOND_WORKTREE_ROOT}") else 0)
 EOF
 chmod +x "${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" \
   "${SHARED_ROOT}/scripts/check_graphify_freshness.py"
@@ -67,16 +71,26 @@ ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-explicit-child "${EXPLICIT_CHILD_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-stale-child "${STALE_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-non-git "${NON_GIT_WORKTREE_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-foreign "${FOREIGN_WORKTREE_ROOT}"
 
 mkdir -p \
   "${NON_GIT_SHARED_ROOT}/aria_nbv/.venv/bin" \
   "${NON_GIT_SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
   "${NON_GIT_SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep"
 ln -s "$(command -v python3)" "${NON_GIT_SHARED_ROOT}/aria_nbv/.venv/bin/python"
+
+mkdir -p "${FOREIGN_SHARED_ROOT}/aria_nbv/.venv/bin" "${FOREIGN_SHARED_ROOT}/.data"
+git -C "${FOREIGN_SHARED_ROOT}" init -q
+cat >"${FOREIGN_SHARED_ROOT}/aria_nbv/.venv/bin/python" <<EOF
+#!/usr/bin/env bash
+touch "${SANDBOX}/foreign-parent-python-executed"
+EOF
+chmod +x "${FOREIGN_SHARED_ROOT}/aria_nbv/.venv/bin/python"
 
 # The source seed is deliberately untracked. Graphify output is an ignored,
 # derived artifact and setup must nevertheless require a complete valid parent.
@@ -120,6 +134,13 @@ echo "mamba must not be used" >&2
 exit 98
 EOF
 chmod +x "${FAKE_BIN}/mamba"
+
+cat >"${FAKE_BIN}/python3" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"${SANDBOX}/source-admission.log"
+exit 0
+EOF
+chmod +x "${FAKE_BIN}/python3"
 
 # Preserve d6a's explicit-Git-dir regression: ambient Git discovery reports a
 # stale worktree, while setup must still address this child explicitly.
@@ -167,6 +188,41 @@ snapshot_tree() {
   find "${root}" -mindepth 1 -printf '%P %y\n' | LC_ALL=C sort
   find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
 }
+
+# A foreign explicit parent must fail solely from Git topology. Its executable
+# must not run and an unseeded child must remain byte-for-byte untouched.
+foreign_before="$(snapshot_tree "${FOREIGN_WORKTREE_ROOT}")"
+if ARIA_NBV_SHARED_ROOT="${FOREIGN_SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
+  bash "${FOREIGN_WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/foreign.out" 2>"${SANDBOX}/foreign.err"; then
+  echo "setup unexpectedly accepted a foreign shared root" >&2
+  exit 1
+fi
+grep -Fq "same Git common directory" "${SANDBOX}/foreign.err"
+[[ ! -e "${SANDBOX}/foreign-parent-python-executed" ]]
+[[ "$(snapshot_tree "${FOREIGN_WORKTREE_ROOT}")" == "${foreign_before}" ]]
+
+# A registered explicit parent that is Graphify-unusable is rejected by the
+# repository-owned checker before its runtime executes or the child changes.
+mkdir -p "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin"
+cat >"${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python" <<EOF
+#!/usr/bin/env bash
+touch "${SANDBOX}/stale-parent-python-executed"
+EOF
+chmod +x "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python"
+stale_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
+if ARIA_NBV_SHARED_ROOT="${SECOND_WORKTREE_ROOT}" PATH="${PATH}" \
+  bash "${STALE_CHILD_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/stale-parent.out" 2>"${SANDBOX}/stale-parent.err"; then
+  echo "setup unexpectedly accepted a Graphify-unusable explicit parent" >&2
+  exit 1
+fi
+grep -Fq "shared parent Graphify generation is not query-admissible" \
+  "${SANDBOX}/stale-parent.err"
+[[ ! -e "${SANDBOX}/stale-parent-python-executed" ]]
+[[ "$(snapshot_tree "${STALE_CHILD_ROOT}")" == "${stale_before}" ]]
+rm "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python"
+rmdir "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin" "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv"
 
 # A shared root without Git ownership cannot supply a mandatory Graphify seed.
 # Both modes must reject it before creating or linking anything in the child.

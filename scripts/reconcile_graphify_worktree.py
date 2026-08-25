@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +16,6 @@ import tempfile
 PINNED_GRAPHIFY_VERSION = "0.9.48"
 GRAPH = Path("graphify-out/graph.json")
 PROJECTION = Path("graphify-input")
-RECEIPT = Path("graphify-out/.aria-graphify-reconcile.json")
 
 
 def fail(message: str) -> None:
@@ -104,87 +102,6 @@ def head(root: Path) -> str:
     ).stdout.strip()
 
 
-def projection_hashes(root: Path) -> dict[str, str]:
-    """Hash local projection inputs before and after deterministic regeneration."""
-    projection = root / PROJECTION
-    if projection.is_symlink() or not projection.is_dir():
-        fail("Graphify projection is missing or unsafe")
-    hashes: dict[str, str] = {}
-    for path in projection.rglob("*.md"):
-        if path.is_symlink() or not path.is_file():
-            fail(f"Graphify projection source is unsafe: {path}")
-        content = path.read_bytes()
-        relative = path.relative_to(root).as_posix()
-        if relative == "graphify-input/index.md":
-            dynamic = (
-                "source_revision:",
-                "source_tree:",
-                "aria_code_ref:",
-                "aria_code_ref_source:",
-                "aria_code_ref_pin_kind:",
-                "aria_code_ref_resolved_oid:",
-                "owner_worktree_state:",
-                "asset_inventory_sha256:",
-            )
-            content = "\n".join(
-                line
-                for line in content.decode("utf-8").splitlines()
-                if not line.startswith(dynamic)
-            ).encode("utf-8")
-        hashes[relative] = hashlib.sha256(content).hexdigest()
-    if not hashes:
-        fail("Graphify projection has no Markdown sources")
-    return hashes
-
-
-def semantic_sources(interpreter: Path, root: Path) -> dict[str, str]:
-    """Return Graphify's semantic corpus with content digests."""
-    program = """
-import json
-import sys
-from pathlib import Path
-from graphify.detect import detect
-
-root = Path(sys.argv[1]).resolve()
-result = detect(root, follow_symlinks=False, google_workspace=False)
-files = result.get('files', {})
-print(json.dumps({kind: files.get(kind, []) for kind in ('document', 'paper', 'image')}))
-"""
-    result = subprocess.run(
-        [str(interpreter), "-I", "-c", program, str(root)],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode:
-        fail(f"Graphify semantic corpus detection failed: {result.stderr.strip()}")
-    try:
-        groups = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        fail(f"Graphify semantic corpus detection returned invalid JSON: {error}")
-    if not isinstance(groups, dict):
-        fail("Graphify semantic corpus detection returned an invalid result")
-    sources: dict[str, str] = {}
-    for kind in ("document", "paper", "image"):
-        paths = groups.get(kind)
-        if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
-            fail("Graphify semantic corpus detection returned invalid paths")
-        for raw in paths:
-            path = root / raw
-            try:
-                resolved = path.resolve(strict=True)
-                relative = resolved.relative_to(root).as_posix()
-            except (OSError, RuntimeError, ValueError) as error:
-                fail(f"Graphify semantic source is unsafe: {raw}: {error}")
-            if not resolved.is_file():
-                fail(f"Graphify semantic source is unsafe: {raw}")
-            sources[relative] = hashlib.sha256(resolved.read_bytes()).hexdigest()
-    if not sources:
-        fail("Graphify semantic corpus is empty")
-    return dict(sorted(sources.items()))
-
-
 def semantic_counts(root: Path) -> tuple[int, int]:
     """Count semantic graph content so an AST update cannot silently discard it."""
     path = root / GRAPH
@@ -204,28 +121,23 @@ def semantic_counts(root: Path) -> tuple[int, int]:
     )
 
 
-def write_receipt(
-    root: Path,
-    revision: str,
-    semantic: dict[str, str],
-    projection_drift: list[str],
-    counts: tuple[int, int],
-) -> None:
-    """Publish the child-local semantic baseline after a successful update."""
-    receipt = root / RECEIPT
-    if receipt.is_symlink():
-        fail("Graphify reconciliation receipt is unsafe")
-    payload = {
-        "schema_version": 1,
-        "head": revision,
-        "projection_semantic_drift": projection_drift,
-        "semantic_edge_count": counts[1],
-        "semantic_node_count": counts[0],
-        "semantic_source_hashes": semantic,
-    }
-    temporary = receipt.with_name(f".{receipt.name}.tmp")
-    temporary.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.replace(receipt)
+def _backup_generation(root: Path, backup: Path) -> None:
+    """Copy the two reconciliation outputs so a failed update can roll back."""
+    for relative in (PROJECTION, GRAPH.parent):
+        source = root / relative
+        if source.is_symlink() or not source.is_dir():
+            fail(f"Graphify reconciliation state is missing or unsafe: {relative}")
+        shutil.copytree(source, backup / relative, symlinks=True)
+
+
+def _restore_generation(root: Path, backup: Path) -> None:
+    """Restore the local reconciliation outputs after an ordinary failure."""
+    for relative in (PROJECTION, GRAPH.parent):
+        destination = root / relative
+        if destination.is_symlink() or not destination.is_dir():
+            fail(f"Graphify reconciliation state cannot be restored safely: {relative}")
+        shutil.rmtree(destination)
+        shutil.copytree(backup / relative, destination, symlinks=True)
 
 
 def run(root: Path) -> None:
@@ -234,44 +146,42 @@ def run(root: Path) -> None:
         fail(f"Graphify reconciliation root is not a Git worktree: {root}")
     cli, interpreter = trusted_graphify_runtime(root)
     revision = head(root)
-    before_projection = projection_hashes(root)
     before_counts = semantic_counts(root)
 
     scripts = Path(__file__).resolve().parent
-    subprocess.run(
-        [
-            sys.executable,
-            str(scripts / "build_graphify_projection.py"),
-            "--output",
-            str(PROJECTION),
-            "--aria-code-ref",
-            revision,
-        ],
-        cwd=root,
-        check=True,
-    )
-    after_projection = projection_hashes(root)
-    projection_drift = sorted(
-        path
-        for path in set(before_projection) | set(after_projection)
-        if before_projection.get(path) != after_projection.get(path)
-    )
-    semantic = semantic_sources(interpreter, root)
-    subprocess.run([str(cli), "update", str(root)], cwd=root, check=True)
-    after_counts = semantic_counts(root)
-    if after_counts != before_counts:
-        fail("Graphify AST reconciliation changed inherited semantic graph content")
-    write_receipt(root, revision, semantic, projection_drift, after_counts)
-    subprocess.run(
-        [
-            str(interpreter),
-            str(scripts / "check_graphify_freshness.py"),
-            "--usable",
-            "--quiet",
-        ],
-        cwd=root,
-        check=True,
-    )
+    with tempfile.TemporaryDirectory(prefix="aria-graphify-reconcile-backup-") as temporary:
+        backup = Path(temporary)
+        _backup_generation(root, backup)
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(scripts / "build_graphify_projection.py"),
+                    "--output",
+                    str(PROJECTION),
+                    "--aria-code-ref",
+                    revision,
+                ],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run([str(cli), "update", str(root)], cwd=root, check=True)
+            after_counts = semantic_counts(root)
+            if after_counts != before_counts:
+                fail("Graphify AST reconciliation changed inherited semantic graph content")
+            subprocess.run(
+                [
+                    str(interpreter),
+                    str(scripts / "check_graphify_freshness.py"),
+                    "--usable",
+                    "--quiet",
+                ],
+                cwd=root,
+                check=True,
+            )
+        except BaseException:
+            _restore_generation(root, backup)
+            raise
 
 
 def main(argv: list[str] | None = None) -> int:

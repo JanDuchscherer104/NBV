@@ -41,6 +41,7 @@ canonical_primary_worktree() {
 # A non-empty Codex source is the actual fork parent and therefore always wins.
 # Codex 0.149.1 may omit it for project-created worktrees; only then fall back
 # to Git's canonical primary checkout, never an arbitrary registered worktree.
+# The strict setup owner validates both topology and Graphify admission.
 shared_root="$explicit_parent"
 if [[ -z "$shared_root" ]]; then
   shared_root="$(canonical_primary_worktree)"

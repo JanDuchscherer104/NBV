@@ -494,6 +494,57 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         self.assertIn("src/example.py", payload["stale_sources"])
         self.assertEqual(payload["next_action"], freshness.STALE_ACTION)
 
+    def test_receipt_cannot_bypass_unbounded_nonancestor_snapshot(self) -> None:
+        """Legacy receipt bytes never bless an unproven semantic graph."""
+        source = self.root / "src/example.py"
+        source.write_text("def example(): return 2\n", encoding="utf-8")
+        for index in range(129):
+            path = self.root / f"semantic/{index}.md"
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(f"semantic {index}\n", encoding="utf-8")
+        subprocess.run(["git", "add", str(source), "semantic"], cwd=self.root, check=True)
+        tree = self.git("write-tree")
+        rebased = subprocess.run(
+            ["git", "commit-tree", tree, "-m", "nonancestor semantic drift"],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        subprocess.run(["git", "update-ref", "HEAD", rebased], cwd=self.root, check=True)
+        (self.root / "graphify-out/.aria-graphify-reconcile.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "head": self.head,
+                    "semantic_node_count": 0,
+                    "semantic_edge_count": 0,
+                    "semantic_source_hashes": {},
+                    "projection_semantic_drift": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        calls: list[Path] = []
+
+        def detector(root: Path, **_: object) -> tuple[dict[str, object], dict[str, object]]:
+            calls.append(root)
+            if root.resolve() == self.root.resolve():
+                return _clean_snapshot_detector(root)
+            oversized = _clean_detector_payload(root)
+            oversized["new_files"] = {
+                **oversized["new_files"],
+                "document": [f"semantic/{index}.md" for index in range(129)],
+            }
+            return _clean_detector_payload(root), oversized
+
+        with mock.patch.object(freshness, "_detect_incremental", side_effect=detector):
+            payload = freshness.check(self.root)
+
+        self.assertEqual(payload["state"], "unusable", payload)
+        self.assertIn("unbounded stale-source set", " ".join(payload["reasons"]))
+        self.assertGreaterEqual(len(calls), 2, "HEAD snapshot was not checked")
+
     def test_nonancestor_committed_source_drift_is_seen_after_worktree_restore(
         self,
     ) -> None:
