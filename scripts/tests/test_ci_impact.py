@@ -149,6 +149,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"scripts/check_graphify_freshness.py"', workflow)
         self.assertIn('"scripts/graphify_worktree_seed.py"', workflow)
         self.assertIn('"scripts/reconcile_graphify_worktree.py"', workflow)
+        self.assertIn('"scripts/setup_codex_worktree_env.sh"', workflow)
         self.assertIn('"scripts/scaffold_audit.py"', workflow)
         for path in (
             "scripts/scaffold/run_routing_trials.py",
@@ -254,6 +255,7 @@ class SelectionTests(unittest.TestCase):
             "scripts/check_graphify_freshness.py": {"scaffold"},
             "scripts/graphify_worktree_seed.py": {"scaffold"},
             "scripts/reconcile_graphify_worktree.py": {"scaffold"},
+            "scripts/setup_codex_worktree_env.sh": {"scaffold"},
             "scripts/scaffold_audit.py": {"scaffold"},
             "scripts/scaffold/fixtures/routing.json": {"scaffold"},
             "scripts/scaffold/run_routing_trials.py": {"scaffold"},

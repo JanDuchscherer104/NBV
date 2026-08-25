@@ -36,6 +36,7 @@ on:
       - "scripts/check_graphify_freshness.py"
       - "scripts/graphify_worktree_seed.py"
       - "scripts/reconcile_graphify_worktree.py"
+      - "scripts/setup_codex_worktree_env.sh"
       - "scripts/setup_worktree_env.sh"
       - "scripts/templates/lrz/**"
       - "scripts/tests/test_build_graphify_projection.py"

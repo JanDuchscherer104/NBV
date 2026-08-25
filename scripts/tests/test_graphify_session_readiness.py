@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
@@ -36,6 +37,7 @@ class GraphifySessionReadinessTests(unittest.TestCase):
                 ".data/semantic-deep",
                 "docs/thesis",
                 "scripts",
+                ".codex/environments",
             ):
                 (parent / relative).mkdir(parents=True, exist_ok=True)
             (parent / ".gitignore").write_text(
@@ -46,11 +48,16 @@ class GraphifySessionReadinessTests(unittest.TestCase):
             shutil.copy2(ROOT / ".graphifyignore", parent / ".graphifyignore")
             for script in (
                 "setup_worktree_env.sh",
+                "setup_codex_worktree_env.sh",
                 "graphify_worktree_seed.py",
                 "reconcile_graphify_worktree.py",
                 "check_graphify_freshness.py",
             ):
                 shutil.copy2(ROOT / "scripts" / script, parent / "scripts" / script)
+            shutil.copy2(
+                ROOT / ".codex/environments/aria-nbv.toml",
+                parent / ".codex/environments/aria-nbv.toml",
+            )
             (parent / "scripts/build_graphify_projection.py").write_text(
                 "#!/usr/bin/env python3\n"
                 "# Hermetic fixture: the parent projection already matches HEAD.\n",
@@ -70,10 +77,24 @@ class GraphifySessionReadinessTests(unittest.TestCase):
             self.write_parent_graph(parent, head)
             self.git(parent, "worktree", "add", "-qb", "session-child", str(child))
 
+            environment = tomllib.loads(
+                (parent / ".codex/environments/aria-nbv.toml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            bridge = environment["setup"]["script"].strip()
+            self.assertEqual(
+                bridge,
+                'bash "$CODEX_WORKTREE_PATH/scripts/setup_codex_worktree_env.sh"',
+            )
             result = subprocess.run(
-                ["bash", "scripts/setup_worktree_env.sh"],
+                ["bash", "-c", bridge],
                 cwd=child,
-                env={**os.environ, "ARIA_NBV_SHARED_ROOT": str(parent)},
+                env={
+                    **os.environ,
+                    "CODEX_WORKTREE_PATH": str(child),
+                    "CODEX_SOURCE_WORKSPACE_PATH": "",
+                },
                 check=False,
                 capture_output=True,
                 text=True,
@@ -89,6 +110,12 @@ class GraphifySessionReadinessTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr + checked.stdout)
             self.assertEqual(checked.returncode, 0, checked.stdout)
             self.assertTrue(json.loads(checked.stdout)["usable"])
+            sentinel = json.loads(
+                (child / "graphify-out/.aria-worktree-seed.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(sentinel["source_worktree"], str(parent.resolve()))
             for name in ("semantic", "semantic-deep"):
                 cache = child / "graphify-out/cache" / name
                 self.assertTrue(cache.is_symlink())

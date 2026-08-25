@@ -8,6 +8,7 @@ trap 'rm -rf "${SANDBOX}"' EXIT
 SHARED_ROOT="${SANDBOX}/shared"
 WORKTREE_ROOT="${SANDBOX}/worktree"
 SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
+EXPLICIT_CHILD_ROOT="${SANDBOX}/explicit-child"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
@@ -33,9 +34,12 @@ mkdir -p \
   "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
   "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
   "${SHARED_ROOT}/docs/literature/pdf" \
-  "${SHARED_ROOT}/scripts" "${FAKE_BIN}"
+  "${SHARED_ROOT}/scripts" "${SHARED_ROOT}/.codex/environments" "${FAKE_BIN}"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${SHARED_ROOT}/scripts/"
+cp "${REPO_ROOT}/scripts/setup_codex_worktree_env.sh" "${SHARED_ROOT}/scripts/"
 cp "${REPO_ROOT}/scripts/graphify_worktree_seed.py" "${SHARED_ROOT}/scripts/"
+cp "${REPO_ROOT}/.codex/environments/aria-nbv.toml" \
+  "${SHARED_ROOT}/.codex/environments/"
 cat >"${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" <<EOF
 #!/usr/bin/env python3
 from pathlib import Path
@@ -62,6 +66,7 @@ git -C "${SHARED_ROOT}" commit -qm fixture
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-explicit-child "${EXPLICIT_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
@@ -126,6 +131,24 @@ git -C "${SECOND_WORKTREE_ROOT}" config --worktree core.worktree "${SANDBOX}/sta
 run_setup() {
   ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
     bash "$1/scripts/setup_worktree_env.sh" "${@:2}"
+}
+
+CODEX_SETUP_SCRIPT="$(python3 - "${SHARED_ROOT}/.codex/environments/aria-nbv.toml" <<'PY'
+import sys
+import tomllib
+
+environment = tomllib.load(open(sys.argv[1], "rb"))
+assert environment["version"] == 1
+assert environment["name"] == "ARIA-NBV shared runtime"
+script = environment["setup"]["script"].strip()
+assert script == 'bash "$CODEX_WORKTREE_PATH/scripts/setup_codex_worktree_env.sh"'
+print(script)
+PY
+)"
+
+run_codex_setup() {
+  CODEX_WORKTREE_PATH="$1" CODEX_SOURCE_WORKSPACE_PATH="$2" \
+    PATH="${FAKE_BIN}:${PATH}" bash -c "${CODEX_SETUP_SCRIPT}"
 }
 
 # Parent selection is explicit; setup must never silently choose Git's first
@@ -218,11 +241,26 @@ done
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
 
-run_setup "${SECOND_WORKTREE_ROOT}"
+# Execute the exact Codex environment bridge with the source variable empty.
+# The resolver must use Git's canonical primary checkout, not the first entry
+# from `git worktree list` and not an unvalidated filesystem default.
+run_codex_setup "${SECOND_WORKTREE_ROOT}" ""
 [[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
 [[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic-deep")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
 [[ ! -e "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 [[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
+
+# A real Codex fork parent remains authoritative even though the canonical
+# primary checkout is also available as a parentless fallback.
+run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}"
+python3 - "${EXPLICIT_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" "${SECOND_WORKTREE_ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
+PY
 printf 'cache-hit\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 grep -Fqx cache-hit "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 printf '{"built_at_commit":"%s","nodes":[{"source_file":"graphify-input/index.md"}],"fixture":"child"}\n' \
