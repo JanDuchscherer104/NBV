@@ -129,4 +129,23 @@
       )
     )
   $,
+  qh_cfplus_h0_control: $
+    op("Struct")(bold(o)_t) = op("Struct")(bold(o)'_t)
+    quad arrow.r.double quad
+    f_theta^"CF+-H0"(
+      #symb.rl.s_pose,
+      bold(o)_t,
+      #symb.entity.target_desc,
+      {q_(t,i)}_(i=1)^(#symb.shape.Nq),
+      #symb.rl.requested_horizon
+    )
+    =
+    f_theta^"CF+-H0"(
+      #symb.rl.s_pose,
+      bold(o)'_t,
+      #symb.entity.target_desc,
+      {q_(t,i)}_(i=1)^(#symb.shape.Nq),
+      #symb.rl.requested_horizon
+    )
+  $,
 )

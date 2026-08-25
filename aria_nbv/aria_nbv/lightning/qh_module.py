@@ -281,6 +281,9 @@ class QhLightningModule(pl.LightningModule):
                 "The deployable Q_H core rejects learned_feasibility_v1; "
                 "learned-only selection requires a separately versioned calibrated profile."
             )
+        scorer_profile = getattr(getattr(scorer, "config", None), "experiment_profile", None)
+        if scorer_profile is not None and scorer_profile != config.experiment_profile:
+            raise ValueError("Q_H scorer and Lightning module experiment profiles must match exactly.")
         self.config = config
         self.automatic_optimization = False
         self.online_scorer = scorer

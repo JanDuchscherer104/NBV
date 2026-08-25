@@ -783,7 +783,7 @@
     key: "geometry-rich-counterfactual-state",
     short: "CF+ state",
     long: "Geometry-Rich Counterfactual State",
-    description: "Ablation actor state that extends the minimal counterfactual state with selected prior synthetic observations only: rendered depth, valid mask, backprojected point cloud, and derived local normals or support summaries.",
+    description: "Ablation actor state that extends the minimal counterfactual state with selected prior synthetic observations only. The executable CF-GT carrier stores rendered depth, valid mask, calibration, selected-camera pose, source identity, and causal support; S1 and later encoders may derive points, normals, or support summaries from it.",
     group: "Planning",
     custom: (
       anchor: "term-geometry-rich-counterfactual-state",
@@ -795,7 +795,7 @@
       category: "planning.state",
       parent: "rollout-state",
       definition_short: "Counterfactual ablation state with selected synthetic geometry observations.",
-      definition_long: "The geometry-rich counterfactual state adds only selected prior synthetic observations to the minimal state. It may include rendered depth, depth-valid masks, backprojected points, derived normals, and local support summaries for views that have already been selected. It does not include oracle renders for unselected candidates.",
+      definition_long: "The geometry-rich counterfactual state adds only selected prior synthetic observations to the minimal state. The executable qh_cfplus_gt_depth_v1 carrier holds strictly causal rendered depth, depth-valid masks, calibration, selected-camera poses, source identity, and support for views that have already been selected; it never includes renders for unselected candidates. The source-matched CF+ H0 control validates this carrier but is exactly invariant to its numeric payload, so it remains an S0-pose-conditioned null model. S1 begins only when an encoder deterministically consumes the carrier, for example by backprojecting selected surfaces before pooling. CF+ H0 and S1 must use matched source populations and seeds before their difference can be attributed to geometry consumption.",
       internal_links: (
         "docs/typst/thesis/sections/04-method/04-01-scene-representation-requirements.typ#sec:thesis-scene-representation",
         "docs/typst/thesis/sections/01-research-questions.typ#ssec:rq4",

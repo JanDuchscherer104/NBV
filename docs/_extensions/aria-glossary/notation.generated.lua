@@ -778,6 +778,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["model.qh_cfplus_h0_control"] = {
+      tex = "\\operatorname{Struct}(\\boldsymbol{o}_t)=\\operatorname{Struct}(\\boldsymbol{o}'_t)\\Rightarrow f_\\theta^{\\mathrm{CF{+}-H0}}(s_t^{\\mathrm{S0-pose}},\\boldsymbol{o}_t,\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)=f_\\theta^{\\mathrm{CF{+}-H0}}(s_t^{\\mathrm{S0-pose}},\\boldsymbol{o}'_t,\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)",
+      typst = "#eqs.model.qh_cfplus_h0_control",
+      description = "Source-matched CF+ H0 validates selected-observation structure while remaining exactly invariant to its numeric payload.",
+      thesis_list = false,
+    },
     ["model.qh_frozen_interface"] = {
       tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_frozen_interface",

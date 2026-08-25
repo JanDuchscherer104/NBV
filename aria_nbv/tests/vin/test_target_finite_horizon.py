@@ -10,10 +10,11 @@ from pathlib import Path
 
 import pytest
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.qh_data import QhActorTensors, collate_qh_chains
-from aria_nbv.data_handling.qh_data.views import QhStaticContext
+from aria_nbv.data_handling.qh_data.views import QhSelectedObservationPrefix, QhStaticContext
 from aria_nbv.utils.fingerprints import stable_config_hash
 from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 from aria_nbv.vin.models.target_finite_horizon import (
@@ -62,6 +63,39 @@ def _scorer() -> TargetFiniteHorizonScorer:
         hidden_dim=32,
         dropout=0.0,
         max_horizon=4,
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
+def _cfplus_actor(*, steps: int = 3, width: int = 4) -> QhActorTensors:
+    """Return the CF+ H0 control actor with one exact causal carrier."""
+
+    actor = _actor(steps=steps, width=width)
+    batch_size = actor.step_mask.shape[0]
+    depth = torch.arange(
+        batch_size * steps * steps * 6,
+        dtype=torch.float16,
+    ).reshape(batch_size, steps, steps, 2, 3)
+    prefix = QhSelectedObservationPrefix(
+        depth_m=depth,
+        valid_mask=torch.ones_like(depth, dtype=torch.bool),
+        camera=CameraTW(torch.zeros((batch_size, steps, steps, 22), dtype=torch.float32)),
+        camera_pose_relative_root=PoseTW(actor.history_pose_relative_root.tensor().clone()),
+        prefix_mask=actor.history_mask.clone(),
+    )
+    return replace(actor, selected_observation_prefix=prefix)
+
+
+def _cfplus_scorer() -> TargetFiniteHorizonScorer:
+    """Return a deterministic privileged H0 scorer that ignores CF-GT values."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        experiment_profile="qh_cfplus_gt_depth_v1",
     ).setup_target()
     scorer.eval()
     return scorer
@@ -156,6 +190,107 @@ def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() ->
         rtol=0.0,
         atol=_FLOAT32_GOLDEN_ATOL,
     )
+
+
+def test_qh_cfplus_h0_is_exactly_invariant_to_selected_observation_values() -> None:
+    """The matched control admits CF+ identity without consuming its payload."""
+
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _cfplus_scorer()
+    baseline = scorer(actor)
+    changed_prefix = replace(
+        prefix,
+        depth_m=prefix.depth_m.add(37),
+        valid_mask=~prefix.valid_mask,
+        camera=CameraTW(prefix.camera.tensor().add(11)),
+        camera_pose_relative_root=PoseTW(prefix.camera_pose_relative_root.tensor().add(5)),
+    )
+
+    changed = scorer(replace(actor, selected_observation_prefix=changed_prefix))
+
+    assert torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
+
+
+def test_qh_cfplus_h0_preserves_action_mask_independence_and_invalid_row_isolation() -> None:
+    actor = _cfplus_actor()
+    scorer = _cfplus_scorer()
+    baseline = scorer(actor)
+    action_mask = actor.action_mask.clone()
+    action_mask[..., 0] = ~action_mask[..., 0]
+    mask_changed = scorer(replace(actor, action_mask=action_mask))
+
+    candidate_mask = actor.candidate_mask.clone()
+    candidate_mask[..., -1] = False
+    action_mask = actor.action_mask & candidate_mask
+    masked = replace(actor, candidate_mask=candidate_mask, action_mask=action_mask)
+    candidate_pose = actor.candidate_pose_relative_root.tensor().clone()
+    candidate_pose[..., -1, :] = 1.0e6
+    invalid_changed = scorer(replace(masked, candidate_pose_relative_root=PoseTW(candidate_pose)))
+    invalid_baseline = scorer(masked)
+
+    assert torch.equal(mask_changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(mask_changed.feasibility_logits, baseline.feasibility_logits)
+    assert torch.equal(invalid_changed.conditional_q[candidate_mask], invalid_baseline.conditional_q[candidate_mask])
+    assert torch.equal(
+        invalid_changed.feasibility_logits[candidate_mask],
+        invalid_baseline.feasibility_logits[candidate_mask],
+    )
+
+
+def test_qh_cf0_rejects_any_selected_observation_carrier() -> None:
+    actor = _cfplus_actor()
+
+    with pytest.raises(ValueError, match="qh_cf0_v1 rejects privileged selected observations"):
+        _scorer()(actor)
+
+
+def test_qh_cfplus_rejects_missing_or_wrong_source_carrier() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _cfplus_scorer()
+
+    with pytest.raises(ValueError, match="requires a causal CF-GT prefix"):
+        scorer(replace(actor, selected_observation_prefix=None))
+    with pytest.raises(ValueError, match="source_protocol='cf_gt'"):
+        scorer(replace(actor, selected_observation_prefix=replace(prefix, source_protocol="other")))
+
+
+@pytest.mark.parametrize("field", ["depth", "valid", "camera", "pose", "mask"])
+def test_qh_cfplus_rejects_malformed_selected_observation_axes(field: str) -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    if field == "depth":
+        changed = replace(prefix, depth_m=prefix.depth_m[..., :-1])
+    elif field == "valid":
+        changed = replace(prefix, valid_mask=prefix.valid_mask[..., :-1])
+    elif field == "camera":
+        changed = replace(prefix, camera=CameraTW(prefix.camera.tensor()[:, :-1]))
+    elif field == "pose":
+        changed = replace(
+            prefix,
+            camera_pose_relative_root=PoseTW(prefix.camera_pose_relative_root.tensor()[:, :-1]),
+        )
+    else:
+        changed = replace(prefix, prefix_mask=prefix.prefix_mask[..., :-1])
+
+    with pytest.raises(ValueError, match="shape|match"):
+        _cfplus_scorer()(replace(actor, selected_observation_prefix=changed))
+
+
+def test_qh_cfplus_rejects_future_selected_observation_support() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    future = prefix.prefix_mask.clone()
+    future[:, 0, 0] = True
+
+    with pytest.raises(ValueError, match="strictly causal"):
+        _cfplus_scorer()(replace(actor, selected_observation_prefix=replace(prefix, prefix_mask=future)))
 
 
 def test_qh_scorer_returns_conditional_q_and_feasibility_logits() -> None:

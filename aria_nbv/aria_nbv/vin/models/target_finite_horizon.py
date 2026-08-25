@@ -49,6 +49,7 @@ from efm3d.aria.pose import PoseTW
 from pydantic import Field, model_validator
 from torch import Tensor, nn
 
+from ...data_handling.qh_contracts import QhExperimentProfile, validate_selected_observation_prefix
 from ...utils import TargetConfig
 from ..encoders import R6dLffPoseEncoder, R6dLffPoseEncoderConfig
 from ..modules.qh_history_encoders import (
@@ -99,7 +100,7 @@ class QhScoreOutput:
 
 
 class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"]):
-    """Configure the deployable actor-only finite-horizon value scorer."""
+    """Configure the actor-only finite-horizon value scorer."""
 
     hidden_dim: int = Field(default=128, gt=0)
     """Shared candidate and state token width."""
@@ -156,8 +157,18 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     horizon_query_semantics: Literal["bounded_scalar_v1"] = "bounded_scalar_v1"
     """Scalar query family admitting every realized ``1 <= h <= b_t <= H_max``."""
 
-    experiment_profile: Literal["qh_cf0_v1"] = "qh_cf0_v1"
-    """Closed deployable actor profile; privileged CF+ observations are not accepted."""
+    experiment_profile: QhExperimentProfile = "qh_cf0_v1"
+    """Named source role admitted by the scorer.
+
+    ``qh_cf0_v1`` requires no selected-observation carrier and remains the
+    deployable default. ``qh_cfplus_gt_depth_v1`` admits the privileged causal
+    CF-GT carrier for source-matched research. Under
+    ``root_moments_v1`` this is the H0 control: the carrier is structurally
+    validated but every depth, validity, calibration, and selected-camera-pose
+    value is intentionally ignored. Lightning owns privileged execution and
+    the inference-bundle validator rejects CF+ independently; this field does
+    not grant deployment authority.
+    """
 
     @property
     def target_type(self) -> type["TargetFiniteHorizonScorer"]:
@@ -239,6 +250,15 @@ class TargetFiniteHorizonScorer(nn.Module):
         ``S0-pose`` trajectory ablation: it does not invent selected
         observations or make compact root moments a sufficient dynamic
         reconstruction state.
+
+        The CF+ H0 role is a source-protocol-matched counterfactual for a
+        future S1 scene encoder. It requires the same strictly causal CF-GT
+        carrier and data population as S1, but the prediction graph consumes
+        none of its numeric payload. Consequently any change confined to
+        selected depth, depth-valid support, calibration, or selected-camera
+        poses must leave both raw heads exactly unchanged. This is not a
+        deployable S0 value and comparing it with CF0 does not identify an S1
+        representation gain.
 
     Notes:
         Syntactic admission does not assert empirical support. Lightning owns
@@ -542,12 +562,26 @@ class TargetFiniteHorizonScorer(nn.Module):
             raise ValueError("Q_H history_mask must be strictly causal.")
         context = actor.static_context
         if context is None:
-            raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 requires compact root EVL context.")
-        if actor.selected_observation_prefix is not None:
-            raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 rejects privileged selected observations.")
+            raise ValueError(
+                f"TargetFiniteHorizonScorer {self.config.experiment_profile} requires compact root EVL context."
+            )
+        prefix = actor.selected_observation_prefix
+        if self.config.experiment_profile == "qh_cf0_v1":
+            if prefix is not None:
+                raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 rejects privileged selected observations.")
+        else:
+            if prefix is None:
+                raise ValueError("TargetFiniteHorizonScorer qh_cfplus_gt_depth_v1 requires a causal CF-GT prefix.")
+            validate_selected_observation_prefix(
+                prefix,
+                history_mask=actor.history_mask,
+                step_mask=actor.step_mask,
+            )
         presence = context.evl_presence
         if presence.shape[-1] != 8 or not bool(presence.all()):
-            raise ValueError("TargetFiniteHorizonScorer qh_cf0_v1 requires all eight root EVL fields.")
+            raise ValueError(
+                f"TargetFiniteHorizonScorer {self.config.experiment_profile} requires all eight root EVL fields."
+            )
 
 
 __all__ = ["QhScoreOutput", "TargetFiniteHorizonScorer", "TargetFiniteHorizonScorerConfig"]

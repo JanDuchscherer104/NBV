@@ -18,6 +18,7 @@ import pytorch_lightning as pl
 import torch
 from pydantic import Field
 
+from ..data_handling.qh_contracts import validate_experiment_profile
 from ..data_handling.qh_data import QhDatasetConfig
 from ..data_handling.qh_data.views import QhActorStateContract
 from ..rollouts.inspection import oracle_headroom_evidence
@@ -213,7 +214,7 @@ class QhExperimentConfig(TargetConfig["QhExperiment"]):
     """Compose the scorer, optimizer module, data loaders, and trainer."""
 
     scorer: TargetFiniteHorizonScorerConfig = Field(default_factory=TargetFiniteHorizonScorerConfig)
-    """Closed production scorer configuration persisted in every bundle."""
+    """Actor-only scorer config; bundle publication admits deployable CF0 only."""
 
     module: QhLightningModuleConfig
     """Optimizer and Double-Q policy; contract hashes are rebound from admitted data during fit."""
@@ -984,6 +985,13 @@ class QhExperiment:
             or module.selected_observation_protocol != actor_contract.selected_observation_protocol
         ):
             raise ValueError("Q_H bundle module and actor observation profiles differ.")
+        validate_experiment_profile(
+            scorer.experiment_profile,
+            root_evl_profile=actor_contract.root_evl_profile,
+            selected_observation_protocol=actor_contract.selected_observation_protocol,
+            target_protocol=learning_contract.data_contract.target_protocol,
+            privileged=False,
+        )
         if module.privileged:
             raise ValueError("Q_H deployable bundle rejects privileged module configuration.")
         if learning_contract.objective_profile != "qh_dense_valid_fitted_q_v1":

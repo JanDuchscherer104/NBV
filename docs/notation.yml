@@ -1000,6 +1000,12 @@ equations:
     description: 'Checkpoint-compatible masked-mean H0 and exploratory ordered causal-transformer H1 selected-pose history controls.'
     thesis_list: false
     order: 9999
+  model.qh_cfplus_h0_control:
+    tex: '\operatorname{Struct}(\boldsymbol{o}_t)=\operatorname{Struct}(\boldsymbol{o}''_t)\Rightarrow f_\theta^{\mathrm{CF{+}-H0}}(s_t^{\mathrm{S0-pose}},\boldsymbol{o}_t,\boldsymbol{\phi}_e,\{q_{t,i}\}_{i=1}^{N_q},h)=f_\theta^{\mathrm{CF{+}-H0}}(s_t^{\mathrm{S0-pose}},\boldsymbol{o}''_t,\boldsymbol{\phi}_e,\{q_{t,i}\}_{i=1}^{N_q},h)'
+    typst: '#eqs.model.qh_cfplus_h0_control'
+    description: 'Source-matched CF+ H0 validates selected-observation structure while remaining exactly invariant to its numeric payload.'
+    thesis_list: false
+    order: 9999
   model.candidate_row_features:
     tex: '\boldsymbol{x}_{t,i}=\operatorname{concat}(\boldsymbol{h}_{t,i}^{\mathrm{pose+rel}},\boldsymbol{h}_{t,i}^{\mathrm{geom}},\boldsymbol{h}_{t,i}^{\mathrm{valid}},\boldsymbol{h}_{t,i}^{\mathrm{prov}},\boldsymbol{H}_t)'
     typst: '#eqs.model.candidate_row_features'

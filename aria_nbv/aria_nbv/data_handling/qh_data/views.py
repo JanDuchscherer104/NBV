@@ -30,44 +30,25 @@ from torch import Tensor
 
 from ...rollouts.qh_geometry import QhGeometryContract  # noqa: F401
 from ...vin.types import FreeInputProvenance
+from ..qh_contracts import (
+    QhExperimentProfile,
+    QhRootEvlProfile,
+    QhSelectedObservationProtocol,
+    validate_experiment_profile,  # noqa: F401 - compatibility re-export
+    validate_selected_observation_prefix,  # noqa: F401 - compatibility re-export
+)
 from ..vin_store.views import VinSnippetView
 
 if TYPE_CHECKING:
     from efm3d.aria.camera import CameraTW
     from efm3d.aria.pose import PoseTW
 
-QhRootEvlProfile = Literal["none", "evl_v1"]
-QhSelectedObservationProtocol = Literal["none", "cf_gt"]
-QhExperimentProfile = Literal["qh_cf0_v1", "qh_cfplus_gt_depth_v1"]
 QhActionMaskSemantics = Literal[
     "oracle_action_mask_v1",
     "actor_observed_action_mask_v1",
     "learned_feasibility_v1",
 ]
 QhRepresentationSemantics = Literal["root_moments_v1"]
-
-
-def validate_experiment_profile(
-    profile: QhExperimentProfile,
-    *,
-    root_evl_profile: QhRootEvlProfile,
-    selected_observation_protocol: QhSelectedObservationProtocol,
-    target_protocol: str | None = None,
-    privileged: bool = False,
-) -> None:
-    """Validate one named Q_H profile before dataset or scorer construction."""
-
-    if selected_observation_protocol == "cf_gt" and profile != "qh_cfplus_gt_depth_v1":
-        raise ValueError("Q_H selected_observation_protocol='cf_gt' requires qh_cfplus_gt_depth_v1.")
-    if root_evl_profile != "evl_v1":
-        raise ValueError(f"Q_H profile {profile!r} requires compact root EVL profile 'evl_v1'.")
-    expected_observation = "none" if profile == "qh_cf0_v1" else "cf_gt"
-    if selected_observation_protocol != expected_observation:
-        raise ValueError(f"Q_H profile {profile!r} requires selected_observation_protocol={expected_observation!r}.")
-    if profile == "qh_cfplus_gt_depth_v1" and not privileged:
-        raise ValueError("Deployable Q_H configuration rejects privileged qh_cfplus_gt_depth_v1.")
-    if profile == "qh_cf0_v1" and target_protocol is not None and target_protocol != "v1_observed":
-        raise ValueError("Deployable qh_cf0_v1 requires target_protocol='v1_observed'.")
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,6 +28,7 @@ from .views import (
     QhSelectedObservationPrefix,
     QhStaticContext,
     QhSupervision,
+    validate_selected_observation_prefix,
 )
 
 QhObjectiveProfile = Literal["legacy_selected_rows_v1", "qh_dense_valid_fitted_q_v1"]
@@ -234,6 +235,12 @@ def collate_qh_chains(
         raise ValueError("Q_H label_mask must imply action_mask.")
     if bool((batch.actor.action_mask & ~batch.actor.candidate_mask).any()):
         raise ValueError("Q_H action_mask must imply candidate_mask.")
+    if batch.actor.selected_observation_prefix is not None:
+        validate_selected_observation_prefix(
+            batch.actor.selected_observation_prefix,
+            history_mask=batch.actor.history_mask,
+            step_mask=batch.actor.step_mask,
+        )
     if objective_profile not in {"legacy_selected_rows_v1", "qh_dense_valid_fitted_q_v1"}:
         raise ValueError(f"Q_H collation received unsupported objective_profile={objective_profile!r}.")
     if objective_profile == "qh_dense_valid_fitted_q_v1":
