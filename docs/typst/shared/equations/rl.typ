@@ -25,27 +25,27 @@
     cal(U)_"cov/unc" -> hat(r)_t^e (i) -> #symb.entity.target_reward -> #symb.entity.return_h -> #symb.rl.qh_theta
   $,
   candidate_row_equivariance: $
-    f_theta (Pi bold(X)_t, Pi bold(m)_t)
+    f_theta (Pi bold(X)_t, Pi bold(m)_t^"cand")
     =
-    Pi f_theta (bold(X)_t, bold(m)_t)
+    Pi f_theta (bold(X)_t, bold(m)_t^"cand")
   $,
   candidate_mask_isolation: $
-    op("Mask") (bold(X)_t, bold(m)_t)
+    op("Mask") (bold(X)_t, bold(m)_t^"cand")
     =
-    op("Mask") (bold(X)'_t, bold(m)_t)
+    op("Mask") (bold(X)'_t, bold(m)_t^"cand")
     quad arrow.r.double quad
-    op("Mask") (f_theta (bold(X)_t, bold(m)_t), bold(m)_t)
+    op("Mask") (f_theta (bold(X)_t, bold(m)_t^"cand"), bold(m)_t^"cand")
     =
-    op("Mask") (f_theta (bold(X)'_t, bold(m)_t), bold(m)_t)
+    op("Mask") (f_theta (bold(X)'_t, bold(m)_t^"cand"), bold(m)_t^"cand")
   $,
   masked_candidate_selection: $
     cal(A)_t
     =
-    {i in {1, dots, #symb.shape.Nq} : m_(t,i)=1},
+    {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act"=1},
     quad
     a_t^theta
     =
-    op("argmax", limits: #true)_(i in cal(A)_t) f_(theta,i)(bold(X)_t, bold(m)_t)
+    op("argmax", limits: #true)_(i in cal(A)_t) Q_(h,theta,e) (s_t, i)
   $,
   s_hist: $
     #symb.rl.s_hist
@@ -145,7 +145,7 @@
   finite_action_set: $
     #symb.rl.candidate_table = {q_(t,i)}_(i=1)^(#symb.shape.Nq),
     quad
-    #symb.rl.action_set_t = {i in {1, dots, #symb.shape.Nq} : m_(t,i) = 1}
+    #symb.rl.action_set_t = {i in {1, dots, #symb.shape.Nq} : m_(t,i)^"act" = 1}
   $,
   replay_transition: $
     (x_(t+1), bold(H)_(t+1), b_(t+1), cal(Q)_(t+1))
@@ -192,18 +192,19 @@
   finite_horizon_return: $
     G_(t,e)^((h))
     =
-    sum_(k=0)^(min(h, b_t) - 1) #symb.rl.gamma^k r_(t+k)^e
+    sum_(k=0)^(h - 1) #symb.rl.gamma^k r_(t+k)^e
   $,
   q_h: $
-    Q_(h,e) (s_t, i)
+    Q_(h,e)^star (s_t, i)
     =
-    bb(E)[G_(t,e)^((h)) | s_t, a_t=i],
+    op("sup", limits: #true)_(pi in cal(Pi)^"act")
+    bb(E)_pi [G_(t,e)^((h)) | s_t, a_t=i],
     quad
     i in cal(A)_t,
     quad
-    1 <= h <= b_t,
+    1 <= h <= b_t <= H_"max",
     quad
-    Q_(0,e) (s, i) = 0
+    Q_(0,e)^star (s, i) = 0
   $,
   qh_residual_decomposition: $
     b_(psi,i)
@@ -260,8 +261,13 @@
   qh_masked_argmax: $
     #symb.rl.selected_action_theta
     =
-    op("argmax", limits: #true)_(i : m_(t,i) = 1)
+    op("argmax", limits: #true)_(i : m_(t,i)^"act" = 1)
     Q_(h,theta,e) (s_t, i)
+  $,
+  qh_supported_successor_set: $
+    cal(A)_(t+1)^((Q,h-1))
+    =
+    {i : m_(t+1,i)^"act" = 1 and m_(t+1,i)^(Q,h-1) = 1}
   $,
   qh_doubleq_index: $
     B_t^((h,e))
@@ -269,9 +275,9 @@
     cases(
       Q_(h-1,theta^-,e) (
         s_(t+1),
-        op("argmax", limits: #true)_(i : m_(t+1,i) = 1)
+        op("argmax", limits: #true)_(i in cal(A)_(t+1)^((Q,h-1)))
         Q_(h-1,theta,e) (s_(t+1), i)
-      ) & "if " h > 1, d_t = 0, sum_i m_(t+1,i) > 0,
+      ) & "if " h > 1 and d_t = 0 and cal(A)_(t+1)^((Q,h-1)) != emptyset,
       0 & "otherwise"
     )
   $,
@@ -287,18 +293,18 @@
     #symb.rl.q_loss
     =
     (
-      sum_((s_t,e,h,a_t,r_t^e,s_(t+1),bold(m)_(t+1),d_t) in cal(D))
-      m_(t,a_t)^"train"
-      (
-        Q_(h,theta,e) (s_t, a_t)
-        -
-        y_t^((h,e))
-      )^2
+    sum_((s_t,e,h,a_t,r_t^e,s_(t+1),bold(m)_(t+1)^"act",d_t) in cal(D))
+    m_(t,a_t)^(Q,h)
+    (
+      Q_(h,theta,e) (s_t, a_t)
+      -
+      y_t^((h,e))
+    )^2
     )
     /
     (
-      sum_((s_t,e,h,a_t,r_t^e,s_(t+1),bold(m)_(t+1),d_t) in cal(D)) m_(t,a_t)^"train"
-      + epsilon
+    sum_((s_t,e,h,a_t,r_t^e,s_(t+1),bold(m)_(t+1)^"act",d_t) in cal(D)) m_(t,a_t)^(Q,h)
+    + epsilon
     )
   $,
   reward_log: $

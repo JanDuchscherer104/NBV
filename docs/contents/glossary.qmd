@@ -122,7 +122,7 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <td><a href="#term-predicted-target-q">PRED-Q - Predicted-Target Q</a></td>
 <td>Main thesis protocol component requiring scorer or Q_H inputs to use predicted or observed target descriptors.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}=0$</span><code>rl.q_h</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-ground-truth-target-evaluation">GT-EVAL - Ground-Truth Target Evaluation</a></td>
@@ -200,13 +200,13 @@ Use `{{{< gls term-id >}}}` for the linked short label and
 <td><a href="#term-finite-horizon-return">return - Finite-Horizon Return</a></td>
 <td>H-step discounted return over root-normalized target-gain rewards.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\gamma$</span><code>rl.gamma</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$H$</span><code>rl.H</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e$</span><code>rl.finite_horizon_return</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_{t,e}^{(h)}=\sum_{k=0}^{h-1}\gamma^k r_{t+k}^e$</span><code>rl.finite_horizon_return</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-finite-horizon-q-function">Q_H - Finite-Horizon Q Function</a></td>
 <td>Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</td>
 <td><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$a$</span><code>rl.a</code></span></div></td>
-<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></td>
+<td><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}=0$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></td>
 </tr>
 <tr>
 <td><a href="#term-validity-mask">mask - Validity Mask</a></td>
@@ -597,7 +597,7 @@ $$
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}=0$</span><code>rl.q_h</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Main thesis protocol component requiring scorer or Q_H inputs to use predicted or observed target descriptors.</p>
@@ -1099,7 +1099,7 @@ $$
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$r_t^e$</span><code>rl.reward_target</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$\gamma$</span><code>rl.gamma</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$H$</span><code>rl.H</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}=\sum_{k=0}^{H-1}\gamma^k r_{t+k}^e$</span><code>rl.finite_horizon_return</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$G_{t,e}^{(h)}=\sum_{k=0}^{h-1}\gamma^k r_{t+k}^e$</span><code>rl.finite_horizon_return</code></span></div></div>
 </div>
 
 <p class="glossary-definition">H-step discounted return over root-normalized target-gain rewards.</p>
@@ -1141,7 +1141,7 @@ $$
 
 <div class="glossary-card-notation">
 <div><strong>Symbols</strong><div class="glossary-notation-list glossary-notation-symbols"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H$</span><code>rl.qh</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$G_t^{(H)}$</span><code>rl.return_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$s_t^{\mathrm{cf0}}$</span><code>rl.s_cf0</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$a$</span><code>rl.a</code></span></div></div>
-<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_H(s_t^{\mathrm{cf0}},a_t)=\mathbb{E}\left[G_t^{(H)}\mid s_t=s_t^{\mathrm{cf0}},a_t\right]$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></div>
+<div><strong>Equations</strong><div class="glossary-notation-list glossary-notation-equations"><span class="glossary-notation-item"><span class="glossary-notation-math">$Q_{h,e}^{\star}(s_t,i)=\sup_{\pi\in\Pi^{\mathrm{act}}}\mathbb{E}_{\pi}\left[G_{t,e}^{(h)}\mid s_t,a_t=i\right],\quad 1\le h\le b_t\le H_{\max},\quad Q_{0,e}^{\star}=0$</span><code>rl.q_h</code></span> <span class="glossary-notation-item"><span class="glossary-notation-math">$y_t^Q=r_t+\gamma V(s_{t+1})$</span><code>rl.q_backup</code></span></div></div>
 </div>
 
 <p class="glossary-definition">Finite-horizon candidate-value function for target-conditioned ARIA-NBV.</p>

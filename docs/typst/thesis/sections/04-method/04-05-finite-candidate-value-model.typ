@@ -83,7 +83,13 @@ The stored evidence gives a particularly strong base case. Every candidate admit
 
 This exact target is a useful recursion check and H=2 control. Whether the production learner is one requested-horizon scorer or a fixed-H family remains open at the source-owner gate.
 
-Double Q is an optional estimator for the learned successor maximum. It uses the online scorer to select
+Double Q is an optional estimator for the learned successor maximum. The
+nonterminal bootstrap first intersects hard action support with factual support
+at horizon $h-1$:
+
+#eqs.rl.qh_supported_successor_set
+
+The online scorer then selects
 
 #eqs.rl.qh_doubleq_index
 

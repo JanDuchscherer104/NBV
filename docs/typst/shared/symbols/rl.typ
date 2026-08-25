@@ -20,6 +20,10 @@
   A: $A$,
   // Finite horizon; glyph H can collide with `shape.H` image height.
   H: $H$,
+  // Requested residual horizon supplied to a finite-horizon value query.
+  requested_horizon: $h$,
+  // Maximum horizon supported by the model and training data contract.
+  max_horizon: $H_"max"$,
   // Temporal discount factor.
   gamma: $gamma$,
   // Markov decision process specialized to NBV selection.
@@ -62,6 +66,18 @@
   qh_target: $Q_(H,theta^-)$,
   // Scalar validity mask for candidate i at step t.
   validity_mask: $m_(t,i)$,
+  // Materialized candidate row versus structural padding.
+  candidate_row_mask: $m_(t,i)^"cand"$,
+  // Authoritative physically valid action support.
+  action_mask: $m_(t,i)^"act"$,
+  // Availability of a finite value label for candidate i at requested horizon h.
+  q_label_mask: $m_(t,i)^(Q,h)$,
+  // Availability of a trustworthy feasibility label for candidate i.
+  feasibility_label_mask: $m_(t,i)^F$,
+  // Availability of a factual successor backup for transition t.
+  successor_mask: $m_t^"succ"$,
+  // Actor/oracle source-provenance role for candidate evidence.
+  source_role: $ell_(t,i)^"src"$,
   // Categorical invalidity reason for candidate i at step t.
   invalid_reason: $rho_(t,i)$,
   // Generic state or metric increment.

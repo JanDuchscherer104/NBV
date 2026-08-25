@@ -1,4 +1,4 @@
-"""Deterministic provenance checks for the active Related Work surface."""
+"""Deterministic provenance checks for the active Foundations literature."""
 
 from __future__ import annotations
 
@@ -23,7 +23,16 @@ from literature_catalog import (  # noqa: E402
 )
 
 
-RELATED_WORK = ROOT / "docs/typst/thesis/sections/02-foundations/02-01-related-work.typ"
+FOUNDATIONS_LITERATURE = tuple(
+    ROOT / "docs/typst/thesis/sections/02-foundations" / name
+    for name in (
+        "02-01-active-perception-and-view-utility.typ",
+        "02-02-targets-actions-and-support.typ",
+        "02-03-finite-horizon-value-learning.typ",
+        "02-04-egocentric-and-geometric-representations.typ",
+        "02-05-literature-positioning.typ",
+    )
+)
 LITERATURE_ROOT = ROOT / "docs/literature"
 GLOSSARY = ROOT / "docs/typst/shared/glossary.typ"
 LOCATOR_RE = re.compile(
@@ -321,18 +330,21 @@ def _has_active_source_line(path: Path, start: int, end: int) -> bool:
     return False
 
 
-def test_each_related_work_paragraph_has_adjacent_resolvable_source_evidence() -> None:
+def test_each_foundations_paragraph_has_adjacent_resolvable_source_evidence() -> None:
     catalog = _literature_catalog()
-    paragraphs = _paragraphs_with_adjacent_evidence(RELATED_WORK)
-    for paragraph, evidence in paragraphs:
-        cited = _paragraph_citations(paragraph, catalog)
-        entries = _evidence_entries(evidence)
-        evidence_keys = {key for key, _ in entries}
-        assert cited, f"claim-bearing paragraph lacks a citation: {paragraph}"
-        assert evidence, f"missing adjacent // evidence: block: {paragraph}"
-        assert cited <= set(catalog.bibliography)
-        assert cited == evidence_keys
-        assert all(locators for _, locators in entries)
+    for path in FOUNDATIONS_LITERATURE:
+        paragraphs = _paragraphs_with_adjacent_evidence(path)
+        for paragraph, evidence in paragraphs:
+            cited = _paragraph_citations(paragraph, catalog)
+            entries = _evidence_entries(evidence)
+            evidence_keys = {key for key, _ in entries}
+            assert cited, (
+                f"claim-bearing paragraph lacks a citation: {path}: {paragraph}"
+            )
+            assert evidence, f"missing adjacent // evidence block: {path}: {paragraph}"
+            assert cited <= set(catalog.bibliography)
+            assert cited == evidence_keys
+            assert all(locators for _, locators in entries)
 
 
 def test_citation_classification_excludes_glossary_references() -> None:
@@ -349,27 +361,38 @@ def test_citation_classification_rejects_unknown_mixed_references() -> None:
         )
 
 
-def test_related_work_source_locators_are_existing_in_range_lines() -> None:
-    for _, evidence in _paragraphs_with_adjacent_evidence(RELATED_WORK):
-        for _, locators in _evidence_entries(evidence, resolve=False):
-            for locator in locators:
-                if locator.kind != "line":
-                    continue
-                assert locator.start is not None
-                assert locator.end is not None
-                path, start, end = locator.path, locator.start, locator.end
-                assert path.is_file(), path
-                line_count = len(path.read_text(encoding="utf-8").splitlines())
-                assert 1 <= start <= end <= line_count, (path, start, end, line_count)
-                assert _has_active_source_line(path, start, end), (path, start, end)
+def test_foundations_source_locators_are_existing_in_range_lines() -> None:
+    for foundations_path in FOUNDATIONS_LITERATURE:
+        for _, evidence in _paragraphs_with_adjacent_evidence(foundations_path):
+            for _, locators in _evidence_entries(evidence, resolve=False):
+                for locator in locators:
+                    if locator.kind != "line":
+                        continue
+                    assert locator.start is not None
+                    assert locator.end is not None
+                    path, start, end = locator.path, locator.start, locator.end
+                    assert path.is_file(), path
+                    line_count = len(path.read_text(encoding="utf-8").splitlines())
+                    assert 1 <= start <= end <= line_count, (
+                        path,
+                        start,
+                        end,
+                        line_count,
+                    )
+                    assert _has_active_source_line(path, start, end), (
+                        path,
+                        start,
+                        end,
+                    )
 
 
-def test_related_work_evidence_locators_are_existing_literature_paths() -> None:
-    for _, evidence in _paragraphs_with_adjacent_evidence(RELATED_WORK):
-        for _, locators in _evidence_entries(evidence, resolve=False):
-            for locator in locators:
-                assert locator.path.is_relative_to(LITERATURE_ROOT), locator.path
-                assert locator.path.is_file(), locator.path
+def test_foundations_evidence_locators_are_existing_literature_paths() -> None:
+    for foundations_path in FOUNDATIONS_LITERATURE:
+        for _, evidence in _paragraphs_with_adjacent_evidence(foundations_path):
+            for _, locators in _evidence_entries(evidence, resolve=False):
+                for locator in locators:
+                    assert locator.path.is_relative_to(LITERATURE_ROOT), locator.path
+                    assert locator.path.is_file(), locator.path
 
 
 def test_source_locator_rejects_comment_only_ranges(tmp_path: Path) -> None:

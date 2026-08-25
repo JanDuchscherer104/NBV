@@ -8,7 +8,7 @@
 
 The factual rollout tables determine which records may supervise each learning problem. The action-validity mask defines actions selectable under the admitted oracle geometry contract. The stricter Q-training eligibility additionally requires a valid target/ground-truth label state and finite target-root-gain and diagnostic target-RRI labels. Padding, actor validity, one-step training eligibility, transition eligibility, modality presence, source role, and horizon availability remain separate masks. Masked rows remain available for support and failure analysis but cannot enter action selection, supervised loss, or bootstrap maximization.
 
-All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and a valid successor step whose candidate table exposes at least one finite one-step root-gain label. General recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, a defined training horizon, and—when nonterminal—a reproducible successor state and hard mask. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
+All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and either an explicit terminal outcome, whose continuation is exactly zero, or a valid nonterminal successor step whose candidate table exposes at least one finite one-step root-gain label. General recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, a defined training horizon, and—when nonterminal—a reproducible successor state, hard mask, and lower-horizon factual support. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
 
 #figure(
   table(
@@ -19,9 +19,9 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
     [dense $h=1$], [immediate candidate value],
     [actor-selectable row with finite one-step root-gain label],
     [exact $h=2$], [base-case finite-support value],
-    [selected reward plus successor table with at least one finite one-step root-gain label],
+    [selected reward plus either terminal flag or a nonterminal successor table with at least one finite one-step root-gain label],
     [recursive $h>1$], [variable-horizon fitted value],
-    [selected transition, successor actor state and mask, lower-horizon target support, terminal and discount],
+    [selected transition, terminal and discount; nonterminal rows also require successor actor state, hard mask, and lower-horizon target support],
     [behavior return], [policy-conditioned Monte-Carlo control],
     [complete retained reward prefix and behavior-policy identity],
     bottomrule(),

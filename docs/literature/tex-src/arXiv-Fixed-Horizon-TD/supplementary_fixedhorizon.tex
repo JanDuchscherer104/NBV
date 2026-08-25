@@ -1,0 +1,753 @@
+%\documentclass{article}
+%\usepackage[utf8]{inputenc}
+%\usepackage[margin=1in]{geometry}
+%\usepackage{graphicx}
+%\usepackage{bbm}
+%\usepackage{algorithm}
+%\usepackage{algpseudocode}
+%\usepackage[title]{appendix}
+
+%\usepackage{apacite}
+
+%\newcommand\defeq{\overset{\mathrm{def}}{=}}
+%\DeclareMathOperator*{\argmax}{argmax}
+
+%\pagenumbering{gobble}
+
+
+%\DeclareMathOperator*{\esssup}{ess\,sup}
+%\DeclareMathOperator*{\argmin}{arg\,min}
+%\DeclareMathOperator*{\argmax}{arg\,max}
+
+%\newcommand{\Ex}{\mathbb{E}}
+%\newcommand{\R}{\mathbb{R}}
+%\newcommand{\E}{\mathbb{E}}
+%\newcommand{\D}{\mathcal{D}}
+%\renewcommand{\vec}[1]{\textbf{\textit{#1}}}
+%\newcommand{\val}{Q}
+%\newcommand{\valt}{\val}
+%\newcommand{\given}{\,|\,}
+%\newcommand{\target}{Q}
+%\newcommand{\params}{\mathbf{w}}
+%\newcommand{\Features}{\bm{\Phi}}
+%\newcommand{\features}{\bm{\phi}}
+%\newcommand{\grad}{\bm{\nabla}}
+%\renewcommand{\r}{\textbf{\textit{r}}}
+%\newcommand{\transitionmtx}{\textbf{\textit{P}}}
+%\newcommand{\projectionmtx}{\bm{\Pi}}
+%\newcommand{\densitymtx}{\textbf{\textit{D}}}
+%\newcommand{\bellmanop}{T}
+%\newcommand{\dv}{\bm{\Delta}}
+%\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+%\newcommand{\smashednorm}[1]{\left\lVert \smash{#1} \right\rVert}
+
+
+%\newtheorem{definition}{Definition}
+%\newtheorem{exercise}{Exercise}
+%\newtheorem{theorem}{Theorem}
+%\newtheorem{proposition}{Proposition}
+%\newtheorem{example}{Example}
+%\newtheorem{lemma}{Lemma}
+%\newtheorem{corollary}{Corollary}
+%\newtheorem{assumption}{Assumption}
+
+%\newcommand{\citei}[1]{\citeauthor{#1} (\citeyear{#1})}
+
+%\title{Finite-Horizon Temporal Difference Methods}
+%\author{Kristopher De Asis}
+%\date{}
+
+%\begin{document}
+
+\clearpage
+
+\begin{appendices}
+
+\section{Full Proof of Convergence for Linear Function Approximation}\label{appdx:convergence}
+\subsection{Preliminaries}
+We assume throughout a common probability space $(\Omega, \mathbb{P}, \Sigma)$. Our proof follows the general outline in~\citeauthor{melo2007q}~\shortcite{melo2007q}.
+
+Assume we have a Markov decision process $(\mathcal{X}, \mathcal{A}, \mathcal{P}, r)$. $\mathcal{X} \subset \R^p$, the state-space, is assumed to be compact, the action space $\mathcal{A}$ is assumed to be finite (with $\sigma$-algebra $2^{\mathcal{A}}$), and $r : \mathcal{X} \times \mathcal{A} \times \mathcal{X} \to [r_{min}, r_{max}]$ is a bounded, deterministic function assigning a reward to every transition tuple. Let $\mathcal{F}$ by a $\sigma$-algebra defined on $\mathcal{X}$. The kernel $\mathcal{P}$ is assumed to be action-dependent, and is defined such that
+\begin{equation*}
+    \mathbb{P}[X_{t + 1} \in U \mid X_t = x, A_t = a] = \mathcal{P}_a(x, U),
+\end{equation*}
+
+\noindent for all $U \in \mathcal{F}$. Throughout, we assume a fixed, measurable behaviour policy $\pi$ such that $\pi(a \mid x) > 0$ for all $a \in \mathcal{A}$ and $x \in \mathcal{X}$. With a fixed behaviour policy, we can define a new Markov chain $(X_t, A_t)$ first with a function $\mathcal{P}_\pi$:
+\begin{equation*}
+    \mathcal{P}_\pi((x, a), U \times A) := \sum_{b \in A} \int_U \pi(b \mid y) P_a(x, dy),
+\end{equation*}
+
+\noindent where $U \times A \subset \mathcal{F} \times 2^\mathcal{A}$. It is straightforward to see that $\mathcal{P}_\pi$ is a pre-measure on the algebra $\mathcal{F} \times 2^\mathcal{A}$ which can be extended to a measure on $\sigma(\mathcal{F} \times 2^\mathcal{A})$.
+
+\noindent To apply the results of ~\citeauthor{benveniste1990stochastic}~\shortcite{benveniste1990stochastic}, we must construct another Markov chain so that $H(\params_t, x_t)$ in ~\citeauthor[p.213]{benveniste1990stochastic}~\shortcite{benveniste1990stochastic} has access to the TD error at time $t$. In the interests of completeness, we provide the full details below, but the reader may safely skip to the next section.
+
+We employ a variation of a standard approach, as in for example ~\citeauthor{tsitsiklis1999average}~\shortcite{tsitsiklis1999average}. Let us define a new process $M_t = (X_t, A_t, X_{t + 1}, A_{t + 1})$. The process $M_t$ has state space $\mathcal{M} := \mathcal{X} \times \mathcal{A} \times \mathcal{X} \times \mathcal{A}$ and $\sigma$-algebra $\sigma(\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F}) 2^\mathcal{A}$, with kernel $\Pi$ defined first on $\mathcal{M} \times \mathcal{F} \times 2^\mathcal{A} \times \mathcal{F}$
+\begin{align*}
+    \Pi((x_t, a_t, x_{t + 1})&, U \times A \times V \times B) :=\\
+    &\hspace{-1cm} 1_{(x_{t + 1}, a_{t + 1}}(U \times A) \mathcal{P}_\pi((x_{t + 1}, a_{t + 1}), V \times B).\nonumber
+\end{align*}
+
+\noindent Similar to before, it is straightforward to see that the above function is a pre-measure and can be extended to a measure on $\sigma(\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F} \times 2^\mathcal{A})$ for each fixed $(x_t, a_t, x_{t + 1}, a_{t + 1})$.
+
+\begin{lemma}
+$\Pi$ is a Markov kernel.
+\end{lemma}
+\begin{proof}
+It remains to show that $\Pi$ is measurable with respect to $(x_t, a_t, x_{t + 1}, a_{t + 1})$ for fixed $U \in \sigma(\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F} \times 2^\mathcal{A})$.
+
+We use Dynkin's $\pi-\lambda$ theorem. Define
+\begin{equation*}
+ \mathcal{D} := \{U \in \sigma(\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F}) : Q((\cdot, \cdot, \cdot, \cdot), U) \text{ is measurable}\}
+\end{equation*}
+We have $\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F} \times 2^\mathcal{A} \subset \mathcal{D}$ by construction of $\Pi$ above and the fact that $\mathcal{P}$ is a kernel. $\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F} \times 2^\mathcal{A}$ is also a $\pi$-system (i.e., it is closed under finite intersections). $\mathcal{D}$ is a monotone class from using basic properties of measurable functions, so that $\mathcal{D} = \sigma(\mathcal{F} \times 2^\mathcal{A} \times \mathcal{F} \times 2^\mathcal{A})$ by the $\pi-\lambda$ theorem. Hence, $\Pi$ is a kernel.
+\end{proof}
+
+\noindent The following is a convenient result.
+
+\begin{lemma}
+Assume that $(X_t, A_t)$ is uniformly ergodic. Then $M_t = (X_t, A_t, X_{t + 1}, A_{t + 1})$ is also uniformly ergodic.
+\end{lemma}
+\begin{proof}
+From ~\citeauthor[p.389]{meyn2012markov}~\shortcite{meyn2012markov}, a Markov chain is uniformly ergodic iff it is $\nu_m$-small for some $m$. We will show that $M_t$ is $\eta_m$-small for some measure $\eta_m$. Since $(X_t, A_t)$ is uniformly ergodic, let $m > 0$ and $\nu_m$ a non-trivial measure on $\mathcal{F}$ such that for all $(x, a) \in \mathcal{X} \times \mathcal{A}$, $B \in \sigma(\mathcal{F} \times 2^\mathcal{A})$,
+
+\begin{equation}\label{eq:p-small}
+    \mathcal{P}^m((x, a), B) \geq \nu_m(B).
+\end{equation}
+
+For any $x_{t + 1}, x_t \in \mathcal{X}, a_{t + 1}, a_t \in \mathcal{A}$, and $U \in \sigma((\mathcal{F} \times 2^\mathcal{A})^2)$, we can write
+\begin{align*}
+    \Pi^{m + 1}&(x_t, a_t, x_{t + 1}, a_{t + 1}, U) =\\
+    &\int_{(\mathcal{X} \times \mathcal{A})^{m + 1}} \mathcal{P}_\pi((x_{t + 1}, a_{t + 1}), dy_1) \mathcal{P}_\pi(y_{m + 1}, U^{y_{m + 1}})\\ \nonumber
+    &\prod_{i = 1}^m \mathcal{P}_\pi(y_i, dy_{i + 1}), \nonumber
+\end{align*}
+
+\noindent where $U^y := \{x \in \mathcal{X} \times \mathcal{A} : (x, y) \in U\}$. Using \Cref{eq:p-small}, we have
+
+\begin{align*}
+    %\Pi^{m + 1}(x_t, a_t, x_{t + 1}, U) &=
+    \int_{(\mathcal{X} \times \mathcal{A})^{m + 1}} &\mathcal{P}_\pi((x_{t + 1}, a_{t + 1}), dy_1) \mathcal{P}_\pi(y_{m + 1}, U^{y_{m + 1}}) \\
+    &\quad\prod_{i = 1}^m \mathcal{P}_\pi(y_i, dy_{i + 1})\\
+    &\geq \int_{(\mathcal{X} \times \mathcal{A})^{m + 1}} \mathcal{P}_\pi((x_{t + 1}, a_{t + 1}), dy_1) \\
+    &\quad\mathcal{P}_\pi(y_{m + 1}, U^{y_{m + 1}})\prod_{i = 1}^m \mathcal{P}(y_i, dy_{i + 1})\\
+    &= \int_{\mathcal{X} \times \mathcal{A}} \mathcal{P}_\pi^m((x_{t + 1}, a_{t + 1}), dy) \mathcal{P}_\pi(y, U^y)\\
+    &\geq \int_{\mathcal{X} \times \mathcal{A}} \nu_m(dy) \mathcal{P}_\pi(y, U^y).
+\end{align*}
+
+\noindent Let us define the bottom expression as a function $\eta_m(U)$. We claim that $\eta_m$ is a measure on $\sigma((\mathcal{F} \times 2^\mathcal{A})^2)$. First, $\eta_m(\varnothing) = 0$. Second, $(\cup_i C_i)^y = \cup_i C_i^y$ for $\{C_i\}_i$ disjoint, and such $\{C_i^y\}$ are themselves disjoint, otherwise if $x \in C_i^y \cap C_j^y$ for $i \neq j$, then $(x, y) \in C_i \cap C_j$, which is impossible by assumption of disjointedness of the $\{A_i\}$. Finally, $\mathcal{P}_\pi$ is itself a measure in the second argument.
+
+It remains to check that $\eta_m$ is not trivial. Set $U = (\mathcal{X} \times \mathcal{A})^2$. Then for all $y \in \mathcal{X} \times \mathcal{A}$, we have $U^y = \mathcal{X} \times \mathcal{A}$. Then
+
+\begin{equation*}
+    \eta_m(U) = \int_{\mathcal{X} \times \mathcal{A}} \nu_m(dy) \mathcal{P}_\pi(y, \mathcal{X} \times \mathcal{A}) = \nu_m(\mathcal{X} \times \mathcal{A}) > 0.
+\end{equation*}
+
+\noindent The last inequality is by assumption of $\nu_m$ being non-trivial.
+\end{proof}
+
+Note that our $M_t$ corresponds to the $X_t$ in ~\citeauthor[p.213]{benveniste1990stochastic}~\shortcite{benveniste1990stochastic}. With this construction finished, we will assume in the following that whenever we refer to $\mathcal{X}$ or the Markov chain $X_t$, we are actually referring to $(\mathcal{X} \times \mathcal{A})^2$ or the Markov chain $M_t$ respectively.
+
+We assume that the step-sizes $\alpha_t$ of the algorithm satisfy the following:
+$$
+    \sum_{t} \alpha_t = \infty\quad\text{  and  }\quad
+    \sum_{t} \alpha_t^2 < \infty.
+$$
+
+%We write $\phi^i(x, a) \in \R^d$ for the $i$-th feature corresponding to the observation $x$ and action $a$, and $
+
+We write $\phi(x, a)$ for the feature vector corresponding to state $x$ and action $a$. We will sometimes write $\phi_x$ for $\phi(x, a)$. Assume furthermore that the features are linearly independent and bounded.
+
+We assume that we are learning $H$ horizons, and approximate the fixed-horizon $h$-th action-value function linearly.
+\begin{equation*}
+    Q^h_\params(x, a) :=  \params^{h, :} \phi(x, a),
+\end{equation*}
+
+\noindent where $\params \in \R^{H \times d}$. Colon indices denote array slicing, with the same conventions as in NumPy. For convenience, we also define $\params^{0, :} := 0$.
+
+We define the feature corresponding to the max action of a given horizon:
+\begin{equation*}
+    \phi_{\params}^*(x, h) := \phi(x, \argmax_{a} Q^h_\params(x, a)).
+\end{equation*}
+
+\noindent The update at time $t + 1$ for each horizon $h$ is given by
+\begin{align*}
+    \params_{t + 1}^{h + 1, :} &:= \params_t^{h + 1, :} + \alpha_t (r(x, a, y) + \gamma \params_t^{h, :} \phi^*_{\params_t}(y, h) \\
+    &\quad - \params_t^{h + 1, :} \phi_x)\phi_x^T.
+\end{align*}
+Here, $\gamma \in (0, 1]$.
+
+\subsection{Results}
+\setcounter{proposition}{0}
+\begin{proposition}\label{prop:odex}
+For $h = 1, ..., H$, the following ODE system has an equilibrium.
+\begin{equation}\label{eq:odex}
+    \dot{\params}^{h + 1, :} = \Ex\left[(r(x, a, y) + \gamma \params^{h, :} \phi^*_{\params}(y, h) - \params^{h + 1, :} \phi_x)\phi_x^T\right]
+\end{equation}
+
+\noindent Denote one such equilibrium by $\params_e$, and define $\tilde{\params} := \params - \params_e$. If, furthermore, we have that for $h = 1, ..., H$,
+\begin{align}\label{eq:odex-bound}
+    \gamma^2\Ex[(\params^{h, :} \phi^*_{\params}&(y, h) - \params_e^{h, :} \phi^*_{\params_e}(y, h))^2 ] <\\
+    &\quad \Ex\left[(\params^{h + 1, :} \phi_x - \params_e^{h + 1, :} \phi_x)^2\right]\nonumber
+\end{align}
+\noindent then $\params_e$ is a globally asymptotically stable equilibrium of \Cref{eq:odex}.
+
+
+\end{proposition}
+
+\begin{proof}
+First, we show that there is at least one equilibrium of \Cref{eq:odex}. Finding an equilibrium point amounts to solving the following equations for all $h$:
+\begin{equation*}
+    \params^{h + 1, :} \Ex[\phi_x \phi_x^T] = \Ex[(r(x, a, y) + \gamma \params^{h, :} \phi^*_{\params_t}(y, h)) \phi_x^T]
+\end{equation*}
+Since we assume that the features are linearly independent, and using the fact that $\params^{0, :} = 0$, we can recursively solve these equations to find an equilibrium.
+
+Let $\params_e$ be the equilibrium point thus generated. Define $\tilde{\params} := \params - \params_e$ and substitute into \Cref{eq:odex} to obtain the following system.
+
+% \begin{align}\label{eq:new-ode}
+%     \dot{\tilde{\params}}^{h + 1, :} &= \Ex[(r(x, a, y) + (\tilde{\params}^{h, :} + \params_e^{h, :}) \phi^h_y \\ \nonumber
+%     &\quad - (\tilde{\params}^{h + 1, :} + \params_e^{h+1, :}) \phi_x)\phi_x^T]\\ \nonumber
+%     &= \Ex[(r(x, a, y) + \params_e^{h + 1, :} \phi^h_y\\ \nonumber
+%     &\quad - \params_e^{h, :} \phi_x)\phi_x^T] + \Ex[(\tilde{\params}^{h, :} \phi^h_y - \tilde{\params}^{h + 1, :} \phi_x)\phi_x^T]\\ \nonumber
+%     &= \Ex\left[(\tilde{\params}^{h, :} \phi^h_y - \tilde{\params}^{h + 1, :} \phi_x)\phi_x^T\right]\nonumber
+% \end{align}
+
+\begin{align}\label{eq:new-ode}
+    \dot{\tilde{\params}}^{h + 1, :} &=  \Ex[(\gamma \params^{h, :} \phi^*_{\params}(y, h) - \gamma \params_e^{h, :} \phi^*_{\params_e}(y, h) \\
+    &\quad - \tilde{\params}^{h + 1, :} \phi_x)\phi_x^T] \nonumber
+\end{align}
+
+\noindent The equilibrium $\tilde{\params} = 0$ of \Cref{eq:new-ode} corresponds to the equilibrium $\params = \params_e$ of \Cref{eq:odex}. By showing global asymptotic stability of 0 for \Cref{eq:new-ode} and using the change of variable $\tilde{\params} = \params - \params_e$, we will have global asymptotic stability of $\params_e$ for \Cref{eq:odex}.
+
+Let us use the squared Euclidean norm $\|\cdot\|^2$ on $\R^{H \times d}$ as our Lyapunov function. Such a function is clearly positive-definite. Let $\tilde{\params}$ now denote a trajectory of \Cref{eq:new-ode}. Calculating,
+\begin{align*}
+    \dv{}{t}\|\tilde{\params}\|^2 &= \sum_{h = 0}^{H - 1}\dv{}{t} \left(\tilde{\params}^{h+1, :} \cdot \tilde{\params}^{h + 1, :}\right)\\
+        &= 2\sum_{h = 0}^{H - 1} \dot{\tilde{\params}}^{h + 1, :} \cdot \tilde{\params}^{h + 1, :}\\
+        &= 2 \sum_{h = 0}^{H - 1} \Ex[(\gamma \params^{h, :} \phi^*_{\params}(y, h) - \gamma \params_e^{h, :} \phi^*_{\params_e}(y, h) \\
+        &\quad\quad - \tilde{\params}^{h + 1, :} \phi_x)\phi_x^T] (\tilde{\params}^{h + 1, :})^T\\
+        &= 2\sum_{h = 0}^{H - 1} \Ex[(\gamma \params^{h, :} \phi^*_{\params}(y, h) - \gamma \params_e^{h, :} \phi^*_{\params_e}(y, h))\phi_x^T \\
+    &\quad\quad (\tilde{\params}^{h + 1, :})^T] - \Ex\left[(\tilde{\params}^{h + 1, :} \phi_x)^2\right]\\
+        &\leq 2\sum_{h = 0}^{H - 1} \sqrt{\gamma^2 \Ex\left[(\params^{h, :} \phi^*_{\params}(y, h) - \params_e^{h, :} \phi^*_{\params_e}(y, h))^2\right]}\\
+        &\quad\quad \sqrt{\Ex\left[(\tilde{\params}^{h + 1, :} \phi_x )^2 \right]} - \Ex\left[(\tilde{\params}^{h + 1, :} \phi_x)^2\right]\\
+        &< 0.
+\end{align*}
+
+\noindent We used H\"\o lder's inequality for the first inequality and \Cref{eq:odex-bound} for the last. The claim follows.
+\end{proof}
+
+\noindent Defining $Q^*_{\params}(x, h) = \argmax_a Q_\params^h(x, a)$, we can rewrite \Cref{eq:odex-bound} as
+\begin{align}\label{eq:odex-bound-2}
+    \Ex[(Q^{h + 1}(x, a) - &Q^{h + 1, e}(x, a))^2] >\\ &\gamma^2 \Ex\left[(Q^*_\params(x, h) - Q_{\params_e}^*(x, h))^2\right]. \nonumber
+\end{align}
+Effectively, \Cref{eq:odex-bound-2} means that the $h$-th fixed-horizon action-value function must be closer to the corresponding equilibrium, when taking the max action for each function, than the $(h + 1)$-th fixed-horizon action-value function is to its equilibrium when averaged across states and actions according to the behaviour policy. Intuitively, the functions for the previous horizons must have converged somewhat for the next horizon to converge. This condition can also be more easily satisfied by using a lower value of $\gamma$.
+
+\setcounter{theorem}{0}
+\begin{theorem}
+Viewing the right-hand side of the ODE system \Cref{eq:odex} as a single function $g(\params)$, assume that $g$ is locally Lipschitz in $\params$. %In general, whether this assumption is satisfied or not may depend upon the stationary distribution.
+
+Assuming \Cref{eq:odex-bound}, a fixed behaviour policy $\pi$ that results in a Markov chain $(\mathcal{X}, \Pi)$, and the assumptions in the Preliminaries, the iterates of FHQL converge with probability 1 to the equilibrium of the ODE system \Cref{eq:odex}.
+\end{theorem}
+\begin{proof}
+We apply Theorem 17 of~\citeauthor[p.239]{benveniste1990stochastic}~\shortcite{benveniste1990stochastic}. Conditions (A.1)-(A.2) easily follow from the step-size assumption and from the existence of a transition kernel for our Markov chain, which we write here as $\Pi$ to keep to the notation in~\citeauthor{benveniste1990stochastic}~\shortcite{benveniste1990stochastic}. We also need to check (A.3)-(A.4). (A.3) and (A.4) (ii)-(iii) will be included into the verification of conditions (1.9.1)-(1.9.6) below, while we have that (A.4) (i) holds by assumption of $h$ being locally Lipschitz.
+
+\noindent It remains to verify the conditions (1.9.1) to (1.9.6). Let us write the invariant measure of $(\mathcal{X}, \Pi)$ as $\mu$.
+
+\paragraph{(1.9.1)}
+The $H(\theta, x)$ (also written as $H_\theta(x)$) in~\citeauthor[p.239]{benveniste1990stochastic}~\shortcite{benveniste1990stochastic} corresponds in our case to the following matrix with components $i, j$ and with $\theta$ replaced by $\params$ :
+
+\begin{equation}\label{eq:H}
+    [(r(x, a, y) + \gamma \params^{h, :} \phi_{\params}^*(y, h) - \params^{h + 1, :} \phi(x, a))\phi(x, a)^T]_j,
+\end{equation}
+
+\noindent with $0 \leq h \leq H$, $1 \leq j \leq d$, where we suppress the $n$ index for clarity. Because we are assuming bounded features, and because $[(r(x, a, y) + \gamma \params^{h, j} \phi_{\params}^*(y, h) - \params^{h + 1, j} \phi(x, a))\phi(x, a)^T]_{h, j}$ depends only linearly on $\params$, the bound (1.9.1) is easily seen to be satisfied after, for example, expanding and applying the Cauchy-Schwarz inequality several times.
+
+
+\paragraph{(1.9.2)}
+The bound is trivially satisfied since in our case, $\rho_n := 0$.
+
+\paragraph{(1.9.3)}
+This bound is satisfied since we assume that our state space is a compact subset of Euclidean space and is thus bounded.
+
+\paragraph{(1.9.4)}
+We construct $\nu_\params$ explicitly, given the suggestion in ~\citeauthor[p.217]{benveniste1990stochastic}~\shortcite{benveniste1990stochastic}. Define
+
+\begin{equation*}
+    \nu_\params(z) := \sum_{k \geq 0} \Pi^k(H_\params - \mu H_\params)(z).
+\end{equation*}
+
+\noindent We will show that the above series converges for all $z$. If it does, then it is straightforward to check that A.4 (ii) is satisfied. Since our chain is assumed to be uniformly ergodic, we have the existence of $K > 0$ and $\rho \in [0, 1)$ such that for all $x \in \mathcal{X}$,
+
+\begin{equation*}
+    \sup_A |\Pi^n(x, A) - \mu(A)| < K \rho^n.
+\end{equation*}
+
+\noindent Note that $M$ depends implicitly upon $\pi$.
+
+For any probability measures $P, Q$, we will use the following standard equality.
+
+\begin{align*}
+    \frac{1}{2} \sup_{|f| \leq 1} & \left\{\int f(x) P(dx) - \int f(x) Q(dx)\right\} \\
+    &= \sup_A |P(A) - Q(A)|.
+\end{align*}
+
+\noindent We let $\|H_\params(x)\|_\infty$ denote the uniform norm with respect to the argument $x$, which we will write as $\|H_\params\|_\infty$ for notational simplicity. Then,
+\begin{align*}
+    \nu_\params(z) &:= \sum_{k \geq 0} \Pi^k(H_\params - \mu H_\params)(z)\\
+    &= (\|H_\params\|_\infty + 1) \sum_{k \geq 0} (\Pi^k - \Pi^k \mu) \frac{H_\params(z)}{\|H_\params\|_\infty + 1}\\
+    &= (\|H_\params\|_\infty + 1) \sum_{k \geq 0} (\Pi^k - \mu) \frac{H_\params(z)}{\|H_\params\|_\infty + 1}\\
+    &\leq  (\|H_\params\|_\infty + 1) \\
+        &\quad \sum_{k \geq 0}\sup_{|f| \leq 1} \left\{\int f(x) \Pi^k(z, dx) - \int f(x) \mu(dx)\right \}\\
+    &= 2 (\|H_\params\|_\infty + 1) \sum_{k \geq 0} \sup_A |\Pi^k(z, A) - \mu(A)|\\
+    &\leq  2 (\|H_\params\|_\infty + 1) \sum_{k \geq 0}  K \rho^n < \infty.
+\end{align*}
+
+\noindent Given our assumption of linear function approximation, the functional form of $H_\params(x)$ in \Cref{eq:H} implies that $\|H_\params\|_\infty$ only grows linearly in $|\params|$, so we also have (1.9.4).
+
+\paragraph{(1.9.5)}
+This assumption is trivially satisfied because of our assumption of a fixed behaviour policy $\pi$, meaning that the stochastic kernel $\Pi$ and the function $\nu_\params$ do not depend on $\params$.
+
+\paragraph{(1.9.6)}
+This condition is satisfied by our step-size assumptions with $\lambda = 1$.
+
+
+~\\~\\ Finally, assumption b of Theorem 17 is satisfied by our \Cref{prop:odex}. The claim follows.
+\end{proof}
+
+\section{Arbitrary Temporal Weighting of Return}\label{appdx:arbitraryweights}
+
+Subtracting subsequent horizons' values allows for extracting the expected reward at each step, trivially allowing for arbitrarily re-weighting the rewards within a fixed horizon. This allows for weighting schemes beyond previous generalized discounting frameworks, such as allowing the discount factor to be 0 for a few steps, while still including future rewards. However, this approach is computationally expensive, particularly if this re-weighted return is to be maximized. In this section, we show the FHTD framework can still directly estimate returns under such weighting schemes.
+
+While fixed-horizon returns don't rely on discounting for convergence, discounting allows for prioritizing near-term rewards within a fixed horizon, and induces a sense of urgency. To reiterate FHTD's TD targets:
+\begin{equation*}
+\hat{G}^h_t = R_{t+1} + \gamma V^{h-1}(S_{t+1})
+\end{equation*}
+Under complex-valued discounting~\cite{tddft2019}, this would allow for predicting the expected return's \textit{exact} discrete Fourier transform, because the transform assumes a fixed and known sequence length.
+Knowing the sequence length also allows for incremental estimation of the \textit{fixed-horizon average reward}. This may have implications with non-linear function approximation, where outputs having similar magnitudes might be favored. This is characterized by the following TD targets:
+\begin{equation}
+\hat{G}^h_t = \frac{1}{h}R_{t+1} + \frac{h-1}{h} V^{h-1}(S_{t+1})
+\label{eqn:avgfhtdtarget}
+\end{equation}
+Taking this further, if we only scale the sampled rewards (and not the bootstrapped value), the weight of each reward in the return is decoupled temporally. This allows for arbitrary temporal weighting schemes, including a notable alternative for exponential discounting up to a final horizon $H$:
+\begin{equation}
+\hat{G}^h_t = \gamma^{H - h}R_{t+1} + V^{h-1}(S_{t+1})
+\label{eqn:rexpfhtdtarget}
+\end{equation}
+It can be seen that for $\gamma < 1$, many of the earlier horizons will have values that are close to zero, putting more reliance on later horizons being correct. The typical way of exponential discounting appears to put more burden on the earlier horizons being correct, as many of the later horizons will have similar values. This intuitively may have implications for trading off representational capacity by placing emphasis on certain horizons, but this was left for future work. Also of note, hyperbolic discounting~\cite{hyperbolic2019} up to a final horizon $H$ can use the targets:
+\begin{equation}
+\hat{G}^h_t = \frac{1}{1 + k(H - h)}R_{t+1} + V^{h-1}(S_{t+1})
+\label{eqn:hyperfhtdtarget}
+\end{equation}
+
+\section{FHTD($\lambda$)}
+
+Another way to perform multi-step TD learning is through TD($\lambda$) methods~\cite{rlbook2018}. These algorithms update toward the $\lambda$-return, a geometrically-weighted sum of $n$-step returns:
+\begin{equation}
+\hat{G}_t^\lambda = (1 - \lambda)\sum_{n=1}^{\infty}{\lambda^{n - 1}\hat{G}_{t:t+n}}
+\label{eqn:deflambdareturn}
+\end{equation}
+It introduces a parameter $\lambda \in [0, 1]$ where $\lambda = 0$ gives one-step TD, and increasing $\lambda$ provides an efficient way to effectively include more sampled rewards into the estimate of the return. In the infinite-horizon setting, it makes computation depend on the size of the feature space, and no longer scales with the number of rewards to include in the estimate.
+We can derive fixed-horizon TD($\lambda$), denoted FHTD($\lambda$), through this recursive form of its $\lambda$-return:
+\begin{equation}
+    \hat{G}^{\lambda, h}_t = R_{t+1} + \gamma\bigg((1 - \lambda)V^{h - 1}(S_{t+1}) + \lambda \hat{G}^{\lambda, h - 1}_{t + 1}\bigg)
+    \label{eqn:deffhtdlambdareturn}
+\end{equation}
+Assuming the values are not changing, we can get the following sum of one-step FHTD TD errors:
+\begin{align}
+\delta^h_t &= R_{t+1} + \gamma V^{h - 1}(S_{t+1}) - V^h(S_{t})
+\label{eqn:onestepfhtdtderror} \\
+\hat{G}^{\lambda, h}_t &= V^h(S_t) + \sum^{H - 1}_{k = 0}{\delta^{h - k}_{t + k}\prod^{k}_{i = 1}{\gamma \lambda}}
+\label{eqn:recfhtdlambdareturn}
+\end{align}
+This requires storage of feature vectors for the last $H$ states. Instead of storing rewards, it estimates the $\lambda$-return by backing up the current step's TD error, weighted by the product term in Equation \ref{eqn:recfhtdlambdareturn}. An observation is that FHTD($\lambda$) requires learning all $H$ value functions. Also, it checks the last $H$ states for each of the $H$ value functions, making its computation scale with $H^2$. Despite this, FHTD($\lambda$) allows for \textit{smooth} interpolation between one-step FHTD and fixed-horizon MC, and is convenient if one wants to dynamically vary the degree of bootstrapping.
+
+\section{Additional Experiments}
+
+\subsection{FHTD's Sample Complexity}\label{appdx:samplecomplexity}
+
+We conjecture that FHTD's sample complexity is upper bounded by that of TD, assuming each horizon's initial values are identical to the initial values of TD. This is based on an observation that FHTD's updates to the final horizon's values will match TD's updates for the first $H - 1$ steps.
+
+We used a 19-state random walk, a tabular 1-dimensional environment where an agent starts in the center and randomly transitions to one of two neighboring states at each step. There is a terminal state on each end of the environment where transitioning to one of them gives a reward of $-1$, and transitioning to the other gives a reward of $1$. Treating it as an undiscounted, episodic task, the true values of FHTD's final horizon approach the true values of TD for sufficiently large $H$. In this experiment, we used a final horizon of $H = 100$, and a step size $\alpha = 0.5$. The true values for each horizon of FHTD, as well as the true values for TD, were computed with dynamic programming. After each step, we measured the root-mean-squared error between the learned and true values (uniformly averaged over states). We performed 10000 independent runs seeded such that each algorithm saw the same trajectories of experience, and Figure \ref{fig:results_19rw} shows the results after 2000 steps.
+
+\begin{figure}[ht]
+    \centering
+	\includegraphics[width=0.8\linewidth]{results_19rw}
+	\caption[]{Prediction error after 2000 steps on the 19-state random walk. Results are averaged over 10000 runs, and standard errors are less than a line width.}
+	\label{fig:results_19rw}
+\end{figure}
+
+Evidently, short horizons plateau relatively quickly, with steady-state errors due to a fixed step size. As the horizon increases, FHTD's true values approach TD's true values, and FHTD's learning curves approach but don't cross that of TD. This supports our conjecture regarding FHTD's sample complexity, and suggests that errors propagate through horizons in a way that decomposes TD's error.
+
+\subsection{Off-policyness of FHTD Control}
+\label{appdx:offpolicyness}
+
+Due to the inherent off-policyness of FHTD control, approximations are needed for the computational savings of $n$-step FHTD methods. We expect the off-policyness to primarily affect earlier horizons, as horizons will tend to agree on an action when looking sufficiently far into the future.
+
+We randomly generated $8 \times 8$ grid worlds with 4-directional movement, where moving off of the grid keeps the agent in place. There were no terminal states, and upon environment initialization, the reward for transitioning into each state was a uniform random integer from the range $[-3, 3]$. We found that a final horizon of $H = 64$ was sufficient for identifying the optimal policy in these grid worlds, and used dynamic programming to compute each horizon's optimal policy. We computed how often each horizon's optimal action agreed with the optimal action for $H = 64$, uniformly averaged over states. Figure \ref{fig:results_offpolicyness} shows the results averaged over 1000 randomly generated $8 \times 8$ grid worlds.
+
+\begin{figure}[ht]
+    \centering
+	\includegraphics[width=0.8\linewidth]{results_offpolicyness}
+	\caption[]{Optimal action agreement with the final horizon in random $8 \times 8$ grid worlds, uniformly averaged over states. Results are averaged over 1000 random grid worlds, and shaded regions represent one standard error.}
+	\label{fig:results_offpolicyness}
+\end{figure}
+
+The results support that most of the off-policyness occurs in the early horizons, and that later horizons tend to agree with the final horizon. A potential algorithm based on this observation is to learn the first few horizons with one-step FHTD, and then use $n$-step FHTD to skip horizons from there.
+
+\subsection{Visualizing Deep Value Estimates}
+\label{appdx:deepvals}
+
+Here we qualitatively compare DFHQ and DQN's value estimates with resulting returns. Each algorithm's weights were frozen after a run of 500,000 frames, and in evaluation episodes, informed an $\epsilon$-greedy policy with $\epsilon=0.05$. We logged the value estimate of each selected action, and computed the resulting returns from each state at the end of the episode. Figures \ref{fig:results_qs_dfhq} and \ref{fig:results_qs_dqn} show for each algorithm, how well the returns were predicted in a randomly sampled episode.
+
+At a glance, DQN's estimates are consistent with Q-learning's well-known \textit{maximization bias}~\cite{rlbook2018}. DFHQ's estimates appear less impacted by this, and they matched the true returns relatively well. This may suggest why DFHQ performed better, and supports the possibility that it learns a better representation from predicting many outputs with shared hidden layers. However, we emphasize the distinction from work on auxiliary tasks~\cite{unreal2016,hyperbolic2019} because earlier horizons' values are necessary for constructing estimates for later horizons.
+
+\begin{figure}[!ht]
+    \centering
+	\includegraphics[width=0.8\linewidth]{results_qs_dfhq}
+	\caption[]{DFHQ's value estimates and the resulting (discounted) 64-step returns in a randomly sampled evaluation episode with frozen weights.}
+	\label{fig:results_qs_dfhq}
+\end{figure}
+
+\begin{figure}[!ht]
+    \centering
+	\includegraphics[width=0.8\linewidth]{results_qs_dqn}
+	\caption[]{DQN's value estimates and the resulting discounted returns in a randomly sampled evaluation episode with frozen weights.}
+	\label{fig:results_qs_dqn}
+\end{figure}
+
+\subsection{Multi-step FHTD Policy Evaluation}
+
+
+
+\afterpage{%
+\begin{figure*}[!h]
+    \centering
+	\includegraphics[width=0.35\linewidth]{results_cgw_nstep_20}
+	\includegraphics[width=0.35\linewidth]{results_cgw_lambda_20}
+	\includegraphics[width=0.35\linewidth]{results_cgw_nstep_200}
+	\includegraphics[width=0.35\linewidth]{results_cgw_lambda_200}
+	\caption[]{Prediction error after 20 and 200 episodes of multi-step FHTD algorithms with various step sizes and backup lengths on the checkered grid world. Results are averaged over 100 runs, and shaded regions represent one standard error. Note the log scale of the x-axis.}
+	\label{fig:results_cgw}
+\end{figure*}
+\clearpage
+}
+
+
+In these experiments, we evaluate $n$-step FHTD and FHTD($\lambda$) in a policy evaluation task. We hypothesize that multi-step FHTD methods address a similar bias-variance trade-off to the infinite-horizon setting, such that intermediate values of $n$ and $\lambda$ can outperform either extreme. We also expect that $n$-step FHTD methods can tolerate larger step sizes relative to FHTD($\lambda$), as FHTD($\lambda$)'s derivation assumes that the value function is not changing.
+
+
+We used the \textit{checkered grid world} environment~\cite{tddft2019}, as this environment's reward distribution emphasizes methods that can predict \textit{when} rewards occur. The environment is a 5 $\times$ 5 grid of states with terminal states on opposite corners. It has deterministic 4-directional movement, and moving into a wall keeps the agent in place. The agent starts in the center, and the board is colored with a checkered pattern which represents the reward distribution. One color represents a reward of $1$ upon entry, and a reward of $-1$ for the other. A reward of 11 is given at termination.
+
+A final horizon of $H = 32$ was used, and each agent learned on-policy under an equiprobable random behavior policy. We swept over step sizes in negative powers of two, used $n \in \{1, 2, 4, 8, 16, 32\}$ for $n$-step FHTD, and $\lambda \in \{ 0.0, 0.5, 0.75, 0.875, 0.9375, 1.0\}$ for FHTD($\lambda$). The true value function for $H = 32$ was computed with dynamic programming, and after each episode, we measured the root-mean-square error in the 32nd horizon's values (uniformly averaged over states). We performed 100 independent runs, and Figure \ref{fig:results_cgw} shows the results after 20 and 200 episodes.
+
+It can be seen that we get a similar trade-off where including more sampled rewards performs better early on, but one-step methods eventually catch up as its estimates become reliable. As expected, we also see that FHTD($\lambda$) is less stable for larger step sizes.
+
+
+
+
+
+\section{Additional Experimental Details}
+
+Below are the hyperparameter settings considered in our DFHQ and DQN results. Bolded values represent DFHQ's best parameter combination in terms of average episodic return over 500,000 frames (area under the curve). DQN's best parameter combination was identical apart from a marginal improvement with target networks.
+
+\begin{center}
+    \begin{tabular}{ |c|c| }
+     \hline
+     \textbf{Parameter} & \textbf{Value(s)} \\
+     \hline
+     Per Episode Frame Limit & $5000$ \\
+     \hline
+     Replay Buffer Size & $10^{5}$ \\
+     \hline
+     Mini-batch Size & $32$ \\
+     \hline
+     RMSprop Learning Rate & $10^{-5}, \mathbf{10^{-4}}, 10^{-3}$ \\
+     \hline
+     Hidden Layer Widths & $128, \mathbf{256}, 512, 4096$ \\
+     \hline
+     DFHQ Final Horizon ($H$) & $32, \mathbf{64}$ \\
+     \hline
+     Discount Rate ($\gamma$) & $\mathbf{0.99}, 1.0$ \\
+     \hline
+     Target Net. Update Freq. & $\mathbf{1}, 100$ \\
+     \hline
+    \end{tabular}
+\end{center}
+
+\section{Environment Diagrams}
+
+\phantom{Below are diagrams of the environments used.}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+	\includegraphics[width=0.5\linewidth]{env_slippery_maze}
+	\captionof{figure}[Diagram of the slippery maze environment]{Diagram of the slippery maze environment. All rewards are $-1$ and reaching the bottom-right corner ends an episode. Each action selected has a $75\%$ chance of being overridden by a random action, unbeknownst to the agent.} 	\label{fig:env_slippery_maze}
+    \vspace{\baselineskip}
+\end{center}
+\end{minipage}
+
+\begin{minipage}{\linewidth}
+\begin{center}
+    \vspace{\baselineskip}
+	\includegraphics[width=0.75\linewidth]{env_hot_baird_balloon}
+	\captionof{figure}[Diagram of Baird's counterexample]{Diagram of Baird's counterexample. Each state's approximate state-value is shown by the linear expression inside each state. The objective is to predict the expected return from each state under a target policy which always chooses to transition to the 7th state.}\label{fig:env_baird}
+    \vspace{\baselineskip}
+\end{center}
+\end{minipage}
+
+
+\begin{minipage}{\linewidth}
+\begin{center}
+	\includegraphics[width=0.55\linewidth]{env_cgw}
+	\captionof{figure}[Diagram of the checkered grid world environment]{Diagram of the checkered grid world environment. Transitioning into to a white square gives a reward of 1, transitioning into a gray square gives a reward of -1, and transitioning into the top-left or bottom-right corner ends an episode with a terminal reward of 11.}
+	\label{fig:env_cgw}
+\end{center}
+\end{minipage}
+
+% \begin{figure}[hp]
+%     \centering
+% 	\includegraphics[width=0.8\linewidth]{env_hot_baird_balloon}
+% 	\caption[Diagram of Baird's counterexample]{Diagram of Baird's counterexample. Each state's approximate state-value is shown by the linear expression inside each state. The objective is to predict the expected return from each state under a target policy which always chooses to transition to the 7th state.}
+% 	\label{fig:env_baird}
+% \end{figure}
+% \begin{figure}[H]
+%     \centering
+% 	\includegraphics[width=0.55\linewidth]{env_slippery_maze}
+% 	\caption[Diagram of the slippery maze environment]{Diagram of the slippery maze environment. All rewards are $-1$ and reaching the bottom-right corner ends an episode. Each action selected has a $75\%$ chance of being overridden by a random action, unbeknownst to the agent.}
+% 	\label{fig:env_slippery_maze}
+% \end{figure}
+
+% \begin{figure}[H]
+%     \centering
+% 	\includegraphics[width=0.55\linewidth]{env_cgw}
+% 	\caption[Diagram of the checkered grid world environment]{Diagram of the checkered grid world environment. Transitioning into to a white square gives a reward of 1, transitioning into a gray square gives a reward of -1, and transitioning into the top-left or bottom-right corner ends an episode with a terminal reward of 11.}
+% 	\label{fig:env_cgw}
+% \end{figure}
+
+\vfill
+
+\section{Algorithm Pseudocode}
+
+%Below is pseudocode for the proposed fixed-horizon algorithms.
+
+% one-step FHTD
+
+\begin{algorithm}[H]\small
+\caption{\small Linear One-step FHTD for estimating $V^H \approx v^H_\pi$}
+\label{alg:onestepfhtd}
+\begin{algorithmic}
+\State $\textbf{w} \leftarrow \textrm{Array of size } (H + 1) \times m$%, \textrm{where } \textbf{w}_{[0]} = [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $\textbf{w}_{[0]} \leftarrow [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $s \sim p(s_0)$
+\State $a \sim \pi(\cdot|s)$
+\State $t \leftarrow 0$
+\While{$t \neq t_{max}$}
+    \State $s', r \sim p(s', r|s, a)$
+    \For{$h = 1, 2, 3, ..., H$}
+        \State $\delta \leftarrow r + \gamma \textbf{w}_{[h - 1]} \cdot \phi(s') - \textbf{w}_{[h]} \cdot \phi(s)$
+        \State $\textbf{w}_{[h]} \leftarrow \textbf{w}_{[h]} + \alpha \delta \phi(s)$
+    \EndFor
+    \State $s \leftarrow s'$
+    \State $a \sim \pi(\cdot|s)$
+    \State $t \leftarrow t + 1$
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+\vspace{-\baselineskip}
+
+% one-step FHQ-learning
+
+\begin{algorithm}[H]\small
+\caption{\small Linear One-step FHQ-Learning for estimating $Q^H \approx q^H_*$}
+\label{alg:onestepfhqlearning}
+\begin{algorithmic}
+\State $\textbf{w} \leftarrow \textrm{Array of size } (H + 1) \times m$%, \textrm{where } \textbf{w}_{[0]} = [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $\textbf{w}_{[0]} \leftarrow [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $s \sim p(s_0)$
+\State $a \sim \mu(\cdot|s) \textrm{ (e.g. }\epsilon\textrm{-greedy w.r.t. }Q^H(s, \cdot))$
+\State $t \leftarrow 0$
+\While{$t \neq t_{max}$}
+    \State $s', r \sim p(s', r|s, a)$
+    \For{$h = 1, 2, 3, ..., H$}
+        \State $\delta \leftarrow r + \gamma \max_{a'}{\big(\textbf{w}_{[h - 1]} \cdot \phi(s', a')\big)} - \textbf{w}_{[h]} \cdot \phi(s, a)$
+        \State $\textbf{w}_{[h]} \leftarrow \textbf{w}_{[h]} + \alpha \delta \phi(s, a)$
+    \EndFor
+    \State $s \leftarrow s'$
+    \State $a \sim \mu(\cdot|s)$
+    \State $t \leftarrow t + 1$
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+\vspace{-\baselineskip}
+
+% n-step FHTD
+
+\begin{algorithm}[H]\small
+\caption{\small Linear $n$-step FHTD for estimating $V^H \approx v^H_\pi$}
+\label{alg:nstepfhtd}
+\begin{algorithmic}
+\State $\textbf{w} \leftarrow \textrm{Array of size } (\frac{H}{n} + 1) \times m$%, \textrm{where } \textbf{w}_{[0]} = [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $\textbf{w}_{[0]} \leftarrow [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $\bm{\Phi} \leftarrow \textrm{Array of size } n \times m$
+\State $\textbf{R} \leftarrow \textrm{Array of size } n \times 1$
+\State $s \sim p(s_0)$
+\State $a \sim \pi(\cdot|s)$
+\State $t \leftarrow 0$
+\While{$t \neq t_{max}$}
+    \State $\bm{\Phi}_{[t \ (\mathrm{mod}\ n)]} = \phi(s)$
+    \State $s', r \sim p(s', r|s, a)$
+    \State $\textbf{R}_{[t \ (\mathrm{mod}\ n)]} = r$
+    \If{$t + 1 \geq n$}
+        \State $r_{sum} \leftarrow \textrm{discountedsum}(\textbf{R})$
+        \State $\phi_{old} \leftarrow \bm{\Phi}_{[(t + 1 - n) \ (\mathrm{mod}\ n)]}$
+        \For{$h_{n} = 1, 2, 3, ..., \frac{H}{n}$}
+            \State $\delta \leftarrow r_{sum} + \gamma^n \textbf{w}_{[h_{n} - 1]} \cdot \phi(s') - \textbf{w}_{[h_{n}]} \cdot \phi_{old}$
+            \State $\textbf{w}_{[h_{n}]} \leftarrow \textbf{w}_{[h_{n}]} + \alpha \delta \phi_{old}$
+        \EndFor
+    \EndIf
+    \State $s \leftarrow s'$
+    \State $a \sim \pi(\cdot|s)$
+    \State $t \leftarrow t + 1$
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+% FHTD(lambda)
+
+\begin{algorithm}[H]\small
+\caption{\small Linear FHTD($\lambda$) for estimating $V^H \approx v^H_\pi$}
+\label{alg:fhtdlambda}
+\begin{algorithmic}
+\State $\textbf{w} \leftarrow \textrm{Array of size } (H + 1) \times m$
+\State $\textbf{w}_{[0]} \leftarrow [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $\bm{\Phi} \leftarrow \textrm{Array of size } H \times m$
+\State $s \sim p(s_0)$
+\State $a \sim \pi(\cdot|s)$
+\State $t \leftarrow 0$
+\While{$t \neq t_{max}$}
+    \State $\bm{\Phi}_{[t \ (\mathrm{mod}\ H)]} \leftarrow \phi(s)$
+    \State $s', r \sim p(s', r|s, a)$
+    \For{$h = 1, 2, 3, ..., H$}
+        \State $\delta^h = r + \gamma \textbf{w}_{[h-1]} \cdot \phi(s') -  \textbf{w}_{[h]} \cdot \phi(s)$
+        \For{$i = 0, 1, 2, ..., H - h$}
+            \State $\textbf{w}_{[h+i]} \leftarrow \textbf{w}_{[h+i]} + \alpha (\gamma\lambda)^i \delta^h \bm{\Phi}_{[(t - i) \ (\mathrm{mod}\ H)]}$
+        \EndFor
+    \EndFor
+    \State $s \leftarrow s'$
+    \State $a \sim \pi(\cdot | s)$
+    \State $t \leftarrow t + 1$
+\EndWhile
+
+\end{algorithmic}
+\end{algorithm}
+
+% FHTB(lambda)
+
+% \begin{algorithm}[!b]\small
+% \caption{\small Linear FHTB($\lambda$) for estimating $Q^H \approx q^H_{\pi^H}$}
+% \label{alg:fhtblambda}
+% \begin{algorithmic}
+% \State $\textbf{w} \leftarrow \textrm{Array of size } (H + 1) \times m, \textrm{where } \textbf{w}_{[0]} = [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+% \State $\textbf{X} \leftarrow \textrm{Array of size } H \times m$
+% \State $\Pi \leftarrow \textrm{Array of size } H \times H$
+% \State $s \sim p(s_0)$
+% \State $a \sim \mu(\cdot|s) \textrm{ (e.g. }\epsilon\textrm{-greedy w.r.t. }Q^H(s, \cdot))$
+% \State $t \leftarrow 0$
+% \While{$t \neq t_{max}$}
+%     \State $\textbf{X}_{[t \ (\mathrm{mod}\ H)]} \leftarrow \textbf{x}(s, a)$
+%     \State $\Pi_{[t \ (\mathrm{mod}\ H)]} \leftarrow [\pi^1(a|s), \pi^2(a|s), ..., \pi^H(a|s)]$
+%     \State $s', r \sim p(s', r|s, a)$
+%     \For{$h = 1, 2, 3, ..., H$}
+%         \State $\delta^h = r + \textbf{w}_{[h-1]} \cdot \mathbb{E}_{\pi^{h-1}}[\textbf{x}(s', \cdot)] -  \textbf{w}_{[h]} \cdot \textbf{x}(s, a)$
+%         \State $e \leftarrow 1$
+%         \For{$i = 0, 1, 2, ..., H - h$}
+%             \State $\textbf{w}_{[h+i]} \leftarrow \textbf{w}_{[h+i]} + \alpha e \delta^h \textbf{X}_{[(t - i) \ (\mathrm{mod}\ H)]}$
+%             \If{$i \neq H - h$}
+%                 \State $e \leftarrow e \lambda \Pi_{[(t - i) \ (\mathrm{mod}\ H), h + i - 1]}$
+%             \EndIf
+%         \EndFor
+%     \EndFor
+%     \State $s \leftarrow s'$
+%     \State $a \sim \mu(\cdot | s)$
+%     \State $t \leftarrow t + 1$
+% \EndWhile
+% \end{algorithmic}
+% \end{algorithm}
+
+% FHQ(lambda)
+
+\begin{algorithm}[H]\small
+\caption{\small Linear FHQ($\lambda$) for estimating $Q^H \approx q^H_{*}$}
+\label{alg:fhqlambda}
+\begin{algorithmic}
+\State $\textbf{w} \leftarrow \textrm{Array of size } (H + 1) \times m$
+\State $\textbf{w}_{[0]} \leftarrow [0 \textrm{ for } i \textrm{ in } \textrm{range}(m)]$
+\State $\bm{\Phi} \leftarrow \textrm{Array of size } H \times m$
+\State $\Pi \leftarrow \textrm{Array of size } H \times H$
+\State $s \sim p(s_0)$
+\State $a \sim \mu(\cdot|s) \textrm{ (e.g. }\epsilon\textrm{-greedy w.r.t. }Q^H(s, \cdot))$
+\State $t \leftarrow 0$
+\While{$t \neq t_{max}$}
+    \State $\bm{\Phi}_{[t \ (\mathrm{mod}\ H)]} \leftarrow \phi(s, a)$
+    \State $\Pi_{[t \ (\mathrm{mod}\ H)]} \leftarrow [\mathbbm{1}_{a = \argmax{Q^h(s,\cdot)}} \textrm{ for } h \in \{1, ..., H \}]$ %[\pi^1(a|s), \pi^2(a|s), ..., \pi^H(a|s)]$
+    \State $s', r \sim p(s', r|s, a)$
+    \For{$h = 1, 2, 3, ..., H$}
+        \State $\delta^h = r + \gamma \max_{a'}{\big(\textbf{w}_{[h-1]} \cdot \phi(s', a')\big)} -  \textbf{w}_{[h]} \cdot \phi(s, a)$
+        \State $e \leftarrow 1$
+        \For{$i = 0, 1, 2, ..., H - h$}
+            \State $\textbf{w}_{[h+i]} \leftarrow \textbf{w}_{[h+i]} + \alpha e \delta^h \bm{\Phi}_{[(t - i) \ (\mathrm{mod}\ H)]}$
+            \If{$i \neq H - h$}
+                \State $e \leftarrow e \gamma \lambda \Pi_{[(t - i) \ (\mathrm{mod}\ H), h + i - 1]}$
+            \EndIf
+        \EndFor
+    \EndFor
+    \State $s \leftarrow s'$
+    \State $a \sim \mu(\cdot | s)$
+    \State $t \leftarrow t + 1$
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+%\section{FHDP updating scheme details}
+
+%\vspace{5mm}
+
+%\noindent
+%Synchronous FHDP:
+%\begin{align}
+%    \nonumber
+%    &\textrm{For}\ k = \ 1, 2, 3, ..., n: \\
+%    \nonumber
+%    &\ \ \ \ \textrm{For}\ h = \ 1, 2, 3, ..., 100: \\
+%    \nonumber
+%    &\ \ \ \ \ \ \ \ \textbf{w}^{h}_{k} \leftarrow \textbf{w}^{h}_{k - 1} + \frac{\alpha}{ \lvert  \mathcal{S} \rvert}  \sum_{s}{\Big(\textbf{w}^{h-1}_{k - 1} \cdot \textbf{x}(s_{7}) - \textbf{w}^{h}_{k - 1} \cdot \textbf{x}(s)\Big) \textbf{x}(s)}
+%\end{align}
+
+%\noindent
+%Asynchronous FHDP:
+%\begin{align}
+%\nonumber
+%&\textrm{For}\ k = \ 1, 2, 3, ..., n:\\
+%\nonumber
+%&\ \ \ \ \textrm{For}\ s = s_1, s_2, s_3, ..., s_7:\\
+%\nonumber
+%&\ \ \ \ \ \ \ \ \textrm{For}\ h = \ 1, 2, 3, ..., 100:\\
+%\nonumber
+%&\ \ \ \ \ \ \ \ \ \ \ \ \textbf{w}^{h} \leftarrow \textbf{w}^{h} + \frac{\alpha}{\lvert \mathcal{S} \rvert} \Big(\textbf{w}^{h-1} \cdot \textbf{x}(s_{7}) - \textbf{w}^{h} \cdot \textbf{x}(s)\Big) \textbf{x}(s)
+%\end{align}
+
+%\noindent
+%Iterative-deepening FHDP:
+%\begin{align}
+%\nonumber
+%&\textrm{For}\ h = \ 1, 2, 3, ..., 100:\\
+%\nonumber
+%&\ \ \ \ \textrm{For}\ k = \ 1, 2, 3, ..., n:\\
+%\nonumber
+%&\ \ \ \ \ \ \ \ \textbf{w}^{h}_{k} \leftarrow \textbf{w}^{h}_{k - 1} + \frac{\alpha}{ \lvert  \mathcal{S} \rvert} \sum_{s}{\Big(\textbf{w}^{h-1}_{k - 1} \cdot \textbf{x}(s_{7}) - \textbf{w}^{h}_{k - 1} \cdot \textbf{x}(s)\Big) \textbf{x}(s)}
+%\end{align}
+%\medskip
+
+%\bibliography{references}
+\clearpage
+
+\end{appendices}
+
+%\end{document}
