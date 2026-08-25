@@ -18,6 +18,7 @@ from .qh_history_encoders import (
     QhMeanPoolHistoryEncoderConfig,
 )
 from .qh_scene_encoders import (
+    QhLegacySelectedSurfacePointSceneEncoderConfig,
     QhRootMomentsSceneEncoder,
     QhRootMomentsSceneEncoderConfig,
     QhSceneChannel,
@@ -58,6 +59,7 @@ __all__ = [
     "QhCoralValueDecoderConfig",
     "QhDecodedValue",
     "QhLegacyFixedCoralSupport",
+    "QhLegacySelectedSurfacePointSceneEncoderConfig",
     "QhPredeclaredPhysicalCoralSupport",
     "QhRegressionValueDecoder",
     "QhRegressionValueDecoderConfig",

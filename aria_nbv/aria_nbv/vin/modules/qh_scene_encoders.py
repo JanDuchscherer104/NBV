@@ -88,8 +88,10 @@ class QhSelectedSurfacePointSceneEncoderConfig(TargetConfig["QhSelectedSurfacePo
     switch or a second initialization profile.
     """
 
-    kind: Literal["root_moments_plus_selected_surface_points_v1"] = "root_moments_plus_selected_surface_points_v1"
-    """Versioned S1 carrier and scorer ``representation_semantics`` value."""
+    kind: Literal["root_moments_plus_selected_surface_points_identity_start_v1"] = (
+        "root_moments_plus_selected_surface_points_identity_start_v1"
+    )
+    """Active identity-start S1 carrier and ``representation_semantics`` value."""
 
     pixel_stride: int = Field(default=8, gt=0)
     """Deterministic row/column stride applied before canonical depth backprojection."""
@@ -110,8 +112,43 @@ class QhSelectedSurfacePointSceneEncoderConfig(TargetConfig["QhSelectedSurfacePo
         return QhSelectedSurfacePointSceneEncoder
 
 
+class QhLegacySelectedSurfacePointSceneEncoderConfig(TargetConfig["QhSelectedSurfacePointSceneEncoder"]):
+    r"""Read the historical S1 discriminator without granting reuse authority.
+
+    The old ``...selected_surface_points_v1`` label did not say whether the
+    residual projection was random- or identity-initialized. It can therefore
+    reconstruct an archived state dictionary for inspection, but cannot define
+    a new fit, warm start, inference runtime, or scientific bundle. New work
+    uses :class:`QhSelectedSurfacePointSceneEncoderConfig`, whose discriminator
+    makes the zero-residual initialization part of architecture identity.
+    """
+
+    kind: Literal["root_moments_plus_selected_surface_points_v1"] = "root_moments_plus_selected_surface_points_v1"
+    """Ambiguous historical discriminator classified as ``unknown_legacy_v1``."""
+
+    pixel_stride: int = Field(default=8, gt=0)
+    """Historical deterministic raster stride."""
+
+    view_chunk_size: int = Field(default=16, gt=0)
+    """Historical selected-view chunk bound."""
+
+    point_hidden_dim: int = Field(default=64, gt=0)
+    """Historical shared point-feature width."""
+
+    coordinate_scale_m: float = Field(default=2.0, gt=0.0)
+    """Historical current-camera coordinate divisor."""
+
+    @property
+    def target_type(self) -> type["QhSelectedSurfacePointSceneEncoder"]:
+        """Return the runtime class solely for historical inspection."""
+
+        return QhSelectedSurfacePointSceneEncoder
+
+
 QhSceneEncoderConfig: TypeAlias = Annotated[
-    QhRootMomentsSceneEncoderConfig | QhSelectedSurfacePointSceneEncoderConfig,
+    QhRootMomentsSceneEncoderConfig
+    | QhSelectedSurfacePointSceneEncoderConfig
+    | QhLegacySelectedSurfacePointSceneEncoderConfig,
     Field(discriminator="kind"),
 ]
 """Versioned S0/S1 scene-carrier configurations persisted with the scorer."""
@@ -285,7 +322,7 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
 
     def __init__(
         self,
-        config: QhSelectedSurfacePointSceneEncoderConfig,
+        config: QhSelectedSurfacePointSceneEncoderConfig | QhLegacySelectedSurfacePointSceneEncoderConfig,
         *,
         scene_channels: tuple[QhSceneChannel, ...],
         dropout: float,
@@ -514,6 +551,7 @@ class QhSelectedSurfacePointSceneEncoder(nn.Module):
 __all__ = [
     "QhRootMomentsSceneEncoder",
     "QhRootMomentsSceneEncoderConfig",
+    "QhLegacySelectedSurfacePointSceneEncoderConfig",
     "QhSceneChannel",
     "QhSceneEncoderConfig",
     "QhSelectedSurfacePointSceneEncoder",

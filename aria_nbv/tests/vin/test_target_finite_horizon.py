@@ -25,7 +25,10 @@ from aria_nbv.vin.modules.qh_history_encoders import (
     QhCausalTransformerHistoryEncoderConfig,
     QhMeanPoolHistoryEncoderConfig,
 )
-from aria_nbv.vin.modules.qh_scene_encoders import QhSelectedSurfacePointSceneEncoderConfig
+from aria_nbv.vin.modules.qh_scene_encoders import (
+    QhLegacySelectedSurfacePointSceneEncoderConfig,
+    QhSelectedSurfacePointSceneEncoderConfig,
+)
 from aria_nbv.vin.modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
     QhIndependentMlpStateFusionConfig,
@@ -131,7 +134,7 @@ def _s1_scorer(*, view_chunk_size: int = 16) -> TargetFiniteHorizonScorer:
         dropout=0.0,
         max_horizon=4,
         experiment_profile="qh_cfplus_gt_depth_v1",
-        representation_semantics="root_moments_plus_selected_surface_points_v1",
+        representation_semantics="root_moments_plus_selected_surface_points_identity_start_v1",
         scene_encoder=QhSelectedSurfacePointSceneEncoderConfig(
             pixel_stride=1,
             view_chunk_size=view_chunk_size,
@@ -355,6 +358,47 @@ def test_qh_s1_view_chunking_is_numerically_equivalent() -> None:
     torch.testing.assert_close(second.feasibility_logits, first.feasibility_logits, rtol=0.0, atol=1e-7)
 
 
+def test_qh_s1_selected_observation_has_exact_one_step_causal_shift() -> None:
+    """Observation ``j`` may affect states ``t>j`` and no earlier state."""
+
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _s1_scorer()
+    with torch.no_grad():
+        scorer.scene_encoder.point_update.weight.fill_(0.1)
+    baseline = scorer(actor)
+    depth = prefix.depth_m.clone()
+    depth[:, :, 1] += 0.75
+    changed = scorer(replace(actor, selected_observation_prefix=replace(prefix, depth_m=depth)))
+
+    assert torch.equal(changed.conditional_q[:, :2], baseline.conditional_q[:, :2])
+    assert torch.equal(changed.feasibility_logits[:, :2], baseline.feasibility_logits[:, :2])
+    assert not torch.equal(changed.conditional_q[:, 2], baseline.conditional_q[:, 2])
+    assert not torch.equal(changed.feasibility_logits[:, 2], baseline.feasibility_logits[:, 2])
+
+
+def test_qh_s1_candidate_rows_remain_isolated() -> None:
+    """S1 is shared state context and never creates candidate-candidate edges."""
+
+    actor = _cfplus_actor()
+    scorer = _s1_scorer()
+    with torch.no_grad():
+        scorer.scene_encoder.point_update.weight.fill_(0.1)
+    baseline = scorer(actor)
+    changed_pose = actor.candidate_pose_relative_root.tensor().clone()
+    changed_pose[..., 1, -3:] += torch.tensor([0.4, -0.2, 0.1])
+    changed = scorer(replace(actor, candidate_pose_relative_root=PoseTW(changed_pose)))
+    unchanged_rows = torch.ones_like(actor.candidate_mask)
+    unchanged_rows[..., 1] = False
+
+    assert torch.equal(changed.conditional_q[unchanged_rows], baseline.conditional_q[unchanged_rows])
+    assert torch.equal(
+        changed.feasibility_logits[unchanged_rows],
+        baseline.feasibility_logits[unchanged_rows],
+    )
+
+
 def test_qh_s1_ignores_future_payload_values_and_preserves_candidate_equivariance() -> None:
     actor = _cfplus_actor()
     prefix = actor.selected_observation_prefix
@@ -414,9 +458,30 @@ def test_qh_s1_configuration_is_profile_and_semantics_bound() -> None:
         )
     with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
         TargetFiniteHorizonScorerConfig(
-            representation_semantics="root_moments_plus_selected_surface_points_v1",
+            representation_semantics="root_moments_plus_selected_surface_points_identity_start_v1",
             scene_encoder=scene_encoder,
         )
+
+
+def test_qh_legacy_s1_identity_is_readable_but_not_reusable() -> None:
+    """The ambiguous historical discriminator remains inspection-only."""
+
+    config = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        representation_semantics="root_moments_plus_selected_surface_points_v1",
+        scene_encoder=QhLegacySelectedSurfacePointSceneEncoderConfig(
+            pixel_stride=1,
+            point_hidden_dim=16,
+        ),
+    )
+    scorer = config.setup_target()
+
+    scorer.validate_artifact_state(require_publishable=False)
+    with pytest.raises(ValueError, match="inspection-only"):
+        scorer.validate_artifact_state(require_publishable=True)
 
 
 def test_qh_cf0_rejects_any_selected_observation_carrier() -> None:

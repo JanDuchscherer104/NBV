@@ -32,6 +32,7 @@ def _s1_encoder(
     *,
     pixel_stride: int = 1,
     view_chunk_size: int = 16,
+    point_hidden_dim: int = 8,
 ) -> QhSelectedSurfacePointSceneEncoder:
     """Return a deterministic fixed-width S1 selected-surface encoder."""
 
@@ -39,7 +40,7 @@ def _s1_encoder(
     encoder = QhSelectedSurfacePointSceneEncoderConfig(
         pixel_stride=pixel_stride,
         view_chunk_size=view_chunk_size,
-        point_hidden_dim=8,
+        point_hidden_dim=point_hidden_dim,
         coordinate_scale_m=2.0,
     ).setup_target(
         scene_channels=("occ_pr", "occ_input", "free_input", "counts", "cent_pr"),
@@ -194,6 +195,117 @@ def test_qh_s1_support_features_bind_sampled_capacity() -> None:
     assert diagnostics[0, 0].tolist() == [0.0, 0.0, 0.0]
     assert diagnostics[0, 1].tolist() == [1.0, 1.0, 1.0]
     assert diagnostics[0, 2].tolist() == [1.0, 1.0, 1.0]
+
+
+def test_qh_s1_support_features_separate_pixel_and_view_support() -> None:
+    """Pixel density and observation coverage remain distinct estimands."""
+
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    valid = prefix.valid_mask.clone()
+    valid[0, 2, 0, 0] = False
+    valid[0, 2, 1] = False
+    changed = replace(actor, selected_observation_prefix=replace(prefix, valid_mask=valid))
+    encoder = _s1_encoder(pixel_stride=1)
+    pooled_inputs: list[torch.Tensor] = []
+    handle = encoder.point_update.register_forward_pre_hook(
+        lambda _module, args: pooled_inputs.append(args[0].detach().clone())
+    )
+
+    encoder(changed, current_pose_relative_root=_identity_current_pose(changed))
+    handle.remove()
+
+    diagnostics = pooled_inputs[0][:, -3:].reshape(*actor.step_mask.shape, 3)
+    assert diagnostics[0, 2].tolist() == [1.0, 0.25, 0.5]
+
+
+def test_qh_s1_global_replication_preserves_density_weighted_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replicating all points and sampled capacity leaves S1 unchanged."""
+
+    actor = _cfplus_actor()
+    encoder = _s1_encoder(pixel_stride=1, point_hidden_dim=3)
+    encoder.point_encoder = torch.nn.Identity()
+    pooled_inputs: list[torch.Tensor] = []
+
+    def fake_backproject(depths, mask_valid, camera, pose_world_camera, *, stride):
+        del mask_valid, camera, pose_world_camera, stride
+        points = torch.tensor(
+            [[0.25, 0.5, 1.0], [1.0, -0.5, 0.75]],
+            dtype=torch.float32,
+            device=depths.device,
+        )
+        return points.unsqueeze(0).expand(depths.shape[0], -1, -1).clone(), torch.full(
+            (depths.shape[0],), 2, dtype=torch.int64, device=depths.device
+        )
+
+    monkeypatch.setattr(scene_encoders, "backproject_depths_camera_tw_batch", fake_backproject)
+    handle = encoder.point_update.register_forward_pre_hook(
+        lambda _module, args: pooled_inputs.append(args[0].detach().clone())
+    )
+    encoder(actor, current_pose_relative_root=_identity_current_pose(actor))
+    handle.remove()
+
+    pooled = pooled_inputs[0].reshape(*actor.step_mask.shape, -1)
+    assert torch.equal(pooled[0, 1], pooled[0, 2])
+
+
+def test_qh_s1_partial_duplication_changes_density_weighted_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplicating only one surface region changes its empirical measure."""
+
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    encoder = _s1_encoder(pixel_stride=1)
+    pooled_inputs: list[torch.Tensor] = []
+
+    def fake_backproject(depths, mask_valid, camera, pose_world_camera, *, stride):
+        del mask_valid, camera, pose_world_camera, stride
+        values = depths[:, 0, 0].float()
+        points = torch.stack((values, torch.zeros_like(values), torch.ones_like(values)), dim=-1).unsqueeze(1)
+        return points, torch.ones(depths.shape[0], dtype=torch.int64, device=depths.device)
+
+    monkeypatch.setattr(scene_encoders, "backproject_depths_camera_tw_batch", fake_backproject)
+    handle = encoder.point_update.register_forward_pre_hook(
+        lambda _module, args: pooled_inputs.append(args[0].detach().clone())
+    )
+    encoder(actor, current_pose_relative_root=_identity_current_pose(actor))
+    duplicated_depth = prefix.depth_m.clone()
+    duplicated_depth[0, 2, 1] = duplicated_depth[0, 2, 0]
+    duplicated = replace(actor, selected_observation_prefix=replace(prefix, depth_m=duplicated_depth))
+    encoder(duplicated, current_pose_relative_root=_identity_current_pose(duplicated))
+    handle.remove()
+
+    baseline = pooled_inputs[0].reshape(*actor.step_mask.shape, -1)[0, 2]
+    duplicated_summary = pooled_inputs[1].reshape(*actor.step_mask.shape, -1)[0, 2]
+    assert not torch.equal(duplicated_summary, baseline)
+
+
+def test_qh_s1_stride_is_representation_identity() -> None:
+    """Changing the deterministic pixel lattice changes the point-set input."""
+
+    actor = _cfplus_actor()
+    pooled_inputs: list[torch.Tensor] = []
+    encoders = (_s1_encoder(pixel_stride=1), _s1_encoder(pixel_stride=2))
+    handles = [
+        encoder.point_update.register_forward_pre_hook(
+            lambda _module, args: pooled_inputs.append(args[0].detach().clone())
+        )
+        for encoder in encoders
+    ]
+
+    for encoder in encoders:
+        encoder(actor, current_pose_relative_root=_identity_current_pose(actor))
+    for handle in handles:
+        handle.remove()
+
+    first = pooled_inputs[0].reshape(*actor.step_mask.shape, -1)[0, 2]
+    second = pooled_inputs[1].reshape(*actor.step_mask.shape, -1)[0, 2]
+    assert not torch.equal(second, first)
 
 
 def test_qh_s1_point_pool_is_permutation_invariant(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -125,6 +125,7 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
     representation_semantics: Literal[
         "root_moments_v1",
+        "root_moments_plus_selected_surface_points_identity_start_v1",
         "root_moments_plus_selected_surface_points_v1",
     ] = "root_moments_v1"
     """Versioned scene-token meaning bound into scorer and artifact identity."""
@@ -134,9 +135,12 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
 
     The omitted alias instantiates the parameter-free ``root_moments_v1``
     control without changing its serialized config hash or state dictionary.
-    ``root_moments_plus_selected_surface_points_v1`` is privileged S1: it
+    ``root_moments_plus_selected_surface_points_identity_start_v1`` is the
+    active privileged S1 carrier: it
     validates and consumes the causal CF-GT selected-depth prefix while
-    returning the same scene width as H0.
+    returning the same scene width as H0. The shorter historical discriminator
+    is accepted only to inspect ambiguous legacy configurations and cannot
+    enter a new fit, warm start, inference runtime, or bundle.
     """
 
     history_encoder: QhHistoryEncoderConfig | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -371,8 +375,8 @@ class TargetFiniteHorizonScorer(nn.Module):
         if self.scene_encoder.output_dim != scene_dim:
             raise ValueError("Q_H scene encoder must preserve the configured root-moment width.")
 
-    def validate_value_decoder_state(self, *, require_publishable: bool = False) -> None:
-        """Validate non-learned decoder state against scorer configuration.
+    def validate_artifact_state(self, *, require_publishable: bool = False) -> None:
+        """Validate non-learned architecture state against scorer configuration.
 
         Learned weights may vary while the scorer configuration stays fixed,
         but CORAL edges and representatives are experiment identity: they
@@ -382,6 +386,13 @@ class TargetFiniteHorizonScorer(nn.Module):
         direct regression as the no-extra-state baseline.
         """
 
+        if require_publishable and self.config.representation_semantics == (
+            "root_moments_plus_selected_surface_points_v1"
+        ):
+            raise ValueError(
+                "Legacy S1 scene-carrier identity is inspection-only and cannot enter training, warm start, "
+                "inference, or a scientific bundle."
+            )
         if isinstance(self.value_decoder, QhCoralValueDecoder):
             self.value_decoder.validate_configured_support()
             if require_publishable:
