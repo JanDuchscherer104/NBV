@@ -57,7 +57,7 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_datamodule.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/lightning/qh_q2_certification.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
   gate: [populated held-out exact-Q2 receipt, supported H>2 targets, compatible checkpoint, frozen state protocol, and independent held-out oracle re-evaluation],
-)[The scalar requested-horizon A0/A1 controls, hard-masked selected-transition Double-Q learner, feasibility auxiliary, and bounded stratified exact-Q2 certification surface are implemented. A1 remains the default; a population receipt, task-sufficient dynamic state, and comparative policy evidence remain unavailable.]
+)[The scalar requested-horizon A0/A1 controls, dense-Q1 plus selected-recursion Double-Q learner, feasibility auxiliary, manifest-bound trained-horizon support, and bounded stratified exact-Q2 certification surface are implemented. A1 remains the default; a qualifying population receipt, task-sufficient dynamic state, and comparative policy evidence remain unavailable.]
 
 The finite-candidate value model decodes actions only over valid candidate rows:
 
@@ -83,15 +83,15 @@ and the recursive target is
 
 The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining recursion is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$, and the executable learner rejects a successor whose factual horizon is not exactly $h-1$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
 
-The clearest initial schedule is staged backward induction with one shared horizon-conditioned network:
+The executable joint objective uses one shared horizon-conditioned network:
 
-1. fit $Q_1$ from dense one-step labels for every candidate admitted by `q_train_mask`;
-2. freeze or snapshot the lower-horizon target path;
-3. fit $Q_2$ from selected transitions and validate it against the exact dense-successor target;
-4. continue through $Q_H$, always requesting $h-1$ from the successor target path;
-5. optionally fine-tune all horizons jointly after the staged model passes per-horizon regression and ranking gates.
+1. query $h=1$ for every realized state and fit every finite hard-valid candidate reward;
+2. query the factual scalar horizon for selected transitions with $h>1$;
+3. select the successor action with the online scorer at factual $h-1$ and evaluate it with the delayed target scorer;
+4. average candidate losses within each Q1 state, state losses within each horizon, and non-empty horizon means uniformly;
+5. persist the realized per-horizon state and candidate counts, and reject online queries absent from that manifest-bound support.
 
-This schedule preserves one inference interface and shared encoders while making target lineage explicit. Fixed-H networks and separate per-horizon heads are matched ablations, not alternate runtime contracts.
+This objective preserves one inference interface and shared encoders while making target lineage and weighting explicit. Staged backward induction, fixed-H networks, and separate per-horizon heads remain matched ablations, not alternate runtime contracts.
 
 For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
 
@@ -149,7 +149,7 @@ Double Q addresses one maximization bias. It does not create missing successor t
 
 === Horizon-balanced replay and evaluation
 
-Dense one-step rows vastly outnumber selected-action targets at longer horizons. An unweighted row mean can therefore optimize the myopic task while obscuring longer-horizon failure. The implemented learning contract freezes this aggregation as `uniform-admitted-selected-row-huber-mean-v1`, binds it with the maximum horizon, replay candidate/rollout configuration identities, behavior-policy vocabulary, reward/return semantics, and discount, and rejects cross-stage mismatches. Checkpoint admission binds the actor-state identity separately. Alternative sampling or weighting schemes must receive new versioned learning identities. Candidate alternatives are:
+Dense one-step rows vastly outnumber selected-action targets at longer horizons. An unweighted row mean can therefore optimize the myopic task while obscuring longer-horizon failure. The implemented learning contract freezes candidate-within-state, state-within-horizon, equal-horizon aggregation as `uniform-horizon-state-balanced-dense-q1-selected-recursion-v2`. It binds this rule with the maximum horizon, replay candidate/rollout configuration identities, behavior-policy vocabulary, reward/return semantics, and discount, and rejects cross-stage mismatches. The bundle additionally records realized state and candidate counts for every trained horizon; syntactically valid horizons without positive training support fail closed at online inference. Checkpoint admission binds the actor-state identity separately. Alternative sampling or weighting schemes require new versioned learning identities. Candidate alternatives are:
 
 - a horizon-stratified sampler;
 - per-horizon loss weights $w_h$;

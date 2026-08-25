@@ -85,7 +85,7 @@ and, for $h>1$,
 
 where the lower-horizon prediction is detached, frozen, or supplied by a delayed target copy. The essential structural rule for this candidate is $Q_h arrow.l Q_(h-1)$: no horizon value bootstraps from itself. Fixed-horizon TD motivates this recursion and shows that horizon-indexed values can share parameters and be updated in parallel, although a staged $h=1$ to $H$ schedule remains the clearest initial control @FixedHorizonTD-deAsis2020.
 
-The stored evidence gives a particularly strong base case. Every candidate admitted by `q_train_mask` can supervise continuous one-step root-normalized gain. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
+The stored evidence gives a particularly strong base case. The executable objective queries $h=1$ for every realized state and supervises every finite hard-valid candidate with continuous one-step root-normalized gain. Candidate losses are averaged within state before state means are averaged within horizon; non-empty horizons then receive equal weight. Selected-transition recursion is disjoint and begins at $h>1$. This prevents large candidate tables and abundant Q1 labels from silently dominating longer horizons. The bundle records the realized state/candidate support by horizon and online inference rejects a requested horizon absent from that support. If a selected first action has a successor table with dense one-step labels, then the exact finite-support H=2 target is
 
 #eqs.rl.qh_exact_q2_target
 
