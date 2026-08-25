@@ -434,7 +434,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.3" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytorch-lightning", specifier = "==2.6.0" },
-    { name = "pytorch3d", git = "https://github.com/facebookresearch/pytorch3d.git?rev=main" },
+    { name = "pytorch3d", git = "https://github.com/facebookresearch/pytorch3d.git?rev=b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881" },
     { name = "pytransform3d", specifier = "==3.14.3" },
     { name = "pyyaml", marker = "sys_platform == 'linux'", specifier = ">=6.0" },
     { name = "rerun-sdk", specifier = "==0.26.2" },
@@ -4412,7 +4412,7 @@ wheels = [
 [[package]]
 name = "pytorch3d"
 version = "0.7.9"
-source = { git = "https://github.com/facebookresearch/pytorch3d.git?rev=main#b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881" }
+source = { git = "https://github.com/facebookresearch/pytorch3d.git?rev=b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881#b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881" }
 dependencies = [
     { name = "iopath" },
 ]
