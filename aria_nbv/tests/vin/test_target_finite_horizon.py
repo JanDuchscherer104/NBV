@@ -115,7 +115,7 @@ def test_qh_scorer_output_matches_actor_candidate_axes_and_is_deterministic() ->
 
 
 def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() -> None:
-    """Lock extraction while including the manifest-bound horizon semantics."""
+    """Lock extraction within float32 backend rounding and current identity."""
 
     config = TargetFiniteHorizonScorerConfig(hidden_dim=32, dropout=0.0, max_horizon=4)
     scorer = _scorer()
@@ -137,7 +137,7 @@ def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() ->
             ]
         ),
         rtol=0.0,
-        atol=1e-7,
+        atol=5e-7,
     )
     torch.testing.assert_close(
         output.feasibility_logits,
@@ -151,7 +151,7 @@ def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() ->
             ]
         ),
         rtol=0.0,
-        atol=1e-7,
+        atol=5e-7,
     )
 
 
