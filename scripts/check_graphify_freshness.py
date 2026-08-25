@@ -588,9 +588,10 @@ def _semantic_receipt_sources(
     if payload.get("schema_version") != 1:
         raise ValueError("Graphify reconciliation receipt is invalid")
     receipt_head = payload.get("head")
-    if not isinstance(receipt_head, str):
+    if not isinstance(receipt_head, str) or not _OID.fullmatch(receipt_head):
         raise ValueError("Graphify reconciliation receipt is invalid")
-    _commit_oid(root, receipt_head, "Graphify reconciliation receipt revision")
+    if (root / ".git").exists():
+        _commit_oid(root, receipt_head, "Graphify reconciliation receipt revision")
     hashes = payload.get("semantic_source_hashes")
     drift = payload.get("projection_semantic_drift")
     nodes = payload.get("semantic_node_count")
