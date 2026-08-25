@@ -36,6 +36,15 @@ contract: invalidity excludes an action; it is not a low or zero return.
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24, docs/literature/tex-src/arXiv-PB-NBV/jzz_2025_ral_resub.tex:55-70 (finite candidate proposal and score-based selection)
 // - @InvalidActionMasking-huang2022 -> docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:52-56, docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:66-71, docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:150-174 (state-dependent valid actions and policy-gradient scope)
 
+The following taxonomy separates the support roles implied by finite
+candidate selection, state-dependent action masking, and fixed-batch learning
+@PB-NBV-jia2025 @InvalidActionMasking-huang2022 @BCQ-fujimoto2019.
+
+// evidence:
+// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24 (candidate proposal and selection stages)
+// - @InvalidActionMasking-huang2022 -> docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:66-71, docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:88-91 (state-dependent valid-action sets and formal scope)
+// - @BCQ-fujimoto2019 -> docs/literature/tex-src/arXiv-BCQ/example_paper.tex:134-163, docs/literature/tex-src/arXiv-BCQ/example_paper.tex:406-426 (fixed-batch support and extrapolation error)
+
 #figure(
   text(size: 8.2pt, table(
     columns: (0.72fr, 1.1fr, 2.25fr),
@@ -50,13 +59,8 @@ contract: invalidity excludes an action; it is not a low or zero return.
     [$#symb.rl.source_role$], [provenance], [Evidence is typed as actor-visible, supervision-only, or oracle evaluation.],
     bottomrule(),
   )),
-  caption: [Support-role taxonomy for finite-candidate value learning. The separation follows finite candidate selection, state-dependent action masking, and fixed-batch support concerns @PB-NBV-jia2025 @InvalidActionMasking-huang2022 @BCQ-fujimoto2019.],
+  caption: [Support-role taxonomy for finite-candidate value learning. The separation follows finite candidate selection, state-dependent action masking, and fixed-batch support concerns.],
 ) <tab:thesis-mask-taxonomy>
-
-// evidence:
-// - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24 (candidate proposal and selection stages)
-// - @InvalidActionMasking-huang2022 -> docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:66-71, docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:88-91 (state-dependent valid-action sets and formal scope)
-// - @BCQ-fujimoto2019 -> docs/literature/tex-src/arXiv-BCQ/example_paper.tex:134-163, docs/literature/tex-src/arXiv-BCQ/example_paper.tex:406-426 (fixed-batch support and extrapolation error)
 
 These roles must remain separate in both training and evaluation. In particular,
 multiplying a signed conditional value by a predicted validity probability can

@@ -39,15 +39,20 @@ untrained horizon: a result at $h=2$ is not evidence for $h>2$.
 // - @UVFA-schaul2015 -> docs/literature/pdf/UVFA.pdf#page=1-2 (single value approximator conditioned on an additional goal variable)
 // - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:164-164, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290 (shared representations and fixed-horizon recursion)
 
-#figure(
-  image("../../figures/qh_evidence_support_lattice.pdf", width: 90%),
-  caption: [Original conceptual lattice for exact finite-horizon supervision. It combines fixed-horizon successor recursion with finite-batch and hard-action support restrictions @FixedHorizonTD-deAsis2020 @BCQ-fujimoto2019 @InvalidActionMasking-huang2022. Dense one-step labels alone do not certify longer-horizon targets; the diagram reports no empirical result.],
-) <fig:qh-evidence-support-lattice>
+The following conceptual lattice combines fixed-horizon recursion with
+the factual support restrictions required by hard action masks and fixed-batch
+learning @FixedHorizonTD-deAsis2020 @BCQ-fujimoto2019
+@InvalidActionMasking-huang2022.
 
 // evidence:
 // - @FixedHorizonTD-deAsis2020 -> docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:245-290, docs/literature/tex-src/arXiv-Fixed-Horizon-TD/AAAI-DeasisK.9337.tex:331-339 (horizon recursion and fixed-horizon Q target)
 // - @BCQ-fujimoto2019 -> docs/literature/tex-src/arXiv-BCQ/example_paper.tex:134-163, docs/literature/tex-src/arXiv-BCQ/example_paper.tex:406-426 (batch support and unsupported-action extrapolation)
 // - @InvalidActionMasking-huang2022 -> docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:66-71, docs/literature/tex-src/arXiv-Invalid-Action-Masking/formatting-instructions-latex.tex:150-174 (state-dependent admissible actions and masking scope)
+
+#figure(
+  image("../../figures/qh_evidence_support_lattice.pdf", width: 90%),
+  caption: [Original conceptual lattice for exact finite-horizon supervision. It combines fixed-horizon successor recursion with finite-batch and hard-action support restrictions. Dense one-step labels alone do not certify longer-horizon targets; the diagram reports no empirical result.],
+) <fig:qh-evidence-support-lattice>
 
 Offline value learning adds two independent cautions. Double DQN decouples
 action selection from target evaluation to reduce maximization bias

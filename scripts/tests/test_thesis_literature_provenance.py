@@ -330,12 +330,23 @@ def _has_active_source_line(path: Path, start: int, end: int) -> bool:
     return False
 
 
-def test_each_foundations_paragraph_has_adjacent_resolvable_source_evidence() -> None:
+def test_each_foundations_claim_or_attributed_figure_has_source_evidence() -> None:
     catalog = _literature_catalog()
     for path in FOUNDATIONS_LITERATURE:
         paragraphs = _paragraphs_with_adjacent_evidence(path)
-        for paragraph, evidence in paragraphs:
+        for index, (paragraph, evidence) in enumerate(paragraphs):
             cited = _paragraph_citations(paragraph, catalog)
+            if paragraph.startswith("#figure(") and not cited:
+                assert not evidence, (
+                    f"figure evidence belongs on its preceding attribution: "
+                    f"{path}: {paragraph}"
+                )
+                assert index > 0 and paragraphs[index - 1][1], (
+                    f"figure lacks an immediately preceding sourced attribution: "
+                    f"{path}: {paragraph}"
+                )
+                assert "caption:" in paragraph
+                continue
             entries = _evidence_entries(evidence)
             evidence_keys = {key for key, _ in entries}
             assert cited, (

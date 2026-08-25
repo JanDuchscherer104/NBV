@@ -28,10 +28,10 @@ quality.
 // - @Hestia-lu2026 -> docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:30-58, docs/literature/tex-src/arXiv-Hestia/sec/3_method.tex:70-93 (voxel-face visibility state and face-coverage reward)
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (Fisher information and active-view information gain)
 
-#figure(
-  image("../../figures/nbv_design_space_axes.pdf", width: 100%),
-  caption: [Original conceptual map of the NBV design space synthesized from finite-candidate, coverage, uncertainty, quality-driven, and target-aware formulations @PB-NBV-jia2025 @SCONE-guedon2022 @FisherRF-jiang2024 @VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026. The diagram is a taxonomy, not an empirical result.],
-) <fig:nbv-design-space-axes>
+The following conceptual figure synthesizes the design axes established by
+finite-candidate, coverage, uncertainty, quality-driven, and target-aware NBV
+formulations @PB-NBV-jia2025 @SCONE-guedon2022 @FisherRF-jiang2024
+@VIN-NBV-frahm2025 @ObjectCentricNBV-jeong2026.
 
 // evidence:
 // - @PB-NBV-jia2025 -> docs/literature/tex-src/arXiv-PB-NBV/sections/related.tex:5-24 (finite-candidate NBV decomposition)
@@ -39,6 +39,11 @@ quality.
 // - @FisherRF-jiang2024 -> docs/literature/tex-src/arXiv-FisherRF/sec/method.tex:4-19 (information utility)
 // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:18-20, docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:36-44 (sampled candidate loop and reconstruction-improvement target)
 // - @ObjectCentricNBV-jeong2026 -> docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:123-139, docs/literature/tex-src/arXiv-Instance-NBV/ver3_rpm/3_method_ver3_rpm.tex:249-258 (target-aware information gain and object-confidence gate)
+
+#figure(
+  image("../../figures/nbv_design_space_axes.pdf", width: 100%),
+  caption: [Original conceptual map of the NBV design space synthesized from finite-candidate, coverage, uncertainty, quality-driven, and target-aware formulations. The diagram is a taxonomy, not an empirical result.],
+) <fig:nbv-design-space-axes>
 
 Direct quality objectives evaluate the reconstruction itself. VIN-NBV predicts
 Relative Reconstruction Improvement for sampled query cameras and greedily
