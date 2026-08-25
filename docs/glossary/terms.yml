@@ -861,13 +861,19 @@
     online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision
     and bootstrap, and select only hard-valid candidates. A `dense_valid` store proves exact
     Q-label/action-mask equality on every realized state; historical `legacy_unspecified`
-    stores promise only subset support. Train, validation, and test share learning semantics
-    but retain separate candidate-generator, rollout-recipe, and behavior-policy population
-    provenance in the bundle. Exact-Q2 certification separates injected exact-table implementation
-    parity from a bounded, stratified held-out measurement of learned-recursion error against
-    factual dense successor rewards. Its receipt binds population, lineage, support, tolerances,
-    scorer configuration, and CORAL saturation where applicable. Unsupported census chains
-    remain in the coverage denominator. Learned-recursion agreement and independently evaluated
+    stores promise only subset support. The learner fits all hard-valid candidates at h=1,
+    selected factual transitions at h>1, averages candidates within state and states within
+    horizon, and weights non-empty horizons equally. The bundle binds realized training support
+    by horizon and inference rejects unsupported queries. Train, validation, and test share
+    learning semantics but retain separate candidate-generator, rollout-recipe, and behavior-policy
+    population provenance in the bundle. Exact-Q2 certification separates injected exact-table
+    implementation parity from a bounded, stratified held-out measurement of learned-recursion
+    error against factual dense successor rewards. Its V2 receipt binds population, lineage,
+    support, tolerances, scorer configuration, and CORAL saturation where applicable. It treats
+    the ordered-store-manifest digest and scene identity as the independent unit, requires
+    at least five supported units and a pass in every selected unit, and keeps pooled row
+    metrics diagnostic; unsupported census chains remain in the coverage denominator and V1
+    receipts are inspection-only. Learned-recursion agreement and independently evaluated
     positive held-out headroom jointly gate longer-horizon claims; the persisted terminal-step
     contrast remains diagnostic only. Learned-only feasibility, candidate-to-candidate interaction,
     and P(valid) times Q ranking are not thesis-core behavior.'
