@@ -8,7 +8,7 @@ distributed admission, one optimizer transaction, metrics, and target sync.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import Any
 
 import pytorch_lightning as pl
@@ -161,6 +161,61 @@ class _QhLearningComponents:
     target_output: QhScoreOutput
 
 
+def _duplicate_actor_batch(actor: QhActorTensors) -> QhActorTensors:
+    r"""Duplicate a batched actor for two atomic scalar-horizon queries.
+
+    The public scorer contract deliberately accepts one scalar horizon per
+    actor state. Dense ``h=1`` supervision and factual recursive supervision
+    nevertheless need two horizon queries for the same batch. Lightning keeps
+    that implementation detail private by duplicating the complete actor along
+    its leading batch axis and issuing one scorer call. Every tensor-shaped
+    leaf in the actor carrier owns that leading batch axis; immutable scalar
+    provenance such as the selected-observation protocol is shared unchanged.
+
+    This batching preserves the scalar estimand and scorer interface while
+    avoiding a second model transaction, which is important for DDP buffer
+    semantics and for modules whose forward pass records state.
+    """
+
+    duplicated = _duplicate_batched_carrier(actor)
+    if not isinstance(duplicated, QhActorTensors):
+        raise TypeError("Actor duplication must preserve QhActorTensors.")
+    return duplicated
+
+
+def _duplicate_batched_carrier(value: Any) -> Any:
+    """Recursively duplicate tensor-shaped dataclass leaves on batch axis zero."""
+
+    if value is None or isinstance(value, (str, bytes, int, float, bool)):
+        return value
+    if is_dataclass(value) and not isinstance(value, type):
+        return replace(
+            value,
+            **{field.name: _duplicate_batched_carrier(getattr(value, field.name)) for field in fields(value)},
+        )
+    try:
+        return torch.cat((value, value), dim=0)
+    except (TypeError, RuntimeError) as error:
+        raise TypeError(
+            f"Unsupported actor carrier leaf {type(value).__qualname__}; "
+            "expected a dataclass, immutable scalar, or tensor-shaped value."
+        ) from error
+
+
+def _slice_score_output(output: QhScoreOutput, rows: slice) -> QhScoreOutput:
+    """Slice batched score rows while retaining decoder-global CORAL support."""
+
+    auxiliary = output.value_auxiliary
+    if auxiliary is not None:
+        auxiliary = replace(auxiliary, logits=auxiliary.logits[rows])
+    return replace(
+        output,
+        conditional_q=output.conditional_q[rows],
+        feasibility_logits=output.feasibility_logits[rows],
+        value_auxiliary=auxiliary,
+    )
+
+
 class QhLightningModule(pl.LightningModule):
     r"""Optimize selected finite-horizon transitions with Double-Q targets.
 
@@ -191,7 +246,13 @@ class QhLightningModule(pl.LightningModule):
     """``Tensor["", float64]`` local admitted-loss sum for the current epoch."""
 
     training_row_count: Tensor
-    """``Tensor["", int64]`` local admitted-row count for the current epoch."""
+    """``Tensor["", int64]`` local admitted state--horizon contributions this epoch.
+
+    A realized state can contribute once to the explicit dense ``h=1``
+    objective and once to its factual recursive ``h>1`` objective. This legacy
+    scalar therefore equals ``training_horizon_state_count.sum()``; it is not a
+    count of unique physical states or candidate labels.
+    """
 
     validation_loss_sum: Tensor
     """``Tensor["", float64]`` sum of non-empty validation horizon means."""
@@ -597,9 +658,11 @@ class QhLightningModule(pl.LightningModule):
         batch: QhBatch,
         *,
         minimum_horizon: int = 1,
+        online_output: QhScoreOutput | None = None,
     ) -> tuple[Tensor, Tensor, Tensor, QhScoreOutput, QhScoreOutput]:
         admitted = self._fitted_q_admission_mask(batch) & batch.actor.horizon_remaining.ge(minimum_horizon)
-        online_output = self(batch.actor)
+        if online_output is None:
+            online_output = self(batch.actor)
         with torch.no_grad():
             target_output = self._score(
                 self.target_scorer,
@@ -644,19 +707,25 @@ class QhLightningModule(pl.LightningModule):
         return losses, targets.detach(), admitted, online_output, target_output
 
     def _learning_components(self, batch: QhBatch) -> _QhLearningComponents:
-        """Materialize the two disjoint supervision domains exactly once."""
+        """Materialize both scalar-horizon supervision domains in one forward."""
 
         dense_support = self._dense_q1_admission_mask(batch)
-        requested_horizon = torch.where(
+        dense_horizon = torch.where(
             batch.actor.step_mask,
             torch.ones_like(batch.actor.horizon_remaining),
             torch.zeros_like(batch.actor.horizon_remaining),
         )
-        dense_output = self._score(
+        batch_size = batch.actor.step_mask.shape[0]
+        joint_output = self._score(
             self.online_scorer,
-            batch.actor,
-            requested_horizon=requested_horizon,
+            _duplicate_actor_batch(batch.actor),
+            requested_horizon=torch.cat(
+                (dense_horizon, batch.actor.horizon_remaining),
+                dim=0,
+            ),
         )
+        dense_output = _slice_score_output(joint_output, slice(0, batch_size))
+        recursive_output = _slice_score_output(joint_output, slice(batch_size, None))
         dense_targets = batch.supervision.candidate_reward.float().detach()
         dense_losses = self._dense_q1_losses(
             dense_output,
@@ -664,7 +733,11 @@ class QhLightningModule(pl.LightningModule):
             support=dense_support,
         )
         recursive_losses, recursive_targets, recursive_support, recursive_output, target_output = (
-            self._fitted_q_components(batch, minimum_horizon=2)
+            self._fitted_q_components(
+                batch,
+                minimum_horizon=2,
+                online_output=recursive_output,
+            )
         )
         return _QhLearningComponents(
             dense_losses=dense_losses,

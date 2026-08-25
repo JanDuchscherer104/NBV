@@ -1027,7 +1027,7 @@ def test_unsupported_recursive_backup_still_trains_dense_q1(
 
     assert result is not None
     assert torch.isfinite(result)
-    assert module.online_scorer.calls == 2
+    assert module.online_scorer.calls == 1
     assert module.target_scorer.calls == 1
     assert module.optimizer_updates.item() == 1
     assert logged["train/unsupported_backup_rows"].item() == 1
