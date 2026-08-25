@@ -49,6 +49,7 @@
 {"id":"scaffold-cleanup","task":"Prune or simplify scaffold skills, metadata, or references while preserving behavior."}
 {"id":"lrz-failed-job-container-start","task":"Route a failed LRZ job or container-start failure to the exact troubleshooting owner."}
 {"id":"academic-writing-related-work-synthesis","task":"Develop a bounded Related Work argument from the repository's literature sources, retaining source locators and limitations for its eventual thesis placement."}
+{"id":"literature-synthesis-source-screening","task":"Screen the available literature for a narrow ARIA-NBV research question, compare only compatible evaluation settings, and prepare the selected-source packet for a later thesis argument."}
 {"id":"typst-authoring-layout-repair","task":"Repair the clipped table in the active thesis section and verify the affected rendered page without changing its scientific claim."}
 {"id":"scientific-review-frozen-claim","task":"Assess the frozen claim packet's evidence and wording for citation support, research-question alignment, and overclaiming; return findings only."}
 {"id":"thesis-claim-revision","task":"Revise the claim-bearing paragraph in the active thesis source so its literature support and limitation are accurate, then compile and inspect the affected page."}

@@ -30,8 +30,12 @@ realization or certify scientific validity.
    [`HM scientific-practice overlay`](references/hm-scientific-practice.md).
    For a candidate that may continue into realization, read the shared
    [academic work phase transition](../README.md#academic-work-phase-transition).
-3. For Related Work or a concept-centred comparison, read
-   [`literature-synthesis.md`](references/literature-synthesis.md). Use
+3. For source discovery, screening, or a comparison matrix, start with
+   [`literature-synthesis`](../literature-synthesis/SKILL.md). For Related Work
+   or a concept-centred comparison of already-screened sources, read
+   [`literature-synthesis.md`](references/literature-synthesis.md). When a
+   material source or conclusion changes, read
+   [`change-impact.md`](references/change-impact.md). Use
    [`upstream-matt-writing.md`](references/upstream-matt-writing.md) only for
    applicable scratch, shape, or beat mechanics.
 4. Calibrate every substantive claim to its evidence. Turn unsupported strength

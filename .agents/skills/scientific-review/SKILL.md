@@ -20,6 +20,8 @@ literature, bibliography, or Typst sources.
      freshness: academic-writing's
      [`empirical-reporting-and-reproducibility.md`](../academic-writing/references/empirical-reporting-and-reproducibility.md)
      and [`empirical-validity.md`](references/empirical-validity.md);
+   - computational model, policy, rollout, or reported-result evidence: the
+     [`computational evidence profile`](references/review-profiles.md#computational-evidence);
    - claim/citation entailment, Related Work, contribution scope, or argument
      coherence: academic-writing's
      [`claim-citation discipline`](../academic-writing/references/claim-citation-discipline.md)
@@ -31,6 +33,8 @@ literature, bibliography, or Typst sources.
      plus [`equations.typ`](../../../docs/typst/shared/equations.typ),
      [`symbols.typ`](../../../docs/typst/shared/symbols.typ), or Typst's
      [`notation policy`](../typst-authoring/references/aria-nbv-notation.md).
+   - a derived figure, table, or displayed quantity: the
+     [`display provenance profile`](references/review-profiles.md#display-provenance).
 3. Inspect exact evidence owners and report each finding with severity, locator,
    rationale, repair action, gate, and review independence. Separate evidence
    from inference.

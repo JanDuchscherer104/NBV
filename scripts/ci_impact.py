@@ -81,6 +81,7 @@ def select_families(paths: list[str]) -> set[str]:
                 (
                     ".agents/skills/typst-authoring/",
                     ".agents/skills/academic-writing/",
+                    ".agents/skills/literature-synthesis/",
                     ".agents/skills/scientific-review/",
                 )
             )
@@ -95,6 +96,7 @@ def select_families(paths: list[str]) -> set[str]:
             (
                 ".agents/skills/typst-authoring/",
                 ".agents/skills/academic-writing/",
+                ".agents/skills/literature-synthesis/",
                 ".agents/skills/scientific-review/",
             )
         ):
