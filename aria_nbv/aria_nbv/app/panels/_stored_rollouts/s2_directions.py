@@ -243,7 +243,11 @@ def render_s2_direction_histograms(session_handle: Any, *, key_prefix: str) -> N
     payload = session_handle.s2_direction_histogram(azimuth_bins=azimuth_bins, elevation_bins=elevation_bins)
     movement_count = int(payload["movement_count"])
     view_count = int(payload["view_direction_count"])
+    issues = pd.DataFrame(payload["issues"])
     if movement_count == 0 and view_count == 0:
+        if not issues.empty:
+            st.warning("All rollout paths were excluded because their target frame or factual path was invalid.")
+            st.dataframe(issues, hide_index=True, width="stretch")
         st.info("No finite factual selected-action directions were available in the selected store.")
         return
     st.caption(
@@ -396,7 +400,6 @@ def render_s2_direction_histograms(session_handle: Any, *, key_prefix: str) -> N
                 theory=theory,
             ),
         )
-    issues = pd.DataFrame(payload["issues"])
     if not issues.empty:
         st.warning("Some rollout paths were excluded because their target frame or factual path was invalid.")
         st.dataframe(issues, hide_index=True, width="stretch")

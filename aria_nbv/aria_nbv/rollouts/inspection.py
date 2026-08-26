@@ -35,6 +35,7 @@ from .read_model import (
     decode_invalid_reason,
     decode_position_id,
     rollout_at,
+    rollout_rows,
     rollout_steps,
     selected_depth_for_step,
     target_rows,
@@ -7195,10 +7196,9 @@ def s2_target_direction_histogram(
         frustum_calibrations = {}
         issues.append(GeometryIssue("invalid_selected_frustum_calibration", str(error)))
     targets = {target.target_row_id: target for target in target_rows(reader)}
-    total_rollouts = int(reader.root["rollouts"]["rollout_row_id"].shape[0])
+    rollouts = rollout_rows(reader)
 
-    for rollout_position in range(total_rollouts):
-        rollout = rollout_at(reader, rollout_position)
+    for rollout in rollouts:
         target = targets.get(rollout.target_row_id)
         if target is None:
             issues.append(
@@ -7349,7 +7349,7 @@ def s2_target_direction_histogram(
         frustum_union_target_surface_fraction_approx=union_fraction,
         movement_skipped_zero_count=movement_skipped_zero_count,
         rollout_count=rollout_count,
-        store_rollout_count=total_rollouts,
+        store_rollout_count=len(rollouts),
         source_sample_count=len(source_sample_ids),
         source_snippet_count=len(source_snippets),
         source_scene_count=len(source_scenes),

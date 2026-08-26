@@ -288,7 +288,8 @@ class _FakeCampaign:
             raise self.error
         return self.evidence or {}
 
-    def progress_summary(self) -> Any:
+    def progress_summary(self, plan: Any | None = None) -> Any:
+        del plan
         self.progress_calls += 1
         return {"state": "running", "counts": {"pending": 1}}
 
@@ -589,7 +590,6 @@ def test_campaign_admission_evidence_routes_completed_shard_to_shared_s2_rendere
 
     stores = (tmp_path / "shards" / "unit-a", tmp_path / "shards" / "unit-b")
     rendered: list[tuple[Path, str]] = []
-    monkeypatch.setattr(panel, "discover_rollout_store_paths", lambda _root: stores)
     monkeypatch.setattr(st, "subheader", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "selectbox", lambda _label, options, **_kwargs: options[1])
@@ -599,9 +599,24 @@ def test_campaign_admission_evidence_routes_completed_shard_to_shared_s2_rendere
         lambda handle, *, key_prefix: rendered.append((handle.store_path, key_prefix)),
     )
 
-    panel._render_campaign_rollout_s2_evidence(tmp_path)
+    panel._render_campaign_rollout_s2_evidence(stores)
 
     assert rendered == [(stores[1], "campaign_admission_unit-b")]
+
+
+def test_campaign_s2_selector_excludes_nonvalidated_artifact_records(tmp_path: Path) -> None:
+    """Only plan-bound validated artifacts may be presented as campaign evidence."""
+
+    validated = tmp_path / "shards" / "planned"
+    stale = tmp_path / "shards" / "stale"
+    stores = panel._validated_campaign_store_paths(
+        {
+            "validated_artifacts": [{"store_path": str(validated)}],
+            "artifact_records": [{"status": "orphan", "store_path": str(stale)}],
+        }
+    )
+
+    assert stores == (validated,)
 
 
 def test_page_warns_and_disables_launch_below_free_disk_floor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

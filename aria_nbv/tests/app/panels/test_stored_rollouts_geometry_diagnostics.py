@@ -214,6 +214,46 @@ def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle
     ]
 
 
+def test_target_s2_panel_shows_exclusion_issues_when_no_direction_survives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty histogram must retain the diagnostic explaining its empty support."""
+
+    class Column:
+        def number_input(self, _label: str, *, value: int, **_kwargs: Any) -> int:
+            return value
+
+    class Handle:
+        def s2_direction_histogram(self, *, azimuth_bins: int, elevation_bins: int) -> dict[str, Any]:
+            assert (azimuth_bins, elevation_bins) == (36, 18)
+            return {
+                "movement_count": 0,
+                "view_direction_count": 0,
+                "issues": ({"code": "missing_target", "rollout_row_id": 7},),
+            }
+
+    warnings: list[str] = []
+    messages: list[str] = []
+    tables: list[pd.DataFrame] = []
+    monkeypatch.setattr(st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "columns", lambda _count: [Column(), Column()])
+    monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(st, "warning", lambda message, **_kwargs: warnings.append(message))
+    monkeypatch.setattr(st, "info", lambda message, **_kwargs: messages.append(message))
+    monkeypatch.setattr(st, "dataframe", lambda frame, **_kwargs: tables.append(frame))
+    monkeypatch.setattr(
+        s2_directions,
+        "_render_plot",
+        lambda *_args, **_kwargs: pytest.fail("empty evidence must not render a plot"),
+    )
+
+    s2_directions.render_s2_direction_histograms(Handle(), key_prefix="empty")
+
+    assert warnings == ["All rollout paths were excluded because their target frame or factual path was invalid."]
+    assert messages == ["No finite factual selected-action directions were available in the selected store."]
+    assert tables[0].to_dict("records") == [{"code": "missing_target", "rollout_row_id": 7}]
+
+
 def test_bounded_geometry_is_default_visible_in_admission_surface() -> None:
     """The bounded geometry plots are immediately discoverable without a hidden extra disclosure."""
 
