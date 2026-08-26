@@ -56,6 +56,7 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
         "Training Data",
         "Generation",
         "Models & Experiments",
+        "Reporting & Configuration",
         "Foundations / Single-step",
     ]
     assert [[page.title for page in pages] for pages in frame.pages.values()] == [
@@ -63,6 +64,7 @@ def test_router_uses_grouped_top_navigation_without_loading_panels(monkeypatch) 
         ["Root Observation Store", "Rollout Supervision"],
         ["Campaign Generation", "Live Rollout Lab", "Candidate Proposals"],
         ["VIN Diagnostics", "RRI Binning", "W&B Runs", "Optuna Studies"],
+        ["Scientific Reporting", "Configuration Workspace"],
         ["Observed Snippet", "Candidate Renders", "Single-step Oracle RRI"],
     ]
     assert frame.pages[""][0].default is True

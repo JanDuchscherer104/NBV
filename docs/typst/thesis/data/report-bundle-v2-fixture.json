@@ -1,0 +1,48 @@
+{
+  "schema_version": "aria-nbv-report-bundle-v2",
+  "evidence_status": "pilot",
+  "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "notation_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "sources": [
+    {
+      "id": "fixture",
+      "kind": "wandb",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "provenance": [["history_complete", false], ["history_mode", "sampled"]]
+    }
+  ],
+  "quantities": [
+    {
+      "id": "fixture.quantity",
+      "value": 0.5,
+      "unit": "fraction",
+      "n": 2,
+      "aggregation": "mean",
+      "source_ids": ["fixture"],
+      "symbol_id": "oracle.rri"
+    }
+  ],
+  "tables": [
+    {
+      "id": "fixture.table",
+      "columns": [
+        {"id": "step", "symbol_id": null},
+        {"id": "value", "symbol_id": "oracle.rri"}
+      ],
+      "rows": [[0, 0.25], [1, 0.5]],
+      "source_ids": ["fixture"]
+    }
+  ],
+  "figures": [
+    {
+      "id": "fixture.figure",
+      "plotly_path": "figures/fixture.plotly.json",
+      "static_path": "assets/fixture.svg",
+      "uses_webgl": false,
+      "symbol_ids": ["oracle.rri"],
+      "source_ids": ["fixture"],
+      "source_result_ids": ["fixture.table"]
+    }
+  ]
+}

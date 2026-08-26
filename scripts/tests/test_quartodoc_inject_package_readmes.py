@@ -121,12 +121,14 @@ def test_current_public_package_readmes_are_projectable() -> None:
         projected_modules.append(module_name)
 
     assert projected_modules == [
+        "configs",
         "data_handling",
         "data_handling.ase_efm",
         "data_handling.vin_store",
         "lightning",
         "oracle",
         "oracle.pipelines",
+        "reporting",
         "rollouts",
         "rollouts.replay",
         "rri_metrics",

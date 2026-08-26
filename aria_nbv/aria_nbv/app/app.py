@@ -189,6 +189,24 @@ class NbvStreamlitApp:
 
         render_wandb_analysis_page()
 
+    def _page_scientific_reporting(self) -> None:
+        """Render immutable report preview and exact-snapshot export."""
+
+        from aria_nbv.app.panels.reporting import render_reporting_workspace
+
+        render_reporting_workspace()
+
+    def _page_configuration_workspace(self) -> None:
+        """Render trusted, metadata-only TOML configuration authoring."""
+
+        from aria_nbv.app.panels.configuration import (
+            render_configuration_workspace,
+            trusted_config_catalog,
+            trusted_config_patterns,
+        )
+
+        render_configuration_workspace(trusted_config_catalog(), path_patterns=trusted_config_patterns())
+
     def _page_optuna_studies(self) -> None:
         """Render Optuna study analysis."""
 
@@ -337,6 +355,10 @@ class NbvStreamlitApp:
                 st.Page(self._page_rri_binning, title="RRI Binning"),
                 st.Page(self._page_wandb_runs, title="W&B Runs"),
                 st.Page(self._page_optuna_studies, title="Optuna Studies"),
+            ],
+            "Reporting & Configuration": [
+                st.Page(self._page_scientific_reporting, title="Scientific Reporting"),
+                st.Page(self._page_configuration_workspace, title="Configuration Workspace"),
             ],
             "Foundations / Single-step": [
                 st.Page(self._page_observed_snippet, title="Observed Snippet"),
