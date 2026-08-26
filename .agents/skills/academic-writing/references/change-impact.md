@@ -21,3 +21,5 @@ This is a local adaptation of the material-change and candidate-check ideas in
 [WenyuChiou/academic-writing-skills at
 `cb56a7d`](https://github.com/WenyuChiou/academic-writing-skills/tree/cb56a7d0175f532a6c628c9829e1df824fa938d7).
 The upstream material is reference-only; active ARIA sources remain authoritative.
+Its grounding is registered as `wenyu-academic-writing` in
+`.agents/skill-sources.toml` and never activates upstream maintenance.
