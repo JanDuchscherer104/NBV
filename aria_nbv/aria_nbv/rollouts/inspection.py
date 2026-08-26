@@ -6672,19 +6672,37 @@ class S2DirectionHistogram:
     ``R_W^e`` is the target-object-to-world rotation, the recorded direction is
 
     $$
-    \hat{\delta}_t^e =
+    \widehat{\boldsymbol{\delta}}_{j,t}^e =
     \frac{(R_W^e)^\mathsf{T}(p_t-p_{t-1}) / r_e}
          {\lVert (R_W^e)^\mathsf{T}(p_t-p_{t-1}) / r_e \rVert_2},
     \qquad r_e=(a_x a_y a_z)^{1/3}.
     $$
 
-    ``(a_x, a_y, a_z)`` are the positive persisted target OBB extents.  The
-    geometric mean is the volume-equivalent characteristic length, so it does
-    not privilege one OBB axis.  The final S² projection is scale invariant,
-    but retaining ``r_e`` in the movement definition keeps the diagnostic
-    compatible with the target-relative translation descriptor planned for S2
-    memory.  View directions use the selected camera's local ``+Z`` optical
-    axis, transformed by ``(R_W^e)^T`` and normalized in the same target frame.
+    ``(a_x, a_y, a_z)`` are the target OBB semi-axis lengths, obtained by
+    halving the persisted full extents.  Their geometric mean is the radius of
+    a volume-equivalent sphere, so it does not privilege one OBB axis.  The
+    final movement direction is scale invariant, but retaining ``r_e`` also
+    exposes the dimensionless transition length used by target-relative
+    translation descriptors.  View directions use the selected camera's local
+    ``+Z`` optical axis, transformed by ``(R_W^e)^T`` and normalized in the
+    same target frame.
+
+    The frustum channel is different from the two direction channels.  It
+    places the proxy surface point ``x^e=r_e d^e`` at every equal-area bin
+    centre, transforms ``x^e-c_{j,t}^e`` into the selected camera, and tests
+    the persisted pinhole image rectangle.  A bin contributes only when the
+    proxy surface normal faces the camera and the projected point is in front
+    of and inside the calibrated image.  Thus ``frustum_counts`` measures
+    geometric field-of-view support on a target-centred volume-equivalent
+    sphere.  It is not occlusion-aware and must not be reported as measured
+    target-mesh visibility.
+
+    Here ``j`` identifies the factual rollout chain and ``t`` its zero-based
+    persisted decision step.  The corresponding camera-forward direction is
+    ``\widehat{\boldsymbol{v}}_{j,t}^e``.  Projection provenance retains both
+    indices, so presentation clients can encode common rollout heritage by
+    colour and common acquisition time by marker style without inferring
+    either identity from array order.
 
     ``movement_counts`` and ``view_direction_counts`` have shape
     ``ndarray["Z A", int64]``.  ``Z`` bins target-frame ``z`` uniformly and
@@ -6698,11 +6716,30 @@ class S2DirectionHistogram:
     view_direction_counts: NDArray[np.int64]
     movement_projection: NDArray[np.float32]
     movement_projection_normalized_lengths: NDArray[np.float32]
+    movement_projection_rollout_row_ids: NDArray[np.int64]
+    movement_projection_step_indices: NDArray[np.int64]
     view_direction_projection: NDArray[np.float32]
+    view_direction_projection_rollout_row_ids: NDArray[np.int64]
+    view_direction_projection_step_indices: NDArray[np.int64]
+    frustum_counts: NDArray[np.int64]
+    frustum_projection: NDArray[np.float32]
+    frustum_projection_rollout_row_ids: NDArray[np.int64]
+    frustum_projection_step_indices: NDArray[np.int64]
     movement_count: int
     view_direction_count: int
+    frustum_count: int
+    frustum_missing_calibration_count: int
+    frustum_mean_fov_solid_angle_sr: float | None
+    frustum_mean_target_surface_fraction_approx: float | None
+    frustum_union_target_surface_fraction_approx: float | None
     movement_skipped_zero_count: int
     rollout_count: int
+    store_rollout_count: int
+    source_sample_count: int
+    source_snippet_count: int
+    source_scene_count: int
+    target_count: int
+    selected_step_count: int
     azimuth_bins: int
     elevation_bins: int
     projection_limit: int
@@ -6729,6 +6766,16 @@ class _GeometryStep:
     pose_world_cam: NDArray[np.float32]
     position_names: NDArray[np.str_]
     mixture_names: NDArray[np.str_]
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectedFrustumCalibration:
+    """Pinhole calibration aligned to one factual selected candidate."""
+
+    candidate_row_id: int
+    focal_px: NDArray[np.float64]
+    principal_point_px: NDArray[np.float64]
+    image_size_hw: tuple[int, int]
 
 
 def _bounded_geometry_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tuple[_GeometryStep, ...]:
@@ -7078,8 +7125,11 @@ def s2_target_direction_histogram(
     candidate shells; it never materializes the full candidate table.  For a
     target object frame ``e``, selected camera centres are transformed with
     ``(R_W^e)^T``.  Consecutive translations are normalized by the geometric
-    mean of the target OBB extents before their unit-sphere projection, while
+    mean of the target OBB semi-axes before their unit-sphere projection, while
     the selected camera local ``+Z`` optical axis supplies the view direction.
+    The calibrated-frustum channel evaluates which points of the corresponding
+    target-centred volume-equivalent sphere are front-facing and project inside
+    each selected pinhole camera.
 
     Args:
         reader: Validated read-only rollout store.
@@ -7107,18 +7157,43 @@ def s2_target_direction_histogram(
     if projection_limit <= 0:
         raise ValueError("projection_limit must be positive.")
 
-    movement_counts = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
-    view_counts = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
+    movement_counts: NDArray[np.int64] = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
+    view_counts: NDArray[np.int64] = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
+    frustum_counts: NDArray[np.int64] = np.zeros((elevation_bins, azimuth_bins), dtype=np.int64)
+    sphere_directions = _s2_bin_center_directions(elevation_bins, azimuth_bins)
     movement_projection: list[np.ndarray] = []
     movement_projection_lengths: list[float] = []
+    movement_projection_rollout_ids: list[int] = []
+    movement_projection_step_indices: list[int] = []
     view_projection: list[np.ndarray] = []
+    view_projection_rollout_ids: list[int] = []
+    view_projection_step_indices: list[int] = []
+    frustum_projection: list[np.ndarray] = []
+    frustum_projection_rollout_ids: list[int] = []
+    frustum_projection_step_indices: list[int] = []
     movement_rng = np.random.default_rng(0)
     view_rng = np.random.default_rng(1)
+    frustum_rng = np.random.default_rng(2)
     movement_count = 0
     view_count = 0
+    frustum_count = 0
+    frustum_centroid_count = 0
+    frustum_missing_calibration_count = 0
+    frustum_fov_solid_angles_sr: list[float] = []
+    frustum_target_surface_fractions: list[float] = []
     movement_skipped_zero_count = 0
     rollout_count = 0
+    source_sample_ids: set[int] = set()
+    source_snippets: set[tuple[str, str]] = set()
+    source_scenes: set[str] = set()
+    target_ids: set[int] = set()
+    selected_step_count = 0
     issues: list[GeometryIssue] = []
+    try:
+        frustum_calibrations = _selected_frustum_calibrations(reader)
+    except ValueError as error:
+        frustum_calibrations = {}
+        issues.append(GeometryIssue("invalid_selected_frustum_calibration", str(error)))
     targets = {target.target_row_id: target for target in target_rows(reader)}
     total_rollouts = int(reader.root["rollouts"]["rollout_row_id"].shape[0])
 
@@ -7153,6 +7228,11 @@ def s2_target_direction_histogram(
         target_rotation = target_pose[:9].reshape(3, 3)
         prior_center = root_pose[9:12]
         rollout_count += 1
+        source_sample_ids.add(rollout.source_row_id)
+        source_snippets.add((rollout.scene, rollout.snippet))
+        source_scenes.add(rollout.scene)
+        target_ids.add(rollout.target_row_id)
+        selected_step_count += len(steps)
         for step in steps:
             selected_pose = _selected_pose(step)
             selected_center = selected_pose[9:12]
@@ -7166,8 +7246,12 @@ def s2_target_direction_histogram(
                 _reservoir_append(
                     movement_projection,
                     movement_projection_lengths,
+                    movement_projection_rollout_ids,
+                    movement_projection_step_indices,
                     normalized_movement,
                     float(np.linalg.norm(movement_target)),
+                    rollout_row_id=rollout.rollout_row_id,
+                    step_index=step.step_index,
                     seen=movement_count,
                     limit=projection_limit,
                     rng=movement_rng,
@@ -7181,24 +7265,96 @@ def s2_target_direction_histogram(
                 _reservoir_append(
                     view_projection,
                     None,
+                    view_projection_rollout_ids,
+                    view_projection_step_indices,
                     normalized_view,
                     None,
+                    rollout_row_id=rollout.rollout_row_id,
+                    step_index=step.step_index,
                     seen=view_count,
                     limit=projection_limit,
                     rng=view_rng,
                 )
+            calibration = frustum_calibrations.get(step.step_row_id)
+            if calibration is None:
+                frustum_missing_calibration_count += 1
+            elif calibration.candidate_row_id != step.selected_candidate_row_id:
+                frustum_missing_calibration_count += 1
+                issues.append(
+                    GeometryIssue(
+                        "selected_frustum_candidate_mismatch",
+                        "Selected-depth calibration does not reference the factual selected candidate.",
+                        rollout_row_id=rollout.rollout_row_id,
+                        step_row_id=step.step_row_id,
+                    )
+                )
+            else:
+                frustum_count += 1
+                camera_to_target = target_rotation.T @ selected_pose[:9].reshape(3, 3)
+                camera_center_target = target_rotation.T @ (selected_center - target_pose[9:12])
+                footprint = _target_surface_frustum_mask(
+                    sphere_directions,
+                    target_radius_m=object_radius_m,
+                    camera_center_target=camera_center_target,
+                    camera_to_target=camera_to_target,
+                    calibration=calibration,
+                )
+                frustum_counts += footprint.astype(np.int64)
+                frustum_fov_solid_angles_sr.append(_pinhole_frustum_solid_angle_sr(calibration))
+                frustum_target_surface_fractions.append(float(np.mean(footprint)))
+                footprint_centroid = _unit_direction(np.sum(sphere_directions[footprint], axis=0))
+                if footprint_centroid is not None:
+                    frustum_centroid_count += 1
+                    _reservoir_append(
+                        frustum_projection,
+                        None,
+                        frustum_projection_rollout_ids,
+                        frustum_projection_step_indices,
+                        footprint_centroid,
+                        None,
+                        rollout_row_id=rollout.rollout_row_id,
+                        step_index=step.step_index,
+                        seen=frustum_centroid_count,
+                        limit=projection_limit,
+                        rng=frustum_rng,
+                    )
             prior_center = selected_center
+
+    mean_fov_solid_angle = float(np.mean(frustum_fov_solid_angles_sr)) if frustum_fov_solid_angles_sr else None
+    mean_target_surface_fraction = (
+        float(np.mean(frustum_target_surface_fractions)) if frustum_target_surface_fractions else None
+    )
+    union_fraction = float(np.count_nonzero(frustum_counts) / frustum_counts.size) if frustum_count else None
 
     return S2DirectionHistogram(
         movement_counts=movement_counts,
         view_direction_counts=view_counts,
         movement_projection=_stack_s2_samples(movement_projection),
         movement_projection_normalized_lengths=np.asarray(movement_projection_lengths, dtype=np.float32),
+        movement_projection_rollout_row_ids=np.asarray(movement_projection_rollout_ids, dtype=np.int64),
+        movement_projection_step_indices=np.asarray(movement_projection_step_indices, dtype=np.int64),
         view_direction_projection=_stack_s2_samples(view_projection),
+        view_direction_projection_rollout_row_ids=np.asarray(view_projection_rollout_ids, dtype=np.int64),
+        view_direction_projection_step_indices=np.asarray(view_projection_step_indices, dtype=np.int64),
+        frustum_counts=frustum_counts,
+        frustum_projection=_stack_s2_samples(frustum_projection),
+        frustum_projection_rollout_row_ids=np.asarray(frustum_projection_rollout_ids, dtype=np.int64),
+        frustum_projection_step_indices=np.asarray(frustum_projection_step_indices, dtype=np.int64),
         movement_count=movement_count,
         view_direction_count=view_count,
+        frustum_count=frustum_count,
+        frustum_missing_calibration_count=frustum_missing_calibration_count,
+        frustum_mean_fov_solid_angle_sr=mean_fov_solid_angle,
+        frustum_mean_target_surface_fraction_approx=mean_target_surface_fraction,
+        frustum_union_target_surface_fraction_approx=union_fraction,
         movement_skipped_zero_count=movement_skipped_zero_count,
         rollout_count=rollout_count,
+        store_rollout_count=total_rollouts,
+        source_sample_count=len(source_sample_ids),
+        source_snippet_count=len(source_snippets),
+        source_scene_count=len(source_scenes),
+        target_count=len(target_ids),
+        selected_step_count=selected_step_count,
         azimuth_bins=azimuth_bins,
         elevation_bins=elevation_bins,
         projection_limit=projection_limit,
@@ -7207,18 +7363,18 @@ def s2_target_direction_histogram(
 
 
 def _target_obb_geometric_mean_radius(extents: np.ndarray) -> float:
-    """Return the volume-equivalent target OBB length in metres.
+    """Return the target OBB's volume-equivalent sphere radius in metres.
 
-    The OBB extent vector is required to be finite and strictly positive.  Its
-    geometric mean is used rather than an arithmetic mean because scaling each
-    OBB axis by a common factor scales this characteristic length by that same
-    factor and preserves the box volume's linear scale.
+    Persisted OBB extents are full axis lengths.  Halving them gives semi-axes
+    ``(a_x, a_y, a_z)``; ``r_e=(a_x a_y a_z)^(1/3)`` is the radius of a sphere
+    with the same volume as the OBB.  The geometric rather than arithmetic mean
+    therefore preserves volume and remains equivariant to uniform scaling.
     """
 
     axes = np.asarray(extents, dtype=np.float64).reshape(3)
     if not np.isfinite(axes).all() or np.any(axes <= _GEOMETRY_EPSILON):
         raise ValueError("Target OBB extents must be finite and strictly positive.")
-    return float(np.exp(np.mean(np.log(axes))))
+    return float(0.5 * np.exp(np.mean(np.log(axes))))
 
 
 def _unit_direction(vector: np.ndarray) -> NDArray[np.float64] | None:
@@ -7242,12 +7398,156 @@ def _increment_s2_count(counts: NDArray[np.int64], direction: NDArray[np.float64
     counts[elevation_index, azimuth_index] += 1
 
 
+def _s2_bin_center_directions(elevation_bins: int, azimuth_bins: int) -> NDArray[np.float64]:
+    """Return equal-solid-angle target-frame S² cell centres."""
+
+    z_centers = -1.0 + (np.arange(elevation_bins, dtype=np.float64) + 0.5) * 2.0 / elevation_bins
+    azimuth_centers = -np.pi + (np.arange(azimuth_bins, dtype=np.float64) + 0.5) * 2.0 * np.pi / azimuth_bins
+    grid_shape = (elevation_bins, azimuth_bins)
+    azimuth: NDArray[np.float64] = np.broadcast_to(azimuth_centers[None, :], grid_shape).copy()
+    z: NDArray[np.float64] = np.broadcast_to(z_centers[:, None], grid_shape).copy()
+    radius = np.sqrt(np.maximum(0.0, 1.0 - z**2))
+    return np.stack((radius * np.cos(azimuth), radius * np.sin(azimuth), z), axis=-1)
+
+
+def _selected_frustum_calibrations(
+    reader: RolloutZarrStoreReader,
+) -> dict[int, _SelectedFrustumCalibration]:
+    """Read selected-view pinhole metadata without materializing depth rasters."""
+
+    if not bool(reader.root.attrs.get("selected_depth_enabled", False)):
+        return {}
+    try:
+        group = reader.root["selected_depth"]
+        step_ids = np.asarray(group["step_row_id"], dtype=np.int64).reshape(-1)
+        candidate_ids = np.asarray(group["candidate_row_id"], dtype=np.int64).reshape(-1)
+        focal = np.asarray(group["focal_px"], dtype=np.float64).reshape(-1, 2)
+        principal = np.asarray(group["principal_point_px"], dtype=np.float64).reshape(-1, 2)
+        sizes = np.asarray(group["image_size_hw"], dtype=np.int64).reshape(-1, 2)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"Selected-depth frustum metadata is incomplete: {error}.") from error
+    row_count = step_ids.size
+    if not (candidate_ids.size == row_count == focal.shape[0] == principal.shape[0] == sizes.shape[0]):
+        raise ValueError("Selected-depth frustum metadata arrays have inconsistent row counts.")
+    if len(set(step_ids.tolist())) != row_count:
+        raise ValueError("Selected-depth frustum metadata contains duplicate step_row_id values.")
+    result: dict[int, _SelectedFrustumCalibration] = {}
+    for row in range(row_count):
+        height, width = (int(value) for value in sizes[row])
+        if (
+            not np.isfinite(focal[row]).all()
+            or np.any(focal[row] <= 0.0)
+            or not np.isfinite(principal[row]).all()
+            or height <= 0
+            or width <= 0
+        ):
+            raise ValueError(f"Selected-depth frustum calibration row {row} is non-finite or non-positive.")
+        result[int(step_ids[row])] = _SelectedFrustumCalibration(
+            candidate_row_id=int(candidate_ids[row]),
+            focal_px=focal[row].copy(),
+            principal_point_px=principal[row].copy(),
+            image_size_hw=(height, width),
+        )
+    return result
+
+
+def _target_surface_frustum_mask(
+    sphere_directions: NDArray[np.float64],
+    *,
+    target_radius_m: float,
+    camera_center_target: NDArray[np.float64],
+    camera_to_target: NDArray[np.float64],
+    calibration: _SelectedFrustumCalibration,
+) -> NDArray[np.bool_]:
+    r"""Return one selected frustum's visible proxy-surface footprint.
+
+    For target-frame unit direction :math:`\boldsymbol{d}^e`, the proxy point
+    is :math:`\boldsymbol{x}^e=r_e\boldsymbol{d}^e`.  Subtracting the selected
+    camera centre before applying the target-to-camera rotation is essential:
+    rotating :math:`\boldsymbol{d}^e` alone would describe an orientation
+    sphere, not a target-centred surface footprint.  A point is admitted only
+    when its outward normal faces the camera and its calibrated pinhole
+    projection lies in the continuous image rectangle.
+
+    The returned mask is geometric potential visibility.  It includes camera
+    translation, rotation, and intrinsics, but not scene or self-occlusion by
+    the true target geometry beyond the proxy sphere's front-facing test.
+    """
+
+    radius = float(target_radius_m)
+    if not np.isfinite(radius) or radius <= _GEOMETRY_EPSILON:
+        raise ValueError("target_radius_m must be finite and positive.")
+    camera_center = np.asarray(camera_center_target, dtype=np.float64).reshape(3)
+    if not np.isfinite(camera_center).all():
+        raise ValueError("camera_center_target must be finite.")
+    surface_points = radius * sphere_directions
+    point_vectors_target = surface_points - camera_center
+    points_camera = point_vectors_target @ np.asarray(camera_to_target, dtype=np.float64)
+    x = points_camera[..., 0]
+    y = points_camera[..., 1]
+    z = points_camera[..., 2]
+    fx, fy = calibration.focal_px
+    cx, cy = calibration.principal_point_px
+    height, width = calibration.image_size_hw
+    with np.errstate(divide="ignore", invalid="ignore"):
+        u = cx - fx * x / z
+        v = cy - fy * y / z
+    front_facing = np.sum(sphere_directions * (camera_center - surface_points), axis=-1) > _GEOMETRY_EPSILON
+    return np.asarray(
+        front_facing
+        & (z > _GEOMETRY_EPSILON)
+        & (u >= 0.0)
+        & (u <= float(width))
+        & (v >= 0.0)
+        & (v <= float(height)),
+        dtype=np.bool_,
+    )
+
+
+def _pinhole_frustum_solid_angle_sr(calibration: _SelectedFrustumCalibration) -> float:
+    r"""Return the calibrated rectangular pinhole frustum's solid angle.
+
+    Four image-edge corner rays form a spherical quadrilateral.  Splitting it
+    into two triangles gives the exact angular area in steradians; triangle
+    ``(a,b,c)`` uses
+
+    $$
+    \Omega_\triangle=2\operatorname{atan2}
+    \left(|a^\top(b\times c)|,1+a^\top b+b^\top c+c^\top a\right).
+    $$
+    """
+
+    fx, fy = calibration.focal_px
+    cx, cy = calibration.principal_point_px
+    height, width = calibration.image_size_hw
+
+    def ray(u: float, v: float) -> NDArray[np.float64]:
+        value = np.asarray([(cx - u) / fx, (cy - v) / fy, 1.0], dtype=np.float64)
+        return value / np.linalg.norm(value)
+
+    top_left = ray(0.0, 0.0)
+    top_right = ray(float(width), 0.0)
+    bottom_right = ray(float(width), float(height))
+    bottom_left = ray(0.0, float(height))
+
+    def triangle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
+        numerator = abs(float(np.dot(a, np.cross(b, c))))
+        denominator = 1.0 + float(np.dot(a, b) + np.dot(b, c) + np.dot(c, a))
+        return 2.0 * float(np.arctan2(numerator, denominator))
+
+    return triangle(top_left, top_right, bottom_right) + triangle(top_left, bottom_right, bottom_left)
+
+
 def _reservoir_append(
     samples: list[np.ndarray],
     magnitudes: list[float] | None,
+    rollout_row_ids: list[int],
+    step_indices: list[int],
     direction: NDArray[np.float64],
     magnitude: float | None,
     *,
+    rollout_row_id: int,
+    step_index: int,
     seen: int,
     limit: int,
     rng: np.random.Generator,
@@ -7256,6 +7556,8 @@ def _reservoir_append(
 
     if len(samples) < limit:
         samples.append(np.asarray(direction, dtype=np.float32))
+        rollout_row_ids.append(int(rollout_row_id))
+        step_indices.append(int(step_index))
         if magnitudes is not None and magnitude is not None:
             magnitudes.append(float(magnitude))
         return
@@ -7263,6 +7565,8 @@ def _reservoir_append(
     if replacement_index >= limit:
         return
     samples[replacement_index] = np.asarray(direction, dtype=np.float32)
+    rollout_row_ids[replacement_index] = int(rollout_row_id)
+    step_indices[replacement_index] = int(step_index)
     if magnitudes is not None and magnitude is not None:
         magnitudes[replacement_index] = float(magnitude)
 

@@ -410,6 +410,12 @@ return {
       description = "Target-specific reward at rollout step t.",
       thesis_list = true,
     },
+    ["rl.rollout_index"] = {
+      tex = "j",
+      typst = "#symb.rl.rollout_index",
+      description = "Factual rollout-chain index used to preserve common trajectory heritage across selected steps.",
+      thesis_list = true,
+    },
     ["rl.s"] = {
       tex = "s",
       typst = "#symb.rl.s",
@@ -572,6 +578,12 @@ return {
       description = "Candidate-target relation descriptor in the candidate/query local frame.",
       thesis_list = true,
     },
+    ["spatial.frustum_solid_angle"] = {
+      tex = "\\Omega_{j,t}^{\\mathrm{FOV}}",
+      typst = "#symb.spatial.frustum_solid_angle",
+      description = "Intrinsic solid angle of one calibrated selected-camera pinhole field of view.",
+      thesis_list = true,
+    },
     ["spatial.ref_candidate_transform"] = {
       tex = "\\boldsymbol{T}_{r_t,i}^{\\mathrm{rel}}",
       typst = "#symb.spatial.ref_candidate_transform",
@@ -588,6 +600,36 @@ return {
       tex = "\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}}",
       typst = "#symb.spatial.relation_rpe",
       description = "Query-local relative positional embedding for target, history, support, or candidate relations.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_frustum"] = {
+      tex = "\\mathcal{F}_{j,t}^{e}",
+      typst = "#symb.spatial.target_frame_frustum",
+      description = "Front-facing target-proxy surface directions that project inside the calibrated selected-camera image.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_frustum_fraction"] = {
+      tex = "\\kappa_{j,t}^{e}",
+      typst = "#symb.spatial.target_frame_frustum_fraction",
+      description = "Fraction of the target-centred proxy sphere geometrically supported by one selected calibrated frustum.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_motion_direction"] = {
+      tex = "\\widehat{\\boldsymbol{\\delta}}_{j,t}^{e}",
+      typst = "#symb.spatial.target_frame_motion_direction",
+      description = "Unit factual selected-camera displacement expressed in target-object coordinates for rollout j and step t.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_view_direction"] = {
+      tex = "\\widehat{\\boldsymbol{v}}_{j,t}^{e}",
+      typst = "#symb.spatial.target_frame_view_direction",
+      description = "Unit selected-camera forward optical axis expressed in target-object coordinates.",
+      thesis_list = true,
+    },
+    ["spatial.target_obb_scale"] = {
+      tex = "r_e",
+      typst = "#symb.spatial.target_obb_scale",
+      description = "Volume-equivalent target radius given by the geometric mean of the target OBB semi-axis lengths.",
       thesis_list = true,
     },
     ["vin.cand_valid"] = {
@@ -1222,11 +1264,65 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["spatial.pinhole_frustum_solid_angle"] = {
+      tex = "\\Omega_{j,t}^{\\mathrm{FOV}}=\\Omega_\\triangle(\\boldsymbol{q}_0,\\boldsymbol{q}_1,\\boldsymbol{q}_2)+\\Omega_\\triangle(\\boldsymbol{q}_0,\\boldsymbol{q}_2,\\boldsymbol{q}_3)",
+      typst = "#eqs.spatial.pinhole_frustum_solid_angle",
+      description = "Exact intrinsic solid angle of a rectangular pinhole frustum from its four unit corner rays.",
+      thesis_list = true,
+    },
     ["spatial.rollout_trajectory_normalization"] = {
       tex = "d_{0,e}^{\\mathrm{initial}}=\\lVert\\boldsymbol{p}_e^w-\\boldsymbol{c}_{r_0}^w\\rVert_2,\\quad \\widetilde{\\boldsymbol{x}}_{r,t}^{\\mathrm{trajectory}}=(\\boldsymbol{B}_{r,0}^{\\mathrm{target-Z-up}})^\\top(\\boldsymbol{x}_{r,t}^w-\\boldsymbol{c}_{r_0}^w)/d_{0,e}^{\\mathrm{initial}}",
       typst = "#eqs.spatial.rollout_trajectory_normalization",
       description = "Factual selected trajectory in one initial-root, target-aligned Z-up frame and scale.",
       thesis_list = false,
+    },
+    ["spatial.spherical_triangle_solid_angle"] = {
+      tex = "\\Omega_\\triangle(\\boldsymbol{a},\\boldsymbol{b},\\boldsymbol{c})=2\\operatorname{atan2}(|\\boldsymbol{a}^\\top(\\boldsymbol{b}\\times\\boldsymbol{c})|,1+\\boldsymbol{a}^\\top\\boldsymbol{b}+\\boldsymbol{b}^\\top\\boldsymbol{c}+\\boldsymbol{c}^\\top\\boldsymbol{a})",
+      typst = "#eqs.spatial.spherical_triangle_solid_angle",
+      description = "Exact solid angle of one spherical triangle from three unit rays.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_frustum_coverage"] = {
+      tex = "\\kappa_{j,t}^e=\\operatorname{area}_{\\mathcal{S}^2}(\\mathcal{F}_{j,t}^e)/(4\\pi)",
+      typst = "#eqs.spatial.target_frame_frustum_coverage",
+      description = "Equal-area fraction of the target-centred proxy sphere supported by one selected calibrated frustum.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_frustum_geometry"] = {
+      tex = "\\boldsymbol{x}^e(\\boldsymbol{d})=r_e\\boldsymbol{d},\\quad \\boldsymbol{x}^c(\\boldsymbol{d})=(\\boldsymbol{R}_e^c)^\\top(\\boldsymbol{x}^e(\\boldsymbol{d})-\\boldsymbol{c}_{j,t}^e)",
+      typst = "#eqs.spatial.target_frame_frustum_geometry",
+      description = "Target-proxy surface point transformed from target-object coordinates into the selected camera.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_frustum_membership"] = {
+      tex = "\\mathcal{F}_{j,t}^e=\\{\\boldsymbol{d}\\in\\mathcal{S}^2:\\boldsymbol{d}^\\top(\\boldsymbol{c}_{j,t}^e-\\boldsymbol{x}^e)>0,\\ x_z^c>0,\\ 0\\le u(\\boldsymbol{d})\\le W,\\ 0\\le v(\\boldsymbol{d})\\le H\\}",
+      typst = "#eqs.spatial.target_frame_frustum_membership",
+      description = "Front-facing target-proxy directions inside the calibrated continuous image rectangle.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_frustum_projection"] = {
+      tex = "u(\\boldsymbol{d})=c_x-f_xx_x^c/x_z^c,\\quad v(\\boldsymbol{d})=c_y-f_yx_y^c/x_z^c",
+      typst = "#eqs.spatial.target_frame_frustum_projection",
+      description = "ARIA left-up-forward pinhole projection of one target-proxy surface point.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_motion_direction"] = {
+      tex = "\\widehat{\\boldsymbol{\\delta}}_{j,t}^{e}=\\operatorname{normalize}((\\boldsymbol{R}_W^e)^\\top(\\boldsymbol{c}_{j,t}^W-\\boldsymbol{c}_{j,t-1}^W)/r_e)",
+      typst = "#eqs.spatial.target_frame_motion_direction",
+      description = "Target-object-frame direction of a factual selected-camera displacement.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_obb_radius"] = {
+      tex = "r_e=(a_xa_ya_z)^{1/3}",
+      typst = "#eqs.spatial.target_frame_obb_radius",
+      description = "Volume-equivalent target-proxy radius from OBB semi-axis lengths.",
+      thesis_list = true,
+    },
+    ["spatial.target_frame_view_direction"] = {
+      tex = "\\widehat{\\boldsymbol{v}}_{j,t}^{e}=\\operatorname{normalize}((\\boldsymbol{R}_W^e)^\\top\\boldsymbol{R}_{j,t}^W\\boldsymbol{e}_z)",
+      typst = "#eqs.spatial.target_frame_view_direction",
+      description = "Target-object-frame direction of a factual selected-camera optical axis.",
+      thesis_list = true,
     },
     ["vin.aux_reg_mse"] = {
       tex = "\\mathcal{L}_{\\mathrm{reg}}=\\frac{1}{N}\\sum_i(\\hat{r}_i-r_i)^2",

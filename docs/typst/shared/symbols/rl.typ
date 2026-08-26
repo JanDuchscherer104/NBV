@@ -10,6 +10,8 @@
   r: $r$,
   // Generic cumulative return.
   G: $G$,
+  // Factual rollout-chain index used to preserve trajectory heritage.
+  rollout_index: $j$,
   // Generic state-action value function.
   Q: $Q$,
   // Generic state-value function.

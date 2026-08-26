@@ -36,6 +36,64 @@
       bold(d)_(t,i) (bold(v))
     )
   $,
+  target_frame_obb_radius: $
+    #symb.spatial.target_obb_scale
+    = (a_x a_y a_z)^(1/3)
+  $,
+  target_frame_motion_direction: $
+    #symb.spatial.target_frame_motion_direction
+    = op("normalize") (
+      (bold(R)_W^e)^top
+      (bold(c)_(j,t)^W - bold(c)_(j,t-1)^W)
+      /
+      #symb.spatial.target_obb_scale
+    )
+  $,
+  target_frame_view_direction: $
+    #symb.spatial.target_frame_view_direction
+    = op("normalize") (
+      (bold(R)_W^e)^top bold(R)_(j,t)^W bold(e)_z
+    )
+  $,
+  target_frame_frustum_geometry: $
+    bold(x)^e (bold(d))
+    = #symb.spatial.target_obb_scale bold(d),
+    quad
+    bold(x)^c (bold(d))
+    = (bold(R)_e^c)^top
+      (bold(x)^e (bold(d)) - bold(c)_(j,t)^e)
+  $,
+  target_frame_frustum_projection: $
+    u (bold(d)) = c_x - f_x x_x^c / x_z^c,
+    quad
+    v (bold(d)) = c_y - f_y x_y^c / x_z^c
+  $,
+  target_frame_frustum_membership: $
+    #symb.spatial.target_frame_frustum
+    = {bold(d) in cal(S)^2 :
+      cases(
+        bold(d)^top (bold(c)_(j,t)^e - bold(x)^e (bold(d))) > 0 & "front-facing",
+        x_z^c > 0 & "in front",
+        0 <= u (bold(d)) <= W & "horizontal image support",
+        0 <= v (bold(d)) <= H & "vertical image support"
+      )}
+  $,
+  target_frame_frustum_coverage: $
+    #symb.spatial.target_frame_frustum_fraction
+    = op("area")_(cal(S)^2) (#symb.spatial.target_frame_frustum) / (4 pi)
+  $,
+  spherical_triangle_solid_angle: $
+    Omega_triangle (bold(a), bold(b), bold(c))
+    = 2 op("atan2") (
+      abs(bold(a)^top (bold(b) times bold(c))),
+      1 + bold(a)^top bold(b) + bold(b)^top bold(c) + bold(c)^top bold(a)
+    )
+  $,
+  pinhole_frustum_solid_angle: $
+    #symb.spatial.frustum_solid_angle
+    = Omega_triangle (bold(q)_0, bold(q)_1, bold(q)_2)
+      + Omega_triangle (bold(q)_0, bold(q)_2, bold(q)_3)
+  $,
   candidate_reference_transform: $
     #symb.spatial.ref_candidate_transform
     =

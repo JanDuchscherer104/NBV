@@ -175,7 +175,7 @@ def test_target_s2_histogram_uses_object_coordinates_and_geometric_obb_scale(
     expected_view = target_rotation.T @ first_selected[:9].reshape(3, 3)[:, 2]
     expected_view /= np.linalg.norm(expected_view)
 
-    assert scale == pytest.approx(36.0 ** (1.0 / 3.0))
+    assert scale == pytest.approx(0.5 * 36.0 ** (1.0 / 3.0))
     assert histogram.rollout_count == 1
     assert histogram.movement_count == histogram.view_direction_count == 2
     assert int(histogram.movement_counts.sum()) == 2
@@ -185,6 +185,18 @@ def test_target_s2_histogram_uses_object_coordinates_and_geometric_obb_scale(
         np.linalg.norm(target_rotation.T @ (first_selected[9:12] - root[9:12]) / scale)
     )
     assert np.allclose(histogram.view_direction_projection[0], expected_view)
+    assert histogram.source_sample_count == 1
+    assert histogram.source_snippet_count == 1
+    assert histogram.source_scene_count == 1
+    assert histogram.target_count == 1
+    assert histogram.selected_step_count == 2
+    assert histogram.frustum_count == 2
+    assert histogram.frustum_missing_calibration_count == 0
+    assert histogram.frustum_mean_fov_solid_angle_sr is not None
+    assert 0.0 <= float(histogram.frustum_mean_target_surface_fraction_approx) <= 0.5
+    assert 0.0 <= float(histogram.frustum_union_target_surface_fraction_approx) <= 1.0
+    assert histogram.movement_projection_rollout_row_ids.tolist() == [rollout.rollout_row_id] * 2
+    assert histogram.movement_projection_step_indices.tolist() == [0, 1]
 
 
 def test_target_s2_histogram_rejects_nonpositive_obb_axes() -> None:
@@ -192,6 +204,74 @@ def test_target_s2_histogram_rejects_nonpositive_obb_axes() -> None:
 
     with pytest.raises(ValueError, match="strictly positive"):
         inspection_module._target_obb_geometric_mean_radius(np.asarray([1.0, 0.0, 2.0]))
+
+
+def test_target_surface_frustum_uses_camera_translation_and_front_facing_support() -> None:
+    """A frustum footprint tests target-surface points, not orientation vectors alone."""
+
+    calibration = inspection_module._SelectedFrustumCalibration(
+        candidate_row_id=0,
+        focal_px=np.asarray([1.0, 1.0]),
+        principal_point_px=np.asarray([1.0, 1.0]),
+        image_size_hw=(2, 2),
+    )
+    directions = np.asarray([[0.0, 0.0, -1.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+
+    footprint = inspection_module._target_surface_frustum_mask(
+        directions,
+        target_radius_m=1.0,
+        camera_center_target=np.asarray([0.0, 0.0, -3.0]),
+        camera_to_target=np.eye(3),
+        calibration=calibration,
+    )
+
+    assert footprint.tolist() == [True, False]
+    assert inspection_module._pinhole_frustum_solid_angle_sr(calibration) == pytest.approx(2.0 * np.pi / 3.0)
+
+
+def test_target_surface_frustum_equal_area_fraction_converges_to_visible_spherical_cap() -> None:
+    """A sufficiently wide camera recovers the analytic front-facing cap fraction."""
+
+    calibration = inspection_module._SelectedFrustumCalibration(
+        candidate_row_id=0,
+        focal_px=np.asarray([1.0, 1.0]),
+        principal_point_px=np.asarray([1.0, 1.0]),
+        image_size_hw=(2, 2),
+    )
+    directions = inspection_module._s2_bin_center_directions(180, 360)
+
+    footprint = inspection_module._target_surface_frustum_mask(
+        directions,
+        target_radius_m=1.0,
+        camera_center_target=np.asarray([0.0, 0.0, -3.0]),
+        camera_to_target=np.eye(3),
+        calibration=calibration,
+    )
+
+    # The 90-degree pinhole contains the whole apparent sphere.  A camera at
+    # distance D sees the outward-facing cap d_z < -r/D, whose S² area fraction
+    # is (1-r/D)/2.  Uniform azimuth/z bins make the discrete mean consistent.
+    assert float(np.mean(footprint)) == pytest.approx(1.0 / 3.0, abs=0.005)
+
+
+def test_target_s2_histogram_does_not_fabricate_frusta_without_calibration(tmp_path: Path) -> None:
+    """Legacy stores retain direction evidence while calibrated support stays unavailable."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "target-s2-no-depth.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=735)[:1],
+        selected_depth_enabled=False,
+    )
+
+    histogram = s2_target_direction_histogram(RolloutZarrStoreReader(result.store_dir))
+
+    assert histogram.frustum_count == 0
+    assert histogram.frustum_missing_calibration_count == histogram.selected_step_count == 2
+    assert int(histogram.frustum_counts.sum()) == 0
+    assert histogram.frustum_projection.shape == (0, 3)
+    assert histogram.frustum_mean_fov_solid_angle_sr is None
+    assert histogram.frustum_mean_target_surface_fraction_approx is None
+    assert histogram.frustum_union_target_surface_fraction_approx is None
 
 
 def test_geometry_projection_bounds_candidate_reads_to_referenced_shells(
