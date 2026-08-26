@@ -20,7 +20,6 @@ import streamlit as st
 
 from aria_nbv.oracle.pipelines.admission_evidence import read_campaign_admission_evidence
 from aria_nbv.oracle.pipelines.campaign import CudaRolloutCampaign, CudaRolloutCampaignConfig
-from aria_nbv.rollouts.inspection import discover_rollout_store_paths
 from aria_nbv.utils.config_paths import resolve_config_toml_path
 
 from ..scientific_labels import TheoryReferences
@@ -262,7 +261,8 @@ def _render_admission_section(campaign: Any, plan_path: Path) -> None:
                 source_manifest_hash=plan.source_manifest_hash,
                 admission_audit_hash=plan.admission_audit_hash,
             )
-            st.session_state[_ADMISSION_STATE_KEY] = (identity, payload)
+            stores = _validated_campaign_store_paths(campaign.progress_summary(plan=plan))
+            st.session_state[_ADMISSION_STATE_KEY] = (identity, payload, stores)
         except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
             st.session_state.pop(_ADMISSION_STATE_KEY, None)
             st.error(f"Admission evidence unavailable: {exc}")
@@ -274,25 +274,39 @@ def _render_admission_section(campaign: Any, plan_path: Path) -> None:
         st.info("Render a deterministic plan, then load the provenance-bound admission audit.")
         return
     _render_admission_audit(state[1], threshold=cfg.observed_target_iou_threshold)
-    _render_campaign_rollout_s2_evidence(cfg.output_root)
+    _render_campaign_rollout_s2_evidence(state[2] if len(state) > 2 else ())
 
 
-def _render_campaign_rollout_s2_evidence(output_root: Path) -> None:
-    """Render one completed campaign shard through the shared S² evidence view."""
+def _validated_campaign_store_paths(summary: dict[str, Any]) -> tuple[Path, ...]:
+    """Return only current-plan stores admitted by the campaign validator."""
 
-    stores = discover_rollout_store_paths(output_root / "shards")
+    artifacts = summary.get("validated_artifacts", ())
+    if not isinstance(artifacts, list | tuple):
+        return ()
+    paths = {
+        Path(store_path)
+        for artifact in artifacts
+        if isinstance(artifact, dict) and isinstance((store_path := artifact.get("store_path")), str) and store_path
+    }
+    return tuple(sorted(paths, key=Path.as_posix))
+
+
+def _render_campaign_rollout_s2_evidence(validated_store_paths: tuple[Path, ...]) -> None:
+    """Render one current-plan validated shard through the shared S² view."""
+
+    stores = validated_store_paths
     st.subheader("Completed-rollout directional evidence")
     if not stores:
-        st.caption("No promoted rollout shards are available for target-frame S² inspection yet.")
+        st.caption("No current-plan validated rollout shards are available for target-frame S² inspection yet.")
         return
     selected = st.selectbox(
         "Completed rollout shard",
         stores,
         format_func=lambda path: path.name,
         key="campaign_admission_s2_store",
-        help="Each selection remains an immutable shard; stores are not pooled across incompatible campaign identities.",
+        help="Each selection is a current-plan validated immutable shard; stores are not pooled across incompatible campaign identities.",
     )
-    st.caption(f"Selected promoted shard: {selected}")
+    st.caption(f"Selected current-plan validated shard: {selected}")
     render_s2_direction_histograms(
         _CampaignS2Handle(Path(selected)),
         key_prefix=f"campaign_admission_{Path(selected).name}",
