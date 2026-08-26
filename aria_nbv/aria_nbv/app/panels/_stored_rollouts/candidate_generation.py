@@ -512,29 +512,32 @@ def _candidate_benchmark_figures(records: tuple[Any, ...]) -> tuple[go.Figure, .
         )
         return (*figures, resources)
 
-    rows = []
-    for record in records:
-        for point in record.points:
-            rows.append(
-                {
-                    "x": point.xyz[0],
-                    "y": point.xyz[1],
-                    "z": point.xyz[2],
-                    "candidate_id": point.candidate_id,
-                    "state": point.state_key,
-                    "family": point.family,
-                    "status": "selected" if point.selected else "valid" if point.actor_valid else "invalid",
-                    "lineage": point.candidate_config or "unavailable",
-                }
-            )
-    frame = pd.DataFrame(rows)
-    funnel_rows = [
-        {"stage": stage, "count": sum(getattr(family, field) for record in records for family in record.families)}
-        for stage, field in (("attempted", "attempted"), ("actor-valid", "valid"), ("selected", "selected"))
-    ]
-    funnel = px.bar(
-        pd.DataFrame(funnel_rows), x="stage", y="count", title="Candidate family attempted → valid → selected funnel"
+    points = tuple(point for record in records for point in record.points)
+    point_count = len(points)
+    coordinates = np.asarray([point.xyz for point in points], dtype=float)
+    selected = np.fromiter((point.selected for point in points), dtype=bool, count=point_count)
+    actor_valid = np.fromiter((point.actor_valid for point in points), dtype=bool, count=point_count)
+    frame = pd.DataFrame(
+        {
+            "x": coordinates[:, 0],
+            "y": coordinates[:, 1],
+            "z": coordinates[:, 2],
+            "candidate_id": np.fromiter((point.candidate_id for point in points), dtype=np.int64, count=point_count),
+            "state": np.fromiter((point.state_key for point in points), dtype=object, count=point_count),
+            "family": np.fromiter((point.family for point in points), dtype=object, count=point_count),
+            "status": np.select((selected, actor_valid), ("selected", "valid"), default="invalid"),
+            "lineage": np.fromiter(
+                (point.candidate_config or "unavailable" for point in points), dtype=object, count=point_count
+            ),
+        }
     )
+    family_counts = np.asarray(
+        [(family.attempted, family.valid, family.selected) for record in records for family in record.families],
+        dtype=np.int64,
+    )
+    totals = family_counts.sum(axis=0) if len(family_counts) else np.zeros(3, dtype=np.int64)
+    funnel_rows = pd.DataFrame({"stage": ("attempted", "actor-valid", "selected"), "count": totals})
+    funnel = px.bar(funnel_rows, x="stage", y="count", title="Candidate family attempted → valid → selected funnel")
     for trace in funnel.data:
         trace.name = trace.name or "candidate funnel"
     plane = px.scatter(

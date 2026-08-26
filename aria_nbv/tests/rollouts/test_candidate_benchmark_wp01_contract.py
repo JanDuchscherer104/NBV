@@ -177,6 +177,38 @@ def test_public_benchmark_figures_expose_four_named_groups_and_support_metadata(
     assert list(figures[0].data[0].y) == [3, 3, 2]
 
 
+def test_benchmark_figure_bulk_projection_preserves_point_status_and_funnel_totals() -> None:
+    additional = CandidateBenchmark(
+        "state-2",
+        "scene-a",
+        (CandidateFamilyCounts("lateral", True, 5, 4, 0, 5),),
+        candidate_ids=(5,),
+        coordinates=((0.5, -0.4, 0.2),),
+        points=(
+            CandidatePoint(
+                5,
+                (0.5, -0.4, 0.2),
+                "lateral",
+                "lateral_target_bypass",
+                False,
+                False,
+                "state-2",
+                None,
+                "roll-a",
+                "branch-c",
+            ),
+        ),
+    )
+
+    figures = candidate_generation._candidate_benchmark_figures((_record(), additional))
+
+    support = figures[2].data[0]
+    assert list(support.x) == [0.1, -0.2, 0.5]
+    assert list(support.customdata[:, 2]) == ["valid", "selected", "invalid"]
+    assert list(support.customdata[:, 3]) == ["cfg-a", "cfg-b", "unavailable"]
+    assert list(figures[0].data[0].y) == [8, 7, 2]
+
+
 def test_benchmark_reader_filters_state_before_applying_candidate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     def row(candidate_id: int, rollout_id: int, step_id: int) -> dict[str, Any]:
         return {
