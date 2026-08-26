@@ -183,6 +183,26 @@ def test_reader_indexes_complete_chains_with_compact_keys(tmp_path: Path) -> Non
         reader.chain_identity(2)
 
 
+def test_reader_receipt_identity_binds_admitted_target_descriptor_lineage(tmp_path: Path) -> None:
+    """Receipt identity keeps protocol and per-target observed-descriptor provenance."""
+
+    reader = QhRolloutReader((_write_v1_store(tmp_path / "v1.zarr"),))
+
+    identity = reader.target_descriptor_identity
+
+    assert identity["schema_version"] == "qh-target-descriptor-identity-v1"
+    assert len(identity["stores"]) == 1
+    store = identity["stores"][0]
+    assert store["target_protocol_version"] == "v1_observed"
+    assert store["manifest_sha256"]
+    descriptor = store["descriptors"][0]
+    assert descriptor["target_row_id"] == 0
+    assert descriptor["descriptor_source"] == "detected_obbs"
+    assert descriptor["descriptor_provenance"] == "actor_visible_detector"
+    assert isinstance(descriptor["descriptor_hash"], str)
+    assert len(descriptor["descriptor_hash"]) == 64
+
+
 def test_reader_normalizes_validation_campaign_split_without_changing_source_split(tmp_path: Path) -> None:
     records = build_rollout_records(horizon=2, num_samples=6, seed=7)[:1]
     records[0].lineage.source.campaign_split = "validation"

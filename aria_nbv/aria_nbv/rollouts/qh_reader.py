@@ -417,6 +417,60 @@ class QhRolloutReader:
             "contract": self.contract,
         }
 
+    @property
+    def target_descriptor_identity(self) -> dict[str, object]:
+        """Return the admitted target-descriptor identities for experiment receipts.
+
+        This metadata-only projection binds each materialized target table row
+        to its target-input protocol and actor-facing descriptor construction.
+        It is audit lineage, never a scorer input: values are read directly
+        from the immutable rollout store and retain the store-manifest hashes
+        returned by :attr:`provenance`.
+        """
+
+        by_store: dict[int, tuple[_ChainRef, ...]] = {
+            store_index: tuple(chain for chain in self._chains if chain.store_index == store_index)
+            for store_index in range(len(self._stores))
+        }
+        stores: list[dict[str, object]] = []
+        for store_index, store in enumerate(self._stores):
+            chains = by_store[store_index]
+            if not chains:
+                continue
+            root = self._root(store_index)
+            target = root["targets"]
+            positions = sorted({chain.target_position for chain in chains})
+            descriptor_sources = _decode_dictionary(root, "descriptor_source")
+            descriptor_provenances = _decode_dictionary(root, "descriptor_provenance")
+            descriptor_hashes = _decode_dictionary(root, "descriptor_hash")
+            target_rows = np.asarray(target["target_row_id"], dtype=np.int64).reshape(-1)
+            source_ids = np.asarray(target["descriptor_source_id"], dtype=np.int64).reshape(-1)
+            provenance_ids = np.asarray(target["descriptor_provenance_id"], dtype=np.int64).reshape(-1)
+            hash_ids = np.asarray(target["descriptor_hash_id"], dtype=np.int64).reshape(-1)
+            descriptors = [
+                {
+                    "target_row_id": int(target_rows[position]),
+                    "descriptor_source": _dictionary_value(
+                        descriptor_sources, source_ids[position], field="descriptor_source"
+                    ),
+                    "descriptor_provenance": _dictionary_value(
+                        descriptor_provenances, provenance_ids[position], field="descriptor_provenance"
+                    ),
+                    "descriptor_hash": _dictionary_value(
+                        descriptor_hashes, hash_ids[position], field="descriptor_hash"
+                    ),
+                }
+                for position in positions
+            ]
+            stores.append(
+                {
+                    "manifest_sha256": store.manifest_hash,
+                    "target_protocol_version": str(root.attrs["target_protocol_version"]),
+                    "descriptors": descriptors,
+                }
+            )
+        return {"schema_version": "qh-target-descriptor-identity-v1", "stores": stores}
+
     def __getstate__(self) -> dict[str, Any]:
         """Drop process-owned Zarr handles before worker pickling."""
         state = self.__dict__.copy()
@@ -1212,6 +1266,17 @@ def _decode_referenced_dictionary_values(
     if np.any((value_ids < 0) | (value_ids >= len(dictionary))):
         raise ValueError(f"Q_H {group_name}/{array_name} contains an out-of-range dictionary id.")
     return tuple(sorted({dictionary[int(value_id)] for value_id in value_ids if dictionary[int(value_id)]}))
+
+
+def _dictionary_value(dictionary: tuple[str, ...], value_id: int, *, field: str) -> str:
+    """Decode one required target-lineage dictionary value with bounds checking."""
+
+    if value_id < 0 or value_id >= len(dictionary):
+        raise ValueError(f"targets/{field}_id contains an out-of-range dictionary id.")
+    value = dictionary[value_id]
+    if not value:
+        raise ValueError(f"targets/{field}_id references an empty target-lineage value.")
+    return value
 
 
 def _find_sorted_row(array: zarr.Array, value: int) -> int:

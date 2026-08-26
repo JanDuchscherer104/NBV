@@ -292,6 +292,19 @@ class QhDataset(Dataset[QhChain]):
             "admission_coverage": self.admission_coverage,
         }
 
+    @property
+    def target_descriptor_identity(self) -> dict[str, object]:
+        """Return receipt-only target descriptor lineage for admitted rollout rows.
+
+        The projection records the target-input protocol plus the source,
+        provenance, and hash of every admitted descriptor. It is deliberately
+        separate from :class:`QhActorTensors`: training receipts need to audit
+        target provenance, whereas the scorer receives only descriptor values
+        admitted by that frozen protocol.
+        """
+
+        return self.rollout_reader.target_descriptor_identity
+
     @cached_property
     def admission_coverage(self) -> dict[str, Any]:
         """Report source coverage without inventing a target-task denominator.

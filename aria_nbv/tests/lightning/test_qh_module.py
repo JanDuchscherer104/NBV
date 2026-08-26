@@ -168,6 +168,24 @@ class _ChainDataset(Dataset[QhChain]):
         self.contract = _CONTRACT
         self.actor_state_contract = actor_state_contract
         self.provenance: dict[str, object] = {"scene": scene}
+        self.target_descriptor_identity: dict[str, object] = {
+            "schema_version": "qh-target-descriptor-identity-v1",
+            "stores": [
+                {
+                    "manifest_sha256": f"fixture-{scene}",
+                    "target_protocol_version": "v1_observed",
+                    "descriptors": [
+                        {
+                            "target_row_id": chain.key.target_row_id,
+                            "descriptor_source": "detected_obbs",
+                            "descriptor_provenance": "actor_visible_detector",
+                            "descriptor_hash": f"fixture-{scene}-{chain.key.target_row_id}",
+                        }
+                        for chain in chains
+                    ],
+                }
+            ],
+        }
 
     def __len__(self) -> int:
         return len(self.chains)

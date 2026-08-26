@@ -45,6 +45,8 @@ _MANIFEST_FILENAME = "manifest.json"
 _SCORER_STATE_FILENAME = "scorer-state.pt"
 _TRAINING_RECEIPT_FILENAME = "training-receipt.json"
 _SELECTION_RECEIPT_FILENAME = "checkpoint-selection-receipt.json"
+_PYTORCH3D_VCS_URL = "https://github.com/facebookresearch/pytorch3d.git"
+_PYTORCH3D_VCS_COMMIT = "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
 _IDENTITY_FIELDS = {
     "actor_state_contract",
     "actor_state_contract_hash",
@@ -349,7 +351,7 @@ class QhExperiment:
             _write_json(selection_path, selection_receipt)
 
             training_receipt = {
-                "schema_version": "qh-training-receipt-v2",
+                "schema_version": "qh-training-receipt-v3",
                 "seed": int(request.seed),
                 "warm_start_parent_manifest_sha256": (
                     None if warm_start_parent is None else warm_start_parent.manifest_sha256
@@ -358,6 +360,11 @@ class QhExperiment:
                 "train_provenance": _jsonable(train.provenance),
                 "validation_provenance": _jsonable(validation.provenance),
                 "test_provenance": _jsonable(test.provenance),
+                "target_descriptor_identity": {
+                    "train": _jsonable(train.target_descriptor_identity),
+                    "validation": _jsonable(validation.target_descriptor_identity),
+                    "test": _jsonable(test.target_descriptor_identity),
+                },
                 "learning_contract_hash": data.learning_contract_hash,
                 "actor_state_contract_hash": data.actor_state_contract_hash,
                 "trained_horizon_support": trained_horizon_support,
@@ -495,12 +502,13 @@ class QhExperiment:
         )
         trainer_config.setup_target().test(module, datamodule=data)
         receipt = {
-            "schema_version": "qh-held-out-diagnostic-receipt-v2",
+            "schema_version": "qh-held-out-diagnostic-receipt-v3",
             "diagnostic_only": True,
             "endpoint_policy_evidence": False,
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
             "test_provenance_sha256": _json_payload_hash(test.provenance),
+            "target_descriptor_identity": _jsonable(test.target_descriptor_identity),
             "ordered_store_manifest_sha256s": _ordered_store_manifest_hashes(test.provenance),
             "ordered_store_manifests_sha256": _json_payload_hash(_ordered_store_manifest_hashes(test.provenance)),
             "bound_contract": {
@@ -1169,13 +1177,43 @@ def _verify_all_artifacts(bundle_path: Path, manifest: dict[str, Any]) -> None:
 
 
 def _bundle_dependencies() -> dict[str, str]:
-    """Return the exact runtime identity admitted by the V1 bundle schema."""
+    """Return exact runtime and PyTorch3D source identities.
+
+    PyTorch3D exposes performance-critical compiled geometry operators while
+    its package version alone does not identify a VCS installation. The
+    bundle therefore fails closed unless installed ``direct_url.json`` metadata
+    names the repository and exact commit pinned by ``pyproject.toml`` and
+    ``uv.lock``. A moving branch name can never become scientific runtime
+    identity, even if it happened to resolve to the same commit once.
+    """
 
     return {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "torch": str(torch.__version__),
         "pytorch_lightning": importlib.metadata.version("pytorch-lightning"),
+        "pytorch3d": importlib.metadata.version("pytorch3d"),
+        "pytorch3d_vcs_url": _PYTORCH3D_VCS_URL,
+        "pytorch3d_vcs_commit": _installed_pytorch3d_vcs_commit(),
     }
+
+
+def _installed_pytorch3d_vcs_commit() -> str:
+    """Return the verified installed PyTorch3D commit or reject the runtime."""
+
+    distribution = importlib.metadata.distribution("pytorch3d")
+    direct_url = distribution.read_text("direct_url.json")
+    if direct_url is None:
+        raise ValueError("Q_H bundle runtime requires PyTorch3D direct_url.json VCS provenance.")
+    try:
+        payload = json.loads(direct_url)
+        url = payload["url"]
+        vcs = payload["vcs_info"]["vcs"]
+        commit = payload["vcs_info"]["commit_id"]
+    except (json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ValueError("Q_H bundle runtime has malformed PyTorch3D VCS provenance.") from error
+    if (url, vcs, commit) != (_PYTORCH3D_VCS_URL, "git", _PYTORCH3D_VCS_COMMIT):
+        raise ValueError("Q_H bundle runtime PyTorch3D VCS identity does not match the exact project pin.")
+    return str(commit)
 
 
 def _bundle_implementation() -> dict[str, str]:

@@ -584,6 +584,34 @@ def test_qh_bundle_rejects_recorded_identity_mutation(tmp_path, mutation: str, m
         QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
+def test_qh_bundle_dependencies_bind_exact_pytorch3d_vcs_identity() -> None:
+    dependencies = qh_experiment_module._bundle_dependencies()  # noqa: SLF001
+
+    assert dependencies["pytorch3d"] == "0.7.9"
+    assert dependencies["pytorch3d_vcs_url"] == "https://github.com/facebookresearch/pytorch3d.git"
+    assert dependencies["pytorch3d_vcs_commit"] == "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
+
+
+def test_qh_bundle_dependencies_reject_moving_pytorch3d_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    direct_url = json.dumps(
+        {
+            "url": "https://github.com/facebookresearch/pytorch3d.git",
+            "vcs_info": {
+                "vcs": "git",
+                "commit_id": "0" * 40,
+                "requested_revision": "main",
+            },
+        }
+    )
+    distribution = SimpleNamespace(read_text=lambda name: direct_url if name == "direct_url.json" else None)
+    monkeypatch.setattr(qh_experiment_module.importlib.metadata, "distribution", lambda _name: distribution)
+
+    with pytest.raises(ValueError, match="does not match the exact project pin"):
+        qh_experiment_module._installed_pytorch3d_vcs_commit()  # noqa: SLF001
+
+
 def test_qh_bundle_rejects_learning_horizon_beyond_scorer_capacity(tmp_path) -> None:
     _experiment_instance, ref = _bundle(tmp_path)
     manifest_path = ref.bundle_path / "manifest.json"
@@ -890,6 +918,14 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     training_receipt = json.loads(result.training_receipt_path.read_text(encoding="utf-8"))
     assert training_receipt["warm_start_parent_manifest_sha256"] is None
     assert "test_loss" not in training_receipt
+    assert training_receipt["target_descriptor_identity"] == {
+        stage: dataset.target_descriptor_identity
+        for stage, dataset in {
+            "train": train_dataset,
+            "validation": validation_dataset,
+            "test": test_dataset,
+        }.items()
+    }
 
     held_out = experiment.evaluate_held_out(
         QhHeldOutEvaluationRequest(
@@ -901,6 +937,7 @@ def test_qh_fit_publishes_new_bundle_and_hashed_receipts(tmp_path) -> None:
     held_out_receipt = json.loads(held_out.receipt_path.read_text(encoding="utf-8"))
     assert held_out_receipt["diagnostic_only"] is True
     assert held_out_receipt["endpoint_policy_evidence"] is False
+    assert held_out_receipt["target_descriptor_identity"] == test_dataset.target_descriptor_identity
     assert (
         held_out_receipt["test_provenance_sha256"]
         == hashlib.sha256(
