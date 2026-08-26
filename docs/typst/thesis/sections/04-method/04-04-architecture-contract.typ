@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": thesis_status, prune_todo
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Geometric and Mask Acceptance Tests <sec:thesis-method-geometry-contract>
 
@@ -57,21 +57,21 @@ The shared A0/A1 query contains root- and current-relative candidate pose, an ex
 History representation is orthogonal to A0/A1 interaction. The default `None` alias preserves the original H0 masked mean and its old state-dictionary/config identity. Explicit `mean_pool_v1` names the same control; `causal_transformer_v1` is an implemented exploratory H1 carrier with relative-age encoding, a learned empty-prefix token, causal self-attention, and last-valid readout. Both emit one equal-width history token. H1 must retain exact-prefix, padding, future-perturbation, and candidate-equivariance tests, and it is not promoted from executability alone. Spatial scene memory remains a later internal replacement behind the same scorer interface @UVFA-schaul2015.
 
 #figure(
-  text(size: 8.2pt, table(
+  publication-table(
+    text-size: 8.2pt,
     columns: (0.45fr, 1.02fr, 1.63fr),
-    toprule(),
-    table.header([*Level*], [*Interaction model*], [*Scientific role*]),
-    midrule(),
-    [A0], [Independent per-row MLP], [Locks target/candidate descriptors, time context, and label learnability for a fixed scene carrier; adapters retain hard masks.],
-    [A1], [Candidate-to-state cross-attention], [Each candidate query independently reads shared target, scene, history, and budget context.],
-    [A2], [DeepSets candidate context], [Tests whether an unordered summary of valid candidates adds information without pairwise attention.],
-    [A3], [Masked Set Transformer], [Tests candidate--candidate interaction while preserving row equivariance and mask isolation.],
-    [A4], [Query-local relation bias], [Tests QCNet-style target, history, and candidate relations without importing its forecasting decoder.],
-    [A5], [Temporal/recurrent state read], [Tests whether ordered long-horizon history remains informative after explicit dynamic scene memory.],
-    [A6], [Residual value head], [Tests finite-horizon recovery over a calibrated continuous one-step root-gain control.],
-    [A7+], [Exact-equivariant or graph interaction], [Escalates only after local-frame controls reveal a symmetry-related failure.],
-    bottomrule(),
-  )),
+    header: ([*Level*], [*Interaction model*], [*Scientific role*]),
+    rows: (
+      [A0], [Independent per-row MLP], [Locks target/candidate descriptors, time context, and label learnability for a fixed scene carrier; adapters retain hard masks.],
+      [A1], [Candidate-to-state cross-attention], [Each candidate query independently reads shared target, scene, history, and budget context.],
+      [A2], [DeepSets candidate context], [Tests whether an unordered summary of valid candidates adds information without pairwise attention.],
+      [A3], [Masked Set Transformer], [Tests candidate--candidate interaction while preserving row equivariance and mask isolation.],
+      [A4], [Query-local relation bias], [Tests QCNet-style target, history, and candidate relations without importing its forecasting decoder.],
+      [A5], [Temporal/recurrent state read], [Tests whether ordered long-horizon history remains informative after explicit dynamic scene memory.],
+      [A6], [Residual value head], [Tests finite-horizon recovery over a calibrated continuous one-step root-gain control.],
+      [A7+], [Exact-equivariant or graph interaction], [Escalates only after local-frame controls reveal a symmetry-related failure.],
+    ),
+  ),
   caption: [Interaction-architecture ladder. A0 and A1 are implemented; scene carrier, target/source protocol, time-query contract, decoder, and learning target stay fixed for their comparison.],
 ) <tab:geometric-learning-ladder>
 

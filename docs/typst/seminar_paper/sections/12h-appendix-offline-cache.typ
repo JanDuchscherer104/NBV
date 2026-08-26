@@ -1,5 +1,4 @@
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
+#import "../../shared/tables.typ": publication-table
 
 = VIN offline store and batching
 
@@ -40,7 +39,7 @@ For the current materialized subset we observe:
   kind: "table",
   supplement: [Table],
   caption: [Representative per-snippet tensor footprint (CPU, float32).],
-  text(size: 8.5pt)[
+  [
     #let rows = (
       ([backbone_out], [#s.backbone MB]),
       ([candidate_pcs], [#s.candidate_pcs MB]),
@@ -51,14 +50,11 @@ For the current materialized subset we observe:
       ([total + backbone], [#s.total_with_backbone MB]),
       ([min train payload], [#s.total_min_train MB]),
     )
-    #table(
+    #publication-table(
       columns: (16em, auto),
+      header: ([Field], [MB]),
       align: (left, left),
-      toprule(),
-      table.header([Field], [MB]),
-      midrule(),
-      ..rows.flatten(),
-      bottomrule(),
+      rows: rows.flatten(),
     )
   ],
 )

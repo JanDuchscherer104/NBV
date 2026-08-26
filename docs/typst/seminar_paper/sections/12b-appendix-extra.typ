@@ -1,9 +1,8 @@
 #pagebreak()
 
 = Appendix: Additional Diagnostics <sec:appendix-extra>
-#import "@preview/booktabs:0.0.4": *
 #import "../../shared/macros.typ": *
-#show: booktabs-default-table-style
+#import "../../shared/tables.typ": publication-table
 
 #let breakable-key(key) = {
   key.replace("/", "/\u{200b}").replace("_", "_\u{200b}")
@@ -87,14 +86,11 @@ VINv3 baseline training run.
   // Date-stamped run wording; keep the table but remove the run/date reference.
   caption: [Training configuration for the VIN v3 baseline (Jan 2026 run).],
   // </rm>
-  table(
+  publication-table(
     columns: (18em, auto),
+    header: ([Parameter], [Value]),
     align: (left, left),
-    toprule(),
-    table.header([Parameter], [Value]),
-    midrule(),
-    ..train_cells,
-    bottomrule(),
+    rows: train_cells,
   ),
 ) <tab:train-config>
 

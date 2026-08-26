@@ -1,8 +1,10 @@
 #import "../draft_markers.typ": development_only, promotion_entry, thesis_status
+#import "../../shared/tables.typ": development-table
 
 // This is a development-only evidence view.  Python modules, focused tests,
 // configuration, and immutable artifacts remain the owners of implementation
 // contracts and measurements.
+#show heading.where(level: 1): it => it
 #development_only(() => [
   #heading(level: 1, numbering: none)[M1 Contract Report] <ch:m1-contract-report>
 
@@ -21,33 +23,33 @@
     and scale evidence do not yet close the M1 exit gate.
   ]
 
-  #table(
+  #development-table(
     columns: (1.1fr, 0.8fr, 2.3fr),
-    stroke: 0.35pt + luma(70%),
-    inset: 5pt,
-    table.header([*Area*], [*Status*], [*Owner and evidence pointer*]),
-    [Source-contract guards], [validated], [
-      Focused tests under `aria_nbv/tests/data_handling/`,
-      `aria_nbv/tests/pose_generation/`, and `aria_nbv/tests/rollouts/` own
-      the executable checks; this view records only their M1 status.
-    ],
-    [Configured local store], [blocked], [
-      `.configs/offline_only.toml` and the resolved
-      `.data/offline_cache/vin_offline` artifact are the smoke-evidence owners.
-    ],
-    [Scene-level split evidence], [blocked], [
-      The store artifact and its split metadata require a scene-level
-      train/validation proof before promotion.
-    ],
-    [Rerun diagnostics], [blocked], [
-      No M1 Rerun recordings are present in this worktree. The recording gate
-      remains open; absence is reported explicitly rather than linked to a
-      nonexistent artifact.
-    ],
-    [Oracle throughput], [blocked], [
-      Representative mesh, rendering, backprojection, and RRI timing remains
-      to be captured in the experiment evidence owner.
-    ],
+    header: ([*Area*], [*Status*], [*Owner and evidence pointer*]),
+    rows: (
+      [Source-contract guards], [validated], [
+        Focused tests under `aria_nbv/tests/data_handling/`,
+        `aria_nbv/tests/pose_generation/`, and `aria_nbv/tests/rollouts/` own
+        the executable checks; this view records only their M1 status.
+      ],
+      [Configured local store], [blocked], [
+        `.configs/offline_only.toml` and the resolved
+        `.data/offline_cache/vin_offline` artifact are the smoke-evidence owners.
+      ],
+      [Scene-level split evidence], [blocked], [
+        The store artifact and its split metadata require a scene-level
+        train/validation proof before promotion.
+      ],
+      [Rerun diagnostics], [blocked], [
+        No M1 Rerun recordings are present in this worktree. The recording gate
+        remains open; absence is reported explicitly rather than linked to a
+        nonexistent artifact.
+      ],
+      [Oracle throughput], [blocked], [
+        Representative mesh, rendering, backprojection, and RRI timing remains
+        to be captured in the experiment evidence owner.
+      ],
+    ),
   )
 
   #heading(level: 2, numbering: none)[Evidence] <ssec:m1-evidence>

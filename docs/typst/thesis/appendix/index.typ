@@ -1,6 +1,6 @@
 #import "../experiment_data.typ": thesis-report-settings, load-thesis-report, short-store-label, digest-prefix, format-report-value
 #import "../draft_markers.typ": development_only
-#import "@preview/booktabs:0.0.4": *
+#import "../../shared/tables.typ": publication-table
 
 #let report-settings = thesis-report-settings()
 #let thesis_evidence_status = report-settings.evidence-status
@@ -61,18 +61,15 @@
 The report bundle is the single numerical interface between validated rollout artifacts and this manuscript. Its schema version, evidence status, store manifests, typed parameter rows, failure records, and sidecar hashes preserve provenance without duplicating analysis logic in Typst. The document loader rejects schema or status mismatches before any table is rendered. Compact labels and digest prefixes are used below; complete store identifiers, paths, and hashes remain in the machine-readable bundle.
 
 #figure(
-  table(
+  publication-table(
     columns: (1.1fr, 1fr, 1.1fr, 0.7fr),
-    toprule(),
-    table.header([*Evidence class*], [*Store*], [*Manifest digest*], [*Validated*]),
-    midrule(),
-    ..thesis_data.tables.stores.rows.map(store => (
-      [#bundle-label],
-      [#short-store-label(thesis_data, store.store_id)],
-      [#digest-prefix(store.manifest_sha256)],
-      [#if store.validation_ok { [yes] } else { [no] }],
-    )).flatten(),
-    bottomrule(),
+    header: ([*Evidence class*], [*Store*], [*Manifest digest*], [*Validated*]),
+    rows: thesis_data.tables.stores.rows.map(store => (
+        [#bundle-label],
+        [#short-store-label(thesis_data, store.store_id)],
+        [#digest-prefix(store.manifest_sha256)],
+        [#if store.validation_ok { [yes] } else { [no] }],
+      )).flatten(),
   ),
   caption: if bundle-role == "fixture" {
     [Loaded development-fixture provenance. The fixture verifies the document interface only and is not scientific evidence.]
@@ -85,17 +82,15 @@ The report bundle is the single numerical interface between validated rollout ar
   The resolved configuration parameters below are read from the same confirmatory bundle as the reported results. The projection is an explicit ten-key contract covering source and target caps, target sampling, candidate count, motion realism, render batching, depth scale, and lookahead depth and branching. Other flattened manifest values remain available in the bundle. Missing selected values remain explicit rather than being replaced by document defaults.
 
   #figure(
-    table(
+    publication-table(
       columns: (0.9fr, 1.8fr, 1fr),
-      toprule(),
-      table.header([*Profile*], [*Resolved parameter*], [*Value*]),
-      midrule(),
-      ..selected-parameter-rows.map(entry => (
-        [#entry.store],
-        [#entry.label],
-        [#parameter-value(entry.row)],
-      )).flatten(),
-      bottomrule(),
+      align: (left, left, right),
+      header: ([*Profile*], [*Resolved parameter*], [*Value*]),
+      rows: selected-parameter-rows.map(entry => (
+          [#entry.store],
+          [#entry.label],
+          [#parameter-value(entry.row)],
+        )).flatten(),
     ),
     caption: [Thesis-critical resolved parameters. Short profile labels map one-to-one to the provenance rows above; full keys and store identifiers remain in the report bundle.],
   ) <tab:thesis-resolved-parameters>

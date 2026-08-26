@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": validation_todo
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Study Population and Evidence Gates
 
@@ -33,23 +33,23 @@ $
 Success is measured by matched endpoint oracle evaluation, not predicted values or training loss. If lookahead has no meaningful headroom, the result is scoped to the frozen split, target protocol, candidate generator, horizon, branch factor, and validity regime. If headroom exists but the learned model does not recover it, target observability, action support, replay coverage, reward construction, and model capacity remain separate candidate explanations.
 
 #figure(
-  table(
+  publication-table(
     columns: (0.82fr, 1.18fr, 1.52fr),
-    toprule(),
-    table.header([*Claim*], [*Primary evidence*], [*Decision rule*]),
-    midrule(),
-    [Population],
-    [scene-split manifest and coverage bundle],
-    [Inference is restricted to the frozen held-out scene population.],
-    [Task protocol],
-    [GT pool, sampled tasks, classes, and oracle failures],
-    [Current evidence is oracle-task coverage, not observed-target matching.],
-    [Myopic control],
-    [ranking, calibration, and oracle-rescored selections],
-    [Actor-visible target conditioning must be implemented before comparison.],
-    [Planning headroom],
-    [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
-    [#symb.rl.qh is evaluated only after a meaningful-headroom gate.], bottomrule(),
+    header: ([*Claim*], [*Primary evidence*], [*Decision rule*]),
+    rows: (
+      [Population],
+      [scene-split manifest and coverage bundle],
+      [Inference is restricted to the frozen held-out scene population.],
+      [Task protocol],
+      [GT pool, sampled tasks, classes, and oracle failures],
+      [Current evidence is oracle-task coverage, not observed-target matching.],
+      [Myopic control],
+      [ranking, calibration, and oracle-rescored selections],
+      [Actor-visible target conditioning must be implemented before comparison.],
+      [Planning headroom],
+      [#symb.entity.lookahead_headroom and recovered fraction #symb.entity.q_recovery],
+      [#symb.rl.qh is evaluated only after a meaningful-headroom gate.],
+    ),
   ),
   caption: [Objective-to-evidence matrix.],
 ) <tab:thesis-objective-evidence>

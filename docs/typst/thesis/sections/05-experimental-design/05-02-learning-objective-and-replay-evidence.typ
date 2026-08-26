@@ -2,7 +2,7 @@
 #import "../../../shared/symbols.typ": symb
 #import "../../../shared/equations.typ": eqs
 #import "../../draft_markers.typ": thesis_status
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Replay Eligibility and Finite-Horizon Learning Gate
 
@@ -11,42 +11,41 @@ The factual rollout tables determine which records may supervise each learning p
 All eligible candidate rows can support dense one-step supervision. Exact H=2 supervision is narrower: the factual first action must have a stored reward and either an explicit terminal outcome, whose continuation is exactly zero, or a valid successor step with finite one-step root-gain labels for every hard-valid successor candidate. This completeness condition makes the masked successor maximum exact over the stored action set; one finite label is insufficient because an unlabeled hard-valid action could have the true maximum. General recursive supervision is narrower again: it requires a factual selected action, reward, terminal flag, discount, a defined training horizon, and—when nonterminal—a reproducible successor state, hard mask, and lower-horizon factual support. The derived `q_h/` arrays align these fields on a padded state--candidate view; they do not create labels for unobserved transitions, make selected GT depth actor-visible, or turn sparse long-horizon action support into dense support.
 
 #figure(
-  table(
+  publication-table(
     columns: (0.78fr, 1.10fr, 1.42fr),
-    toprule(),
-    table.header([*Learning surface*], [*Purpose*], [*Minimum factual evidence*]),
-    midrule(),
-    [dense $h=1$], [immediate candidate value],
-    [actor-selectable row with finite one-step root-gain label],
-    [exact $h=2$], [base-case finite-support value],
-    [selected reward plus either terminal outcome or complete finite one-step labels over the hard-valid successor action set],
-    [recursive $h>1$], [variable-horizon fitted value],
-    [selected transition, terminal and discount; nonterminal rows also require successor actor state, hard mask, and lower-horizon target support],
-    [behavior return], [policy-conditioned Monte-Carlo control],
-    [complete retained reward prefix and behavior-policy identity],
-    bottomrule(),
+    header: ([*Learning surface*], [*Purpose*], [*Minimum factual evidence*]),
+    rows: (
+      [dense $h=1$], [immediate candidate value],
+      [actor-selectable row with finite one-step root-gain label],
+      [exact $h=2$], [base-case finite-support value],
+      [selected reward plus either terminal outcome or complete finite one-step labels over the hard-valid successor action set],
+      [recursive $h>1$], [variable-horizon fitted value],
+      [selected transition, terminal and discount; nonterminal rows also require successor actor state, hard mask, and lower-horizon target support],
+      [behavior return], [policy-conditioned Monte-Carlo control],
+      [complete retained reward prefix and behavior-policy identity],
+    ),
   ),
   caption: [Required replay evidence by learning target. Dense immediate labels, exact H=2 targets, recursive optimal-continuation targets, and behavior-policy returns are distinct supervision surfaces.],
 ) <tab:thesis-support-coverage>
 
 #figure(
-  table(
+  publication-table(
     columns: (0.72fr, 1.18fr, 1.25fr),
-    toprule(),
-    table.header([*Gate*], [*Available evidence*], [*Required before inference*]),
-    midrule(),
-    [Oracle data], [target labels, masks, lineage, replay validation, and selected-depth persistence],
-    [held-out coverage, source-role audit, and matched endpoint evaluation],
-    [Myopic control], [scene-level VIN substrate],
-    [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
-    [Finite-horizon scorer], [feature-matched A0/A1--S0-pose/root-moments scalar-horizon controls and fitted-Q seam],
-    [exact-Q2 certification, parameter/runtime report, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
-    [Requested horizons], [fail-closed scalar query and exact $h arrow.l h-1$ recursion tests],
-    [supported targets through $H_"max"$, positive headroom, and per-horizon validation],
-    [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
-    [typed dynamic-state reader, deterministic fusion, source masks, and held-out policy evaluation],
-    [Policy claim], [train-only feasibility pilots],
-    [completed held-out paired comparison under equal budget], bottomrule(),
+    header: ([*Gate*], [*Available evidence*], [*Required before inference*]),
+    rows: (
+      [Oracle data], [target labels, masks, lineage, replay validation, and selected-depth persistence],
+      [held-out coverage, source-role audit, and matched endpoint evaluation],
+      [Myopic control], [scene-level VIN substrate],
+      [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
+      [Finite-horizon scorer], [feature-matched A0/A1--S0-pose/root-moments scalar-horizon controls and fitted-Q seam],
+      [exact-Q2 certification, parameter/runtime report, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
+      [Requested horizons], [fail-closed scalar query and exact $h arrow.l h-1$ recursion tests],
+      [supported targets through $H_"max"$, positive headroom, and per-horizon validation],
+      [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
+      [typed dynamic-state reader, deterministic fusion, source masks, and held-out policy evaluation],
+      [Policy claim], [train-only feasibility pilots],
+      [completed held-out paired comparison under equal budget],
+    ),
   ),
   caption: [Learning-readiness gates. A runnable scorer establishes executable readiness, not a scientific policy result.],
 ) <tab:thesis-learning-readiness>
@@ -71,19 +70,9 @@ $
 
 The masked argmax is already the discrete decision rule. A separate actor network and online data collection are not required to train or execute this finite-candidate policy. Batch fitted Q iteration explicitly learns a greedy Q function from a fixed collection of transitions by repeatedly solving supervised regression problems @FittedQIteration-ernst2005.
 
-=== Training unit, causal batching, and prediction support
-
-A retained rollout chain supplies several realized decision states rather than one monolithic recurrent sample. The root is one state; after each selected action, its factual successor is another state with an updated current pose, selected prefix, remaining budget, and candidate table. The `q_h/` reader collates these states on padded batch and state axes. At state $t$, every actor carrier is restricted to the causal prefix available before action $a_t$: a later state may be present elsewhere in the same tensor batch, but its selected poses, observations, and candidate table are not inputs to the prediction at $t$.
-
-The scorer evaluates the realized states and their candidate rows in parallel. For one scalar horizon query per state it emits one conditional value for every materialized candidate row. This parallel tensor layout is not recurrent inference, autoregressive rollout generation, or temporal attention across the rollout. The current scorer does not advance the environment, feed one prediction back into its next state, or iteratively refine one candidate value. During policy execution it is invoked again only after the selected action has produced a genuinely new causal state and candidate table. Causal masking across the state axis would become relevant only for a future joint temporal state encoder; it is not required when each state already carries its independently materialized causal prefix.
-
-Prediction support and loss support are therefore different. The scorer may emit finite values for every materialized candidate. Dense one-step loss uses every hard-valid candidate with a finite immediate label. For $h>1$, recursive loss is limited to the factual selected transition. Nonterminal targets additionally require a supported factual successor; terminal targets have zero continuation. The padded candidate dimension must not be read as dense multi-step supervision, and an unselected candidate receives no invented successor or return.
-
 === Scalar requested-horizon targets
 
-The scorer represents $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H_"max"$. Remaining budget $b_t$ is a factual field of the represented state; requested horizon $h$ selects how many rewards the current value is meant to summarize. Consequently, a shorter query $h<b_t$ changes the value estimand without changing the state or pretending that less acquisition budget was available. Truncating the return of an eight-step suffix to five steps is conceptually valid only when that five-step target is explicitly constructed and factually supported; changing $b_t$ itself is not ordinary data augmentation.
-
-The boundary target is
+The scorer represents $Q_theta(s_t,e,i,h)$ for each residual horizon $h$ admitted by $1 <= h <= b_t <= H_"max"$. The boundary target is
 
 #eqs.rl.target_root_gain_reward
 
@@ -91,17 +80,17 @@ and the recursive target is
 
 #eqs.rl.qh_doubleq_target
 
-Here *recursion* means Bellman target recursion across factual successor states. For a nonterminal $h>1$ target, the current reward is combined with a shorter-horizon successor value queried at $h-1$; a terminal selected transition has zero continuation and requires no successor state. The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining relation is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$, and the executable learner rejects a nonterminal successor whose factual horizon is not exactly $h-1$. This terminology does not denote an RNN hidden-state loop, repeated invocation of a refinement block, or backpropagation through an unrolled future rollout. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
+The lower-horizon prediction is treated as a fixed regression target by stop-gradient, a frozen stage checkpoint, or a delayed target copy. The defining recursion is $Q_h arrow.l Q_(h-1)$ rather than $Q_h arrow.l Q_h$, and the executable learner rejects a successor whose factual horizon is not exactly $h-1$. Fixed-horizon TD was introduced precisely for predictions over a bounded number of future rewards and avoids same-horizon self-bootstrapping; its horizon functions may use shared parameters and parallel updates @FixedHorizonTD-deAsis2020.
 
-The executable joint objective uses one shared horizon-conditioned network. Its public scorer interface still admits one scalar $h$ per state. Privately, Lightning duplicates the complete actor batch along the leading batch axis and concatenates two query domains into one scorer transaction:
+The executable joint objective uses one shared horizon-conditioned network:
 
 1. query $h=1$ for every realized state and fit every finite hard-valid candidate reward;
-2. query the factual residual horizon $h=b_t$ for the same realized states, retaining recursive loss only for selected transitions with $h>1$;
+2. query the factual scalar horizon for selected transitions with $h>1$;
 3. select the successor action with the online scorer at factual $h-1$ and evaluate it with the delayed target scorer;
 4. average candidate losses within each Q1 state, state losses within each horizon, and non-empty horizon means uniformly;
 5. persist the realized per-horizon state and candidate counts, report state-normalized loss and absolute calibration error for every supported horizon, report pairwise ranking and greedy selected-action regret only where a dense counterfactual candidate table exists, and reject online queries absent from manifest-bound training support.
 
-This private batching avoids a second model transaction while preserving the scalar-horizon estimand. It does not add a public vectorized horizon axis and it does not enumerate every off-diagonal query $1<h<b_t$. Sampling or enumerating additional supported state--horizon pairs would be a separate, versioned learning-contract change with its own weighting and support rules. The present objective preserves one inference interface and shared encoders while making target lineage and weighting explicit. Staged backward induction, fixed-H networks, separate per-horizon heads, and broader off-diagonal horizon enumeration remain matched alternatives rather than implicit runtime behavior.
+This objective preserves one inference interface and shared encoders while making target lineage and weighting explicit. Staged backward induction, fixed-H networks, and separate per-horizon heads remain matched ablations, not alternate runtime contracts.
 
 For remaining horizon two, the store supplies an exact target whenever the successor table has dense one-step labels:
 

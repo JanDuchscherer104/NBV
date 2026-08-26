@@ -3,8 +3,7 @@
 = Appendix: VIN Pose Frames and Consistency Checks <sec:appendix-pose-frames>
 
 #import "../../shared/macros.typ": *
-#import "@preview/booktabs:0.0.4": *
-#show: booktabs-default-table-style
+#import "../../shared/tables.typ": publication-table
 
 This appendix summarizes the SE(3) frames provided to `VinModelV3.forward`,
 using the notation from the coordinate conventions section.
@@ -46,13 +45,13 @@ Frame glossary (consistent with the main notation):
   supplement: [Table],
   placement: none,
   caption: [SE(3) inputs passed into `VinModelV3.forward` and their frame meaning.],
-  text(size: 7pt)[
-    #table(
+  [
+    #publication-table(
       columns: (auto, auto, auto, auto),
+      header: ([Input], [Notation], [SE(3) meaning], [Notes]),
       align: (left, center, left, left),
-      toprule(),
-      table.header([Input], [Notation], [SE(3) meaning], [Notes]),
-      midrule(),
+      text-size: 7pt,
+      rows: (
       [#code-inline("candidate_poses_") #linebreak() #code-inline("world_cam")],
       [$#T(symb.frame.w, symb.frame.cq)$],
       [world #sym.arrow.r camera (PoseTW)],
@@ -77,7 +76,7 @@ Frame glossary (consistent with the main notation):
       [$bold(p)^(#symb.frame.w)$],
       [points in world frame],
 
-      [Voxel-center points used for positional encoding and pooling.], bottomrule(),
+      [Voxel-center points used for positional encoding and pooling.]),
     )
   ],
 ) <tab:vin-input-frames>

@@ -1,7 +1,7 @@
 #import "../../../shared/macros.typ": *
 #import "../../../shared/symbols.typ": symb
 #import "../../draft_markers.typ": thesis_status, validation_todo, decision_todo
-#import "@preview/booktabs:0.0.4": *
+#import "../../../shared/tables.typ": publication-table
 
 == Policy Comparison and Statistical Protocol
 
@@ -19,17 +19,16 @@ The primary estimand is the paired per-scene difference in fixed-budget endpoint
 Support and failure strata are fixed before policy inspection. The report distinguishes source rows without an admitted target task, admitted tasks whose oracle evaluation fails, roots without a valid action, trajectories that terminate before the shared budget, and completed paired trajectories. A policy that cannot continue remains in the comparison with no further gain; it is not silently dropped. These strata delimit the analysis population and expose whether a policy difference is instead a support or systems failure.
 
 #figure(
-  table(
+  publication-table(
     columns: (0.72fr, 0.72fr, 0.58fr, 1.35fr),
-    toprule(),
-    table.header([*Policy*], [*Decision information*], [*Acquisition budget*], [*Scientific role*]),
-    midrule(),
-    [$pi_"rand"$], [actor-visible], [$H$], [valid-action lower reference],
-    [$pi_"learned-1"$], [actor-visible], [$H$], [learned myopic control],
-    [$pi_"oracle-1"$], [oracle immediate reward], [$H$], [one-step oracle-greedy comparator],
-    [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [conditional finite-support upper reference],
-    [$pi_Q$], [actor-visible], [$H$], [planned learned finite-horizon recovery],
-    bottomrule(),
+    header: ([*Policy*], [*Decision input*], [*Acquisition budget*], [*Scientific role*]),
+    rows: (
+      [$pi_"rand"$], [actor-visible], [$H$], [valid-action lower reference],
+      [$pi_"learned-1"$], [actor-visible], [$H$], [learned myopic control],
+      [$pi_"oracle-1"$], [oracle immediate reward], [$H$], [one-step oracle-greedy comparator],
+      [$pi_"oracle-look"$], [bounded oracle lookahead], [$H$], [conditional finite-support upper reference],
+      [$pi_Q$], [actor-visible], [$H$], [planned learned finite-horizon recovery],
+    ),
   ),
   caption: [Matched policy comparison. All rows acquire the same number of views; oracle access and planner depth define the decision rule rather than the acquisition budget.],
 ) <tab:thesis-policy-comparison>
