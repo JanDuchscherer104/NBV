@@ -802,6 +802,12 @@ return {
       description = "",
       thesis_list = false,
     },
+    ["model.qh_s1_selected_surface"] = {
+      tex = "\\boldsymbol{p}_{t,j,u}^{c_t}=T_{c_t\\leftarrow r}T_{r\\leftarrow c_j}\\pi^{-1}(u,D_{j,u}^{\\mathrm{sel}}),\\ j<t;\\quad \\boldsymbol{z}_{t,j,u}=\\phi_{\\mathrm{pt}}(\\boldsymbol{p}_{t,j,u}^{c_t}/\\sigma_{\\mathrm{xyz}});\\quad \\boldsymbol{g}_t^{\\mathrm{S1}}=[\\operatorname{Mean}\\boldsymbol{z},\\operatorname{Max}\\boldsymbol{z},\\rho_t^{\\mathrm{present}},\\rho_t^{\\mathrm{pixel}},\\rho_t^{\\mathrm{view}}];\\quad \\boldsymbol{\\Phi}_t^{\\mathrm{S1}}=\\boldsymbol{\\Phi}_t^{\\mathrm{root}}+W_{\\mathrm{pt}}\\boldsymbol{g}_t^{\\mathrm{S1}},\\quad W_{\\mathrm{pt}}^{(0)}=0",
+      typst = "#eqs.model.qh_s1_selected_surface",
+      description = "Fixed-width identity-start privileged S1 selected-surface residual over current-camera point sets.",
+      thesis_list = false,
+    },
     ["model.qh_state_fusion_controls"] = {
       tex = "\\boldsymbol{Z}_t=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{h}_t^{\\mathrm{hist}},\\operatorname{Emb}(b_t/H_{\\max}),\\operatorname{Emb}(h/H_{\\max})),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A0}}=\\operatorname{MLP}_{\\mathrm{A0}}([\\boldsymbol{x}_{t,i};\\operatorname{vec}(\\boldsymbol{Z}_t)]),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A1}}=\\operatorname{CrossAttn}_{\\mathrm{A1}}(\\boldsymbol{x}_{t,i},\\boldsymbol{Z}_t,\\boldsymbol{Z}_t)",
       typst = "#eqs.model.qh_state_fusion_controls",

@@ -148,4 +148,23 @@
       #symb.rl.requested_horizon
     )
   $,
+  qh_s1_selected_surface: $
+    bold(p)_(t,j,u)^(c_t)
+    &=
+    T_(c_t arrow.l r) T_(r arrow.l c_j)
+    pi^(-1)(u, D_(j,u)^"sel"),
+    quad j<t \
+    bold(z)_(t,j,u)
+    &=
+    phi_"pt"(bold(p)_(t,j,u)^(c_t) / sigma_"xyz") \
+    bold(g)_t^"S1"
+    &=
+    [op("Mean") bold(z), op("Max") bold(z),
+      rho_t^"present", rho_t^"pixel", rho_t^"view"] \
+    #symb.scene.scene_memory_t^"S1"
+    &=
+    #symb.scene.scene_memory_t^"root"
+    + W_"pt" bold(g)_t^"S1",
+    quad W_"pt"^(0) = 0
+  $,
 )

@@ -589,9 +589,15 @@
     source identity, and support for views that have already been selected; it never includes
     renders for unselected candidates. The source-matched CF+ H0 control validates this carrier
     but is exactly invariant to its numeric payload, so it remains an S0-pose-conditioned
-    null model. S1 begins only when an encoder deterministically consumes the carrier, for
-    example by backprojecting selected surfaces before pooling. CF+ H0 and S1 must use matched
-    source populations and seeds before their difference can be attributed to geometry consumption.
+    null model. The implemented S1-points control consumes only causal selected views through
+    canonical float32 backprojection, expresses their surface points from the factual current
+    camera, and adds a fixed-width density-weighted mean/max point-set residual to the unchanged
+    root moments. Its final residual projection starts at zero, making fresh S1 predictions
+    exactly equal to matched H0 while leaving that projection trainable on the first backward
+    pass. It preserves no source-view or free/unknown ray identity and remains a privileged,
+    non-deployable research profile. CF+ H0 and S1 must use matched source populations, seeds,
+    common downstream initialization, and the named identity-start rule before their difference
+    can be attributed to geometry consumption.
   notation:
     typst: $s_t^"cf+"$
   symbol_refs:
@@ -855,13 +861,19 @@
     online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision
     and bootstrap, and select only hard-valid candidates. A `dense_valid` store proves exact
     Q-label/action-mask equality on every realized state; historical `legacy_unspecified`
-    stores promise only subset support. Train, validation, and test share learning semantics
-    but retain separate candidate-generator, rollout-recipe, and behavior-policy population
-    provenance in the bundle. Exact-Q2 certification separates injected exact-table implementation
-    parity from a bounded, stratified held-out measurement of learned-recursion error against
-    factual dense successor rewards. Its receipt binds population, lineage, support, tolerances,
-    scorer configuration, and CORAL saturation where applicable. Unsupported census chains
-    remain in the coverage denominator. Learned-recursion agreement and independently evaluated
+    stores promise only subset support. The learner fits all hard-valid candidates at h=1,
+    selected factual transitions at h>1, averages candidates within state and states within
+    horizon, and weights non-empty horizons equally. The bundle binds realized training support
+    by horizon and inference rejects unsupported queries. Train, validation, and test share
+    learning semantics but retain separate candidate-generator, rollout-recipe, and behavior-policy
+    population provenance in the bundle. Exact-Q2 certification separates injected exact-table
+    implementation parity from a bounded, stratified held-out measurement of learned-recursion
+    error against factual dense successor rewards. Its V2 receipt binds population, lineage,
+    support, tolerances, scorer configuration, and CORAL saturation where applicable. It treats
+    the ordered-store-manifest digest and scene identity as the independent unit, requires
+    at least five supported units and a pass in every selected unit, and keeps pooled row
+    metrics diagnostic; unsupported census chains remain in the coverage denominator and V1
+    receipts are inspection-only. Learned-recursion agreement and independently evaluated
     positive held-out headroom jointly gate longer-horizon claims; the persisted terminal-step
     contrast remains diagnostic only. Learned-only feasibility, candidate-to-candidate interaction,
     and P(valid) times Q ranking are not thesis-core behavior.'

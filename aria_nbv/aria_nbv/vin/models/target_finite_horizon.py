@@ -31,9 +31,11 @@ separates four information paths:
   conditional value. Regression predicts it directly; CORAL discretizes the
   same fitted-Q target and decodes fixed continuous representatives.
 
-The root scene carrier is intentionally small and lossy: detached EVL channel
-moments plus root-frame semidense point mean, standard deviation, presence, and
-support. It is an executable control, not a claim that global moments are a
+The default root scene carrier is intentionally small and lossy: detached EVL
+channel moments plus root-frame semidense point mean, standard deviation,
+presence, and support. Privileged S1 may add a same-width residual formed from
+strictly causal selected-depth surfaces expressed from the factual current
+camera. Both are executable controls, not claims that global pooling is a
 sufficient reconstruction state. Candidate rows never exchange information,
 so a joint row permutation produces the same output permutation and duplicate
 rows remain identical.
@@ -57,7 +59,11 @@ from ..modules.qh_history_encoders import (
     QhHistoryEncoderConfig,
     QhMeanPoolHistoryEncoderConfig,
 )
-from ..modules.qh_scene_encoders import QhRootMomentsSceneEncoder, QhSceneChannel
+from ..modules.qh_scene_encoders import (
+    QhRootMomentsSceneEncoder,
+    QhSceneChannel,
+    QhSceneEncoderConfig,
+)
 from ..modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
     QhStateFusionConfig,
@@ -117,8 +123,25 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
     )
     """Ordered compact root-EVL fields pooled into the state token."""
 
-    representation_semantics: Literal["root_moments_v1"] = "root_moments_v1"
-    """Versioned scene-token meaning only: root-frame moments plus support."""
+    representation_semantics: Literal[
+        "root_moments_v1",
+        "root_moments_plus_selected_surface_points_identity_start_v1",
+        "root_moments_plus_selected_surface_points_v1",
+    ] = "root_moments_v1"
+    """Versioned scene-token meaning bound into scorer and artifact identity."""
+
+    scene_encoder: QhSceneEncoderConfig | None = Field(default=None, exclude_if=lambda value: value is None)
+    """Optional explicit scene carrier; ``None`` preserves legacy S0 identity.
+
+    The omitted alias instantiates the parameter-free ``root_moments_v1``
+    control without changing its serialized config hash or state dictionary.
+    ``root_moments_plus_selected_surface_points_identity_start_v1`` is the
+    active privileged S1 carrier: it
+    validates and consumes the causal CF-GT selected-depth prefix while
+    returning the same scene width as H0. The shorter historical discriminator
+    is accepted only to inspect ambiguous legacy configurations and cannot
+    enter a new fit, warm start, inference runtime, or bundle.
+    """
 
     history_encoder: QhHistoryEncoderConfig | None = Field(default=None, exclude_if=lambda value: value is None)
     """H0/H1 representation of the strictly causal selected-pose prefix.
@@ -195,6 +218,11 @@ class TargetFiniteHorizonScorerConfig(TargetConfig["TargetFiniteHorizonScorer"])
             raise ValueError("scene_channels must contain at least one root-EVL field.")
         if len(set(self.scene_channels)) != len(self.scene_channels):
             raise ValueError("scene_channels must be unique and ordered.")
+        scene_kind = "root_moments_v1" if self.scene_encoder is None else self.scene_encoder.kind
+        if self.representation_semantics != scene_kind:
+            raise ValueError("representation_semantics must equal the configured scene-encoder kind.")
+        if scene_kind != "root_moments_v1" and self.experiment_profile != "qh_cfplus_gt_depth_v1":
+            raise ValueError("Q_H selected-surface scene encoding requires qh_cfplus_gt_depth_v1.")
         return self
 
 
@@ -251,14 +279,21 @@ class TargetFiniteHorizonScorer(nn.Module):
         observations or make compact root moments a sufficient dynamic
         reconstruction state.
 
-        The CF+ H0 role is a source-protocol-matched counterfactual for a
-        future S1 scene encoder. It requires the same strictly causal CF-GT
-        carrier and data population as S1, but the prediction graph consumes
-        none of its numeric payload. Consequently any change confined to
-        selected depth, depth-valid support, calibration, or selected-camera
-        poses must leave both raw heads exactly unchanged. This is not a
-        deployable S0 value and comparing it with CF0 does not identify an S1
-        representation gain.
+        The CF+ H0 role is the source-protocol-matched counterfactual for S1.
+        It requires the same strictly causal CF-GT carrier and data population,
+        but the prediction graph consumes none of its numeric payload.
+        Consequently any change confined to selected depth, depth-valid
+        support, calibration, or selected-camera poses must leave both raw
+        heads exactly unchanged. S1 instead uses canonical float32
+        backprojection and a fixed-width, density-weighted point-set residual.
+        Its scene feature remains shared across candidate rows and target
+        independent; candidate-relative point queries are deliberately
+        deferred. Its final bias-free residual projection starts at zero, and
+        dynamic scene rows traverse the same per-state linear path as static
+        H0. Thus matched zero-residual S1 and H0 predictions are bitwise equal
+        at initialization rather than merely close despite shape-dependent GEMM
+        rounding. Neither CF+ role is deployable, and comparing CF0 with CF+ H0
+        does not identify an S1 representation gain.
 
     Notes:
         Syntactic admission does not assert empirical support. Lightning owns
@@ -274,8 +309,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         self.pose_encoder: R6dLffPoseEncoder = config.pose_encoder.setup_target()
         pose_dim = self.pose_encoder.out_dim
         hidden_dim = int(config.hidden_dim)
-        self.scene_encoder = QhRootMomentsSceneEncoder(scene_channels=config.scene_channels)
-        scene_dim = self.scene_encoder.output_dim
+        scene_dim = 4 * len(config.scene_channels) + 8
 
         self.physical_projection = nn.Sequential(
             nn.Linear(2 * pose_dim + scene_dim, hidden_dim),
@@ -329,9 +363,20 @@ class TargetFiniteHorizonScorer(nn.Module):
             hidden_dim=hidden_dim,
             dropout=float(config.dropout),
         )
+        scene_encoder_config = config.scene_encoder
+        self.scene_encoder = (
+            QhRootMomentsSceneEncoder(scene_channels=config.scene_channels)
+            if scene_encoder_config is None
+            else scene_encoder_config.setup_target(
+                scene_channels=config.scene_channels,
+                dropout=float(config.dropout),
+            )
+        )
+        if self.scene_encoder.output_dim != scene_dim:
+            raise ValueError("Q_H scene encoder must preserve the configured root-moment width.")
 
-    def validate_value_decoder_state(self, *, require_publishable: bool = False) -> None:
-        """Validate non-learned decoder state against scorer configuration.
+    def validate_artifact_state(self, *, require_publishable: bool = False) -> None:
+        """Validate non-learned architecture state against scorer configuration.
 
         Learned weights may vary while the scorer configuration stays fixed,
         but CORAL edges and representatives are experiment identity: they
@@ -341,6 +386,13 @@ class TargetFiniteHorizonScorer(nn.Module):
         direct regression as the no-extra-state baseline.
         """
 
+        if require_publishable and self.config.representation_semantics == (
+            "root_moments_plus_selected_surface_points_v1"
+        ):
+            raise ValueError(
+                "Legacy S1 scene-carrier identity is inspection-only and cannot enter training, warm start, "
+                "inference, or a scientific bundle."
+            )
         if isinstance(self.value_decoder, QhCoralValueDecoder):
             self.value_decoder.validate_configured_support()
             if require_publishable:
@@ -356,7 +408,9 @@ class TargetFiniteHorizonScorer(nn.Module):
 
         Args:
             actor: Batched actor-visible chain with candidate support
-                ``Tensor["B S N", bool]`` and compact root EVL evidence.
+                ``Tensor["B S N", bool]``, compact root EVL evidence, and—only
+                for the named privileged S1 profile—the complete causal
+                selected-depth prefix.
             requested_horizon: Optional ``Tensor["B S", int64]`` value query.
                 ``None`` means :attr:`QhActorTensors.horizon_remaining`.
                 Realized rows admit ``1 <= h <= b_t <= H_max``; padding must be
@@ -392,8 +446,16 @@ class TargetFiniteHorizonScorer(nn.Module):
         root_candidate_features = self.pose_encoder.encode(candidate_pose).pose_enc
         current_from_candidate = self._expand_pose(current_pose.inverse(), width) @ candidate_pose
         current_candidate_features = self.pose_encoder.encode(current_from_candidate).pose_enc
-        scene_summary = self.scene_encoder(actor)
-        candidate_scene = scene_summary[:, None, None, :].expand(-1, steps, width, -1)
+        scene_summary = (
+            self.scene_encoder(actor)
+            if isinstance(self.scene_encoder, QhRootMomentsSceneEncoder)
+            else self.scene_encoder(actor, current_pose_relative_root=current_pose)
+        )
+        candidate_scene = (
+            scene_summary[:, None, None, :].expand(-1, steps, width, -1)
+            if scene_summary.ndim == 2
+            else scene_summary.unsqueeze(-2).expand(-1, -1, width, -1)
+        )
         physical_tokens = self.physical_projection(
             torch.cat((root_candidate_features, current_candidate_features, candidate_scene), dim=-1)
         )
@@ -415,7 +477,7 @@ class TargetFiniteHorizonScorer(nn.Module):
         budget = actor.horizon_remaining.float().unsqueeze(-1) / float(self.config.max_horizon)
         budget_token = self.budget_projection(budget)
         horizon_token = self.horizon_projection(horizon.float().unsqueeze(-1) / float(self.config.max_horizon))
-        scene_token = self.scene_projection(scene_summary).unsqueeze(1).expand(-1, steps, -1)
+        scene_token = self._project_scene_summary(scene_summary, steps=steps)
         target_token = target_token.unsqueeze(1).expand(-1, steps, -1)
 
         target_by_candidate = self._expand_pose(target_pose, steps, width)
@@ -454,6 +516,41 @@ class TargetFiniteHorizonScorer(nn.Module):
             conditional_q=conditional_q.float(),
             feasibility_logits=feasibility_logits.float(),
             value_auxiliary=value_auxiliary,
+        )
+
+    def _project_scene_summary(self, scene_summary: Tensor, *, steps: int) -> Tensor:
+        """Project static or dynamic scene rows through one numeric path.
+
+        The H0 carrier returns ``[B,F]`` because root evidence is static, while
+        S1 returns ``[B,S,F]`` after adding a causal state residual.  Applying
+        the same linear layer once to those differently ranked tensors can
+        select different BLAS kernels and introduce small rounding differences
+        even when every S1 residual is exactly zero.  Projecting each dynamic
+        state as ``[B,F]`` preserves the H0 operation exactly and makes S1 a
+        genuinely nested control at initialization.  This changes neither
+        learned parameters nor gradients: nonzero residual rows still pass
+        through the same shared projection and stack back to ``[B,S,H]``.
+
+        Args:
+            scene_summary: Static ``Tensor["B F"]`` root features or dynamic
+                ``Tensor["B S F"]`` scene features.
+            steps: Padded scorer state width ``S``.
+
+        Returns:
+            ``Tensor["B S H"]`` scene tokens aligned with scorer states.
+
+        Raises:
+            ValueError: If the scene carrier returns an unsupported rank or a
+                dynamic step width inconsistent with the actor.
+        """
+
+        if scene_summary.ndim == 2:
+            return self.scene_projection(scene_summary).unsqueeze(1).expand(-1, steps, -1)
+        if scene_summary.ndim != 3 or scene_summary.shape[1] != steps:
+            raise ValueError("Q_H scene summary must have shape (B,F) or actor-aligned (B,S,F).")
+        return torch.stack(
+            tuple(self.scene_projection(state_summary) for state_summary in scene_summary.unbind(dim=1)),
+            dim=1,
         )
 
     def _validated_requested_horizon(

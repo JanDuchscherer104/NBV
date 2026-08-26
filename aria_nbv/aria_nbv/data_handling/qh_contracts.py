@@ -69,8 +69,10 @@ def validate_selected_observation_prefix(
     This validator owns only carrier identity, tensor layout, dtype, device,
     and causal support. It deliberately does not interpret depth, calibration,
     or pose values. That distinction lets the ``root_moments_v1`` CF+ H0
-    control admit the exact same source population as a later S1 encoder while
-    proving that no selected-observation payload reaches its prediction.
+    control admit the exact same source population as the S1 encoder while
+    proving that no selected-observation payload reaches H0 prediction. S1
+    separately strengthens numeric geometry validation before interpreting
+    the structurally admitted carrier.
 
     The two trailing axes of ``history_mask`` are query state :math:`s` and
     selected-observation index :math:`j`. ``prefix_mask`` must equal the

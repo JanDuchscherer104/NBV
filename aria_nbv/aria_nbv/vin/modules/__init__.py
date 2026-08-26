@@ -17,7 +17,15 @@ from .qh_history_encoders import (
     QhMeanPoolHistoryEncoder,
     QhMeanPoolHistoryEncoderConfig,
 )
-from .qh_scene_encoders import QhRootMomentsSceneEncoder, QhSceneChannel
+from .qh_scene_encoders import (
+    QhLegacySelectedSurfacePointSceneEncoderConfig,
+    QhRootMomentsSceneEncoder,
+    QhRootMomentsSceneEncoderConfig,
+    QhSceneChannel,
+    QhSceneEncoderConfig,
+    QhSelectedSurfacePointSceneEncoder,
+    QhSelectedSurfacePointSceneEncoderConfig,
+)
 from .qh_state_fusion import (
     QhCrossAttentionStateFusion,
     QhCrossAttentionStateFusionConfig,
@@ -51,12 +59,17 @@ __all__ = [
     "QhCoralValueDecoderConfig",
     "QhDecodedValue",
     "QhLegacyFixedCoralSupport",
+    "QhLegacySelectedSurfacePointSceneEncoderConfig",
     "QhPredeclaredPhysicalCoralSupport",
     "QhRegressionValueDecoder",
     "QhRegressionValueDecoderConfig",
     "QhRootMomentsSceneEncoder",
+    "QhRootMomentsSceneEncoderConfig",
     "QhSceneChannel",
     "QhTrainFittedCoralSupport",
+    "QhSceneEncoderConfig",
+    "QhSelectedSurfacePointSceneEncoder",
+    "QhSelectedSurfacePointSceneEncoderConfig",
     "QhValueDecoderConfig",
     "QhCrossAttentionStateFusion",
     "QhCrossAttentionStateFusionConfig",
