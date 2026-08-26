@@ -48,7 +48,13 @@ use `scientific-review`.
    contracts to `academic-writing`; do not solve an argument problem as layout.
 4. Move `ready-for-realization` content to `realized` only after changing its
    exact Typst owner and completing the required proof. Compile and inspect
-   affected output when layout or meaning can change; report any skipped proof.
+   affected output when layout or meaning can change. For the thesis, use
+   `make thesis-pdf`: it also runs the rendered PDF column-bound contract.
+   Treat every `typst-column-overflow` warning as a layout failure to split or
+   re-layout, not something to hide by shrinking or moving the object. Report
+   any skipped proof. The current thesis baseline is warning-only; use
+   `THESIS_COLUMN_CHECK_ARGS=` to make the same check strict when repairing
+   the remaining baseline warnings.
 
 For current Typst or package API uncertainty, inspect local owners first, then
 read [`external-research.md`](references/external-research.md) and use the
@@ -56,6 +62,6 @@ conditional Context7 route in `aria-nbv-context`.
 
 ## Completion
 
-Accepted content is present in its exact Typst owner, relevant compile/render or
-hygiene proof is fresh, and scientific uncertainty is handed to review rather
-than silently decided during realization.
+Accepted content is present in its exact Typst owner, relevant compile/render,
+column-bound, or hygiene proof is fresh, and scientific uncertainty is handed
+to review rather than silently decided during realization.

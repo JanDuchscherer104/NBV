@@ -44,6 +44,21 @@ Prefer repo Make targets for full document builds:
 make thesis-pdf
 ```
 
+`make thesis-pdf` and `make thesis-pdf-ci` run
+`scripts/check_typst_pdf_column_bounds.py` after Typst compilation. The check
+reads rendered Poppler bounding boxes, not source width guesses, and detects
+each body-band line outside the template's declared 30 mm left/right column
+(within a small point tolerance). Its `WARNING typst-column-overflow` records
+the PDF page, actual horizontal bounds, violated side, and extracted text. Treat a
+warning as a failure even when using `--warn-only` during detector adoption:
+split the equation/table or use a deliberate readable layout; do not use
+scaling, negative spacing, or clipping merely to silence it.
+
+The current thesis invocation keeps `--warn-only` as an explicit transitional
+baseline because it has pre-existing overflow warnings. It prints the warnings
+in local builds and CI. Set `THESIS_COLUMN_CHECK_ARGS=` to make the identical
+command non-zero on any finding once the baseline is clean.
+
 Use the manual form when isolating an output path:
 
 ```bash
@@ -69,7 +84,10 @@ Use `--ppi 600` for detailed equation/figure inspection.
 
 Check attachment scope after `_` / `^`, bolding and symbol consistency, line
 breaks and equation overflow, figure scale/cropping, caption clarity, table
-alignment, cross-reference output, and awkward page breaks.
+alignment, cross-reference output, and awkward page breaks. The PDF
+column-bound contract catches text/equation leakage mechanically, but visual
+inspection remains necessary for clipped non-text graphics, readability, and
+page-break quality.
 
 For the thesis-wide authoring contract, also run:
 

@@ -30,6 +30,16 @@ TYPST_PAPER ?= $(DOCS_DIR)/typst/seminar_paper/main.typ
 TYPST_PAPER_PDF ?= $(DOCS_DIR)/typst/seminar_paper/main.pdf
 TYPST_THESIS ?= $(DOCS_DIR)/typst/thesis/main.typ
 TYPST_THESIS_PDF ?= $(DOCS_DIR)/typst/thesis/main.pdf
+PDF_COLUMN_CHECK ?= scripts/check_typst_pdf_column_bounds.py
+PDF_COLUMN_CHECK_PYTHON ?= python3
+THESIS_BODY_MARGIN_MM ?= 30
+# Poppler reports glyph extents, which can reach slightly beyond Typst's layout
+# box. Four points retains a useful signal while avoiding rounding noise.
+THESIS_COLUMN_TOLERANCE_PT ?= 4
+# The existing manuscript contains pre-existing overflows. Keep builds green
+# while surfacing every rendered violation; remove this default to promote the
+# same check to a blocking gate after the warning baseline is repaired.
+THESIS_COLUMN_CHECK_ARGS ?= --warn-only
 TYPST_SLIDES_DIR ?= $(DOCS_DIR)/typst/seminar_slides
 CI_RENDER_DIR ?= $(CURDIR)/.cache/ci-renders
 SLIDES ?= slides_4.typ
@@ -770,10 +780,16 @@ typst-slide: ## Compile a Typst slide deck (make typst-slide SLIDES=slides_4.typ
 
 thesis-pdf: ## Compile the DEVELOPMENT/DRAFT thesis PDF (submission is a separate evidence-gated projection)
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
+	@$(PDF_COLUMN_CHECK_PYTHON) $(PDF_COLUMN_CHECK) $(TYPST_THESIS_PDF) \
+		--left-margin-mm $(THESIS_BODY_MARGIN_MM) --right-margin-mm $(THESIS_BODY_MARGIN_MM) \
+		--tolerance-pt $(THESIS_COLUMN_TOLERANCE_PT) $(THESIS_COLUMN_CHECK_ARGS)
 
 thesis-pdf-ci: ## Compile the development thesis into an ignored CI artifact path
 	@mkdir -p "$(CI_RENDER_DIR)"
 	@$(TYPST) compile --root $(TYPST_ROOT) $(TYPST_THESIS) "$(CI_RENDER_DIR)/thesis.pdf"
+	@$(PDF_COLUMN_CHECK_PYTHON) $(PDF_COLUMN_CHECK) "$(CI_RENDER_DIR)/thesis.pdf" \
+		--left-margin-mm $(THESIS_BODY_MARGIN_MM) --right-margin-mm $(THESIS_BODY_MARGIN_MM) \
+		--tolerance-pt $(THESIS_COLUMN_TOLERANCE_PT) $(THESIS_COLUMN_CHECK_ARGS)
 
 thesis-watch: ## Watch and recompile the DEVELOPMENT/DRAFT thesis PDF
 	@$(TYPST) watch --root $(TYPST_ROOT) $(TYPST_THESIS) $(TYPST_THESIS_PDF)
