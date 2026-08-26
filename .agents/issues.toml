@@ -168,7 +168,7 @@ references = ["repo:.agents/work/rri-metrics/dense-semidense-rri-missmatch.md", 
 [[issue]]
 id = "issue-032"
 title = "Target-first RRI rollout contract needs scale-ready alignment"
-wp01_evidence = "Branch codex/candidate-benchmark-contract; see docs/contents/evidence/candidate_benchmark_wp01_smoke.json and aria_nbv/aria_nbv/rollouts/candidate_benchmark.py."
+wp01_evidence = "PR #154 (https://github.com/JanDuchscherer104/ARIA-NBV/pull/154), branch codex/candidate-benchmark-contract; see docs/contents/evidence/candidate_benchmark_wp01_smoke.json and aria_nbv/aria_nbv/rollouts/candidate_benchmark.py."
 description = "The GPT-5.5 Pro reviews and local code inspection require the rollout, target-selector, sampler, retention, split, and docs contracts to align around target-first root-normalized gain before thesis-scale data generation."
 type = "research-debt"
 priority = "high"

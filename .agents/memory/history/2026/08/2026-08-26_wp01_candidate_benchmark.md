@@ -15,6 +15,8 @@ worktree_kind: linked
 
 # WP01 candidate benchmark contract
 
+Implementation review and delivery: [PR #154](https://github.com/JanDuchscherer104/ARIA-NBV/pull/154).
+
 - Implemented an immutable candidate benchmark DTO and strict JSON/Parquet bundle reader/writer.
 - Candidate facts are built from `rollouts.inspection.candidate_audit_rows`, preserving scene, rollout/step state, family applicability, candidate IDs, target-normalized coordinates, and lineage.
 - The stored-rollout panel constructs the benchmark only after explicit dispatch and renders deterministic 2D/3D support plots plus export.

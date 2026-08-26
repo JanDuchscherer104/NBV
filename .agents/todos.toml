@@ -649,7 +649,7 @@ verification = ["cd aria_nbv && uv run pytest tests/rollouts/test_zarr_store.py 
 [[todo]]
 id = "todo-088"
 title = "Make three-family sampler pass per-family validity preflight"
-wp01_evidence = "WP01 baseline contract is on codex/candidate-benchmark-contract; family preflight remains this TODO's scope."
+wp01_evidence = "WP01 baseline contract is on PR #154 (https://github.com/JanDuchscherer104/ARIA-NBV/pull/154), branch codex/candidate-benchmark-contract; family preflight remains this TODO's scope."
 description = "The target-first three-family sampler must produce valid target-aware actions before broad rollout generation."
 priority = "high"
 status = "todo"
@@ -667,7 +667,7 @@ verification = ["cd aria_nbv && uv run pytest tests/pose_generation/test_candida
 [[todo]]
 id = "todo-089"
 title = "Add rollout generation preflight gate before broader offline samples"
-wp01_evidence = "WP01 two-scene smoke evidence is at docs/contents/evidence/candidate_benchmark_wp01_smoke.json; preflight remains this TODO's scope."
+wp01_evidence = "WP01 two-scene smoke evidence is at docs/contents/evidence/candidate_benchmark_wp01_smoke.json; implementation is PR #154 (https://github.com/JanDuchscherer104/ARIA-NBV/pull/154); preflight remains this TODO's scope."
 description = "Create a current-schema preflight report that blocks scale generation on invalid stores, stale schemas, degenerate samplers, flat rewards, or excessive file counts."
 priority = "high"
 status = "todo"
