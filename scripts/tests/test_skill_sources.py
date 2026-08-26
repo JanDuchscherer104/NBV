@@ -66,6 +66,7 @@ class SkillSourceTests(unittest.TestCase):
         """
         cases = (
             ("../SKILL.md", "exists.md"),
+            (".git/config", "exists.md"),
             ("SKILL.md", "missing.md"),
         )
         for source_path, consumer in cases:
