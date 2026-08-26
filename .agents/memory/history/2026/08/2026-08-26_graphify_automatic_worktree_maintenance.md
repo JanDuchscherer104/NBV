@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 69c5eeb053a2c9bcf17df5ab8fa0a84ab37e1d54
+repo_head: a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -61,13 +61,19 @@ mode-specific namespace containment.
 After rebasing, maintenance also treats a deleted projection owner as a rebuild
 signal while strict admission still rejects the stale projection. This lets an
 upstream owner removal repair itself without weakening query admission.
+The strict checker materializes raw HEAD blobs beneath the authenticated Git
+administrative directory instead of capacity-limited system tmpfs. The docs
+pre-push hook also clears hook-scoped Git bindings before hermetic fixture repos
+create commits.
 
 ## Commits
-- [0d205f80c52af495b62851e4829962176b384b14](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0d205f80c52af495b62851e4829962176b384b14)
-- [0a00f2dff727d808a22d346db139a1e6b6939a28](https://github.com/JanDuchscherer104/ARIA-NBV/commit/0a00f2dff727d808a22d346db139a1e6b6939a28)
-- [724004282b11e788dd1c8c184bfec6128ed7f242](https://github.com/JanDuchscherer104/ARIA-NBV/commit/724004282b11e788dd1c8c184bfec6128ed7f242)
-- [68067d53898242829517e0aa205a71e2d7e64209](https://github.com/JanDuchscherer104/ARIA-NBV/commit/68067d53898242829517e0aa205a71e2d7e64209)
-- [69c5eeb053a2c9bcf17df5ab8fa0a84ab37e1d54](https://github.com/JanDuchscherer104/ARIA-NBV/commit/69c5eeb053a2c9bcf17df5ab8fa0a84ab37e1d54)
+- [e03831ba10a64653d56ab7367b994f7e10307edd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e03831ba10a64653d56ab7367b994f7e10307edd)
+- [5c54e23b5669a3efad2ef6049789409bc7fd7929](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5c54e23b5669a3efad2ef6049789409bc7fd7929)
+- [14cc4092440b8256e73e0109d86ed3cd7f63789b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/14cc4092440b8256e73e0109d86ed3cd7f63789b)
+- [5b6b7c498480a59b54f144be75774059e4e98d00](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5b6b7c498480a59b54f144be75774059e4e98d00)
+- [f7985d470815343fc8ab26217f699fe6cb5e6d54](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f7985d470815343fc8ab26217f699fe6cb5e6d54)
+- [1d151e90e59fbb8b38c61888314750def11d1579](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1d151e90e59fbb8b38c61888314750def11d1579)
+- [a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
