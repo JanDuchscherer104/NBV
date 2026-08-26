@@ -14,9 +14,15 @@ from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.qh_data import QhActorTensors, collate_qh_chains
 from aria_nbv.data_handling.qh_data.views import QhStaticContext
+from aria_nbv.utils.fingerprints import stable_config_hash
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 from aria_nbv.vin.models.target_finite_horizon import (
     TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
+)
+from aria_nbv.vin.modules.qh_history_encoders import (
+    QhCausalTransformerHistoryEncoderConfig,
+    QhMeanPoolHistoryEncoderConfig,
 )
 from aria_nbv.vin.modules.qh_state_fusion import (
     QhCrossAttentionStateFusionConfig,
@@ -76,6 +82,20 @@ def _coral_scorer() -> TargetFiniteHorizonScorer:
             ),
             preinit_bias=False,
         ),
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
+def _ordered_history_scorer() -> TargetFiniteHorizonScorer:
+    """Return a deterministic A1 scorer whose only new factor is H1 history."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        history_encoder=QhCausalTransformerHistoryEncoderConfig(attention_heads=4),
     ).setup_target()
     scorer.eval()
     return scorer
@@ -240,6 +260,29 @@ def test_qh_scorer_materialized_invalid_candidate_is_isolated_from_other_rows() 
 def test_qh_scorer_candidate_permutation_preserves_both_output_heads() -> None:
     actor = _actor()
     scorer = _scorer()
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+
+    expected = scorer(actor)
+    actual = scorer(permuted)
+
+    assert torch.allclose(actual.conditional_q, expected.conditional_q[:, :, permutation], atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        actual.feasibility_logits,
+        expected.feasibility_logits[:, :, permutation],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
+def test_qh_ordered_history_preserves_candidate_permutation_equivariance() -> None:
+    actor = _actor(steps=4)
+    scorer = _ordered_history_scorer()
     permutation = torch.tensor([2, 0, 3, 1])
     permuted = replace(
         actor,
@@ -556,6 +599,43 @@ def test_qh_feasibility_is_independent_of_target_budget_and_requested_horizon() 
     assert torch.equal(changed, baseline)
 
 
+def test_qh_ordered_history_is_sensitive_only_to_noncurrent_prefix_order() -> None:
+    actor = _actor(steps=4)
+    history = actor.history_pose_relative_root.tensor().clone()
+    history[:, 3, [0, 1]] = history[:, 3, [1, 0]]
+    permuted = replace(actor, history_pose_relative_root=PoseTW(history))
+
+    torch.manual_seed(11)
+    mean_scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        history_encoder=QhMeanPoolHistoryEncoderConfig(),
+    ).setup_target()
+    mean_scorer.eval()
+    ordered_scorer = _ordered_history_scorer()
+
+    assert torch.allclose(
+        mean_scorer(actor).conditional_q,
+        mean_scorer(permuted).conditional_q,
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert not torch.allclose(
+        ordered_scorer(actor).conditional_q[:, 3],
+        ordered_scorer(permuted).conditional_q[:, 3],
+    )
+
+
+def test_qh_scorer_rejects_incomplete_realized_history_prefix() -> None:
+    actor = _actor(steps=4)
+    history_mask = actor.history_mask.clone()
+    history_mask[:, 3, 1] = False
+
+    with pytest.raises(ValueError, match="complete strictly causal prefix"):
+        _ordered_history_scorer()(replace(actor, history_mask=history_mask))
+
+
 def test_qh_scorer_backward_updates_parameters_only() -> None:
     actor = _actor()
     scorer = _scorer()
@@ -586,20 +666,54 @@ def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
 
 
 @pytest.mark.parametrize(
-    "state_fusion",
-    [QhIndependentMlpStateFusionConfig(), QhCrossAttentionStateFusionConfig(attention_heads=2)],
+    ("state_fusion", "history_encoder"),
+    [
+        (QhIndependentMlpStateFusionConfig(), None),
+        (QhCrossAttentionStateFusionConfig(attention_heads=2), QhMeanPoolHistoryEncoderConfig()),
+        (
+            QhCrossAttentionStateFusionConfig(attention_heads=2),
+            QhCausalTransformerHistoryEncoderConfig(attention_heads=2),
+        ),
+    ],
 )
-def test_qh_scorer_config_round_trips_discriminated_state_fusion(state_fusion) -> None:
+def test_qh_scorer_config_round_trips_discriminated_modules(state_fusion, history_encoder) -> None:
     config = TargetFiniteHorizonScorerConfig(
         hidden_dim=32,
         max_horizon=4,
         state_fusion=state_fusion,
+        history_encoder=history_encoder,
     )
 
     restored = TargetFiniteHorizonScorerConfig.model_validate(config.model_dump_jsonable())
 
     assert restored == config
     assert type(restored.state_fusion) is type(state_fusion)
+    assert type(restored.history_encoder) is type(history_encoder)
+
+
+def test_qh_default_history_preserves_legacy_state_and_explicit_identity() -> None:
+    default_config = TargetFiniteHorizonScorerConfig(hidden_dim=32, dropout=0.0, max_horizon=4)
+    explicit_config = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        history_encoder=QhMeanPoolHistoryEncoderConfig(),
+    )
+    assert "history_encoder" not in default_config.model_dump_jsonable()
+    assert explicit_config.model_dump_jsonable()["history_encoder"]["kind"] == "mean_pool_v1"
+    assert stable_config_hash(default_config) != stable_config_hash(explicit_config)
+
+    torch.manual_seed(17)
+    default = default_config.setup_target()
+    torch.manual_seed(17)
+    explicit = explicit_config.setup_target()
+    assert default.state_dict().keys() == explicit.state_dict().keys()
+    assert not any(key.startswith("history_encoder.") for key in default.state_dict())
+    assert all(torch.equal(default.state_dict()[key], explicit.state_dict()[key]) for key in default.state_dict())
+    actor = _actor(steps=4)
+    default.eval()
+    explicit.eval()
+    assert torch.equal(default(actor).conditional_q, explicit(actor).conditional_q)
 
 
 def test_qh_scorer_config_rejects_incompatible_attention_width() -> None:
@@ -607,6 +721,28 @@ def test_qh_scorer_config_rejects_incompatible_attention_width() -> None:
         TargetFiniteHorizonScorerConfig(
             hidden_dim=31,
             state_fusion=QhCrossAttentionStateFusionConfig(attention_heads=4),
+        )
+
+
+def test_qh_scorer_config_validates_complete_history_pose_width() -> None:
+    """H1 divisibility includes a concatenated raw pose residual."""
+
+    pose_encoder = R6dLffPoseEncoderConfig(
+        pose_encoder_lff=LearnableFourierFeaturesConfig(
+            input_dim=9,
+            fourier_dim=64,
+            hidden_dim=128,
+            output_dim=32,
+            include_input=True,
+        ),
+    )
+    assert pose_encoder.out_dim == 41
+
+    with pytest.raises(ValueError, match="pose-encoder output width must be divisible"):
+        TargetFiniteHorizonScorerConfig(
+            hidden_dim=32,
+            pose_encoder=pose_encoder,
+            history_encoder=QhCausalTransformerHistoryEncoderConfig(attention_heads=4),
         )
 
 

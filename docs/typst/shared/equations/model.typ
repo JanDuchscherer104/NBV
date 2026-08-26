@@ -105,4 +105,28 @@
     ),
     quad "Ak" in {"A0", "A1"}
   $,
+  qh_history_controls: $
+    #symb.model.history_pose_feature
+    &=
+    op("PoseEnc") (T_(c_t arrow.l c_j)),
+    quad j<t \
+    #symb.model.history_relative_age
+    &=
+    (t-1-j) / #symb.rl.H_max \
+    #symb.model.history_token^"H0"
+    &=
+    op("HistProj") (
+      1 / max(1,t) sum_(j<t) #symb.model.history_pose_feature
+    ) \
+    #symb.model.history_token^"H1"
+    &=
+    op("HistProj") (
+      op("LastValid") (
+        op("CausalTransformer") (
+          [bold(e)_"empty",
+           {#symb.model.history_pose_feature + g(#symb.model.history_relative_age)}_(j<t)]
+        )
+      )
+    )
+  $,
 )

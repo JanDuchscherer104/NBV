@@ -10,6 +10,13 @@ from __future__ import annotations
 from .heads import VinScorerHead, VinScorerHeadConfig
 from .normalization import largest_divisor_leq
 from .pooling import PoseConditionedGlobalPool
+from .qh_history_encoders import (
+    QhCausalTransformerHistoryEncoder,
+    QhCausalTransformerHistoryEncoderConfig,
+    QhHistoryEncoderConfig,
+    QhMeanPoolHistoryEncoder,
+    QhMeanPoolHistoryEncoderConfig,
+)
 from .qh_state_fusion import (
     QhCrossAttentionStateFusion,
     QhCrossAttentionStateFusionConfig,
@@ -35,6 +42,8 @@ from .semidense_grid import SemidenseGridEncoder, SemidenseGridEncoderConfig
 
 __all__ = [
     "PoseConditionedGlobalPool",
+    "QhCausalTransformerHistoryEncoder",
+    "QhCausalTransformerHistoryEncoderConfig",
     "QhCoralAuxiliary",
     "QhCoralSupportProvenance",
     "QhCoralValueDecoder",
@@ -50,6 +59,9 @@ __all__ = [
     "QhCrossAttentionStateFusionConfig",
     "QhIndependentMlpStateFusion",
     "QhIndependentMlpStateFusionConfig",
+    "QhHistoryEncoderConfig",
+    "QhMeanPoolHistoryEncoder",
+    "QhMeanPoolHistoryEncoderConfig",
     "QhStateFusionConfig",
     "SceneFieldProjection",
     "SceneFieldProjectionConfig",
