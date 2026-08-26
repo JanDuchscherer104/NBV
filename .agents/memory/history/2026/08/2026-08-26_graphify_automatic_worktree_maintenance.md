@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: bc46bdc5ad14431c0d5cd7afa6463bb63380d438
+repo_head: 6d0134ba9551e564d7a051e62721b75d408bb746
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -71,6 +71,12 @@ That lets upstream Graphify distinguish tracked files from matching `.gitignore`
 rules without consulting the mutable source index. The private commands clear
 hook-scoped Git bindings, so a pre-commit check cannot reset the caller's index.
 
+The parentless fallback now resolves equally near, query-admissible ancestors
+with the existing stable path ordering instead of rejecting a valid worktree
+set as ambiguous. A later main-branch tracked paper exposed the legacy PDF
+directory link as unsafe; setup now preserves a local tracked PDF directory and
+only uses the shared directory link when no PDF input is tracked.
+
 ## Commits
 - [37b8a8848906c4652fc65d9dc62fc9999990bb2f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/37b8a8848906c4652fc65d9dc62fc9999990bb2f)
 - [b6de2ce1b57829de0a05ab7facf10a7cb3bbd0f8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b6de2ce1b57829de0a05ab7facf10a7cb3bbd0f8)
@@ -81,6 +87,8 @@ hook-scoped Git bindings, so a pre-commit check cannot reset the caller's index.
 - [ab4854067a26345fd2f6a92ebccebc2928c10196](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ab4854067a26345fd2f6a92ebccebc2928c10196)
 - [153b09fc405d8bd7b6189987fa90e8c7d3a505b0](https://github.com/JanDuchscherer104/ARIA-NBV/commit/153b09fc405d8bd7b6189987fa90e8c7d3a505b0)
 - [bc46bdc5ad14431c0d5cd7afa6463bb63380d438](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bc46bdc5ad14431c0d5cd7afa6463bb63380d438)
+- [1858f451d7e1ad7aebbf768181ffe757b3f0bbcb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1858f451d7e1ad7aebbf768181ffe757b3f0bbcb)
+- [6d0134ba9551e564d7a051e62721b75d408bb746](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6d0134ba9551e564d7a051e62721b75d408bb746)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
@@ -102,6 +110,11 @@ full freshness suite (29 tests and 20 subtests).
 
 `make graphify-session-readiness-integration` completed both real explicit and
 parentless disposable worktree paths in 304 seconds on the local host.
+
+The post-main regression proof ran the exact final commit in two new detached
+worktrees with `CODEX_SOURCE_WORKSPACE_PATH` absent and present. Both setups
+were silent, retained the tracked `UVFA.pdf`, and resolved standard and deep
+cache links under `/home/jd/repos/ARIA-NBV/.data/graphify-semantic-cache`.
 
 ## Canonical Owner Impact
 The setup scripts, seeder, reconciliation owner, freshness helper, maintenance
