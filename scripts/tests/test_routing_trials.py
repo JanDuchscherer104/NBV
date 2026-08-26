@@ -199,7 +199,8 @@ def test_prompt_and_rubric_ids_match_without_prompt_leakage() -> None:
 def test_academic_authoring_trial_selection_is_a_small_disjoint_suite() -> None:
     assert trials.ACADEMIC_AUTHORING_TRIAL_IDS == (
         "academic-writing-related-work-synthesis",
-        "literature-synthesis-source-screening",
+        "literature-research-source-screening",
+        "literature-research-current-typst-api-near-miss",
         "typst-authoring-layout-repair",
         "scientific-review-frozen-claim",
         "thesis-claim-revision",

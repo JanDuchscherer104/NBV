@@ -65,9 +65,11 @@ For an already-known exact owner, open that owner and its nearest `AGENTS.md`
 and stop retrieving. Use optional navigation, recall, or external-document
 references only when their branch condition is active.
 
-`literature-synthesis` is a preparatory lane for source discovery, screening,
-and comparison; it hands a bounded packet to `academic-writing` and never
-advances a phase state. Academic work then has three disjoint first owners:
+`literature-research` is an optional source-discovery, screening, and comparison
+lane when the task lacks sufficient evidence; it hands a bounded packet to
+`academic-writing` and never advances a phase state. A task with screened
+sources starts directly at its relevant owner. Academic work has three disjoint
+first owners:
 `academic-writing` constructs source-grounded arguments; `scientific-review`
 independently reviews an exact candidate without mutation; `typst-authoring`
 realizes ready content, notation, citations, and rendered pages. Handoffs carry

@@ -30,8 +30,9 @@ realization or certify scientific validity.
    [`HM scientific-practice overlay`](references/hm-scientific-practice.md).
    For a candidate that may continue into realization, read the shared
    [academic work phase transition](../README.md#academic-work-phase-transition).
-3. For source discovery, screening, or a comparison matrix, start with
-   [`literature-synthesis`](../literature-synthesis/SKILL.md). For Related Work
+3. When source coverage, novelty, screening, or compatible-setting comparison
+   is unresolved, use the optional
+   [`literature-research`](../literature-research/SKILL.md) lane. For Related Work
    or a concept-centred comparison of already-screened sources, read
    [`literature-synthesis.md`](references/literature-synthesis.md). When a
    material source or conclusion changes, read

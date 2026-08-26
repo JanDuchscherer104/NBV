@@ -1381,7 +1381,7 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     )
     assert "ready-for-realization" in academic_skill
     assert "obtain scientific-review findings before marking" in academic_skill
-    assert "literature-synthesis" in academic_skill
+    assert "literature-research" in academic_skill
     assert "academic work phase transition" in academic_skill
     assert (
         "references/empirical-reporting-and-reproducibility.md"
@@ -1412,9 +1412,9 @@ def test_academic_owner_split_retains_typst_links_and_scientific_contract() -> N
     assert "`independence: independent`" in review_protocol
     assert "same-context advisory review cannot unlock" in review_protocol
     assert "independent scientific review" in skill_guide
-    assert "preparatory lane" in skill_guide
+    assert "optional source-discovery" in skill_guide
     assert (
-        ROOT / ".agents" / "skills" / "literature-synthesis" / "SKILL.md"
+        ROOT / ".agents" / "skills" / "literature-research" / "SKILL.md"
     ).is_file()
     assert "prose-draft" not in thesis_writing
     assert "prose-polish" not in thesis_writing

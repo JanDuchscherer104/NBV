@@ -1,17 +1,21 @@
 # Candidate change impact
 
-Read this only after a source, evidence interpretation, scope, or conclusion
-changes in a candidate that was already reviewed or handed off.
+Read this only after a candidate that was already reviewed or handed off
+changes.
 
-1. Reopen the affected claims and their exact evidence locators; do not infer
-   that a nearby paragraph remains supported.
-2. Update the candidate packet's scope, limitations, and destination. Preserve
-   unaffected claims and their existing evidence rather than restarting the
-   whole section.
-3. Request a fresh `scientific-review` only when the changed claim has an
-   empirical, causal, mathematical, or citation-entailment risk. Hand ready
-   wording to `typst-authoring` only after the packet again states the required
-   proof.
+1. Classify surface-only changes such as spelling, punctuation, or layout that
+   preserve meaning, evidence interpretation, scope, destination, and status.
+   They preserve the existing review.
+2. Treat any change to meaning, evidence interpretation, scope, destination,
+   contribution or research-question relationship, conclusion, mathematics,
+   citation entailment, or scientific status as material. Reopen the affected
+   claims and their exact evidence locators.
+3. Update the candidate packet's scope, limitations, destination, and status.
+   Preserve unaffected claims and evidence rather than restarting the section.
+4. Request fresh `scientific-review` profiles for each affected empirical,
+   causal, mathematical, citation, research-question, contribution-scope, or
+   argument-coherence risk. Hand the candidate to `typst-authoring` only after
+   the packet again states the required proof and no blocking finding remains.
 
 This is a local adaptation of the material-change and candidate-check ideas in
 [WenyuChiou/academic-writing-skills at
