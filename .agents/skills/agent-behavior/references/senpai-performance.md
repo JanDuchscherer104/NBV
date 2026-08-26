@@ -24,6 +24,8 @@ contexts. If role separation is unavailable, record the iteration as blocked.
 
 1. **Freeze.** Create/start one performance goal with its evaluator command,
    metric direction, hard gates, mutable paths, budget, and plateau window.
+   Start the Codex goal with the emitted objective verbatim and keep it unchanged
+   so the completed snapshot matches the OMX workflow.
 2. **Research.** Inspect prior experiments and local sources first:
    `docs/literature/sources.jsonl`, matching `tex-src/`, exact code/tests, and
    registered Context7 libraries. Use primary papers, official docs, and pinned
