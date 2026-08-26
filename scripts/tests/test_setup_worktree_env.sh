@@ -11,6 +11,7 @@ SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
 EXPLICIT_CHILD_ROOT="${SANDBOX}/explicit-child"
 STALE_CHILD_ROOT="${SANDBOX}/stale-child"
 AMBIGUOUS_CHILD_ROOT="${SANDBOX}/ambiguous-child"
+TRACKED_PDF_ROOT="${SANDBOX}/tracked-pdf-worktree"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
@@ -90,6 +91,7 @@ git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-explicit-child "${EXPLICIT_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-stale-child "${STALE_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-ambiguous-child "${AMBIGUOUS_CHILD_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-tracked-pdf "${TRACKED_PDF_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
@@ -340,6 +342,18 @@ done
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/report.md" ]]
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/wiki" ]]
 [[ ! -e "${WORKTREE_ROOT}/graphify-out/query.json" ]]
+
+# A newly tracked paper makes the PDF directory an exact local input. Setup
+# must preserve it instead of trying to replace its parent directory with the
+# legacy shared-cache symlink.
+mkdir -p "${TRACKED_PDF_ROOT}/docs/literature/pdf"
+printf 'tracked paper\n' >"${TRACKED_PDF_ROOT}/docs/literature/pdf/tracked.pdf"
+git -C "${TRACKED_PDF_ROOT}" add -f docs/literature/pdf/tracked.pdf
+git -C "${TRACKED_PDF_ROOT}" commit -qm "track paper fixture"
+run_setup "${TRACKED_PDF_ROOT}" \
+  >"${SANDBOX}/tracked-pdf.out" 2>"${SANDBOX}/tracked-pdf.err"
+[[ -f "${TRACKED_PDF_ROOT}/docs/literature/pdf/tracked.pdf" ]]
+[[ ! -L "${TRACKED_PDF_ROOT}/docs/literature/pdf" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
 

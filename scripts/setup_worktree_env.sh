@@ -184,7 +184,14 @@ while IFS= read -r -d '' source; do
 done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
   ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
 
-if [[ -e "$shared_root/docs/literature/pdf" ]]; then
+# A tracked paper must remain an exact local checkout input. Older revisions
+# ignored this directory wholesale and could share it as one cache symlink;
+# mixed tracked/untracked directories cannot safely be replaced that way.
+tracked_pdf_inputs="$(git_in_worktree ls-files -- docs/literature/pdf)"
+if [[ -n "$tracked_pdf_inputs" ]]; then
+  [[ -d docs/literature/pdf && ! -L docs/literature/pdf ]] || \
+    fail "tracked PDF inputs require a local docs/literature/pdf directory"
+elif [[ -e "$shared_root/docs/literature/pdf" ]]; then
   link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
 fi
 
