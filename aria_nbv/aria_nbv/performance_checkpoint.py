@@ -6,26 +6,32 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .configs.wandb_config import WandbConfig
 
 _CHECKPOINT_STATUSES = frozenset({"pass", "fail", "blocked"})
+_SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _REQUIRED_FIELDS = frozenset(
     {
         "schema_version",
         "goal_slug",
+        "iteration",
         "title",
         "checkpoint_status",
         "summary",
+        "hypothesis",
         "baseline_revision",
         "candidate_revision",
         "evaluator_fingerprint",
+        "research",
         "metrics",
         "hard_gates",
         "series_axis",
@@ -37,8 +43,16 @@ class ResultContractError(ValueError):
     """Raised when a result file cannot serve as immutable evaluator evidence."""
 
 
+@dataclass(frozen=True)
+class WandbPublication:
+    """Verified W&B identity for one immutable SENPAI result."""
+
+    run_id: str
+    run_path: str
+
+
 def load_result(path: Path) -> dict[str, Any]:
-    """Load a version-one evaluator result for callers that need only its fields."""
+    """Load a version-two evaluator result for callers that need only its fields."""
     result, _ = load_result_snapshot(path)
     return result
 
@@ -55,12 +69,15 @@ def load_result_snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
     missing = sorted(_REQUIRED_FIELDS.difference(raw))
     if missing:
         raise ResultContractError(f"result is missing required fields: {', '.join(missing)}")
-    if raw["schema_version"] != 1:
-        raise ResultContractError("result.schema_version must be 1")
+    if raw["schema_version"] != 2:
+        raise ResultContractError("result.schema_version must be 2")
+    if isinstance(raw["iteration"], bool) or not isinstance(raw["iteration"], int) or raw["iteration"] <= 0:
+        raise ResultContractError("result.iteration must be a positive integer")
     for field in (
         "goal_slug",
         "title",
         "summary",
+        "hypothesis",
         "baseline_revision",
         "candidate_revision",
         "evaluator_fingerprint",
@@ -70,12 +87,46 @@ def load_result_snapshot(path: Path) -> tuple[dict[str, Any], bytes]:
             raise ResultContractError(f"result.{field} must be a non-empty string")
     if raw["checkpoint_status"] not in _CHECKPOINT_STATUSES:
         raise ResultContractError("result.checkpoint_status must be pass, fail, or blocked")
+    _validate_research(raw["research"])
     _validate_scalar_mapping(raw["metrics"], field="metrics", boolean=False)
     _validate_scalar_mapping(raw["hard_gates"], field="hard_gates", boolean=True)
+    if not raw["metrics"]:
+        raise ResultContractError("result.metrics must not be empty")
+    if not raw["hard_gates"]:
+        raise ResultContractError("result.hard_gates must not be empty")
     _validate_evidence_series(raw.get("evidence_series", []))
     if raw["checkpoint_status"] == "pass" and not all(raw["hard_gates"].values()):
         raise ResultContractError("result.checkpoint_status cannot be pass when a hard gate failed")
     return raw, result_bytes
+
+
+def _validate_research(value: Any) -> None:
+    """Require one source-grounded research brief and approved assignment."""
+    if not isinstance(value, Mapping):
+        raise ResultContractError("result.research must be an object")
+    for digest_field in ("brief_sha256", "assignment_sha256"):
+        digest = value.get(digest_field)
+        if not isinstance(digest, str) or _SHA256_PATTERN.fullmatch(digest) is None:
+            raise ResultContractError(f"result.research.{digest_field} must be a lowercase SHA-256 digest")
+    sources = value.get("sources")
+    if not isinstance(sources, list):
+        raise ResultContractError("result.research.sources must be a list")
+    if not sources:
+        raise ResultContractError("result.research.sources must not be empty")
+    identities: set[tuple[str, str, str]] = set()
+    for index, source in enumerate(sources):
+        if not isinstance(source, Mapping):
+            raise ResultContractError(f"result.research.sources[{index}] must be an object")
+        values: list[str] = []
+        for field in ("kind", "locator", "version", "mechanism"):
+            item = source.get(field)
+            if not isinstance(item, str) or not item.strip():
+                raise ResultContractError(f"result.research.sources[{index}].{field} must be a non-empty string")
+            values.append(item.strip())
+        identity = (values[0], values[1], values[2])
+        if identity in identities:
+            raise ResultContractError("result.research.sources must not contain duplicate identities")
+        identities.add(identity)
 
 
 def _validate_scalar_mapping(value: Any, *, field: str, boolean: bool) -> None:
@@ -124,10 +175,37 @@ def checkpoint_evidence(result: Mapping[str, Any], digest: str) -> str:
     gates = sum(bool(value) for value in result["hard_gates"].values())
     total_gates = len(result["hard_gates"])
     return (
-        f"result_sha256={digest}; candidate={result['candidate_revision']}; "
+        f"result_sha256={digest}; iteration={result['iteration']}; candidate={result['candidate_revision']}; "
         f"baseline={result['baseline_revision']}; gates={gates}/{total_gates}; "
         f"summary={result['summary']}"
     )
+
+
+def _wandb_provenance(result: Mapping[str, Any], digest: str) -> dict[str, Any]:
+    research = result["research"]
+    return {
+        "goal_slug": result["goal_slug"],
+        "iteration": result["iteration"],
+        "checkpoint_status": result["checkpoint_status"],
+        "hypothesis": result["hypothesis"],
+        "baseline_revision": result["baseline_revision"],
+        "candidate_revision": result["candidate_revision"],
+        "evaluator_fingerprint": result["evaluator_fingerprint"],
+        "research_brief_sha256": research["brief_sha256"],
+        "assignment_sha256": research["assignment_sha256"],
+        "research_source_count": len(research["sources"]),
+        "result_sha256": digest,
+    }
+
+
+def _wandb_tags(result: Mapping[str, Any], configured: Sequence[str] | None) -> list[str]:
+    required = (
+        "senpai",
+        f"goal:{result['goal_slug']}",
+        f"iteration:{result['iteration']}",
+        f"status:{result['checkpoint_status']}",
+    )
+    return list(dict.fromkeys((*configured, *required) if configured else required))
 
 
 def _verify_wandb_publication(
@@ -139,40 +217,33 @@ def _verify_wandb_publication(
 ) -> None:
     """Read back the published run identity and immutable-result provenance."""
     published = wandb.Api().run("/".join(run_path))
-    expected_config = {
-        "goal_slug": result["goal_slug"],
-        "checkpoint_status": result["checkpoint_status"],
-        "baseline_revision": result["baseline_revision"],
-        "candidate_revision": result["candidate_revision"],
-        "evaluator_fingerprint": result["evaluator_fingerprint"],
-        "result_sha256": digest,
-    }
+    expected_config = _wandb_provenance(result, digest)
+    expected_tags = set(_wandb_tags(result, None))
     if published.name != f"[senpai] {result['title']}" or published.group != "senpai":
         raise RuntimeError("published W&B run does not have the required SENPAI identity")
+    if not expected_tags.issubset(set(published.tags)):
+        raise RuntimeError("published W&B run does not have the required SENPAI tags")
     observed_config = published.config.get("aria_autoresearch", {})
     if observed_config != expected_config:
         raise RuntimeError("published W&B run does not preserve immutable evaluator provenance")
 
 
-def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str, config: WandbConfig) -> str:
+def log_wandb_result(
+    result: Mapping[str, Any],
+    result_bytes: bytes,
+    digest: str,
+    config: WandbConfig,
+) -> WandbPublication:
     """Log a checkpointed result as a consistently named SENPAI observation."""
     import wandb
 
     init_kwargs = config.init_kwargs()
     init_kwargs["name"] = f"[senpai] {result['title']}"
     init_kwargs["group"] = "senpai"
+    init_kwargs["tags"] = _wandb_tags(result, config.tags)
     run = wandb.init(
         **init_kwargs,
-        config={
-            "aria_autoresearch": {
-                "goal_slug": result["goal_slug"],
-                "checkpoint_status": result["checkpoint_status"],
-                "baseline_revision": result["baseline_revision"],
-                "candidate_revision": result["candidate_revision"],
-                "evaluator_fingerprint": result["evaluator_fingerprint"],
-                "result_sha256": digest,
-            }
-        },
+        config={"aria_autoresearch": _wandb_provenance(result, digest)},
     )
     run_id = str(run.id)
     run_path = tuple(str(component) for component in run.path)
@@ -195,7 +266,14 @@ def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str
         artifact = wandb.Artifact(
             name=f"performance-goal-{result['goal_slug']}-{digest[:12]}",
             type="aria-performance-result",
-            metadata={"result_sha256": digest, "checkpoint_status": result["checkpoint_status"]},
+            metadata={
+                "result_sha256": digest,
+                "checkpoint_status": result["checkpoint_status"],
+                "iteration": result["iteration"],
+                "hypothesis": result["hypothesis"],
+                "research_brief_sha256": result["research"]["brief_sha256"],
+                "assignment_sha256": result["research"]["assignment_sha256"],
+            },
         )
         with artifact.new_file("result.json", mode="wb") as result_file:
             result_file.write(result_bytes)
@@ -203,7 +281,7 @@ def log_wandb_result(result: Mapping[str, Any], result_bytes: bytes, digest: str
     finally:
         run.finish()
     _verify_wandb_publication(wandb, run_path=run_path, result=result, digest=digest)
-    return run_id
+    return WandbPublication(run_id=run_id, run_path="/".join(run_path))
 
 
 def record_checkpoint(
@@ -229,6 +307,25 @@ def record_checkpoint(
         return outcome
     if wandb_config is None:
         raise ResultContractError("formal SENPAI checkpoints require W&B configuration")
+    pending_command = [
+        "omx",
+        "performance-goal",
+        "checkpoint",
+        "--slug",
+        result["goal_slug"],
+        "--status",
+        "blocked",
+        "--evidence",
+        f"wandb_publication=pending; evaluator_status={result['checkpoint_status']}; {evidence}",
+    ]
+    pending = subprocess.run(
+        pending_command,
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=_REPOSITORY_ROOT,
+    )
+    publication = log_wandb_result(result, result_bytes, digest, wandb_config)
     command = [
         "omx",
         "performance-goal",
@@ -238,7 +335,7 @@ def record_checkpoint(
         "--status",
         result["checkpoint_status"],
         "--evidence",
-        evidence,
+        f"wandb_run={publication.run_path}; {evidence}",
     ]
     completed = subprocess.run(
         command,
@@ -247,8 +344,10 @@ def record_checkpoint(
         text=True,
         cwd=_REPOSITORY_ROOT,
     )
+    outcome["omx_pending_stdout"] = pending.stdout
     outcome["omx_stdout"] = completed.stdout
-    outcome["wandb_run_id"] = log_wandb_result(result, result_bytes, digest, wandb_config)
+    outcome["wandb_run_id"] = publication.run_id
+    outcome["wandb_run_path"] = publication.run_path
     return outcome
 
 
