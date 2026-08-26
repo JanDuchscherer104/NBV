@@ -32,6 +32,7 @@ from .audits import candidate_policy_entropy
 from .manifest import read_rollout_store_manifest
 from .read_model import (
     StoredRollout,
+    _candidate_mixture_names,
     decode_invalid_reason,
     decode_position_id,
     rollout_at,
@@ -5011,43 +5012,112 @@ def root_relative_candidate_rows(
         units and ``RIGHT_HAND_Z_UP`` as the frame convention.
     """
 
-    rows: list[dict[str, Any]] = []
-    rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
-    for rollout_position in range(rollout_count):
-        rollout = rollout_at(reader, rollout_position)
-        if rollout_row_id is not None and rollout.rollout_row_id != int(rollout_row_id):
+    rollout_ids = reader.array("rollouts/rollout_row_id").astype(np.int64, copy=False).reshape(-1)
+    root_poses = reader.array("rollouts/root_pose_world").astype(np.float64, copy=False).reshape(-1, 12)
+    source_ids = reader.array("rollouts/source_row_id").astype(np.int64, copy=False).reshape(-1)
+    target_ids = reader.array("rollouts/target_row_id").astype(np.int64, copy=False).reshape(-1)
+    scene_ids = reader.array("rollouts/scene_id").astype(np.int64, copy=False).reshape(-1)
+    policy_ids = reader.array("rollouts/policy_id").astype(np.int64, copy=False).reshape(-1)
+    scene_names = _read_string_array(reader, "dictionaries/scene")
+    policy_names = _read_string_array(reader, "dictionaries/policy")
+
+    step_ids = reader.array("steps/step_row_id").astype(np.int64, copy=False).reshape(-1)
+    step_rollout_ids = reader.array("steps/rollout_row_id").astype(np.int64, copy=False).reshape(-1)
+    step_indices = reader.array("steps/step_index").astype(np.int64, copy=False).reshape(-1)
+    shell_index = reader.candidate_shell_index()
+    candidate_positions: list[np.ndarray] = []
+    candidate_step_positions: list[np.ndarray] = []
+    candidate_rollout_positions: list[np.ndarray] = []
+    for rollout_position, current_rollout_id in enumerate(rollout_ids.tolist()):
+        if rollout_row_id is not None and current_rollout_id != int(rollout_row_id):
             continue
-        root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
-        for step in rollout_steps(reader, rollout):
-            if step_row_id is not None and step.step_row_id != int(step_row_id):
+        step_positions = np.flatnonzero(step_rollout_ids == current_rollout_id)
+        step_positions = step_positions[np.argsort(step_indices[step_positions], kind="stable")]
+        for step_position in step_positions.tolist():
+            current_step_id = int(step_ids[step_position])
+            if step_row_id is not None and current_step_id != int(step_row_id):
                 continue
-            for local, candidate_row_id in enumerate(step.candidate_row_ids.tolist()):
-                if actor_valid_only and not bool(step.actor_action_mask[local]):
-                    continue
-                relative = np.asarray(step.pose_world_cam[local, 9:12], dtype=np.float64) - root_center
-                rows.append(
-                    {
-                        "candidate_row_id": int(candidate_row_id),
-                        "rollout_row_id": rollout.rollout_row_id,
-                        "step_row_id": step.step_row_id,
-                        "step_index": step.step_index,
-                        "source_row_id": rollout.source_row_id,
-                        "scene": rollout.scene,
-                        "policy": rollout.policy,
-                        "target_row_id": rollout.target_row_id,
-                        "actor_action": bool(step.actor_action_mask[local]),
-                        "selected": bool(step.selected_mask[local]),
-                        "position": str(step.position_names[local]),
-                        "mixture": str(step.mixture_names[local]),
-                        "root_relative_x_m": float(relative[0]),
-                        "root_relative_y_m": float(relative[1]),
-                        "root_relative_z_m": float(relative[2]),
-                        "root_distance_m": float(np.linalg.norm(relative)),
-                        "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
-                        "units": "m",
-                    }
-                )
-    return rows
+            positions = shell_index.positions_by_step.get(current_step_id, np.empty(0, dtype=np.int64))
+            candidate_positions.append(positions)
+            candidate_step_positions.append(np.full(positions.size, step_position, dtype=np.int64))
+            candidate_rollout_positions.append(np.full(positions.size, rollout_position, dtype=np.int64))
+
+    if not candidate_positions:
+        return []
+    positions = np.concatenate(candidate_positions)
+    step_positions = np.concatenate(candidate_step_positions)
+    rollout_positions = np.concatenate(candidate_rollout_positions)
+    actor_actions = reader.array("candidates/actor_action_mask").astype(np.bool_, copy=False).reshape(-1)[positions]
+    if actor_valid_only:
+        positions = positions[actor_actions]
+        step_positions = step_positions[actor_actions]
+        rollout_positions = rollout_positions[actor_actions]
+        actor_actions = actor_actions[actor_actions]
+    if positions.size == 0:
+        return []
+
+    candidate_ids = shell_index.candidate_ids[positions]
+    selected = reader.array("candidates/selected_mask").astype(np.bool_, copy=False).reshape(-1)[positions]
+    pose_centers = (
+        reader.array("candidates/pose_world_cam").astype(np.float64, copy=False).reshape(-1, 12)[positions, 9:12]
+    )
+    position_ids = reader.array("candidate_diagnostics/position_id").astype(np.int32, copy=False).reshape(-1)[positions]
+    mixture_ids = reader.array("candidates/mixture_id").astype(np.int32, copy=False).reshape(-1)[positions]
+    relative = pose_centers - root_poses[rollout_positions, 9:12]
+    distances = np.linalg.norm(relative, axis=1)
+    mixture_names = _candidate_mixture_names(reader, mixture_ids)
+
+    return [
+        {
+            "candidate_row_id": int(candidate_id),
+            "rollout_row_id": int(rollout_ids[rollout_position]),
+            "step_row_id": int(step_ids[step_position]),
+            "step_index": int(step_indices[step_position]),
+            "source_row_id": int(source_ids[rollout_position]),
+            "scene": _dictionary_value(scene_names, scene_ids[rollout_position]),
+            "policy": _dictionary_value(policy_names, policy_ids[rollout_position]),
+            "target_row_id": int(target_ids[rollout_position]),
+            "actor_action": bool(actor_action),
+            "selected": bool(selected_mask),
+            "position": decode_position_id(position_id),
+            "mixture": str(mixture_name),
+            "root_relative_x_m": float(offset[0]),
+            "root_relative_y_m": float(offset[1]),
+            "root_relative_z_m": float(offset[2]),
+            "root_distance_m": float(distance),
+            "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+            "units": "m",
+        }
+        for (
+            candidate_id,
+            step_position,
+            rollout_position,
+            actor_action,
+            selected_mask,
+            position_id,
+            mixture_name,
+            offset,
+            distance,
+        ) in zip(
+            candidate_ids.tolist(),
+            step_positions.tolist(),
+            rollout_positions.tolist(),
+            actor_actions.tolist(),
+            selected.tolist(),
+            position_ids.tolist(),
+            mixture_names.tolist(),
+            relative.tolist(),
+            distances.tolist(),
+            strict=True,
+        )
+    ]
+
+
+def _dictionary_value(values: list[str], index: int | np.integer[Any]) -> str:
+    """Decode one dictionary id with the reader model's legacy empty fallback."""
+
+    value = int(index)
+    return values[value] if 0 <= value < len(values) else ""
 
 
 def rollout_step_objective_rows(

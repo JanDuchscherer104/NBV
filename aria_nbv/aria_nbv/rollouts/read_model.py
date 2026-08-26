@@ -291,19 +291,6 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
     diagnostics = reader.root["candidate_diagnostics"]
     step_table = reader.root["steps"]
     shell_index = reader.candidate_shell_index()
-    component_names: dict[int, str] = {}
-    try:
-        writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
-        candidate_mixture = writer_config.get("candidate_mixture") if isinstance(writer_config, dict) else None
-        components = candidate_mixture.get("components") if isinstance(candidate_mixture, dict) else None
-        if isinstance(components, list):
-            for index, component in enumerate(components):
-                if isinstance(component, dict):
-                    name = component.get("name") or component.get("family") or component.get("position_mode")
-                    if name is not None:
-                        component_names[index] = str(name)
-    except (KeyError, TypeError, ValueError):
-        component_names = {}
 
     steps: list[StoredStep] = []
     for step_position in rollout.step_row_positions.tolist():
@@ -345,16 +332,7 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
                 scene_rri=take(candidates, "scene_rri", np.float32),
                 selection_probabilities=take(candidates, "selection_probabilities", np.float32),
                 mixture_ids=mixture_ids,
-                mixture_names=np.asarray(
-                    [
-                        component_names.get(
-                            int(value),
-                            "unknown" if int(value) < 0 else f"component_{int(value)}",
-                        )
-                        for value in mixture_ids
-                    ],
-                    dtype=np.str_,
-                ),
+                mixture_names=_candidate_mixture_names(reader, mixture_ids),
                 sampler_probabilities=take(candidates, "sampler_probability", np.float32),
                 position_ids=position_ids,
                 position_names=np.asarray([decode_position_id(value) for value in position_ids], dtype=np.str_),
@@ -370,6 +348,37 @@ def rollout_steps(reader: RolloutZarrStoreReader, rollout: StoredRollout) -> tup
             )
         )
     return tuple(steps)
+
+
+def _candidate_mixture_names(
+    reader: RolloutZarrStoreReader,
+    mixture_ids: NDArray[np.int32],
+) -> NDArray[np.str_]:
+    """Decode persisted mixture ids using the writer's optional component names."""
+
+    component_names: dict[int, str] = {}
+    try:
+        writer_config = reader.manifest().get("manifest", {}).get("generation", {}).get("writer_config")
+        candidate_mixture = writer_config.get("candidate_mixture") if isinstance(writer_config, dict) else None
+        components = candidate_mixture.get("components") if isinstance(candidate_mixture, dict) else None
+        if isinstance(components, list):
+            for index, component in enumerate(components):
+                if isinstance(component, dict):
+                    name = component.get("name") or component.get("family") or component.get("position_mode")
+                    if name is not None:
+                        component_names[index] = str(name)
+    except (KeyError, TypeError, ValueError):
+        component_names = {}
+    return np.asarray(
+        [
+            component_names.get(
+                int(value),
+                "unknown" if int(value) < 0 else f"component_{int(value)}",
+            )
+            for value in mixture_ids
+        ],
+        dtype=np.str_,
+    )
 
 
 def target_rows(reader: RolloutZarrStoreReader) -> tuple[StoredTarget, ...]:

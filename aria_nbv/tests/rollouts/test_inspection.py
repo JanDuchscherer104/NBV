@@ -3674,6 +3674,79 @@ def test_root_relative_candidate_rows_use_root_centered_z_up_world_metres(tmp_pa
     assert "center_x" not in first
 
 
+def test_root_relative_candidate_rows_preserve_shell_order_without_materializing_steps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The direct geometry projection must retain the former full-step result exactly."""
+
+    result = write_rollout_zarr_store(
+        tmp_path / "rollouts.zarr",
+        build_rollout_records(horizon=2, num_samples=6, seed=160)[:2],
+    )
+    reader = RolloutZarrStoreReader(result.store_dir)
+
+    def scalar_reference(
+        *,
+        step_row_id: int | None = None,
+        actor_valid_only: bool = False,
+    ) -> list[dict[str, object]]:
+        """The former direct step projection used as an exact ordering oracle."""
+
+        from aria_nbv.rollouts.read_model import rollout_at, rollout_steps
+
+        rows: list[dict[str, object]] = []
+        rollout_count = int(np.asarray(reader.array("rollouts/rollout_row_id")).size)
+        for rollout_position in range(rollout_count):
+            rollout = rollout_at(reader, rollout_position)
+            root_center = np.asarray(rollout.root_pose_world[9:12], dtype=np.float64)
+            for step in rollout_steps(reader, rollout):
+                if step_row_id is not None and step.step_row_id != step_row_id:
+                    continue
+                for local, candidate_row_id in enumerate(step.candidate_row_ids.tolist()):
+                    if actor_valid_only and not bool(step.actor_action_mask[local]):
+                        continue
+                    relative = np.asarray(step.pose_world_cam[local, 9:12], dtype=np.float64) - root_center
+                    rows.append(
+                        {
+                            "candidate_row_id": int(candidate_row_id),
+                            "rollout_row_id": rollout.rollout_row_id,
+                            "step_row_id": step.step_row_id,
+                            "step_index": step.step_index,
+                            "source_row_id": rollout.source_row_id,
+                            "scene": rollout.scene,
+                            "policy": rollout.policy,
+                            "target_row_id": rollout.target_row_id,
+                            "actor_action": bool(step.actor_action_mask[local]),
+                            "selected": bool(step.selected_mask[local]),
+                            "position": str(step.position_names[local]),
+                            "mixture": str(step.mixture_names[local]),
+                            "root_relative_x_m": float(relative[0]),
+                            "root_relative_y_m": float(relative[1]),
+                            "root_relative_z_m": float(relative[2]),
+                            "root_distance_m": float(np.linalg.norm(relative)),
+                            "coordinate_frame": "root-centered ARIA world (RIGHT_HAND_Z_UP)",
+                            "units": "m",
+                        }
+                    )
+        return rows
+
+    expected_all = scalar_reference()
+    expected_valid = scalar_reference(actor_valid_only=True)
+    expected_step = scalar_reference(step_row_id=int(expected_all[-1]["step_row_id"]))
+
+    import aria_nbv.rollouts.inspection as inspection
+
+    def fail_if_materialized(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("root-relative geometry must not materialize StoredStep payloads")
+
+    monkeypatch.setattr(inspection, "rollout_steps", fail_if_materialized)
+
+    assert root_relative_candidate_rows(reader) == expected_all
+    assert root_relative_candidate_rows(reader, actor_valid_only=True) == expected_valid
+    assert root_relative_candidate_rows(reader, step_row_id=int(expected_all[-1]["step_row_id"])) == expected_step
+
+
 def test_failure_triage_emits_exact_mask_violation_rows(tmp_path: Path) -> None:
     """Hard mask violations should carry exact rollout, step, and candidate identifiers."""
 
