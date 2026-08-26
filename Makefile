@@ -98,6 +98,7 @@ PACKAGE_SMOKE_TESTS := \
 	tests/vin/test_vin_diagnostics_runtime.py
 QH_CI_RUFF_PATHS := \
 	aria_nbv/data_handling/__init__.py \
+	aria_nbv/data_handling/qh_contracts.py \
 	aria_nbv/data_handling/qh_data \
 	aria_nbv/lightning/qh_datamodule.py \
 	aria_nbv/lightning/qh_experiment.py \

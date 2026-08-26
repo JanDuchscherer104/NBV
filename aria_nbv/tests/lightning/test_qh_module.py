@@ -26,7 +26,7 @@ from aria_nbv.rollouts.qh_geometry import QhGeometryContract
 from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutChainIdentity
 from aria_nbv.utils import Stage
 from aria_nbv.utils.fingerprints import stable_msgspec_hash
-from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput
+from aria_nbv.vin.models.target_finite_horizon import QhScoreOutput, TargetFiniteHorizonScorerConfig
 from aria_nbv.vin.modules.qh_value_decoders import QhCoralAuxiliary
 from aria_nbv.vin.ordinal import coral_loss
 from tests.data_handling.test_qh import _chain, _snippet
@@ -285,6 +285,23 @@ def test_named_cfplus_allows_explicit_privileged_module() -> None:
         scorer=_TableScorer(),
     )
     assert module.config.experiment_profile == "qh_cfplus_gt_depth_v1"
+
+
+def test_module_rejects_scorer_profile_mismatch_before_training() -> None:
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+    ).setup_target()
+
+    with pytest.raises(ValueError, match="scorer and Lightning module experiment profiles"):
+        QhLightningModule(
+            QhLightningModuleConfig(
+                lr_scheduler=None,
+                actor_state_contract_hash=_CF0_ACTOR_HASH,
+                learning_contract_hash=_LEARNING_CONTRACT_HASH,
+            ),
+            scorer=scorer,
+        )
 
 
 def test_module_rejects_unnamed_cf_gt_before_scorer_construction() -> None:

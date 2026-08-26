@@ -289,6 +289,55 @@ class QhDataset(Dataset[QhChain]):
                 "split": self.split,
                 "row_count": len(self._records),
             },
+            "admission_coverage": self.admission_coverage,
+        }
+
+    @cached_property
+    def admission_coverage(self) -> dict[str, Any]:
+        """Report source coverage without inventing a target-task denominator.
+
+        The immutable actor split supplies a factual denominator for root
+        source rows and scenes. Rollout identities supply the admitted
+        numerator and the distinct admitted ``(source, target)`` tasks. The
+        actor store does not enumerate every possible target task, so target
+        coverage is deliberately ``None`` instead of treating the observed
+        CF+ cohort as its own denominator. Consequently H0/S1 comparisons on
+        this profile estimate performance conditional on CF-GT carrier
+        availability; they do not establish coverage of the full root-target
+        task population.
+        """
+
+        reference_records = self.actor_reader.get_split_records(self.split)
+        reference_sources = {int(record.sample_index) for record in reference_records}
+        reference_scenes = {str(record.scene_id) for record in reference_records}
+        identities = [self.rollout_reader.chain_identity(index) for index in range(len(self.rollout_reader))]
+        admitted_sources = {int(identity.source_sample_index) for identity in identities}
+        admitted_scenes = {str(identity.scene_id) for identity in identities}
+        admitted_source_targets = {
+            (int(identity.source_sample_index), int(identity.target_row_id)) for identity in identities
+        }
+        if not admitted_sources <= reference_sources:
+            raise ValueError("Q_H admitted rollout sources exceed the immutable actor split population.")
+        if not admitted_scenes <= reference_scenes:
+            raise ValueError("Q_H admitted rollout scenes exceed the immutable actor split population.")
+        return {
+            "schema_version": "qh-admission-coverage-v1",
+            "conditional_population": self.selected_observation_protocol == "cf_gt",
+            "condition": (
+                "cf_gt_selected_observation_available_v1"
+                if self.selected_observation_protocol == "cf_gt"
+                else "root_actor_source_available_v1"
+            ),
+            "reference_source_row_count": len(reference_sources),
+            "admitted_source_row_count": len(admitted_sources),
+            "source_row_fraction": _bounded_fraction(len(admitted_sources), len(reference_sources)),
+            "reference_scene_count": len(reference_scenes),
+            "admitted_scene_count": len(admitted_scenes),
+            "scene_fraction": _bounded_fraction(len(admitted_scenes), len(reference_scenes)),
+            "admitted_source_target_task_count": len(admitted_source_targets),
+            "reference_source_target_task_count": None,
+            "source_target_task_fraction": None,
+            "source_target_coverage_reason": "actor store does not enumerate the complete target-task population",
         }
 
     def _validate_source_refs(self) -> None:
@@ -367,6 +416,16 @@ class QhDataset(Dataset[QhChain]):
         if actual != expected:
             raise ValueError(f"VIN source identity does not match rollout chain. {self._REBUILD_GUIDANCE}")
         return record
+
+
+def _bounded_fraction(numerator: int, denominator: int) -> float | None:
+    """Return a factual coverage fraction or ``None`` for an empty denominator."""
+
+    if denominator <= 0:
+        return None
+    if numerator < 0 or numerator > denominator:
+        raise ValueError("Q_H coverage numerator must lie within its reference denominator.")
+    return numerator / denominator
 
 
 def _require_named_profile_store(actor_reader: VinOfflineStoreReader) -> FreeInputProvenance:

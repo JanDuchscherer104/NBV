@@ -16,6 +16,7 @@ import pytest
 import torch
 
 import aria_nbv.lightning.qh_experiment as qh_experiment_module
+from aria_nbv.data_handling.qh_data.views import QhActorStateContract
 from aria_nbv.lightning.lit_trainer_factory import TrainerFactoryConfig
 from aria_nbv.lightning.qh_datamodule import QhLearningContract
 from aria_nbv.lightning.qh_experiment import (
@@ -456,6 +457,71 @@ def test_qh_bundle_detects_manifest_and_state_mutation(tmp_path) -> None:
     state_path.write_bytes(state_path.read_bytes() + b"tamper")
     with pytest.raises(ValueError, match="artifact 'scorer-state.pt' hash"):
         QhExperiment.load_for_inference(ref, device="cpu")
+
+
+def test_qh_bundle_rejects_consistent_cfplus_tamper_without_privileged_marker(tmp_path) -> None:
+    """Deployability follows the profile itself, not a bypassable bool."""
+
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    geometry_hash = "tampered-cfplus-geometry"
+    manifest["scorer_config"]["experiment_profile"] = "qh_cfplus_gt_depth_v1"
+    scorer_config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])
+    manifest["scorer_config_hash"] = stable_config_hash(scorer_config, length=64)
+    manifest["module_config"].update(
+        {
+            "experiment_profile": "qh_cfplus_gt_depth_v1",
+            "selected_observation_protocol": "cf_gt",
+            "privileged": False,
+            "geometry_contract_hash": geometry_hash,
+        }
+    )
+    actor_payload = manifest["identity"]["actor_state_contract"]
+    actor_payload.update(
+        {
+            "experiment_profile": "qh_cfplus_gt_depth_v1",
+            "selected_observation_protocol": "cf_gt",
+            "geometry_contract_hash": geometry_hash,
+        }
+    )
+    actor_contract = QhActorStateContract(**actor_payload)
+    actor_hash = stable_msgspec_hash(actor_contract)
+    manifest["identity"]["actor_state_contract_hash"] = actor_hash
+    manifest["identity"]["geometry_contract_hash"] = geometry_hash
+    manifest["module_config"]["actor_state_contract_hash"] = actor_hash
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="Deployable Q_H configuration rejects privileged"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
+
+
+def test_qh_bundle_rejects_rehashed_cf0_target_protocol_drift(tmp_path) -> None:
+    """Deployable CF0 binds the observed target source through learning identity."""
+
+    _experiment_instance, ref = _bundle(tmp_path)
+    manifest_path = ref.bundle_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    learning_payload = manifest["identity"]["learning_contract"]
+    learning_payload["data_contract"]["target_protocol"] = "v0_oracle_compatible"
+    data_contract = QhDataContract(**learning_payload["data_contract"])
+    learning_contract = QhLearningContract(
+        data_contract=data_contract,
+        max_horizon=int(learning_payload["max_horizon"]),
+        horizon_weighting=str(learning_payload["horizon_weighting"]),
+        objective_profile=learning_payload["objective_profile"],
+    )
+    learning_hash = stable_msgspec_hash(learning_contract)
+    manifest["identity"]["learning_contract_hash"] = learning_hash
+    manifest["module_config"]["learning_contract_hash"] = learning_hash
+    manifest["manifest_sha256"] = _manifest_hash(manifest)
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    tampered_ref = replace(ref, manifest_sha256=manifest["manifest_sha256"])
+
+    with pytest.raises(ValueError, match="requires target_protocol='v1_observed'"):
+        QhExperiment.load_for_inference(tampered_ref, device="cpu")
 
 
 def test_qh_bundle_rejects_missing_required_artifact(tmp_path) -> None:

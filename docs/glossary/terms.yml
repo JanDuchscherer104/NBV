@@ -584,9 +584,14 @@
   lookup_rank: 144
   definition_short: Counterfactual ablation state with selected synthetic geometry observations.
   definition_long: The geometry-rich counterfactual state adds only selected prior synthetic
-    observations to the minimal state. It may include rendered depth, depth-valid masks, backprojected
-    points, derived normals, and local support summaries for views that have already been
-    selected. It does not include oracle renders for unselected candidates.
+    observations to the minimal state. The executable qh_cfplus_gt_depth_v1 carrier holds
+    strictly causal rendered depth, depth-valid masks, calibration, selected-camera poses,
+    source identity, and support for views that have already been selected; it never includes
+    renders for unselected candidates. The source-matched CF+ H0 control validates this carrier
+    but is exactly invariant to its numeric payload, so it remains an S0-pose-conditioned
+    null model. S1 begins only when an encoder deterministically consumes the carrier, for
+    example by backprojecting selected surfaces before pooling. CF+ H0 and S1 must use matched
+    source populations and seeds before their difference can be attributed to geometry consumption.
   notation:
     typst: $s_t^"cf+"$
   symbol_refs:
