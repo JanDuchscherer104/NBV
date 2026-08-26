@@ -10,6 +10,7 @@ canonical_updates_needed:
   - scripts/quartodoc_inject_package_readmes.py
   - aria_nbv/aria_nbv/vin/README.md
   - tools/mermaid/references/aria_mermaid_style.md
+  - .agents/skills/aria-nbv-mermaid/SKILL.md
 touched_owner_paths:
   - scripts/quarto_generate_api_docs.sh
   - scripts/quartodoc_inject_package_readmes.py
@@ -19,9 +20,10 @@ touched_owner_paths:
   - aria_nbv/aria_nbv/lightning/README.md
   - docs/figures/diagrams
   - tools/mermaid
+  - .agents/skills/aria-nbv-mermaid/SKILL.md
 codex_thread: codex://threads/01a033b8-ed20-76a0-9627-2679b556cbff
 repo_object_format: sha1
-repo_head: fbf30215289f1c62330b04d166694d8fcfe7c74c
+repo_head: c24f7f103ab00f602896c8dda3bf55a9dda96d1b
 repo_branch: "codex/quartodoc-package-readmes"
 worktree_kind: linked
 ---
@@ -46,10 +48,11 @@ current public package READMEs project successfully. The app and Rerun README
 packages remain outside the existing public Quartodoc surface.
 
 ## Commits
-- [071d37b8b6b50c483cf0cdfb4543adb7194a8b88](https://github.com/JanDuchscherer104/ARIA-NBV/commit/071d37b8b6b50c483cf0cdfb4543adb7194a8b88)
-- [8e3807b8f78516b1d3a3eb1d3692a93b6cdc6cbb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/8e3807b8f78516b1d3a3eb1d3692a93b6cdc6cbb)
-- [a822cde9209a6c16e61092a688f877a31a682481](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a822cde9209a6c16e61092a688f877a31a682481)
-- [fbf30215289f1c62330b04d166694d8fcfe7c74c](https://github.com/JanDuchscherer104/ARIA-NBV/commit/fbf30215289f1c62330b04d166694d8fcfe7c74c)
+- [f59874e95cb25aa3de2731111432b1c0a0d33de3](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f59874e95cb25aa3de2731111432b1c0a0d33de3)
+- [1479bcdc2b5b4434104bb8ecef2ce753e7861202](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1479bcdc2b5b4434104bb8ecef2ce753e7861202)
+- [ed570aa5e4ef0a78a800c8dc00339e775ae331a8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ed570aa5e4ef0a78a800c8dc00339e775ae331a8)
+- [359cd9ef15a02957ccff31d383c633f311d69c86](https://github.com/JanDuchscherer104/ARIA-NBV/commit/359cd9ef15a02957ccff31d383c633f311d69c86)
+- [c24f7f103ab00f602896c8dda3bf55a9dda96d1b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/c24f7f103ab00f602896c8dda3bf55a9dda96d1b)
 
 ## Verification
 - Five focused generator/injection tests passed.
