@@ -217,6 +217,16 @@ save_manifest(result['files'], manifest_path=manifest, root=root, scan_corpus=co
         self.assertEqual(payload["state"], "unusable", payload)
         self.assertIn("projection owner is unavailable", " ".join(payload["reasons"]))
 
+    def test_committed_nonowner_tree_change_requires_projection_rebuild(self) -> None:
+        code = self.root / "src/example.py"
+        code.write_text("def example(): return 2\n", encoding="utf-8")
+        self.git("add", code.relative_to(self.root).as_posix())
+        self.git("commit", "-qm", "change code")
+
+        changes = freshness.projection_owner_changes(self.root)
+
+        self.assertIn("projection source tree differs from HEAD", changes)
+
     def test_ast_and_semantic_drift_use_their_respective_upstream_hashes(self) -> None:
         code = self.root / "src/example.py"
         code.write_text("def example(): return 2\n", encoding="utf-8")

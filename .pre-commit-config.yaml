@@ -29,7 +29,7 @@ repos:
 
       - id: graphify-maintain
         name: graphify automatic maintenance
-        entry: make graphify-maintain
+        entry: bash -c 'if [[ -n "${GEMINI_API_KEY:-}${GOOGLE_API_KEY:-}" ]]; then exec make graphify-maintain; fi'
         language: system
         pass_filenames: false
         files: ^(AGENTS\.md|\.agents/(references/|skills/)|aria_nbv/|docs/|graphify-input/|\.graphifyignore|scripts/(build_graphify_projection|check_graphify_freshness)\.py|Makefile)$

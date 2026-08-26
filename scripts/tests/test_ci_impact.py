@@ -356,7 +356,11 @@ class SelectionTests(unittest.TestCase):
 
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
         self.assertIn("id: graphify-maintain", hooks)
-        self.assertIn("entry: make graphify-maintain", hooks)
+        self.assertIn(
+            "entry: bash -c 'if [[ -n \"${GEMINI_API_KEY:-}${GOOGLE_API_KEY:-}\" ]]; then exec make graphify-maintain; fi'",
+            hooks,
+        )
+        self.assertNotIn("entry: make graphify-maintain", hooks)
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
         self.assertIn(
