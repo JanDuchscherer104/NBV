@@ -582,6 +582,28 @@ def test_page_loads_and_renders_identity_bound_admission_evidence(
     )
 
 
+def test_campaign_admission_evidence_routes_completed_shard_to_shared_s2_renderer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The campaign page reuses the rollout S² owner without moving plots into the oracle reducer."""
+
+    stores = (tmp_path / "shards" / "unit-a", tmp_path / "shards" / "unit-b")
+    rendered: list[tuple[Path, str]] = []
+    monkeypatch.setattr(panel, "discover_rollout_store_paths", lambda _root: stores)
+    monkeypatch.setattr(st, "subheader", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(st, "selectbox", lambda _label, options, **_kwargs: options[1])
+    monkeypatch.setattr(
+        panel,
+        "render_s2_direction_histograms",
+        lambda handle, *, key_prefix: rendered.append((handle.store_path, key_prefix)),
+    )
+
+    panel._render_campaign_rollout_s2_evidence(tmp_path)
+
+    assert rendered == [(stores[1], "campaign_admission_unit-b")]
+
+
 def test_page_warns_and_disables_launch_below_free_disk_floor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _, fake_st, _ = _patch_fake_page(monkeypatch, tmp_path, buttons={"Launch in tmux"})
     monkeypatch.setattr(shutil, "disk_usage", lambda _: SimpleNamespace(free=2 * 1024**3))

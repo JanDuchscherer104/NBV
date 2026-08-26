@@ -17,7 +17,7 @@ import streamlit as st
 
 pytest.importorskip("efm3d")
 
-from aria_nbv.app.panels._stored_rollouts import candidate_generation, qh_admission, validity_support
+from aria_nbv.app.panels._stored_rollouts import candidate_generation, s2_directions, validity_support
 from aria_nbv.rollouts.inspection import GeometryFrame
 
 
@@ -110,25 +110,36 @@ def test_target_s2_figures_render_complete_heatmaps_and_projection_overlays() ->
     payload = {
         "movement_counts": np.asarray([[0, 2], [1, 0]], dtype=np.int64),
         "view_direction_counts": np.asarray([[3, 0], [0, 1]], dtype=np.int64),
+        "frustum_counts": np.asarray([[1, 1], [0, 0]], dtype=np.int64),
         "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
         "movement_projection_normalized_lengths": np.asarray([0.75], dtype=np.float32),
+        "movement_projection_rollout_row_ids": np.asarray([7], dtype=np.int64),
+        "movement_projection_step_indices": np.asarray([0], dtype=np.int64),
         "view_direction_projection": np.asarray([[0.0, 1.0, 0.0]], dtype=np.float32),
+        "view_direction_projection_rollout_row_ids": np.asarray([7], dtype=np.int64),
+        "view_direction_projection_step_indices": np.asarray([1], dtype=np.int64),
+        "frustum_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "frustum_projection_rollout_row_ids": np.asarray([7], dtype=np.int64),
+        "frustum_projection_step_indices": np.asarray([1], dtype=np.int64),
     }
 
-    movement = qh_admission._s2_direction_figure(payload, channel="movement")
-    view = qh_admission._s2_direction_figure(payload, channel="view_direction")
+    movement = s2_directions.s2_direction_figure(payload, channel="movement")
+    view = s2_directions.s2_direction_figure(payload, channel="view_direction")
+    frustum = s2_directions.s2_direction_figure(payload, channel="frustum")
 
     for figure, expected_count, expected_name in (
-        (movement, 3, "movement projection"),
-        (view, 4, "camera +Z projection"),
+        (movement, 3, "acquisition 1 (t=0)"),
+        (view, 4, "acquisition 2 (t=1)"),
+        (frustum, 2, "acquisition 2 (t=1)"),
     ):
         assert isinstance(figure.data[0], go.Surface)
         assert int(np.asarray(figure.data[0].surfacecolor).sum()) == expected_count
         assert isinstance(figure.data[1], go.Scatter3d)
         assert figure.data[1].name == expected_name
-        assert figure.layout.scene.xaxis.title.text == "target x"
-        assert figure.layout.scene.yaxis.title.text == "target y"
-        assert figure.layout.scene.zaxis.title.text == "target z"
+        assert figure.layout.scene.xaxis.title.text == "target xᵉ"
+        assert figure.layout.scene.yaxis.title.text == "target yᵉ"
+        assert figure.layout.scene.zaxis.title.text == "target zᵉ"
+        assert np.asarray(figure.data[1].marker.color).tolist() == [7]
 
 
 def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle(
@@ -149,13 +160,32 @@ def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle
     payload = {
         "movement_counts": np.asarray([[1]], dtype=np.int64),
         "view_direction_counts": np.asarray([[1]], dtype=np.int64),
+        "frustum_counts": np.asarray([[1]], dtype=np.int64),
         "movement_projection": np.asarray([[1.0, 0.0, 0.0]], dtype=np.float32),
         "movement_projection_normalized_lengths": np.asarray([0.5], dtype=np.float32),
+        "movement_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
+        "movement_projection_step_indices": np.asarray([0], dtype=np.int64),
         "view_direction_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "view_direction_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
+        "view_direction_projection_step_indices": np.asarray([0], dtype=np.int64),
+        "frustum_projection": np.asarray([[0.0, 0.0, 1.0]], dtype=np.float32),
+        "frustum_projection_rollout_row_ids": np.asarray([11], dtype=np.int64),
+        "frustum_projection_step_indices": np.asarray([0], dtype=np.int64),
         "movement_count": 1,
         "view_direction_count": 1,
+        "frustum_count": 1,
+        "frustum_missing_calibration_count": 0,
+        "frustum_mean_fov_solid_angle_sr": 1.0,
+        "frustum_mean_target_surface_fraction_approx": 0.1,
+        "frustum_union_target_surface_fraction_approx": 0.1,
         "movement_skipped_zero_count": 0,
         "rollout_count": 1,
+        "store_rollout_count": 1,
+        "source_sample_count": 1,
+        "source_snippet_count": 1,
+        "source_scene_count": 1,
+        "target_count": 1,
+        "selected_step_count": 1,
         "issues": (),
     }
     calls: list[tuple[int, int]] = []
@@ -172,14 +202,15 @@ def test_target_s2_panel_dispatches_the_complete_store_reducer_only_after_toggle
     monkeypatch.setattr(st, "toggle", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(st, "warning", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(st, "dataframe", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(qh_admission, "_render_plot", lambda figure, *_args, **_kwargs: rendered.append(figure))
+    monkeypatch.setattr(s2_directions, "_render_plot", lambda figure, *_args, **_kwargs: rendered.append(figure))
 
-    qh_admission._render_s2_direction_histograms(Handle())
+    s2_directions.render_s2_direction_histograms(Handle(), key_prefix="test")
 
     assert calls == [(36, 18)]
     assert [figure.layout.title.text for figure in rendered] == [
-        "Root-target-normalized movement on target-frame S²",
-        "Selected camera view directions on target-frame S²",
+        "δ̂ᵉ[j,t] — target-frame movement direction",
+        "v̂ᵉ[j,t] — target-frame camera +Z direction",
+        "ℱᵉ[j,t] — calibrated target-proxy surface support",
     ]
 
 

@@ -20,6 +20,18 @@
   target_bearing: $cos theta_(t,e,i)^"opt"$,
   // Canonical unit direction; duplicated by unused `oracle.dir` and `vin.dir_unit`.
   dir_unit: $bold(d)$,
+  // Volume-equivalent radius from the selected target OBB semi-axes.
+  target_obb_scale: $r_e$,
+  // Unit selected-camera displacement expressed in target-object coordinates.
+  target_frame_motion_direction: $hat(bold(delta))_(j,t)^e$,
+  // Unit selected-camera optical axis expressed in target-object coordinates.
+  target_frame_view_direction: $hat(bold(v))_(j,t)^e$,
+  // Calibrated front-facing footprint on the target-centred proxy sphere.
+  target_frame_frustum: $cal(F)_(j,t)^e$,
+  // Approximate fraction of the target proxy surface supported by one frustum.
+  target_frame_frustum_fraction: $kappa_(j,t)^e$,
+  // Intrinsic calibrated pinhole field-of-view solid angle.
+  frustum_solid_angle: $Omega_(j,t)^"FOV"$,
   // Canonical directional memory; VIN's unused alias changes this superscript to a subscript.
   dir_memory: $bold(h)^"dir"$,
   // Canonical directional moment; VIN's unused alias changes this superscript to a subscript.
