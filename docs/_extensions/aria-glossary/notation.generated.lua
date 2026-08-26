@@ -748,12 +748,6 @@ return {
       description = "",
       thesis_list = false,
     },
-    ["model.qh_candidate_state_cross_attention"] = {
-      tex = "\\boldsymbol{u}_{t,i}=\\operatorname{CrossAttn}_{\\theta}(\\boldsymbol{x}_{t,i},\\{\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\operatorname{Emb}(t),\\operatorname{Emb}(H),\\boldsymbol{b}_t\\})",
-      typst = "#eqs.model.qh_candidate_state_cross_attention",
-      description = "",
-      thesis_list = false,
-    },
     ["model.qh_frozen_interface"] = {
       tex = "f_\\theta(s_t^{\\mathrm{S0-pose}},\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)\\to(\\{Q_{h,\\theta,e,i}^{\\mathrm{cond}}\\}_{i=1}^{N_q},\\{\\ell_{t,i}^{\\mathrm{feas}}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_frozen_interface",
@@ -764,6 +758,12 @@ return {
       tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\boldsymbol{b}_t,t,H,\\{\\boldsymbol{x}_{t,i},\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}},m_{t,i},\\boldsymbol{\\rho}_{t,i}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_input_contract",
       description = "",
+      thesis_list = false,
+    },
+    ["model.qh_state_fusion_controls"] = {
+      tex = "\\boldsymbol{Z}_t=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{h}_t^{\\mathrm{hist}},\\operatorname{Emb}(b_t/H_{\\max}),\\operatorname{Emb}(h/H_{\\max})),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A0}}=\\operatorname{MLP}_{\\mathrm{A0}}([\\boldsymbol{x}_{t,i};\\operatorname{vec}(\\boldsymbol{Z}_t)]),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A1}}=\\operatorname{CrossAttn}_{\\mathrm{A1}}(\\boldsymbol{x}_{t,i},\\boldsymbol{Z}_t,\\boldsymbol{Z}_t)",
+      typst = "#eqs.model.qh_state_fusion_controls",
+      description = "Feature-matched independent-row MLP and candidate-to-state attention controls.",
       thesis_list = false,
     },
     ["model.qh_target_token"] = {

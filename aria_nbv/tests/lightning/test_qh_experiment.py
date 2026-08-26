@@ -30,6 +30,7 @@ from aria_nbv.lightning.qh_module import QhLightningModuleConfig
 from aria_nbv.rollouts.qh_reader import QhDataContract
 from aria_nbv.utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from aria_nbv.vin.models.target_finite_horizon import TargetFiniteHorizonScorerConfig
+from aria_nbv.vin.modules.qh_state_fusion import QhIndependentMlpStateFusionConfig
 from aria_nbv.vin.modules.qh_value_decoders import (
     QhCoralValueDecoderConfig,
     QhLegacyFixedCoralSupport,
@@ -44,7 +45,6 @@ def _experiment() -> QhExperiment:
     config = QhExperimentConfig(
         scorer=TargetFiniteHorizonScorerConfig(
             hidden_dim=32,
-            attention_heads=4,
             dropout=0.0,
             max_horizon=4,
         ),
@@ -63,7 +63,6 @@ def _coral_experiment() -> QhExperiment:
     config = QhExperimentConfig(
         scorer=TargetFiniteHorizonScorerConfig(
             hidden_dim=32,
-            attention_heads=4,
             dropout=0.0,
             max_horizon=4,
             value_decoder=QhCoralValueDecoderConfig(
@@ -84,6 +83,17 @@ def _coral_experiment() -> QhExperiment:
         ),
     )
     return config.setup_target()
+
+
+def _a0_experiment() -> QhExperiment:
+    """Return the regression experiment with identical-feature A0 fusion."""
+
+    base = _experiment().config
+    scorer = base.scorer.model_copy(
+        deep=True,
+        update={"state_fusion": QhIndependentMlpStateFusionConfig()},
+    )
+    return base.model_copy(deep=True, update={"scorer": scorer}).setup_target()
 
 
 def _bundle(tmp_path) -> tuple[QhExperiment, QhInferenceBundleRef]:
@@ -208,6 +218,36 @@ def test_qh_coral_bundle_round_trip_preserves_support_thresholds_and_ranking(tmp
         actual.conditional_q.masked_fill(~actor.action_mask, -torch.inf).argmax(dim=-1),
         expected_rank,
     )
+
+
+def test_qh_a0_bundle_round_trip_preserves_fusion_identity_and_values(tmp_path) -> None:
+    torch.manual_seed(23)
+    experiment = _a0_experiment()
+    scorer = experiment.config.scorer.setup_target().eval()
+    actor = _actor()
+    expected = scorer(actor)
+    bundle_dir = tmp_path / "a0-bundle"
+    bundle_dir.mkdir()
+    module_config, identity = _publish_contracts(experiment)
+    manifest = experiment._publish_bundle(  # noqa: SLF001
+        bundle_dir,
+        scorer,
+        module_config=module_config,
+        identity=identity,
+        artifact_hashes=_stub_artifacts(bundle_dir),
+    )
+    ref = QhInferenceBundleRef(
+        bundle_path=bundle_dir,
+        schema_version=QH_INFERENCE_BUNDLE_SCHEMA_VERSION,
+        manifest_sha256=manifest["manifest_sha256"],
+    )
+
+    runtime = QhExperiment.load_for_inference(ref, device="cpu")
+    actual = runtime.scorer(actor)
+
+    assert manifest["scorer_config"]["state_fusion"] == {"kind": "independent_mlp"}
+    assert torch.equal(actual.conditional_q, expected.conditional_q)
+    assert torch.equal(actual.feasibility_logits, expected.feasibility_logits)
 
 
 @pytest.mark.parametrize(

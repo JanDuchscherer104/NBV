@@ -19,7 +19,7 @@
   citation: [@VIN-NBV-frahm2025 @CORAL-cao2019 @DoubleDQN-vanHasselt2015],
   source: "aria_nbv/aria_nbv/vin/models/target_finite_horizon.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/oracle/pipelines/online_qh.py; aria_nbv/tests/vin/test_target_finite_horizon.py",
   gate: [retain the one-step scorer as a matched control, certify exact Q2, and require held-out oracle-rescored policy evidence],
-)[The A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, modular regression/CORAL value decoders, fitted-Q learner, and hard-masked online adapter are implemented. The one-step VIN/CORAL scorer remains historical evidence and a myopic control; scientific policy evidence is pending.]
+)[The modular A0/A1--S0-pose--root-moments finite-horizon scorer, typed output, scalar horizon query, feasibility auxiliary, regression/CORAL value decoders, fitted-Q learner, and hard-masked online adapter are implemented. A1 remains the default and A0 its identical-feature interaction control; scientific policy evidence is pending.]
 
 The actor DTO carries root semidense evidence, GT-derived target pose and extent, root-relative candidate geometry, selected-pose history, remaining budget, and candidate materialization support. It deliberately excludes supervision and audit lineage from scorer inputs. The current model makes this an executable `S0-pose` baseline, but neither a trained checkpoint nor task-sufficient reconstruction state follows from interface tests alone.
 
@@ -57,11 +57,11 @@ The notation $Q_H$ names a bounded finite-horizon family. One model query is
 
 rather than a value from a separately configured fixed-H model. The maximum $H_"max"$ is a dataset, model, and checkpoint contract. Requested residual horizon $h$ is a model input and remaining budget $b_t$ determines whether the query is admissible. The step index $t$ stays lineage unless a named non-stationarity ablation uses it.
 
-One candidate row is one geometric query. Candidate pose, candidate--target relation, and root-scene support are encoded once, and a lightweight horizon embedding turns that candidate into a horizon--candidate query:
+One candidate row is one geometric query. Candidate pose, candidate--target relation, and root-scene support are encoded once; remaining budget and requested horizon stay separate named state tokens. The implemented A0 and A1 controls receive identical query and state-token values and return the same-width context:
 
-#eqs.model.qh_candidate_state_cross_attention
+#eqs.model.qh_state_fusion_controls
 
-followed by one shared per-row value head. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Fixed-H models and separate $Q_1,dots,Q_H$ heads remain ablations rather than competing public interfaces.
+followed by the same `[query, context, query times context]` decoder input and shared per-row value head. A0 flattens the five tokens in the fixed semantic order scene, target, causal history, budget, horizon and uses an independent-row MLP. A1 uses candidate-to-state cross-attention; candidates never become keys or values. The controls are feature-matched but not parameter-matched, so comparisons report trainable parameters and runtime rather than attributing a difference solely to attention. This conditioning follows the general principle of a shared value approximator queried by an explicit task variable @UVFA-schaul2015. Fixed-H models and separate $Q_1,dots,Q_H$ heads remain ablations rather than competing public interfaces.
 
 The public interface scores one $h$ per state and returns $[B,S,N_q]$. Multiple horizons use separate calls; private batching may reuse encodings. A public $L$ axis is introduced only after two real atomic callers, measured inadequacy of private batching, and scalar/vector parity tests exist. Every query receives only the causal state available at step $t$; the learning target, not future scorer input, determines how many rewards the value represents.
 

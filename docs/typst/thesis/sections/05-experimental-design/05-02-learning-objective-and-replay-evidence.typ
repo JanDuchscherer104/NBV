@@ -39,8 +39,8 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
     [held-out coverage, source-role audit, and matched endpoint evaluation],
     [Myopic control], [scene-level VIN substrate],
     [actor-visible target-conditioned $Q_1$ scorer and frozen checkpoint],
-    [Finite-horizon scorer], [A1--S0-pose/root-moments scalar-horizon scorer and fitted-Q seam],
-    [exact-Q2 certification, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
+    [Finite-horizon scorer], [feature-matched A0/A1--S0-pose/root-moments scalar-horizon controls and fitted-Q seam],
+    [exact-Q2 certification, parameter/runtime report, compatible checkpoint, frozen state protocol, and oracle-rescored policy],
     [Requested horizons], [fail-closed scalar query and exact $h arrow.l h-1$ recursion tests],
     [supported targets through $H_"max"$, positive headroom, and per-horizon validation],
     [Dynamic #symb.rl.qh], [selected-observation persistence and planned state update],
@@ -57,7 +57,7 @@ All eligible candidate rows can support dense one-step supervision. Exact H=2 su
   citation: [@FittedQIteration-ernst2005 @FixedHorizonTD-deAsis2020 @DoubleDQN-vanHasselt2015 @CQL-kumar2020 @BCQ-fujimoto2019],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/batching.py; aria_nbv/aria_nbv/lightning/qh_datamodule.py; aria_nbv/aria_nbv/lightning/qh_module.py; aria_nbv/aria_nbv/rollouts/qh_reader.py",
   gate: [exact Q2 certification, supported H>2 targets, compatible checkpoint, frozen state protocol, and held-out oracle re-evaluation],
-)[The scalar requested-horizon A1 scorer, hard-masked selected-transition Double-Q learner, feasibility auxiliary, and exact-Q2 diagnostic are implemented. Task-sufficient dynamic state and policy evidence remain unavailable.]
+)[The scalar requested-horizon A0/A1 controls, hard-masked selected-transition Double-Q learner, feasibility auxiliary, and exact-Q2 diagnostic are implemented. A1 remains the default; task-sufficient dynamic state and comparative policy evidence remain unavailable.]
 
 The finite-candidate value model decodes actions only over valid candidate rows:
 

@@ -1123,7 +1123,7 @@
     key: "finite-horizon-q-function",
     short: "Q_H",
     long: "Finite-Horizon Q Function",
-    description: "Target-conditioned finite-candidate value function trained from ASE oracle rollout traces. The current A1-S0-pose/root-moments scorer emits an action-mask-independent conditional continuous value and a separate feasibility signal for each materialized candidate; adapters apply hard validity masks for training and selection.",
+    description: "Target-conditioned finite-candidate value function trained from ASE oracle rollout traces. The implemented feature-matched A0/A1-S0-pose/root-moments controls emit an action-mask-independent conditional value and a separate feasibility signal for each materialized candidate; A1 remains the default and adapters apply hard validity masks for training and selection.",
     group: "Model",
     custom: (
       anchor: "term-finite-horizon-q-function",
@@ -1137,7 +1137,7 @@
       category: "model.value",
       parent: "target-conditioned-nbv-mdp",
       definition_short: "Finite-horizon candidate-value function for target-conditioned ARIA-NBV.",
-      definition_long: "The thesis-core Q_H interface is one shared scalar-requested-horizon scorer over finite candidate sets. The current A1 interaction reads actor-visible S0-pose/root-moments context, target descriptor, candidate geometry, and causal budget/history, then emits conditional Q values and feasibility logits without reading the action mask. The terminal decoder is modular: direct continuous Huber regression is canonical, while fixed-support CORAL is an implemented ordinal ablation over the same fitted-Q target and decodes back to continuous return units. Lightning and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision and bootstrap, and select only hard-valid candidates. Exact-Q2 parity and positive held-out headroom gate claims for longer horizons. Learned-only feasibility and P(valid) times Q ranking are not thesis-core behavior.",
+      definition_long: "The thesis-core Q_H interface is one shared scalar-requested-horizon scorer over finite candidate sets. The implemented A0 independent-row MLP and default A1 candidate-to-state cross-attention receive identical candidate queries and the same fixed-order scene, target, causal-history, remaining-budget, and requested-horizon tokens. Both return one equal-width context and expose the same query/context/product features to the terminal decoder. The controls are feature-matched rather than parameter-matched, so comparisons report parameter count and runtime. They emit conditional Q values and feasibility logits without reading the action mask. The terminal decoder is modular: direct continuous Huber regression is canonical, while fixed-support CORAL is an implemented ordinal ablation over the same fitted-Q target and decodes back to continuous return units. Lightning and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision and bootstrap, and select only hard-valid candidates. Exact-Q2 parity and positive held-out headroom gate claims for longer horizons. Learned-only feasibility, candidate-to-candidate interaction, and P(valid) times Q ranking are not thesis-core behavior.",
       internal_links: (
         "docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2",
         "docs/typst/thesis/development/roadmap.typ#ssec:milestones",
