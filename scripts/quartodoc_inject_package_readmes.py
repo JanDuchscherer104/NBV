@@ -40,6 +40,7 @@ _MARKDOWN_LINK = re.compile(
     r"(?P<destination><[^>]+>|[^\s)]+)"
     r"(?P<suffix>(?:\s+[^)]*)?\))"
 )
+_GITHUB_MERMAID_FENCE = re.compile(r"^```mermaid[ \t]*$", re.MULTILINE)
 
 
 def _relative_destination(destination: Path, page: Path) -> str:
@@ -119,6 +120,17 @@ def _without_leading_title(text: str, *, readme: Path) -> str:
     raise ValueError(f"{readme}: package README is empty.")
 
 
+def _quarto_readme_syntax(text: str) -> str:
+    """Adapt GitHub-compatible README constructs to executable Quarto syntax.
+
+    Package READMEs use GitHub's `````mermaid`` fence so diagrams render on
+    GitHub.  Quarto activates its Mermaid renderer only for `````{mermaid}``
+    executable cells; normalize just that fence while retaining the README as
+    the authored, GitHub-facing source.
+    """
+    return _GITHUB_MERMAID_FENCE.sub("```{mermaid}", text)
+
+
 def _guide_block(
     module_name: str, *, readme: Path, page: Path, docs_root: Path, package_root: Path
 ) -> str:
@@ -133,6 +145,7 @@ def _guide_block(
         docs_root=docs_root,
         package_root=package_root,
     )
+    guide = _quarto_readme_syntax(guide)
     return (
         f"<!-- quartodoc-package-readme: aria_nbv.{module_name} -->\n"
         "## Package guide\n\n"

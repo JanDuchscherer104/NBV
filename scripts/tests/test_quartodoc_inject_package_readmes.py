@@ -28,6 +28,13 @@ def test_inject_package_readmes_preserves_api_content_and_rewrites_links(
         "A package guide with a [method](../../../docs/typst/method.typ) and "
         "![diagram](../../../docs/figures/diagram.svg).\n\n"
         "See the [other package](../other/README.md).\n\n"
+        "```mermaid\n"
+        "flowchart LR\n"
+        "  A --> B\n"
+        "```\n\n"
+        "```python\n"
+        "print('unchanged')\n"
+        "```\n\n"
         "## Usage\n\n"
         "Use it.\n",
     )
@@ -59,6 +66,9 @@ def test_inject_package_readmes_preserves_api_content_and_rewrites_links(
     assert "../typst/method.typ" in rendered_source
     assert "../figures/diagram.svg" in rendered_source
     assert "other.qmd" in rendered_source
+    assert "```{mermaid}\nflowchart LR" in rendered_source
+    assert "```mermaid" not in rendered_source
+    assert "```python\nprint('unchanged')" in rendered_source
 
     assert not inject_package_readmes(
         modules=modules,
