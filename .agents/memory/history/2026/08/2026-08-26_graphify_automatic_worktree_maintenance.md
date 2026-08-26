@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 3471828f262aae5998cf234891fee77ed3cdd27d
+repo_head: bc46bdc5ad14431c0d5cd7afa6463bb63380d438
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -66,15 +66,21 @@ administrative directory instead of capacity-limited system tmpfs. The docs
 pre-push hook also clears hook-scoped Git bindings before hermetic fixture repos
 create commits.
 
+Raw HEAD snapshots now also initialize a private Git index for the exact commit.
+That lets upstream Graphify distinguish tracked files from matching `.gitignore`
+rules without consulting the mutable source index. The private commands clear
+hook-scoped Git bindings, so a pre-commit check cannot reset the caller's index.
+
 ## Commits
-- [e03831ba10a64653d56ab7367b994f7e10307edd](https://github.com/JanDuchscherer104/ARIA-NBV/commit/e03831ba10a64653d56ab7367b994f7e10307edd)
-- [5c54e23b5669a3efad2ef6049789409bc7fd7929](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5c54e23b5669a3efad2ef6049789409bc7fd7929)
-- [14cc4092440b8256e73e0109d86ed3cd7f63789b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/14cc4092440b8256e73e0109d86ed3cd7f63789b)
-- [5b6b7c498480a59b54f144be75774059e4e98d00](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5b6b7c498480a59b54f144be75774059e4e98d00)
-- [f7985d470815343fc8ab26217f699fe6cb5e6d54](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f7985d470815343fc8ab26217f699fe6cb5e6d54)
-- [1d151e90e59fbb8b38c61888314750def11d1579](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1d151e90e59fbb8b38c61888314750def11d1579)
-- [a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6)
-- [3471828f262aae5998cf234891fee77ed3cdd27d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3471828f262aae5998cf234891fee77ed3cdd27d)
+- [37b8a8848906c4652fc65d9dc62fc9999990bb2f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/37b8a8848906c4652fc65d9dc62fc9999990bb2f)
+- [b6de2ce1b57829de0a05ab7facf10a7cb3bbd0f8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b6de2ce1b57829de0a05ab7facf10a7cb3bbd0f8)
+- [6cd9460698283a07a64b26077bfe0dd1e784ed8b](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6cd9460698283a07a64b26077bfe0dd1e784ed8b)
+- [395c8ccb9238ef8959274a902292db34e54be897](https://github.com/JanDuchscherer104/ARIA-NBV/commit/395c8ccb9238ef8959274a902292db34e54be897)
+- [b9fe967a20dfcbed6d665344a8da14e68fc67402](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b9fe967a20dfcbed6d665344a8da14e68fc67402)
+- [bd8b9fadf573c7a6b829924bf2f2626d3fb8c98d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bd8b9fadf573c7a6b829924bf2f2626d3fb8c98d)
+- [ab4854067a26345fd2f6a92ebccebc2928c10196](https://github.com/JanDuchscherer104/ARIA-NBV/commit/ab4854067a26345fd2f6a92ebccebc2928c10196)
+- [153b09fc405d8bd7b6189987fa90e8c7d3a505b0](https://github.com/JanDuchscherer104/ARIA-NBV/commit/153b09fc405d8bd7b6189987fa90e8c7d3a505b0)
+- [bc46bdc5ad14431c0d5cd7afa6463bb63380d438](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bc46bdc5ad14431c0d5cd7afa6463bb63380d438)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
@@ -91,6 +97,8 @@ fingerprints.
 
 The removed-owner regression and the complete CI-equivalent scaffold, docs,
 ownership, and focused lint suites passed again after the final rebase.
+The tracked-ignored snapshot and hook-bound index regressions passed with the
+full freshness suite (29 tests and 20 subtests).
 
 `make graphify-session-readiness-integration` completed both real explicit and
 parentless disposable worktree paths in 304 seconds on the local host.

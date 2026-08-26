@@ -13,7 +13,7 @@ touched_owner_paths:
   - scripts/tests/test_quartodoc_generate_dependency_diagram.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 73c84a89cde608b15615a9ece6e1b33c9ca068a6
+repo_head: 91c22e0333cb31e3c20ea1a6a72f63adc17f3001
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -35,8 +35,8 @@ sidebar churn was excluded. A focused generator test locks the local styling
 and preserves the LR edge-label output contract.
 
 ## Commit
-- [66ea5a48d31fb1eb46664995969ac48f03339535](https://github.com/JanDuchscherer104/ARIA-NBV/commit/66ea5a48d31fb1eb46664995969ac48f03339535)
-- [73c84a89cde608b15615a9ece6e1b33c9ca068a6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/73c84a89cde608b15615a9ece6e1b33c9ca068a6)
+- [5ed94991767d3ad434663e7b2081418d441594c2](https://github.com/JanDuchscherer104/ARIA-NBV/commit/5ed94991767d3ad434663e7b2081418d441594c2)
+- [91c22e0333cb31e3c20ea1a6a72f63adc17f3001](https://github.com/JanDuchscherer104/ARIA-NBV/commit/91c22e0333cb31e3c20ea1a6a72f63adc17f3001)
 
 ## Verification
 `make api-docs`, the focused generator test, Ruff, CI-impact test,
