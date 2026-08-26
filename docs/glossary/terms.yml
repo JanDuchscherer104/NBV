@@ -848,11 +848,16 @@
   lookup_rank: 190
   definition_short: Finite-horizon candidate-value function for target-conditioned ARIA-NBV.
   definition_long: 'The thesis-core Q_H interface is one shared bounded-scalar-requested-horizon
-    scorer over finite candidate sets. The implemented A0 independent-row MLP and default
-    A1 candidate-to-state cross-attention receive identical candidate queries and the same
-    fixed-order scene, target, causal-history, remaining-budget, and requested-horizon tokens.
-    Both return one equal-width context and expose the same query/context/product features
-    to the terminal decoder. The controls are feature-matched rather than parameter-matched,
+    scorer over finite candidate sets. Conditional Q is the return after choosing candidate
+    i first, for the represented actor state, target, scalar requested horizon, and named
+    continuation rule; it is neither a validity probability nor a value multiplied by feasibility.
+    Remaining budget and requested horizon occupy the triangular domain 1 <= h <= b_t <= H_max:
+    the diagonal h=b_t requests the complete factual residual budget, while h<b_t is an off-diagonal
+    truncated-return query from the same state. The implemented A0 independent-row MLP and
+    default A1 candidate-to-state cross-attention receive identical candidate queries and
+    the same fixed-order scene, target, causal-history, remaining-budget, and requested-horizon
+    tokens. Both return one equal-width context and expose the same query/context/product
+    features to the terminal decoder. The controls are feature-matched rather than parameter-matched,
     so comparisons report parameter count and runtime. Causal selected-pose history has a
     separate versioned seam: H0 is the checkpoint-compatible masked mean and remains the default;
     exploratory H1 adds current-camera-relative pose order through relative-age encoding and
