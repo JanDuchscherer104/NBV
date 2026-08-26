@@ -79,7 +79,9 @@ verification of affected sources.
 - `graphify hook install` is the upstream post-commit and post-checkout
   no-LLM accelerator. It refreshes changed code and the pinned executable may
   AST-quick-scan changed Markdown headings. It does not semantically refresh
-  documents or images or prove their freshness; refresh those semantic inputs explicitly.
+  documents or images or prove their freshness. ARIA's automatic
+  `graphify-maintain` completion and pre-commit ownership handles declared-mode
+  semantic maintenance; ordinary models do not refresh semantic inputs manually.
 - The vendored `../../graphify/references/hooks.md` still says document and image changes are
   ignored. Preserve that upstream byte, but follow verified `0.9.48` executable
   behavior and treat either outcome as non-semantic navigation only.

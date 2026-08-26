@@ -35,6 +35,7 @@ except ImportError as error:  # pragma: no cover - depends on test environment
 class PinnedGraphifyCommandPathTests(unittest.TestCase):
     def setUp(self) -> None:
         self.assertEqual(version("graphifyy"), "0.9.48")
+        self.cache_directories: list[Path] = []
         self.lookup: list[dict] = []
         self.saves: list[dict] = []
         self.dispatches: list[dict] = []
@@ -43,6 +44,12 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
     def command(self, root: Path, *, mode: str | None = None):
         original_lookup = graphify_cache.check_semantic_cache
         original_save = graphify_cache.save_semantic_cache
+        original_cache_dir = graphify_cache.cache_dir
+
+        def cache_dir(*args, **kwargs):
+            resolved = original_cache_dir(*args, **kwargs)
+            self.cache_directories.append(Path(resolved).resolve())
+            return resolved
 
         def lookup(*args, **kwargs):
             self.lookup.append({"mode": kwargs.get("mode"), "prompt": kwargs.get("prompt")})
@@ -76,6 +83,7 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         if mode:
             argv.extend(("--mode", mode))
         with (
+            mock.patch.object(graphify_cache, "cache_dir", side_effect=cache_dir),
             mock.patch.object(graphify_cache, "check_semantic_cache", side_effect=lookup),
             mock.patch.object(graphify_cache, "save_semantic_cache", side_effect=save),
             mock.patch.object(graphify_llm, "extract_corpus_parallel", side_effect=extract),
@@ -98,14 +106,24 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         (root / "docs/b.md").write_text("# B\nbeta\n", encoding="utf-8")
         return root
 
+    def assert_cache_namespace(self, root: Path, name: str) -> None:
+        expected = (root / "graphify-out/cache" / name).resolve()
+        self.assertTrue(self.cache_directories)
+        self.assertTrue(
+            all(path.is_relative_to(expected) for path in self.cache_directories),
+            self.cache_directories,
+        )
+
     def test_warm_standard_command_dispatches_zero_files(self) -> None:
         root = self.project()
         with self.command(root):
             first = list(self.dispatches)
         first_lookup = list(self.lookup)
         first_saves = list(self.saves)
+        self.assert_cache_namespace(root, "semantic")
         self.dispatches.clear()
         self.lookup.clear()
+        self.cache_directories.clear()
         with self.command(root):
             pass
         self.assertTrue(first)
@@ -146,6 +164,7 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         self.dispatches.clear()
         self.lookup.clear()
         self.saves.clear()
+        self.cache_directories.clear()
         with self.command(root, mode="deep"):
             pass
         self.assertTrue(self.dispatches)
@@ -156,6 +175,7 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         self.assertEqual({item["deep"] for item in self.dispatches}, {True})
         self.assertEqual({item["mode"] for item in self.lookup}, {"deep"})
         self.assertEqual({item["mode"] for item in self.saves}, {"deep"})
+        self.assert_cache_namespace(root, "semantic-deep")
         self.assertEqual(
             {graphify_cache.prompt_fingerprint(item["prompt"]) for item in self.lookup},
             {graphify_cache.prompt_fingerprint(item["prompt"]) for item in self.saves},
@@ -163,11 +183,13 @@ class PinnedGraphifyCommandPathTests(unittest.TestCase):
         self.dispatches.clear()
         self.lookup.clear()
         self.saves.clear()
+        self.cache_directories.clear()
         with self.command(root, mode="deep"):
             pass
         self.assertEqual(self.dispatches, [])
         self.assertEqual({item["mode"] for item in self.lookup}, {"deep"})
         self.assertEqual(self.saves, [])
+        self.assert_cache_namespace(root, "semantic-deep")
 
 
 if __name__ == "__main__":

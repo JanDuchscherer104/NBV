@@ -82,7 +82,11 @@ class UpstreamGraphifySkillTests(unittest.TestCase):
         boundary = ARIA_BOUNDARY.read_text(encoding="utf-8")
         self.assertIn("Doc/image changes are ignored by the hook", hooks)
         self.assertIn("AST-quick-scan changed Markdown headings", boundary)
-        self.assertIn("refresh those semantic inputs explicitly", boundary)
+        self.assertIn(
+            "`graphify-maintain` completion and pre-commit ownership", boundary
+        )
+        self.assertIn("do not refresh semantic inputs manually", boundary)
+        self.assertNotIn("refresh those semantic inputs explicitly", boundary)
         self.assertNotIn("marks changed documents", boundary)
 
     def test_mandatory_worktree_route_stays_outside_upstream_bundle(self) -> None:
