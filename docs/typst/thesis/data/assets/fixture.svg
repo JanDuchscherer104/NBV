@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320" viewBox="0 0 640 320">
+  <rect width="640" height="320" fill="#ffffff"/>
+  <path d="M80 255 L220 190 L360 205 L560 70" fill="none" stroke="#3B6FB6" stroke-width="10"/>
+  <g fill="#B85450">
+    <circle cx="80" cy="255" r="12"/>
+    <circle cx="220" cy="190" r="12"/>
+    <circle cx="360" cy="205" r="12"/>
+    <circle cx="560" cy="70" r="12"/>
+  </g>
+  <text x="80" y="45" fill="#222222" font-family="Arial, sans-serif" font-size="28">Frozen report figure fixture</text>
+</svg>

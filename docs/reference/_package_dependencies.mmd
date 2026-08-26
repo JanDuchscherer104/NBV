@@ -20,6 +20,7 @@ flowchart LR
   oracle["oracle"]
   pose_generation["pose_generation"]
   rendering["rendering"]
+  reporting["reporting"]
   rollouts["rollouts"]
   rri_metrics["rri_metrics"]
   targets["targets"]
@@ -31,8 +32,8 @@ flowchart LR
   oracle -->|"12"| data_handling
   lightning -->|"10"| utils
   vin -->|"10"| data_handling
+  data_handling -->|"9"| configs
   oracle -->|"9"| pose_generation
-  data_handling -->|"8"| configs
   lightning -->|"8"| data_handling
   oracle -->|"7"| rollouts
   rollouts -->|"7"| utils
@@ -42,4 +43,4 @@ flowchart LR
   pose_generation -->|"6"| utils
 
   classDef package fill:#E1D5E7,stroke:#9673A6,color:#1F2937,font-weight:600,stroke-width:1.5px,rx:6,ry:6;
-  class configs,data_handling,lightning,oracle,pose_generation,rendering,rollouts,rri_metrics,targets,utils,vin package;
+  class configs,data_handling,lightning,oracle,pose_generation,rendering,reporting,rollouts,rri_metrics,targets,utils,vin package;

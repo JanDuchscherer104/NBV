@@ -93,6 +93,7 @@ dependencies = [
     nbv-train                 = "aria_nbv.lightning.cli:train_main"
     nbv-optuna                = "aria_nbv.lightning.cli:optuna_main"
     nbv-wandb                 = "aria_nbv.lightning.cli:wandb_main"
+    nbv-report                = "aria_nbv.reporting.cli:main"
     nbv-cli                   = "aria_nbv.lightning.cli:main"
 
 
@@ -107,6 +108,8 @@ dependencies = [
     ]
 
     pointnext = ["openpoints-shim; sys_platform == 'linux'"]
+
+    reporting = ["kaleido==1.3.0"]
 
     notebook = [
         "ipympl>=0.9.0",
