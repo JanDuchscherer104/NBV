@@ -691,6 +691,39 @@ def test_stored_rollout_session_candidate_population_fails_closed_on_mid_read_re
         handle.candidate_population()
 
 
+def test_candidate_benchmark_display_is_bounded_export_is_complete_and_identity_is_rechecked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Display limits never truncate a bundle labelled as complete."""
+
+    scans: list[dict[str, Any]] = []
+    identity_checks: list[str] = []
+    reader = object()
+    handle = session.StoredRolloutSession(Path("/selected.zarr"), "first", reader, object(), {}, None)
+    monkeypatch.setattr(
+        handle,
+        "_assert_current_identity",
+        lambda: identity_checks.append("checked") or "first",
+    )
+    monkeypatch.setattr(
+        session,
+        "benchmarks_from_reader",
+        lambda actual_reader, **kwargs: scans.append(kwargs) or (),
+    )
+    monkeypatch.setattr(session, "benchmark_binding_from_reader", lambda *_args: {"binding": "fixture"})
+    monkeypatch.setattr(session, "serialize_bundle_bytes", lambda *_args, **_kwargs: b"bundle")
+    monkeypatch.setattr(session, "read_bundle_bytes", lambda *_args, **_kwargs: None)
+
+    handle.candidate_benchmark_records(state_key="rollout:1/step:2", candidate_limit=7)
+    handle.candidate_benchmark_export(state_key="rollout:1/step:2")
+
+    assert scans == [
+        {"state_key": "rollout:1/step:2", "candidate_limit": 7},
+        {"state_key": "rollout:1/step:2", "candidate_limit": None},
+    ]
+    assert len(identity_checks) >= 5
+
+
 def test_cached_proposal_geometry_preserves_zero_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     """An explicit zero bound is distinct from the uncapped default."""
 

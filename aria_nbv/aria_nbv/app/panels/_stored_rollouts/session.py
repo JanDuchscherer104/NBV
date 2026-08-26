@@ -16,6 +16,12 @@ import streamlit as st
 from ....configs import PathConfig
 from ....dataset_topology import build_dataset_topology
 from ....rollouts import RolloutZarrStoreReader
+from ....rollouts.candidate_benchmark import (
+    benchmark_binding_from_reader,
+    benchmarks_from_reader,
+    read_bundle_bytes,
+    serialize_bundle_bytes,
+)
 from ....rollouts.inspection import (
     RolloutSuspiciousQueryConfig,
     build_effective_streamlit_trust,
@@ -193,6 +199,27 @@ class StoredRolloutSession:
         result = _cached_candidate_population_cached(store_path, self.store_identity, sample_size)
         self._assert_current_identity()
         return result
+
+    def candidate_benchmark_records(
+        self, *, state_key: str | None = None, candidate_limit: int | None = 500
+    ) -> tuple[Any, ...]:
+        """Build immutable benchmark facts through the canonical inspection reader."""
+
+        result = benchmarks_from_reader(self.reader, state_key=state_key, candidate_limit=candidate_limit)
+        self._assert_current_identity()
+        return result
+
+    def candidate_benchmark_export(self, *, state_key: str | None = None) -> bytes:
+        """Export one deterministic benchmark bundle from validated facts."""
+
+        manifest = self.manifest_payload
+        binding = benchmark_binding_from_reader(self.reader, manifest)
+        payload = serialize_bundle_bytes(
+            self.candidate_benchmark_records(state_key=state_key, candidate_limit=None),
+            provenance=binding,
+        )
+        read_bundle_bytes(payload, expected_binding=binding)
+        return payload
 
     def invariants(self) -> Any:
         return _cached_invariants(self._projection_path(), store_identity=self.store_identity)
