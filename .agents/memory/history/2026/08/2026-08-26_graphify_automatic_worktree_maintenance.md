@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: 6d0134ba9551e564d7a051e62721b75d408bb746
+repo_head: aee0235e1fe34c185a418452224831ec6f7a672e
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -77,6 +77,12 @@ set as ambiguous. A later main-branch tracked paper exposed the legacy PDF
 directory link as unsafe; setup now preserves a local tracked PDF directory and
 only uses the shared directory link when no PDF input is tracked.
 
+The review follow-up rebuilds the generated projection whenever its recorded
+Git tree differs from HEAD, so revision-pinned code links cannot remain stale
+after an unrelated committed code change. Pre-commit maintenance now runs only
+when Gemini is explicitly configured; without that headless semantic backend it
+exits silently and leaves admission to setup instead of blocking offline commits.
+
 ## Commits
 - [37b8a8848906c4652fc65d9dc62fc9999990bb2f](https://github.com/JanDuchscherer104/ARIA-NBV/commit/37b8a8848906c4652fc65d9dc62fc9999990bb2f)
 - [b6de2ce1b57829de0a05ab7facf10a7cb3bbd0f8](https://github.com/JanDuchscherer104/ARIA-NBV/commit/b6de2ce1b57829de0a05ab7facf10a7cb3bbd0f8)
@@ -89,6 +95,7 @@ only uses the shared directory link when no PDF input is tracked.
 - [bc46bdc5ad14431c0d5cd7afa6463bb63380d438](https://github.com/JanDuchscherer104/ARIA-NBV/commit/bc46bdc5ad14431c0d5cd7afa6463bb63380d438)
 - [1858f451d7e1ad7aebbf768181ffe757b3f0bbcb](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1858f451d7e1ad7aebbf768181ffe757b3f0bbcb)
 - [6d0134ba9551e564d7a051e62721b75d408bb746](https://github.com/JanDuchscherer104/ARIA-NBV/commit/6d0134ba9551e564d7a051e62721b75d408bb746)
+- [aee0235e1fe34c185a418452224831ec6f7a672e](https://github.com/JanDuchscherer104/ARIA-NBV/commit/aee0235e1fe34c185a418452224831ec6f7a672e)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
@@ -115,6 +122,11 @@ The post-main regression proof ran the exact final commit in two new detached
 worktrees with `CODEX_SOURCE_WORKSPACE_PATH` absent and present. Both setups
 were silent, retained the tracked `UVFA.pdf`, and resolved standard and deep
 cache links under `/home/jd/repos/ARIA-NBV/.data/graphify-semantic-cache`.
+
+The review regressions first failed on HEAD-tree drift and the unconditional
+pre-commit command, then passed after the focused repair. The complete affected
+suite passed with 66 tests and 97 subtests; an actual credential-absent
+`graphify-maintain` pre-commit invocation and the setup shell contract passed.
 
 ## Canonical Owner Impact
 The setup scripts, seeder, reconciliation owner, freshness helper, maintenance
