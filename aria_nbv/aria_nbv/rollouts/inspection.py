@@ -6413,7 +6413,7 @@ def _selected_path_lengths(reader: RolloutZarrStoreReader) -> np.ndarray:
     starts[1:] = rollout_positions[1:] != rollout_positions[:-1]
     previous_centers[starts] = root_pose[rollout_positions[starts], 9:12]
     previous_centers[~starts] = centers[:-1][~starts[1:]]
-    segment_lengths = np.linalg.vector_norm(centers - previous_centers, axis=1)
+    segment_lengths = np.linalg.norm(centers - previous_centers, axis=1)
     np.add.at(lengths, rollout_positions, segment_lengths)
     return lengths
 
