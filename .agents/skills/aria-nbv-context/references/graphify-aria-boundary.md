@@ -6,12 +6,19 @@ repository owners remain authoritative for behavior and scientific claims.
 
 ## Mandatory Worktree Route
 
-1. Codex passes the fork parent through `CODEX_SOURCE_WORKSPACE_PATH`; setup
-   requires that exact parent as `ARIA_NBV_SHARED_ROOT` and never substitutes
-   Git's first registered worktree. It copies the parent generation locally,
-   links the parent-resolved content-addressed `semantic` and `semantic-deep`
-   namespaces, then runs upstream incremental `graphify update` before
-   reporting readiness.
+1. When Codex supplies `CODEX_SOURCE_WORKSPACE_PATH`, setup uses that exact fork
+   parent. Project-created worktrees may omit it, so the Codex bridge resolves
+   the query-admissible canonical primary. If that primary is unusable, the
+   bridge considers only registered, non-prunable same-repository siblings that
+   are ancestors of the destination: an exact destination `HEAD` wins, then the
+   nearest ancestor; equally ranked usable siblings fail as ambiguous. It never
+   selects by worktree-list order. Before running a parent executable or
+   mutating the child, the setup owner proves that both paths are registered,
+   distinct worktrees in the same Git common directory and that the selected
+   parent's graph is query-admissible. It then copies that generation locally,
+   links the selected parent's content-addressed `semantic` and `semantic-deep` namespaces,
+   regenerates the deterministic child projection, then runs upstream
+   incremental `graphify update` before reporting readiness.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
    provenance state are worktree-local regular-file copies. Only the two
    content-addressed cache namespaces are shared; neither cache identity nor a
@@ -49,11 +56,12 @@ delta is `unusable`; an ancestor committed delta or bounded overlay delta is
 
 ## Freshness And Refresh
 
-Setup owns the ordinary session reconciliation: it keeps the inherited semantic
-projection intact and invokes upstream's no-LLM incremental code update against
-the child generation. Rebuilding the generated projection changes its provenance
-on every commit and therefore belongs to an explicit semantic refresh, not cheap
-worktree admission. `make graphify-state-check` remains
+Setup owns the ordinary session reconciliation: it regenerates the deterministic
+child projection and invokes upstream's no-LLM incremental code update. A
+receipt, matching semantic counts, or matching Git commit never substitutes for
+the pinned upstream detector and ancestry checks. A parent whose detector result
+is unbounded or otherwise unusable requires a factual semantic refresh before a
+new session can start. `make graphify-state-check` remains
 strict for scaffold and pre-push validation, while `make graphify-usable-check`
 proves navigation safety. A Git HEAD mismatch alone is not staleness when the
 recorded graph and projection revisions are ancestors and indexed bytes still

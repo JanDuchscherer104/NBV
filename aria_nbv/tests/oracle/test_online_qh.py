@@ -140,6 +140,7 @@ def _runtime(scorer: nn.Module | None = None, **changes: object) -> QhInferenceR
         "candidate_config_hashes": ("candidates",),
         "action_mask_semantics": "oracle_action_mask_v1",
         "representation_semantics": "root_moments_v1",
+        "trained_horizons": (1,),
     }
     values.update(changes)
     return QhInferenceRuntime(**values)  # type: ignore[arg-type]
@@ -316,6 +317,11 @@ def test_qh_candidate_score_adapter_preserves_negative_values_for_hard_selection
 def test_qh_candidate_score_adapter_rejects_runtime_input_mismatch(field: str, value: object) -> None:
     with pytest.raises(ValueError, match=field.removesuffix("es")):
         _QhCandidateScoreAdapter(_runtime(**{field: value}))(_context())
+
+
+def test_qh_candidate_score_adapter_rejects_untrained_requested_horizon() -> None:
+    with pytest.raises(ValueError, match=r"no manifest-bound training support for horizons \[1\]"):
+        _QhCandidateScoreAdapter(_runtime(trained_horizons=(2,)))(_context())
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is unavailable")

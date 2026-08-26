@@ -38,6 +38,8 @@ website:
           file: reference/data_handling.identifiers.qmd
         - text: mesh_cache
           file: reference/data_handling.mesh_cache.qmd
+        - text: qh_contracts
+          file: reference/data_handling.qh_contracts.qmd
         - text: qh_data
           file: reference/data_handling.qh_data.qmd
           contents:
@@ -45,6 +47,8 @@ website:
             file: reference/data_handling.qh_data.batching.qmd
           - text: dataset
             file: reference/data_handling.qh_data.dataset.qmd
+          - text: materialization
+            file: reference/data_handling.qh_data.materialization.qmd
           - text: views
             file: reference/data_handling.qh_data.views.qmd
         - text: vin_store
@@ -68,6 +72,8 @@ website:
             file: reference/data_handling.vin_store.source.qmd
           - text: store
             file: reference/data_handling.vin_store.store.qmd
+          - text: target_inventory
+            file: reference/data_handling.vin_store.target_inventory.qmd
           - text: views
             file: reference/data_handling.vin_store.views.qmd
           - text: writer
@@ -95,11 +101,17 @@ website:
           file: reference/lightning.optimizers.qmd
         - text: qh_datamodule
           file: reference/lightning.qh_datamodule.qmd
+        - text: qh_experiment
+          file: reference/lightning.qh_experiment.qmd
         - text: qh_module
           file: reference/lightning.qh_module.qmd
+        - text: qh_q2_certification
+          file: reference/lightning.qh_q2_certification.qmd
       - text: oracle
         file: reference/oracle.qmd
         contents:
+        - text: environment
+          file: reference/oracle.environment.qmd
         - text: evidence
           file: reference/oracle.evidence.qmd
         - text: labels
@@ -107,12 +119,18 @@ website:
         - text: pipelines
           file: reference/oracle.pipelines.qmd
           contents:
+          - text: admission_evidence
+            file: reference/oracle.pipelines.admission_evidence.qmd
+          - text: campaign
+            file: reference/oracle.pipelines.campaign.qmd
           - text: cli
             file: reference/oracle.pipelines.cli.qmd
           - text: evaluated_rollout
             file: reference/oracle.pipelines.evaluated_rollout.qmd
           - text: offline_vin
             file: reference/oracle.pipelines.offline_vin.qmd
+          - text: online_qh
+            file: reference/oracle.pipelines.online_qh.qmd
           - text: online_vin
             file: reference/oracle.pipelines.online_vin.qmd
           - text: rollout_dataset
@@ -174,6 +192,8 @@ website:
           file: reference/rollouts.inspection.qmd
         - text: manifest
           file: reference/rollouts.manifest.qmd
+        - text: qh_geometry
+          file: reference/rollouts.qh_geometry.qmd
         - text: qh_reader
           file: reference/rollouts.qh_reader.qmd
         - text: read_model
@@ -225,6 +245,8 @@ website:
           file: reference/targets.descriptor.qmd
         - text: protocol
           file: reference/targets.protocol.qmd
+        - text: selection
+          file: reference/targets.selection.qmd
       - text: utils
         file: reference/utils.qmd
         contents:
@@ -345,6 +367,8 @@ website:
           contents:
           - text: scene_myopic
             file: reference/vin.models.scene_myopic.qmd
+          - text: target_finite_horizon
+            file: reference/vin.models.target_finite_horizon.qmd
           - text: target_myopic
             file: reference/vin.models.target_myopic.qmd
         - text: modules
@@ -356,12 +380,22 @@ website:
             file: reference/vin.modules.normalization.qmd
           - text: pooling
             file: reference/vin.modules.pooling.qmd
+          - text: qh_history_encoders
+            file: reference/vin.modules.qh_history_encoders.qmd
+          - text: qh_scene_encoders
+            file: reference/vin.modules.qh_scene_encoders.qmd
+          - text: qh_state_fusion
+            file: reference/vin.modules.qh_state_fusion.qmd
+          - text: qh_value_decoders
+            file: reference/vin.modules.qh_value_decoders.qmd
           - text: scene_field
             file: reference/vin.modules.scene_field.qmd
           - text: semidense_grid
             file: reference/vin.modules.semidense_grid.qmd
         - text: ordinal
           file: reference/vin.ordinal.qmd
+        - text: qh_bundle
+          file: reference/vin.qh_bundle.qmd
         - text: scorer_context
           file: reference/vin.scorer_context.qmd
         - text: types

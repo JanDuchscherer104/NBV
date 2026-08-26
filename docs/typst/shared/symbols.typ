@@ -114,6 +114,9 @@
   (key: "spatial.relation_rpe", tex: "\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}}", description: "Query-local relative positional embedding for target, history, support, or candidate relations.", thesis_list: true, order: 590),
   (key: "model.target_token", tex: "\\boldsymbol{h}_e^{\\mathrm{tgt}}", description: "Learned selected-target token built from the actor-visible target descriptor and scene support.", thesis_list: true, order: 600),
   (key: "model.candidate_row", tex: "\\boldsymbol{x}_{t,i}", description: "Per-candidate row feature assembled from pose, relation, support, validity, provenance, and history descriptors.", thesis_list: true, order: 610),
+  (key: "model.history_pose_feature", tex: "\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}", description: "Previously selected pose j encoded from the current camera at decision state t.", thesis_list: true, order: 612),
+  (key: "model.history_relative_age", tex: "a_{t,j}^{\\mathrm{hist}}", description: "Normalized relative age of selected pose j at decision state t; the immediate predecessor has age zero.", thesis_list: true, order: 614),
+  (key: "model.history_token", tex: "\\boldsymbol{h}_t^{\\mathrm{hist}}", description: "Fixed-width causal selected-pose history token supplied to scorer state fusion.", thesis_list: true, order: 616),
   (key: "entity.endpoint_gain", tex: "J_e^{(H)}", description: "Endpoint reconstruction gain for target e over horizon H.", thesis_list: true, order: 620),
   (key: "entity.log_gain", tex: "J_{e,\\mathrm{log}}^{(H)}", description: "Log-scale endpoint reconstruction gain for target e.", thesis_list: true, order: 630),
   (key: "entity.lookahead_headroom", tex: "\\Delta_{\\mathrm{look}}", description: "Gain available to an oracle lookahead policy beyond one-step selection.", thesis_list: true, order: 640),
@@ -126,6 +129,8 @@
   (key: "obs.points_semi", tex: "\\mathcal{P}^{\\mathrm{semi}}", description: "Semi-dense observed point set.", thesis_list: true, order: 710),
   (key: "obs.points_t", tex: "\\mathcal{P}_t", description: "Point set available at rollout step t.", thesis_list: true, order: 720),
   (key: "rl.candidate_table", tex: "\\mathcal{Q}_t", description: "Finite candidate-view table at rollout step t.", thesis_list: true, order: 730),
+  (key: "rl.exact_q2_target", tex: "y_t^{(2,\\mathrm{exact})}", description: "Exact two-step fitted-Q control using factual dense successor one-step rewards.", thesis_list: true, order: 732),
+  (key: "rl.q2_recursion_error", tex: "\\varepsilon_t^{(2)}", description: "Absolute learned-recursion target error against the exact two-step control.", thesis_list: true, order: 734),
   (key: "vin.field_v", tex: "\\boldsymbol{F}_v", description: "Learned value field evaluated at v.", thesis_list: true, order: 740),
 )
 

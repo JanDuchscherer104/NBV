@@ -18,6 +18,10 @@ when owners conflict.
   claims. `typst/shared/style.typ` owns thesis-to-code link behavior.
 - Keep public docs aligned with these owners. Do not expose agent guidance,
   generated context, OMX state, or rendered artifacts as public source content.
+- Public Python docstrings own symbol-level implementation contracts and feed
+  the generated API reference. Package READMEs are user-facing workflow and
+  navigation guides; keep detailed shapes, field catalogs, and private symbol
+  inventories in source rather than duplicating them there.
 - The privileged V0/GT target path is only a sanity or upper-bound route; use
   `docs/typst/thesis/sections/01-research-questions.typ#ssec:rq3`. The
   conditional online bridge is RQ5 at
@@ -40,3 +44,6 @@ when owners conflict.
   `aria-wip-links=false` and pinned `aria-code-ref` inputs in `style.typ`.
 - For broader Quarto changes, run the relevant frontmatter/render/check command;
   do not generate API, agent, or site artifacts unless that is the task.
+- For README changes, verify every command and relative link against the exact
+  source owner. For public-docstring changes, generate the affected API pages
+  rather than hand-editing Quartodoc output.

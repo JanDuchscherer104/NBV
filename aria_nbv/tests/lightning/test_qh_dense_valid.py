@@ -110,3 +110,48 @@ def test_datamodule_dense_objective_requires_exact_data_contract() -> None:
             seed=7,
             objective_profile="qh_dense_valid_fitted_q_v1",
         )
+
+
+def test_datamodule_allows_stage_specific_replay_population_vocabularies() -> None:
+    train_contract = replace(
+        _dense_contract(),
+        candidate_config_hashes=("candidate-train",),
+        rollout_config_hashes=("rollout-train",),
+        selection_policies=("temperature-softmax",),
+    )
+    validation_contract = replace(
+        train_contract,
+        candidate_config_hashes=("candidate-held-out",),
+        rollout_config_hashes=("rollout-validation",),
+    )
+    test_contract = replace(
+        train_contract,
+        rollout_config_hashes=("rollout-test",),
+    )
+
+    data = QhDataModule(
+        train=_StructuralDataset("train", contract=train_contract),  # type: ignore[arg-type]
+        val=_StructuralDataset("validation", contract=validation_contract),  # type: ignore[arg-type]
+        test=_StructuralDataset("test", contract=test_contract),  # type: ignore[arg-type]
+        seed=7,
+        objective_profile="qh_dense_valid_fitted_q_v1",
+    )
+
+    assert data.learning_contract.data_contract == train_contract
+
+
+def test_datamodule_rejects_stage_semantic_drift_despite_population_projection() -> None:
+    train_contract = _dense_contract()
+    validation_contract = replace(
+        train_contract,
+        rollout_config_hashes=("different-population",),
+        discount_gamma=0.5,
+    )
+
+    with pytest.raises(ValueError, match="incompatible learning semantics"):
+        QhDataModule(
+            train=_StructuralDataset("train", contract=train_contract),  # type: ignore[arg-type]
+            val=_StructuralDataset("validation", contract=validation_contract),  # type: ignore[arg-type]
+            seed=7,
+            objective_profile="qh_dense_valid_fitted_q_v1",
+        )

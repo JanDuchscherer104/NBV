@@ -41,7 +41,7 @@ The rollout store preserves source, target, rollout, step, candidate, diagnostic
   citation: [@GeometricDeepLearning-bronstein2021 @zhou2023query @FixedHorizonTD-deAsis2020 @UVFA-schaul2015],
   source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/lightning/qh_module.py; docs/contents/theory/candidate_view_dependence.qmd",
   gate: [typed selected-observation state, positive-width actor-visible target path, source masks, leakage tests, and scientific policy evidence],
-)[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The scalar requested-horizon scorer returns a typed conditional-Q/feasibility result, with optional objective-specific CORAL training tensors that never participate in masking. Static scene context, target state, candidate rows, and causal history are implemented; dynamic selected-observation state remains a richer protocol.]
+)[The implemented DTO seam separates actor inputs, selected-transition supervision, and audit lineage for varying stored chain lengths. The scalar requested-horizon scorer returns a typed conditional-Q/feasibility result, with optional objective-specific CORAL training tensors that never participate in masking. Static scene context, target state, candidate rows, and causal history are implemented; privileged selected depth can now form the S1 point-set residual, while ray-aware dynamic state remains richer planned work.]
 
 The intended input for target $e$ at step $t$ is
 
@@ -61,7 +61,7 @@ This equation is an information contract rather than one flat tensor. The corres
     [`DynamicSceneState`], [selected geometry, free/unknown support, recency, source masks and ordered history], [actor input; causal update only],
     [`TargetState`], [protocol-specific descriptor, target-local support and field-availability masks], [oracle-task instruction or actor-visible target],
     [`CandidateTable`], [row identity, local pose, target relation, actor validity and padding mask], [actor input; row-aligned],
-    [`ValueQuery`], [scalar requested residual horizon $h$ per state; omission means $h=b_t$], [`V1` admits only the trained diagonal $h=b_t$; off-diagonal support is planned],
+    [`ValueQuery`], [scalar requested residual horizon $h$ per state; omission means $h=b_t$], [`bounded_scalar_v1` admits $1 <= h <= b_t$ syntactically; bundle support gates deployment],
     [`CandidateSupervision`], [one-step root gain, diagnostic target RRI and `q_train_mask`], [supervision only],
     [`SelectedTransition`], [factual action index and row id, reward, discount, terminal and successor identity], [training linkage only],
     [`AuditLineage`], [source/store/config hashes, policy, seed and reason vocabulary], [CPU audit data; not a learned feature],
@@ -74,7 +74,7 @@ The maximum supported horizon $H_"max"$ is a scorer, data, and checkpoint contra
 
 The executable boundary is `score(actor, requested_horizon=None)`. It hides scene, target, candidate, history, and time encoding behind one deep module and returns conditional Q plus feasibility logits in stored candidate order. The continuous `conditional_q` field retains one meaning for regression and CORAL: it alone enters Bellman backup and online ranking. CORAL additionally carries cumulative logits and its fixed support as training metadata. Static encodings may be reused privately, but the interface exposes no cache lifecycle, encoder handles, candidate sorting, or public horizon axis.
 
-Padding masks, modality-presence masks, source-role masks, action masks, and training masks remain distinct. Unsupported requested horizons fail closed and are never clamped to the available budget. This does not break recursion from $h$ to $h-1$: the successor's factual remaining budget is itself $b_t-1$, so its diagonal query supplies the required lower-horizon backup. A missing modality must never be encoded as an ordinary zero observation or confused with padding.
+Padding masks, modality-presence masks, source-role masks, action masks, and training masks remain distinct. Out-of-range requests and bundle-unsupported in-range horizons fail closed and are never clamped to the available budget. This does not break recursion from $h$ to $h-1$: the target scorer receives the explicit supported scalar query $h-1$ at the factual successor, whose remaining budget is $b_t-1$. A missing modality must never be encoded as an ordinary zero observation or confused with padding.
 
 The target descriptor separates identity, geometry, observed support, confidence, and source:
 
@@ -136,11 +136,19 @@ This adopts QCNet's query-centric geometric discipline, not its trajectory decod
   implementation: "partial",
   evidence: "pending",
   citation: [@e3nn-SphericalHarmonics-2025 @Hestia-lu2026],
-  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; docs/contents/theory/candidate_view_dependence.qmd",
-  gate: [directional-novelty fixture and matched architecture ablation],
-)[The implemented scorer consumes the strictly causal selected-pose prefix through a candidate-relative summary. Ordered token-level temporal encoding and directional memory remain representation ablations for longer-horizon models.]
+  source: "aria_nbv/aria_nbv/data_handling/qh_data/views.py; aria_nbv/aria_nbv/vin/modules/qh_history_encoders.py; aria_nbv/tests/vin/test_qh_history_encoders.py; docs/contents/theory/candidate_view_dependence.qmd",
+  gate: [matched repeated-seed H0/H1 measurement, directional-novelty fixture, and held-out policy evidence],
+)[The scorer exposes a versioned selected-pose history seam. H0 is the checkpoint-compatible masked mean; H1 is an implemented exploratory causal Transformer over current-camera-relative pose tokens and relative age. Directional scene memory and scientific longer-horizon evidence remain pending.]
 
 The candidate row is a local query, not a duplicate of the full state. The implemented trunk encodes root-relative and current-relative candidate pose plus global root-scene moments, predicts feasibility before target or horizon conditioning, and then adds a candidate-local target transform for conditional value prediction. Shared target, scene, causal-history, remaining-budget, and requested-horizon context are supplied as state tokens. Hard action validity is not a scorer feature; candidate family or sampler provenance is audit-only by default and may enter the model only as a named ablation.
+
+For each realized state, materialization must provide the complete strictly causal selected-pose prefix. Each selected pose is expressed from the current camera before the shared R6D--LFF pose encoder. H0 reproduces the original masked arithmetic mean exactly. H1 attaches relative age—zero for the immediate predecessor, increasing backward through the prefix—then uses causal self-attention and last-valid-token readout:
+
+$
+  #eqs.model.qh_history_controls
+$
+
+The learned empty token represents the realized root state with no selected predecessor; padded states remain zero and cannot enter a candidate output. Relative age makes chronology observable without adding absolute step index as a separate feature. Prefix cardinality is also factual causal state, but neither chronology nor cardinality substitutes for the separately encoded remaining budget $b_t$ or requested value horizon $h$. H1 still observes poses only: it carries no selected depth, appearance, free/unknown update, target-local evidence, or new counterfactual render. It is therefore an `S0-pose` ablation rather than a sufficient dynamic reconstruction state.
 
 Viewing history is not reducible to camera distance. For a target-local point or cell, selected camera directions define a signed first moment together with the second-moment memory
 

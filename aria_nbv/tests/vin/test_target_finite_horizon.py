@@ -10,19 +10,37 @@ from pathlib import Path
 
 import pytest
 import torch
+from efm3d.aria.camera import CameraTW
 from efm3d.aria.pose import PoseTW
 
 from aria_nbv.data_handling.qh_data import QhActorTensors, collate_qh_chains
-from aria_nbv.data_handling.qh_data.views import QhStaticContext
+from aria_nbv.data_handling.qh_data.views import QhSelectedObservationPrefix, QhStaticContext
+from aria_nbv.utils.fingerprints import stable_config_hash
+from aria_nbv.vin.encoders import LearnableFourierFeaturesConfig, R6dLffPoseEncoderConfig
 from aria_nbv.vin.models.target_finite_horizon import (
     TargetFiniteHorizonScorer,
     TargetFiniteHorizonScorerConfig,
+)
+from aria_nbv.vin.modules.qh_history_encoders import (
+    QhCausalTransformerHistoryEncoderConfig,
+    QhMeanPoolHistoryEncoderConfig,
+)
+from aria_nbv.vin.modules.qh_scene_encoders import (
+    QhLegacySelectedSurfacePointSceneEncoderConfig,
+    QhSelectedSurfacePointSceneEncoderConfig,
+)
+from aria_nbv.vin.modules.qh_state_fusion import (
+    QhCrossAttentionStateFusionConfig,
+    QhIndependentMlpStateFusionConfig,
 )
 from aria_nbv.vin.modules.qh_value_decoders import (
     QhCoralValueDecoderConfig,
     QhPredeclaredPhysicalCoralSupport,
 )
 from tests.data_handling.test_qh import _chain, _snippet
+
+_FLOAT32_GOLDEN_ATOL = 1e-4
+"""Cross-backend tolerance for frozen scalar-output smoke values only."""
 
 
 def _actor(*, steps: int = 3, width: int = 4) -> QhActorTensors:
@@ -47,9 +65,82 @@ def _scorer() -> TargetFiniteHorizonScorer:
     torch.manual_seed(11)
     scorer = TargetFiniteHorizonScorerConfig(
         hidden_dim=32,
-        attention_heads=4,
         dropout=0.0,
         max_horizon=4,
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
+def _cfplus_actor(*, steps: int = 3, width: int = 4) -> QhActorTensors:
+    """Return the CF+ H0 control actor with one exact causal carrier."""
+
+    actor = _actor(steps=steps, width=width)
+    batch_size = actor.step_mask.shape[0]
+    history_pose = PoseTW().tensor().reshape(1, 1, 1, 12).expand(batch_size, steps, steps, -1).clone()
+    actor = replace(actor, history_pose_relative_root=PoseTW(history_pose))
+    depth = (
+        1.0
+        + torch.arange(
+            batch_size * steps * steps * 6,
+            dtype=torch.float32,
+        ).reshape(batch_size, steps, steps, 2, 3)
+        / 20.0
+    )
+    camera_row = CameraTW.from_parameters(
+        width=torch.tensor([3.0]),
+        height=torch.tensor([2.0]),
+        fx=torch.tensor([4.0]),
+        fy=torch.tensor([4.0]),
+        cx=torch.tensor([1.5]),
+        cy=torch.tensor([1.0]),
+        gain=torch.tensor([0.0]),
+        exposure_s=torch.tensor([0.0]),
+        valid_radiusx=torch.tensor([3.0]),
+        valid_radiusy=torch.tensor([2.0]),
+        T_camera_rig=PoseTW().tensor().reshape(1, 12),
+        dist_params=torch.empty((1, 0)),
+    ).tensor()
+    prefix = QhSelectedObservationPrefix(
+        depth_m=depth.to(torch.float16),
+        valid_mask=torch.ones_like(depth, dtype=torch.bool),
+        camera=CameraTW(camera_row.reshape(1, 1, 1, 22).expand(batch_size, steps, steps, -1).clone()),
+        camera_pose_relative_root=PoseTW(history_pose.clone()),
+        prefix_mask=actor.history_mask.clone(),
+    )
+    return replace(actor, selected_observation_prefix=prefix)
+
+
+def _cfplus_scorer() -> TargetFiniteHorizonScorer:
+    """Return a deterministic privileged H0 scorer that ignores CF-GT values."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
+def _s1_scorer(*, view_chunk_size: int = 16) -> TargetFiniteHorizonScorer:
+    """Return the fixed-width selected-surface S1 scorer."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        representation_semantics="root_moments_plus_selected_surface_points_identity_start_v1",
+        scene_encoder=QhSelectedSurfacePointSceneEncoderConfig(
+            pixel_stride=1,
+            view_chunk_size=view_chunk_size,
+            point_hidden_dim=16,
+            coordinate_scale_m=2.0,
+        ),
     ).setup_target()
     scorer.eval()
     return scorer
@@ -61,7 +152,6 @@ def _coral_scorer() -> TargetFiniteHorizonScorer:
     torch.manual_seed(11)
     scorer = TargetFiniteHorizonScorerConfig(
         hidden_dim=32,
-        attention_heads=4,
         dropout=0.0,
         max_horizon=4,
         value_decoder=QhCoralValueDecoderConfig(
@@ -79,6 +169,20 @@ def _coral_scorer() -> TargetFiniteHorizonScorer:
     return scorer
 
 
+def _ordered_history_scorer() -> TargetFiniteHorizonScorer:
+    """Return a deterministic A1 scorer whose only new factor is H1 history."""
+
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        history_encoder=QhCausalTransformerHistoryEncoderConfig(attention_heads=4),
+    ).setup_target()
+    scorer.eval()
+    return scorer
+
+
 def test_qh_scorer_output_matches_actor_candidate_axes_and_is_deterministic() -> None:
     actor = _actor()
     scorer = _scorer()
@@ -90,6 +194,347 @@ def test_qh_scorer_output_matches_actor_candidate_axes_and_is_deterministic() ->
     assert first.conditional_q.dtype == torch.float32
     assert torch.equal(first.conditional_q, second.conditional_q)
     assert torch.isfinite(first.conditional_q[actor.action_mask]).all()
+
+
+def test_qh_scene_encoder_extraction_preserves_outputs_and_current_identity() -> None:
+    """Lock extraction within float32 backend rounding and current identity."""
+
+    config = TargetFiniteHorizonScorerConfig(hidden_dim=32, dropout=0.0, max_horizon=4)
+    scorer = _scorer()
+    output = scorer(_actor())
+
+    assert stable_config_hash(config) == "f1940a233c7ea5b7"
+    assert len(scorer.state_dict()) == 44
+    assert not scorer.scene_encoder.state_dict()
+    assert not any(key.startswith("scene_encoder.") for key in scorer.state_dict())
+    torch.testing.assert_close(
+        output.conditional_q,
+        torch.tensor(
+            [
+                [
+                    [-0.0111854225, -0.0080969334, -0.0088586658, -0.0080592483],
+                    [-0.0085932389, -0.0064415932, -0.0055623800, -0.0082657412],
+                    [-0.0083224773, -0.0050708354, -0.0052963421, -0.0028626025],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=_FLOAT32_GOLDEN_ATOL,
+    )
+    torch.testing.assert_close(
+        output.feasibility_logits,
+        torch.tensor(
+            [
+                [
+                    [-1.2504171133, -1.2618308067, -1.2461163998, -1.2615814209],
+                    [-1.2496248484, -1.2496305704, -1.2499766350, -1.2494469881],
+                    [-1.2460227013, -1.2493461370, -1.2373200655, -1.2411725521],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=_FLOAT32_GOLDEN_ATOL,
+    )
+
+
+def test_qh_cfplus_h0_is_exactly_invariant_to_selected_observation_values() -> None:
+    """The matched control admits CF+ identity without consuming its payload."""
+
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _cfplus_scorer()
+    baseline = scorer(actor)
+    changed_prefix = replace(
+        prefix,
+        depth_m=prefix.depth_m.add(37),
+        valid_mask=~prefix.valid_mask,
+        camera=CameraTW(prefix.camera.tensor().add(11)),
+        camera_pose_relative_root=PoseTW(prefix.camera_pose_relative_root.tensor().add(5)),
+    )
+
+    changed = scorer(replace(actor, selected_observation_prefix=changed_prefix))
+
+    assert torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
+
+
+def test_qh_cfplus_h0_preserves_action_mask_independence_and_invalid_row_isolation() -> None:
+    actor = _cfplus_actor()
+    scorer = _cfplus_scorer()
+    baseline = scorer(actor)
+    action_mask = actor.action_mask.clone()
+    action_mask[..., 0] = ~action_mask[..., 0]
+    mask_changed = scorer(replace(actor, action_mask=action_mask))
+
+    candidate_mask = actor.candidate_mask.clone()
+    candidate_mask[..., -1] = False
+    action_mask = actor.action_mask & candidate_mask
+    masked = replace(actor, candidate_mask=candidate_mask, action_mask=action_mask)
+    candidate_pose = actor.candidate_pose_relative_root.tensor().clone()
+    candidate_pose[..., -1, :] = 1.0e6
+    invalid_changed = scorer(replace(masked, candidate_pose_relative_root=PoseTW(candidate_pose)))
+    invalid_baseline = scorer(masked)
+
+    assert torch.equal(mask_changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(mask_changed.feasibility_logits, baseline.feasibility_logits)
+    assert torch.equal(invalid_changed.conditional_q[candidate_mask], invalid_baseline.conditional_q[candidate_mask])
+    assert torch.equal(
+        invalid_changed.feasibility_logits[candidate_mask],
+        invalid_baseline.feasibility_logits[candidate_mask],
+    )
+
+
+def test_qh_s1_keeps_every_common_downstream_weight_equal_to_h0() -> None:
+    """Fixed scene width and late S1 construction isolate downstream initialization."""
+
+    h0 = _cfplus_scorer()
+    s1 = _s1_scorer()
+    h0_state = h0.state_dict()
+    s1_state = s1.state_dict()
+    common_keys = [key for key in h0_state if not key.startswith("scene_encoder.")]
+
+    assert common_keys
+    assert all(key in s1_state for key in common_keys)
+    for key in common_keys:
+        assert torch.equal(s1_state[key], h0_state[key]), key
+    assert s1.scene_encoder.output_dim == h0.scene_encoder.output_dim == 28
+
+
+def test_qh_s1_identity_start_matches_h0_and_can_open_on_first_backward() -> None:
+    """A fresh S1 is the exact H0 function, but its output projection can learn."""
+
+    actor = _cfplus_actor()
+    h0 = _cfplus_scorer()
+    s1 = _s1_scorer()
+
+    h0_output = h0(actor)
+    s1_output = s1(actor)
+
+    assert torch.count_nonzero(s1.scene_encoder.point_update.weight) == 0
+    assert torch.equal(s1_output.conditional_q, h0_output.conditional_q)
+    assert torch.equal(s1_output.feasibility_logits, h0_output.feasibility_logits)
+
+    loss = s1_output.conditional_q[actor.candidate_mask].square().sum()
+    loss.backward()
+    projection_gradient = s1.scene_encoder.point_update.weight.grad
+
+    assert projection_gradient is not None
+    assert torch.isfinite(projection_gradient).all()
+    assert torch.count_nonzero(projection_gradient) > 0
+
+
+def test_qh_s1_consumes_selected_surface_values_without_reading_action_mask() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _s1_scorer()
+    with torch.no_grad():
+        scorer.scene_encoder.point_update.weight.fill_(0.1)
+    baseline = scorer(actor)
+    changed_depth = prefix.depth_m.clone()
+    changed_depth[prefix.prefix_mask[..., None, None].expand_as(changed_depth)] += 0.75
+    changed = scorer(replace(actor, selected_observation_prefix=replace(prefix, depth_m=changed_depth)))
+    action_mask = actor.action_mask.clone()
+    action_mask[..., 0] = ~action_mask[..., 0]
+    mask_changed = scorer(replace(actor, action_mask=action_mask))
+
+    assert not torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert not torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
+    assert torch.equal(mask_changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(mask_changed.feasibility_logits, baseline.feasibility_logits)
+
+
+def test_qh_s1_view_chunking_is_numerically_equivalent() -> None:
+    actor = _cfplus_actor()
+    one_view = _s1_scorer(view_chunk_size=1)
+    all_views = _s1_scorer(view_chunk_size=32)
+    all_views.load_state_dict(one_view.state_dict())
+
+    first = one_view(actor)
+    second = all_views(actor)
+
+    torch.testing.assert_close(second.conditional_q, first.conditional_q, rtol=0.0, atol=1e-7)
+    torch.testing.assert_close(second.feasibility_logits, first.feasibility_logits, rtol=0.0, atol=1e-7)
+
+
+def test_qh_s1_selected_observation_has_exact_one_step_causal_shift() -> None:
+    """Observation ``j`` may affect states ``t>j`` and no earlier state."""
+
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _s1_scorer()
+    with torch.no_grad():
+        scorer.scene_encoder.point_update.weight.fill_(0.1)
+    baseline = scorer(actor)
+    depth = prefix.depth_m.clone()
+    depth[:, :, 1] += 0.75
+    changed = scorer(replace(actor, selected_observation_prefix=replace(prefix, depth_m=depth)))
+
+    assert torch.equal(changed.conditional_q[:, :2], baseline.conditional_q[:, :2])
+    assert torch.equal(changed.feasibility_logits[:, :2], baseline.feasibility_logits[:, :2])
+    assert not torch.equal(changed.conditional_q[:, 2], baseline.conditional_q[:, 2])
+    assert not torch.equal(changed.feasibility_logits[:, 2], baseline.feasibility_logits[:, 2])
+
+
+def test_qh_s1_candidate_rows_remain_isolated() -> None:
+    """S1 is shared state context and never creates candidate-candidate edges."""
+
+    actor = _cfplus_actor()
+    scorer = _s1_scorer()
+    with torch.no_grad():
+        scorer.scene_encoder.point_update.weight.fill_(0.1)
+    baseline = scorer(actor)
+    changed_pose = actor.candidate_pose_relative_root.tensor().clone()
+    changed_pose[..., 1, -3:] += torch.tensor([0.4, -0.2, 0.1])
+    changed = scorer(replace(actor, candidate_pose_relative_root=PoseTW(changed_pose)))
+    unchanged_rows = torch.ones_like(actor.candidate_mask)
+    unchanged_rows[..., 1] = False
+
+    assert torch.equal(changed.conditional_q[unchanged_rows], baseline.conditional_q[unchanged_rows])
+    assert torch.equal(
+        changed.feasibility_logits[unchanged_rows],
+        baseline.feasibility_logits[unchanged_rows],
+    )
+
+
+def test_qh_s1_ignores_future_payload_values_and_preserves_candidate_equivariance() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _s1_scorer()
+    baseline = scorer(actor)
+    inactive = ~prefix.prefix_mask
+    future_depth = prefix.depth_m.clone()
+    future_depth[inactive[..., None, None].expand_as(future_depth)] = 60000.0
+    future_camera = prefix.camera.tensor().clone()
+    future_camera[inactive] = 1.0e6
+    future_pose = prefix.camera_pose_relative_root.tensor().clone()
+    future_pose[inactive] = -1.0e6
+    changed = scorer(
+        replace(
+            actor,
+            selected_observation_prefix=replace(
+                prefix,
+                depth_m=future_depth,
+                camera=CameraTW(future_camera),
+                camera_pose_relative_root=PoseTW(future_pose),
+            ),
+        )
+    )
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+    permuted_output = scorer(permuted)
+
+    assert torch.equal(changed.conditional_q, baseline.conditional_q)
+    assert torch.equal(changed.feasibility_logits, baseline.feasibility_logits)
+    torch.testing.assert_close(
+        permuted_output.conditional_q,
+        baseline.conditional_q[:, :, permutation],
+        rtol=0.0,
+        atol=1e-6,
+    )
+    torch.testing.assert_close(
+        permuted_output.feasibility_logits,
+        baseline.feasibility_logits[:, :, permutation],
+        rtol=0.0,
+        atol=1e-6,
+    )
+
+
+def test_qh_s1_configuration_is_profile_and_semantics_bound() -> None:
+    scene_encoder = QhSelectedSurfacePointSceneEncoderConfig()
+
+    with pytest.raises(ValueError, match="representation_semantics"):
+        TargetFiniteHorizonScorerConfig(
+            experiment_profile="qh_cfplus_gt_depth_v1",
+            scene_encoder=scene_encoder,
+        )
+    with pytest.raises(ValueError, match="requires qh_cfplus_gt_depth_v1"):
+        TargetFiniteHorizonScorerConfig(
+            representation_semantics="root_moments_plus_selected_surface_points_identity_start_v1",
+            scene_encoder=scene_encoder,
+        )
+
+
+def test_qh_legacy_s1_identity_is_readable_but_not_reusable() -> None:
+    """The ambiguous historical discriminator remains inspection-only."""
+
+    config = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        experiment_profile="qh_cfplus_gt_depth_v1",
+        representation_semantics="root_moments_plus_selected_surface_points_v1",
+        scene_encoder=QhLegacySelectedSurfacePointSceneEncoderConfig(
+            pixel_stride=1,
+            point_hidden_dim=16,
+        ),
+    )
+    scorer = config.setup_target()
+
+    scorer.validate_artifact_state(require_publishable=False)
+    with pytest.raises(ValueError, match="inspection-only"):
+        scorer.validate_artifact_state(require_publishable=True)
+
+
+def test_qh_cf0_rejects_any_selected_observation_carrier() -> None:
+    actor = _cfplus_actor()
+
+    with pytest.raises(ValueError, match="qh_cf0_v1 rejects privileged selected observations"):
+        _scorer()(actor)
+
+
+def test_qh_cfplus_rejects_missing_or_wrong_source_carrier() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    scorer = _cfplus_scorer()
+
+    with pytest.raises(ValueError, match="requires a causal CF-GT prefix"):
+        scorer(replace(actor, selected_observation_prefix=None))
+    with pytest.raises(ValueError, match="source_protocol='cf_gt'"):
+        scorer(replace(actor, selected_observation_prefix=replace(prefix, source_protocol="other")))
+
+
+@pytest.mark.parametrize("field", ["depth", "valid", "camera", "pose", "mask"])
+def test_qh_cfplus_rejects_malformed_selected_observation_axes(field: str) -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    if field == "depth":
+        changed = replace(prefix, depth_m=prefix.depth_m[..., :-1])
+    elif field == "valid":
+        changed = replace(prefix, valid_mask=prefix.valid_mask[..., :-1])
+    elif field == "camera":
+        changed = replace(prefix, camera=CameraTW(prefix.camera.tensor()[:, :-1]))
+    elif field == "pose":
+        changed = replace(
+            prefix,
+            camera_pose_relative_root=PoseTW(prefix.camera_pose_relative_root.tensor()[:, :-1]),
+        )
+    else:
+        changed = replace(prefix, prefix_mask=prefix.prefix_mask[..., :-1])
+
+    with pytest.raises(ValueError, match="shape|match"):
+        _cfplus_scorer()(replace(actor, selected_observation_prefix=changed))
+
+
+def test_qh_cfplus_rejects_future_selected_observation_support() -> None:
+    actor = _cfplus_actor()
+    prefix = actor.selected_observation_prefix
+    assert prefix is not None
+    future = prefix.prefix_mask.clone()
+    future[:, 0, 0] = True
+
+    with pytest.raises(ValueError, match="strictly causal"):
+        _cfplus_scorer()(replace(actor, selected_observation_prefix=replace(prefix, prefix_mask=future)))
 
 
 def test_qh_scorer_returns_conditional_q_and_feasibility_logits() -> None:
@@ -123,6 +568,49 @@ def test_qh_coral_scorer_preserves_scalar_contract_and_attaches_thresholds() -> 
     )
     assert bool((output.conditional_q[materialized] >= -1.0).all())
     assert bool((output.conditional_q[materialized] <= 1.0).all())
+    torch.testing.assert_close(
+        output.conditional_q,
+        torch.tensor(
+            [
+                [
+                    [-0.0339741707, -0.0324316025, -0.0328121185, -0.0324127674],
+                    [-0.0326795280, -0.0316047966, -0.0311655998, -0.0325159729],
+                    [-0.0325441658, -0.0309200287, -0.0310328007, -0.0298169851],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=_FLOAT32_GOLDEN_ATOL,
+    )
+    torch.testing.assert_close(
+        output.value_auxiliary.logits,
+        torch.tensor(
+            [
+                [
+                    [
+                        [-0.0679745078, -0.0679745078],
+                        [-0.0648860186, -0.0648860186],
+                        [-0.0656477511, -0.0656477511],
+                        [-0.0648483336, -0.0648483336],
+                    ],
+                    [
+                        [-0.0653823242, -0.0653823242],
+                        [-0.0632306784, -0.0632306784],
+                        [-0.0623514652, -0.0623514652],
+                        [-0.0650548264, -0.0650548264],
+                    ],
+                    [
+                        [-0.0651115626, -0.0651115626],
+                        [-0.0618599206, -0.0618599206],
+                        [-0.0620854273, -0.0620854273],
+                        [-0.0596516877, -0.0596516877],
+                    ],
+                ]
+            ]
+        ),
+        rtol=0.0,
+        atol=_FLOAT32_GOLDEN_ATOL,
+    )
 
 
 def test_qh_scorer_explicit_remaining_horizon_matches_default_query() -> None:
@@ -258,6 +746,29 @@ def test_qh_scorer_candidate_permutation_preserves_both_output_heads() -> None:
     )
 
 
+def test_qh_ordered_history_preserves_candidate_permutation_equivariance() -> None:
+    actor = _actor(steps=4)
+    scorer = _ordered_history_scorer()
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+
+    expected = scorer(actor)
+    actual = scorer(permuted)
+
+    assert torch.allclose(actual.conditional_q, expected.conditional_q[:, :, permutation], atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        actual.feasibility_logits,
+        expected.feasibility_logits[:, :, permutation],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+
+
 def test_qh_coral_scorer_candidate_permutation_preserves_thresholds() -> None:
     actor = _actor()
     scorer = _coral_scorer()
@@ -309,6 +820,70 @@ def test_qh_scorer_is_candidate_permutation_equivariant() -> None:
     actual = scorer(permuted).conditional_q
 
     assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+
+
+def test_qh_a0_identical_feature_control_preserves_public_candidate_invariants() -> None:
+    actor = _actor()
+    torch.manual_seed(11)
+    scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        state_fusion=QhIndependentMlpStateFusionConfig(),
+    ).setup_target()
+    scorer.eval()
+    permutation = torch.tensor([2, 0, 3, 1])
+    permuted = replace(
+        actor,
+        candidate_pose_relative_root=PoseTW(actor.candidate_pose_relative_root.tensor()[:, :, permutation]),
+        candidate_mask=actor.candidate_mask[:, :, permutation],
+        action_mask=actor.action_mask[:, :, permutation],
+    )
+    changed_action_mask = actor.action_mask.clone()
+    changed_action_mask[..., 0] = ~changed_action_mask[..., 0]
+
+    expected = scorer(actor)
+    actual = scorer(permuted)
+    mask_changed = scorer(replace(actor, action_mask=changed_action_mask))
+    candidate_mask = actor.candidate_mask.clone()
+    candidate_mask[..., -1] = False
+    valid_mask = actor.action_mask.clone()
+    valid_mask[..., -1] = False
+    masked = replace(actor, candidate_mask=candidate_mask, action_mask=valid_mask)
+    mutated_pose = actor.candidate_pose_relative_root.tensor().clone()
+    mutated_pose[..., -1, :] = 1.0e6
+    invalid_changed = scorer(replace(masked, candidate_pose_relative_root=PoseTW(mutated_pose)))
+    invalid_baseline = scorer(masked)
+
+    assert torch.allclose(actual.conditional_q, expected.conditional_q[:, :, permutation], atol=1e-6, rtol=1e-6)
+    assert torch.allclose(
+        actual.feasibility_logits,
+        expected.feasibility_logits[:, :, permutation],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert torch.equal(mask_changed.conditional_q, expected.conditional_q)
+    assert torch.equal(mask_changed.feasibility_logits, expected.feasibility_logits)
+    assert torch.allclose(
+        invalid_changed.conditional_q[candidate_mask],
+        invalid_baseline.conditional_q[candidate_mask],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert torch.allclose(
+        invalid_changed.feasibility_logits[candidate_mask],
+        invalid_baseline.feasibility_logits[candidate_mask],
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert torch.equal(
+        invalid_changed.conditional_q[~candidate_mask],
+        torch.zeros_like(invalid_changed.conditional_q[~candidate_mask]),
+    )
+    assert torch.equal(
+        invalid_changed.feasibility_logits[~candidate_mask],
+        torch.zeros_like(invalid_changed.feasibility_logits[~candidate_mask]),
+    )
 
 
 def test_qh_scorer_invalid_rows_are_isolated() -> None:
@@ -383,35 +958,6 @@ def test_qh_scorer_rejects_nonfinite_active_pose_rows() -> None:
     extents[..., 0] = float("inf")
     with pytest.raises(ValueError, match="active target extents"):
         scorer(replace(actor, target_extents=extents))
-
-
-def test_qh_scene_summary_is_root_frame_invariant_and_tracks_raw_support() -> None:
-    actor = _actor()
-    scorer = _scorer()
-    points = actor.vin_snippet.points_world.clone()
-    root = actor.root_pose_world.tensor().clone()
-    root[0, -3:] = torch.tensor([2.0, -1.0, 0.5])
-    shifted = replace(
-        actor,
-        root_pose_world=PoseTW(root),
-        vin_snippet=replace(actor.vin_snippet, points_world=points + root[:, -3:]),
-    )
-    assert torch.allclose(scorer._scene_summary(actor), scorer._scene_summary(shifted))
-
-    empty = replace(actor, vin_snippet=replace(actor.vin_snippet, lengths=torch.tensor([0])))
-    zero = replace(actor, vin_snippet=replace(actor.vin_snippet, points_world=torch.zeros_like(points)))
-    empty_summary = scorer._scene_summary(empty)
-    zero_summary = scorer._scene_summary(zero)
-    assert empty_summary[0, -2:].tolist() == [0.0, 0.0]
-    assert zero_summary[0, -2:].tolist() == [1.0, 1.0]
-
-
-def test_qh_scene_summary_rejects_out_of_range_point_lengths() -> None:
-    actor = _actor()
-    scorer = _scorer()
-    invalid = replace(actor, vin_snippet=replace(actor.vin_snippet, lengths=torch.tensor([99])))
-    with pytest.raises(ValueError, match=r"lengths must be in \[0,"):
-        scorer._scene_summary(invalid)
 
 
 def test_qh_candidate_relative_transforms_compose_in_the_declared_direction() -> None:
@@ -490,6 +1036,43 @@ def test_qh_feasibility_is_independent_of_target_budget_and_requested_horizon() 
     assert torch.equal(changed, baseline)
 
 
+def test_qh_ordered_history_is_sensitive_only_to_noncurrent_prefix_order() -> None:
+    actor = _actor(steps=4)
+    history = actor.history_pose_relative_root.tensor().clone()
+    history[:, 3, [0, 1]] = history[:, 3, [1, 0]]
+    permuted = replace(actor, history_pose_relative_root=PoseTW(history))
+
+    torch.manual_seed(11)
+    mean_scorer = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        history_encoder=QhMeanPoolHistoryEncoderConfig(),
+    ).setup_target()
+    mean_scorer.eval()
+    ordered_scorer = _ordered_history_scorer()
+
+    assert torch.allclose(
+        mean_scorer(actor).conditional_q,
+        mean_scorer(permuted).conditional_q,
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert not torch.allclose(
+        ordered_scorer(actor).conditional_q[:, 3],
+        ordered_scorer(permuted).conditional_q[:, 3],
+    )
+
+
+def test_qh_scorer_rejects_incomplete_realized_history_prefix() -> None:
+    actor = _actor(steps=4)
+    history_mask = actor.history_mask.clone()
+    history_mask[:, 3, 1] = False
+
+    with pytest.raises(ValueError, match="complete strictly causal prefix"):
+        _ordered_history_scorer()(replace(actor, history_mask=history_mask))
+
+
 def test_qh_scorer_backward_updates_parameters_only() -> None:
     actor = _actor()
     scorer = _scorer()
@@ -504,7 +1087,7 @@ def test_qh_scorer_backward_updates_parameters_only() -> None:
 
 
 def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
-    config = TargetFiniteHorizonScorerConfig(hidden_dim=32, attention_heads=4, max_horizon=4)
+    config = TargetFiniteHorizonScorerConfig(hidden_dim=32, max_horizon=4)
 
     assert config.model_dump()["horizon_query_semantics"] == "bounded_scalar_v1"
     assert config.target_type is TargetFiniteHorizonScorer
@@ -517,6 +1100,87 @@ def test_qh_scorer_config_is_factory_and_rejects_profile_mismatch() -> None:
         assert "EVL" in str(error)
     else:  # pragma: no cover - assertion branch
         raise AssertionError("scorer accepted an actor without required EVL context")
+
+
+@pytest.mark.parametrize(
+    ("state_fusion", "history_encoder"),
+    [
+        (QhIndependentMlpStateFusionConfig(), None),
+        (QhCrossAttentionStateFusionConfig(attention_heads=2), QhMeanPoolHistoryEncoderConfig()),
+        (
+            QhCrossAttentionStateFusionConfig(attention_heads=2),
+            QhCausalTransformerHistoryEncoderConfig(attention_heads=2),
+        ),
+    ],
+)
+def test_qh_scorer_config_round_trips_discriminated_modules(state_fusion, history_encoder) -> None:
+    config = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        max_horizon=4,
+        state_fusion=state_fusion,
+        history_encoder=history_encoder,
+    )
+
+    restored = TargetFiniteHorizonScorerConfig.model_validate(config.model_dump_jsonable())
+
+    assert restored == config
+    assert type(restored.state_fusion) is type(state_fusion)
+    assert type(restored.history_encoder) is type(history_encoder)
+
+
+def test_qh_default_history_preserves_legacy_state_and_explicit_identity() -> None:
+    default_config = TargetFiniteHorizonScorerConfig(hidden_dim=32, dropout=0.0, max_horizon=4)
+    explicit_config = TargetFiniteHorizonScorerConfig(
+        hidden_dim=32,
+        dropout=0.0,
+        max_horizon=4,
+        history_encoder=QhMeanPoolHistoryEncoderConfig(),
+    )
+    assert "history_encoder" not in default_config.model_dump_jsonable()
+    assert explicit_config.model_dump_jsonable()["history_encoder"]["kind"] == "mean_pool_v1"
+    assert stable_config_hash(default_config) != stable_config_hash(explicit_config)
+
+    torch.manual_seed(17)
+    default = default_config.setup_target()
+    torch.manual_seed(17)
+    explicit = explicit_config.setup_target()
+    assert default.state_dict().keys() == explicit.state_dict().keys()
+    assert not any(key.startswith("history_encoder.") for key in default.state_dict())
+    assert all(torch.equal(default.state_dict()[key], explicit.state_dict()[key]) for key in default.state_dict())
+    actor = _actor(steps=4)
+    default.eval()
+    explicit.eval()
+    assert torch.equal(default(actor).conditional_q, explicit(actor).conditional_q)
+
+
+def test_qh_scorer_config_rejects_incompatible_attention_width() -> None:
+    with pytest.raises(ValueError, match="divisible"):
+        TargetFiniteHorizonScorerConfig(
+            hidden_dim=31,
+            state_fusion=QhCrossAttentionStateFusionConfig(attention_heads=4),
+        )
+
+
+def test_qh_scorer_config_validates_complete_history_pose_width() -> None:
+    """H1 divisibility includes a concatenated raw pose residual."""
+
+    pose_encoder = R6dLffPoseEncoderConfig(
+        pose_encoder_lff=LearnableFourierFeaturesConfig(
+            input_dim=9,
+            fourier_dim=64,
+            hidden_dim=128,
+            output_dim=32,
+            include_input=True,
+        ),
+    )
+    assert pose_encoder.out_dim == 41
+
+    with pytest.raises(ValueError, match="pose-encoder output width must be divisible"):
+        TargetFiniteHorizonScorerConfig(
+            hidden_dim=32,
+            pose_encoder=pose_encoder,
+            history_encoder=QhCausalTransformerHistoryEncoderConfig(attention_heads=4),
+        )
 
 
 def test_qh_scorer_module_has_no_oracle_or_supervision_dependency() -> None:

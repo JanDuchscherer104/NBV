@@ -60,7 +60,7 @@ class LearnableFourierFeatures(nn.Module):
     @property
     def out_dim(self) -> int:
         """Return the emitted feature dimension, including raw inputs when enabled."""
-        return (self.input_dim if self.include_input else 0) + self.output_dim
+        return int(self.config.out_dim)
 
     def forward(self, x: Tensor) -> Tensor:
         """Encode vectors with learned sinusoidal features.
@@ -91,6 +91,21 @@ class LearnableFourierFeaturesConfig(TargetConfig[LearnableFourierFeatures]):
     def target_type(self) -> type[LearnableFourierFeatures]:
         """Factory target for `aria_nbv.utils.base_config.BaseConfig.setup_target`."""
         return LearnableFourierFeatures
+
+    @property
+    def out_dim(self) -> int:
+        """Return the width emitted by this configuration.
+
+        ``output_dim`` names only the learned Fourier branch. When
+        :attr:`include_input` is enabled, the raw coordinate vector is a second
+        feature path concatenated to that branch, so downstream attention and
+        projection contracts must use ``input_dim + output_dim``. Keeping the
+        calculation on the immutable configuration lets incompatible widths
+        fail before parameter allocation rather than during the first forward
+        pass.
+        """
+
+        return int(self.output_dim + (self.input_dim if self.include_input else 0))
 
     input_dim: int = Field(default=6, gt=0)
     """Input dimensionality (default: 6 for SE(3) relative pose as translation + so(3) log)."""

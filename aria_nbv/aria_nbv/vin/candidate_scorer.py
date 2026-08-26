@@ -1,16 +1,19 @@
 """Structural scorer contract for VIN-compatible candidate models.
 
-This module names the narrow interface that `aria_nbv.lightning.lit_module`
-needs from a candidate scorer. The current implementation is
+This module provides the narrow one-step interface that
+`aria_nbv.lightning.lit_module` needs from a candidate scorer, its prediction
+protocol, and configuration-to-objective classification. The current
+implementation is
 `aria_nbv.vin.models.scene_myopic.VinModelV3`, the seminar-era one-step RRI scorer. Future
 target-conditioned myopic scorers should implement the same forward surface
 when they are trainable through the existing Lightning loss path.
 
 The contract deliberately keeps rollout value targets out of
-`aria_nbv.vin.types.VinPrediction`. Multi-step labels such as endpoint gain,
-selected-transition returns, and hard valid-action masks belong to
-`aria_nbv.rollouts` stores and metrics until a concrete Q_H scorer owns that
-training objective.
+`aria_nbv.vin.types.VinPrediction`. Multi-step scoring uses the separate
+`aria_nbv.vin.models.target_finite_horizon.TargetFiniteHorizonScorer` contract,
+whose structured output is optimized by `aria_nbv.lightning.qh_module`.
+Endpoint gain, selected-transition returns, and authoritative hard masks remain
+owned outside this one-step protocol.
 """
 
 from __future__ import annotations
@@ -41,9 +44,9 @@ class CandidateScorer(Protocol):
     Implementers:
         `aria_nbv.vin.models.scene_myopic.VinModelV3` is the current one-step scorer.
         Future target-conditioned myopic scorers can satisfy this protocol when
-        they still emit per-candidate ordinal logits. Finite-horizon Q_H models
-        should only reuse it if their training objective remains row-local and
-        compatible with `VinPrediction`.
+        they still emit per-candidate ordinal logits. Finite-horizon QH scorers
+        use their dedicated actor input, structured output, and Lightning
+        objective instead of this protocol.
     """
 
     head_coral: Any

@@ -110,6 +110,24 @@ return {
       description = "Per-candidate row feature assembled from pose, relation, support, validity, provenance, and history descriptors.",
       thesis_list = true,
     },
+    ["model.history_pose_feature"] = {
+      tex = "\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}",
+      typst = "#symb.model.history_pose_feature",
+      description = "Previously selected pose j encoded from the current camera at decision state t.",
+      thesis_list = true,
+    },
+    ["model.history_relative_age"] = {
+      tex = "a_{t,j}^{\\mathrm{hist}}",
+      typst = "#symb.model.history_relative_age",
+      description = "Normalized relative age of selected pose j at decision state t; the immediate predecessor has age zero.",
+      thesis_list = true,
+    },
+    ["model.history_token"] = {
+      tex = "\\boldsymbol{h}_t^{\\mathrm{hist}}",
+      typst = "#symb.model.history_token",
+      description = "Fixed-width causal selected-pose history token supplied to scorer state fusion.",
+      thesis_list = true,
+    },
     ["model.target_token"] = {
       tex = "\\boldsymbol{h}_e^{\\mathrm{tgt}}",
       typst = "#symb.model.target_token",
@@ -314,6 +332,12 @@ return {
       description = "Fixed continuous-Q representative used to decode one CORAL class.",
       thesis_list = true,
     },
+    ["rl.exact_q2_target"] = {
+      tex = "y_t^{(2,\\mathrm{exact})}",
+      typst = "#symb.rl.exact_q2_target",
+      description = "Exact two-step fitted-Q control using factual dense successor one-step rewards.",
+      thesis_list = true,
+    },
     ["rl.feasibility_label_mask"] = {
       tex = "m_{t,i}^{F}",
       typst = "#symb.rl.feasibility_label_mask",
@@ -342,6 +366,12 @@ return {
       tex = "\\mathcal{M}_{\\mathrm{NBV}}",
       typst = "#symb.rl.mdp_nbv",
       description = "Target-conditioned finite-candidate NBV decision process.",
+      thesis_list = true,
+    },
+    ["rl.q2_recursion_error"] = {
+      tex = "\\varepsilon_t^{(2)}",
+      typst = "#symb.rl.q2_recursion_error",
+      description = "Absolute learned-recursion target error against the exact two-step control.",
       thesis_list = true,
     },
     ["rl.q_label_mask"] = {
@@ -784,10 +814,10 @@ return {
       description = "",
       thesis_list = false,
     },
-    ["model.qh_candidate_state_cross_attention"] = {
-      tex = "\\boldsymbol{u}_{t,i}=\\operatorname{CrossAttn}_{\\theta}(\\boldsymbol{x}_{t,i},\\{\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\operatorname{Emb}(t),\\operatorname{Emb}(H),\\boldsymbol{b}_t\\})",
-      typst = "#eqs.model.qh_candidate_state_cross_attention",
-      description = "",
+    ["model.qh_cfplus_h0_control"] = {
+      tex = "\\operatorname{Struct}(\\boldsymbol{o}_t)=\\operatorname{Struct}(\\boldsymbol{o}'_t)\\Rightarrow f_\\theta^{\\mathrm{CF{+}-H0}}(s_t^{\\mathrm{S0-pose}},\\boldsymbol{o}_t,\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)=f_\\theta^{\\mathrm{CF{+}-H0}}(s_t^{\\mathrm{S0-pose}},\\boldsymbol{o}'_t,\\boldsymbol{\\phi}_e,\\{q_{t,i}\\}_{i=1}^{N_q},h)",
+      typst = "#eqs.model.qh_cfplus_h0_control",
+      description = "Source-matched CF+ H0 validates selected-observation structure while remaining exactly invariant to its numeric payload.",
       thesis_list = false,
     },
     ["model.qh_frozen_interface"] = {
@@ -796,10 +826,28 @@ return {
       description = "Frozen scalar requested-horizon scorer interface.",
       thesis_list = false,
     },
+    ["model.qh_history_controls"] = {
+      tex = "\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}=\\operatorname{PoseEnc}(T_{c_t\\leftarrow c_j}),\\ a_{t,j}^{\\mathrm{hist}}=(t-1-j)/H_{\\max};\\quad \\boldsymbol{h}_t^{\\mathrm{H0}}=\\operatorname{HistProj}(\\operatorname{Mean}_{j<t}\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}),\\quad \\boldsymbol{h}_t^{\\mathrm{H1}}=\\operatorname{HistProj}(\\operatorname{LastValid}(\\operatorname{CausalTransformer}([\\boldsymbol{e}_{\\emptyset},\\{\\boldsymbol{p}_{t,j}^{\\mathrm{hist}}+g(a_{t,j}^{\\mathrm{hist}})\\}_{j<t}])))",
+      typst = "#eqs.model.qh_history_controls",
+      description = "Checkpoint-compatible masked-mean H0 and exploratory ordered causal-transformer H1 selected-pose history controls.",
+      thesis_list = false,
+    },
     ["model.qh_input_contract"] = {
       tex = "\\mathcal{I}_{t,e}=(\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{H}_t,\\boldsymbol{b}_t,t,H,\\{\\boldsymbol{x}_{t,i},\\boldsymbol{e}_{a\\mid i}^{\\mathrm{rel}},m_{t,i},\\boldsymbol{\\rho}_{t,i}\\}_{i=1}^{N_q})",
       typst = "#eqs.model.qh_input_contract",
       description = "",
+      thesis_list = false,
+    },
+    ["model.qh_s1_selected_surface"] = {
+      tex = "\\boldsymbol{p}_{t,j,u}^{c_t}=T_{c_t\\leftarrow r}T_{r\\leftarrow c_j}\\pi^{-1}(u,D_{j,u}^{\\mathrm{sel}}),\\ j<t;\\quad \\boldsymbol{z}_{t,j,u}=\\phi_{\\mathrm{pt}}(\\boldsymbol{p}_{t,j,u}^{c_t}/\\sigma_{\\mathrm{xyz}});\\quad \\boldsymbol{g}_t^{\\mathrm{S1}}=[\\operatorname{Mean}\\boldsymbol{z},\\operatorname{Max}\\boldsymbol{z},\\rho_t^{\\mathrm{present}},\\rho_t^{\\mathrm{pixel}},\\rho_t^{\\mathrm{view}}];\\quad \\boldsymbol{\\Phi}_t^{\\mathrm{S1}}=\\boldsymbol{\\Phi}_t^{\\mathrm{root}}+W_{\\mathrm{pt}}\\boldsymbol{g}_t^{\\mathrm{S1}},\\quad W_{\\mathrm{pt}}^{(0)}=0",
+      typst = "#eqs.model.qh_s1_selected_surface",
+      description = "Fixed-width identity-start privileged S1 selected-surface residual over current-camera point sets.",
+      thesis_list = false,
+    },
+    ["model.qh_state_fusion_controls"] = {
+      tex = "\\boldsymbol{Z}_t=(\\boldsymbol{\\Phi}_t^{\\mathrm{scene}},\\boldsymbol{h}_e^{\\mathrm{tgt}},\\boldsymbol{h}_t^{\\mathrm{hist}},\\operatorname{Emb}(b_t/H_{\\max}),\\operatorname{Emb}(h/H_{\\max})),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A0}}=\\operatorname{MLP}_{\\mathrm{A0}}([\\boldsymbol{x}_{t,i};\\operatorname{vec}(\\boldsymbol{Z}_t)]),\\quad \\boldsymbol{c}_{t,i}^{\\mathrm{A1}}=\\operatorname{CrossAttn}_{\\mathrm{A1}}(\\boldsymbol{x}_{t,i},\\boldsymbol{Z}_t,\\boldsymbol{Z}_t)",
+      typst = "#eqs.model.qh_state_fusion_controls",
+      description = "Feature-matched independent-row MLP and candidate-to-state attention controls.",
       thesis_list = false,
     },
     ["model.qh_target_token"] = {
@@ -926,6 +974,18 @@ return {
       tex = "y_t^{(h,e)}=r_t^e+\\gamma B_t^{(h,e)}",
       typst = "#eqs.rl.qh_doubleq_target",
       description = "",
+      thesis_list = false,
+    },
+    ["rl.qh_exact_q2_error"] = {
+      tex = "\\varepsilon_t^{(2)}=|y_t^{(2,\\mathrm{recursive})}-y_t^{(2,\\mathrm{exact})}|\\leq\\tau_{\\mathrm{abs}}+\\tau_{\\mathrm{rel}}|y_t^{(2,\\mathrm{exact})}|",
+      typst = "#eqs.rl.qh_exact_q2_error",
+      description = "Versioned absolute-plus-relative learned-recursion agreement gate.",
+      thesis_list = false,
+    },
+    ["rl.qh_exact_q2_target"] = {
+      tex = "y_t^{(2,\\mathrm{exact})}=r_t^e+\\gamma_t\\max_{j:m_{t+1,j}^{\\mathrm{train}}=1}r_{t+1,j}^e",
+      typst = "#eqs.rl.qh_exact_q2_target",
+      description = "Factual dense-successor exact-Q2 control.",
       thesis_list = false,
     },
     ["rl.qh_masked_argmax"] = {

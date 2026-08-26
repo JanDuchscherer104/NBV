@@ -1,4 +1,12 @@
-"""Immutable training and inference composition for finite-horizon Q_H."""
+"""Immutable finite-horizon QH training, certification, and inference.
+
+This module owns experiment-level composition of validated stage datasets,
+scorer construction, masked
+Double-Q optimization, deterministic checkpoint selection, content-addressed
+receipts, atomic bundle publication, explicit held-out evaluation, and bounded
+exact-``Q_2`` certification. Scorer architecture stays in :mod:`aria_nbv.vin`;
+factual replay and actor joins remain with their data owners.
+"""
 
 from __future__ import annotations
 
@@ -18,9 +26,12 @@ import pytorch_lightning as pl
 import torch
 from pydantic import Field
 
+from ..data_handling.qh_contracts import validate_experiment_profile
 from ..data_handling.qh_data import QhDatasetConfig
 from ..data_handling.qh_data.views import QhActorStateContract
+from ..rollouts.inspection import oracle_headroom_evidence
 from ..rollouts.qh_reader import QhDataContract
+from ..rollouts.zarr_store import RolloutZarrStoreReader
 from ..utils import BaseConfig, TargetConfig
 from ..utils.fingerprints import stable_config_hash, stable_msgspec_hash
 from ..vin.models.target_finite_horizon import (
@@ -32,11 +43,18 @@ from .lit_trainer_callbacks import TrainerCallbacksConfig
 from .lit_trainer_factory import TrainerFactoryConfig
 from .qh_datamodule import QhDataModule, QhLearningContract
 from .qh_module import QhLightningModule, QhLightningModuleConfig
+from .qh_q2_certification import (
+    QhDecoderSupport,
+    QhExactQ2CertificationSpec,
+    QhExactQ2Certifier,
+)
 
 _MANIFEST_FILENAME = "manifest.json"
 _SCORER_STATE_FILENAME = "scorer-state.pt"
 _TRAINING_RECEIPT_FILENAME = "training-receipt.json"
 _SELECTION_RECEIPT_FILENAME = "checkpoint-selection-receipt.json"
+_PYTORCH3D_VCS_URL = "https://github.com/facebookresearch/pytorch3d.git"
+_PYTORCH3D_VCS_COMMIT = "b6a77ad7aaf41ed90fca80ce6a2bac3c462a7881"
 _IDENTITY_FIELDS = {
     "actor_state_contract",
     "actor_state_contract_hash",
@@ -50,16 +68,17 @@ _IDENTITY_FIELDS = {
     "warm_start_parent_manifest_sha256",
     "action_mask_semantics",
     "representation_semantics",
+    "trained_horizon_support",
     "seed",
 }
 
 
 @dataclass(frozen=True, slots=True)
 class QhCheckpointSelectionSpec:
-    """Closed V1 validation-checkpoint selection rule."""
+    """Closed validation-checkpoint selection rule."""
 
     monitor: Literal["val/loss"] = "val/loss"
-    """Existing admitted-row-weighted Q_H validation metric."""
+    """Equal-horizon Q_H validation metric under the bound learning contract."""
 
     mode: Literal["min"] = "min"
     """Validation loss is minimized."""
@@ -147,6 +166,43 @@ class QhHeldOutEvaluationResult:
     """Digest of :attr:`receipt_path`."""
 
 
+@dataclass(frozen=True, slots=True)
+class QhExactQ2CertificationRequest:
+    """Immutable request for bounded held-out learned-recursion evidence.
+
+    Args:
+        bundle: Verified scorer bundle whose frozen weights are evaluated.
+        test: Exact held-out dataset configuration already bound by the bundle
+            manifest; a different population is rejected.
+        spec: Numeric tolerances and deterministic stratified selection bounds.
+        output_receipt_path: New JSON destination; existing paths are rejected.
+        device: Torch device used for scorer evaluation. Dataset census and
+            materialization remain CPU-owned until each selected batch moves.
+        headroom_store_dir: Optional validated rollout store from which the
+            existing exact-role oracle-headroom diagnostic is summarized. This
+            diagnostic is a persisted terminal-step proxy, not independent
+            endpoint evaluation, and can never satisfy the longer-horizon gate.
+    """
+
+    bundle: QhInferenceBundleRef
+    test: QhDatasetConfig
+    spec: QhExactQ2CertificationSpec
+    output_receipt_path: Path
+    device: str = "cpu"
+    headroom_store_dir: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class QhExactQ2CertificationResult:
+    """Immutable reference to one exact-``Q_2`` certification receipt."""
+
+    receipt_path: Path
+    """JSON receipt containing bound census, row, and gate evidence."""
+
+    receipt_sha256: str
+    """Digest of :attr:`receipt_path`."""
+
+
 def _default_qh_trainer() -> TrainerFactoryConfig:
     return TrainerFactoryConfig(
         use_wandb=False,
@@ -168,7 +224,7 @@ class QhExperimentConfig(TargetConfig["QhExperiment"]):
     """Compose the scorer, optimizer module, data loaders, and trainer."""
 
     scorer: TargetFiniteHorizonScorerConfig = Field(default_factory=TargetFiniteHorizonScorerConfig)
-    """Closed production scorer configuration persisted in every bundle."""
+    """Actor-only scorer config; bundle publication admits deployable CF0 only."""
 
     module: QhLightningModuleConfig
     """Optimizer and Double-Q policy; contract hashes are rebound from admitted data during fit."""
@@ -199,13 +255,42 @@ class QhExperimentConfig(TargetConfig["QhExperiment"]):
 
 
 class QhExperiment:
-    """Fit, publish, verify, and reconstruct immutable Q_H bundles."""
+    """Fit, publish, verify, and reconstruct immutable QH bundles.
+
+    A fit admits nonempty scene-disjoint train, validation, and test datasets,
+    constructs a scorer and masked Double-Q module, selects the minimum
+    validation-loss checkpoint with deterministic tie breaking, and atomically
+    publishes scorer weights plus content-bound receipts. Held-out evaluation
+    and exact-``Q_2`` certification are explicit later requests; fit never uses
+    test metrics for checkpoint selection.
+
+    Published bundles contain inference dependencies rather than resumable
+    training state. :meth:`load_for_inference` verifies hashes, configuration,
+    implementation identity, calibration support, representation semantics,
+    and trained horizons before returning an evaluation-mode scorer.
+    """
 
     def __init__(self, config: QhExperimentConfig) -> None:
         self.config = config
 
     def fit(self, request: QhFitRequest) -> QhFitResult:
-        """Train from immutable stages and atomically publish one new bundle."""
+        """Train from immutable stages and atomically publish one new bundle.
+
+        Args:
+            request: Stage configurations, optional verified warm-start weights,
+                deterministic checkpoint rule, seed, and a new output directory.
+
+        Returns:
+            Bundle reference plus hashed training and checkpoint-selection
+            receipts. The output directory becomes visible only after complete
+            publication.
+
+        Raises:
+            FileExistsError: If the requested immutable destination exists.
+            ValueError: If stage, profile, horizon, geometry, warm-start, or
+                checkpoint identities are incompatible.
+            RuntimeError: If fitting produces no realized horizon support.
+        """
 
         output = request.output_bundle_dir.expanduser().resolve()
         if output.exists():
@@ -242,6 +327,7 @@ class QhExperiment:
                     "root_evl_profile": train.actor_state_contract.root_evl_profile,
                     "selected_observation_protocol": train.actor_state_contract.selected_observation_protocol,
                     "experiment_profile": self.config.scorer.experiment_profile,
+                    "max_horizon": self.config.scorer.max_horizon,
                     "action_mask_semantics": data.learning_contract.data_contract.action_mask_semantics,
                     "actor_state_contract_hash": data.actor_state_contract_hash,
                     "learning_contract_hash": data.learning_contract_hash,
@@ -249,6 +335,7 @@ class QhExperiment:
                 },
             )
             scorer = self.config.scorer.setup_target()
+            scorer.validate_artifact_state(require_publishable=True)
             module = QhLightningModule(module_config, scorer=scorer)
             warm_start_parent = self._warm_start_weights(
                 request.warm_start_from,
@@ -267,6 +354,16 @@ class QhExperiment:
             trainer_config = self._trainer_config(temporary, request.checkpoint_selection)
             trainer = trainer_config.setup_target()
             trainer.fit(module, datamodule=data)
+            trained_horizon_support = {
+                str(horizon): {
+                    "state_count": int(module.training_horizon_state_count[horizon - 1].item()),
+                    "candidate_count": int(module.training_horizon_candidate_count[horizon - 1].item()),
+                }
+                for horizon in range(1, module_config.max_horizon + 1)
+                if int(module.training_horizon_state_count[horizon - 1].item()) > 0
+            }
+            if not trained_horizon_support:
+                raise RuntimeError("Q_H fit completed without any realized fitted-horizon support.")
             selected_checkpoint, selected_validation_loss, selected_optimizer_updates = self._selected_checkpoint(
                 temporary
             )
@@ -278,11 +375,12 @@ class QhExperiment:
             if int(module.optimizer_updates.item()) != selected_optimizer_updates:
                 raise ValueError("Selected Q_H checkpoint optimizer-update identity is inconsistent.")
             selection_receipt = {
-                "schema_version": "qh-checkpoint-selection-receipt-v1",
+                "schema_version": "qh-checkpoint-selection-receipt-v2",
                 "selection": asdict(request.checkpoint_selection),
                 "selected_checkpoint_sha256": _sha256_file(selected_checkpoint),
                 "validation_loss_sum": float(torch.as_tensor(selected_state["validation_loss_sum"]).item()),
-                "validation_row_count": int(torch.as_tensor(selected_state["validation_row_count"]).item()),
+                "validation_horizon_count": int(torch.as_tensor(selected_state["validation_row_count"]).item()),
+                "aggregation_semantics": data.learning_contract.horizon_weighting,
                 "selected_validation_loss": selected_validation_loss,
                 "optimizer_updates": selected_optimizer_updates,
             }
@@ -290,7 +388,7 @@ class QhExperiment:
             _write_json(selection_path, selection_receipt)
 
             training_receipt = {
-                "schema_version": "qh-training-receipt-v1",
+                "schema_version": "qh-training-receipt-v3",
                 "seed": int(request.seed),
                 "warm_start_parent_manifest_sha256": (
                     None if warm_start_parent is None else warm_start_parent.manifest_sha256
@@ -299,8 +397,14 @@ class QhExperiment:
                 "train_provenance": _jsonable(train.provenance),
                 "validation_provenance": _jsonable(validation.provenance),
                 "test_provenance": _jsonable(test.provenance),
+                "target_descriptor_identity": {
+                    "train": _jsonable(train.target_descriptor_identity),
+                    "validation": _jsonable(validation.target_descriptor_identity),
+                    "test": _jsonable(test.target_descriptor_identity),
+                },
                 "learning_contract_hash": data.learning_contract_hash,
                 "actor_state_contract_hash": data.actor_state_contract_hash,
+                "trained_horizon_support": trained_horizon_support,
             }
             training_path = temporary / _TRAINING_RECEIPT_FILENAME
             _write_json(training_path, training_receipt)
@@ -344,6 +448,7 @@ class QhExperiment:
                     "representation_semantics": str(
                         getattr(self.config.scorer, "representation_semantics", "root_moments_v1")
                     ),
+                    "trained_horizon_support": trained_horizon_support,
                     "seed": int(request.seed),
                 },
                 artifact_hashes={
@@ -370,11 +475,21 @@ class QhExperiment:
         )
 
     def evaluate_held_out(self, request: QhHeldOutEvaluationRequest) -> QhHeldOutEvaluationResult:
-        """Run explicit diagnostic fitted-Q evaluation on a bundle's frozen test population.
+        """Run diagnostic fitted-Q evaluation on the bundle's frozen test population.
 
-        This operation is intentionally separate from :meth:`fit` and does not
-        provide endpoint-policy evidence; endpoint evaluation remains owned by
-        the online oracle contract.
+        Configuration equality identifies the intended paths but cannot prove
+        that immutable stores still occupy them. Evaluation therefore rebuilds
+        the dataset and rechecks its learning semantics, actor/geometry
+        contracts, full provenance, and ordered store-manifest hashes against
+        the verified bundle before materializing a test batch. The receipt binds
+        that observed provenance. This operation remains separate from
+        :meth:`fit` and provides no endpoint-policy evidence; endpoint
+        evaluation is owned by the online oracle contract.
+
+        Raises:
+            FileExistsError: If the receipt destination already exists.
+            ValueError: If the requested configuration or reconstructed test
+                population has drifted from the frozen bundle identity.
         """
 
         output = request.output_receipt_path.expanduser().resolve()
@@ -386,21 +501,29 @@ class QhExperiment:
         if expected_test != actual_test:
             raise ValueError("Q_H held-out diagnostic population does not match the frozen bundle test identity.")
         test = request.test.setup_target()
-        runtime = self.load_for_inference(request.bundle, device="cpu")
+        identity = manifest["identity"]
         module_config = QhLightningModuleConfig.model_validate(manifest["module_config"])
-        module = QhLightningModule(module_config, scorer=runtime.scorer)
-        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
+        objective_profile = identity["learning_contract"].get("objective_profile")
         data = QhDataModule(
             train=test,
             batch_size=int(self.config.batch_size),
             num_workers=int(self.config.num_workers),
             pin_memory=bool(self.config.pin_memory),
             persistent_workers=bool(self.config.persistent_workers),
-            seed=int(manifest["identity"]["seed"]),
+            seed=int(identity["seed"]),
             experiment_profile=module_config.experiment_profile,
-            objective_profile=self.config.objective_profile,
+            objective_profile=objective_profile,
+        )
+        _validate_bound_test_population(
+            manifest=manifest,
+            test=test,
+            data=data,
+            operation="held-out diagnostic",
         )
         data.test_dataset = test
+        runtime = self.load_for_inference(request.bundle, device="cpu")
+        module = QhLightningModule(module_config, scorer=runtime.scorer)
+        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
         trainer_config = self.config.trainer.model_copy(
             deep=True,
             update={
@@ -416,17 +539,150 @@ class QhExperiment:
         )
         trainer_config.setup_target().test(module, datamodule=data)
         receipt = {
-            "schema_version": "qh-held-out-diagnostic-receipt-v1",
+            "schema_version": "qh-held-out-diagnostic-receipt-v3",
             "diagnostic_only": True,
             "endpoint_policy_evidence": False,
             "bundle_manifest_sha256": request.bundle.manifest_sha256,
             "test_population_sha256": _json_payload_hash(request.test),
+            "test_provenance_sha256": _json_payload_hash(test.provenance),
+            "target_descriptor_identity": _jsonable(test.target_descriptor_identity),
+            "ordered_store_manifest_sha256s": _ordered_store_manifest_hashes(test.provenance),
+            "ordered_store_manifests_sha256": _json_payload_hash(_ordered_store_manifest_hashes(test.provenance)),
+            "bound_contract": {
+                "learning_contract_hash": identity["learning_contract_hash"],
+                "actor_state_contract_hash": identity["actor_state_contract_hash"],
+                "geometry_contract_hash": identity["geometry_contract_hash"],
+            },
             "test_loss_sum": float(module.test_loss_sum.item()),
-            "test_row_count": int(module.test_row_count.item()),
+            "test_horizon_count": int(module.test_row_count.item()),
+            "aggregation_semantics": data.learning_contract.horizon_weighting,
         }
         output.parent.mkdir(parents=True, exist_ok=True)
         _write_json(output, receipt)
         return QhHeldOutEvaluationResult(output, _sha256_file(output))
+
+    def certify_exact_q2(self, request: QhExactQ2CertificationRequest) -> QhExactQ2CertificationResult:
+        r"""Certify learned recursive ``Q_2`` targets on the frozen test corpus.
+
+        This operation evaluates the selected bundle but does not fit it. The
+        exact control replaces the learned successor value with the maximum
+        persisted one-step reward at the factual successor. Consequently the
+        reported discrepancy isolates the bundle's learned ``Q_1`` path inside
+        the two-step recursion; it does not re-test tensor-indexing parity and
+        it does not estimate endpoint-policy headroom.
+
+        Hard-invalid rows remain excluded by the Lightning owner's
+        ``selected_train_mask`` and ``successor_backup_mask``. The certifier
+        never consults feasibility logits, never multiplies probability by Q,
+        and never widens support beyond the frozen action/label masks.
+
+        Args:
+            request: Frozen bundle, exact test population, stratified-selection
+                and tolerance contract, new output path, execution device, and
+                optional diagnostic headroom store.
+
+        Returns:
+            Receipt reference whose content binds the scorer, state fusion,
+            decoder, actor/source profile, learning semantics, test provenance,
+            row selection, tolerances, and optional headroom diagnostic.
+
+        Raises:
+            FileExistsError: If the receipt destination already exists.
+            ValueError: If bundle, dataset, device, lineage, or diagnostic store
+                identity is invalid or has drifted from the frozen manifest.
+
+        Notes:
+            ``longer_horizon_gate_passed`` requires both learned-recursion
+            agreement and positive independent held-out endpoint headroom. The
+            optional store diagnostic explicitly declares that it is not an
+            independent endpoint evaluation, so a certification receipt cannot
+            promote ``h>2`` claims by itself.
+        """
+
+        output = request.output_receipt_path.expanduser().resolve()
+        if output.exists():
+            raise FileExistsError(f"Q_H exact-Q2 certification receipt already exists: {output}.")
+        manifest = self._read_verified_manifest(request.bundle)
+        expected_test = manifest["identity"]["datasets"]["test"]
+        if expected_test != _jsonable(request.test):
+            raise ValueError("Q_H exact-Q2 population does not match the frozen bundle test identity.")
+        test = request.test.setup_target()
+        identity = manifest["identity"]
+        module_config = QhLightningModuleConfig.model_validate(manifest["module_config"])
+        objective_profile = identity["learning_contract"].get("objective_profile")
+        if objective_profile != "qh_dense_valid_fitted_q_v1":
+            raise ValueError("Q_H exact-Q2 certification requires the dense-valid fitted-Q objective profile.")
+        data = QhDataModule(
+            train=test,
+            batch_size=int(self.config.batch_size),
+            num_workers=int(self.config.num_workers),
+            pin_memory=bool(self.config.pin_memory),
+            persistent_workers=bool(self.config.persistent_workers),
+            seed=int(manifest["identity"]["seed"]),
+            experiment_profile=module_config.experiment_profile,
+            objective_profile=objective_profile,
+        )
+        _validate_bound_test_population(
+            manifest=manifest,
+            test=test,
+            data=data,
+            operation="exact-Q2",
+        )
+
+        device = _certification_device(request.device)
+        runtime = self.load_for_inference(request.bundle, device=device)
+        module = QhLightningModule(module_config, scorer=runtime.scorer)
+        module.target_scorer.load_state_dict(module.online_scorer.state_dict(), strict=True)
+        q2_evidence = QhExactQ2Certifier(request.spec).certify(
+            module=module,
+            dataset=test,
+            device=device,
+            ordered_store_manifest_sha256=_json_payload_hash(identity["ordered_store_manifests"]["test"]),
+            decoder_support=_decoder_support(manifest["scorer_config"]),
+        )
+        headroom = _headroom_diagnostic(
+            request.headroom_store_dir,
+            threshold=float(request.spec.positive_headroom_threshold),
+        )
+        independent_positive_headroom = bool(
+            headroom.get("independent_endpoint_evaluation", False)
+            and headroom.get("positive_lookahead_headroom", False)
+        )
+        receipt = {
+            "schema_version": "qh-exact-q2-certification-receipt-v2",
+            "historical_compatibility": {
+                "qh-exact-q2-certification-receipt-v1": "inspection_only_not_promotable",
+            },
+            "bundle_manifest_sha256": request.bundle.manifest_sha256,
+            "test_population_sha256": _json_payload_hash(request.test),
+            "test_provenance_sha256": _json_payload_hash(test.provenance),
+            "execution_device": str(device),
+            "bound_contract": {
+                "scorer_config_hash": manifest["scorer_config_hash"],
+                "scorer_config": manifest["scorer_config"],
+                "module_config": manifest["module_config"],
+                "learning_contract_hash": identity["learning_contract_hash"],
+                "learning_contract": identity["learning_contract"],
+                "actor_state_contract_hash": identity["actor_state_contract_hash"],
+                "actor_state_contract": identity["actor_state_contract"],
+                "geometry_contract_hash": identity["geometry_contract_hash"],
+                "action_mask_semantics": identity["action_mask_semantics"],
+                "representation_semantics": identity["representation_semantics"],
+                "ordered_test_store_manifests": identity["ordered_store_manifests"]["test"],
+                "ordered_test_store_paths": identity["ordered_store_paths"]["test"],
+            },
+            "exact_q2": q2_evidence,
+            "oracle_headroom": headroom,
+            "longer_horizon_gate": {
+                "learned_recursion_passed": q2_evidence["learned_recursion_passed"],
+                "independent_positive_headroom": independent_positive_headroom,
+                "passed": bool(q2_evidence["learned_recursion_passed"] and independent_positive_headroom),
+                "claim_scope": "h>2",
+            },
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(output, receipt)
+        return QhExactQ2CertificationResult(output, _sha256_file(output))
 
     @classmethod
     def load_for_inference(
@@ -435,7 +691,21 @@ class QhExperiment:
         *,
         device: torch.device | str,
     ) -> QhInferenceRuntime:
-        """Verify a bundle and return its scorer with manifest-derived identities."""
+        """Verify a bundle and return its scorer with manifest-derived identities.
+
+        Args:
+            ref: Content-bound bundle reference whose schema and manifest hash
+                must match the bytes on disk.
+            device: Destination device for the reconstructed scorer.
+
+        Returns:
+            Evaluation-mode scorer and manifest-derived runtime identities used
+            by online context and trained-horizon admission.
+
+        Raises:
+            ValueError: If the manifest, scorer state, configuration, support
+                artifact, implementation identity, or hashes are inconsistent.
+        """
 
         manifest = cls._read_verified_manifest(ref)
         config = TargetFiniteHorizonScorerConfig.model_validate(manifest["scorer_config"])
@@ -446,7 +716,7 @@ class QhExperiment:
             raise ValueError("Q_H scorer-state payload hash does not match the bundle manifest.")
         state = torch.load(state_path, map_location="cpu", weights_only=True)
         scorer.load_state_dict(state, strict=True)
-        scorer.validate_value_decoder_state(require_publishable=True)
+        scorer.validate_artifact_state(require_publishable=True)
         scorer.to(device=device)
         scorer.eval()
         identity = manifest["identity"]
@@ -466,6 +736,7 @@ class QhExperiment:
             representation_semantics=str(
                 manifest["scorer_config"].get("representation_semantics", identity["representation_semantics"])
             ),
+            trained_horizons=tuple(sorted(int(value) for value in identity["trained_horizon_support"])),
         )
 
     def _publish_bundle(
@@ -486,7 +757,7 @@ class QhExperiment:
             raise FileExistsError(f"Q_H bundle payload already exists in {bundle_dir}.")
         if stable_config_hash(scorer.config, length=64) != stable_config_hash(self.config.scorer, length=64):
             raise ValueError("Q_H scorer runtime configuration does not match the experiment configuration.")
-        scorer.validate_value_decoder_state(require_publishable=True)
+        scorer.validate_artifact_state(require_publishable=True)
         torch.save(scorer.state_dict(), state_path)
         artifacts = {
             _SCORER_STATE_FILENAME: {
@@ -618,7 +889,7 @@ class QhExperiment:
         state_path = _verified_artifact_path(ref.bundle_path, manifest, _SCORER_STATE_FILENAME)
         state = torch.load(state_path, map_location="cpu", weights_only=True)
         scorer.load_state_dict(state, strict=True)
-        scorer.validate_value_decoder_state(require_publishable=True)
+        scorer.validate_artifact_state(require_publishable=True)
         return QhInferenceBundleRef(ref.bundle_path, ref.schema_version, ref.manifest_sha256)
 
     @staticmethod
@@ -734,6 +1005,33 @@ class QhExperiment:
                 "Q_H bundle learning-contract max_horizon exceeds scorer max_horizon: "
                 f"{learning_contract.max_horizon} > {scorer.max_horizon}."
             )
+        if module.max_horizon != scorer.max_horizon:
+            raise ValueError("Q_H bundle module and scorer max_horizon must match exactly.")
+        trained_support = identity["trained_horizon_support"]
+        if not isinstance(trained_support, dict) or not trained_support:
+            raise ValueError("Q_H bundle requires non-empty manifest-bound trained horizon support.")
+        trained_horizons: set[int] = set()
+        for key, support in trained_support.items():
+            try:
+                horizon = int(key)
+            except (TypeError, ValueError) as error:
+                raise ValueError("Q_H trained horizon keys must be canonical positive integers.") from error
+            if str(horizon) != key or horizon < 1 or horizon > learning_contract.max_horizon:
+                raise ValueError("Q_H trained horizon support exceeds the admitted learning contract.")
+            if (
+                not isinstance(support, dict)
+                or set(support) != {"state_count", "candidate_count"}
+                or isinstance(support["state_count"], bool)
+                or not isinstance(support["state_count"], int)
+                or support["state_count"] < 1
+                or isinstance(support["candidate_count"], bool)
+                or not isinstance(support["candidate_count"], int)
+                or support["candidate_count"] < support["state_count"]
+            ):
+                raise ValueError("Q_H trained horizon support requires positive state and candidate counts.")
+            trained_horizons.add(horizon)
+        if 1 not in trained_horizons:
+            raise ValueError("Q_H dense-valid bundles require realized h=1 training support.")
         geometry_hash = identity.get("geometry_contract_hash")
         if module.geometry_contract_hash != geometry_hash or actor_contract.geometry_contract_hash != geometry_hash:
             raise ValueError("Q_H bundle geometry identity is inconsistent across actor, module, and manifest.")
@@ -747,6 +1045,13 @@ class QhExperiment:
             or module.selected_observation_protocol != actor_contract.selected_observation_protocol
         ):
             raise ValueError("Q_H bundle module and actor observation profiles differ.")
+        validate_experiment_profile(
+            scorer.experiment_profile,
+            root_evl_profile=actor_contract.root_evl_profile,
+            selected_observation_protocol=actor_contract.selected_observation_protocol,
+            target_protocol=learning_contract.data_contract.target_protocol,
+            privileged=False,
+        )
         if module.privileged:
             raise ValueError("Q_H deployable bundle rejects privileged module configuration.")
         if learning_contract.objective_profile != "qh_dense_valid_fitted_q_v1":
@@ -837,6 +1142,58 @@ def _ordered_store_manifest_hashes(provenance: dict[str, object]) -> list[str]:
     return hashes
 
 
+def _validate_bound_test_population(
+    *,
+    manifest: dict[str, Any],
+    test: Any,
+    data: QhDataModule,
+    operation: str,
+) -> None:
+    """Prove a reconstructed held-out population still matches its bundle.
+
+    A dataset configuration is an address-and-reader recipe, not immutable
+    population evidence: a store can be replaced in place while the serialized
+    request remains byte-identical. This boundary therefore compares the
+    reconstructed dataset's population-independent Bellman semantics,
+    actor-visible state carrier, privileged-geometry role, full stage
+    provenance, and ordered store manifests with the values observed at fit
+    publication. Both ordinary diagnostics and exact-Q2 certification call the
+    same proof so neither can issue a receipt for stale bundle identity.
+
+    Args:
+        manifest: Already verified inference-bundle manifest.
+        test: Reconstructed held-out chain dataset exposing contract and
+            provenance properties.
+        data: Data module admitted from exactly ``test`` under the bound
+            objective profile.
+        operation: Human-readable caller name used in fail-closed diagnostics.
+
+    Raises:
+        ValueError: If semantic, actor-state, geometry, provenance, or ordered
+            store-manifest identity differs from the frozen bundle.
+    """
+
+    identity = manifest["identity"]
+    learning_payload = identity["learning_contract"]
+    bound_learning_contract = QhLearningContract(
+        data_contract=QhDataContract(**learning_payload["data_contract"]),
+        max_horizon=int(learning_payload["max_horizon"]),
+        horizon_weighting=str(learning_payload["horizon_weighting"]),
+        objective_profile=learning_payload["objective_profile"],
+    )
+    if data.learning_contract.learning_semantics() != bound_learning_contract.learning_semantics():
+        raise ValueError(f"Q_H {operation} test learning semantics drifted from the bundle.")
+    if data.actor_state_contract_hash != identity["actor_state_contract_hash"]:
+        raise ValueError(f"Q_H {operation} test actor-state contract drifted from the bundle.")
+    if data.geometry_contract_hash != identity["geometry_contract_hash"]:
+        raise ValueError(f"Q_H {operation} test geometry contract drifted from the bundle.")
+    if _jsonable(test.provenance) != identity["dataset_provenance"]["test"]:
+        raise ValueError(f"Q_H {operation} test provenance drifted from the bundle.")
+    observed_manifests = _ordered_store_manifest_hashes(test.provenance)
+    if observed_manifests != identity["ordered_store_manifests"]["test"]:
+        raise ValueError(f"Q_H {operation} ordered test store manifests drifted from the bundle.")
+
+
 def _validate_artifact_name(name: str, raw_path: object) -> str:
     if not isinstance(raw_path, str) or not raw_path:
         raise ValueError(f"Q_H bundle artifact {name!r} has no relative payload path.")
@@ -871,13 +1228,43 @@ def _verify_all_artifacts(bundle_path: Path, manifest: dict[str, Any]) -> None:
 
 
 def _bundle_dependencies() -> dict[str, str]:
-    """Return the exact runtime identity admitted by the V1 bundle schema."""
+    """Return exact runtime and PyTorch3D source identities.
+
+    PyTorch3D exposes performance-critical compiled geometry operators while
+    its package version alone does not identify a VCS installation. The
+    bundle therefore fails closed unless installed ``direct_url.json`` metadata
+    names the repository and exact commit pinned by ``pyproject.toml`` and
+    ``uv.lock``. A moving branch name can never become scientific runtime
+    identity, even if it happened to resolve to the same commit once.
+    """
 
     return {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         "torch": str(torch.__version__),
         "pytorch_lightning": importlib.metadata.version("pytorch-lightning"),
+        "pytorch3d": importlib.metadata.version("pytorch3d"),
+        "pytorch3d_vcs_url": _PYTORCH3D_VCS_URL,
+        "pytorch3d_vcs_commit": _installed_pytorch3d_vcs_commit(),
     }
+
+
+def _installed_pytorch3d_vcs_commit() -> str:
+    """Return the verified installed PyTorch3D commit or reject the runtime."""
+
+    distribution = importlib.metadata.distribution("pytorch3d")
+    direct_url = distribution.read_text("direct_url.json")
+    if direct_url is None:
+        raise ValueError("Q_H bundle runtime requires PyTorch3D direct_url.json VCS provenance.")
+    try:
+        payload = json.loads(direct_url)
+        url = payload["url"]
+        vcs = payload["vcs_info"]["vcs"]
+        commit = payload["vcs_info"]["commit_id"]
+    except (json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ValueError("Q_H bundle runtime has malformed PyTorch3D VCS provenance.") from error
+    if (url, vcs, commit) != (_PYTORCH3D_VCS_URL, "git", _PYTORCH3D_VCS_COMMIT):
+        raise ValueError("Q_H bundle runtime PyTorch3D VCS identity does not match the exact project pin.")
+    return str(commit)
 
 
 def _bundle_implementation() -> dict[str, str]:
@@ -916,6 +1303,99 @@ def _json_payload_hash(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _certification_device(value: str) -> torch.device:
+    """Resolve one explicit certification device and fail closed on CUDA drift."""
+
+    try:
+        device = torch.device(value)
+    except (RuntimeError, ValueError) as error:
+        raise ValueError(f"Q_H exact-Q2 certification received invalid device {value!r}.") from error
+    if device.type not in {"cpu", "cuda"}:
+        raise ValueError("Q_H exact-Q2 certification supports only CPU or CUDA devices.")
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise ValueError("Q_H exact-Q2 certification requested CUDA, but CUDA is unavailable.")
+    return device
+
+
+def _decoder_support(scorer_config: object) -> QhDecoderSupport | None:
+    """Extract fixed CORAL support from the verified scorer configuration."""
+
+    if not isinstance(scorer_config, dict):
+        raise ValueError("Q_H exact-Q2 scorer configuration is malformed.")
+    decoder = scorer_config.get("value_decoder")
+    if not isinstance(decoder, dict) or not isinstance(decoder.get("kind"), str):
+        raise ValueError("Q_H exact-Q2 value-decoder configuration is malformed.")
+    kind = str(decoder["kind"])
+    if kind == "regression":
+        return None
+    if kind != "coral":
+        raise ValueError(f"Q_H exact-Q2 received unsupported value decoder {kind!r}.")
+    edges = decoder.get("bin_edges")
+    values = decoder.get("bin_values")
+    if not isinstance(edges, list) or not isinstance(values, list) or not edges or not values:
+        raise ValueError("Q_H exact-Q2 CORAL support is incomplete.")
+    return QhDecoderSupport(
+        kind="coral",
+        lower_representative=float(values[0]),
+        upper_representative=float(values[-1]),
+        lower_edge=float(edges[0]),
+        upper_edge=float(edges[-1]),
+    )
+
+
+def _headroom_diagnostic(store_dir: Path | None, *, threshold: float) -> dict[str, object]:
+    """Summarize the existing exact-role terminal-step headroom diagnostic.
+
+    The rollout inspection owner explicitly labels this evidence as a proxy and
+    records ``independent_endpoint_evaluation=False``. This adapter preserves
+    that boundary, binds the validated store manifest, and reports whether any
+    exact-role ``delta_look`` contrast is positive without promoting the proxy
+    to the independent held-out endpoint evidence required for ``h>2``.
+    """
+
+    if store_dir is None:
+        return {
+            "available": False,
+            "reason": "no_headroom_store_supplied",
+            "independent_endpoint_evaluation": False,
+            "positive_lookahead_headroom": False,
+        }
+    reader = RolloutZarrStoreReader(store_dir)
+    validation = reader.validate(validate_selected_depth_payload=False)
+    if not validation.ok:
+        raise ValueError(f"Q_H exact-Q2 headroom store validation failed: {validation.errors}.")
+    evidence = oracle_headroom_evidence(reader, threshold=threshold)
+    included = [
+        row
+        for row in evidence["contrast_rows"]
+        if row.get("contrast") == "delta_look" and row.get("status") == "included"
+    ]
+    values = [float(row["value"]) for row in included if row.get("value") is not None]
+    manifest = reader.manifest()
+    root_attrs = manifest.get("root_attrs")
+    root_attrs = root_attrs if isinstance(root_attrs, dict) else {}
+    return {
+        "available": True,
+        "evidence_status": evidence["evidence_status"],
+        "metric_source": evidence["metric_source"],
+        "endpoint_kind": evidence["endpoint_kind"],
+        "independent_endpoint_evaluation": evidence["independent_endpoint_evaluation"],
+        "positive_lookahead_headroom": any(value > threshold for value in values),
+        "positive_threshold": threshold,
+        "included_delta_look_count": len(values),
+        "delta_look_values": values,
+        "summary_rows": evidence["summary_rows"],
+        "store": {
+            "path": str(validation.store_dir),
+            "manifest_sha256": root_attrs.get("manifest_sha256"),
+            "num_rollouts": validation.num_rollouts,
+            "num_steps": validation.num_steps,
+            "num_candidates": validation.num_candidates,
+        },
+        "full_evidence_sha256": _json_payload_hash(evidence),
+    }
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     try:
@@ -936,6 +1416,9 @@ __all__ = [
     "QhCheckpointSelectionSpec",
     "QhExperiment",
     "QhExperimentConfig",
+    "QhExactQ2CertificationRequest",
+    "QhExactQ2CertificationResult",
+    "QhExactQ2CertificationSpec",
     "QhFitRequest",
     "QhFitResult",
     "QhHeldOutEvaluationRequest",

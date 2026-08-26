@@ -8,12 +8,18 @@ trap 'rm -rf "${SANDBOX}"' EXIT
 SHARED_ROOT="${SANDBOX}/shared"
 WORKTREE_ROOT="${SANDBOX}/worktree"
 SECOND_WORKTREE_ROOT="${SANDBOX}/second-worktree"
+EXPLICIT_CHILD_ROOT="${SANDBOX}/explicit-child"
+STALE_CHILD_ROOT="${SANDBOX}/stale-child"
+AMBIGUOUS_CHILD_ROOT="${SANDBOX}/ambiguous-child"
 COLLISION_ROOT="${SANDBOX}/collision-worktree"
 UNSAFE_OUT_ROOT="${SANDBOX}/unsafe-out-worktree"
 UNSAFE_CACHE_ROOT="${SANDBOX}/unsafe-cache-worktree"
 NON_GIT_WORKTREE_ROOT="${SANDBOX}/non-git-worktree"
 NON_GIT_SHARED_ROOT="${SANDBOX}/non-git-shared"
+FOREIGN_WORKTREE_ROOT="${SANDBOX}/foreign-worktree"
+FOREIGN_SHARED_ROOT="${SANDBOX}/foreign-shared"
 FAKE_BIN="${SANDBOX}/bin"
+HOST_PYTHON="$(command -v python3)"
 
 GRAPHIFY_CLI="$(command -v graphify)"
 [[ -n "${GRAPHIFY_CLI}" && -f "${GRAPHIFY_CLI}" ]] || {
@@ -33,9 +39,12 @@ mkdir -p \
   "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
   "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" \
   "${SHARED_ROOT}/docs/literature/pdf" \
-  "${SHARED_ROOT}/scripts" "${FAKE_BIN}"
+  "${SHARED_ROOT}/scripts" "${SHARED_ROOT}/.codex/environments" "${FAKE_BIN}"
 cp "${REPO_ROOT}/scripts/setup_worktree_env.sh" "${SHARED_ROOT}/scripts/"
+cp "${REPO_ROOT}/scripts/setup_codex_worktree_env.sh" "${SHARED_ROOT}/scripts/"
 cp "${REPO_ROOT}/scripts/graphify_worktree_seed.py" "${SHARED_ROOT}/scripts/"
+cp "${REPO_ROOT}/.codex/environments/aria-nbv.toml" \
+  "${SHARED_ROOT}/.codex/environments/"
 cat >"${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" <<EOF
 #!/usr/bin/env python3
 from pathlib import Path
@@ -44,9 +53,25 @@ Path("${SANDBOX}/reconcile.log").open("a", encoding="utf-8").write(" ".join(sys.
 EOF
 cat >"${SHARED_ROOT}/scripts/check_graphify_freshness.py" <<EOF
 #!/usr/bin/env python3
+import os
 from pathlib import Path
 import sys
 Path("${SANDBOX}/freshness.log").open("a", encoding="utf-8").write(" ".join(sys.argv[1:]) + "\\n")
+root = Path.cwd()
+admitted = root == Path("${WORKTREE_ROOT}")
+admitted = admitted or (
+    root == Path("${SHARED_ROOT}")
+    and os.environ.get("ARIA_TEST_PRIMARY_UNUSABLE") != "1"
+)
+admitted = admitted or (
+    root == Path("${SECOND_WORKTREE_ROOT}")
+    and os.environ.get("ARIA_TEST_ADMIT_SECOND") == "1"
+)
+admitted = admitted or (
+    root == Path("${EXPLICIT_CHILD_ROOT}")
+    and os.environ.get("ARIA_TEST_ADMIT_EXPLICIT") == "1"
+)
+raise SystemExit(0 if admitted else 1)
 EOF
 chmod +x "${SHARED_ROOT}/scripts/reconcile_graphify_worktree.py" \
   "${SHARED_ROOT}/scripts/check_graphify_freshness.py"
@@ -62,16 +87,28 @@ git -C "${SHARED_ROOT}" commit -qm fixture
 ln -s "$(command -v python3)" "${SHARED_ROOT}/aria_nbv/.venv/bin/python"
 git -C "${SHARED_ROOT}" worktree add -qb seed-child "${WORKTREE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-second "${SECOND_WORKTREE_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-explicit-child "${EXPLICIT_CHILD_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-stale-child "${STALE_CHILD_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-ambiguous-child "${AMBIGUOUS_CHILD_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-collision "${COLLISION_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-out "${UNSAFE_OUT_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-unsafe-cache "${UNSAFE_CACHE_ROOT}"
 git -C "${SHARED_ROOT}" worktree add -qb seed-non-git "${NON_GIT_WORKTREE_ROOT}"
+git -C "${SHARED_ROOT}" worktree add -qb seed-foreign "${FOREIGN_WORKTREE_ROOT}"
 
 mkdir -p \
   "${NON_GIT_SHARED_ROOT}/aria_nbv/.venv/bin" \
   "${NON_GIT_SHARED_ROOT}/.data/graphify-semantic-cache/semantic" \
   "${NON_GIT_SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep"
 ln -s "$(command -v python3)" "${NON_GIT_SHARED_ROOT}/aria_nbv/.venv/bin/python"
+
+mkdir -p "${FOREIGN_SHARED_ROOT}/aria_nbv/.venv/bin" "${FOREIGN_SHARED_ROOT}/.data"
+git -C "${FOREIGN_SHARED_ROOT}" init -q
+cat >"${FOREIGN_SHARED_ROOT}/aria_nbv/.venv/bin/python" <<EOF
+#!/usr/bin/env bash
+touch "${SANDBOX}/foreign-parent-python-executed"
+EOF
+chmod +x "${FOREIGN_SHARED_ROOT}/aria_nbv/.venv/bin/python"
 
 # The source seed is deliberately untracked. Graphify output is an ignored,
 # derived artifact and setup must nevertheless require a complete valid parent.
@@ -116,6 +153,16 @@ exit 98
 EOF
 chmod +x "${FAKE_BIN}/mamba"
 
+cat >"${FAKE_BIN}/python3" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"${SANDBOX}/source-admission.log"
+if [[ "\$*" == *"check_graphify_freshness.py"* ]]; then
+  exec "${HOST_PYTHON}" "\$@"
+fi
+exit 0
+EOF
+chmod +x "${FAKE_BIN}/python3"
+
 # Preserve d6a's explicit-Git-dir regression: ambient Git discovery reports a
 # stale worktree, while setup must still address this child explicitly.
 git -C "${WORKTREE_ROOT}" config --worktree core.worktree "${SANDBOX}/stale-worktree"
@@ -126,6 +173,27 @@ git -C "${SECOND_WORKTREE_ROOT}" config --worktree core.worktree "${SANDBOX}/sta
 run_setup() {
   ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
     bash "$1/scripts/setup_worktree_env.sh" "${@:2}"
+}
+
+CODEX_SETUP_SCRIPT="$(python3 - "${SHARED_ROOT}/.codex/environments/aria-nbv.toml" <<'PY'
+import sys
+import tomllib
+
+environment = tomllib.load(open(sys.argv[1], "rb"))
+assert environment["version"] == 1
+assert environment["name"] == "ARIA-NBV shared runtime"
+script = environment["setup"]["script"].strip()
+assert script == 'bash "$CODEX_WORKTREE_PATH/scripts/setup_codex_worktree_env.sh"'
+print(script)
+PY
+)"
+
+run_codex_setup() {
+  CODEX_WORKTREE_PATH="$1" CODEX_SOURCE_WORKSPACE_PATH="$2" \
+    ARIA_TEST_PRIMARY_UNUSABLE="${ARIA_TEST_PRIMARY_UNUSABLE:-}" \
+    ARIA_TEST_ADMIT_SECOND="${ARIA_TEST_ADMIT_SECOND:-}" \
+    ARIA_TEST_ADMIT_EXPLICIT="${ARIA_TEST_ADMIT_EXPLICIT:-}" \
+    PATH="${FAKE_BIN}:${PATH}" bash -c "${CODEX_SETUP_SCRIPT}"
 }
 
 # Parent selection is explicit; setup must never silently choose Git's first
@@ -144,6 +212,41 @@ snapshot_tree() {
   find "${root}" -mindepth 1 -printf '%P %y\n' | LC_ALL=C sort
   find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
 }
+
+# A foreign explicit parent must fail solely from Git topology. Its executable
+# must not run and an unseeded child must remain byte-for-byte untouched.
+foreign_before="$(snapshot_tree "${FOREIGN_WORKTREE_ROOT}")"
+if ARIA_NBV_SHARED_ROOT="${FOREIGN_SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
+  bash "${FOREIGN_WORKTREE_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/foreign.out" 2>"${SANDBOX}/foreign.err"; then
+  echo "setup unexpectedly accepted a foreign shared root" >&2
+  exit 1
+fi
+grep -Fq "same Git common directory" "${SANDBOX}/foreign.err"
+[[ ! -e "${SANDBOX}/foreign-parent-python-executed" ]]
+[[ "$(snapshot_tree "${FOREIGN_WORKTREE_ROOT}")" == "${foreign_before}" ]]
+
+# A registered explicit parent that is Graphify-unusable is rejected by the
+# repository-owned checker before its runtime executes or the child changes.
+mkdir -p "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin"
+cat >"${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python" <<EOF
+#!/usr/bin/env bash
+touch "${SANDBOX}/stale-parent-python-executed"
+EOF
+chmod +x "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python"
+stale_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
+if ARIA_NBV_SHARED_ROOT="${SECOND_WORKTREE_ROOT}" PATH="${PATH}" \
+  bash "${STALE_CHILD_ROOT}/scripts/setup_worktree_env.sh" --check \
+  >"${SANDBOX}/stale-parent.out" 2>"${SANDBOX}/stale-parent.err"; then
+  echo "setup unexpectedly accepted a Graphify-unusable explicit parent" >&2
+  exit 1
+fi
+grep -Fq "shared parent Graphify generation is not query-admissible" \
+  "${SANDBOX}/stale-parent.err"
+[[ ! -e "${SANDBOX}/stale-parent-python-executed" ]]
+[[ "$(snapshot_tree "${STALE_CHILD_ROOT}")" == "${stale_before}" ]]
+rm "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python"
+rmdir "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin" "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv"
 
 # A shared root without Git ownership cannot supply a mandatory Graphify seed.
 # Both modes must reject it before creating or linking anything in the child.
@@ -218,11 +321,54 @@ done
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic" ]]
 [[ -L "${WORKTREE_ROOT}/graphify-out/cache/semantic-deep" ]]
 
-run_setup "${SECOND_WORKTREE_ROOT}"
+# Execute the exact Codex environment bridge with the source variable empty.
+# When the canonical primary is unusable, it must choose the nearest admitted
+# ancestor sibling rather than worktree-list order. Advance the destination by
+# one empty commit so the seeded worktree is its only admitted ancestor.
+git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
+  --work-tree="${SECOND_WORKTREE_ROOT}" commit --allow-empty -qm "destination ahead"
+ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" ""
+python3 - "${SECOND_WORKTREE_ROOT}/graphify-out/.aria-worktree-seed.json" "${WORKTREE_ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
+PY
 [[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic" ]]
 [[ "$(readlink -f "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic-deep")" == "${SHARED_ROOT}/.data/graphify-semantic-cache/semantic-deep" ]]
 [[ ! -e "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
 [[ ! -L "${SECOND_WORKTREE_ROOT}/.data/graphify-semantic-cache" ]]
+
+# Equally ranked admitted ancestor siblings are ambiguous; the resolver must
+# not select whichever worktree happened to appear first, and must not mutate
+# the child.
+git --git-dir="$(git -C "${AMBIGUOUS_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
+  --work-tree="${AMBIGUOUS_CHILD_ROOT}" merge --ff-only \
+  "$(git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
+    --work-tree="${SECOND_WORKTREE_ROOT}" rev-parse HEAD)"
+ambiguous_before="$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")"
+if ARIA_TEST_PRIMARY_UNUSABLE=1 ARIA_TEST_ADMIT_EXPLICIT=1 \
+  run_codex_setup "${AMBIGUOUS_CHILD_ROOT}" "" \
+  >"${SANDBOX}/ambiguous.out" 2>"${SANDBOX}/ambiguous.err"; then
+  echo "Codex setup unexpectedly selected an ambiguous parent" >&2
+  exit 1
+fi
+grep -Fq "ambiguous query-admissible Graphify parent candidates" "${SANDBOX}/ambiguous.err"
+[[ "$(snapshot_tree "${AMBIGUOUS_CHILD_ROOT}")" == "${ambiguous_before}" ]]
+
+# A real Codex fork parent remains authoritative even though the canonical
+# primary checkout and an admitted sibling are also available.
+ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}"
+python3 - "${EXPLICIT_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" "${SECOND_WORKTREE_ROOT}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sentinel = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert sentinel["source_worktree"] == str(Path(sys.argv[2]).resolve())
+PY
 printf 'cache-hit\n' >"${WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 grep -Fqx cache-hit "${SECOND_WORKTREE_ROOT}/graphify-out/cache/semantic/cache-hit.json"
 printf '{"built_at_commit":"%s","nodes":[{"source_file":"graphify-input/index.md"}],"fixture":"child"}\n' \

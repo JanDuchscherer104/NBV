@@ -11,13 +11,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CHECKER = ROOT / "scripts/check_graphify_freshness.py"
-
-
 def graphify_interpreter() -> Path:
     cli = Path(shutil.which("graphify") or "").resolve()
     if not cli.is_file():
@@ -26,7 +24,7 @@ def graphify_interpreter() -> Path:
 
 
 class GraphifySessionReadinessTests(unittest.TestCase):
-    def test_setup_admits_a_real_child_worktree(self) -> None:
+    def test_parentless_setup_rejects_an_unadmitted_primary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aria-graphify-session-") as temporary:
             parent = Path(temporary) / "parent"
             child = Path(temporary) / "child"
@@ -36,6 +34,7 @@ class GraphifySessionReadinessTests(unittest.TestCase):
                 ".data/semantic-deep",
                 "docs/thesis",
                 "scripts",
+                ".codex/environments",
             ):
                 (parent / relative).mkdir(parents=True, exist_ok=True)
             (parent / ".gitignore").write_text(
@@ -46,11 +45,21 @@ class GraphifySessionReadinessTests(unittest.TestCase):
             shutil.copy2(ROOT / ".graphifyignore", parent / ".graphifyignore")
             for script in (
                 "setup_worktree_env.sh",
+                "setup_codex_worktree_env.sh",
                 "graphify_worktree_seed.py",
                 "reconcile_graphify_worktree.py",
                 "check_graphify_freshness.py",
             ):
                 shutil.copy2(ROOT / "scripts" / script, parent / "scripts" / script)
+            shutil.copy2(
+                ROOT / ".codex/environments/aria-nbv.toml",
+                parent / ".codex/environments/aria-nbv.toml",
+            )
+            (parent / "scripts/build_graphify_projection.py").write_text(
+                "#!/usr/bin/env python3\n"
+                "# Hermetic fixture: the parent projection already matches HEAD.\n",
+                encoding="utf-8",
+            )
             (parent / ".env.example").write_text("", encoding="utf-8")
             owner = parent / "docs/thesis/main.md"
             owner.write_text("fixture\n", encoding="utf-8")
@@ -63,33 +72,41 @@ class GraphifySessionReadinessTests(unittest.TestCase):
             self.git(parent, "commit", "-qm", "seed")
             head = self.git_output(parent, "rev-parse", "HEAD")
             self.write_parent_graph(parent, head)
+            (parent / "graphify-out/needs_update").write_text(
+                "semantic refresh required\n", encoding="utf-8"
+            )
             self.git(parent, "worktree", "add", "-qb", "session-child", str(child))
 
+            environment = tomllib.loads(
+                (parent / ".codex/environments/aria-nbv.toml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            bridge = environment["setup"]["script"].strip()
+            self.assertEqual(
+                bridge,
+                'bash "$CODEX_WORKTREE_PATH/scripts/setup_codex_worktree_env.sh"',
+            )
             result = subprocess.run(
-                ["bash", "scripts/setup_worktree_env.sh"],
+                ["bash", "-c", bridge],
                 cwd=child,
-                env={**os.environ, "ARIA_NBV_SHARED_ROOT": str(parent)},
+                env={
+                    **os.environ,
+                    "CODEX_WORKTREE_PATH": str(child),
+                    "CODEX_SOURCE_WORKSPACE_PATH": "",
+                },
                 check=False,
                 capture_output=True,
                 text=True,
             )
 
-            checked = subprocess.run(
-                [str(graphify_interpreter()), str(CHECKER), "--usable", "--json"],
-                cwd=child,
-                check=False,
-                capture_output=True,
-                text=True,
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "no query-admissible registered Graphify parent",
+                result.stderr,
             )
-            self.assertEqual(result.returncode, 0, result.stderr + checked.stdout)
-            self.assertEqual(checked.returncode, 0, checked.stdout)
-            self.assertTrue(json.loads(checked.stdout)["usable"])
-            for name in ("semantic", "semantic-deep"):
-                cache = child / "graphify-out/cache" / name
-                self.assertTrue(cache.is_symlink())
-                self.assertEqual(
-                    cache.resolve(), (parent / ".data" / name).resolve()
-                )
+            self.assertFalse((child / "graphify-out").exists())
+            self.assertFalse((child / "graphify-input").exists())
 
     def git(self, root: Path, *args: str) -> None:
         subprocess.run(["git", *args], cwd=root, check=True)

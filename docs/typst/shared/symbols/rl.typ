@@ -130,6 +130,10 @@
   selected_action_theta: $a_t^theta$,
   // Reserved temporal-difference target; no direct authored use in the 2026-08-14 audit.
   td_target: $y_t$,
+  // Exact two-step target using factual dense successor one-step rewards.
+  exact_q2_target: $y_t^((2,"exact"))$,
+  // Learned-recursion target error against the exact two-step control.
+  q2_recursion_error: $epsilon_t^((2))$,
   // Q-function training loss for parameters theta.
   q_loss: $cal(L)_Q (theta)$,
 )

@@ -8,9 +8,12 @@ access: :class:`AseEfmDataset`, its config, and the zero-copy typed
 :class:`VinOfflineDataset` stores.
 
 Specialized codecs, diagnostics, writers, adapters, and storage internals stay
-owned by their leaf modules. Oracle sample generation and target selection are
-pipeline concerns owned outside :mod:`aria_nbv.data_handling`; this package
-neither constructs oracle labels nor chooses target entities.
+owned by their leaf modules. :mod:`aria_nbv.data_handling.qh_data` owns the
+validated rollout-to-actor join and keeps scorer-visible tensors separate from
+supervision, but remains a leaf import rather than widening this one-step root.
+Oracle sample generation and target selection are pipeline concerns owned
+outside :mod:`aria_nbv.data_handling`; this package neither constructs oracle
+labels nor chooses target entities.
 """
 
 from __future__ import annotations

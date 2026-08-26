@@ -94,7 +94,8 @@ def test_two_process_local_empty_rank_matches_single_rank_update(tmp_path: Path)
 
     one_fields = ("global_step", "optimizer_updates", "online_scorer_calls", "target_scorer_calls")
     assert all({payload[field] for payload in payloads} == {1} for field in one_fields)
-    assert sorted(payload["training_row_count"] for payload in payloads) == [0, 2]
+    # A two-step chain contributes two dense h=1 states and one recursive h=2 state.
+    assert sorted(payload["training_row_count"] for payload in payloads) == [0, 3]
     rank_states = [torch.load(tmp_path / f"rank-{rank}-state.pt", weights_only=True) for rank in range(2)]
     for name in rank_states[0]:
         assert torch.equal(rank_states[0][name], rank_states[1][name])
@@ -125,7 +126,9 @@ def test_two_process_evaluation_fails_before_scorer_or_logging(tmp_path: Path, s
 def test_two_process_unequal_counts_match_exact_global_mean_update(tmp_path: Path) -> None:
     payloads = _run_torchrun(tmp_path, "unequal")
 
-    assert sorted(payload["training_row_count"] for payload in payloads) == [1, 2]
+    # Both local chains retain three state--horizon contributions; only their
+    # candidate-label support differs, which is reflected in the exact update.
+    assert sorted(payload["training_row_count"] for payload in payloads) == [3, 3]
     rank_states = [torch.load(tmp_path / f"rank-{rank}-state.pt", weights_only=True) for rank in range(2)]
     for name in rank_states[0]:
         assert torch.equal(rank_states[0][name], rank_states[1][name])

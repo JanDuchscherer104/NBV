@@ -41,11 +41,37 @@ git_in_worktree() {
   git --git-dir="$repo_git_dir" --work-tree="$repo_root" "$@"
 }
 
-[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
 [[ -n "$shared_root" ]] || fail "ARIA_NBV_SHARED_ROOT must identify the parent worktree"
 [[ -d "$shared_root" ]] || fail "shared root does not exist: $shared_root"
-git -C "$shared_root" rev-parse --git-common-dir >/dev/null 2>&1 || \
+shared_root="$(cd "$shared_root" && pwd -P)"
+[[ "$shared_root" != "$repo_root" ]] || fail "shared root must be another worktree"
+source_git_dir="$(git -C "$shared_root" rev-parse --absolute-git-dir 2>/dev/null)" || \
   fail "shared root is not a Git worktree; cannot seed Graphify"
+source_common_dir="$(git --git-dir="$source_git_dir" --work-tree="$shared_root" \
+  rev-parse --git-common-dir 2>/dev/null)" || fail "shared root Git metadata is unavailable"
+destination_common_dir="$(git_in_worktree rev-parse --git-common-dir)" || \
+  fail "destination Git metadata is unavailable"
+[[ "$source_common_dir" = /* ]] || source_common_dir="$shared_root/$source_common_dir"
+[[ "$destination_common_dir" = /* ]] || destination_common_dir="$repo_root/$destination_common_dir"
+source_common_dir="$(cd "$source_common_dir" && pwd -P)"
+destination_common_dir="$(cd "$destination_common_dir" && pwd -P)"
+[[ "$source_common_dir" == "$destination_common_dir" ]] || \
+  fail "source and destination must belong to the same Git common directory"
+registered_source=false
+registered_destination=false
+while IFS= read -r worktree_line; do
+  [[ "$worktree_line" == "worktree $shared_root" ]] && registered_source=true
+  [[ "$worktree_line" == "worktree $repo_root" ]] && registered_destination=true
+done < <(git --git-dir="$source_git_dir" --work-tree="$shared_root" worktree list --porcelain)
+[[ "$registered_source" == true && "$registered_destination" == true ]] || \
+  fail "source and destination must both be registered Git worktrees"
+
+# Everything above is Git metadata only. Do not invoke a parent-provided
+# executable or create child links until the source topology is proven.
+(
+  cd "$shared_root"
+  python3 -I "$repo_root/scripts/check_graphify_freshness.py" --usable --quiet
+) || fail "shared parent Graphify generation is not query-admissible; complete its semantic refresh first"
 [[ -d "$shared_root/aria_nbv/.venv" ]] || fail "shared runtime is missing: $shared_root/aria_nbv/.venv"
 shared_python="$shared_root/aria_nbv/.venv/bin/python"
 [[ -x "$shared_python" ]] || fail "shared Python is not executable: $shared_python"
@@ -92,6 +118,19 @@ if [[ "$check_only" == false ]]; then
   mkdir -p .data docs/literature
 fi
 
+# Download manifests are tracked; every other top-level .data directory is an
+# ignored cache and can be shared before rebuilding the deterministic Graphify
+# projection. PDF presence participates in that projection, so link it before
+# reconciliation rather than after it.
+while IFS= read -r -d '' source; do
+  link_or_check "$source" ".data/$(basename "$source")"
+done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
+  ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
+
+if [[ -e "$shared_root/docs/literature/pdf" ]]; then
+  link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
+fi
+
 # Seed durable Graphify state from a sibling Git worktree. The helper copies a
 # strict allowlist and synthesizes child metadata; cache links below are the
 # only shared Graphify state.
@@ -105,21 +144,6 @@ if [[ "$check_only" == false ]]; then
 else
   "$shared_python" "$repo_root/scripts/check_graphify_freshness.py" --usable --quiet || \
     fail "seeded Graphify generation is not query-admissible"
-fi
-
-# Download manifests are tracked; every other top-level .data directory is an
-# ignored cache and can be shared without copying it into each worktree. The
-# Graphify semantic cache is intentionally excluded: only its two content-
-# addressed namespaces are linked under graphify-out/cache below.
-while IFS= read -r -d '' source; do
-  link_or_check "$source" ".data/$(basename "$source")"
-done < <(find "$shared_root/.data" -mindepth 1 -maxdepth 1 -type d \
-  ! -name aria_download_urls ! -name graphify-semantic-cache -print0)
-
-# TeX and bibliography sources are tracked and Git checks them out normally.
-# PDFs are ignored downloads, so retain one shared read-only cache for them.
-if [[ -e "$shared_root/docs/literature/pdf" ]]; then
-  link_or_check "$shared_root/docs/literature/pdf" "docs/literature/pdf"
 fi
 
 # These content-addressed semantic results are the only Graphify state shared

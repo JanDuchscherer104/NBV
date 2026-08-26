@@ -1,356 +1,108 @@
 # Rollouts
 
-`aria_nbv.rollouts` owns replay transitions, persisted traces/stores, manifests,
-audits, and read-side inspection. Rollout dataset/shard generation lives in
-`aria_nbv.oracle.pipelines`; the top-level scene labeler moves there in WP12.
+`aria_nbv.rollouts` owns finite-candidate replay, standalone rollout Zarr
+stores, QH chain reading, manifests, audits, and presentation-free inspection
+projections. Dataset generation is composed by `aria_nbv.oracle.pipelines`;
+immutable actor roots remain in `aria_nbv.data_handling.vin_store`.
 
-## Persisted-store status and Rerun seam
+## Stored Contract
 
-`zarr_contract.md` remains a draft design for future writer capabilities. It is
-not evidence that every listed table, migration, generator, Q_H training path,
-or operational deployment exists. Implemented store behavior is owned by
-`zarr_store.py`, `trace.py`, and their focused tests; `read_model.py` owns the
-shared, presentation-free interpretation of persisted rollout rows.
+A rollout store contains factual tables for targets, rollout chains, realized
+steps, candidate rows, selected actions, source lineage, optional selected
+depth, and a validated derived `q_h/` view. The factual tables remain
+authoritative; the QH view is a training-hot projection that readers validate
+against them.
 
-The implemented read model resolves ordered rollout steps, full-shell candidate
-rows, hard action masks, selected rows, decoded target fields, and selected
-depth. `aria_nbv.rerun_inspector._rollout_zarr` uses those projections for its
-chain/step/target display. It still reads a small set of arrays directly for
-branch selection and Q_H metadata summaries, so a complete read-model migration
-is **open**. That presentation-only migration is not made here because it would
-change the package boundary; no README claim should treat it as complete.
+Candidate support has several distinct meanings:
 
-The current proof points are `tests/rollouts/test_zarr_store.py` for store
-validation, `tests/rollouts/test_read_model.py` for the typed projections, and
-`tests/rerun_inspector/test_rollout_zarr_logger.py` for Rerun's consumption of
-the persisted chain.
+- materialized candidate rows;
+- hard action-valid rows;
+- oracle-labelled rows;
+- selected transition rows;
+- storage padding.
 
-## Layout
+Invalid targets or actions remain masks and reason codes. They are never
+fabricated low-RRI or zero-Q labels.
 
-```text
-rollouts/
-  audits.py               # operational validity/provenance/path checks
-  replay/                 # policy, state, score contracts, and replay engine
-  read_model.py           # typed, presentation-free store projections
-  inspection.py           # inventory, audits, and presentation-ready summaries
-  manifest.py
-  shard_manifest.py
-  trace.py
-  zarr_store.py
-  info_cli.py
+## Generate and Inspect
+
+Run from `aria_nbv/`:
+
+```sh
+uv run nbv-build-rollouts \
+  --config-path ../.configs/build_rollouts_v1_smoke.toml \
+  --dry-run
+uv run nbv-build-rollouts \
+  --config-path ../.configs/build_rollouts_v1_smoke.toml
+
+uv run nbv-rollouts-info \
+  --store ../.data/offline_cache/rollouts_v1_smoke.zarr \
+  --validate
+uv run nbv-rollouts-info \
+  --store ../.data/offline_cache/rollouts_v1_smoke.zarr \
+  --json
 ```
 
-G009 baseline: `5c4c450`
+For sharded campaigns, use `nbv-plan-rollout-shards`,
+`nbv-status-rollout-shards`, and `nbv-rollout-campaign`. Each completed shard
+must pass validation and carry its success/owner sidecars before it is treated
+as reusable input.
 
-Inventory refreshed: `2026-07-13`
+## Read a Store
 
-## Symbol Ownership Matrix
+```python
+from aria_nbv.rollouts import RolloutZarrStoreReader
 
-### `__init__.py`
+reader = RolloutZarrStoreReader("rollouts.zarr")
+validation = reader.validate()
+if not validation.ok:
+    raise ValueError(validation.errors)
 
-The exact stable root allowlist is `CandidateScores`,
-`CounterfactualPoseGenerator`, `CounterfactualPoseGeneratorConfig`,
-`CounterfactualRolloutResult`, `CounterfactualTrajectory`, `RolloutPolicySpec`,
-`RolloutZarrStoreConfig`, and `RolloutZarrStoreReader`. All other callers use
-the owning leaf module; no compatibility facade is provided.
+manifest = reader.manifest()
+qh_arrays = reader.q_h_view()
+```
 
-### `audits.py`
+Use `read_model.py` for typed, presentation-free projections consumed by
+Streamlit and Rerun. Use `QhRolloutReader` when the consumer needs complete
+validated QH chains, target protocol identity, source references, and optional
+selected-depth evidence.
 
-Operational audit reducers and TorchMetrics moved out of the former mixed
-metrics modules. These symbols are evaluation-only.
+## Replay and Online Scores
 
-| Symbol | Kind | Visibility | Final owner | Status |
-|---|---|---|---|---|
-| `CandidateOrderConsistency` | `DTO` | `public` | `rollouts.audits` | `moved` |
-| `CandidatePathIncrementStats` | `DTO` | `public` | `rollouts.audits` | `moved` |
-| `CandidatePrimaryInvalidReasonStats` | `DTO` | `public` | `rollouts.audits` | `moved` |
-| `selected_path_length_tensor` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_order_consistency` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_policy_entropy` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_provenance_share` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_path_increment_stats` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_primary_invalid_reason_share` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_masked_mean` | `function` | `public` | `rollouts.audits` | `moved` |
-| `candidate_best_value` | `function` | `public` | `rollouts.audits` | `moved` |
-| `_as_path_matrix` | `function` | `private` | `rollouts.audits` | `moved` |
-| `_as_candidate_matrix` | `function` | `private` | `rollouts.audits` | `moved` |
-| `_candidate_valid_matrix` | `function` | `private` | `rollouts.audits` | `moved` |
-| `_masked_argmax` | `function` | `private` | `rollouts.audits` | `moved` |
-| `_finite_mask` | `function` | `private` | `rollouts.audits` | `moved` |
-| `_id_membership` | `function` | `private` | `rollouts.audits` | `moved` |
-| `CandidateTableMetrics` | `class` | `public` | `rollouts.audits` | `moved` |
-| `CandidatePathIncrementMetric` | `class` | `public` | `rollouts.audits` | `moved` |
-| `CandidatePrimaryInvalidReasonMetric` | `class` | `public` | `rollouts.audits` | `moved` |
-| `SelectedPathCostMetrics` | `class` | `public` | `rollouts.audits` | `moved` |
-| `CandidateOrderConsistencyMetric` | `class` | `public` | `rollouts.audits` | `moved` |
-| `CandidatePolicyEntropyMetric` | `class` | `public` | `rollouts.audits` | `moved` |
-| `CandidateProvenanceShareMetric` | `class` | `public` | `rollouts.audits` | `moved` |
-| `_safe_mean` | `function` | `private` | `rollouts.audits` | `moved` |
+`rollouts.replay` owns in-memory rollout state, policy specifications,
+`CandidateScores`, and finite-candidate transition generation. Persisted Zarr
+encoding belongs to `zarr_store.py` and `trace.py`.
 
-### `replay/`
+The online finite-horizon adapter lives in
+`aria_nbv.oracle.pipelines.online_qh`. It validates a bundle against the current
+decision context, evaluates raw conditional Q, then passes only hard-valid
+values into `CandidateScores`. Learned feasibility does not replace the policy
+mask.
 
-The nested package owns replay policy, score, state, and engine symbols. Its
-complete current/final symbol matrix is in [`replay/README.md`](replay/README.md).
+## Ownership Map
 
-### `info_cli.py`
+| Module | Responsibility |
+| --- | --- |
+| `replay` | Policies, in-memory states, score DTOs, and transition engine. |
+| `trace` | Normalize replay results into factual persisted rows. |
+| `zarr_store` | Store schema, writer, strict reader, and validation. |
+| `qh_reader` | Multi-store QH chain decoding and learning/data identity. |
+| `qh_geometry` | Stored relative-pose composition into actor tensors. |
+| `read_model` | Presentation-free typed projections. |
+| `inspection` / `reporting` | Read-only summaries and evidence tables. |
+| `audits` | Provenance, validity, path, entropy, and order diagnostics. |
 
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `_HELP_SETTINGS` | `constant` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_STRATEGY_NAMES` | `constant` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `app` | `constant` | `public` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `main` | `function` | `public` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `info_command` | `function` | `public` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_random_index_payload` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_stats_payload` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_preflight_payload` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_target_component_count` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_reward_signal_payload` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_storage_payload` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_selected_path_lengths` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_reason_counts` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_id_counts` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_component_names` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_read_string_array` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_distribution` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_safe_fraction` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_print_text_summary` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
-| `_print_stats` | `function` | `private` | `rollouts.info_cli` | `rollouts.info_cli` | `rollouts.info_cli` | `already aligned` |
+Detailed table schemas, shapes, and validation failures live in source
+docstrings and the [generated API reference](../../../docs/reference/index.qmd).
 
-### `read_model.py`
+## Verification
 
-These records express persisted store meaning shared by Streamlit and Rerun.
-They contain no entities, colors, chart fields, commands, or output side
-effects. `StoredTarget` includes only target columns consumed by a reader;
-unconsumed redundant geometry and endpoint fields are not projected.
+```sh
+cd aria_nbv
+uv run ruff check aria_nbv/rollouts
+uv run pytest tests/rollouts
+uv run pytest tests/data_handling/test_qh.py
+```
 
-| Symbol | Kind | Visibility | Before module | Final owner | Status |
-|---|---|---|---|---|---|
-| `_INVALID_REASON_NAMES` | constant | private | `rollouts.inspection` | `rollouts.read_model` | moved |
-| `_POSITION_NAMES` | constant | private | `rollouts.inspection` | `rollouts.read_model` | moved |
-| `StoredRollout` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `StoredStep` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `StoredTarget` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `StoredSelectedDepth` | DTO | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `decode_invalid_reason` | function | public leaf | `rollouts.inspection` | `rollouts.read_model` | moved |
-| `decode_position_id` | function | public leaf | `rollouts.inspection` | `rollouts.read_model` | moved |
-| `rollout_at` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `rollout_by_id` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `rollout_steps` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `target_rows` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `target_by_id` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `selected_depth_for_step` | function | public leaf | duplicated joins | `rollouts.read_model` | moved |
-| `_string_dictionary` | function | private | duplicated decoders | `rollouts.read_model` | moved |
-
-### `inspection.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `_TARGET_INVALID_REASON_NAMES` | `constant` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_STRATEGY_NAMES` | `constant` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `RolloutSuspiciousQueryConfig` | `config` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `decode_target_invalid_reason` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `decode_strategy_id` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `discover_rollout_store_paths` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `rollout_store_inventory_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `candidate_audit_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `target_audit_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `validity_waterfall_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `candidate_group_summary_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `rollout_step_objective_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `rollout_tree_summary_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `selected_depth_summary_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `selected_depth_preview` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `candidate_result_diagnostic_counts` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `suspicious_rollout_rows` | `function` | `public` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_low_fanout_rows` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_dominant_invalid_reason_rows` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_missing_label_rows` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_high_score_invalid_target_rows` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_selected_motion_outlier_rows` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_rollout_store_inventory_row` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_schema_sort_rank` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_validation_status` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_safe_manifest` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_manifest_profile` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_manifest_config_stem` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_manifest_coverage_count` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_store_stats` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_path_mtime` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_array_size` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_mask_count` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_mask_fraction` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_rollout_dictionary_summary` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_numeric_summary` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_finite_or_none` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-| `_safe_fraction` | `function` | `private` | `rollouts.inspection` | `rollouts.inspection` | `rollouts.inspection` | `deferred: semantic WP` |
-
-### `manifest.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `ROLLOUT_MANIFEST_FILENAME` | `constant` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `ROLLOUT_MANIFEST_VERSION` | `constant` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `RolloutStoreInvocation` | `DTO` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `RolloutStoreManifestContext` | `DTO` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `utc_timestamp` | `function` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `manifest_json_bytes` | `function` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `manifest_sha256` | `function` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `write_rollout_store_manifest` | `function` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `read_rollout_store_manifest` | `function` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `collect_runtime_provenance` | `function` | `public` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `_git_root` | `function` | `private` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `_git_summary` | `function` | `private` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `_run_git` | `function` | `private` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-| `_package_versions` | `function` | `private` | `rollouts.manifest` | `rollouts.manifest` | `rollouts.manifest` | `already aligned` |
-
-### `shard_manifest.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `ROLLOUT_SHARD_MANIFEST_VERSION` | `constant` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `ROLLOUT_SHARD_SUCCESS_FILENAME` | `constant` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `ROLLOUT_SHARD_OWNER_FILENAME` | `constant` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `RolloutShardRow` | `DTO` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `RolloutShardEntry` | `DTO` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `canonical_rollout_shard_id` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `write_rollout_shard_manifest` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `read_rollout_shard_manifest` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-| `load_rollout_shard_entry` | `function` | `public` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `rollouts.shard_manifest` | `already aligned` |
-
-### `trace.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `INVALID_REASON_CODES` | `constant` | `public` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `INVALID_REASON_VERSION` | `constant` | `public` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_RULE_REASON_BITS` | `constant` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_HARD_DIAGNOSTIC_REASON_BITS` | `constant` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_PRIMARY_INVALID_REASON_PRIORITY` | `constant` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `SourceLineage` | `DTO` | `public` | flat `RolloutLineage` fields | `rollouts.trace` | `rollouts.trace` | `moved` |
-| `TargetLineage` | `DTO` | `public` | flat `RolloutLineage` fields | `rollouts.trace` | `rollouts.trace` | `moved` |
-| `PolicyLineage` | `DTO` | `public` | flat `RolloutLineage` fields | `rollouts.trace` | `rollouts.trace` | `moved` |
-| `RolloutLineage` | `DTO` | `public` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_full_candidate_vector` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_full_shell_or_default` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_candidate_invalid_reasons` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_full_shell_bool_extra` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_primary_candidate_invalid_reason` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_termination_reason` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-| `_policy_name` | `function` | `private` | `rollouts.trace` | `rollouts.trace` | `rollouts.trace` | `already aligned` |
-
-### `zarr_store.py`
-
-| Symbol | Kind | Visibility | Before module | Mechanical module | Final owner | Status |
-|---|---|---|---|---|---|---|
-| `RolloutWriteRecord` | protocol | public | `rollouts.trace.RolloutZarrRecord` | `rollouts.zarr_store` | `rollouts.zarr_store` | moved |
-| `_SelectedDepthEvidence` | protocol | private | wide replay step fields | `rollouts.zarr_store` | `rollouts.zarr_store` | moved |
-| `ROLLOUT_ZARR_SCHEMA_ID` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `ROLLOUT_ZARR_SCHEMA_VERSION` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `DEFAULT_RETURN_SEMANTICS` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `Q_H_REWARD_METRIC` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `DEFAULT_TARGET_EVAL_CROP_MAX_POINTS` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `SELECTED_DEPTH_INVALID_FILL_VALUE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `SELECTED_DEPTH_CODEC` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `Q_H_TD_SEMANTICS` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `Q_H_ARRAY_NAMES` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_TableField` | `DTO` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_TableSchema` | `DTO` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `SOURCE_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `ROLLOUT_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `LINEAGE_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `STEP_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `CANDIDATE_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `CANDIDATE_DIAGNOSTIC_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `SELECTED_DEPTH_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `TARGET_EVAL_CROP_TABLE` | `constant` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `RolloutZarrWriteResult` | `DTO` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_evaluated_step` | `function` | `private` | direct wide-step access | `rollouts.zarr_store` | `rollouts.zarr_store` | `moved` |
-| `RolloutZarrValidationResult` | `DTO` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_RolloutTables` | `DTO` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `RolloutZarrStoreConfig` | `config` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `RolloutZarrStoreReader` | `class` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `write_rollout_zarr_store` | `function` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_RolloutZarrWriteSession` | `class` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `validate_rollout_zarr_store` | `function` | `public` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_RolloutZarrValidator` | `class` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_required_groups` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_root_metadata_payload` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_build_manifest_payload` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_source_coverage` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_manifest_config_hashes` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_add_manifest_hash` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_records_with_global_target_row_ids` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_global_target_key` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_unique_targets` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_metadata_group` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_build_dictionaries` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_dictionaries` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_targets` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_target_rows_from_records` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_flatten_records` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_append_source_row` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_source_identity` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_lineage_source_row_id` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_empty_rows` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_empty_candidate_rows` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_empty_candidate_diagnostic_rows` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_empty_selected_depth_rows` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_empty_target_eval_crop_rows` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_append_target_eval_crop_rows` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_append_target_eval_crop_row` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_fixed_crop_payload` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_append_candidate_row` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_append_candidate_diagnostic_row` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_append_selected_depth_row` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_rollout_tables` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_selected_depth_group` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_target_eval_crops_group` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_q_h_group` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_build_q_h_arrays` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_table_horizon` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_rows_to_numpy_table` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_rows_to_numpy_selected_depth_table` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_rows_to_numpy_target_eval_crop_table` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_tables_from_root` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_group_table` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_selected_depth_table` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_target_eval_crop_table` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_q_h_arrays` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_q_h_arrays_if_present` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_q_h_arrays_for_validation` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_stored_horizon` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_max_candidates_per_step` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_array` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_selected_depth_array` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_q_h_array` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_write_string_array` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_string_array` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_default_chunks` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_selected_depth_chunks` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_q_h_chunks` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_q_h_arrays_differ` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_selected_depth_compressors` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_dict_id` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_record_items` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_first_temperature` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_nan_if_none` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_trajectory_cumulative_metric` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_accumulate_selected_metric` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_float_or_nan` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_fixed_float_vector` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_selected_depth_image_size` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_int_or_default` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_candidate_valid` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_compact_valid_index` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_metric_value` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_full_shell_value` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_candidate_extra_value` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_candidate_extra_bool` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_valid_vector_value` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_lineage_target_label_valid` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_relative_pose_to_root` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_missing_lineage_token` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_target_identifier_mentions_other_snippet` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_encoded_values` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
-| `_read_string_array` | `function` | `private` | `rollouts.zarr_store` | `rollouts.zarr_store` | `rollouts.zarr_store` | `already aligned` |
+Include Oracle generation, Streamlit, or Rerun tests when changing their
+consumer boundary.

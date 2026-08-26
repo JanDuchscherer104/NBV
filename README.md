@@ -49,8 +49,10 @@ reason codes rather than represented as low-reward actions.
   generation and rendering, immutable VIN stores, rollout generation and
   [Zarr](https://github.com/zarr-developers/zarr-python) persistence,
   [Streamlit](https://github.com/streamlit/streamlit)/[Rerun](https://github.com/rerun-io/rerun)
-  inspection, one-step VIN training, and scorer-independent finite-horizon
-  `Q_H` data and optimization contracts.
+  inspection, one-step VIN training, actor/oracle-separated finite-horizon
+  `Q_H` datasets, modular regression and CORAL scorers, masked Double-Q
+  optimization, immutable inference bundles, online hard-masked selection, and
+  bounded exact-`Q_2` certification.
 - **Open thesis gates:** actor-visible target matching, a target-conditioned
   one-step control, trusted scene-disjoint evidence at scale, measured positive
   oracle-lookahead headroom, and a production learned `Q_H` evaluation.
@@ -121,9 +123,18 @@ by their package owners.
 | `docs/contents/` | Public documentation, background, literature reviews, and navigation. |
 | `external/` | Pinned or forked upstream dependencies, including [EFM3D](https://github.com/facebookresearch/efm3d), [ATEK](https://github.com/facebookresearch/ATEK), and [PointNeXt](https://github.com/guochengqian/PointNeXt). |
 
-Exact Python source, tests, and active configuration own executable behavior.
-The active Typst thesis owns current scientific claims; rendered documentation
-and historical material provide navigation and evidence.
+### Documentation ownership
+
+| Surface | Responsibility |
+| --- | --- |
+| Python source, tests, and active configuration | Executable behavior and its verification. |
+| Public Python docstrings and generated API pages | Shapes, coordinate frames, invariants, errors, lifecycle, and symbol-level implementation contracts. |
+| Active Typst thesis | Scientific estimands, architectural rationale, evidence status, and limitations. |
+| Package READMEs | User workflows, entrypoints, architecture orientation, troubleshooting, and links to the detailed owners. |
+| `AGENTS.md` files | Contributor routing, cross-module hazards, and required verification. |
+
+Historical plans, reports, and refactor inventories are evidence rather than
+current documentation owners.
 
 ## License
 

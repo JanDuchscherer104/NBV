@@ -46,7 +46,13 @@ from aria_nbv.data_handling.vin_store.views import VinSnippetView
 from aria_nbv.lightning.qh_datamodule import QhDataModule
 from aria_nbv.lightning.qh_module import QhLightningModule, QhLightningModuleConfig
 from aria_nbv.oracle.pipelines.offline_vin import _compact_evl_block_signature, _point_feature_schema
-from aria_nbv.rollouts.qh_reader import QhDataContract, QhRolloutReader, _QhSourceRef, _StoredChain
+from aria_nbv.rollouts.qh_reader import (
+    QhDataContract,
+    QhRolloutChainIdentity,
+    QhRolloutReader,
+    _QhSourceRef,
+    _StoredChain,
+)
 from aria_nbv.rollouts.shard_manifest import build_rollout_split_manifest_hash
 from aria_nbv.rollouts.zarr_store import ROLLOUT_ZARR_SCHEMA_VERSION, write_rollout_zarr_store
 from aria_nbv.targets.descriptor import TargetDescriptor
@@ -560,6 +566,12 @@ def _stored(source_ref: _QhSourceRef) -> _StoredChain:
         store_index=0,
         rollout_row_id=4,
         target_row_id=5,
+        configured_horizon=2,
+        candidate_width_min=1,
+        candidate_width_max=2,
+        candidate_config_hash="candidate-config",
+        rollout_config_hash="rollout-config",
+        selection_policy="oracle_greedy",
         source_ref=source_ref,
     )
 
@@ -590,6 +602,25 @@ class _RolloutReader:
         del index
         return self.stored
 
+    def chain_identity(self, index: int) -> QhRolloutChainIdentity:
+        """Return the metadata-only identity exposed by the production reader."""
+
+        assert index == 0
+        stored = self.stored
+        return QhRolloutChainIdentity(
+            store_index=stored.store_index,
+            rollout_row_id=stored.rollout_row_id,
+            source_sample_index=stored.source_ref.source_sample_index,
+            scene_id=stored.source_ref.scene_id,
+            target_row_id=stored.target_row_id,
+            configured_horizon=stored.configured_horizon,
+            candidate_width_min=stored.candidate_width_min,
+            candidate_width_max=stored.candidate_width_max,
+            candidate_config_hash=stored.candidate_config_hash,
+            rollout_config_hash=stored.rollout_config_hash,
+            selection_policy=stored.selection_policy,
+        )
+
 
 def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     actor_reader = _ActorReader()
@@ -598,7 +629,19 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     )
     chain = dataset[0]
 
-    assert chain.key == QhChainKey(0, 4, 0, "scene-0", 5)
+    assert chain.key == QhChainKey(
+        0,
+        4,
+        0,
+        "scene-0",
+        5,
+        configured_horizon=2,
+        candidate_width_min=1,
+        candidate_width_max=2,
+        candidate_config_hash="candidate-config",
+        rollout_config_hash="rollout-config",
+        selection_policy="oracle_greedy",
+    )
     assert isinstance(chain.actor.root_pose_world, PoseTW)
     assert isinstance(chain.actor.target_pose_relative_root, PoseTW)
     assert isinstance(chain.actor.candidate_pose_relative_root, PoseTW)
@@ -611,6 +654,32 @@ def test_dataset_joins_exact_source_and_emits_no_provenance() -> None:
     assert not hasattr(chain.actor, "one_step_target_rri")
     assert chain.actor.static_context is None
     assert actor_reader.backbone_reads == 0
+
+
+def test_dataset_reports_conditional_source_coverage_without_fabricated_target_denominator() -> None:
+    dataset = QhDataset(
+        rollout_reader=_as_rollout_reader(_RolloutReader(_source_ref())),
+        actor_reader=_as_actor_reader(_ActorReader()),
+    )
+
+    coverage = dataset.admission_coverage
+
+    assert coverage == {
+        "schema_version": "qh-admission-coverage-v1",
+        "conditional_population": False,
+        "condition": "root_actor_source_available_v1",
+        "reference_source_row_count": 1,
+        "admitted_source_row_count": 1,
+        "source_row_fraction": 1.0,
+        "reference_scene_count": 1,
+        "admitted_scene_count": 1,
+        "scene_fraction": 1.0,
+        "admitted_source_target_task_count": 1,
+        "reference_source_target_task_count": None,
+        "source_target_task_fraction": None,
+        "source_target_coverage_reason": "actor store does not enumerate the complete target-task population",
+    }
+    assert dataset.provenance["admission_coverage"] == coverage
 
 
 def test_rich_dataset_normalizes_one_source_axis_before_batching(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -647,6 +716,8 @@ def test_rich_dataset_normalizes_one_source_axis_before_batching(monkeypatch: py
     )
 
     chain = dataset[0]
+    assert dataset.admission_coverage["conditional_population"] is True
+    assert dataset.admission_coverage["condition"] == "cf_gt_selected_observation_available_v1"
     context = chain.actor.static_context
     assert context is not None
     assert context.t_world_voxel is not None and _pose_tensor(context.t_world_voxel).shape == (12,)

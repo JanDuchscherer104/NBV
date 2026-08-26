@@ -437,6 +437,122 @@ class CampaignPlan:
         return plan
 
 
+def bounded_scene_stratified_plan(
+    plan: CampaignPlan,
+    *,
+    scenes_per_split: int = 1,
+    required_splits: tuple[str, ...] = ("train", "validation", "test"),
+) -> CampaignPlan:
+    """Return a deterministic train/validation/test evidence slice.
+
+    The full :class:`CampaignPlan` remains the population owner: scene-level
+    split assignment, work-unit identity, source lineage, generation revision,
+    and configuration hashes are copied without reinterpretation. This helper
+    selects complete existing work units only; it does not invent a second
+    partition rule or mutate the parent plan. Selection is keyed by the parent
+    seed and stable work-unit identities so input ordering cannot silently pick
+    an easier target.
+
+    Args:
+        plan: Fully validated broad campaign plan containing persisted
+            ``train``, ``validation``, and ``test`` scene assignments.
+        scenes_per_split: Positive number of distinct scenes retained from each
+            requested campaign split. One work unit is selected per scene.
+        required_splits: Ordered, nonempty subset of ``train``, ``validation``,
+            and ``test``. The default constructs a complete three-stage smoke
+            population. A stage-only plan supports deterministic replacement
+            acquisition after input-side feasibility rejection without
+            regenerating already admitted stages or inspecting Q labels.
+
+    Returns:
+        A new hash-valid plan ordered by train, validation, and test split. Its
+        smaller work-unit list is the complete bounded execution population;
+        all parent provenance and admission summaries remain bound.
+
+    Raises:
+        ValueError: If the bound is non-positive, the requested splits are
+            empty, duplicated, or unknown, a work unit lacks scene lineage, or
+            a requested split has insufficient distinct scenes.
+
+    Notes:
+        This is an infrastructure/smoke surface, not a statistically powered
+        evaluation design. Scientific comparisons still require a separately
+        justified population size and scene-level uncertainty analysis.
+    """
+
+    if scenes_per_split < 1:
+        raise ValueError("bounded campaign scenes_per_split must be positive")
+    known_splits = {"train", "validation", "test"}
+    if not required_splits or len(set(required_splits)) != len(required_splits):
+        raise ValueError("bounded campaign required_splits must be nonempty and unique")
+    unknown_splits = set(required_splits) - known_splits
+    if unknown_splits:
+        raise ValueError(f"bounded campaign required_splits are unknown: {sorted(unknown_splits)}")
+    selected: list[CampaignWorkUnit] = []
+    for split in required_splits:
+        by_scene: dict[str, list[CampaignWorkUnit]] = {}
+        for unit in plan.work_units:
+            if unit.campaign_split != split:
+                continue
+            scene = str((unit.source_row_payload or {}).get("scene_id", ""))
+            if not scene:
+                raise ValueError("bounded campaign work units require source scene lineage")
+            by_scene.setdefault(scene, []).append(unit)
+        ranked_scenes = sorted(
+            by_scene,
+            key=lambda scene: (
+                hashlib.sha256(
+                    json.dumps([plan.seed, "bounded-scene", split, scene], separators=(",", ":")).encode()
+                ).hexdigest(),
+                scene,
+            ),
+        )
+        if len(ranked_scenes) < scenes_per_split:
+            raise ValueError(
+                f"bounded campaign split {split!r} has {len(ranked_scenes)} distinct scene(s); "
+                f"requires {scenes_per_split}."
+            )
+        for scene in ranked_scenes[:scenes_per_split]:
+            selected.append(
+                min(
+                    by_scene[scene],
+                    key=lambda unit: (
+                        hashlib.sha256(
+                            json.dumps(
+                                [plan.seed, "bounded-unit", split, scene, unit.work_unit_hash],
+                                separators=(",", ":"),
+                            ).encode()
+                        ).hexdigest(),
+                        unit.work_unit_hash,
+                    ),
+                )
+            )
+    return _replace_campaign_plan_units(plan, tuple(selected))
+
+
+def _replace_campaign_plan_units(plan: CampaignPlan, units: tuple[CampaignWorkUnit, ...]) -> CampaignPlan:
+    """Replace only a plan's execution population and recompute its digest."""
+
+    payload = {
+        "schema_version": CAMPAIGN_PLAN_SCHEMA_VERSION,
+        "campaign_id": plan.campaign_id,
+        "seed": plan.seed,
+        "source_manifest_hash": plan.source_manifest_hash,
+        "profile_hash": plan.profile_hash,
+        "config_hash": plan.config_hash,
+        "writer_config_hash": plan.writer_config_hash,
+        "admission_audit_hash": plan.admission_audit_hash,
+        "admission_counts": plan.admission_counts or {},
+        "admission_reason_counts": plan.admission_reason_counts or {},
+        "generation_revision": None if plan.generation_revision is None else plan.generation_revision.to_jsonable(),
+        "zero_admission_scene_ids": list(plan.zero_admission_scene_ids),
+        "zero_admission_scene_count": plan.zero_admission_scene_count,
+        "work_units": [asdict(unit) for unit in units],
+    }
+    plan_hash = stable_msgspec_hash(json.loads(json.dumps(payload, sort_keys=True, default=str)))
+    return replace(plan, work_units=units, plan_hash=plan_hash)
+
+
 @dataclass(frozen=True, slots=True)
 class CampaignEvent:
     kind: str
@@ -3467,4 +3583,5 @@ __all__ = [
     "CampaignWorkUnit",
     "CudaRolloutCampaign",
     "CudaRolloutCampaignConfig",
+    "bounded_scene_stratified_plan",
 ]
