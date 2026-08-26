@@ -5,24 +5,32 @@ This is intentionally conservative. It catches the failure modes that usually
 make Codex-generated Mermaid figures inconsistent with the ARIA-NBV thesis style.
 It does not replace rendering with `mmdc`; it complements it.
 """
+
 from __future__ import annotations
 
 import argparse
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 RESERVED_IDS = {
-    "end", "default", "style", "linkStyle", "classDef", "class",
-    "call", "href", "click", "interpolate",
+    "end",
+    "default",
+    "style",
+    "linkStyle",
+    "classDef",
+    "class",
+    "call",
+    "href",
+    "click",
+    "interpolate",
 }
 
 REQUIRED_CLASSDEFS = {
-    "input": "fill:#D5E8D4,stroke:#82B366,stroke-width:1.5px,rx:0,ry:0",
-    "output": "fill:#F8CECC,stroke:#B85450,stroke-width:1.5px,rx:0,ry:0",
-    "compute": "fill:#E1D5E7,stroke:#9673A6,stroke-width:1.5px,rx:8,ry:8",
-    "data": "fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1.2px,rx:0,ry:0",
+    "input": "fill:#D5E8D4,stroke:#82B366,color:#17202A,stroke-width:1.5px,rx:0,ry:0",
+    "output": "fill:#F8CECC,stroke:#B85450,color:#17202A,stroke-width:1.5px,rx:0,ry:0",
+    "compute": "fill:#E1D5E7,stroke:#9673A6,color:#17202A,stroke-width:1.5px,rx:8,ry:8",
+    "data": "fill:#F5F5F5,stroke:#9E9E9E,color:#17202A,stroke-width:1.2px,rx:0,ry:0",
 }
 
 NON_CANONICAL_SYMBOLS = {
@@ -48,7 +56,7 @@ def strip_frontmatter(text: str) -> tuple[str | None, str]:
     rest_start = text.find("\n", end + 4)
     if rest_start == -1:
         return text[4:end], ""
-    return text[4:end], text[rest_start + 1:]
+    return text[4:end], text[rest_start + 1 :]
 
 
 def line_col(text: str, idx: int) -> tuple[int, int]:
@@ -66,7 +74,9 @@ def lint_text(text: str, path: Path) -> list[tuple[str, str]]:
     issues: list[tuple[str, str]] = []
 
     if "---" in text and not text.startswith("---\n"):
-        add_issue(issues, "error", "frontmatter exists but does not start at byte 0 / line 1")
+        add_issue(
+            issues, "error", "frontmatter exists but does not start at byte 0 / line 1"
+        )
 
     frontmatter, body = strip_frontmatter(text)
     diagram_match = DIAGRAM_DECL_RE.search(body)
@@ -82,14 +92,28 @@ def lint_text(text: str, path: Path) -> list[tuple[str, str]]:
     if diagram_type in {"flowchart", "graph"}:
         if has_math:
             if not frontmatter:
-                add_issue(issues, "error", "math-heavy flowchart should include ARIA-NBV frontmatter")
+                add_issue(
+                    issues,
+                    "error",
+                    "math-heavy flowchart should include ARIA-NBV frontmatter",
+                )
             else:
                 if "htmlLabels: true" not in frontmatter:
-                    add_issue(issues, "error", "math-heavy flowchart must set htmlLabels: true")
+                    add_issue(
+                        issues,
+                        "error",
+                        "math-heavy flowchart must set htmlLabels: true",
+                    )
                 if "layout: elk" not in frontmatter:
-                    add_issue(issues, "warning", "math-heavy thesis flowchart should use layout: elk")
+                    add_issue(
+                        issues,
+                        "warning",
+                        "math-heavy thesis flowchart should use layout: elk",
+                    )
                 if "themeCSS:" not in frontmatter:
-                    add_issue(issues, "warning", "missing themeCSS font-size normalization")
+                    add_issue(
+                        issues, "warning", "missing themeCSS font-size normalization"
+                    )
 
         for cls, style in REQUIRED_CLASSDEFS.items():
             pattern = rf"classDef\s+{re.escape(cls)}\s+([^;]+);"
@@ -97,7 +121,11 @@ def lint_text(text: str, path: Path) -> list[tuple[str, str]]:
             if not m:
                 add_issue(issues, "warning", f"missing required classDef `{cls}`")
             elif style not in m.group(1):
-                add_issue(issues, "warning", f"classDef `{cls}` differs from ARIA-NBV style guide")
+                add_issue(
+                    issues,
+                    "warning",
+                    f"classDef `{cls}` differs from ARIA-NBV style guide",
+                )
 
     # Reserved IDs used as node declarations or arrow targets.
     for word in RESERVED_IDS:
@@ -112,25 +140,39 @@ def lint_text(text: str, path: Path) -> list[tuple[str, str]]:
     if re.search(r"subgraph\s+[^\"\n]*<br", body):
         add_issue(issues, "error", "subgraph titles containing <br/> must be quoted")
 
-    if re.search(r"stroke-dasharray:\s*\d+,\d+", body) and not re.search(r"stroke-dasharray:\s*\d+\\,\d+", body):
+    if re.search(r"stroke-dasharray:\s*\d+,\d+", body) and not re.search(
+        r"stroke-dasharray:\s*\d+\\,\d+", body
+    ):
         add_issue(issues, "warning", "escape comma in stroke-dasharray, e.g. `5\\,5`")
 
     if diagram_type == "sequenceDiagram" and re.search(r"->>.*:.*(?<!#59);", body):
-        add_issue(issues, "warning", "literal semicolons in sequence messages should use `#59;`")
+        add_issue(
+            issues,
+            "warning",
+            "literal semicolons in sequence messages should use `#59;`",
+        )
 
     for bad, good in NON_CANONICAL_SYMBOLS.items():
         if bad in text:
-            add_issue(issues, "warning", f"non-canonical symbol `{bad}`; prefer `{good}` from shared Typst notation")
+            add_issue(
+                issues,
+                "warning",
+                f"non-canonical symbol `{bad}`; prefer `{good}` from shared Typst notation",
+            )
 
     # Warn on \\mathrm subscripts written as raw English with underscores outside math conventions.
     if re.search(r"\$\$.*_[a-zA-Z]{3,}.*\$\$", text, re.DOTALL):
         # Do not hard-fail; this catches many false positives in texttt labels.
-        add_issue(issues, "info", "check long raw subscripts; thesis math should usually use `_{\\mathrm{...}}`")
+        add_issue(
+            issues,
+            "info",
+            "check long raw subscripts; thesis math should usually use `_{\\mathrm{...}}`",
+        )
 
     # Basic balance checks.
     if text.count("$$") % 2 != 0:
         add_issue(issues, "error", "unbalanced `$$` delimiters")
-    if text.count("\"") % 2 != 0:
+    if text.count('"') % 2 != 0:
         add_issue(issues, "warning", "odd number of double quotes; check quoted labels")
 
     return issues
@@ -142,14 +184,18 @@ def run_mmdc(path: Path, output: Path | None) -> tuple[int, str]:
         output = path.with_suffix(".lint.svg")
     wrapper = Path(__file__).with_name("render_mermaid.sh")
     cmd = [str(wrapper), str(path), str(output)]
-    proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90)
+    proc = subprocess.run(
+        cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=90
+    )
     return proc.returncode, proc.stdout
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lint ARIA-NBV Mermaid thesis figures")
     parser.add_argument("files", nargs="+", type=Path)
-    parser.add_argument("--render", action="store_true", help="also run mmdc if available")
+    parser.add_argument(
+        "--render", action="store_true", help="also run mmdc if available"
+    )
     parser.add_argument("--render-output", type=Path, default=None)
     args = parser.parse_args()
 
