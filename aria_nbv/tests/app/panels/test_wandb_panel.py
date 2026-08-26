@@ -80,3 +80,49 @@ def test_filter_runs_by_steps() -> None:
         max_steps=None,
     )
     assert [run.id for run in filtered] == ["b"]
+
+
+def test_build_autoresearch_run_dataframe_uses_explicit_config_namespace() -> None:
+    runs = [
+        _DummyRun(
+            id="result-run",
+            name="evaluator",
+            state="finished",
+            config={
+                "aria_autoresearch": {
+                    "goal_slug": "latency",
+                    "iteration": 3,
+                    "checkpoint_status": "pass",
+                    "hypothesis": "Cache the resolved command graph.",
+                    "candidate_revision": "candidate",
+                    "baseline_revision": "baseline",
+                    "evaluator_fingerprint": "evaluator-v1",
+                    "research_source_count": 2,
+                    "result_sha256": "digest",
+                }
+            },
+            summary={"aria_autoresearch/runtime_s": 3.5},
+        ),
+        _DummyRun(id="training", name="train", state="finished", config={}, summary={}),
+    ]
+
+    result = wandb_utils.build_autoresearch_run_dataframe(runs)
+
+    assert result.to_dict(orient="records") == [
+        {
+            "id": "result-run",
+            "run_name": "evaluator",
+            "state": "finished",
+            "goal_slug": "latency",
+            "iteration": 3,
+            "checkpoint_status": "pass",
+            "hypothesis": "Cache the resolved command graph.",
+            "research_source_count": 2,
+            "candidate_revision": "candidate",
+            "baseline_revision": "baseline",
+            "evaluator_fingerprint": "evaluator-v1",
+            "result_sha256": "digest",
+            "runtime_s": 3.5,
+            "peak_memory_mb": None,
+        }
+    ]

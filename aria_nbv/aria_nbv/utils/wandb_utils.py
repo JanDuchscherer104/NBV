@@ -120,6 +120,44 @@ def _safe_mapping(raw: Any) -> dict[str, Any]:
         return {}
 
 
+def build_autoresearch_run_dataframe(runs: Iterable[WandbRun]) -> "pd.DataFrame":
+    """Return the read-only autoresearch evidence rows embedded in W&B configs.
+
+    The bridge writes this compact identity data under ``aria_autoresearch``;
+    metrics remain ordinary W&B summaries.  Runs without that namespace are
+    intentionally excluded, so the panel never infers campaign state from a
+    run name, tag, or mutable W&B history.
+    """
+    import pandas as pd
+
+    rows: list[dict[str, Any]] = []
+    for run in runs:
+        config = _flatten_mapping(_safe_mapping(getattr(run, "config", None)))
+        goal_slug = config.get("aria_autoresearch.goal_slug")
+        if not goal_slug:
+            continue
+        summary = _safe_mapping(getattr(run, "summary", None))
+        rows.append(
+            {
+                "id": str(getattr(run, "id", "")),
+                "run_name": str(getattr(run, "name", "")),
+                "state": str(getattr(run, "state", "")),
+                "goal_slug": goal_slug,
+                "iteration": config.get("aria_autoresearch.iteration"),
+                "checkpoint_status": config.get("aria_autoresearch.checkpoint_status", ""),
+                "hypothesis": config.get("aria_autoresearch.hypothesis", ""),
+                "research_source_count": config.get("aria_autoresearch.research_source_count"),
+                "candidate_revision": config.get("aria_autoresearch.candidate_revision", ""),
+                "baseline_revision": config.get("aria_autoresearch.baseline_revision", ""),
+                "evaluator_fingerprint": config.get("aria_autoresearch.evaluator_fingerprint", ""),
+                "result_sha256": config.get("aria_autoresearch.result_sha256", ""),
+                "runtime_s": summary.get("aria_autoresearch/runtime_s"),
+                "peak_memory_mb": summary.get("aria_autoresearch/peak_memory_mb"),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _list_entities(api: WandbApi) -> list[str]:
     """Return available entities (user + teams) for the current API token."""
     entities: list[str] = []
@@ -780,6 +818,7 @@ __all__ = [
     "_summarize_gap",
     "_summarize_metric",
     "build_dynamics_dataframe",
+    "build_autoresearch_run_dataframe",
     "build_run_dataframes",
     "collect_run_media_images",
     "list_run_dirs",

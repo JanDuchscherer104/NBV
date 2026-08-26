@@ -72,8 +72,10 @@ verification of affected sources.
 
 ## Upstream Lifecycle And Hooks
 
-- ARIA pins Graphify 0.9.48 and keeps the Codex skill byte-identical to upstream
-  commit `b2cd36267456c166788c95be6e68574064a92a42`.
+- ARIA pins Graphify 0.9.48 and keeps the Codex skill byte-identical to the
+  upstream source registered as `graphify-skill-bundle` in
+  `.agents/skill-sources.toml`. The grounding ID never activates upstream
+  maintenance.
 - `graphify hook install` is the upstream post-commit and post-checkout
   no-LLM accelerator. It refreshes changed code and the pinned executable may
   AST-quick-scan changed Markdown headings. It does not semantically refresh

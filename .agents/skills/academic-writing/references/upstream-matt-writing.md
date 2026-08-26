@@ -5,19 +5,14 @@ activate raw Matt writing skills for ARIA-NBV thesis writing.
 
 ## Upstream Sources
 
-Pinned to `mattpocock/skills` reviewed ref
-`896f14d9c25659f03b24e08e4efc3ee69bbade08`:
+The reviewed upstream files and revision are registered as
+`matt-writing-modes` in `.agents/skill-sources.toml`:
 
-- `writing-fragments`:
-  <https://raw.githubusercontent.com/mattpocock/skills/896f14d9c25659f03b24e08e4efc3ee69bbade08/skills/in-progress/writing-fragments/SKILL.md>
-- `writing-shape`:
-  <https://raw.githubusercontent.com/mattpocock/skills/896f14d9c25659f03b24e08e4efc3ee69bbade08/skills/in-progress/writing-shape/SKILL.md>
-- `writing-beats`:
-  <https://raw.githubusercontent.com/mattpocock/skills/896f14d9c25659f03b24e08e4efc3ee69bbade08/skills/in-progress/writing-beats/SKILL.md>
+- `skills/in-progress/writing-fragments/SKILL.md`
+- `skills/in-progress/writing-shape/SKILL.md`
+- `skills/in-progress/writing-beats/SKILL.md`
 
-Before adopting future upstream changes, compare upstream `main` with the pinned
-links above, then adapt only generic mechanics that improve ARIA thesis
-authoring.
+The grounding ID is provenance only and never activates upstream maintenance.
 
 ## ARIA Adaptation
 

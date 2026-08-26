@@ -20,4 +20,6 @@ claim. This profile does not replace the exact source, report, or Typst proof.
 These bounded profiles adapt the computational and display-provenance checks in
 [WenyuChiou/paper-review at
 `cb56a7d`](https://github.com/WenyuChiou/academic-writing-skills/tree/cb56a7d0175f532a6c628c9829e1df824fa938d7/skills/paper-review).
-They are prompts for independent review, not scientific truth owners.
+They are prompts for independent review, not scientific truth owners. Their
+grounding is registered as `wenyu-academic-writing` in
+`.agents/skill-sources.toml` and never activates upstream maintenance.

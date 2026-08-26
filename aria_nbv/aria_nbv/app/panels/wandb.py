@@ -35,6 +35,7 @@ from ...utils.wandb_utils import (
     plot_dynamics_scatter,
     plot_metric_curves,
 )
+from ._wandb_autoresearch import render_autoresearch_panel
 from .common import (
     _info_popover,
     _pretty_label,
@@ -273,6 +274,7 @@ def render_wandb_analysis_page() -> None:
         return
 
     run_by_id = {str(getattr(run, "id", "")): run for run in runs}
+    render_autoresearch_panel(runs)
     meta_df, summary_df, config_df = build_run_dataframes(runs)
     config_by_id = cast(dict[str, dict[str, Any]], config_df.to_dict(orient="index")) if not config_df.empty else {}
 

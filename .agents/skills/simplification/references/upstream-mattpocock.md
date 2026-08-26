@@ -3,6 +3,10 @@
 Use this as reference-only inspiration from Matt `codebase-design`,
 `improve-codebase-architecture`, and `writing-great-skills`.
 
+External grounding is registered as `matt-scaffold-guidance` in
+`.agents/skill-sources.toml`. The ID is provenance only and never activates
+upstream maintenance.
+
 Borrow:
 
 - use module, interface, depth, seam, adapter, leverage, and locality vocabulary;

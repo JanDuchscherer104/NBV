@@ -1,0 +1,6 @@
+interface:
+  display_name: "Update Skill Sources"
+  short_description: "Explicit upstream skill-source maintenance"
+  default_prompt: "Use $update-skill-sources to explicitly check or update one registered external source behind an ARIA-NBV skill adaptation."
+policy:
+  allow_implicit_invocation: false
