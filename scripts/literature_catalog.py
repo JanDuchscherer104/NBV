@@ -21,10 +21,7 @@ class LiteratureCatalogConfig:
     """Locate the canonical bibliography and literature-manifest owners."""
 
     repo_root: Path
-    bibliography_paths: tuple[Path, ...] = (
-        Path("docs/references.bib"),
-        Path("docs/references-qh.bib"),
-    )
+    bibliography_paths: tuple[Path, ...] = (Path("docs/references.bib"),)
     manifest_path: Path = Path("docs/literature/sources.jsonl")
     tex_root: Path = Path("docs/literature/tex-src")
     pdf_root: Path = Path("docs/literature/pdf")

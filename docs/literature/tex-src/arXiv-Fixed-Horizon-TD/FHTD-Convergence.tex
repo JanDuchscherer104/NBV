@@ -1,0 +1,340 @@
+\documentclass{article}
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+\usepackage[preprint]{neurips_2019}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+
+% extra packages
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{subfig}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[title]{appendix}
+\newcommand\defeq{\overset{\mathrm{def}}{=}}
+\DeclareMathOperator*{\argmax}{argmax}
+\usepackage{wrapfig}
+
+\usepackage[dvipsnames]{xcolor}
+\newcommand{\TODO}[1]{\textcolor{red}{#1}}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\D}{\mathcal{D}}
+\renewcommand{\vec}[1]{\textbf{\textit{#1}}}
+\newcommand{\val}{\vec{v}}
+\newcommand{\valt}{\val}
+\newcommand{\given}{\,|\,}
+\newcommand{\target}{\vec{u}}
+\newcommand{\params}{\textbf{w}}
+\newcommand{\Features}{\bm{\Phi}}
+\newcommand{\features}{\bm{\phi}}
+\newcommand{\grad}{\bm{\nabla}}
+\renewcommand{\r}{\textbf{\textit{r}}}
+\newcommand{\transitionmtx}{\textbf{\textit{P}}}
+\newcommand{\projectionmtx}{\bm{\Pi}}
+\newcommand{\densitymtx}{\textbf{\textit{D}}}
+\newcommand{\bellmanop}{\textbf{\textit{T}}}
+\newcommand{\dv}{\bm{\Delta}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\smashednorm}[1]{\left\lVert \smash{#1} \right\rVert}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
+\newtheorem{assumption}{Assumption}
+\newtheorem{definition}{Definition}
+
+\begin{document}
+
+{\Huge \textbf{Convergence of FHTD}}
+
+\vspace{\baselineskip}
+\hrule
+\vspace{\baselineskip}
+
+\section{Synchronous policy valuation with known $n$-th step rewards}
+
+To get a feel for the argument that needs to be made, consider the simplest case: synchronous policy valuation with known reward vector $\r_n$ (whose $i$-th component represents the expected reward in the $n$-th timestep when following the policy from state $s_i$)\footnote{For purposes of exposition, this is a different formulation that the usual TD(0) algorithm, since the transition dynamics are represented solely in $\r_n$. We can recover a valid proof for the TD(0) formulation, however, by treating $\r_n$ as the 1 step reward vector, and $\valt_{n-1}^t$ as the vector representing the \textit{expected} $n-1$ step value of the next state when following the given policy.}. Here $\valt_n^t$ is a vector representing the value function for the $n$-step horizon at the $t$-th learning step, $\alpha \in (0, 1)$ the learning rate, and $\delta_n^t$ the update to $\valt_n^t$ at the $t$-th timestep.
+
+\begin{theorem}
+For $t > 1$ , $n \geq 0$ consider the tabular policy valuation algorithm, defined as follows:
+
+\begin{itemize}
+\item $\valt_0^t = \bm{0}$,
+\item $\valt_{n}^{t+1} = \valt_{n}^{t} - \alpha\dv^t_{n}$,
+\item $\dv^t_{n} = \valt^t_{n} - \valt_{n-1}^t - \r_{n}$.
+\end{itemize}
+
+For all $n$, $\lim_{t \to \infty} \dv^t_n = \bm{0}$ so that $\valt_{n}^{t} \to \valt_{n-1}^t + \r_{n}$.
+\end{theorem}
+
+\begin{proof}
+Note that for  $\alpha \in (0, 1)$, $\dv^t_1 \to \bm{0}$, since:
+\begin{align*}
+\dv^{t+1}_1 &= \valt^{t+1}_1 - \r_1 \\
+& = (1-\alpha)\dv_1^t\\
+& = (1-\alpha)^t\dv_1^1.
+\end{align*}
+
+Now suppose $\dv^t_{n-1} \to \bm{0}$ and consider $\dv^t_{n}$. We have:
+\begin{align*}
+\dv^{t+1}_n &= \valt^{t+1}_n - \valt^{t+1}_{n-1} - \r_n \\
+& = \valt^t_n - \alpha\dv^t_n - \valt^t_{n-1} + \alpha\dv^t_{n-1} - \r_n \\
+& = (1 - \alpha)\dv^t_n + \alpha\dv^t_{n-1}\\
+& = (1 - \alpha)^k\dv^{t+1-k}_n + \alpha\left[\dv^t_{n-1} + (1-\alpha)\dv^{t-1}_{n-1} + \dots  + (1-\alpha)^{k-1}\dv^{t+1-k}_{n-1} \right].
+\end{align*}
+Given $\epsilon$, pick integer $k$ such that $\norm{\dv^{k+t}_{n-1}} < \epsilon - \delta$ for all $t \geq 0$ and some $0 < \delta < \epsilon$. Then:
+\begin{align*}
+\norm{\dv^{k+t}_n} &= \norm{(1 - \alpha)^t\dv^{k}_n + \alpha\left[\dv^{k+t-1}_{n-1} + (1-\alpha)\dv^{k+t-2}_{n-1} + \dots  + (1-\alpha)^{t-1}\dv^{k}_{n-1} \right]}\\
+& \leq \norm{(1 - \alpha)^t\dv^{k}_n} + \alpha(\epsilon - \delta)[1 + (1-\alpha) + \dots + (1-\alpha)^{t-1}]\\
+& \leq \norm{(1 - \alpha)^t\dv^{k}_n} + (\epsilon - \delta),
+\end{align*}
+
+where the first inequality uses the triangle inequality and the second extends the geometric series to infinity. For large $t$, $\norm{(1 - \alpha)^t\dv^{k}_n} < \delta$, so that $ \norm{\dv^{k+t}_n} < \epsilon$. The result follows by induction.
+\end{proof}
+
+\section{Policy valuation with known loss}
+
+\subsection{Linear function approximation}
+
+We now address the case where the $n$-step value function is parameterized as $\valt_n^t = \Features\params_n^t$, where $\Features \in \R^{|S| \times d}$ is a matrix of state features, $S$ is a finite state space, and $\params_n^t \in \R^d$ is a learned parameter vector for the $n$-step value function.
+
+The loss being optimized at every step is:
+
+\begin{equation}
+	J(\params_n^t) = \frac{1}{2}\norm{\bellmanop\valt_{n-1}^t - \valt_n^t}_\densitymtx^2 = \frac{1}{2}(\r + \transitionmtx\valt_{n-1}^t - \valt_n^t)^T\densitymtx(\r + \transitionmtx\valt_{n-1}^t - \valt_n^t)
+\end{equation}
+
+where $\bellmanop$ is the 1-step bellman operator, $\densitymtx$ is an $|S| \times |S|$ diagonal matrix whose $i$-th entry indicates the non-negative weight of the $i$-th state (typically this is the steady-state probability of the $i$-th state under the current policy), and $\norm{\cdot}_\densitymtx$ is the norm induced by the inner product on $\mathbb{R}^{|S|}$: $\langle \vec{x} , \vec{y} \rangle_\densitymtx = \vec{x}^T\densitymtx \vec{y}$.
+
+Gradient descent updates the parameters $\params_n$ according to the following update rule:
+
+\begin{equation}\label{equation_linear_gradient_descent}
+\begin{split}
+	\params_n^{t+1} &= \params_n^t - \alpha \nabla J(\params_n^t)\\
+	& = \params_n^t - \alpha \Features^T\densitymtx(\bellmanop\valt_{n-1}^t - \valt_n^t),
+\end{split}
+\end{equation}
+
+where $\alpha > 0$ is a constant learning rate. We assume that:
+
+\begin{assumption}\label{assumption_full_rank}
+ The columns (or basis vectors) $\{\features_1, \features_2, \dots, \features_d\}$ of $\Features$ are linearly independent.
+\end{assumption}
+
+It follows that $\Features^T\densitymtx\Features$ is invertible. Following \cite{tsitsiklis1997analysis}, we define the projection matrix $\projectionmtx_\densitymtx$, which projects elements of $\mathbb{R}^{|S|}$ onto the parameterized subspace $\{\Features\vec{w}\}$, as:
+
+\begin{equation}
+	\projectionmtx_\densitymtx = \Features(\Features^T\densitymtx\Features)^{-1}\Features^T\densitymtx.
+\end{equation}
+
+Let $M = \norm{\Features^T\densitymtx\Features}$, $M' = \max(M, \norm{\Features^T\densitymtx\transitionmtx\Features})$, $m = 1/\norm{(\Features^T\densitymtx\Features)^{-1}}$, and $\kappa = M'/m$.
+
+We further assume that:
+
+\begin{assumption}\label{assumption_converging_target}
+	The sequence $(\valt_{n-1}^t)$ converges to some fixed point $\target^*_{n-1}$ as $t \to \infty$.
+\end{assumption}
+
+Given this assumption, we can define the ``true'' loss:
+
+\begin{equation}
+	J^*(\params_n^t) = \frac{1}{2}\norm{\bellmanop\target^*_{n-1} - \valt_n^t}_\densitymtx^2
+\end{equation}
+
+Given Assumption \ref{assumption_full_rank}, it follows that there is a unique $\params_n^*$ that minimizes the above loss (\cite{tsitsiklis1997analysis}), and that $\projectionmtx_\densitymtx\bellmanop\target^*_{n-1} = \Features\params_n^*$.
+
+We will prove that under Assumptions 1-2 above, gradient descent (with a sufficiently small learning rate) on the surrogate loss $J$ minimizes the true loss $J^*$, so that $\params_n^t$ converges to $\params_n^*$. The idea behind the proof is simple: if $\params_{n-1}^t$ is $\epsilon$-close to $\target^*_{n-1}$, then a gradient step on $J$ is guaranteed to reduce $J^*$ for values of $\params_n^t$ that are $\delta > k\epsilon$, where $k$ is a constant, away from $\params_n^*$; then, since $\delta \to 0$ as $\epsilon \to 0$, and since the increase in $J^*$ is also bounded in terms of $\epsilon$, convergence follows.
+
+\begin{theorem}\label{theorem_linear_convergence}
+[FHTD with gradient descent and linear function approximation converges]
+When $\params_n^{t+1}$ is initialized with bounded $\params_n^0$ and is updated according to the gradient descent FHTD update (Equation \ref{equation_linear_gradient_descent}), then given Assumptions \ref{assumption_full_rank} and \ref{assumption_converging_target} and sufficiently small $\alpha > 0$ (see proof), we have $\params_n^{t+1} \to \params_n^*$ and $J^*(\params_n^t)$ converges to its globally minimal value.
+\end{theorem}
+
+\begin{proof}
+	We begin with a few observations. First, given $\epsilon > 0$, by Assumption \ref{assumption_converging_target} there exists integer $\tau$ such that $\norm{\params_{n-1}^t - \target^*_{n-1}} < \epsilon$ for all $t > \tau$.
+	We also have that $\nabla J^*(\params_n^t) = \Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)$ is Lipschitz smooth with constant $M = \norm{\Features^T\densitymtx\Features}$; i.e.:
+		\begin{equation}
+			\norm{\nabla J^*(\params_1) - \nabla J^*(\params_2)} \leq M\!\norm{\params_1 - \params_2}.
+		\end{equation}
+
+	For notational convenience, we will omit the argument to $J$ (or $J^*$) when writing the gradient $\nabla J$ (or $\nabla J^*$). Choose $0 < c \ll 1$ and suppose $\smashednorm{\params_n^* - \params_n^t} > \delta = \kappa\epsilon/(1-c)$. Then:
+	\begin{equation}
+	\small
+	\begin{split}
+	\nabla J^T\nabla J^*	 - c\smashednorm{\nabla J^*	}^2 &= (\Features^T\densitymtx(\bellmanop\params_{n-1}^t + (\bellmanop\target^*_{n-1}  - \bellmanop\target^*_{n-1}) - \Features\params_n^t))^T\nabla J^*	 - c\smashednorm{\nabla J^*	}^2\\
+	&=(1 - c)\smashednorm{\nabla J^*	}^2  + (\Features^T\densitymtx\transitionmtx\Features(\params_{n-1}^t - \target^*_{n-1}))^T\nabla J^*	 \\
+	&\geq (1 - c)\smashednorm{\nabla J^*	}^2  - \vert (\Features^T\densitymtx\transitionmtx\Features(\params_{n-1}^t - \target^*_{n-1}))^T\nabla J^* \vert \\
+	&\geq (1 - c)\smashednorm{\nabla J^*	}^2  - \smashednorm{\nabla J^*}\smashednorm{\smash{\Features^T\densitymtx\transitionmtx\Features}}\smashednorm{\params_{n-1}^t - \target^*_{n-1}} \\
+	&= \smashednorm{\nabla J^*	}\Big[(1 - c)\smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)}  - M'\epsilon\Big] \\
+	&= \smashednorm{\nabla J^*	}\Big[(1 - c)\smashednorm{\Features^T\densitymtx(\Features\params_n^* - \Features\params_n^t  + (\bellmanop\target^*_{n-1} - \projectionmtx_\densitymtx\bellmanop\target^*_{n-1}))}  - M'\epsilon\Big] \\
+	&= \smashednorm{\nabla J^*	}\Big[(1 - c)\smashednorm{\Features^T\densitymtx\Features(\params_n^* - \params_n^t)}  - M'\epsilon\Big] \\
+	&\geq \smashednorm{\nabla J^*	}\Big[(1 - c)m\delta  - M'\epsilon\Big] = 0,\\
+	\end{split}
+	\end{equation}
+	where the second inequality uses Cauchy-Schartz, and the final equality holds because the difference $(\bellmanop\target^*_{n-1} - \projectionmtx_\densitymtx\bellmanop\target^*_{n-1})$ is $\densitymtx$-orthogonal to each basis vector in $\Features$. It follows that $c\smashednorm{\nabla J^*	}^2 \leq \nabla J^T\nabla J^*$ when $\smashednorm{\params_n^* - \params_n^t} > \delta$. Similarly, we have:
+	\begin{equation*}
+	\small
+	\begin{split}
+	(2 - c)\smashednorm{\nabla J^*} - \smashednorm{\nabla J} &= (2 - c)\smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)} - \smashednorm{\Features^T\densitymtx(\bellmanop\params_{n-1}^t - \Features\params_n^t)}\\
+	&= (2 - c) \smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)} - \smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t) + \Features^T\densitymtx\transitionmtx\Features(\params_{n-1}^t - \target^*_{n-1})}\\
+	&\geq (2 - c) \smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)} - \smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)} - \smashednorm{\Features^T\densitymtx\transitionmtx\Features(\params_{n-1}^t - \target^*_{n-1})}\\
+	&\geq (1-c) \smashednorm{\Features^T\densitymtx\Features(\params_n^* - \params_n^t)} - M'\epsilon\\
+	&\geq (1 - c) m\delta -
+	M'\epsilon = 0,\\
+	\end{split}
+	\end{equation*}
+	so that $\smashednorm{\nabla J} \leq (2-c)\smashednorm{\nabla J^*}$ when $\smashednorm{\params_n^* - \params_n^t} > \delta$.
+
+
+	Then, starting with Equation 3.39 of \cite{bertsekas1996neuro}, we have:
+	\begin{equation}
+	\begin{split}
+	J^*(\params_n^t - \alpha \nabla J) - J^*(\params_n^t)
+	&\leq -\alpha \nabla J^T\nabla J^* + \frac{1}{2}\alpha^2 M\smashednorm{ \nabla J}^2\\
+	&\leq -\alpha c\smashednorm{\nabla J^*	}^2 + \frac{1}{2}\alpha^2 M(2-c)^2\smashednorm{\nabla J^*}^2\\
+	&= \frac{\alpha M (2-c)^2}{2}\left(\alpha - \frac{2c}{M(2-c)^2} \right)\smashednorm{\nabla J^*}^2.\\
+	\end{split}
+	\end{equation}
+
+	Thus, if $\alpha$ is sufficiently small, i.e. $\alpha < \frac{2c}{M(2-c)^2}$, and $\smashednorm{\params_n^* - \params_n^t} > \delta$, the true loss $J^*$ is strictly decreasing. Now, if $\smashednorm{\params_n^* - \params_n^t} \leq \delta$, the true loss $J^*$ may increase, but note that:
+
+	\begin{align*}
+	\begin{split}
+		\smashednorm{\nabla J}
+		&= \smashednorm{\Features^T\densitymtx(\bellmanop\params_{n-1}^t - \Features\params_n^t)}\\
+		&\leq \smashednorm{\Features^T\densitymtx(\bellmanop\target^*_{n-1} - \Features\params_n^t)} + \smashednorm{\Features^T\densitymtx\transitionmtx\Features(\params_{n-1}^t - \target^*_{n-1})}\\
+		&\leq M\delta + M'\epsilon,
+	\end{split}
+	\end{align*}
+	so that:
+	\begin{equation}
+	\begin{split}
+		\smashednorm{\params_n^* - \params_n^{t+1}} &= \smashednorm{\params_n^* - \params_n^t + \alpha \nabla J}\\
+		&\leq \delta + M\delta + M'\epsilon.\\
+	\end{split}
+	\end{equation}
+
+	Therefore, again starting with Equation 3.39 of \cite{bertsekas1996neuro}, once learning reaches a timestep T for which $\smashednorm{\params_n^* - \params_n^{T}} \leq \delta  + M\delta + M'\epsilon \leq k\epsilon$, where $k$ is a constant (this always occurs, since $J^*$ is strictly decreasing outside of this $k\epsilon$-ball), $J^*(\params_n^{t \geq T})$ is upper bounded by:
+	\begin{equation}
+	\begin{split}
+	J^*(\params_n^* - (\params_n^* - \params_n^t))
+	&\leq J^*(\params_n^*) - (\params_n^* - \params_n^t)^T\nabla J^* + \frac{1}{2}M\smashednorm{(\params_n^* - \params_n^t)}^2\\
+	&\leq J^*(\params_n^*) + k\epsilon \smashednorm{\nabla J^*} + \frac{1}{2}M(k\epsilon)^2.\\
+	\end{split}
+	\end{equation}
+
+	Since this upper bound goes to $J^*(\params_n^*)$ as $\epsilon \to 0$, which is the global minimum loss (\cite{tsitsiklis1997analysis}), and since $\epsilon$ was arbitrary, the result follows.
+
+\end{proof}
+
+\pagebreak
+\subsection{General function approximation}\label{subsection_general_fn_approx}
+
+\begin{wrapfigure}{r}{0.26\textwidth}
+\vspace{-1.55\baselineskip}
+  \includegraphics[width=0.255\textwidth]{divergence.pdf}
+  \caption{\small With a general function approximator, $J^*$ may increase at each step.}\label{figure_diverging_loss}
+  \vspace{-1.5\baselineskip}
+\end{wrapfigure}
+
+A critical step in the proof of Theorem \ref{theorem_linear_convergence} was to show that gradient descent on the surrogate loss $J$ resulted in a strictly decreasing true loss $J^*$ outside a $\delta$-ball of the limit. For the $\delta$-ball to be bounded in terms of an arbitrary $\epsilon > 0$, we assumed that the feature matrix $\Features$ had linearly independent columns, so that the matrix $\Features^T\densitymtx\Features$ had bounded condition number. For a general function approximator, however, it is difficult to formulate an equivalent assumption that will allow us to conclude that the true loss $J^*$ decreases as we optimize the surrogate loss $J$.
+
+This is illustrated in Figure \ref{figure_diverging_loss}, where the gradient step $\alpha\nabla J$ reduces the surrogate loss $J$, but \textit{increases} the true loss $J^*$. Note that the increase $\Delta J^* = J_2^* - J_1^*$ may be on the order of $\epsilon$ (as is the increase shown in Figure \ref{figure_diverging_loss}). Thus, even if $\epsilon \to 0$, the sum total of the increases (over all gradient descent steps) may be on the order of $\sum \epsilon$, which may diverge.
+Nevertheless, if we assume there is some minimal non-negative progress toward the surrogate objective at every step (a practical assumption, else our learning algorithm would be considered to have ``converged''), it is easy to show that standard gradient descent converges to a solution that is at least as strong as the function approximation class (in the sense defined in the next subsection).
+
+\subsection{Convergence of FH policy valuation and control for $\delta$-strong function approximators}
+
+We now address the case where $\valt_n^t: S \to \R$, parameterized by $\params^t \in \R^k$, is represented by a general function approximator (e.g., a neural network). General non-linear function approximators have non-convex loss surfaces and may have many saddle points and local minima. As a result, typical convergence results (e.g., for gradient descent) are not useful without some additional assumption about the approximation error (cf., the \textit{inherent Bellman error} in the analysis of Fitted Value Iteration \cite{munos2008finite}), since learning may converge to a bad solution. We therefore state our result for general function approximators in terms of \textit{$\delta$-strongness} for $\delta > 0$:
+
+\begin{definition}[$\delta$-strongness]\label{defition_delta_strongness}
+	A function approximator, consisting of function class $\mathcal{H}$ and iterative learning algorithm $\mathcal{A}$, is \textbf{$\bm{\delta}$-strong} with respect to target function class $\mathcal{G}$ and loss function $J: \mathcal{H} \times \mathcal{G} \to \R^+$ if, for all target functions $g \in \mathcal{G}$, the learning algorithm $\mathcal{A}$ is \textit{guaranteed} to produce (within a finite $t$ number of steps) an $h^t \in \mathcal{H}$ such that $J(h^t, g) \leq \delta$.
+\end{definition}
+
+We assume we know when algorithm $\mathcal{A}$ has converged as follows:
+
+\begin{assumption}[Constant progress]\label{assumption_minimum_progress}
+	There exists stopping constant $c$ such that learning algorithm $\mathcal{A}$ is considered to have ``converged'' with respect to target function $g$ whenever less than $c$ progress would be made by an additional step; i.e., when $J(h^t, g) - J(h^{t-1}, g) < c$.
+\end{assumption}
+
+Note that $\delta$-strongness may depend on the stopping constant $c$: a looser stopping constant naturally corresponds to earlier stopping and looser $\delta$. Note also that, so long as the distance between the function classes $\mathcal{H}$ and $\mathcal{G}$ is upper bounded, say by $\vec{d}$, any convergent $\mathcal{A}$ is ``$\vec{d}$-strong''. Thus, a $\delta$-strongness result is only meaningful to the extent that $\delta$ is sufficiently small.
+
+Are deep neural networks trained by gradient descent $\delta$-strong, for a sufficiently small $\delta$? In general, no: despite their expressiveness, gradient-based learning may stall in a bad saddle point or bad local minimum. Nevertheless, repeat empirical experience has taught us that neural networks consistently find good solutions (\cite{zhang2016understanding}), and a growing number of theoretical results suggest that almost all local optima are ``good'' (\cite{pascanu2014saddle, choromanska2015loss, pennington2017geometry}). For this reason, we argue that $\delta$-strongness (for sufficiently small $\delta$) is a reasonable assumption, at least approximately, when using neural networks.
+
+%The following result identifies a training procedure that, given a ``$\delta$-strong'' function approximator with stopping constant $c$ and loss function $J(\params)$, is guaranteed to converge to a $\delta$-strong solution; i.e., $J(\params) \leq \delta$.
+As above, we assume:
+
+\begin{assumption}
+	\label{assumption_converging_target_2}
+		The sequence $(\params_{n-1}^t)$ converges to some fixed point $\params_{n-1}^*$ as $t \to \infty$.
+\end{assumption}
+
+And further, that:
+
+\begin{assumption}
+	\label{assumption_Lipschitz}
+		The target function $\bellmanop\valt(\params_{n-1}^t)$ is Lipschitz continuous in the target parameters; i.e.,
+		$\norm{\bellmanop\valt(\params_1) - \bellmanop\valt(\params_2)}_\mathcal{F} \leq L\norm{\params_1 - \params_2}$
+		for some constant $L < \infty$, where $\norm{\cdot}_\mathcal{F}$ is a norm defined on a value function space $\mathcal{F}$, which we take to be a Banach space containing both $\mathcal{H}$ and $\mathcal{G}$.
+\end{assumption}
+
+
+It follows from Assumptions \ref{assumption_converging_target_2} and \ref{assumption_Lipschitz} that the sequence of target functions $\bellmanop\valt_{n-1}^t$ converges to $\bellmanop\target^* = \bellmanop\valt(\params_{n-1}^*)$ in $\mathcal{F}$ (which may be infinite dimensional) under norm $\norm{\cdot}$. We can therefore define the ``true'' loss:
+
+\begin{equation}
+	J^*(\params_n^t) = \norm{\bellmanop\target^* - \valt_n^t}.
+\end{equation}
+
+Here we have dropped the $\frac{1}{2}$ scalar factor and squared error for ease of exposition (the two losses share the same minimums and the analysis is unaffected after adjusted $\delta$ and $c$ accordingly). Since we cannot access $J^*$ directly, we optimize $\valt_n^t$ with respect to the surrogate loss:
+
+\begin{equation}
+	J(\params_{n-1}^t, \params_n^t) = \norm{\bellmanop\valt_{n-1}^t - \valt_n^t}.
+\end{equation}
+
+
+\begin{lemma}\label{lemma_strict_progress}
+	If $\norm{\bellmanop\valt_{n-1}^t - \bellmanop\target^*} < \epsilon$,
+	and learning has not yet converged with respect to the surrogate loss $J$, then $J^*(\params_n^t) -J^*(\params_n^{t+1}) > c - 2\epsilon$ (where $c$ is the stopping constant from Assumption \ref{assumption_minimum_progress}).
+\end{lemma}
+
+\begin{proof}
+	This follows by applying the triangle inequality (twice) in function space $\mathcal{F}$:
+	\begin{equation}
+		\small
+	\begin{split}
+		J^*(\params_n^t) - J^*(\params_n^{t+1})
+		&= \smashednorm{\bellmanop\target^* - \valt_n^t} - \smashednorm{\bellmanop\target^* - \valt_n^{t+1}}\\
+		&= \smashednorm{\bellmanop\target^* - \valt_n^t} + \Big(\smashednorm{\bellmanop\valt_{n-1}^t - \bellmanop\target^*} - \smashednorm{\bellmanop\valt_{n-1}^t - \bellmanop\target^*}\Big) \\
+		&\quad\quad\quad\quad - \smashednorm{\bellmanop\target^* + (\bellmanop\valt_{n-1}^t - \bellmanop\valt_{n-1}^t) - \valt_n^{t+1}}\\
+		&\geq \Big(\smashednorm{\bellmanop\valt_{n-1}^t - \valt_n^t} - \smashednorm{\bellmanop\valt_{n-1}^t - \bellmanop\target^*}\Big)\\
+		&\quad\quad\quad\quad - \Big(\smashednorm{\bellmanop\valt_{n-1}^t - \valt_n^{t+1}}+\smashednorm{\bellmanop\target^*- \bellmanop\valt_{n-1}^t }\Big)\\
+		&= \Big(\smashednorm{\bellmanop\valt_{n-1}^t - \valt_n^t} -\smashednorm{\bellmanop\valt_{n-1}^t - \valt_n^{t+1}} \Big) - 2\smashednorm{\bellmanop\target^*- \bellmanop\valt_{n-1}^t }\\
+		&> c - 2\epsilon,\\
+	\end{split}
+	\end{equation}
+	where the last inequality uses $\Big(\smashednorm{\bellmanop\valt_{n-1}^t - \valt_n^t} -\smashednorm{\bellmanop\valt_{n-1}^t - \valt_n^{t+1}} \Big) > c$ from Assumption \ref{assumption_minimum_progress}.
+\end{proof}
+
+It follows from Lemma \ref{lemma_strict_progress} that when $\epsilon$ is small enough---$\epsilon < \frac{c}{2} - k$ for some constant $k$---either the true loss $J^*$ falls by at least $k$, or learning has converged with respect to the current target $\bellmanop\valt_{n-1}^t$. Since the loss is non-negative (so cannot go to $-\infty$), it follows that the \textit{loss} converges to a $\delta$-strong solution: $J^*(\params_n^t) \to d$ with $d \leq \delta$. Since there are only a finite number of $k$-sized steps between the current loss at time $t$ and $0$ (i.e., only a finite number of opportunities for the learning algorithm to have ``not converged'' with respect to the surrogate loss $J$), the parameters $\params_n^t$ must also converge.
+
+Since Assumption \ref{assumption_Lipschitz} is reasonable in cases of both policy valuation and control, and since the 1-step target is stationary, the result follows by induction:
+
+\begin{theorem}
+Under Assumptions \ref{assumption_minimum_progress}, \ref{assumption_converging_target_2}, and \ref{assumption_Lipschitz}, each horizon of FHTD and FHQL converges to a $\delta$-strong solution relative to the previous horizon, when using a $\delta$-strong function approximator, as defined in Definition \ref{defition_delta_strongness}.
+\end{theorem}
+
+The minimum constant progress assumption is critical to the above result: only if progress is guaranteed to be ``large enough'' relative to the error in the surrogate target is learning guaranteed to make progress on the true loss $J^*$. Without constant progress---e.g., if the progress at each step is allowed to be less than $2\epsilon$, regardless of how small $\epsilon$ is---the discussion from earlier in this section applies, and training may diverge. As stated above, the constant progress assumption does not reflect common practice: rather than progress being measured at every step, it is typically measured over several, say $k$, steps. The above analysis is easily adapted to this more practical scenario by making use of a target network (\cite{mnih2013playing}) to freeze the targets for $k$ steps at a time. Then, considering each $k$ step window as a single step in the above discussion, the result applies.
+
+\bibliography{references}
+\bibliographystyle{apa}
+
+\end{document}

@@ -20,10 +20,10 @@
   A: $A$,
   // Finite horizon; glyph H can collide with `shape.H` image height.
   H: $H$,
+  // Requested residual horizon supplied to a finite-horizon value query.
+  requested_horizon: $h$,
   // Maximum supported residual horizon in the scorer/data contract.
   H_max: $H_"max"$,
-  // Scalar residual horizon requested for one scorer call.
-  requested_horizon: $h$,
   // Temporal discount factor.
   gamma: $gamma$,
   // Markov decision process specialized to NBV selection.
@@ -60,9 +60,9 @@
   return_h: $G_t^((H))$,
   // Horizon-conditioned action-value function.
   qh: $Q_H$,
-  // Action-mask-independent conditional value emitted by the scorer.
+  // Action-mask-independent conditional candidate value emitted by the scorer.
   conditional_q: $Q_(h,theta,e,i)^"cond"$,
-  // Physical/observed feasibility logit emitted by the scorer.
+  // Physical or observed feasibility logit emitted by the scorer's feasibility head.
   feasibility_logits: $ell_(t,i)^"feas"$,
   // Fixed boundary assigning a continuous fitted-Q target to CORAL classes.
   coral_q_edge: $e_k^Q$,
@@ -76,6 +76,18 @@
   qh_target: $Q_(H,theta^-)$,
   // Scalar validity mask for candidate i at step t.
   validity_mask: $m_(t,i)$,
+  // Materialized candidate row versus structural padding.
+  candidate_row_mask: $m_(t,i)^"cand"$,
+  // Authoritative physically valid action support.
+  action_mask: $m_(t,i)^"act"$,
+  // Availability of a finite value label for candidate i at requested horizon h.
+  q_label_mask: $m_(t,i)^(Q,h)$,
+  // Availability of a trustworthy feasibility label for candidate i.
+  feasibility_label_mask: $m_(t,i)^F$,
+  // Availability of a factual successor backup for transition t.
+  successor_mask: $m_t^"succ"$,
+  // Actor/oracle source-provenance role for candidate evidence.
+  source_role: $ell_(t,i)^"src"$,
   // Categorical invalidity reason for candidate i at step t.
   invalid_reason: $rho_(t,i)$,
   // Generic state or metric increment.

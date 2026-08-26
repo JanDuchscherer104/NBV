@@ -1,0 +1,1436 @@
+%File: formatting-instruction.tex
+\documentclass[letterpaper]{article}
+\usepackage{flairs}%aaai
+\usepackage{times}
+\usepackage{helvet}
+\usepackage{courier}
+
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{subfig}
+\usepackage[]{hyperref}
+\urlstyle{same}
+\interfootnotelinepenalty=10000
+\newtheorem{prop}{Proposition}
+
+% overlength papers
+\frenchspacing
+\setlength{\pdfpagewidth}{8.5in}
+\setlength{\pdfpageheight}{11in}
+\pdfinfo{
+/Title (A Closer Look at Invalid Action Masking in Policy Gradient Algorithms)
+/Author (Shengyi Huang, Santiago Ontañón)}
+\setcounter{secnumdepth}{0}
+ \begin{document}
+% This file is an adoption of the style file for AAAI Press
+% proceedings, working notes, and technical reports.  This file is made
+% with minimal changes by explicit permission from AAAI.
+%
+\title{A Closer Look at Invalid Action Masking in Policy Gradient Algorithms}
+% \author{Shengyi Huang \text{and} Santiago Onta\~{n}\'{o}n \thanks{Currently at Google}\\
+% Drexel University\\
+% Address Line 1\\
+% Address Line 2\\
+% }
+
+\author{Shengyi Huang \textnormal{and} Santiago Onta\~{n}\'{o}n \thanks{Currently at Google} \\
+College of Computing \& Informatics,
+Drexel University\\
+Philadelphia, PA 19104 \\
+\texttt{\{sh3397,so367\}@drexel.edu}
+}
+
+\maketitle
+\begin{abstract}
+\begin{quote}
+In recent years, Deep Reinforcement Learning (DRL) algorithms have achieved state-of-the-art performance in many challenging strategy games. Because these games have complicated rules, an action sampled from the full discrete action distribution predicted by the learned policy is likely to be invalid according to the game rules (e.g., walking into a wall). The usual approach to deal with this problem in policy gradient algorithms is to ``mask out'' invalid actions and just sample from the set of valid actions. The implications of this process, however, remain under-investigated.
+% In this paper, we show that the standard working mechanism of invalid action masking corresponds to valid policy gradient updates.
+% More interestingly, it works by applying a \emph{state-dependent differentiable function} during the calculation of action probability distribution.
+% Additionally, we show its critical importance to the performance of policy gradient algorithms in the context of games with complex action spaces. Specifically, our experiments show that invalid action masking scales well when the space of invalid actions in a game is large, while the common approach of giving negative rewards for invalid actions will fail. Finally, we provide further insights by evaluating different action masking regimes, such as removing masking after an agent has been trained using masking.
+In this paper, we 1) show theoretical justification for such a practice, 2) empirically demonstrate its importance as the space of invalid actions grows, and 3) provide further insights by evaluating different action masking regimes, such as removing masking after an agent has been trained using masking.
+\end{quote}
+\end{abstract}
+
+
+\section{Introduction}
+
+% {\color{red} [santi: I don't like the ``The Implication of'' in the title, it reads awkward. Let's think of a better title.]}
+% {\color{blue} [costa: how about the current title?]}
+
+Deep Reinforcement Learning (DRL) algorithms have yielded state-of-the-art game playing agents in challenging domains such as Real-time Strategy (RTS) games~\cite{vinyals2017starcraft,vinyals2019grandmaster} and Multiplayer Online Battle Arena (MOBA) games~\cite{Berner2019Dota2W,ye2019mastering}. Because these games have complicated rules, the valid discrete action spaces of different states usually have different sizes. That is, one state might have 5 valid actions and another state might have 7 valid actions. To formulate these games as a standard reinforcement learning problem with a singular action set, previous work combines these discrete action spaces to a \emph{full discrete action space} that contains available actions of all states~\cite{vinyals2017starcraft,Berner2019Dota2W,ye2019mastering}. Although such a full discrete action space makes it easier to apply DRL algorithms, one issue is that an action sampled from this full discrete action space could be invalid for some game states, and this action will have to be discarded.
+
+% For example, consider the action ``move left'', which can be valid in some game states, but will become invalid if there is an obstacle to the left of the agent.
+To make matters worse, some games have extremely large full discrete action spaces and an action sampled will typically be invalid. As an example, the full discrete action space of Dota~2 has a size of 1,837,080~\cite{Berner2019Dota2W}, and an action sampled might be to buy an item, which can be \emph{valid} in some game states but will become \emph{invalid} when there is not enough gold.
+% One of the most popular categories of DRL algorithms used for these games are policy gradient algorithms~\cite{sutton2000policy} which directly optimize the agent's policy. Because these games have complicated rules, a typical action sampled from the action probability distribution generated by the policy being trained will likely be invalid, when applying policy gradient algorithms directly to the full discrete action space. For example, the action being sampled in the full discrete action space might be to buy an item when there is not enough gold.
+To avoid repeatedly sampling invalid actions in full discrete action spaces, recent work applies policy gradient algorithms in conjunction with a technique known as invalid action masking, which ``masks out'' invalid actions and then just samples from those actions that are valid~\cite{vinyals2017starcraft,Berner2019Dota2W,ye2019mastering}. To the best of our knowledge, however, the theoretical foundations of invalid action masking have not been studied and its empirical effect is under-investigated.
+%  {\color{blue}[Here we define the full discrete action space as the union of sets of avaialble actions of every states, which is the typical action space formulation of existing work~\cite{vinyals2017starcraft,vinyals2019grandmaster,Berner2019Dota2W,ye2019mastering,Dietterich_2000}]}.
+\begin{figure}[t]
+  \centering
+    \includegraphics[width=0.3\textwidth]{images/microrts.png}\,%
+  \caption{A screenshot of $\mu$RTS. Square units are ``bases'' (light grey, that can produce workers), ``barracks'' (dark grey, that can produce military units), and ``resources mines'' (green, from where workers can extract resources to produce more units), the circular units are ``workers'' (small, dark grey) and military units (large, yellow or light blue), and on the right is the $10\times10$ map we used to train agents to harvest resources. The agents could control units at the top left, and the units in the bottom left will remain stationary.}
+  \label{fig:microrts}
+\end{figure}
+% \begin{figure*}[t]
+% \centering
+% \subfloat[$4\times4$ Map]{\label{fig:sub:4x4}{\includegraphics[width=0.45\textwidth]{screen/invalid_action_masking.png}}}\hfill
+% \subfloat[$4\times4$ Map]{\label{fig:sub:4x4}{\includegraphics[width=0.45\textwidth]{screen/invalid_action_masking.png}}}\hfill
+% % \subfloat[$4\times4$ Map]{\label{fig:sub:4x4}{\includegraphics[width=0.32\textwidth]{screen/invalid_action_masking.png}}}\hfill
+% % \subfloat[$4\times4$ Map]{\label{fig:sub:4x4}{\includegraphics[width=0.245\textwidth]{screen/invalid_action_masking.png}}}
+%   \caption{A screenshot of $\mu$RTS. Square units are ``bases'' (light grey, that can produce workers), ``barracks'' (dark grey, that can produce military units), and ``resources mines'' (green, from where workers can extract resources to produce more units), the circular units are ``workers'' (small, dark grey) and military units (large, yellow or light blue), and on the right is the $10\times10$ map we used to train agents to harvest resources. The agents could control units at the top left, and the units in the bottom left will remain stationary.}
+%   \label{fig:microrts}
+% \end{figure*}
+In this paper, we take a closer look at invalid action masking in the context of games, pointing out the gradient produced by invalid action masking corresponds to a valid policy gradient. More interestingly, we show that in fact, invalid action masking can be seen as applying a \emph{state-dependent differentiable function} during the calculation of the action probability distribution, to produce a behavior policy. %This is a practice we do not find in any other DRL algorithms, which generally formulate the policy or value function using state-independent differentiable functions such as sigmoid or softmax.
+Next, we design experiments to compare the performance of {\em invalid action masking} versus {\em invalid action penalty}, which is a common approach that gives negative rewards for invalid actions so that the agent learns to maximize reward by not executing any invalid actions. We empirically show that, when the space of invalid actions grows, invalid action masking scales well and the agent solves our desired task while invalid action penalty struggles to explore even the very first reward. Then, we design experiments to answer two questions: (1) What happens if we remove the invalid action mask once the agent was trained with the mask?
+% In other words, if an agent is well-trained with invalid action masking, how much does it depend on invalid action masking?
+(2) What is the agent's performance when we implement the invalid action masking naively by sampling the action from the masked action probability distribution but updating the policy gradient using the unmasked action probability distribution? Finally, we made our source code available at GitHub for the purpose of reproducibility\footnote{\footnotesize \url{https://github.com/vwxyzjn/invalid-action-masking}}.
+
+\section{Background}
+% %\textbf{Notation.}
+% We consider the Reinforcement Learning problem in a Markov Decision Process (MDP) denoted as $(S,A,P, \rho_0, r,\gamma, T)$, where $S$ is the state space, $A$ is the discrete action space, $P: S \times A \times S \rightarrow [0, 1]$ is the state transition probability, $\rho_0: S\rightarrow [0,1]$ is the the initial state distribution, $r: S \times A \rightarrow \mathbb{R}$ is the reward function, $\gamma$ is the discount factor, and $T$ is the maximum episode length. A stochastic policy $\pi_{\theta}: S \times A \rightarrow [0,1]$ , parameterized by a parameter vector $\theta$, assigns a probability value to an action given a state. The goal is to maximize the expected discounted return:
+% \begin{align*}
+%     J = \mathbb{E}_{\tau}\left[\sum_{t=0}^{T-1} \gamma^{t} r_{t}\right], & \text { where } \tau \text { is the trajectory } \left(s_{0}, a_{0}, r_{0}, s_{1}, \dots, s_{T-1}, a_{T-1}, r_{T-1}\right)\\
+%      &\text { and } s_{0} \sim \rho_{0}, s_t \sim P(\cdot \vert s_{t-1}, a_{t-1}), a_t \sim \pi_{\theta}(\cdot \vert s_t), r_{t}=r\left(s_{t}, a_{t}\right)
+% \end{align*}
+% The notation $P(\cdot \vert s_{t-1}, a_{t-1})$ represents the states transition distribution given the previous state $s_{t-1}$ and action $a_{t-1}$, and the notation $s_t \sim P(\cdot \vert s_{t-1}, a_{t-1})$ represents that the state $s_t$ visited at time $t$ is sampled from $P(\cdot \vert s_{t-1}, a_{t-1})$. Similarly, $\pi_{\theta}(\cdot \vert s_t)$ represents the action distribution given state $s_t$, and $a_t \sim \pi_{\theta}(\cdot \vert s_t)$ means the action $a_t$ at time $t$ is sampled from $\pi_{\theta}(\cdot \vert s_t)$.
+
+
+
+% \textbf{Policy Gradient Algorithms. } The core idea behind policy gradient algorithms is to obtain the \textsl{policy gradient} $\nabla_{\theta}J$ of the expected discounted return with respect to the policy parameter $\theta$. Doing gradient ascent $\theta = \theta + \nabla_{\theta}J$ therefore maximizes the expected discounted reward. Earlier work proposed the following policy gradient estimate to the objective $J$~\cite{sutton2000policy,sutton2018reinforcement}:
+% \begin{equation}
+%     g_{\text{policy}} = \mathbb{E}_{\tau}\left [ \nabla_{\theta} \log\pi_{\theta}(a_\tau|s_\tau)G_\tau \right] =  \mathbb{E}_{\tau}\left [\nabla_{\theta} \sum_{t=0}^{T-1} \log\pi_{\theta}(a_t|s_t)G_t \right]\mathrm{,}
+% \end{equation}
+% where $G_{t} = \sum_{k=0}^{\infty} \gamma^{k} r_{t+k}$ denotes the discounted return following time $t$.
+
+In this paper, we use  policy gradient methods to train agents.
+Let us consider the Reinforcement Learning problem in a Markov Decision Process (MDP) denoted as $(S,A,P, \rho_0, r,\gamma, T)$, where $S$ is the state space, $A$ is the discrete action space, $P: S \times A \times S \rightarrow [0, 1]$ is the state transition probability, $\rho_0: S\rightarrow [0,1]$ is the initial state distribution, $r: S \times A \rightarrow \mathbb{R}$ is the reward function, $\gamma$ is the discount factor, and $T$ is the maximum episode length. A stochastic policy $\pi_{\theta}: S \times A \rightarrow [0,1]$, parameterized by a parameter vector $\theta$, assigns a probability value to an action given a state. The goal is to maximize the expected discounted return of the policy:
+\begin{gather*}
+        J = \mathbb{E}_{\tau}\left[\sum_{t=0}^{T-1} \gamma^{t} r_{t}\right]\\
+        \text { where } \tau \text { is the trajectory } \left(s_{0}, a_{0}, r_{0},  \dots, s_{T-1}, a_{T-1}, r_{T-1}\right),\\
+        \text  s_{0} \sim \rho_{0}, s_t \sim P(\cdot \vert s_{t-1}, a_{t-1}), a_t \sim \pi_{\theta}(\cdot \vert s_t), r_{t}=r\left(s_{t}, a_{t}\right)
+\end{gather*}
+The core idea behind policy gradient algorithms is to obtain the \textsl{policy gradient} $\nabla_{\theta}J$  of the expected discounted return with respect to the policy parameter $\theta$. Doing gradient ascent $\theta = \theta + \nabla_{\theta}J$ therefore maximizes the expected discounted reward.
+Earlier work proposes the following policy gradient estimate to the objective $J$~\cite{sutton2018reinforcement}:
+\begin{align*}
+   \nabla_{\theta}J = \mathbb{E}_{\tau\sim\pi_\theta}\left[ \sum_{t=0}^{T-1} \nabla_{\theta}\log\pi_{\theta}(a_t|s_t)G_t \right]\mathrm{,} \  G_{t} = \sum_{k=0}^{\infty} \gamma^{k} r_{t+k}
+\end{align*}
+% This gradient estimate, however, suffers from high variance~\cite{sutton2018reinforcement} and there are many techniques and extensions to address it~\cite{schulman2015high,schulman2017proximal,espeholt2018impala}.
+
+
+% This gradient estimation, however, suffers from large variance and it is  suggested to replace $G_t$ in the calculation of the gradient $\nabla_{\theta} J$ with some form of advantage estimates $A(s_t, s_t)$~\cite{sutton2018reinforcement}, which generally takes the form of:
+% \[A_{\pi}\left(s_{t}, a_{t}\right)=Q_{\pi}\left(s_{t}, a_{t}\right)-V_{\pi}\left(s_{t}\right)\]
+% where $Q_{\pi}$ and $V_{\pi}$ are the state-action value function and value function.
+% Using the advantage function $A_{\pi}\left(s_{t}, a_{t}\right)$ instead of the discounted return $G_t$ to obtain the gradients of the policy network's weights $\nabla_{\theta} J$ has been shown to reduce the variance of policy gradient algorithms~\cite{schulman2015gae}. {\color{red} [santi: missing citation]}
+
+% \section{Invalid Action Masking}
+% Invalid action masking is a common technique implemented to avoid repeatedly generating invalid actions in large discrete action spaces~\cite{vinyals2017starcraft,Berner2019Dota2W,ye2019mastering}. To the best of our knowledge, there is no literature providing detailed descriptions off the implementation of invalid action masking. Existing work~\cite{vinyals2017starcraft,Berner2019Dota2W} seems to treat invalid action masking as an auxiliary detail, usually describing it using only a few sentences. Additionally, there is no literature providing theoretical justification to explain why it works with policy gradient algorithms. In this section, we examine how invalid action masking is implemented and prove it indeed corresponds to valid policy gradient updates~\cite{sutton2000policy}. More importantly, we show it works by applying a \emph{ state-dependent differentiable function} during the calculation of action probability distribution, which is a practice we do not find in any other DRL algorithms.  %In addition, we provide a intuitive explanation for why it works.
+
+% First, let us see how a discrete action is typically generated through policy gradient algorithms. Most policy gradient algorithms employ a neural network to represent the policy, which usually outputs unnormalized scores (logits) and then converts them into an action probability distribution using a softmax operation or equivalent, which is the framework we will assume in the rest of the paper. For illustration purposes, consider an MDP with the action set $A=\{a_0, a_1, a_2, a_3\}$. Further, consider a policy $\pi_{\theta}$ parameterized by $\theta = [l_0, l_1, l_2, l_3]$ that, for the sake of this example, directly produces $\theta$ as the output logits. Then in $s_t$ we have that:
+% \begin{align}
+%     \pi_{\theta}(\cdot \vert s_t)&= [\pi_{\theta}(a_0|s_t), \pi_{\theta}(a_1|s_t), \pi_{\theta}(a_2|s_t), \pi_{\theta}(a_3|s_t)] = \text{softmax}([l_0, l_1, l_2, l_3]) \label{eq:softmax_logits2}\\
+%     \pi_{\theta}(a_i|s_t) &= \frac{\exp(l_i)}{\sum_j \exp(l_j)}
+% \end{align}
+% At this point, regular policy gradient algorithms will sample an action from $\pi_{\theta}(\cdot \vert s_t)$. Now suppose $a_2$ is invalid for state $s_t$, and the only valid actions are $a_0, a_1, a_3$. Invalid action masking helps to avoid sampling invalid actions by ``masking out'' the logits corresponding to the invalid actions. This is usually accomplished by replacing the logits of the actions to be masked by a large negative number $M$ (e.g. $M = -1 \times 10^8$).  %{\color{red} [santi: really? ``replacing''? what I have seen often implemented is just ``adding'' a large negative number. Is ``replacing'' the common implementation in RL?]} { \color{blue}[costa: as you know, alphastar and openai five are not open sourced, the only implementation on invalid action masking I can find is in TFagent, which replaces the logits with a number that is  really negative \url{https://github.com/tensorflow/agents/blob/a6ab65605a6910cb3130a500614d006c9271157b/tf_agents/distributions/masked.py#L80}]}.
+% So in this case, we calculate the re-normalized probability distribution $\pi'_{\theta}(\cdot \vert s_t)$ as the following:
+% \begin{align}
+%     &\pi'_{\theta}(\cdot \vert s_t)= \text{softmax}([l'_0, l'_1, l'_2, l'_3]) \label{eq:softmax_masked_logits}\\
+%     &=\text{softmax}([l_0, l_1, M, l_3]) = [\pi'_{\theta}(a_0|s_t), \pi'_{\theta}(a_1|s_t), \epsilon, \pi'_{\theta}(a_3|s_t)] \label{eq:softmax_masked_logits2}
+% \end{align}
+% where $\epsilon$ is the resulting probability of the masked invalid action, which should be a small number. If $M$ is chosen to be sufficiently negative, the probability of choosing the masked invalid action $a_2$ will be virtually zero. After finishing the episode, the policy is updated according to the following gradient, which we refer to as the \emph{invalid action policy gradient}.
+% \begin{align}
+% \label{eq:invalid_action_masking_gradient}
+%     g_{\text{invalid action policy}} = \nabla_{\theta} \sum_{t=0}^{T-1} \log\pi'_{\theta}(a_t|s_t)G_t
+% \end{align}
+
+\section{Invalid Action Masking}
+Invalid action masking is a common technique implemented to avoid repeatedly generating invalid actions in large discrete action spaces~\cite{vinyals2017starcraft,Berner2019Dota2W,ye2019mastering}. To the best of our knowledge, there is no literature providing detailed descriptions of the implementation of invalid action masking. Existing work~\cite{vinyals2017starcraft,Berner2019Dota2W} seems to treat invalid action masking as an auxiliary detail, usually describing it using only a few sentences. Additionally, there is no literature providing theoretical justification to explain why it works with policy gradient algorithms. In this section, we examine how invalid action masking is implemented and prove it indeed corresponds to valid policy gradient updates~\cite{sutton2000policy}. More interestingly, we show it works by applying a \emph{state-dependent differentiable function} during the calculation of action probability distribution.
+% , which is a practice we do not find in any other DRL algorithms.  %In addition, we provide a intuitive explanation for why it works.
+
+First, let us see how a discrete action is typically generated through policy gradient algorithms. Most policy gradient algorithms employ a neural network to represent the policy, which usually outputs unnormalized scores (logits) and then converts them into an action probability distribution using a softmax operation or equivalent, which is the framework we will assume in the rest of the paper. For illustration purposes, consider an MDP with the action set $A=\{a_0, a_1, a_2, a_3\}$ and $S=\{s_0, s_1\}$, where the MDP reaches the terminal state $s_1$ immediately after an action is taken in the initial state $s_0$ and the reward is always +1. Further, consider a policy $\pi_{\theta}$ parameterized by $\theta = [l_0, l_1, l_2, l_3]=[1.0,1.0,1.0,1.0]$ that, for the sake of this example, directly produces $\theta$ as the output logits. Then in $s_0$ we have:
+\begin{align}
+    \pi_{\theta}(\cdot \vert s_0)&= [\pi_{\theta}(a_0|s_0), \pi_{\theta}(a_1|s_0), \pi_{\theta}(a_2|s_0), \pi_{\theta}(a_3|s_0)]  \nonumber \\
+    &=\text{softmax}([l_0, l_1, l_2, l_3])  \label{eq:softmax_logits2}\\
+    &=[0.25, 0.25, 0.25, 0.25],  \nonumber\\
+    &\text{where }\pi_{\theta}(a_i|s_0) = \frac{\exp(l_i)}{\sum_j \exp(l_j)} \nonumber
+\end{align}
+At this point, regular policy gradient algorithms will sample an action from $\pi_{\theta}(\cdot \vert s_0)$. Suppose $a_0$ is sampled from $\pi_{\theta}(\cdot \vert s_0)$, and the policy gradient can be calculated as follows:
+\begin{align*}
+    \begin{aligned}
+g_{\text{policy}} &=  \mathbb{E}_{\tau}\left [\nabla_{\theta} \sum_{t=0}^{T-1} \log\pi_{\theta}(a_t|s_t)G_t \right] \\
+    &=\nabla_{\theta}\log\pi_{\theta}(a_0|s_0)G_0 \\
+    &= [ 0.75, -0.25, -0.25, -0.25]
+    \end{aligned} \\
+    (\nabla_{\theta}\log \text{softmax}(\theta)_j)_i = \begin{cases}
+ (1 -  \frac{\exp(l_j)}{\sum_j \exp(l_j)}) &\text{if $i=j$}\\
+ \frac{-\exp(l_j)}{\sum_j \exp(l_j)} &\text{otherwise}
+\end{cases}
+\end{align*}
+Now suppose $a_2$ is invalid for state $s_0$, and the only valid actions are $a_0, a_1, a_3$. Invalid action masking helps to avoid sampling invalid actions by ``masking out'' the logits corresponding to the invalid actions. This is usually accomplished by replacing the logits of the actions to be masked by a large negative number $M$ (e.g. $M = -1 \times 10^8$).  %{\color{red} [santi: really? ``replacing''? what I have seen often implemented is just ``adding'' a large negative number. Is ``replacing'' the common implementation in RL?]} { \color{blue}[costa: as you know, alphastar and openai five are not open sourced, the only implementation on invalid action masking I can find is in TFagent, which replaces the logits with a number that is  really negative \url{https://github.com/tensorflow/agents/blob/a6ab65605a6910cb3130a500614d006c9271157b/tf_agents/distributions/masked.py#L80}]}.
+Let us use $mask: \mathbb{R} \rightarrow \mathbb{R}$ to denote this masking process, and we can calculate the re-normalized probability distribution $\pi'_{\theta}(\cdot \vert s_0)$ as the following:
+\begin{align}
+    &\pi'_{\theta}(\cdot \vert s_0)= \text{softmax}(mask([l_0, l_1, l_2, l_3])) \label{eq:softmax_masked_logits}\\
+    &=\text{softmax}([l_0, l_1, M, l_3]) \\
+    &= [\pi'_{\theta}(a_0|s_0), \pi'_{\theta}(a_1|s_0), \epsilon, \pi'_{\theta}(a_3|s_0)] \label{eq:softmax_masked_logits2}\\
+    &= [0.33, 0.33, 0.0000, 0.33] \nonumber
+\end{align}
+where $\epsilon$ is the resulting probability of the masked invalid action, which should be a small number. If $M$ is chosen to be sufficiently negative, the probability of choosing the masked invalid action $a_2$ will be virtually zero. After finishing the episode, the policy is updated according to the following gradient, which we refer to as the \emph{invalid action policy gradient}.
+\begin{align}
+\label{eq:invalid_action_masking_gradient}
+    g_{\text{invalid action policy}} &= \mathbb{E}_{\tau}\left [\nabla_{\theta} \sum_{t=0}^{T-1} \log\pi'_{\theta}(a_t|s_t)G_t \right] \\
+    &=\nabla_{\theta}\log\pi'_{\theta}(a_0|s_0)G_0  \\
+    & = [ 0.67, -0.33,  0.0000, -0.33]\nonumber
+\end{align}
+This example highlights that invalid action masking appears to do more than just ``renormalizing the probability distribution''; it in fact makes the gradient corresponding to the logits of the invalid action to zero.
+
+%{\color{red} [santi: $g_{\text{invalid action policy gradient}}$ is very clumsy a name, no? can we shorten this? at least to something shorter like  $g_{\text{inv-act-$\pi$}}$? (I don't like this one either, but you get the idea)]}
+
+% \subsection{A specific example}
+% Let us show this with a counter example. Consider an MDP with the action set $A=\{a_0, a_1, a_2, a_3\}$ and $S=\{s_0, s_1\}$, where the MDP reaches the terminal state $s_1$ immediately after an action is taken in the initial state $s_0$ and the reward is always +1. Further consider a policy $\pi_{\theta}$ to be parameterized by $\theta = [1.0,1.0,1.0,1.0]$ and the logits it produces is always $\theta$. Furthermore, we assume $a_2$ is invalid and $a_0$ is the action that was sampled to be executed. Then we have:
+% \begin{align*}
+%     \begin{aligned}
+%     \pi_{\theta}(\cdot \vert s_0)&= \text{softmax}([1.0, 1.0, 1.0, 1.0]) \\
+%     &= [0.25, 0.25, 0.25, 0.25] \\
+%     g_{\text{policy}} &= \nabla_{\theta} \log\pi_{\theta}(a_0|s_0)G_t\\
+%     &= [ 0.75, -0.25, -0.25, -0.25]
+%     \end{aligned}
+%     &\begin{aligned}
+%     \pi'_{\theta}(\cdot \vert s_0)&= \text{softmax}([1.0, 1.0, -1\times10^8, 1.0])\\
+%     &= [0.33, 0.33, 0.0000, 0.33]\\
+%     g_{\text{invalid action policy}} &= \nabla_{\theta}\log\pi'_{\theta}(a_0|s_0)G_t \\
+%     &= [ 0.67, -0.33,  0.0000, -0.33]
+%     \end{aligned}
+% \end{align*}
+% where the derivative of the $\log \text{softmax}(\theta)_j$ can be calculated as follows:
+% \begin{align*}
+%         (\nabla_{\theta}\log \text{softmax}(\theta)_j)_i = \begin{cases}
+%  (1 -  \frac{\exp(l_j)}{\sum_j \exp(l_j)}) &\text{if $i=j$}\\
+%  \frac{-\exp(l_j)}{\sum_j \exp(l_j)} &\text{otherwise}
+% \end{cases}
+% \end{align*}
+% Let us now calculate the actual off-policy policy gradient~\cite{degris2012off,levine2020offline} with target policy being $\pi_\theta$ and behavior policy being $\pi'_{\theta}$, which we will call $g_{\text{off-policy}}$:
+% Therefore $g_{\text{invalid action policy}}$ is not the off-policy policy gradient.
+
+
+
+% \begin{prop}
+% \label{prop:not-off-policy}
+% $g_{\text{invalid action policy}}$ is not the off-policy policy gradient with target policy being $\pi_\theta$ and behavior policy being $\pi'_{\theta}$.
+% \end{prop}
+% \begin{proof}
+% Let us show this with a counter example. Consider an MDP with the action set $A=\{a_0, a_1, a_2, a_3\}$ and $S=\{s_0, s_1\}$, where the MDP reaches the terminal state $s_1$ immediately after an action is taken in the initial state $s_0$ and the reward is always +1. Further consider a policy $\pi_{\theta}$ to be parameterized by $\theta = [1.0,1.0,1.0,1.0]$ and the logits it produces is always $\theta$. Furthermore, we assume $a_2$ is invalid and $a_0$ is the action that was sampled to be executed. Then we have:
+% \begin{align*}
+%     \begin{aligned}
+%     \pi_{\theta}(\cdot \vert s_0)&= \text{softmax}([1.0, 1.0, 1.0, 1.0]) \\
+%     &= [0.25, 0.25, 0.25, 0.25] \\
+%     g_{\text{policy}} &= \nabla_{\theta} \log\pi_{\theta}(a_0|s_0)G_t\\
+%     &= [ 0.75, -0.25, -0.25, -0.25]
+%     \end{aligned}
+%     &\begin{aligned}
+%     \pi'_{\theta}(\cdot \vert s_0)&= \text{softmax}([1.0, 1.0, -1\times10^8, 1.0])\\
+%     &= [0.33, 0.33, 0.0000, 0.33]\\
+%     g_{\text{invalid action policy}} &= \nabla_{\theta}\log\pi'_{\theta}(a_0|s_0)G_t \\
+%     &= [ 0.67, -0.33,  0.0000, -0.33]
+%     \end{aligned}
+% \end{align*}
+% where the derivative of the $\log \text{softmax}(\theta)_j$ can be calculated as follows:
+% \begin{align*}
+%         (\nabla_{\theta}\log \text{softmax}(\theta)_j)_i = \begin{cases}
+%  (1 -  \frac{\exp(l_j)}{\sum_j \exp(l_j)}) &\text{if $i=j$}\\
+%  \frac{-\exp(l_j)}{\sum_j \exp(l_j)} &\text{otherwise}
+% \end{cases}
+% \end{align*}
+% Let us now calculate the actual off-policy policy gradient~\cite{degris2012off,levine2020offline} with target policy being $\pi_\theta$ and behavior policy being $\pi'_{\theta}$, which we will call $g_{\text{off-policy}}$:
+% \begin{align*}
+%     g_{\text{off-policy}} & = \left(\prod_{t=0}^{T-1} \frac{\pi_{\theta}\left(a_t | s_t\right)}{\pi'_{\theta}\left(a_t | s_t\right)}\right) \sum_{t=0}^{T-1}  \nabla_{\theta} \log \pi_{\theta}\left(a_t | s_t\right) G_t \\
+%     &= \left(\frac{\pi_{\theta}\left(a_0 | s_t\right)}{\pi'_{\theta}\left(a_0 | s_t\right)}\right)  \nabla_{\theta} \log \pi_{\theta}\left(a_0 | s_t\right)\\
+%     &= \left(\frac{0.25}{0.33}\right)   \nabla_{\theta} \log \pi_{\theta}\left(a_0 | s_t\right) = [ 0.5625, -0.1875, -0.1875, -0.1875] \neq  g_{\text{invalid action policy}}
+% \end{align*}
+% Therefore $g_{\text{invalid action policy}}$ is not the off-policy policy gradient.
+% \end{proof}
+
+\subsection{Masking Still Produces a Valid Policy Gradient}
+%Let us now take a closer look at this action masking procedure.
+The action selection process is affected by a process that seems external to $\pi_\theta$ that calculates the mask. It is therefore natural to wonder how does the policy gradient theorem~\cite{sutton2000policy} apply.
+% Intuitively, considering $g_{\text{invalid action policy}}$ as the off-policy policy gradient~\cite{degris2012off,levine2020offline} of $\pi_\theta$ makes sense because we can consider $\pi'_{\theta}$ as the behavior policy. However, let us show that this is not the case:
+As a matter of fact, our analysis shows that the process of invalid action masking can be considered as a state-dependent differentiable function applied for the calculation of $\pi'_{\theta}$, and therefore $g_{\text{invalid action policy}}$ can be considered as a policy gradient update for $\pi'_{\theta}$.
+
+% $g_{\text{invalid action policy}}$ can not be explained using policy gradient update~\cite{sutton2000policy} nor the off-policy policy gradient~\cite{degris2012off,levine2020offline} with target policy being $\pi_\theta$ and behavior policy being $\pi'_\theta$.
+
+
+% \begin{prop}
+% $g_{\text{invalid action policy}}$ is not the policy gradient of policy $\pi_{\theta}$ in any domain where there is at least one invalid action for which $\pi_\theta$ assigns a non zero probability.
+% \end{prop}
+% \begin{proof}
+% The policy gradient theorem~\cite{sutton2000policy} assumes action probabilities are determined by $\pi_\theta$. However, with invalid action masking, action probabilities are determined by $\pi'_\theta$, which is different from $\pi_\theta$ in any domain for which there is at least one invalid action for which $\pi_\theta$ assigns a non zero probability. Thus,
+% %the policy parameterized by $\theta$ completely characterizes the action $a_t$ the policy issues. This is clearly not the case with the working mechanism of invalid action masking,  where the action $a_t$ is affected by both parameter $\theta$ and an external process that calculates the invalid action mask.
+% since $a_t$ is not sampled according to $\pi_{\theta}(\cdot \vert s_t)$, $g_{\text{invalid action policy}}$ is not the policy gradient of policy $\pi_{\theta}$.
+% \end{proof}
+
+\begin{prop}
+\label{prop:policy_gradient}
+$g_{\text{invalid action policy}}$ is the policy gradient of policy $\pi'_{\theta}$.
+\end{prop}
+\begin{proof} Let $s\in S$ to be arbitrary and consider the process of invalid action masking as a differentiable function $mask$ to be applied to the logits $l(s)$ outputted by policy $\pi_\theta$ given state $s$. Then we have:
+\begin{align*}
+    \pi'_{\theta}(\cdot \vert s) &= \text{softmax}(mask(l(s))) \\
+    mask(l(s))_i &= \begin{cases}
+     l_i &\text{if $a_i$ is valid in $s$}\\
+     M &\text{otherwise}
+    \end{cases}
+\end{align*}
+Clearly, $mask$ is either an identity function or a constant function for elements in the logits. Since these two kinds of functions are differentiable, $\pi'_{\theta}$ is differentiable to its parameters $\theta$. That is, $\frac{\partial \pi'_{\theta}(a\vert s)}{\partial \theta}$ exists for all $a\in A, s\in S$, which satisfies the assumption of  policy gradient theorem~\cite{sutton2000policy}. Hence, $g_{\text{invalid action policy}}$ is the policy gradient of policy $\pi'_{\theta}$.
+\end{proof}
+Note that $mask$ is \emph{not} a piece-wise linear function. If we plot $mask$, it is either an identity function or a constant function, depending on the state $s$, going from $-\infty$ to $+\infty$. We therefore call $mask$ a state-dependent differentiable function. That is, given a vector $x$  and two states $s, s'$ with different number of invalid actions available in these states, $mask(s,x) \neq mask(s', x)$.
+
+%To the best of our knowledge, the construction of action probability distribution has always used state-independent differentiable functions such as softmax, sigmoid or hyperbolic tangent. $mask$ seems to be the first state-dependent differentiable function used in the policy formulation.
+
+% Notice that $g_{\text{invalid action policy}}$ does not correspond to the off-policy gradient either. Thus, it is unclear what type of update is being performed to the policy under invalid action masking.
+
+% If we wanted to make invalid action masking produce gradients that match to some policy or off-policy policy gradients, however, we could do it by assuming the existence of some differentiable function that, when applied to the logits of policy, produces the same effect as invalid action masking. Let us consider $\mathcal{M}:S \times \mathbb{R}^k \rightarrow \mathbb{R}^k$  to be a differentiable function that encodes the rules of the game and performs the masking process. % If we use the example setup from Proposition~\ref{prop:not-off-policy}, then such function $\mathcal{M}: S \times \mathbb{R}^4 \rightarrow \mathbb{R}^4$ could be defined as $\mathcal{M}:(s, x) = x + [0,0,M,0]$, which is linear and differentiable.
+% Then we define the policy $\pi'_{\theta}(\cdot \vert s_t) = \text{softmax}(\mathcal{M}(s_t, \pi(\cdot | s_t)))$.
+% Therefore $\pi'_{\theta}(a_t \vert s_t)$ is differentiable with respect to $\theta$
+% % {\color{blue} [costa:this text works the same as the next sentence, so we should delete one or the other I think]}. %And when $M$ is sufficiently small (i.e. $M=-1\times10^8$), the gradient $\nabla_{\theta}\log\pi'_{\theta}(a_0|s_0)G_t$ would the approximately the same as $\nabla_{\theta}\log\pi^{\mathcal{M}}_{\theta}(a_0|s_0)G_t$.
+% % Under this scenario, where masking is calculated by a differentiable function $\mathcal{M}$, we could directly calculate the gradient of $\pi'_{\theta}$
+% , and the policy gradient theorem \cite{sutton2000policy} would provide theoretical justification for invalid action masking. In general, however, it is unclear whether it is possible to construct such $\mathcal{M}$ to represent the invalid action masking process. In particular, the invalid action masking produces the masks based on the game rules, which usually involves conditioning and that could make $\mathcal{M}$ not continuous let alone differentiable.
+
+% So, what could explain the working mechanism of invalid action masking? We encourage the readers to carefully inspect the value of $g_{\text{off-policy policy gradient}}$ {\color{red} [santi: do not talk to the reader. Again, please do not use questions in the text, it looks very informal (like if it was a blog or a magazine, rather than a research paper).]}. In particular, note that the \textit{gradient of the logits that corresponding to the invalid action is 0}, which lead us to make the following conjecture:
+
+% \textbf{Conjecture 1 (Extended Policy Gradient Conjecture).} \textit{Policy gradient theorem still applies when some sub-parameter $\theta_{\text{sub}}$ of the policy parameter $\theta$ is immutable and constructed under some restrictive conditions $C$ {\color{red} [santi: let's revise this after we come to an agreement over the idea of considering the rules of the game as a subset of parameters... (which I do not buy)]}}
+
+% {\color{red} [santi: I have thought a bit more about this. I do not think this can stay in the paper the way it is currently written. We are assuming a family of policies parametried by $\theta$. Now, what you want to say is that if there is a way to encode the game rules to be part of the policy, then the invalid action masking gradient could be the policy gradient. In your ``conjecture'', you are assuming that this is encoded in some subset of parameters $\theta$. But I do not think that's the right way to do it. I think the right way to do it is this: imagine your original policy $\pi_\theta$, and now imagine that I have a differentiable function $m$, that given a vector of logits and game state returns the corresponding vector of logits but with the invalid actions masked. Now, we can define a new policy $\pi_\theta'(s) = m(\pi_\theta(s), s)$. This new policy is differentiable, since we have assumed $m$ to be differentiable, and $\pi_\theta$ is also differentiable. So, we can calculate the gradient of the new policy. So, in this way, we have constructed a new policy that does action masking and for which the gradients are the policy gradients, without needing to assume that the game rules are encoded in the parameters $\theta$. So, basically, unless this is thought a bit deepeter, I suggest removing it from the paper.]}
+
+% Without the conditions $C$, Conjecture 1 is obviously False {\color{red} [santi: why? and what are these conditions $C$? they are never described]}. Consider the example where $\theta_{\text{sub}}$ always makes sure the action probability distribution generated is uniform, the immutability of $\theta_{\text{sub}}$ means the policy will not learn anything as the action probability distribution remains the same. If this conjecture is true and $\theta_{\text{sub}}= \theta_{\text{rules of the game}}$ is constructed under $C$, then we could explain invalid action masking using this extended form of policy gradient theorem.
+
+
+% \begin{proof}
+% We design a \emph{behavior policy} $b: S \times A \times \mathbb{R} \rightarrow [0,1]$  defined as below:
+% \begin{align}
+%     b(s_t, a_i, l_i) &= \frac{\pi_{\theta}(a_t|s_t) \log \pi_{\theta}(a_t|s_t)}{\log\frac{\exp(l'_i)}{\sum_j \exp(l'_j)}} \\
+%     l'_i &=\begin{cases}
+% -1\times10^8 &\text{if $a_i$ is an invalid action in $s_t$}\\
+% l_i &\text{otherwise}
+% \end{cases}
+% \end{align}
+
+% Suppose we collect the trajectory using the behavior policy $b$, then the off-policy policy gradient proposed by~\cite{degris2012off} for $\pi_{\theta}$ would be
+% \begin{equation}
+%     \nabla_{\theta} J = \mathbb{E}_{b}\left [\sum_{t=0}^{T-1} \frac{\pi_{\theta}(a_t|s_t)}{ b(s_t, a_i, \theta)}  \nabla_{\theta}\log\pi_{\theta}(a_t|s_t)G_t \right]
+% \end{equation}
+% and the empirical gradient estimate is
+% \begin{align}
+% \label{eq:off_policy_gradient}
+%     &\sum_{t=0}^{T-1}\frac{\pi_{\theta}(a_t|s_t)}{ b(s_t, a_i, \theta)}  \nabla_{\theta}\log\pi_{\theta}(a_t|s_t)G_t\\
+%     &=\sum_{t=0}^{T-1}\pi_{\theta}(a_t|s_t) \frac{\log\frac{\exp(l'_i)}{\sum_j \exp(l'_j)}}{\pi_{\theta}(a_t|s_t) \log \pi_{\theta}(a_t|s_t)}  \nabla_{\theta}\log\pi_{\theta}(a_t|s_t)G_t\\
+%     &=\sum_{t=0}^{T-1}\frac{\log\frac{\exp(l'_i)}{\sum_j \exp(l'_j)}}{ \log \pi_{\theta}(a_t|s_t)}  \nabla_{\theta}\log\pi_{\theta}(a_t|s_t)G_t
+% \end{align}
+% We claim the gradient in equation~\ref{eq:invalid_action_masking_gradient} is the same as equation~\ref{eq:off_policy_gradient}. The reasons are two-fold. First, both estimates evaluate to the same numerical value. Second, because invalid action is never sampled, only the logits $l_i$, where $a_i$ is valid, have gradient involvement \textcolor{blue}{i don't know... Feel like a more elegant argument can be made. maybe something like the following}. Consider
+% \begin{align}
+%     &c(\theta) = \sum_{t=0}^{T-1}\frac{\log\frac{\exp(l'_i)}{\sum_j \exp(l'_j)}}{ \log \pi_{\theta}(a_t|s_t)}  \log\pi_{\theta}(a_t|s_t)G_t \\
+%     &d(\theta) = \sum_{t=0}^{T-1}\log\frac{\exp(l'_i)}{\sum_j \exp(l'_j)}G_t
+% \end{align}
+% It must be the case that
+% \begin{align}
+%     \lim_{h\rightarrow 0} \frac{c(\theta+h)-c(\theta)}{h} = \lim_{h\rightarrow 0} \frac{d(\theta+h)-d(\theta)}{h}
+% \end{align}
+% because change in the parameter $\theta$ does not change whether an action is valid or not. So
+% \[c(\theta+h) = d(\theta+h) \quad c(\theta) =c(\theta) \]
+% \end{proof}
+
+
+\begin{table}[t]
+\begin{small}
+\centering
+\caption{Observation features and action components.}
+\begin{tabular}{p{2.3cm}lp{3cm}}
+\toprule
+Observation Features  & Planes & Description \\
+\midrule
+Hit Points & 5 & 0, 1, 2, 3, $\geq 4$  \\
+Resources & 5 & 0, 1, 2, 3, $\geq 4$  \\
+Owner &3 & player 1, -, player 2 %, N/A, N/A, N/A, N/A, N/A
+\\
+Unit Types &8 & -, resource, base, barrack, worker, light, heavy, ranged \\
+Current Action &6& -, move, harvest, return, produce, attack\\
+\midrule
+Action Components  & Range & Description \\
+\midrule
+Source Unit & $[0,h \times w-1]$ & the location of the unit selected to perform an action  \\
+Action Type & $[0,5]$ & NOOP, move, harvest, return, produce, attack  \\
+Move Parameter & $[0,3]$ & north, east, south, west \\
+Harvest Parameter & $[0,3]$  & north, east, south, west  \\
+Return Parameter & $[0,3]$ & north, east, south, west  \\
+Produce Direction Parameter & $[0,3]$ & north, east, south, west  \\
+Produce Type Parameter & $[0,6]$ & resource, base, barrack, worker, light, heavy, ranged \\
+Attack Target Unit & $[0,h\times w-1]$  & the location of unit that  will be attacked \\
+\bottomrule
+\end{tabular}
+\label{tab:action-components}
+\end{small}
+\end{table}
+
+
+
+\begin{figure*}[ht]
+\centering
+{\includegraphics[width=0.97\textwidth]{charts_episode_reward/legend.pdf}}\hfill
+\subfloat[$4\times4$ Map]{\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining4x4F9-v0.pdf}}
+\subfloat[$10\times10$ Map]{\label{fig:sub:10x10}\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining10x10F9-v0.pdf}}
+\subfloat[$4\times4$ Map]{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining4x4F9-v0.pdf}}
+\subfloat[$10\times10$ Map]{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining10x10F9-v0.pdf}}\hfill
+  \caption{The first two figures show the episodic return over the time steps, and the remaining two show the Kullback–Leibler (KL) divergence between the target and current policy of PPO over the time steps. The shaded area represents one standard deviation of the data over 4 random seeds. Curves are exponentially smoothed with a weight of 0.9 for readability.}
+  \label{fig:invalid_action_masking_vs_penalty_part}
+\end{figure*}
+
+
+\section{Experimental Setup}
+\label{sec:expsetup}
+In the remainder of this paper, we provide a series of empirical results showing the practical implications of invalid action masking.
+
+% To develop a deeper understanding of empirical behavior of using invalid action masking, we further examine
+
+
+
+\subsection{Evaluation Environment}
+\label{sec:evaluation_environment}
+We use $\mu$RTS\footnote{\url{https://github.com/santiontanon/microrts}} as our testbed, which is a minimalistic RTS game maintaining the core features that make RTS games challenging from an AI point of view: simultaneous and durative actions, large branching factors, and real-time decision-making. A screenshot of the game can be found in Figure~\ref{fig:microrts}.
+% Although the game can be configured to be partially observably and non-deterministic, we turn off these settings for the results reported in the paper.
+It is the perfect testbed for our experiments because the action space in $\mu$RTS grows combinatorially and so does the number of invalid actions that could be generated by the DRL agent.
+We now present the technical details of the environment for our experiments.
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Observation Space.} Given a map of size $h\times w$, the observation is a tensor of shape $(h, w, n_f)$, where $n_f$ is a number of feature planes that have binary values. The observation space used in this paper uses 27 feature planes as shown in Table~\ref{tab:action-components}, similar to previous work in $\mu$RTS~\cite{stanescu2016evaluating,Yang2018LearningME,huang2019comparing}. A feature plane can be thought of as a concatenation of multiple one-hot encoded features. As an example, if there is a worker with hit points equal to 1, not carrying any resources, the owner being Player 1, and currently not executing any actions, then the one-hot encoding features will look like the following:
+    \begin{align*}
+        [0,1,0,0,0],  [1,0,0,0,0],  [1,0,0], \\ [0,0,0,0,1,0,0,0],  [1,0,0,0,0,0]
+    \end{align*}
+    The 27 values of each feature plane for the position in the map of such worker will thus be the concatenation of the arrays above.
+    \item \textbf{Action Space.} Given a map of size $h\times w$, the action is an 8-dimensional vector of discrete values as specified in Table~\ref{tab:action-components}. The action space is designed similar to the action space formulation by Hausknecht, et al.,~\cite{hausknecht2015deep}. The first component of the action vector represents the unit in the map to issue actions to, the second is the action type, and the rest of the components represent the different parameters different action types can take. Depending on which action type is selected, the game engine will use the corresponding parameters to execute the action.
+    % Additional details on how to interface actions with $\mu$RTS internally can be found in Appendix~\ref{appendix:additional-detals-murts}.
+    \item \textbf{Rewards.} We are evaluating our agents on the simple task of harvesting resources as fast as they can for Player 1 who controls units at the top left of the map. A $+1$ reward is given when a worker harvests a resource, and another $+1$ is received once the worker returns the resource to a base.
+    \item \textbf{Termination Condition.} We set the maximum game length to be 200 time steps, but the game could be terminated earlier if all the resources in the map are harvested first.
+
+    % Note that it is implemented as the \verb MultiDiscrete  action space specified in the OpenAI Gym library~\cite{brockman2016openai}.
+\end{itemize}
+
+
+
+
+% \begin{table}[t]
+% \centering
+% \caption{The action components and their descriptions.}
+% \begin{small}
+% \begin{tabular}{ lll}
+%  \toprule
+% Action Components  & Range & Description \\
+% \midrule
+% Source Unit & $[0,h \times w-1]$ & the location of unit selected to perform an action  \\
+% Action Type & $[0,5]$ & NOOP, move, harvest, return, produce, attack  \\
+% Move Parameter & $[0,3]$ & north, east, south, west \\
+% Harvest Parameter & $[0,3]$  & north, east, south, west  \\
+% Return Parameter & $[0,3]$ & north, east, south, west  \\
+% Produce Direction Parameter & $[0,3]$ & north, east, south, west  \\
+% Produce Type Parameter & $[0,5]$ & resource, base, barrack, worker, light, heavy, ranged \\
+% Attack Target Unit & $[0,h\times w-1]$  & the location of unit that  will be attacked \\
+% \bottomrule
+% \end{tabular}
+% \end{small}
+% \label{tab:action-components}
+% \end{table}
+
+
+Notice that the space of invalid actions becomes significantly larger in larger maps. This is because the range of the first and last discrete values in the action space, corresponding to {\em Source Unit} and {\em Attack Target Unit} selection, grows linearly with the size of the map. To illustrate, in our experiments, there are usually only two units that can be selected as the {\em Source Unit} (the base and the worker).  Although it is possible to produce more units or buildings to be selected, the production behavior has no contribution to reward and therefore is generally not learned by the agent. Note the range of {\em Source Unit} is $4\times4=16$ and $24\times24=576$, in maps of size $4\times4$ and $24\times24$, respectively. Selecting a valid {\em Source Unit} at random has a probability of $2/16=0.125$ in the $4\times4$ map and $2/576=0.0034$ in the $24\times24$ map. With such action space, we can examine the scalability of invalid action masking.
+
+
+
+% \begin{figure*}
+%   \centering
+% \setkeys{Gin}{width=0.32\linewidth}
+%     \includegraphics[clip, trim=0.0cm 4cm 0.0cm 0cm]{images/invalid_action_penalty_mask_4x4.pdf}\,%
+%     \includegraphics[clip, trim=0.0cm 4cm 0.0cm 0cm]{images/invalid_action_penalty_mask_10x10.pdf}
+%     \includegraphics[clip, trim=0.0cm 4cm 0.0cm 0cm]{images/invalid_action_penalty_mask_24x24.pdf}
+%   \caption{Learning curves for training agents with invalid action penalty and invalid action masking. The x-axis shows the number of game steps and y-axis shows the episodic return  gathered. Shaded areas are the maximum and minimum of runs over 4 random seeds. Curves are smoothed for readability.}
+%   \label{fig:invalid_action_masking_vs_penalty}
+% \end{figure*}
+
+% \begin{figure}[t]
+%      \begin{subfigure}[b]{1\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/legend1.pdf}
+%      \end{subfigure}\hfill
+%      \centering
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/charts_episode_reward-MicrortsMining4x4F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$4\times4$ Map}
+%          \label{fig:sub:ar1}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/charts_episode_reward-MicrortsMining10x10F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$10\times10$ Map}
+%          \label{fig:sub:ar2}
+%      \end{subfigure}
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/losses_approx_kl-MicrortsMining4x4F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$4\times4$ Map}
+%          \label{fig:sub:kl-explosion}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/losses_approx_kl-MicrortsMining10x10F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$10\times10$ Map}
+%          \label{fig:sub:kl-explosion2}
+%      \end{subfigure}
+%   \caption{(a) and (b) show the learning curves of agents with different strategies to handle invalid actions. The x-axis shows the number of game steps and y-axis shows the average episodic return  gathered. (c) and (d) have the x-axis showing the number of game steps and y-axis showing the average Kullback–Leibler (KL) divergence between the target and current policy of PPO. Shaded area represents one standard deviation of the data over 4 random seeds. Curves are smoothed for readability. For results in other maps, see Figure~\ref{fig:invalid_action_masking_vs_penalty_full} in the Appendices.}
+%   \label{fig:invalid_action_masking_vs_penalty}
+% \end{figure}
+
+% \begin{figure*}[ht]
+% \centering
+% {\includegraphics[width=0.97\textwidth]{charts_episode_reward/legend.pdf}}\hfill
+% {\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining4x4F9-v0.pdf}}
+% {\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining10x10F9-v0.pdf}}
+% {\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining16x16F9-v0.pdf}}
+% {\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining24x24F9-v0.pdf}}\hfill
+% \subfloat[$4\times4$ Map]{\label{fig:sub:4x4}{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining4x4F9-v0.pdf}}}
+% \subfloat[$10\times10$ Map]{\label{fig:sub:10x10}{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining10x10F9-v0.pdf}}}
+% \subfloat[$16\times16$ Map]{\label{fig:sub:16x16}{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining16x16F9-v0.pdf}}}
+% \subfloat[$24\times24$ Map]{\label{fig:sub:24x24}{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining24x24F9-v0.pdf}}}
+%   \caption{The first row shows the episodic return over the time steps, and the second row shows the Kullback–Leibler (KL) divergence between the target and current policy of PPO over the time steps. The shaded area represents one standard deviation of the data over 4 random seeds. Curves are exponentially smoothed with a weight of 0.9 for readability.}
+%   \label{fig:invalid_action_masking_vs_penalty_full}
+% \end{figure*}
+
+
+% \begin{figure}[t]
+%   \centering
+% \setkeys{Gin}{width=0.49\linewidth}
+%     \includegraphics{charts/Section-0-Panel-0-3qgaesldt}\,%
+%     \includegraphics{charts/Section-1-Panel-0-w22a75pdg}
+%     \includegraphics{charts/Section-2-Panel-0-772kdj1hw}\,%
+%     \includegraphics{charts/Section-3-Panel-0-v0rjfujte}
+%   \caption{Learning curves for training agents with invalid action penalty and invalid action masking. The x-axis shows the number of game steps and y-axis shows the episodic return  gathered. Shaded areas are the maximum and minimum of runs over 4 random seeds. Curves are smoothed for readability.}
+%   \label{fig:invalid_action_masking_vs_penalty}
+% \end{figure}
+
+% \begin{table*}[]
+%     \centering
+% \caption{Various metrics average over 4 random seeds. The symbol ``-'' means ``not applicable''.}
+
+
+% \begin{tabular}{lllrrrrrrr}
+% \toprule
+% Technique & \rot{Map size} & \rot{$r_{\text{invalid}}$} &    \rot{$r_{\text{episode}}$} &  \rot{$\bar{D}_{KL}$} &  \rot{$a_\text{null}$} &  \rot{$a_\text{busy}$} &  \rot{$a_\text{owner}$} &  \rot{$t_\text{solve}$} &  \rot{$t_\text{first}$} \\
+% \midrule
+% invalid  & 4x4 &  - &                  39.95 &           0.00002 &                           - &                                0.00 &                                - &                17.81\% &                 0.07\% \\
+% action            & 10x10 &  - &                  38.33 &           0.00003 &                           - &                                0.25 &                                - &                11.97\% &                 0.05\% \\
+% masking            & 16x16 &  - &                  38.30 &           0.00010 &                           -&                                0.52 &                               - &                14.12\% &                 0.07\% \\
+%             & 24x24 &  - &                  37.40 &           0.00006 &                           - &                                0.28 &                               - &                24.16\% &                 0.07\% \\
+% adj & 4x4 &  - &                  43.94 &          -0.21085 &                           - &                                0.00 &                                - &                17.81\% &                 0.07\% \\
+%             & 10x10 &  - &                  38.08 &           1.50533 &                           0.30\footnote{they might be } &                               29.98 &                                - &                11.97\% &                 0.05\% \\
+%             & 16x16 &  - &                  40.00 &           0.56035 &                           - &                                0.28 &                                - &                14.12\% &                 0.07\% \\
+%             & 24x24 &  - &                  40.00 &           0.22077 &                           - &                                0.00 &                                - &                24.16\% &                 0.07\% \\
+% penalty              & 4x4 & -1.00 &                   0.00 &           0.00002 &                           2.52 &                                0.05 &                                0.65 &                     - &                 2.49\% \\
+%             &                        & -0.10 &                  30.00 &           0.00015 &                           0.12 &                                0.00 &                                0.08 &                - &                 4.01\% \\
+%             &                        & -0.01 &                  30.25 &           0.00010 &                           0.05 &                                0.00 &                                0.00 &                - &                 2.07\% \\
+%             &                        &  0.00 &                  40.00 &           0.00008 &                           0.12 &                                0.00 &                                0.00 &                - &                 1.74\% \\
+%             & 10x10 & -1.00 &                   0.00 &           0.00005 &                           0.00 &                                0.02 &                                0.00 &                     24.05\% &                 0.05\% \\
+%             &                        & -0.10 &                   0.00 &           0.00004 &                           0.00 &                                0.00 &                                0.00 &                     40.54\% &                 0.10\% \\
+%             &                        & -0.01 &                  10.00 &           0.00011 &                           7.35 &                                0.38 &                                0.30 &                 52.11\% &                 0.07\% \\
+%             &                        &  0.00 &                  10.00 &           0.00012 &                         160.55 &                                0.02 &                                4.55 &                 41.77\% &                 0.07\% \\
+%             & 16x16 & -1.00 &                   0.50 &           0.00008 &                           0.10 &                                0.00 &                                0.00 &                     - &                 9.94\% \\
+%             &                        & -0.10 &                   0.75 &           0.00007 &                           0.00 &                                0.00 &                                0.00 &                     - &                17.28\% \\
+%             &                        & -0.01 &                   0.97 &           0.00014 &                           4.93 &                                0.00 &                                0.00 &                     17.71\% &                 2.03\% \\
+%             &                        &  0.00 &                   1.00 &           0.00004 &                         192.78 &                                0.00 &                                3.38 &                     7.37\% &                21.86\% \\
+%             & 24x24 & -1.00 &                   0.25 &           0.00009 &                           0.00 &                                0.00 &                                0.00 &                     - &                 0.44\% \\
+%             &                        & -0.10 &                   0.50 &           0.00011 &                          50.08 &                                0.00 &                                0.00 &                     - &                 0.44\% \\
+%             &                        & -0.01 &                   0.50 &           0.00009 &                          48.50 &                                0.00 &                                0.00 &                     - &                 0.44\% \\
+%             &                        &  0.00 &                   1.00 &           0.00001 &                         196.90 &                                0.00 &                                1.00 &                     - &                 0.40\% \\
+% removed & 4x4 &  0.00 &                  37.47 &           0.00002 &                          37.95 &                                0.00 &                                2.92 &                  19.86\% &                 0.50\% \\
+%             & 10x10 &  0.00 &                  32.25 &           0.00003 &                         105.42 &                                0.00 &                                4.42 &                  - &                 0.50\% \\
+%             & 16x16 &  0.00 &                  23.15 &           0.00010 &                         141.40 &                                0.00 &                                1.30 &                  24.67\% &                 0.50\% \\
+%             & 24x24 &  0.00 &                  12.25 &           0.00006 &                         174.92 &                                0.00 &                                0.45 &                  12.90\% &                 0.52\% \\
+% \bottomrule
+% \end{tabular}
+
+
+%     \label{tab:all_results}
+% \end{table*}
+
+
+
+\begin{table*}[tb]
+    \centering
+\caption{Results averaged over 4 random seeds. The symbol ``-'' means ``not applicable''. Higher is better for $r_{\text{episode}}$ and lower is better for $a_\text{null}$,  $a_\text{busy}$, $a_\text{owner}$,  $t_\text{solve}$, and  $t_\text{first}$.}
+\begin{small}
+\begin{tabular}{lllrrrrrll}
+\toprule
+% Strategies & \rot{Map size} & \rot{$r_{\text{invalid}}$} &    \rot{$r_{\text{episode}}$}  &  \rot{$a_\text{null}$} &  \rot{$a_\text{busy}$} &  \rot{$a_\text{owner}$} &  \rot{$t_\text{solve}$} &  \rot{$t_\text{first}$} \\
+Strategies & Map size & $r_{\text{invalid}}$ &    $r_{\text{episode}}$  &  $a_\text{null}$ &  $a_\text{busy}$ &  $a_\text{owner}$ &  $t_\text{solve}$ &  $t_\text{first}$ \\
+
+\midrule
+Invalid action penalty & $4\times4$ & -1.00 &                   0.00 &                           0.00 &                                0.00 &                                0.00 &                - &                 0.53\% \\
+                             &       & -0.10 &                  30.00 &                           0.02 &                                0.00 &                                0.00 &                 50.94\% &                 0.52\% \\
+                             &       & -0.01 &                  \textbf{40.00} &                           0.02 &                                0.00 &                                0.00 &                 14.32\% &                 0.51\% \\
+                             &       &  0.00 &                  30.25 &                           2.17 &                                0.22 &                                2.70 &                 36.00\% &                 0.60\% \\
+                             & $10\times10$ & -1.00 &                   0.00 &                           0.00 &                                0.00 &                                0.00 &                - &                 3.43\% \\
+                             &       & -0.10 &                   0.00 &                           0.00 &                                0.00 &                                0.00 &                - &                 2.18\% \\
+                             &       & -0.01 &                   0.50 &                           0.00 &                                0.00 &                                0.00 &                - &                 1.57\% \\
+                             &       &  0.00 &                   0.25 &                          90.10 &                                0.00 &                              102.95 &                - &                 3.41\% \\
+                             & $16\times16$ & -1.00 &                   0.25 &                           0.00 &                                0.00 &                                0.00 &                - &                 0.44\% \\
+                             &       & -0.10 &                   0.75 &                           0.00 &                                0.00 &                                0.00 &                - &                 0.44\% \\
+                             &       & -0.01 &                   1.00 &                           0.02 &                                0.00 &                                0.00 &                - &                 0.44\% \\
+                             &       &  0.00 &                   1.00 &                         184.68 &                                0.00 &                                2.53 &                - &                 0.40\% \\
+                             & $24\times24$ & -1.00 &                   0.00 &                          49.72 &                                0.00 &                                0.02 &                - &                 1.40\% \\
+                             &       & -0.10 &                   0.25 &                           0.00 &                                0.00 &                                0.00 &                - &                 1.40\% \\
+                             &       & -0.01 &                   0.50 &                           0.00 &                                0.00 &                                0.00 &                - &                 1.92\% \\
+                             &       &  0.00 &                   0.50 &                         197.68 &                                0.00 &                                0.90 &                - &                 1.83\% \\ \midrule
+Invalid action masking & 04x04 &  - &                  \textbf{40.00} &                           - &                                - &                               - &                  8.67\% &                \textbf{0.07\%} \\
+                             & 10x10 &  - &                  \textbf{40.00} &                           - &                                - &                                - &                 11.13\% &                \textbf{0.05\%} \\
+                             & 16x16 &  - &                  \textbf{40.00} &                           - &                                - &                                - &                 11.47\% &                 \textbf{0.08\%} \\
+                             & 24x24 &  - &                  \textbf{40.00} &                           - &                                - &                                - &                 18.38\% &                 \textbf{0.07\%} \\ \midrule
+Masking removed & 04x04 &  - &                  33.53 &                          63.57 &                                0.00 &                               17.57 &                 76.42\% &                 - \\
+                             & 10x10 &  - &                  25.93 &                         128.76 &                                0.00 &                                7.75 &                 94.15\% &                 - \\
+                             & 16x16 &  - &                  17.32 &                         165.12 &                                0.00 &                                0.52 &                - &                - \\
+                             & 24x24 &  - &                  17.37 &                         150.06 &                                0.00 &                                0.94 &                - &                - \\ \midrule
+Naive invalid action  & $4\times4$ &  - &                  \textbf{59.61} &                          - &                                - &                                - &                 11.74\% &                 \textbf{0.07\%} \\
+masking                             & $10\times10$ &  - &                  \textbf{40.00} &                           - &                                - &                                - &                 13.97\% &                 \textbf{0.05\%} \\
+                             & $16\times16$ &  - &                  \textbf{40.00} &                           - &                                - &                                - &                 30.59\% &                 \textbf{0.10\%} \\
+                             & $24\times24$ &  - &                  \textbf{38.50} &                           - &                                - &                                - &                 49.14\% &                 \textbf{0.07\%} \\
+\bottomrule
+\end{tabular}
+\end{small}
+    \label{tab:all_results}
+\end{table*}
+
+
+
+
+
+
+\subsection{Training Algorithm}
+We use Proximal Policy Optimization~\cite{schulman2017proximal} as the DRL algorithm to train our agents.
+% PPO is the underlying training algorithm used in the Dota 2 game playing agent that defeated the world champion {\em Team OG}~\cite{Berner2019Dota2W}.
+% Recent work suggested code-level optimizations could be critical to the performance of PPO~\cite{engstrom2019implementation}, so we augmented our implementation with many of those optimizations.
+% The details of the implementation and neural network architecture, hyperparameters can be found in Appendix~\ref{sec:details_on_ppo}.
+
+% Due to the ambiguity in the existing literature, the implementation of invalid action masking could be interpreted in the following way.
+\subsection{Strategies to Handle Invalid Actions}
+To examine the empirical importance of invalid action masking, we compare the following four strategies to handle invalid actions.
+% We compared invalid action masking against a common approach of dealing with invalid actions: imposing a negative reward to the DRL agent whenever an invalid action is taken, hoping that the agent will learn to maximize its reward and therefore not execute any invalid actions. Furthermore, we compare two additional action masking regimes to provide further insights:
+\begin{enumerate}
+    \item \textbf{Invalid action penalty.} Every time the agent issues an invalid action, the game environment adds a non-positive reward $r_{\text{invalid}} \leq 0$ to the reward produced by the current time step. This technique is standard in previous work~\cite{dietterich2000hierarchical}. We experiment with $r_{\text{invalid}} \in \{0, -0.01, -0.1, -1\}$, respectively, to study the effect of the different scales on the negative reward.
+    \item \textbf{Invalid action masking.} At each time step $t$, the agent receives a mask on the {\em Source Unit} and {\em Attack Target Unit} features such that only valid units can be selected and targeted. Note that in our experiments, invalid actions still could be sampled because the agent could still select incorrect parameters for the current action type. We didn't provide a feature-complete invalid action mask for simplicity, as the mask on {\em Source Unit} and {\em Attack Target Unit} already significantly reduce the action space.
+    \item \textbf{Naive invalid action masking.} At each time step $t$, the agent receives the same mask on the {\em Source Unit} and {\em Attack Target Unit} as described  for invalid action masking. The action shall still be sampled according to the re-normalized probability calculated in Equation~\ref{eq:softmax_masked_logits2}, which ensures no invalid actions could be sampled, but  the gradient is updated according to the probability calculated in Equation~\ref{eq:softmax_logits2}. We call this implementation \emph{naive invalid action masking} because its gradient does not replace the gradient of the logits corresponds to invalid actions with zero.
+
+    \item \textbf{Masking removed.} At each time step $t$, the agent receives the same mask on the {\em Source Unit} and {\em Attack Target Unit} as described for invalid action masking, and trains in the same way as the agent trained under invalid action masking. However, we then evaluate the agent without providing the mask. In other words, in this scenario, we evaluate what happens if we train with a mask, but then perform without it.
+\end{enumerate}
+
+We evaluate the agent's performance in maps of sizes $4\times4$, $10\times10$, $16\times16$, and $24\times24$. All maps have one base and one worker for each player, and each worker is located near the resources.
+% The agent controls the units on the top left of the map, and the opponent player is passive (i.e. not executing any action) and was placed in the game because $\mu$RTS requires two players to run.
+
+
+
+\subsection{Evaluation Metrics}
+We used the following metrics to measure the performance of the agents in our experiments: $r_{\text{episode}}$ is the average episodic return  over the last 10 episodes.
+% $\bar{D}_{KL}$ is the average Kullback–Leibler (KL) divergence~\cite{kullback1951information} between the target and current policy over last 10 batch updates.
+$a_\text{null}$ is the average number of actions that select a {\em Source Unit} that is not valid  over the last 10 episodes. $a_\text{busy}$is the average number of actions that select a {\em Source Unit} that is already busy executing other actions over the last 10 episodes. $a_\text{owner}$ is the average number of actions that select a {\em Source Unit} that does not belong to Player 1 over the last 10 episodes. $t_\text{solve}$ is the percentage of total training time steps that it takes for the agents' moving average episodic return  of the last 10 episodes to exceed 40. $t_\text{first}$ is the percentage of the total training time step that it takes for the agent to receive the first positive reward.
+% \begin{itemize}
+%     \item $r_{\text{episode}}$ is the average episodic return  over last 10 episodes.
+%     \item $\bar{D}_{KL}$ is the average Kullback–Leibler (KL) divergence~\cite{kullback1951information} between the target and current policy over last 10 batch updates.
+%     \item $a_\text{null}$ is the average number of actions that select a {\em Source Unit} that is not valid  over last 10 episodes.
+%     \item $a_\text{busy}$is the average number of actions that select a Source Unit that is already busy executing other actions over last 10 episodes.
+%     \item $a_\text{owner}$ is the average number of actions that select a Source Unit that does not belong to Player 1 over last 10 episodes.
+%     \item $t_\text{solve}$ is the percentage of total training time steps that it takes for the agents' moving average episodic return  of the last 10 episodes to exceed 40.
+%     \item $t_\text{first}$ is the percentage of total training time step that it takes for the agent to receive the first positive reward.
+% \end{itemize}
+
+
+\subsection{Evaluation Results}
+
+
+We report the results in Figure~\ref{fig:invalid_action_masking_vs_penalty_part} and in Table~\ref{tab:all_results}. Here we present a list of important observations:
+
+\textbf{Invalid action masking scales well. } Invalid action masking is shown to scale well as the number of invalid actions increases; $t_\text{solve}$ is roughly 12\% and very similar across different map sizes. In addition, the $t_\text{first}$ for invalid action masking is not only the lowest across all experiments (only taking about $0.05-0.08\%$ of the total time steps), but also consistent against different map sizes. This would mean the agent was able to find the first reward very quickly regardless of the map sizes.
+
+\textbf{Invalid action penalty does not scale.} Invalid action penalty is able to achieve good results in $4\times 4$ maps, but it does not scale to larger maps. As the space of invalid action gets larger, sometimes it struggles to even find the very first reward. E.g. in the $10\times10$ map, agents trained with invalid action penalty with $r_{\text{invalid}}=-0.01$ spent 3.43\% of the entire training time just discovering the first reward, while agents trained with invalid action masking take roughly 0.06\% of the time in all maps. In addition, the hyper-parameter $r_{\text{invalid}}$ can be difficult to tune. Although having a negative $r_{\text{invalid}}$ did encourage the agents not to execute any invalid actions (e.g. $a_\text{null}$, $a_\text{busy}$, $a_\text{owner}$ are usually very close to zero for these agents), setting $r_{\text{invalid}}=-1$ seems to have an adverse effect of discouraging exploration by the agent, therefore achieving consistently the worst performance across maps.
+
+\textbf{KL divergence explodes for naive invalid action masking.} According to Table~\ref{tab:all_results}, the $r_{\text{episode}}$ of naive invalid action masking is the best across almost
+all maps. In the $4\times4$ map, the agent trained with naive invalid action masking even learns to travel to the other side of the map to harvest additional resources. However, naive invalid action masking has two main issues: 1) As shown in the second row of Figure~\ref{fig:invalid_action_masking_vs_penalty_full}, the average Kullback–Leibler (KL) divergence~\cite{kullback1951information} between the target and current policy of PPO for naive invalid action masking is significantly higher than that of any other experiments. Since the policy changes so drastically between policy updates, the performance of naive invalid action masking might suffer when dealing with more challenging tasks. 2) As shown in Table~\ref{tab:all_results}, the $t_\text{solve}$ of naive invalid action masking is more volatile and sensitive to the map sizes. In the $24\times 24$ map, for example, the agents trained with naive invalid action masking take 49.14\% of the entire training time to converge. In comparison, agents trained with invalid action masking exhibit a consistent $t_\text{solve} \approx 12\%$  in all maps.
+% In a follow-up work, we also show naive invalid action masking does not scale when we apply it to the full action space of $\mu$RTS (see Appendix B in \cite{huang2021gym}).
+
+
+\textbf{Masking removed still behaves to some extent.} As shown in Figures~\ref{fig:sub:10x10}, masking removed is still able to perform well to a certain degree. As the map size gets larger, its performance degrades and starts to execute more invalid actions by, most prominently, selecting an invalid {\em Source Unit}. Nevertheless, its performance is significantly better than that of the agents trained with invalid action penalty even though they are evaluated without the use of invalid action masking. This shows that the agents trained with invalid action masking can, to some extent, still produce useful behavior when the invalid action masking can no longer be provided.
+
+
+% \begin{figure*}
+%   \centering
+% \setkeys{Gin}{width=0.32\linewidth}
+%     \includegraphics[clip, trim=0.0cm 1cm 0.0cm 0cm]{images/invalid_action_masking_remove_4x4.pdf}\,%
+%     \includegraphics[clip, trim=0.0cm 1cm 0.0cm 0cm]{images/invalid_action_masking_remove_10x10.pdf}
+%     \includegraphics[clip, trim=0.0cm 1cm 0.0cm 0cm]{images/invalid_action_masking_remove_24x24.pdf}
+%   \caption{Learning curves for training agents with invalid action penalty and invalid action masking. The x-axis shows the number of game steps and y-axis shows the episodic return  gathered. Shaded areas are the maximum and minimum of runs over 4 random seeds. Curves are smoothed for readability.}
+%   \label{fig:invalid_action_masking_vs_removal}
+% \end{figure*}
+
+% \section{Other Experiments}
+% %The main findings of the paper has already presented in previous sections.
+% In this section, we conduct supplementary experiments to develop better understanding of the implementation and behavior of invalid action masking.
+
+% \subsection{Naive Invalid Action Masking}
+% \textcolor{blue}{costa: please let me know if I should completely remove this section and its related experiments as I found they are not really that helpful for understanding and take a lot of space.} {\color{red} [santi: I think this is important, as the idea of ``naive action masking'' is the only experiment that I see that relates to your theoretical results. What I would do is to list 3 techniques in Section 4.3 rather than 2: action penalty, action masking and naive action masking. As a matter of fact I feel this comparison is more important than the ``main one'' you currently have! ]}
+% Due to the ambiguity in the existing literature, the implementation of invalid action masking could be interpreted in the following way. The action shall still be sampled according to the re-normalized probability calculated in Equation~\ref{eq:softmax_masked_logits2}, which ensures no invalid actions could be sampled, but update the gradient according to probability calculated in Equation~\ref{eq:softmax_logits2}. We call this implementation \emph{naive invalid action masking} because it does not incorporate the importance sampling correction given by the behavior policy $b$. Without such correction, policy gradient theorem no longer applies.
+
+% Nevertheless, we decided to test the performance of naive invalid action masking and report the performance in Figure~\ref{fig:invalid_action_masking_vs_removal}. Although it is able to achieve to similar final performance as using the correct invalid action masking, there are two important drawbacks.
+% \begin{enumerate}
+
+% \end{enumerate}
+
+% \subsection{Tearing Down the Mask}
+% {\color{red} [santi: again, do not use questions in the text. But also, you keep introducing techniques one section at a time. This is not a mystery novel, where you reveal information one piece at a time. If you want to compare several settings, then present them all upfront. So, this means that in Section 4.3, there should be 4 techniques listed: action penalty, invalid action masking, naive invalid action masking, and doing action masking first and then removing the mask.]}
+% After witnessing the importance of invalid action masking, one question remains unanswered: what if we remove the invalid action mask after the agents have already learned? Would the agent still be able to execute the valid sequence of moves without issues? We now describe our second experiment to examine this issue.
+
+% The agents are still trained using the invalid action masking by the gradients generated in Equation~\ref{eq:invalid_action_masking_gradient}, but an additional evaluation of the agents' performance is added by sampling actions according to the probability in Equation~\ref{eq:softmax_logits2} once the agents finished training on a batch of data.
+
+% The learning curves of the agents are reported in Figure~\ref{fig:invalid_action_masking_vs_removal}. The agents' performance gets worse once evaluated in larger maps. However, removing the mask still results in better performance compared to using invalid action penalty.
+
+
+\section{Related Work}
+There have been other approaches to deal with invalid actions. Dulac-Arnold, Evans, et al.~\cite{dulac2015deep} suggest embedding discrete action spaces into a continuous action space, using nearest-neighbor methods to locate the nearest valid actions. In the field of games with natural language, others propose to train an Action Elimination Network (AEN)~\cite{zahavy2018learn} to reduce the action set.
+
+The purpose of avoiding executing invalid actions arguably is to boost exploration efficiency. Some less related work achieves this purpose by reducing the full discrete action space to a simpler action space. Kanervisto, et al.~\cite{kanervisto2020action} describes this kind of work as ``action space shaping'', which typically involves 1) action removals (e.g. Minecraft RL environment removes non-useful actions such as ``sneak''~\cite{johnson2016malmo}), and 2) discretization of continuous action space (e.g. the famous CartPole-v0 environment discretize the continuous forces to be applied to the cart~\cite{brockman2016openai}). Although a well-shaped action space could help the agent efficiently explore and learn a useful policy, action space shaping is shown to be potentially difficult to tune and sometimes detrimental in helping the agent solve the desired tasks~\cite{dulac2015deep}.
+
+Lastly, Kanervisto, et al.~\cite{kanervisto2020action} and Ye, et al.~\cite{ye2019mastering} provide ablation studies to show invalid action masking could be important to the performance of agents, but they do not study the empirical effect of invalid action masking as the space of invalid action grows, which is addressed in this paper.
+
+\section{Conclusions}
+In this paper, we examined the technique of invalid action masking, which is a technique commonly implemented in policy gradient algorithms to avoid executing invalid actions. Our work shows that: 1) the gradient produced by invalid action masking is a valid policy gradient, 2) it works by applying a \emph{state-dependent differentiable function} during the calculation of action probability distribution, 3) invalid action masking empirically scales well as the space of invalid action gets larger; in comparison, the common technique of giving a negative reward when an invalid action is issued fails to scale, sometimes struggling to find even the first reward in our environment, 4) the agent trained with invalid action masking was still able to produce useful behaviors with masking removed.
+
+Given the clear effectiveness of invalid action masking demonstrated in this paper, we believe the community would benefit from wider adoption of this technique in practice.  Invalid action masking empowers the agents to learn more efficiently, and we ultimately hope that it will accelerate research in applying DRL to games with large and complex discrete action spaces.
+
+% For games with large and complex discrete action spaces. Invalid action masking empowers the agents to learn more efficiently, ultimately making it easier to apply DRL to diverse types of games.
+
+
+% We hope this adoption would accelerate research in applying DRL to games with large and complex discrete action spaces, ultimately empowering studies in more diverse environments.
+
+% The RL environment designers should consider exposing APIs that provide action masks, and the RL libraries should utilize these masks to improve training efficiency in policy gradient algorithms.
+
+% To this end, we endorse the implementation of this paper in Stable-Baselines3~\footnote{https://sb3-contrib.readthedocs.io/en/master/modules/ppo\_mask.html}.
+
+% For future work, we plan to study methods that could exploit masks during training but do not rely on them. This would be important to apply these techniques to domains other than games, where masks might be available during training (e.g., training in simulation), but not when deployed in the real world.
+
+\fontsize{9.5pt}{10.5pt}
+\selectfont
+\bibliographystyle{flairs}
+\bibliography{references}
+
+\clearpage
+\onecolumn
+
+
+\appendix
+\section*{Appendices}
+\addcontentsline{toc}{section}{Appendices}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+
+
+\subsection{Details on the Training Algorithm Proximal Policy Optimization}
+\label{sec:details_on_ppo}
+The DRL algorithm that we use to train the agent is Proximal Policy Optimization (PPO)~\cite{schulman2017proximal}, one of the state of the art algorithms available. There are two important  details regarding our PPO implementation that warrants explanation, as those details are not elaborated in the original paper. The first detail concerns how to generate an action in the \texttt{MultiDiscrete}  action space as defined in the OpenAI Gym environment~\cite{brockman2016openai} of gym-microrts~\cite{huang2019comparing}, while the second detail is about the various code-level optimizations utilized to augment performance. As pointed out by Engstrom, Ilyas, et al.~\cite{engstrom2019implementation}, such code-level optimizations could be critical to the performance of PPO.
+
+\subsubsection{Multi Discrete Action Generation}
+To perform an action $a_t$ in $\mu$RTS, according to Table~\ref{tab:action-components}, we have to select a Source Unit, Action Type, and its corresponding action parameters. So in total, there are $hw\times6\times4\times4\times4\times4\times6\times hw = 9216(hw)^2 $  number of possible discrete actions (including invalid ones), which grows exponentially as we increase the map size. If we apply the PPO directly to this discrete action space, it would be computationally expensive to generate the distribution for $9216(hw)^2 $ possible actions. To simplify this combinatorial action space, \texttt{openai/baselines}~\cite{baselines} library proposes an idea to consider this discrete action to be composed from some smaller \emph{independent} discrete actions. Namely, $a_t$ is composed of smaller actions
+\begin{align*}
+    &a_{t}^{\text{Source Unit}},a_{t}^{\text{Action Type}},a_{t}^{\text{Move Parameter}},a_{t}^{\text{Harvest Parameter}}, \\
+    &a_{t}^{\text{Return Parameter}},a_{t}^{\text{Produce Direction Parameter}}, a_{t}^{\text{Produce Type Parameter}},a_{t}^{\text{Attack Target Unit}}
+\end{align*}
+And the policy gradient is updated in the following way (without considering the PPO's clipping for simplicity)
+\begin{align*}
+     &\begin{aligned}
+         \sum_{t=0}^{T-1}\nabla_{\theta}\log\pi_{\theta}(a_t|s_t)G_t  &= \sum_{t=0}^{T-1}\nabla_{\theta}  \left( \sum_{d\in D} \log\pi_{\theta}(a^{d}_{t}|s_t) \right)G_t\\
+         &= \sum_{t=0}^{T-1}\nabla_{\theta}  \log \left( \prod_{d\in D} \pi_{\theta}(a^{d}_{t}|s_t) \right)G_t
+     \end{aligned} \\
+     &D = \{\text{Source Unit},\text{Action Type},\text{Move Parameter},\text{Harvest Parameter},\text{Return Parameter},\\
+     &\text{Produce Direction Parameter},\text{Produce Type Parameter},\text{Attack Target Unit},\}
+\end{align*}
+
+Implementation wise, for each Action Component of range $[0, x-1]$, the logits of the corresponding shape $x$ is generated, which we call Action Component logits, and each $a^{d}_{t}$ is sampled from this Action Component logits. Because of this idea, the algorithm now only has to generate $hw+6+4+4+4+4+6+hw = 2hw + 36$ number of logits, which is significantly less than $9216(hw)^2$. To the best of our knowledge, this approach of handling large multi discrete action space is only mentioned by Kanervisto et, al~\cite{kanervisto2020action}.
+
+
+\subsubsection{Code-level Optimizations}
+Here is a list of code-level optimizations utilized in this experiments. For each of these optimizations, we include a footnote directing the readers to the files in the  \emph{openai/baselines}~\cite{baselines} that implements these optimization.
+
+\begin{enumerate}
+    % \item \textbf{General Advantage Estimation (GAE)\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/runner.py\#L53-L65}}:} Schulman et al.~\cite{schulman2015high} introduced an exponentially-weighted estimator of the advantage function to balance the trade-off between the variance and bias of the policy gradient estimation. Empirically, GAE has shown to produce better performance than the regular advantages calculation (TODO: needs better term for regular advantage calculation and citations).
+    % \item \textbf{``Early Stopping'' (KLE-Stop)\footnote{\url{https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/spinup/algos/pytorch/ppo/ppo.py\#L269-L271}}:} As discussed above.
+    % \textcolor{blue}{TODO: adaptive KL penalty in the PPO paper}
+    \item \textbf{Normalization of Advantages\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/model.py\#L139}}:} After calculating the advantages based on GAE, the advantages vector is normalized by subtracting its mean and divided by its standard deviation.
+    \item \textbf{Normalization of Observation\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/common/vec_env/vec_normalize.py\#L4}}:} The observation is pre-processed before feeding to the PPO agent. The raw observation was normalized by subtracting its running mean and divided by its variance; then the raw observation is clipped to a range, usually $[-10,10]$.
+    \item \textbf{Rewards Scaling\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/common/vec_env/vec_normalize.py\#L4}}:} Similarly, the reward is pre-processed by dividing the running variance of the discounted the returns, following by clipping it to a range, usually $[-10,10]$.
+    \item \textbf{Value Function Loss Clipping\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/model.py\#L68-L75}}:} The PPO implementation of {\em  openai/baselines} clips the value function loss in a manner that is similar to the PPO's clipped surrogate objective:
+
+    \[V_{loss} =\max \left[\left(V_{\theta_{t}}-V_{t a r g}\right)^{2},\left(V_{\theta_{t-1}} + \mbox{clip}\left(V_{\theta_{t}}-V_{\theta_{t-1}}, -\varepsilon, \varepsilon\right)\right)^{2}\right]\]
+    where $V_{t a r g}$ is calculated by adding $V_{\theta_{t-1}}$ and the  $A$ calculated by General Advantage Estimation\cite{schulman2015high}.
+    \item \textbf{Adam Learning Rate Annealing\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py\#L135}}:} The Adam \cite{kingma2014adam} optimizer's learning rate is set to decay as the number of timesteps agent trained increase.
+    \item \textbf{Mini-batch updates\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py\#L160-L162}}:} The PPO implementation of the {\em  openai/baselines} also uses minibatches to compute the gradient and update the policy instead of the whole batch data such as in {\em open/spinningup}.
+    The mini-batch sampling scheme, however, still makes sure that every transition is sampled only once, and that the all the transitions sampled are actually for the network update.
+    \item \textbf{Global Gradient Clipping\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/model.py\#L107}}:} For each update iteration in an epoch, the gradients of the policy and value network are clipped so that the ``global $\ell_{2}$ norm'' (i.e. the norm of the concatenated gradients of all parameters) does not exceed 0.5.
+    \item \textbf{Orthogonal Initialization  of weights\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/a2c/utils.py\#L58}}:} The weights and biases of fully connected layers use with orthogonal initialization scheme with different scaling. For our experiments, however, we always use the scaling of 1 for historical reasons.
+    % \item \textbf{Hyperbolic tangent activations\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/common/models.py\#L75}}}: The activation functions of the hidden layers are always set to use the hyperbolic tangent function.
+    % https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py#L137
+    % {\color{teal}Maybe just put it the the hyper parameter table instead ?}
+    % \textcolor{blue}{costa: maybe we shouldn't include this as it is mentioned in the original paper. So by our definition of code-level optimizations, minibatch update does not qualify}
+\end{enumerate}
+
+% \begin{enumerate}
+
+%     \item \textbf{Normalization of Observation\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/common/vec_env/vec_normalize.py\#L4}}:} The observation is pre-processed before feeding to the PPO agent. The raw observation was normalized by subtracting its running mean and divided by its variance; then the raw observation is usually clipped to a range, usually $[-10,10]$.
+%     \item \textbf{Normalization of Advantages\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/model.py\#L139}}:} After calculating the advantages based on GAE, the advantages vector is normalized by its mean and divided by standard deviation.
+%     \item \textbf{Value Function Loss Clipping\footnote{\url{https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/model.py\#L68-L75}}:} The PPO implementation of {\em openai/baselines} clips the value function loss in a manner that is similar to the PPO's clipped surrogate objective:
+%     \[V_{loss} =\min \left[\left(V_{\theta_{t}}-V_{t a r g}\right)^{2},\left(V_{\theta_{t-1}} + \mbox{clip}\left(V_{\theta_{t}}-V_{\theta_{t-1}}, -\varepsilon, \varepsilon\right)\right)^{2}\right]\]
+%     where $\epsilon$ is a clipping coefficient that is usually set to 0.2
+%     \item \textbf{Adam Learning Rate Annealing:} The Adam~\cite{kingma2014adam} optimizer's learning rate is set to decay as the number of time steps agent trained increase, and eventually the learning rate reaches 0.
+% \end{enumerate}
+
+\subsection{Additional Details on the $\mu$RTS Environment Setup}
+\label{appendix:additional-detals-murts}
+Each action in $\mu$RTS takes some internal game time, measured in ticks, for the action to be completed. \emph{gym-microrts} \cite{huang2019comparing} sets the time of performing harvest action, return action, and move action to be 10 game ticks. Once an action is issued to a particular unit, the unit would be considered as a ``busy'' unit and would therefore no longer be able to execute any actions until its current action is finished. To prevent the DRL algorithms from repeatedly issuing actions to ``busy'' units, \emph{gym-microrts} allows performing frame skipping of 9 frames such that from the agent's perspective, once it executes the harvest action, return action, or move action given the current observation, those actions would be finished in the next observation. Such frame skipping is used for all of our experiments.
+
+% \begin{figure}
+%      \begin{subfigure}[b]{1\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/legend1.pdf}
+%      \end{subfigure}\hfill
+%      \centering
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/charts_episode_reward-MicrortsMining4x4F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$4\times4$ Map}
+%         %  \label{fig:sub:ar1}
+%      \end{subfigure}
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/losses_approx_kl-MicrortsMining4x4F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$4\times4$ Map}
+%         %  \label{fig:sub:kl-explosion}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/charts_episode_reward-MicrortsMining10x10F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$10\times10$ Map}
+%         %  \label{fig:sub:ar2}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/losses_approx_kl-MicrortsMining10x10F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$10\times10$ Map}
+%         %  \label{fig:sub:kl-explosion2}
+%      \end{subfigure}
+%      \centering
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/charts_episode_reward-MicrortsMining16x16F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$16\times16$ Map}
+%         %  \label{fig:sub:ar1}
+%      \end{subfigure}
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/losses_approx_kl-MicrortsMining16x16F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$16\times16$ Map}
+%         %  \label{fig:sub:kl-explosion}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/charts_episode_reward-MicrortsMining24x24F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$24\times24$ Map}
+%         %  \label{fig:sub:ar2}
+%      \end{subfigure}
+%      \hfill
+%      \begin{subfigure}[b]{0.49\textwidth}
+%          \centering
+%          \includegraphics[width=\textwidth]{images/losses_approx_kl-MicrortsMining24x24F9-v0.pdf}
+%          \vspace{-2\baselineskip}
+%          \caption{$24\times24$ Map}
+%         %  \label{fig:sub:kl-explosion2}
+%      \end{subfigure}
+%   \caption{The left column show the learning curves of agents with different strategies to handle invalid actions. The x-axis shows the number of game steps and y-axis shows the average episode reward gathered. The right column have the x-axis showing the number of game steps and y-axis showing the average Kullback–Leibler (KL) divergence between the target and current policy of PPO. Shaded area represents one standard deviation of the data over 4 random seeds. Curves are smoothed for readability.}
+%   \label{fig:invalid_action_masking_vs_penalty_full}
+% \end{figure}
+
+
+\begin{figure*}[t]
+\centering
+{\includegraphics[width=0.97\textwidth]{charts_episode_reward/legend.pdf}}\hfill
+\subfloat[$4\times4$ Map]{\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining4x4F9-v0.pdf}}
+\subfloat[$10\times10$ Map]{\label{fig:sub:10x10}\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining10x10F9-v0.pdf}}
+\subfloat[$16\times16$ Map]{\label{fig:sub:10x10}\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining16x16F9-v0.pdf}}
+\subfloat[$24\times24$ Map]{\label{fig:sub:10x10}\includegraphics[width=0.245\textwidth]{charts_episode_reward/MicrortsMining24x24F9-v0.pdf}}\hfill\\
+\subfloat[$4\times4$ Map]{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining4x4F9-v0.pdf}}
+\subfloat[$10\times10$ Map]{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining10x10F9-v0.pdf}}
+\subfloat[$16\times16$ Map]{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining16x16F9-v0.pdf}}
+\subfloat[$24\times24$ Map]{\includegraphics[width=0.245\textwidth]{losses_approx_kl/MicrortsMining24x24F9-v0.pdf}}
+  \caption{The first row shows the episodic return over the time steps, and the second row shows the Kullback–Leibler (KL) divergence between the target and current policy of PPO over the time steps. The shaded area represents one standard deviation of the data over 4 random seeds. Curves are exponentially smoothed with a weight of 0.9 for readability.}
+  \label{fig:invalid_action_masking_vs_penalty_full}
+\end{figure*}
+
+
+\subsection{Reproducibility}
+It is important to for the research work to be reproducible. We now present the list of hyperparameters used in Table~\ref{tab:params} and the list of neural network architecture in  Table~\ref{tab:architecture}. In addition, we provide the source code to reproduce our experiments at GitHub\footnote{\url{https://github.com/neurips2020submission/invalid-action-masking}}.
+\begin{table}[t]
+\centering
+\caption{The list of feature maps and their descriptions.}
+\begin{tabular}{lll}
+\toprule
+Features  & Planes & Description \\
+\midrule
+Hit Points & 5 & 0, 1, 2, 3, $\geq 4$  \\
+Resources & 5 & 0, 1, 2, 3, $\geq 4$  \\
+Owner &3 & player 1, -, player 2 %, N/A, N/A, N/A, N/A, N/A
+\\
+Unit Types &8 & -, resource, base, barrack, \\
+&&worker, light, heavy, ranged \\
+Current Action &6& -, move, harvest, \\
+&&return, produce, attack\\
+\bottomrule
+\end{tabular}
+\label{tab:features}
+\end{table}
+\begin{table}[t]
+\centering
+\caption{The list of experiment parameters and their values.}
+\begin{tabular}{ll}
+\toprule
+Parameter Names  & Parameter Values\\
+\midrule
+Total Time steps & 500,000 time steps \\
+$\gamma$ (Discount Factor) & 0.99 \\
+$\lambda$ (for GAE) & 0.97 \\
+$\varepsilon$ (PPO's Clipping Coefficient) & 0.2 \\
+$\eta$ (Entropy Regularization Coefficient) & 0.01 \\
+$\omega$ (Gradient Norm Threshold)& 0.5 \\
+$K$ (Number of PPO Update Iteration Per Epoch)& 10 \\
+$\alpha_{\pi}$ Policy's Learning Rate &  0.0003 \\
+$\alpha_{v}$ Value Function's Learning Rate &  0.0003 \\
+\bottomrule
+\end{tabular}
+\label{tab:params}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Neural Network Architecture. To explain the notation, let us provide detailed description of the architecture used in $24\times24$ map as an example. The input to the neural network is a tensor of shape $(24, 24, 27)$.
+The first hidden layer convolves 16 $3\times3$ filters with stride 1 with the input tensor followed by a $2\times 2$ max pooling layer~\protect\cite{ranzato2007unsupervised}
+and applies a  rectifier nonlinearity~\protect\cite{nair2010rectified}. The second hidden layer similarly convolves 32 $2\times2$ filters with stride 1 followed by a $2\times 2$ max pooling layer and applies a  rectifier nonlinearity. The final hidden layer is a fully connected linear layer consisting of 128 rectifier units. The output layer is a fully connected linear layer with $2hw + 36=1188$ number of output.
+}
+\begin{tabular}{ll}
+\toprule
+$4\times4$ &$10\times10$ \\
+\midrule
+Conv2d(27, 16, kernel\_size=2,),&   Conv2d(27, 16, kernel\_size=3,), \\
+MaxPool2d(1),&                     MaxPool2d(1), \\
+ReLU()&                            ReLU(), \\
+Flatten()&                         Conv2d(16, 32, kernel\_size=3), \\
+Linear(144, 128),&              MaxPool2d(1), \\
+ReLU(),&                           ReLU() \\
+Linear(128, 68)&         Flatten() \\
+                                   &Linear(1152, 128), \\
+                                   &ReLU(), \\
+                                   &Linear(128, $236$) \\
+\midrule
+$16\times16$ &$24\times24$ \\
+\midrule
+Conv2d(27, 16, kernel\_size=3),&  Conv2d(27, 16, kernel\_size=3, stride=1), \\
+MaxPool2d(1),&                   MaxPool2d(2), \\
+ReLU(),&                         ReLU(), \\
+Conv2d(16, 32, kernel\_size=3),&  Conv2d(16, 32, kernel\_size=2, stride=1), \\
+MaxPool2d(1),&                   MaxPool2d(2), \\
+ReLU()&                          ReLU() \\
+Flatten()&                       Flatten() \\
+Linear(4608, 128),&          Linear(800, 128), \\
+ReLU(),&                         ReLU(), \\
+Linear(128, 548)&       Linear(128, 1188) \\
+\bottomrule
+\end{tabular}
+
+\label{tab:architecture}
+\end{table}
+
+
+
+% \noindent  This document details the requirements necessary to get your accepted paper published using \LaTeX{}. If you are using Microsoft Word, instructions are provided in a different document. If you want to use some other formatting software, you must obtain permission from FLAIRS  first.
+
+% The instructions herein are provided as a general guide for experienced \LaTeX{} users who would like to use that software to format their paper for a FLAIRS publication or report. If you are not an experienced \LaTeX{} user, do not use it to format your paper. FLAIRS cannot provide you with support and the accompanying style files are \textbf{not} guaranteed to work. If the results you obtain are not in accordance with the specifications you received, you must correct your source file to achieve the correct result.
+
+% These instructions are generic. Consequently, they do not include specific dates, page charges, and so forth. Please consult your specific written conference instructions for details regarding your submission. Please review the entire document for specific instructions that might apply to your particular situation. All authors must comply with the following:
+
+% \begin{itemize}
+% \item Read and format your paper source and PDF according to the formatting instructions for authors.
+% \item Submit your electronic files and abstract using our electronic submission form \textbf{on time.}
+% \item Check every page of your paper before submitting it.
+% \end{itemize}
+
+% \section{Copyright}
+% Copyright Year  by the authors. All rights reserved.
+
+% \section{Formatting Requirements in Brief}
+% We need source and PDF files that can be used in a variety of ways and can be output on a variety of devices. FLAIRS imposes some requirements on your source and PDF files that must be followed. Most of these requirements are based on our efforts to standardize conference manuscript properties and layout. These requirements are as follows, and all papers submitted to FLAIRS for publication must comply:
+
+% \begin{itemize}
+% \item Your .tex file must compile in PDF\LaTeX{} --- \textbf{ no .ps or .eps figure files.}
+% \item All fonts must be embedded in the PDF file --- \textbf{ this includes your figures.}
+% \item Modifications to the style sheet (or your document) in an effort to avoid extra page  are NOT allowed.
+% \item No type 3 fonts may be used (even in illustrations).
+% \item Your title must follow US capitalization rules.
+% \item \LaTeX{} documents must use the Times or Nimbus font package (do not use Computer Modern for the text of your paper).
+% \item Fonts that require non-English language support (CID and Identity-H) must be converted to outlines or removed from the document (even if they are in a graphics file embedded in the document).
+% \item Two-column format is required for all papers.
+% \item The paper size for final submission must be US letter. No exceptions.
+% \item The source file must exactly match the PDF.
+% \item The document margins must be as specified in the formatting instructions.
+% \item The number of pages and the file size must be as specified for your event.
+% \item No document may be password protected.
+% \item Neither the PDFs nor the source may contain any embedded links or bookmarks.
+% \item Your source and PDF must not have any page numbers, footers, or headers.
+% \item Your PDF must be compatible with Acrobat 5 or higher.
+% \item Your \LaTeX{} source file (excluding references) must consist of a \textbf{single} file (use of the ``input" command is not allowed.
+% \item Your graphics must be sized appropriately outside of \LaTeX{} (do not use the ``clip" command) .
+% \end{itemize}
+
+% If you do not follow the above requirements, it is likely that we will be unable to publish your paper.
+
+% \section{What Files to Submit}
+% You must submit the following items to ensure that your paper is published:
+% \begin{itemize}
+% \item A fully-compliant PDF file.
+% \item Your  \LaTeX{}  source file submitted as a \textbf{single} .tex file (do not use the ``input" command to include sections of your paper --- every section must be in the single source file). The only exception is the bibliography, which you may include separately. Your source must compile on our system, which includes the standard \LaTeX{} support files.
+% \item All your graphics files.
+% \item The \LaTeX{}-generated files (e.g. .aux and .bib file, etc.) for your compiled source.
+% \item All the nonstandard style files (ones not commonly found in standard \LaTeX{} installations) used in your document (including, for example, old algorithm style files). If in doubt, include it.
+% \end{itemize}
+
+% Your \LaTeX{} source will be reviewed and recompiled on our system (if it does not compile, you may incur late fees).   \textbf{Do not submit your source in multiple text files.} Your single \LaTeX{} source file must include all your text, your bibliography (formatted using flairs.bst), and any custom macros. Accompanying this source file, you must also supply any nonstandard (or older) referenced style files and all your referenced graphics files.
+
+% Your files should work without any supporting files (other than the program itself) on any computer with a standard \LaTeX{} distribution. Place your PDF and source files in a single tar, zipped, gzipped, stuffed, or compressed archive. Name your source file with your last (family) name.
+
+% \textbf{Do not send files that are not actually used in the paper.} We don't want you to send us any files not needed for compiling your paper, including, for example, this instructions file, unused graphics files, and so forth.
+
+% \section{Using \LaTeX{} to Format Your Paper}
+
+% The latest version of the FLAIRS style file is available on FLAIRS's website. Download this file and place it in a file named ``flairs.sty" in the \TeX\ search path. Placing it in the same directory as the paper should also work. You must download the latest version.
+
+% \subsection{Document Preamble}
+
+% In the \LaTeX{} source for your paper, you \textbf{must} place the following lines as shown in the example in this subsection. This command set-up is for three authors. Add or subtract author and address lines as necessary, and uncomment the portions that apply to you. In most instances, this is all you need to do to format your paper in the Times font. The helvet package will cause Helvetica to be used for sans serif, and the courier package will cause Courier to be used for the typewriter font. These files are part of the PSNFSS2e package, which is freely available from many Internet sites (and is often part of a standard installation).
+
+% Leave the setcounter for section number depth commented out and set at 0 unless you want to add section numbers to your paper. If you do add section numbers, you must uncomment this line and change the number to 1 (for section numbers), or 2 (for section and subsection numbers). The style file will not work properly with numbering of subsubsections, so do not use a number higher than 2.
+
+
+% \begin{quote}
+% \begin{small}
+% \textbackslash documentclass[letterpaper]{article}\\
+% \% \textit{Required Packages}\\
+% \textbackslash usepackage\{flairs\}\\
+% \textbackslash usepackage\{times\}\\
+% \textbackslash usepackage\{helvet\}\\
+% \textbackslash usepackage\{courier\}\\
+% \textbackslash setlength\{\textbackslash pdfpagewidth\}\{8.5in\}
+% \textbackslash setlength\{\textbackslash pdfpageheight\}\{11in\}\\
+% \%\%\%\%\%\%\%\%\%\%\\
+% \% \textit{PDFINFO for PDF\LaTeX{}}\\
+% \% Uncomment and complete the following for metadata (your paper must compile with PDF\LaTeX{})\\
+% \textbackslash pdfinfo\{\\
+% /Title (Input Your Paper Title Here)\\
+% /Author (John Doe, Jane Doe)\\
+% /Keywords (Input your paper's keywords in this optional area)\\
+% \}\\
+% \%\%\%\%\%\%\%\%\%\%\\
+% \% \textit{Section Numbers}\\
+% \% Uncomment if you want to use section numbers\\
+% \% and change the 0 to a 1 or 2\\
+% \% \textbackslash setcounter\{secnumdepth\}\{0\}\\
+% \%\%\%\%\%\%\%\%\%\%\\
+% \% \textit{Title, Author, and Address Information}\\
+% \textbackslash title\{Title\}\\
+% \textbackslash author\{Author 1 \textbackslash and Author 2\textbackslash\textbackslash \\
+% Address line\textbackslash\textbackslash\\ Address line\textbackslash\textbackslash \\
+% \textbackslash And\\
+% Author 3\textbackslash\textbackslash\\ Address line\textbackslash\textbackslash\\ Address line\}\\
+% \%\%\%\%\%\%\%\%\%\%\\
+% \% \textit{Body of Paper Begins}\\
+% \textbackslash begin\{document\}\\
+% \textbackslash maketitle\\
+% ...\\
+% \%\%\%\%\%\%\%\%\%\%\\
+% \% \textit{References and End of Paper}\\
+% \textbackslash bibliography\{Bibliography-File\}\\
+% \textbackslash bibliographystyle\{flairs\}\\
+% \textbackslash end\{document\}
+% \end{small}
+% \end{quote}
+
+% \subsection{Inserting Document Metadata with \LaTeX{}}
+% PDF files contain document summary information that enables us to create an Acrobat index (pdx) file, and also allows search engines to locate and present your paper more accurately. \textbf{Document Metadata  for Author and Title are REQUIRED.}
+
+% If your paper includes illustrations that are not compatible with PDF\TeX{} (such as .eps or .ps documents), you will need to convert them. The epstopdf package will usually work for eps files. You will need to convert your ps files to PDF however.
+
+% \textit{Important:} Do not include \textit{any} \LaTeX{} code or nonascii characters (including accented characters) in the metadata. The data in the metadata must be completely plain ascii. It may not include slashes, accents, linebreaks, unicode, or any \LaTeX{} commands. Type the title exactly as it appears on the paper (minus all formatting). Input the author names in the order in which they appear on the paper (minus all accents), separating each author by a comma. You may also include keywords in the Keywords field.
+
+
+
+% \subsection{Preparing Your Paper}
+
+% After the preamble above, you should prepare your paper as follows:
+
+% \begin{quote}
+% \begin{small}
+% \textbackslash begin\{document\}\\
+% \textbackslash maketitle\\
+% ...\\
+% \textbackslash bibliography\{Bibliography-File\}\\
+% \textbackslash bibliographystyle\{flairs\}\\
+% \textbackslash end\{document\}\\
+% \end{small}
+% \end{quote}
+% \subsection{Incompatible Packages}
+% The following packages are incompatible with flairs.sty and/or flairs.bst and must not be used (this list is not exhaustive --- there are others as well):
+% \begin{itemize}
+% \item hyperref
+% \item natbib
+% \item geometry
+% \item titlesec
+% \item layout
+% \item caption
+% \item titlesec
+% \item T1 fontenc package (install the CM super fonts package instead)
+% \end{itemize}
+
+% \subsection{Illegal Commands}
+% The following commands may not be used in your paper:
+% \begin{itemize}
+% \item \textbackslash input
+% \item \textbackslash vspace (when used before or after a section or subsection)
+% \item \textbackslash addtolength
+% \item \textbackslash columnsep
+% \item \textbackslash top margin (or text height or addsidemargin or even side margin)
+% \end{itemize}
+
+% \subsection{Paper Size, Margins, and Column Width}
+% Papers must be formatted to print in two-column format on 8.5 x 11 inch US letter-sized paper. The margins must be exactly as follows:
+% \begin{itemize}
+% \item Top margin: .75 inches
+% \item Left margin: .75 inches
+% \item Right margin: .75 inches
+% \item Bottom margin: 1.25 inches
+% \end{itemize}
+
+
+% The default paper size in most installations of \LaTeX{} is A4. However, because we require that your electronic paper be formatted in US letter size, you will need to alter the default for this paper to US letter size. Assuming you are using the 2e version of \LaTeX{}, you can do this by including the [letterpaper] option at the beginning of your file:
+% \textbackslash documentclass[letterpaper]{article}.
+
+% This command is usually sufficient to change the format. Sometimes, however, it may not work. Use PDF\LaTeX{} and include
+% \textbackslash setlength\{\textbackslash pdfpagewidth\}\{8.5in\}
+% \textbackslash setlength\{\textbackslash pdfpageheight\}\{11in\}
+% in your preamble.
+
+% \textbf{Do not use the Geometry package to alter the page size.} Use of this style file alters flairs.sty and will result in your paper being rejected.
+
+
+% \subsubsection{Column Width and Margins.}
+% To ensure maximum readability, your paper must include two columns. Each column should be 3.3 inches wide (slightly more than 3.25 inches), with a .375 inch (.952 cm) gutter of white space between the two columns. The flairs.sty file will automatically create these columns for you.
+
+% \subsection{Overlength Papers}
+% If your paper is too long, turn on \textbackslash frenchspacing, which will reduce the space after periods. Next,  shrink the size of your graphics. Use \textbackslash centering instead of \textbackslash begin\{center\} in your figure environment. If these two methods don't work, you may minimally use the following. For floats (tables and figures), you may minimally reduce \textbackslash floatsep, \textbackslash textfloatsep, \textbackslash abovecaptionskip, and \textbackslash belowcaptionskip. For mathematical environments, you may minimally reduce \textbackslash abovedisplayskip, \textbackslash belowdisplayskip, and \textbackslash arraycolsep. You may also alter the size of your bibliography by inserting \textbackslash fontsize\{9.5pt\}\{10.5pt\} \textbackslash selectfont
+% right before the bibliography.
+
+% Commands that alter page layout are forbidden. These include \textbackslash columnsep, \textbackslash topmargin, \textbackslash topskip, \textbackslash textheight, \textbackslash textwidth, \textbackslash oddsidemargin, and \textbackslash evensizemargin (this list is not exhaustive). If you alter page layout, you will be required to pay the page fee \textit{plus} a reformatting fee. Other commands that are questionable and may cause your paper to be rejected include  \textbackslash parindent, and \textbackslash parskip. Commands that alter the space between sections are also questionable. The title sec package is not allowed. Regardless of the above, if your paper is obviously ``squeezed" it is not going to to be accepted. Before using every trick you know to make your paper a certain length, try reducing the size of your graphics or cutting text instead.
+
+% \subsection{Figures}
+% Your paper must compile in PDF\LaTeX{}. Consequently, all your figures must be .jpg, .png, or .pdf. You may not use the .gif (the resolution is too low), .ps, or .eps file format for your figures.
+
+% When you include your figures, you must crop them \textbf{outside} of \LaTeX{}. The command \textbackslash includegraphics*[clip=true, viewport 0 0 10 10]{...} might result in a PDF that looks great, but the image is \textbf{not really cropped.} The full image can reappear when page numbers are applied or color space is standardized.
+
+% \subsection{Type Font and Size}
+% Your paper must be formatted in Times Roman or Nimbus. We will not accept papers formatted using Computer Modern or Palatino or some other font as the text or heading typeface. Sans serif, when used, should be Courier. Use Symbol or Lucida or Computer Modern for \textit{mathematics only. }
+
+% Do not use type 3 fonts for any portion of your paper, including graphics. Type 3 bitmapped fonts are designed for fixed resolution printers. Most print at 300 dpi even if the printer resolution is 1200 dpi or higher. They also often cause high resolution imagesetter devices and our PDF indexing software to crash. Consequently, FLAIRS will not accept electronic files containing obsolete type 3 fonts. Files containing those fonts (even in graphics) will be rejected.
+
+% Fortunately, there are effective workarounds that will prevent your file from embedding type 3 bitmapped fonts. The easiest workaround is to use the required times, helvet, and courier packages with \LaTeX{}2e. (Note that papers formatted in this way will still use Computer Modern for the mathematics. To make the math look good, you'll either have to use Symbol or Lucida, or you will need to install type 1 Computer Modern fonts --- for more on these fonts, see the section ``Obtaining Type 1 Computer Modern.")
+
+% If you are unsure if your paper contains type 3 fonts, view the PDF in Acrobat Reader. The Properties/Fonts window will display the font name, font type, and encoding properties of all the fonts in the document. If you are unsure if your graphics contain type 3 fonts (and they are PostScript or encapsulated PostScript documents), create PDF versions of them, and consult the properties window in Acrobat Reader.
+
+% The default size for your type should be ten-point with twelve-point leading (line spacing). Start all pages (except the first) directly under the top margin. (See the next section for instructions on formatting the title page.) Indent ten points when beginning a new paragraph, unless the paragraph begins directly below a heading or subheading.
+
+% \subsubsection{Obtaining Type 1 Computer Modern for \LaTeX{}.}
+
+% If you use Computer Modern for the mathematics in your paper (you cannot use it for the text) you may need to download type 1 Computer fonts. They are available without charge from the American Mathematical Society:
+% http://www.ams.org/tex/type1-fonts.html.
+
+% \subsection{Title and Authors}
+% Your title must appear in mixed case (nouns, pronouns, and verbs are capitalized) near the top of the first page, centered over both columns in sixteen-point bold type (twenty-four point leading). This style is called ``mixed case." Author's names should appear below the title of the paper, centered in twelve-point type (with fifteen point leading), along with affiliation(s) and complete address(es) (including electronic mail address if available) in nine-point roman type (the twelve point leading). (If the title is long, or you have many authors, you may reduce the specified point sizes by up to two points.) You should begin the two-column format when you come to the abstract.
+
+% \subsubsection{Formatting Author Information}
+% Author information can be set in a number of different styles, depending on the number of authors and the number of affiliations you need to display. For several authors from the same institution, use \textbackslash and:
+
+% \begin{quote}
+% \begin{small}
+% \textbackslash author\{Author 1 \textbackslash and  ...  \textbackslash and Author \textit{n}\textbackslash \textbackslash  \\
+% Address line \textbackslash \textbackslash ~... \textbackslash \textbackslash ~Address line\}
+% \end{small}
+% \end{quote}
+
+% \noindent If the names do not fit well on one line use:
+
+% \begin{quote}
+% \begin{small}
+% \textbackslash author\{Author 1\}\textbackslash \textbackslash \\ \{\textbackslash bf Author 2\}\textbackslash \textbackslash ~
+% ... \textbackslash \textbackslash ~\{\textbackslash bf Author \textit{n}\}\textbackslash \textbackslash \\
+% Address line \textbackslash \textbackslash ~ ... \textbackslash \textbackslash ~ Address line\}
+% \end{small}
+% \end{quote}
+
+% \noindent For authors from different institutions, use \textbackslash And:
+
+% \begin{quote}
+% \begin{small}
+% \textbackslash author\{Author 1\textbackslash \textbackslash ~ Address line \textbackslash \textbackslash ~...  \textbackslash \textbackslash ~ Address line
+% \textbackslash And  ...
+% \textbackslash And
+% Author \textit{n}\textbackslash \textbackslash \\ Address line\textbackslash \textbackslash ~
+% ... \textbackslash \textbackslash ~
+% Address line\}
+% \end{small}
+% \end{quote}
+
+% \noindent To start a separate ``row" of authors, use \textbackslash AND:
+% \begin{quote}
+% \begin{small}
+% \textbackslash author\{Author 1\textbackslash\textbackslash ~ Address line \textbackslash\textbackslash ~
+% ...  \textbackslash \textbackslash ~ Address line\textbackslash\textbackslash \\
+% \textbackslash AND\\
+% Author 2 \textbackslash\textbackslash ~ Address line \textbackslash\textbackslash ~
+% ...  \textbackslash \textbackslash ~ Address line\textbackslash\textbackslash \\
+% \textbackslash And\\
+% Author 3 \textbackslash\textbackslash ~ Address line \textbackslash\textbackslash ~
+% ...  \textbackslash \textbackslash ~ Address line\textbackslash\textbackslash \\\}
+% \end{small}
+% \end{quote}
+
+% \noindent If the title and author information does not fit in the area allocated, place
+% \textbackslash setlength\textbackslash titlebox\{\textit{height}\}
+% after the \textbackslash documentclass line where \{\textit{height}\} is something like 2.5in.
+
+% \subsection{\LaTeX{} Copyright Notice}
+% The copyright notice automatically appears if you use FLAIRS.sty. If you are creating a technical report, it is not necessary to include this notice. You may disable the copyright line using the \verb+\+nocopyrightcommand. To change the entire text of the copyright slug, use:
+% \textbackslash copyrighttext \{\emph{text}\}.
+% Either of these must appear before \textbackslash maketitle. Please be advised, however, that \textit{if you disable or change the copyright line and transfer of copyright is required, your paper will not be published.}
+
+% \subsection{Credits}
+% Any credits to a sponsoring agency should appear in the acknowledgments section, unless the agency requires different placement. If it is necessary to include this information on the front page, use
+% \textbackslash thanks in either the \textbackslash author or \textbackslash title commands.
+% For example:
+% \begin{quote}
+% \begin{small}
+% \textbackslash title\{Very Important Results in AI\textbackslash thanks\{This work is
+%  supported by everybody.\}\}
+% \end{small}
+% \end{quote}
+% Multiple \textbackslash thanks commands can be given. Each will result in a separate footnote indication in the author or title with the corresponding text at the botton of the first column of the document. Note that the \textbackslash thanks command is fragile. You will need to use \textbackslash protect.
+
+% Please do not include \textbackslash pubnote commands in your document.
+
+% \subsection{Abstract}
+% The abstract must be placed at the beginning of the first column, indented ten points from the left and right margins. The title ÒAbstractÓ should appear in ten-point bold type, centered above the body of the abstract. The abstract should be set in nine-point type with ten-point leading. This concise, one-paragraph summary should describe the general thesis and conclusion of your paper. A reader should be able to learn the purpose of the paper and the reason for its importance from the abstract. The abstract should be no more than two hundred fifty words in length. (Authors who are submitting short one- or two-page extended extracts should provide a short abstract of only a sentence or so.) \textbf{Do not include references in your abstract!}
+
+% \subsection{Page Numbers}
+
+% Do not \textbf{ever} print any page numbers on your paper.
+
+% \subsection{Text }
+% The main body of the paper must be formatted in ten-point with twelve-point leading (line spacing).
+
+% \subsection{Citations}
+% Citations within the text should include the author's last name and year, for example (Newell 1980). Append lower-case letters to the year in cases of ambiguity. Multiple authors should be treated as follows: (Feigenbaum and Engelmore 1988) or (Ford, Hayes, and Glymour 1992). In the case of four or more authors, list only the first author, followed by et al. (Ford et al. 1997).
+
+% \subsection{Extracts}
+% Long quotations and extracts should be indented ten points from the left and right margins.
+
+% \begin{quote}
+% This is an example of an extract or quotation. Note the indent on both sides. Quotation marks are not necessary if you offset the text in a block like this, and properly identify and cite the quotation in the text.
+
+% \end{quote}
+
+% \subsection{Footnotes}
+% Avoid footnotes as much as possible; they interrupt the reading of the text. When essential, they should be consecutively numbered throughout with superscript Arabic numbers. Footnotes should appear at the bottom of the page, separated from the text by a blank line space and a thin, half-point rule.
+
+% \subsection{Headings and Sections}
+% When necessary, headings should be used to separate major sections of your paper. Remember, you are writing a short paper, not a lengthy book! An overabundance of headings will tend to make your paper look more like an outline than a paper.
+
+% First-level heads should be twelve-point Times Roman bold type, mixed case (initial capitals followed by lower case on all words except articles, conjunctions, and prepositions, which should appear entirely in lower case), with fifteen-point leading, centered, with one blank line preceding them and three additional points of leading following them. Second-level headings should be eleven-point Times Roman bold type, mixed case, with thirteen-point leading, flush left, with one blank line preceding them and three additional points of leading following them. Do not skip a line between paragraphs. Third-level headings should be run in with the text, ten-point Times Roman bold type, mixed case, with twelve-point leading, flush left, with six points of additional space preceding them and no additional points of leading following them.
+
+% \subsubsection{Section Numbers}
+% The use of section numbers is optional. To use section numbers in \LaTeX{}, uncomment the setcounter line in your document preamble and change the 0 to a 1 or 2. Section numbers should not be used in short poster papers.
+
+% \subsubsection{Section Headings.}
+% Sections should be arranged and headed as follows:
+
+% \subsubsection{Acknowledgments.}
+% The acknowledgments section, if included, appears after the main body of text and is headed ``Acknowledgments." This section includes acknowledgments of help from associates and colleagues, credits to sponsoring agencies, financial support, and permission to publish. Please acknowledge other contributors, grant support, and so forth, in this section. Do not put acknowledgments in a footnote on the first page. If your grant agency requires acknowledgment of the grant on page 1, limit the footnote to the required statement, and put the remaining acknowledgments at the back. Please try to limit acknowledgments to no more than three sentences.
+
+% \subsubsection{Appendices.}
+% Any appendices follow the acknowledgments, if included, or after the main body of text if no acknowledgments appear.
+
+% \subsubsection{References}
+% The references section should be labeled ``References" and should appear at the very end of the paper (don't end the paper with references, and then put a figure by itself on the last page). A sample list of references is given later on in these instructions. Please use a consistent format for references. Poorly prepared or sloppy references reflect badly on the quality of your paper and your research. Please prepare complete and accurate citations.
+
+% \subsection{Illustrations and Figures}
+% Figures, drawings, tables, and photographs should be placed throughout the paper near the place where they are first discussed. Do not group them together at the end of the paper. If placed at the top or bottom of the paper, illustrations may run across both columns. Figures must not invade the top, bottom, or side margin areas. Figures must be inserted using the \textbackslash usepackage\{graphicx\}. Number figures sequentially, for example, figure 1, and so on.
+
+% The illustration number and caption should appear under the illustration. Labels, and other text in illustrations must be at least nine-point type.
+
+% \subsubsection{Low-Resolution Bitmaps.}
+% You may not use low-resolution (such as 72 dpi) screen-dumps and GIF files---these files contain so few pixels that they are always blurry, and illegible when printed. If they are color, they will become an indecipherable mess when converted to black and white. This is always the case with gif files, which should never be used. The resolution of screen dumps can be increased by reducing the print size of the original file while retaining the same number of pixels. You can also enlarge files by manipulating them in software such as PhotoShop. Your figures should be a minimum of 266 dpi when incorporated into your document.
+
+% \subsubsection{\LaTeX{} Overflow.}
+% \LaTeX{} users please beware: \LaTeX{} will sometimes put portions of the figure or table or an equation in the margin. If this happens, you need to scale the figure or table down, or reformat the equation. Check your log file! You must fix any overflow into the margin (that means no overfull boxes in \LaTeX{}). If you don't, the overflow text will simply be eliminated. \textbf{Nothing is permitted to intrude into the margins.}
+
+% \subsubsection{Using Color.}
+% Your paper will be printed in black and white and grayscale. Consequently, because conversion to grayscale can cause undesirable effects (red changes to black, yellow can disappear, and so forth), we strongly suggest you avoid placing color figures in your document. Of course, any reference to color will be indecipherable to your reader.
+
+% \subsubsection{Drawings.}
+% We suggest you use computer drawing software (such as Adobe Illustrator or, (if unavoidable), the drawing tools in Microsoft Word) to create your illustrations. Do not use Microsoft Publisher. These illustrations will look best if all line widths are uniform (half- to two-point in size), and you do not create labels over shaded areas. Shading should be 133 lines per inch if possible. Use Times Roman or Helvetica for all figure call-outs. \textbf{Do not use hairline width lines} --- be sure that the stroke width of all lines is at least .5 pt. Zero point lines will print on a laser printer, but will completely disappear on the high-resolution devices used by our printers.
+
+% \subsubsection{Photographs and Images.}
+% Photographs and other images should be in grayscale (color photographs will not reproduce well; for example, red tones will reproduce as black, yellow may turn to white, and so forth) and set to a minimum of 266 dpi. Do not prescreen images.
+
+% \subsubsection{Resizing Graphics.}
+% Resize your graphics \textbf{before} you include them with LaTeX. You may \textbf{not} use trim or clip options as part of your \textbackslash includgraphics command. Resize the media box of your PDF using a graphics program instead.
+
+% \subsubsection{Fonts in Your Illustrations}
+% You must embed all fonts in your graphics before including them in your LaTeX document.
+
+% \subsection{References}
+% The flairs.sty file includes a set of definitions for use in formatting references with BibTeX. These definitions make the bibliography style fairly close to the one specified below. To use these definitions, you also need the BibTeX style file ``flairs.bst," available in the author kit on the FLAIRS web site. Then, at the end of your paper but before \textbackslash end{document}, you need to put the following lines:
+
+% \begin{quote}
+% \begin{small}
+% \textbackslash bibliographystyle\{flairs\}
+% \textbackslash bibliography\{bibfile1,bibfile2,...\}
+% \end{small}
+% \end{quote}
+
+% The list of files in the \textbackslash  bibliography command should be the names of your BibTeX source files (that is, the .bib files referenced in your paper).
+
+% The following commands are available for your use in citing references:
+% \begin{quote}
+% \begin{small}
+% \textbackslash cite: Cites the given reference(s) with a full citation. This appears as ``(Author Year)'' for one reference, or ``(Author Year; Author Year)'' for multiple references.\\
+% \textbackslash shortcite: Cites the given reference(s) with just the year. This appears as ``(Year)'' for one reference, or ``(Year; Year)'' for multiple references.\\
+% \textbackslash citeauthor: Cites the given reference(s) with just the author name(s) and no parentheses.\\
+% \textbackslash citeyear: Cites the given reference(s) with just the date(s) and no parentheses.
+% \end{small}
+% \end{quote}
+
+% \textbf{Warning:} The flairs.sty file is incompatible with the hyperref and natbib packages. If you use either, your references will be garbled.
+
+% Formatted bibliographies should look like the following examples.
+
+% \smallskip \noindent \textit{Book with Multiple Authors}\\
+% Engelmore, R., and Morgan, A. eds. 1986. \textit{Blackboard Systems.} Reading, Mass.: Addison-Wesley.
+
+% \smallskip \noindent \textit{Journal Article}\\
+% Robinson, A. L. 1980a. New Ways to Make Microcircuits Smaller. \textit{Science} 208: 1019--1026.
+
+% \smallskip \noindent \textit{Magazine Article}\\
+% Hasling, D. W.; Clancey, W. J.; and Rennels, G. R. 1983. Strategic Explanations in Consultation. \textit{The International Journal of Man-Machine Studies} 20(1): 3--19.
+
+% \smallskip \noindent \textit{Proceedings Paper Published by a Society}\\
+% Clancey, W. J. 1983b. Communication, Simulation, and Intelligent Agents: Implications of Personal Intelligent Machines for Medical Education. In Proceedings of the Eighth International Joint Conference on Artificial Intelligence, 556--560. Menlo Park, Calif.: International Joint Conferences on Artificial Intelligence, Inc.
+
+% \smallskip \noindent \textit{Proceedings Paper Published by a Press or Publisher}\\
+% Clancey, W. J. 1984. Classification Problem Solving. In \textit{Proceedings of the Fourth National Conference on Artificial Intelligence,} 49--54. Menlo Park, Calif.: AAAI Press.
+
+% \smallskip \noindent \textit{University Technical Report}\\
+% Rice, J. 1986. Poligon: A System for Parallel Problem Solving, Technical Report, KSL-86-19, Dept. of Computer Science, Stanford Univ.
+
+% \smallskip \noindent \textit{Dissertation or Thesis}\\
+% Clancey, W. J. 1979b. Transfer of Rule-Based Expertise through a Tutorial Dialogue. Ph.D. diss., Dept. of Computer Science, Stanford Univ., Stanford, Calif.
+
+% \smallskip \noindent \textit{Forthcoming Publication}\\
+% Clancey, W. J. 1986a. The Engineering of Qualitative Models. Forthcoming.
+
+
+
+% \section{Producing Reliable PDF\\Documents with \LaTeX{}}
+% Generally speaking, PDF files are platform independent and accessible to everyone. When creating a paper for a proceedings or publication in which many PDF documents must be merged and then printed on high-resolution PostScript RIPs, several requirements must be met that are not normally of concern. Thus to ensure that your paper will look like it does when printed on your own machine, you must take several precautions:
+% \begin{itemize}
+% \item Use type 1 fonts (not type 3 fonts)
+% \item Use only standard Times, Nimbus, and CMR font packages (not fonts like F3 or fonts with tildes in the names or fonts---other than Computer Modern---that are created for specific point sizes, like Times\~{}19) or fonts with strange combinations of numbers and letters
+% \item Embed all fonts when producing the PDF
+% \item Do not use the [T1]{fontenc} package (install the CM super fonts package instead)
+% \end{itemize}
+
+% \subsection{Creating Output Using PDF\LaTeX{} Is Required}
+% By using the PDF\TeX{} program instead of straight \LaTeX{} or \TeX{}, you will probably avoid the type 3 font problem altogether (unless you use a package that calls for metafont). PDF\LaTeX{} enables you to create a PDF document directly from \LaTeX{} source. The one requirement of this software is that all your graphics and images must be available in a format that PDF\LaTeX{} understands (normally PDF).
+
+% PDF\LaTeX{}'s default is to create documents with type 1 fonts. If you find that it is not doing so in your case, it is likely that one or more fonts are missing from your system or are not in a path that is known to PDF\LaTeX{}.
+
+% \subsubsection{dvipdf Script}
+% Scripts such as dvipdf which ostensibly bypass the Postscript intermediary should not be used since they generally do not instruct dvips to use the config.pdf file.
+
+% \subsubsection{dvipdfm}
+% Do not use this dvi-PDF conversion package if your document contains graphics (and we recommend you avoid it even if your document does not contain graphics).
+
+% \subsection{Ghostscript}
+% \LaTeX{} users should not use GhostScript to create their PDFs.
+
+% \subsection{Graphics}
+% If you are still finding type 3 fonts in your PDF file, look at your graphics! \LaTeX{} users should check all their imported graphics files as well for font problems.
+
+% \section{Proofreading Your PDF}
+% Please check all the pages of your PDF file. Is the page size A4? Are there any type 3, Identity-H, or CID fonts? Are all the fonts embedded? Are there any areas where equations or figures run into the margins? Did you include all your figures? Did you follow mixed case capitalization rules for your title? Did you include a copyright notice? Do any of the pages scroll slowly (because the graphics draw slowly on the page)? Are URLs underlined and in color? You will need to fix these common errors before submitting your file.
+
+% \section{Improperly Formatted Files }
+% In the past, FLAIRS has corrected improperly formatted files submitted by the authors. Unfortunately, this has become an increasingly burdensome. Consequently, if your file is improperly formatted, it may not be possible to include your paper in the publication. If time allows, however, you will be notified via e-mail (with a copy to the program chair) of the problems with your file and given the option of correcting the file yourself  If you opt to correct the file yourself, please note that we cannot provide you with any additional advice beyond that given in your packet. Files that are not corrected after a second attempt will be withdrawn.
+
+% \subsection{\LaTeX{} 209 Warning}
+% If you use \LaTeX{} 209 we will not be able to publish your paper. Convert your paper to \LaTeX{}2e.
+
+% \section{Naming Your Electronic File}
+% We request that you name your \LaTeX{} source file with your last name (family name) so that it can easily be differentiated from other submissions. If you name your files with the name of the event or ``flairs" or ``paper" or ``camera-ready" or some other generic or indecipherable name, you bear all risks of loss --- it is extremely likely that your file may be overwritten.
+
+% \section{Submitting Your Electronic Files to FLAIRS}
+% Submitting your files to FLAIRS is a two-step process. It is explained fully in the author registration and submission instructions. Please consult this document for details on how to submit your paper.
+
+% \section{Inquiries}
+% If you have any questions about the preparation or submission of your paper as instructed in this document, please contact FLAIRS. If you have technical questions about implementation of the flairs style file, please contact an expert at your site. We do not provide technical support for \LaTeX{} or any other software package. To avoid problems, please keep your paper simple, and do not incorporate complicated macros and style files.
+
+
+% \section{Additional Resources}
+% \LaTeX{} is a difficult program to master. If you've used that software, and this document didn't help or some items were not explained clearly, we recommend you read Michael Shell's excellent document (testflow doc.txt V1.0a 2002/08/13) about obtaining correct PS/PDF output on \LaTeX{} systems. (It was written for another purpose, but it has general application as well). It is available at www.ctan.org in the tex-archive.
+
+% \section{ Acknowledgments}
+% FLAIRS is especially grateful to Peter Patel Schneider, Barbara Beeton, George Ferguson, Hans Guesgen, as well as the many others who have, either created the original file from AAAI that this is based on, or from time to time, sent in suggestions on improvements to the FLAIRS style.
+
+% \bigskip
+% \noindent Thank you for reading these instructions carefully. We look forward to receiving your electronic files!
+
+\end{document}

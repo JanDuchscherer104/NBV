@@ -1,0 +1,647 @@
+\def\year{2020}\relax
+%File: formatting-instruction.tex
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage{aaai20}  % DO NOT CHANGE THIS
+\usepackage{times}  % DO NOT CHANGE THIS
+\usepackage{helvet} % DO NOT CHANGE THIS
+\usepackage{courier}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{graphicx}  % DO NOT CHANGE THIS
+\frenchspacing  % DO NOT CHANGE THIS
+\setlength{\pdfpagewidth}{8.5in}  % DO NOT CHANGE THIS
+\setlength{\pdfpageheight}{11in}  % DO NOT CHANGE THIS
+
+%% Extra packages
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{bbm}
+\usepackage{bm}
+\usepackage{subfig}
+\usepackage{mathtools}
+\usepackage{cleveref}
+\usepackage{physics}
+\usepackage{afterpage}
+
+\usepackage[]{appendix}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\usepackage[dvipsnames]{xcolor}
+\newcommand{\TODO}[1]{\textcolor{red}{#1}}
+\usepackage{lipsum}
+\DeclareMathSymbol{\shortminus}{\mathbin}{AMSa}{"39}
+
+%\nocopyright
+%PDF Info Is REQUIRED.
+% For /Author, add all authors within the parentheses, separated by commas. No accents or commands.
+% For /Title, add Title in Mixed Case. No accents or commands. Retain the parentheses.
+ \pdfinfo{
+/Title (Fixed-Horizon Temporal Difference Methods for Stable Reinforcement Learning)
+/Author (Kristopher De Asis, Alan Chan, Silviu Pitis, Richard S. Sutton, Daniel Graves)
+} %Leave this
+% /Title ()
+% Put your actual complete title (no codes, scripts, shortcuts, or LaTeX commands) within the parentheses in mixed case
+% Leave the space between \Title and the beginning parenthesis alone
+% /Author ()
+% Put your actual complete list of authors (no codes, scripts, shortcuts, or LaTeX commands) within the parentheses in mixed case.
+% Each author should be only by a comma. If the name contains accents, remove them. If there are any LaTeX commands,
+% remove them.
+
+% DISALLOWED PACKAGES
+% \usepackage{authblk} -- This package is specifically forbidden
+% \usepackage{balance} -- This package is specifically forbidden
+% \usepackage{caption} -- This package is specifically forbidden
+% \usepackage{color (if used in text)
+% \usepackage{CJK} -- This package is specifically forbidden
+% \usepackage{float} -- This package is specifically forbidden
+% \usepackage{flushend} -- This package is specifically forbidden
+% \usepackage{fontenc} -- This package is specifically forbidden
+% \usepackage{fullpage} -- This package is specifically forbidden
+% \usepackage{geometry} -- This package is specifically forbidden
+% \usepackage{grffile} -- This package is specifically forbidden
+% \usepackage{hyperref} -- This package is specifically forbidden
+% \usepackage{navigator} -- This package is specifically forbidden
+% (or any other package that embeds links such as navigator or hyperref)
+% \indentfirst} -- This package is specifically forbidden
+% \layout} -- This package is specifically forbidden
+% \multicol} -- This package is specifically forbidden
+% \nameref} -- This package is specifically forbidden
+% \natbib} -- This package is specifically forbidden -- use the following workaround:
+% \usepackage{savetrees} -- This package is specifically forbidden
+% \usepackage{setspace} -- This package is specifically forbidden
+% \usepackage{stfloats} -- This package is specifically forbidden
+% \usepackage{tabu} -- This package is specifically forbidden
+% \usepackage{titlesec} -- This package is specifically forbidden
+% \usepackage{tocbibind} -- This package is specifically forbidden
+% \usepackage{ulem} -- This package is specifically forbidden
+% \usepackage{wrapfig} -- This package is specifically forbidden
+% DISALLOWED COMMANDS
+% \nocopyright -- Your paper will not be published if you use this command
+% \addtolength -- This command may not be used
+% \balance -- This command may not be used
+% \baselinestretch -- Your paper will not be published if you use this command
+% \clearpage -- No page breaks of any kind may be used for the final version of your paper
+% \columnsep -- This command may not be used
+% \newpage -- No page breaks of any kind may be used for the final version of your paper
+% \pagebreak -- No page breaks of any kind may be used for the final version of your paperr
+% \pagestyle -- This command may not be used
+% \tiny -- This is not an acceptable font size.
+% \vspace{- -- No negative value may be used in proximity of a caption, figure, table, section, subsection, subsubsection, or reference
+% \vskip{- -- No negative value may be used to alter spacing above or below a caption, figure, table, section, subsection, subsubsection, or reference
+
+\setcounter{secnumdepth}{1} %May be changed to 1 or 2 if section numbers are desired.
+
+% The file aaai20.sty is the style file for AAAI Press
+% proceedings, working notes, and technical reports.
+%
+\setlength\titlebox{2.5in} % If your paper contains an overfull \vbox too high warning at the beginning of the document, use this
+% command to correct it. You may not alter the value below 2.5 in
+
+\DeclareMathOperator*{\esssup}{ess\,sup}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+\newcommand{\Ex}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\D}{\mathcal{D}}
+\renewcommand{\vec}[1]{\textbf{\textit{#1}}}
+\newcommand{\val}{Q}
+\newcommand{\valt}{\val}
+\newcommand{\given}{\,|\,}
+\newcommand{\target}{Q}
+\newcommand{\params}{\mathbf{w}}
+\newcommand{\Features}{\bm{\Phi}}
+\newcommand{\features}{\bm{\phi}}
+%\newcommand{\grad}{\bm{\nabla}}
+\renewcommand{\r}{\textbf{\textit{r}}}
+\newcommand{\transitionmtx}{\textbf{\textit{P}}}
+\newcommand{\projectionmtx}{\bm{\Pi}}
+\newcommand{\densitymtx}{\textbf{\textit{D}}}
+\newcommand{\bellmanop}{T}
+%\newcommand{\dv}{\bm{\Delta}}
+%\newcommand{\smashednorm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\smashednorm}[1]{\left\lVert \smash{#1} \right\rVert}
+
+
+\newtheorem{definition}{Definition}
+\newtheorem{exercise}{Exercise}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{example}{Example}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{assumption}{Assumption}
+
+\newcommand{\citei}[1]{\citeauthor{#1} (\citeyear{#1})}
+
+\title{Fixed-Horizon Temporal Difference Methods\\for Stable Reinforcement Learning}
+% Stable/Stabilizing Reinforcement Learning with Finite-Horizon Temporal Difference Methods
+% Finite-Horizon Temporal Difference Methods for Stable Approximation in Reinforcement Learning
+% Grounded/Stable Bootstrapping with Finite-Horizon Temporal Difference Methods
+
+\author{\Large \textbf{Kristopher De Asis,\textsuperscript{\rm 1} Alan Chan,\textsuperscript{\rm 1,3} Silviu Pitis,\textsuperscript{\rm 2} Richard S. Sutton,\textsuperscript{\rm 1} Daniel Graves\textsuperscript{\rm 3}}\\
+\textsuperscript{\rm 1}University of Alberta, \textsuperscript{\rm 2}University of Toronto, \textsuperscript{\rm 3}Huawei Technologies Canada, Ltd.\\
+\{kldeasis, achan4, rsutton\}@ualberta.ca, spitis@cs.toronto.edu, daniel.graves@huawei.com
+}
+
+% anonymizer
+%\author{\Large \textbf{Anonymous authors}\\Anonymous affiliations\\}
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+%Reinforcement learning agents are typically designed to optimize the \textit{infinite-horizon} return---an arbitrarily long discounted sum of rewards, computed either through the end of an episode, or through infinity in continuing settings. The discount rate is used to keep the return finite and to specify a horizon of interest, as it decays the weight given to distant rewards.
+%The infinite-horizon return is appealing because it can be expressed recursively, giving rise to infinite-horizon temporal difference (TD) methods. Although these methods are simple, efficient to compute online, and offer strong convergence guarantees in tabular settings, the naive addition of function approximation can result in divergence.
+%In this work, we investigate using \textit{finite-horizon} returns, where rewards are only considered up to a fixed number of steps into the future.  We derive finite-horizon TD methods and compare them to their infinite-horizon counterparts in terms of prediction capabilities, complexity, convergence, and performance. Our main contributions are several novel algorithms for both prediction and control, convergence theorems that apply to function approximation, and empirical demonstrations of their benefits over infinite-horizon TD methods.
+%% + Rich's additions
+We explore fixed-horizon temporal difference (TD) methods, reinforcement learning algorithms for a new kind of value function that predicts the sum of rewards over a \textit{fixed} number of future time steps. To learn the value function for horizon $h$, these algorithms bootstrap from the value function for horizon $h-1$, or some shorter horizon. Because no value function bootstraps from itself, fixed-horizon methods are immune to the stability problems that plague other off-policy TD methods using function approximation (also known as ``the deadly triad''). Although fixed-horizon methods require the storage of additional value functions, this gives the agent additional predictive power, while the added complexity can be substantially reduced via parallel updates, shared weights, and $n$-step bootstrapping. We show how to use fixed-horizon value functions to solve reinforcement learning problems competitively with methods such as Q-learning that learn conventional value functions. We also prove convergence of fixed-horizon temporal difference methods with linear and general function approximation. Taken together, our results establish fixed-horizon TD methods as a viable new way of avoiding the stability problems of the deadly triad.
+\end{abstract}
+
+\section{Temporal Difference Learning}
+\label{sec:tdintro}
+
+%\textit{Temporal difference} (TD) methods~\cite{sutton1988} are an important approach to reinforcement learning (RL) that combine ideas from Monte Carlo estimation and dynamic programming. TD methods enable learning from raw experience in the absence of an environment model, as do Monte Carlo methods, while computing estimates that bootstrap from other estimates, as does dynamic programming. This allows for online and incremental learning in both long-term prediction and sequential decision-making problems.
+
+%A key view of TD learning is that it learns testable, predictive knowledge of the environment~\cite{horde2011}. The learned value functions represent answers to questions about how a signal will accumulate over time, conditioned on a way of behaving. By continually comparing predictions to actual outcomes, a TD learning agent can incrementally adjust its world knowledge accordingly. In control problems, this signal is the reward sequence, and the value function represents an arbitrarily long sum of rewards an agent expects to receive when behaving greedily with respect to its current predictions about this signal.
+
+\textit{Temporal difference} (TD) methods~\cite{sutton1988} are an important approach to reinforcement learning (RL) that combine ideas from Monte Carlo estimation and dynamic programming. A key view of TD learning is that it incrementally learns testable, predictive knowledge of the environment~\cite{horde2011}. The learned values represent answers to questions about how a signal will accumulate over time, conditioned on a way of behaving. %By continually comparing predictions to actual outcomes, a TD learning agent can incrementally adjust its world knowledge accordingly.
+In control tasks, this signal is the reward sequence, and the values represent an arbitrarily long sum of rewards an agent expects to receive when acting greedily with respect to its current predictions.% about this signal.
+
+A TD learning agent's prediction horizon is specified through a \textit{discount factor}~\cite{rlbook2018}. This parameter adjusts how quickly to exponentially decay the weight given to later outcomes in a sequence's sum, and allows computational complexity to be \textit{independent of span}~\cite{indspan2015}. It's often set to a constant $\gamma \in [0, 1)$, but prior work generalizes the discount rate to be a transition-dependent \textit{termination} function~\cite{taskspec2016}. This allows for (variable) finite-length sums dependent on state transitions, like in episodic tasks.
+
+In this paper, we explore a case of \textit{time-dependent} discounting, where the sum considers a fixed number of future steps regardless of where the agent ends up. We derive and investigate properties of fixed-horizon TD algorithms, and identify benefits over infinite-horizon algorithms in both prediction and control.
+%
+% SP: There was grammar mistake below; check proposed change
+% AC : Looks good to me
+Specifically, by storing and updating a separate value function for each horizon, fixed-horizon methods avoid feedback loops when bootstrapping, so that learning is stable even in presence of function approximation. Fixed-horizon agents can approximate infinite-horizon returns arbitrarily well, expand their set of learned horizons freely (computation permitting), and combine forecasts from multiple horizons to make time-sensitive predictions about rewards.
+%
+We emphasize %that the ``fixed-horizon'' nomenclature comes from
+our novel focus on predicting a fixed-horizon return from each state as a solution method, regardless of the problem setting. Our algorithms can be applied to both finite-horizon and infinite-horizon MDPs.
+% KD: is it particularly optimizing a finite horizon return, if it's finite from current state? it's like a limited-lookahead policy
+% AC: It might be good to draw a distinction between finite-horizon MDPs and our finite-horizon methods at the outset to avoid confusion
+
+
+\section{MDPs and One-step TD Methods}\label{sec:mdps}
+
+The RL problem is usually modeled as a Markov decision process (MDP), in which an agent interacts with an environment over a sequence of discrete time steps.
+
+At each time step $t$, the agent receives information about the environment's current \textit{state}, $S_t \in \mathcal{S}$, where $\mathcal{S}$ is the set of all possible states in the MDP. The agent uses this state information to select an \textit{action}, $A_t \in \mathcal{A}(S_t)$, where $\mathcal{A}(s)$ is the set of possible actions in state $s$. Based on the current state and the selected action, the agent gets information about the environment's next state, $S_{t+1} \in \mathcal{S}$, and receives a \textit{reward}, $R_{t+1} \in \mathbb{R}$, according to the \textit{environment model}, $p(s',r|s,a)={P(S_{t+1}=s',R_{t+1}=r|S_t=s,A_t=a)}$.
+
+Actions are selected according to a \textit{policy}, $\pi(a|s) = P(A_t=a|S_t=s)$, which gives the probability of taking action $a$ given state $s$. An agent is interested in the return:
+\begin{equation}
+G_t = \sum_{k=0}^{T-t - 1} \gamma^{k} R_{t+k+1}
+\label{eqn:returndef}
+\end{equation}
+where $\gamma \in [0,1]$ and $T$ is the final time step in an episodic task, and $\gamma \in [0,1)$ and $T = \infty$ for a continuing task.
+
+\textit{Value-based methods} approach the RL problem by computing \textit{value functions}. In prediction, or \textit{policy evaluation}, the goal is to accurately estimate a policy's expected return, and a \textit{state-value function}, denoted $v_\pi(s)$, is estimated. In control, the goal is to learn a policy that maximizes the expected return, and an \textit{action-value function}, denoted $q_\pi(s, a)$, is estimated. In each case, the value functions represent a policy's expected return from state $s$ (and action $a$):
+\begin{align}
+v_\pi(s) &= \mathbb{E}_\pi[G_t|S_t=s]
+\label{eqn:vdef}\\
+q_\pi(s,a) &= \mathbb{E}_\pi[G_t|S_t=s,A_t=a]
+\label{eqn:qdef}
+\end{align}
+
+TD methods learn to approximate value functions by expressing Equations \ref{eqn:vdef} and \ref{eqn:qdef} in terms of successor values (the \textit{Bellman equations}). The Bellman equation for $v_\pi$ is:
+\begin{equation}
+v_\pi(s) = \sum_{a}{\pi(a|s)\sum_{s',r}{p(s',r|s,a)\Big(r + \gamma v_\pi(s')\Big)}}
+\label{eqn:vbellman}
+\end{equation}
+Based on Equation \ref{eqn:vbellman}, one-step TD prediction estimates the return by taking an action in the environment according to a policy, sampling the immediate reward, and bootstrapping off of the current estimated value of the next state for the remainder of the return.
+The difference between this \textit{TD target} and the value of the previous state (the \textit{TD error}) is then computed, and the previous state's value is updated by taking a step proportional to the TD error with $\alpha \in (0, 1]$:
+\begin{align}
+\hat{G}_t &= R_{t+1} + \gamma V(S_{t+1})
+\label{eqn:tdtarget} \\
+V(S_t) &\leftarrow V(S_t) + \alpha [\hat{G}_t - V(S_t)]
+\label{eqn:tdupdate}
+\end{align}
+Q-learning~\cite{watkinsq1989} is arguably the most popular TD method for control. It has a similar update, but because policy improvement is involved, its target is a sample of the Bellman optimality equation for action-values:
+\begin{align}
+\hat{G}_t &= R_{t+1} + \gamma \max_{a'}{Q(S_{t+1}, a')}
+\label{eqn:qltarget} \\
+Q(S_t, A_t) &\leftarrow Q(S_t, A_t) + \alpha [\hat{G}_t - Q(S_t, A_t)]
+\label{eqn:qlupdate}
+\end{align}
+
+%\subsection{Value Function Approximation}
+
+For small finite state spaces where the value function can be stored as a single parameter vector, also known as the \textit{tabular} case, TD methods %prediction and off-policy TD control
+are known to converge under mild technical conditions %(infinite visits to each state-action pair)
+\cite{rlbook2018}. For large or uncountable state spaces, however, one must use function approximation %(e.g., a linear combination of basis functions or neural network)
+to represent the value function, which does not have the same convergence guarantees.
+
+Some early examples of divergence with function approximation were provided by \citei{boyan1995generalization}, who proposed the Grow-Support algorithm to combat divergence. \citei{baird1995} provided perhaps the most famous example of divergence (discussed below) and proposed residual algorithms. \citei{gordon1995stable} proved convergence for a specific class of function approximators known as \textit{averagers}. Convergence of TD prediction using linear function approximation, first proved by \citei{tsitsiklis1997analysis}, requires the training distribution to be on-policy. This approach was later extended to Q-learning \cite{melo2007q}, but under relatively stringent conditions. In particular, Assumption (7) of Theorem 1 in ~\citeauthor{melo2007q}~\shortcite{melo2007q} amounts to a requirement that the behaviour policy is already somewhat close to the optimal policy.
+
+\newcommand{\triad}[1]{\,\raisebox{-0.26\baselineskip}{$^{(#1)}$}}
+The on-policy limitations of the latter two results reflect what has come to be known as the \textit{deadly triad} \cite{rlbook2018}: when using \triad{1} TD methods with \triad{2} function approximation, training on \triad{3} an off-policy data distribution can result in instability and divergence. One response to this problem is to shift the optimization target, as done by Gradient TD (GTD) methods \cite{sutton2009fast,bhatnagar2009convergent}; while provably convergent, GTD algorithms are empirically slow \cite{ghiassian2018online,rlbook2018}. Another approach is to approximate Fitted Value Iteration (FVI) methods \cite{munos2008finite} using a \textit{target network}, as proposed by \citei{dqn2015}. Though lacking convergence guarantees, this approach has been empirically successful. In the next section, we propose fixed-horizon TD methods, an alternative approach to ensuring stability in presence of the deadly triad.
+
+\section{Fixed-horizon TD Methods}\label{sec:fhreturns}
+
+%\subsection{Finite-horizon Returns and Value Functions}
+
+
+A \textit{fixed-horizon return} is a sum of rewards similar to Equation \ref{eqn:returndef} that includes only a fixed number of future steps. %Of note, episodic tasks in the standard setting can produce finite-horizon returns, but the horizon is determined by the environment and can be infinite under policies which avoid terminal states.
+%Note that this differs from the standard episodic setting, where the horizon is determined by the environment and can be infinite under policies that avoid terminal states.
+For a fixed horizon $h$, the fixed-horizon return is defined to be:
+\begin{equation}
+G^h_t = \sum_{k=0}^{\min(h, T-t) - 1} \gamma^k R_{t+k+1}
+\label{eqn:deffhreturn}
+\end{equation}
+which is well-defined for any finite $\gamma$. %, including $\gamma = 1$ in a continuing setting.
+%This shifts the role of $\gamma$ from specifying a horizon of interest to primarily inducing a sense of urgency.
+%SP Comment: Isn't sense of urgency / horizon of interest more or less the same thing in above sentence? I would replace with this:
+% KD: I like it
+This formulation allows the agent's horizon of interest and sense of urgency to be characterized more flexibly and admits the use of $\gamma = 1$ in the continuing setting.
+Fixed-horizon value functions are defined as expectations of the above sum when %. They represent the expected finite-horizon return of
+following policy $\pi$ beginning with state $s$ (and action $a$):
+\begin{align}
+v^h_\pi(s) &= \mathbb{E}_\pi[G^h_t|S_t=s]
+\label{eqn:deffhstatevalues} \\
+q^h_\pi(s, a) &= \mathbb{E}_\pi[G^h_t|S_t=s, A_t=a]
+\label{eqn:deffhactionvalues}
+\end{align}
+These fixed-horizon value functions can also be written in terms of successor values. Instead of bootstrapping off of the same value function, $v^h_\pi(s)$ bootstraps off of the successor state's value from an earlier horizon~\cite{bertsekastwo2012}:
+\begin{equation}\small
+v^h_\pi(s) = \sum_{a}{\pi(a|s)\sum_{s', r}{p(s',r|s,a)\Big(r + \gamma v^{h-1}_\pi(s')\Big)}}
+\label{eqn:fhvbellman}
+\end{equation}
+where $v^{0}_{\pi}(s) = 0$ for all $s \in \mathcal{S}$.%, as no rewards occur in $0$ steps.
+
+From the perspective of \textit{generalized value functions} (GVFs)~\cite{horde2011}, fixed-horizon value functions are compositional GVFs. %The answer to a question about $h$ steps into the future builds on the answer to a question about $h - 1$ steps into the future.
+%It's a clear example of specifying questions which can leverage previously learned GVFs.
+%Thus,
+If an agent knows about a signal up to a final horizon of $H$, it can specify a question under the same policy with a horizon of $H + 1$, and directly make use of existing values.
+As $H \to \infty$, the fixed-horizon return converges to the infinite-horizon return, so that a fixed-horizon agent with sufficiently large $H$ could solve infinite-horizon tasks arbitrarily well. Indeed, for an infinite-horizon MDP with absolute rewards bounded by $R_{max}$ and $\gamma < 1$, it is easy to see that $|v_\pi^h(s) - v_\pi(s)| \leq \gamma^h\frac{R_{max}}{1-\gamma}$.
+%AC: I think this makes sense to include as a simple proof that we can approach optimality if we want
+
+For a final horizon $H \ll \infty$, there may be concerns about suboptimal control. We explore this empirically in Section \ref{sec:empirical}. For now, we note that optimality is never guaranteed when values are approximated. This can result from function approximation, or even in tabular settings from the use of a constant step size. Further, recent work shows benefits in considering shorter horizons~\cite{lowergamma2019} based on performance metric mismatches.
+
+\subsection{One-step Fixed-horizon TD}
+
+One-step fixed-horizon TD (FHTD) learns approximate values $V^h \approx v^h_\pi$ by computing, for each $h \in \{1, 2, 3, ..., H\}$:
+\begin{align}
+\hat{G}^h_t &= R_{t+1} + \gamma V^{h-1}(S_{t+1})
+\label{eqn:onestepfhtdtarget} \\
+V^h(S_t) &\leftarrow V^h(S_t) + \alpha [\hat{G}^h_t - V^h(S_t)]
+\label{eqn:onestepfhtdupdate}
+\end{align}
+where $V^0(s) = 0$ for all $s \in \mathcal{S}$.
+The general procedure of one-step FHTD was previously described by~\citei{sutton1988}, but not tested due to the observation that one-step FHTD's computation and storage scale linearly with the final horizon $H$, as it performs $H$ value updates per step. We argue that because these value updates can be parallelized, reasonably long horizons are feasible, and we'll later show that $n$-step FHTD can make even longer horizons practical. Forms of temporal abstraction~\cite{options1999} can further substantially reduce the complexity.
+
+A key property of FHTD is that bootstrapping is grounded by the 0th horizon, which is \textit{exactly} known from the start. The 1st horizon's values estimate the expected immediate reward from each state, which is a stable target. The 2nd horizon bootstraps off of the 1st, which eventually becomes a stable target, and so forth. This argument intuitively applies even with general function approximation, assuming weights are not shared between horizons. To see the implications of this on TD's deadly triad, consider one-step FHTD with linear function approximation. For each horizon's weight vector, $\params^h$, the following update is performed:
+\begin{equation*}
+    \params^h_{t+1} \leftarrow \params^h_{t} + \alpha \big[R_{t+1} + \gamma \params^{h-1}_{t} \cdot \features_{t+1} - \params^h_t \cdot \features_t \big] \features_t
+\end{equation*}
+where $\features_t$ is the feature vector of the state at time $t$, $\features(S_t)$. The expected update can be written as:
+\begin{equation*}
+    \params^h_{t+1} \leftarrow \params^h_t + \alpha [\mathbf{b} - \mathbf{A} \params^h_t]
+\end{equation*}
+where $\mathbf{A} = \mathbb{E}[\features_t\features_t^T]$ and $\mathbf{b} = \mathbb{E}[(R_{t+1} + \gamma  \params^{h-1}_t \cdot \features_{t+1}) \features_t]$, having expectations over the transition dynamics and the sampling distribution over states.
+Because the target uses a different set of weights, the $\mathbf{b}$ vector is non-stationary (but convergent), and the $\mathbf{A}$ matrix is an expectation over the \textit{fixed} sampling distribution.
+Defining $\Features$ to be the matrix containing each state's feature vector along each row, and $\mathbf{D}$ to be the diagonal matrix containing the probability of sampling each state on its diagonal, we have that $\mathbf{A} = \Features^T \mathbf{D} \Features$. $\mathbf{A}$ is always positive definite and so the updates are guaranteed to be stable relative to the current $\mathbf{b}$ vector. In contrast, TD's update gives $\mathbf{A} = \Features^T \mathbf{D} (I - \gamma \mathbf{P}) \Features$ where $\mathbf{P}$ contains the state-transition probabilities under the target policy.
+%, $\mathbf{P}_{ij} = P(S_{t+1} = i|S_t = j, \pi)$.
+TD's $\mathbf{A}$ matrix can be negative definite if $\mathbf{D}$ and $\mathbf{P}$ do not match (i.e., off-policy updates), and the weights may diverge. We explore the convergence of FHTD formally in Section \ref{sec:convergence}.
+
+A horizon's reliance on earlier horizons' estimates being accurate may be expected to have worse sample complexity. If each horizon's parameters are identically initialized, distant horizons will match infinite-horizon TD's updates for the first $H - 1$ steps. If $H\rightarrow\infty$, this suggests that FHTD's sample complexity might be upper bounded by that of TD. See Appendix \ref{appdx:samplecomplexity} for a preliminary result in this vein.
+
+% KD: Not super important but noteworthy if there's space- maybe in future directions? SP: I like it let's see if there is room before cutting
+An FHTD agent has strictly more predictive capabilities than a standard TD agent. FHTD can be viewed as computing an inner product between the rewards and a step function. This gives an agent an exact notion of \textit{when} rewards occur, as one can subtract the fixed-horizon returns of subsequent horizons to get an individual expected reward at a specific future time step. %\TODO{Appendix \ref{appdx:arbitraryweights} discusses some potential applications of this, including computing the discrete Fourier transform of returns \cite{tddft2019} and hyperbolic discounting \cite{hyperbolic2019}.}
+
+\subsection{Multi-step Fixed-horizon TD Prediction}
+\label{sec:nstepfhtd}
+
+Another way to estimate fixed-horizon values is through \textit{Monte Carlo} (MC) methods. From a state, one can generate reward sequences of fixed lengths, and average their sums into the state's expected fixed-horizon return. Fixed-horizon MC is an opposite extreme from one-step FHTD in terms of a bias-variance trade-off, similar to the infinite-horizon setting~\cite{multistepbiasvar1994}. This trade-off motivates considering multi-step FHTD methods.
+
+Fixed-horizon MC is appealing when one only needs the expected return for the final horizon $H$, and has no explicit use for the horizons leading up to $H$. This is because it can learn the final horizon directly by storing and summing the last $H$ rewards, and performing one value-function update for each visited state. If we use a fixed-horizon analogue to $n$-step TD methods \cite{rlbook2018}, denoted $n$-step FHTD, the algorithm stores and sums the last $n$ rewards, and only has to learn $\lceil\frac{H}{n}\rceil$ value functions. For each $h \in \{n, 2n, 3n, ..., H\}$, $n$-step FHTD computes:
+\begin{align}\small
+\hat{G}^h_{t:t+n} &= \gamma^n V^{h - n}(S_{t+n}) + \sum^{n-1}_{k=0}{\gamma^k R_{t+k+1}}
+\label{eqn:nstepfhtdtarget} \\
+V^h(S_t) &\leftarrow V^h(S_t) + \alpha [\hat{G}^h_{t:t+n} - V^h(S_t)]
+\label{eqn:nstepfhtdupdate}
+\end{align}
+assuming that $H$ is divisible by $n$. If $H$ is not divisible by $n$, the earliest horizon's update will only sum the first $H\ (\mathrm{mod}\ n)$ of the last $n$ rewards. Counting the number of rewards to sum, and the number of value function updates, $n$-step FHTD performs $n - 1 + H/n$ operations per time step. This has a worst case of $H$ operations at $n = 1$ and $n = H$, and a best case of $2\sqrt{H} - 1$ operations at $n = \sqrt{H}$. This suggests that in addition to trading off reliance on sampled information versus current estimates, $n$-step FHTD's computation can scale sub-linearly in $H$.
+
+\subsection{Fixed-horizon TD Control}
+
+The above FHTD methods for state-values can be trivially extended to learn action-values under fixed policies, but it is less trivial with policy improvement involved.
+
+If we consider the best an agent can do from a state in terms of the next $H$ steps, it consists of an immediate reward, and the best it can do in the next $H - 1$ steps from the next state. That is, each horizon has a separate target policy that's greedy with respect to its own horizon. Because the greedy action may differ between one horizon and another, FHTD control is inherently off-policy.
+
+Q-learning provides a natural way to handle this off-policyness, where the TD target bootstraps off of an estimate under a greedy policy. Based on this, fixed-horizon Q-learning (FHQ-learning) performs the following updates:
+\begin{align}
+\hat{G}^h_t &= R_{t+1} + \gamma \max_{a'}{Q^{h-1}(S_{t+1}, a')}
+\label{eqn:onestepfhqltarget} \\
+Q^h(S_t, A_t) &\leftarrow Q^h(S_t, A_t) + \alpha [\hat{G}^h_t - Q^h(S_t, A_t)]
+\label{eqn:onestepfhqlupdate}
+\end{align}
+
+%To see algorithmic implications of this, consider a finite-horizon analogue of Tree-backup($\lambda$)~\cite{pdis2000}, denoted FHTB($\lambda$), where each horizon can have its own arbitrary target policy, denoted $\pi^h(a|s) = \textrm{Pr}[A_t = a|S_t = s, h]$. Introducing short-hand notation where $Q^h_t = Q^h(S_{t}, A_{t})$, and $\pi^h_t = \pi^h(A_t|S_t)$, we get the following $\lambda$-return (with expectations implicitly conditioned on state):
+%\begin{equation}\small
+%\begin{multlined}
+%    \hat{G}^{\lambda, h}_t = R_{t+1}
+%    + \bigg(
+%        (1 - \lambda_{t+1}) \mathbb{E}_{\pi^{h-1}_{t+1}}[Q^{h-1}_{t+1}]
+%        \\+ \lambda \big(
+%            \pi^{h-1}_{t+1}\hat{G}^{\lambda, h-1}_{t+1}
+%            + \mathbb{E}_{\pi^{h-1}_{t+1}}[Q^{h-1}_{t+1}]
+%            - \pi^{h-1}_{t+1} Q^{h-1}_{t+1}
+%        \big)
+%    \bigg)
+%    \label{eqn:deffhtblambdareturn}
+%\end{multlined}
+%\end{equation}
+%Similar to how Tree-backup($\lambda$) results in a sum of one-step Expected Sarsa TD errors~\cite{rlbook2018}, this results in a sum of one-step \textit{finite-horizon Expected Sarsa} TD errors:
+%\begin{align}
+%\delta^h_t &= R_{t+1} + \mathbb{E}_{\pi^{h-1}_{t+1}}[Q^{h-1}_{t+1}] - Q^h_t
+%\label{eqn:onestepfhestderror} \\
+%\hat{G}^{\lambda, h}_t &= Q^h_t + \sum^{H - 1}_{k = 0}{\delta^{h - k}_{t + k}\prod^{k}_{i = 1}{\lambda \pi^{h - i}_{t + i}}}
+%\label{eqn:recfhtblambdareturn}
+%\end{align}
+%Expanding this summation for a couple of terms, we get:
+%\begin{equation}
+%\begin{split}\small
+%    \hat{G}^{\lambda, h}_t &= Q^h_t +(
+%    \delta^h_t + \lambda\pi^{h-1}_{t+1}\delta^{h-1}_{t+1}
+%    \\&+ \lambda^2\pi^{h-1}_{t+1}\pi^{h-2}_{t+2}\delta^{h-2}_{t+2}
+%    \\&+ \lambda^3\pi^{h-1}_{t+1}\pi^{h-2}_{t+2}\pi^{h-3}_{t+3}\delta^{h-3}_{t+3} + ...)
+%\end{split}
+%\end{equation}
+%Evidently, an approach which explicitly stores the last $H$ states would additionally need to store an $H \times H$ matrix containing, for the last $H$ steps, the probability of the selected action under each horizon's target policy. Setting each horizon's target policy to be greedy with respect to that horizon's action values, we get a finite-horizon version of Watkin's Q($\lambda$)~\cite{watkinsq1989}, denoted FHQ($\lambda$).
+
+A saddening observation from FHTD control being inherently off-policy is that the computational savings of $n$-step FHTD methods may not be possible without approximations.
+With policy improvement, an agent needs to know the current greedy action for each horizon. This information isn't available if $n$-step FHTD methods avoid learning intermediate horizons.
+On the other hand, a benefit of each horizon having its own greedy policy is that the optimal policy for a horizon is unaffected by the policy improvement steps of later horizons. As a compositional GVF, the unidirectional decoupling of greedy policies suggests that in addition to a newly specified final horizon leveraging previously learned values for prediction, it can leverage \textit{previously learned policies} for control.
+
+\section{Convergence of Fixed-horizon TD}\label{sec:convergence}
+
+This section sets forth our convergence results, first for linear function approximation (which includes the tabular case), and second for general function approximation.
+
+\subsection{Linear Function Approximation}
+For linear function approximation, we prove the convergence of FHQ-learning under some additional assumptions, outlined in detail in Appendix \ref{appdx:convergence}. Analogous proofs may be obtained easily for policy evaluation. We provide a sketch of the proof below, and generally follow the outline of ~\citeauthor{melo2007q}~\shortcite{melo2007q}. Full proofs are in the Appendix.
+
+We denote $\phi(s, a) \in \R^d$ for the feature vector corresponding to the state $s$ and action $a$. We will sometimes write $\phi_s$ for $\phi(s, a)$. Assume furthermore that the features are linearly independent and bounded.
+
+% We assume that we are learning action-values corresponding to $H$ horizons, using linear function approximation:%and approximate the $h$-th horizon's action-value function linearly, so that
+% \begin{equation}
+%     Q^h(s, a) :=  \params^{h, :} \phi(s, a)
+% \end{equation}
+
+% \noindent where $\params \in \R^{H \times d}$, and colon superscripts denote standard array slicing conventions. We further define $\params^{0, :} := 0$, and denote the feature vector for a horizon's greedy action to be:
+% \begin{equation}
+%     \phi_s^h := \phi(s, \argmax_{a} Q^h(s, a)).
+% \end{equation}
+
+% \noindent The update at time $t + 1$ for each horizon $h$ is given by
+% \begin{align*}\small
+%     \params_{t + 1}^{h + 1, :} &:= \params_t^{h + 1, :} + \alpha_t (R_{t + 1} + \max_{a'} Q^h(s', a')\\
+%      &\quad - Q^{h + 1}(s, a))\phi_s^T,
+% \end{align*}
+
+
+We assume that we are learning $H$ horizons, and approximate the fixed-horizon $h$-th action-value function linearly.
+\begin{equation*}
+    Q^h_\params(s, a) :=  \params^{h, :} \phi(s, a),
+\end{equation*}
+
+\noindent where $\params \in \R^{H \times d}$. Colon indices denote array slicing, with the same conventions as in NumPy. For convenience, we also define $\params^{0, :} := 0$.
+
+We define the feature corresponding to the max action of a given horizon:
+\begin{equation*}
+    \phi_{\params}^*(s, h) := \phi(s, \argmax_{a} Q^h_\params(s, a)).
+\end{equation*}
+
+\noindent The update at time $t + 1$ for each horizon $h$ is given by
+\begin{align*}
+    \params_{t + 1}^{h + 1, :} &:= \params_t^{h + 1, :} + \alpha_t (r(s, a, s') + \gamma \params_t^{h, :} \phi^*_{\params_t}(s', h) \\
+    &\quad - \params_t^{h + 1, :} \phi_s)\phi_s^T.
+\end{align*}
+\noindent where the step-sizes $\alpha_t$ are assumed to satisfy:
+$$
+    \sum_{t} \alpha_t = \infty\quad\text{  and  }\quad
+    \sum_{t} \alpha_t^2 < \infty.
+$$
+
+
+\begin{proposition}\label{prop:ode}
+% For $h = 1, ..., H$, the following ODE system has an equilibrium.
+% \begin{equation}\label{eq:ode}
+%     \dot{\params}^{h + 1, :} = \Ex\left[(r(s, a, s') + \params^{h, :} \phi^h_{s'} - \params^{h + 1, :} \phi_s)\phi_s^T\right]
+% \end{equation}
+
+% \noindent Denote one such equilibrium by $\params_e$, and define $\tilde{\params} := \params - \params_e$.
+% If, furthermore, we have that for $h = 1, ..., H$,
+% \begin{equation}\label{eq:ode-bound}
+%     \Ex\left[(\tilde{\params}^{h + 1, :} \phi_s)^2\right] > \Ex\left[(\tilde{\params}^{h, :} \phi^h_{s'})^2\right],
+% \end{equation}
+
+% \noindent then $\params_e$ is a globally asymptotically stable equilibrium for \Cref{eq:ode}.
+
+For $h = 1, ..., H$, the following ODE system has an equilibrium.
+\begin{equation}\label{eq:ode}
+    \dot{\params}^{h + 1, :} = \Ex\left[(r(s, a, s') + \gamma \params^{h, :} \phi^*_{\params}(s', h) - \params^{h + 1, :} \phi_s)\phi_s^T\right]
+\end{equation}
+
+\noindent Denote one such equilibrium by $\params_e$, and define $\tilde{\params} := \params - \params_e$. If, furthermore, we have that for $h = 1, ..., H$,
+% \begin{equation}\label{eq:odex-bound}
+%     \Ex\left[(\tilde{\params}^{h + 1, :} \phi_x)^2\right] > \Ex\left[(\tilde{\params}^{h, :} \phi^*_{\params}(y, h))^2\right],
+% \end{equation}
+\begin{align}\label{eq:ode-bound}
+    \gamma^2 \Ex[(\params^{h, :} \phi^*_{\params}&(s, h) - \params_e^{h, :} \phi^*_{\params_e}(s, h))^2 ] <\\
+    &\quad \Ex\left[(\params^{h + 1, :} \phi_s - \params_e^{h + 1, :} \phi_s)^2\right]\nonumber
+\end{align}
+\noindent then $\params_e$ is a globally asymptotically stable equilibrium of \Cref{eq:ode}.
+
+\end{proposition}
+
+\begin{proof}
+    See Appendix \ref{appdx:convergence}. The main idea is to explicitly construct an equilibrium of \Cref{eq:ode} and to use a Lyapunov function along with \Cref{eq:ode-bound} to show global asymptotic stability.
+\end{proof}
+
+\noindent \Cref{eq:ode-bound} means that the $h$-th fixed-horizon action-value function must be closer, when taking respective max actions, to its equilibrium point than the $(h + 1)$-th fixed-horizon action-value function is to its equilibrium, where distance is measured in terms of squared error of the action-values. Intuitively, the functions for the previous horizons must have converged somewhat for the next horizon to converge, formalizing the cascading effect described earlier. This assumption is reasonable given that value functions for smaller horizons have a bootstrap target that is closer to a Monte Carlo target than the value functions for larger horizons. As a result, \cref{eq:ode-bound} is somewhat less stringent than the corresponding assumption (7) in Theorem 1 of ~\citeauthor{melo2007q}~\shortcite{melo2007q}, which requires the behaviour policy already be somewhat close to optimal.
+
+\begin{theorem}\label{thm:linearapproximation}
+Viewing the right-hand side of the ODE system \cref{eq:ode} as a single function $g(\params)$, assume that $g$ is locally Lipschitz in $\params$.
+Assuming also \Cref{eq:ode-bound}, a fixed behaviour policy $\pi$, and the assumptions in the Appendix, the iterates of FHQ-learning converge with probability 1 to the equilibrium of the ODE system \cref{eq:ode}.
+\end{theorem}
+\begin{proof}
+See Appendix \ref{appdx:convergence}. The main idea is to use Theorem 17 of ~\citeauthor{benveniste1990stochastic}~\shortcite{benveniste1990stochastic} and \Cref{prop:ode}.
+\end{proof}
+
+A limitation of \Cref{thm:linearapproximation} is the assumption of a fixed behaviour policy. It is possible to make a similar claim for a changing policy, assuming that it satisfies a form of Lipschitz continuity with respect to the parameters. See~\citeauthor{melo2007q}~\shortcite{melo2007q} for discussion on this point.
+
+\subsection{General Function Approximation}
+We now address the case where $\val^h$ is represented by a general function approximator (e.g., a neural network). As before, the analysis extends easily to prediction ($V^h$). General non-linear function approximators have non-convex loss surfaces and may have many saddle points and local minima. As a result, typical convergence results (e.g., for gradient descent) are not useful without some additional assumption about the approximation error (cf., the \textit{inherent Bellman error} in the analysis of Fitted Value Iteration \cite{munos2008finite})%, since learning may converge to a bad solution
+. We therefore state our result for general function approximators in terms of \textit{$\delta$-strongness} for $\delta > 0$:
+
+\begin{definition}\label{defition_delta_strongness}
+    A function approximator, consisting of function class $\mathcal{H}$ and iterative learning algorithm $\mathcal{A}$, is \textbf{$\bm{\delta}$-strong} with respect to target function class $\mathcal{G}$ and loss function $J: \mathcal{H} \times \mathcal{G} \to \R^+$ if, for all target functions $g \in \mathcal{G}$, the learning algorithm $\mathcal{A}$ is \textit{guaranteed} to produce (within a finite $t$ number of steps) an $h_t \in \mathcal{H}$ such that $J(h_t, g) \leq \delta$.
+\end{definition}
+
+We consider learning algorithms $\mathcal{A}$ that converge once some minimum progress $c$ can no longer be made:
+
+\begin{assumption}\label{assumption_minimum_progress}
+    There exists stopping constant $c$ such that algorithm $\mathcal{A}$ is considered ``converged'' with respect to target function $g$ if less than $c$ progress would be made by an additional step; i.e., if $J(h_{t}, g) - J(h_{t+1}, g) < c$.
+\end{assumption}
+
+Note that $\delta$-strongness may depend on stopping constant $c$: a larger $c$ naturally corresponds to earlier stopping and looser $\delta$. Note also that, so long as the distance between the function classes $\mathcal{H}$ and $\mathcal{G}$ is upper bounded, say by $\vec{d}$, any convergent $\mathcal{A}$ is ``$\vec{d}$-strong''. Thus, a $\delta$-strongness result is only meaningful to the extent that $\delta$ is sufficiently small.
+
+We consider functions $\valt^h_t = \valt(\params^{h}_t)$ parameterized by $\params^{h}_t$. Letting $\bellmanop$ denote the Bellman operator $[\bellmanop\valt](s, a) = \mathbb{E}_{s',r \sim p(\cdot|s,a)}[r + \gamma \max_{a'}\valt(s',a')]$, we assume:
+
+\begin{assumption}
+    \label{assumption_Lipschitz}
+        The target function $\bellmanop\valt(\params)$ is Lipschitz continuous in the parameters: there exists constant $L$ such that $\smashednorm{\bellmanop\valt(\params_1) - \bellmanop\valt(\params_2)}_\mathcal{F}\leq L\smashednorm{\params_1 - \params_2}$ for all $\params_1, \params_2$, where $\smashednorm{\cdot}_\mathcal{F}$ is a norm on value function space $\mathcal{F}$ (typically a weighted $L_2$ norm, weighted by the data distribution), which we take to be a Banach space containing both $\mathcal{H}$ and $\mathcal{G}$.
+\end{assumption}
+
+It follows that if $(\params^{h-1}_t) \to \params^{h-1}_*$, the sequence of target functions $\bellmanop\valt^{h-1}_t$ converges to $\bellmanop\target^{h-1}_* = \bellmanop\valt(\params^{h-1}_*)$ in $\mathcal{F}$ under norm $\smashednorm{\cdot}$. We can therefore define the ``true'' loss:
+\begin{equation}
+    J^*(\params^h_t) = \smashednorm{\bellmanop\target^{h-1}_* - \valt^h_t}
+\end{equation}
+
+\noindent where we drop the square from the usual mean square Bellman error \cite{rlbook2018} for ease of exposition (the analysis is unaffected after an appropriate adjustment). Since we cannot access $J^*$, we optimize the surrogate loss:
+\begin{equation}
+    J(\params^{h-1}_t, \params^h_t) = \smashednorm{\bellmanop\valt^{h-1}_t - \valt^h_t}.
+\end{equation}
+\begin{lemma}\label{lemma_strict_progress}
+    If $\smashednorm{\bellmanop\valt^{h-1}_t - \bellmanop\target^{h-1}_*} < \epsilon$,
+    and learning has not yet converged with respect to the surrogate loss $J$, then $J^*(\params^h_t) -J^*(\params^h_{t+1}) > c - 2\epsilon$.
+\end{lemma}
+
+\newcommand{\moveback}{}
+\begin{proof}
+    Intuitively, enough progress toward a similar enough surrogate loss guarantees progress toward the true loss.
+    Applying the triangle inequality (twice) gives:
+    \begin{equation*}\small
+            J^*(\params^h_t) - J^*(\params^h_{t+1}) = \smashednorm{\bellmanop\target^{h\shortminus1}_* - \valt^h_t} - \smashednorm{\bellmanop\target^{h\shortminus1}_* - \valt^h_{t+1}}
+    \end{equation*}
+    \begin{equation*}
+        \begin{split}\small
+            &\moveback= \smashednorm{\bellmanop\target^{h\shortminus1}_* - \valt^h_t} \\
+            &\moveback\quad\quad\quad + (\smashednorm{\bellmanop\valt^{h\shortminus1}_t - \bellmanop\target^{h\shortminus1}_*} -  \smashednorm{\bellmanop\valt^{h\shortminus1}_t - \bellmanop\target^{h\shortminus1}_*}) \\
+            &\moveback\quad\quad\quad
+            - \smashednorm{\bellmanop\target^{h\shortminus1}_* + (\bellmanop\valt^{h\shortminus1}_t - \bellmanop\valt^{h\shortminus1}_t) - \valt^h_{t+1}}\\
+            &\moveback\geq (\smashednorm{\bellmanop\valt^{h\shortminus1}_t - \valt^h_t} - \smashednorm{\bellmanop\valt^{h\shortminus1}_t - \bellmanop\target^{h\shortminus1}_*})\\
+            &\moveback\quad\quad\quad - (\smashednorm{\bellmanop\valt^{h\shortminus1}_t - \valt^h_{t+1}}+\smashednorm{\bellmanop\target^{h\shortminus1}_*- \bellmanop\valt^{h\shortminus1}_t })\\
+            &\moveback= (\smashednorm{\bellmanop\valt^{h\shortminus1}_t - \valt^h_t} -\smashednorm{\bellmanop\valt^{h\shortminus1}_t - \valt^h_{t+1} }\\
+            &\moveback\quad\quad\quad - 2\smashednorm{\bellmanop\target^{h\shortminus1}_* -  \bellmanop\valt^{h\shortminus1}_t }
+        > c - 2\epsilon,\\
+    \end{split}
+    \end{equation*}
+    where the final inequality uses $ \smashednorm{\bellmanop\valt^{h\shortminus1}_t - \valt^h_t} - \smashednorm{\bellmanop\valt^{h\shortminus1}_t - \valt^h_{t+1}} \geq c$ from
+    Assumption \ref{assumption_minimum_progress}.
+\end{proof}
+
+It follows from Lemma \ref{lemma_strict_progress} that when $\epsilon$ is small enough---$\epsilon < \frac{c}{2} - k$ for some constant $k$---either the true loss $J^*$ falls by at least $k$, or learning has converged with respect to the current target $\bellmanop\valt^{h-1}_t$. Since $J^*$ is non-negative (so cannot go to $-\infty$), it follows that the \textit{loss} converges to a $\delta$-strong solution: $J^*(\params^h_t) \to d$ with $d \leq \delta$. Since there are only a finite number of $k$-sized steps between the current loss at time $t$ and $0$ (i.e., only a finite number of opportunities for the learning algorithm to have ``not converged'' with respect to the surrogate $J$), the parameters $\params^h_t$ must also converge.
+
+Since $Q^0_t = 0$ is stationary, it follows by induction that:
+
+\begin{theorem}\label{thm:generalapproximation}
+Under Assumptions \ref{assumption_minimum_progress} and \ref{assumption_Lipschitz}, each horizon of FHQ-learning converges to a $\delta$-strong solution when using a $\delta$-strong function approximator.
+\end{theorem}
+
+%It is worth discussing the limitations of this result.
+In contrast to Theorem \ref{thm:linearapproximation}, which applies quite generally to linear function approximators, $\delta$-strongness and Assumption \ref{assumption_minimum_progress} limit the applicability of Theorem \ref{thm:generalapproximation} in two important ways.
+
+First, since gradient-based learning may stall in a bad saddle point or local minimum, neural networks are not, in general, $\delta$-strong for small $\delta$. Nevertheless, repeat empirical experience shows that neural networks consistently find good solutions \cite{zhang2016understanding}, and a growing number of theoretical results suggest that almost all local optima are ``good'' \cite{pascanu2014saddle,choromanska2015loss,pennington2017geometry}. For this reason, we argue that $\delta$-strongness is reasonable, at least approximately.
+
+Second, Assumption \ref{assumption_minimum_progress} is critical to the result: only if progress is ``large enough'' relative to the error in the surrogate target is learning guaranteed to make progress on $J^*$. Without a lower bound on progress---e.g., if the progress at each step is allowed to be less than $2\epsilon$ regardless of $\epsilon$---training might accumulate an error on the order of $\epsilon$ at every step. In pathological cases, the sum of such errors may diverge even if $\epsilon \to 0$. As stated, Assumption \ref{assumption_minimum_progress} does not reflect common practice: rather than  progress being measured at every step, it is typically measured over several, say $k$, steps. This is because training targets are noisy estimates of the expected Bellman operator and several steps are needed to accurately assess progress. Our analysis can be adapted to this more practical scenario by making use of a target network \cite{dqn2015} to freeze the targets for $k$ steps at a time. Then, considering each $k$ step window as a single step in the above discussion, Assumption \ref{assumption_minimum_progress} is fair.
+This said, intuition suggests that pathological divergence when Assumption \ref{assumption_minimum_progress} is not satisfied is rare, and our experiments with Deep FHTD Control show that training can be stable even with shared weights and no target networks.
+
+\section{Empirical Evaluation}\label{sec:empirical}
+
+This section outlines several hypotheses concerning fixed-horizon TD methods, experiments aimed at testing them, and the results from each experiment. Pseudo-code, diagrams, more experimental details, and additional experiments can be found in the supplementary material.
+
+\subsection{Stability in Baird's Counterexample}
+
+We hypothesize that FHTD methods provide a stable way of bootstrapping, such that divergence will not occur under off-policy updating with function approximation. To test this, we used Baird's counterexample~\cite{baird1995}, a 7-state MDP where every state has two actions. One action results in a uniform random transition to one of the first 6 states, and the other action results in a deterministic transition to the 7th state. Rewards are always zero, and each state has a specific feature vector for use with linear function approximation. It was presented with a discount rate of $\gamma = 0.99$, and a target policy which always chooses to go to the 7th state.
+
+In our experiment, we used one-step FHTD with importance sampling corrections~\cite{montecarlo1981} to predict up to a horizon of $H = \frac{1}{1-\gamma}=100$. Each horizon's weights were initialized to be $\textbf{w}^h = [1, 1, 1, 1, 1, 1, 10, 1]^T$, based on~\citeauthor{rlbook2018}~\shortcite{rlbook2018}, and we used a step size of $\alpha = \frac{0.2}{ \lvert \mathcal{S} \rvert}$. We performed 1000 independent runs of 10,000 steps, and the results can be found in Figure \ref{fig:results_baird}.
+
+\newcommand{\figwidth}{7cm}
+\begin{figure}[!bp]
+    \centering
+    \includegraphics[width=\figwidth]{results_baird_fhtd}
+    \caption[]{Weight trajectories of one-step FHTD's 100th horizon value function on Baird's counterexample, plotted after each time step. Shaded regions represent one standard error.}
+    \label{fig:results_baird}
+\end{figure}
+
+We see that one-step FHTD eventually and consistently converges. The initial apparent instability is due to each horizon being initialized to the same weight vector, making early updates resemble the infinite-horizon setting where weight updates bootstrap off of the same weight vector. The results emphasize what TD would have done, and how FHTD can recover from it. Of note, the final weights do give optimal state-values of $0$ for each state. In results not shown, FHTD still converges, sometimes quicker, when each horizon's weights are initialized randomly (and not identically).
+
+% KD: might be easier to lay out if these are two separate figures?
+\subsection{Tabular FHTD Control}\label{subsec:tabularFHTDcontrol}
+\begin{figure*}[!btp]
+    \centering
+    \includegraphics[width=\figwidth]{results_smaze_fhqlearning}
+    \hspace{0.05\linewidth}
+    \includegraphics[width=\figwidth]{results_smaze_qlearning}
+    \caption[]{Mean episode lengths over 100 episodes of FHQ-learning and Q-learning with various step-sizes and horizons of interest. Results are averaged over 100 runs, and shaded regions represent one standard error.}
+    \label{fig:results_slippery_maze}
+\end{figure*}
+
+In this section, we evaluate one-step FHQ-learning in a control problem. We hypothesize that when transitions are highly stochastic, predicting too far into the future results in unnecessarily large variance. Using fixed step sizes, we expect this to be an issue even in tabular settings. Both truncating the horizon and constant-valued discounting can address the variability of long term information, so we compare undiscounted FHQ-learning to discounted Q-learning.
+
+We designed the \textit{slippery maze} environment, a maze-like grid world with 4-directional movement. The agent starts in the center, and hitting walls keep the agent in place. The ``slipperiness'' involves a $75\%$ chance that the agent's action is overridden by a random action. A reward of $-1$ is given at each step. The optimal deterministic path is 14 steps, but due to stochasticity, an optimal policy averages 61.77 steps.
+
+%, resulting in about a $40\%$ chance of taking the optimal action under the optimal action-values.
+Each agent behaved $\epsilon$-greedily with $\epsilon = 0.1$. We swept linearly spaced step-sizes, final horizons $H \in \{8, 16, 32, 48\}$ for FHQ-learning, and discount rates $\gamma \in \{0.875, 0.938, 0.969, 0.979\}$ for Q-learning. The discount rates were selected such that if $1 - \gamma$ represented a per-step termination probability of a stochastic process, the expected number of steps before termination matches the tested values of $H$. We performed 100 independent runs, and Figure \ref{fig:results_slippery_maze} shows the mean episode length over 100 episodes.
+
+For FHQ-learning, it can be seen that if the final horizon is unreasonably short ($H = 8$), the agent performs poorly. However, $H = 16$ does considerably better than if it were to predict further into the future. With Q-learning, each discount rate performed relatively similar to one another, despite discount rates chosen to have expected sequence lengths comparable to the fixed horizons. This may be because they still include a portion of the highly variable information about further steps. For both algorithms, a shorter horizon was preferable over the full episodic return.
+
+\subsection{Deep FHTD Control}
+\label{subsec:deepFHTDcontrol}
+
+We further expect FHTD methods to perform well in control with non-linear function approximation. FHTD's derivation assumes weights are separated by horizon. To see the effect of horizons sharing weights, we treated each horizon's values as linear neural network outputs over shared hidden layers. Use of this architecture along with parallelization emphasizes that the increased computation can be minimal. Due to bootstrapped targets being decoupled by horizon, we also expect deep FHTD methods to not need target networks.
+
+In OpenAI Gym's \textit{LunarLander-v2} environment~\cite{gym2016}, we compared Deep FHQ-learning (DFHQ) with a final horizon $H = 64$ and DQN~\cite{dqn2015}. We restricted the neural network to have two hidden layers, and swept over hidden layer widths for each algorithm. We used $\gamma \in \{0.99, 1.0\}$, and behaviour was $\epsilon$-greedy with $\epsilon$ annealing linearly from $1.0$ to $0.1$ over 50,000 frames. RMSprop \cite{rmsprop2012} was used on sampled mini-batches from an experience replay buffer~\cite{dqn2015}, and ignoring that the target depends on the weights, DFHQ minimized the mean-squared-error across horizons:
+% AC: Should we mention that momentum (e.g., in Adam) might be harmful if all the horizons share the same body?
+\begin{align}
+    \hat{G}_{t}^{h} &= R_{t+1} + \gamma\max_{a'}{Q^{h-1}(S_{t+1}, a'; \params)} \nonumber \\
+    J(\params) &= \frac{1}{H}\sum_{h = 1}^{H}{\bigg(\hat{G}_{t}^{h} - Q^h(S_t, A_t; \params)\bigg)^2}
+\end{align}
+
+We performed 30 independent runs of 500,000 frames each (approximately 1000 episodes for each run). Figure \ref{fig:results_lunar_er} shows for each frame, the mean return over the last 10 episodes of each algorithm's best parameters (among those tested) in terms of area under the curve. Note that the results show DFHQ and DQN \textit{without} target networks. From additional experiments, we found that target networks slowed DFHQ's learning more than it could help over a run's duration. They marginally improve DQN's performance, but the area under the curve remained well below that of DFHQ.
+
+\begin{figure}[!tp]
+    \centering
+    \includegraphics[width=\figwidth]{results_lunar_er.png}
+    \caption[]{Mean return over last 10 episodes at each frame of DFHQ and DQN, without target networks, averaged over 30 runs. Shaded regions represent one standard error.}
+    \label{fig:results_lunar_er}
+\end{figure}
+
+It can be seen that DFHQ had considerably lower variance, and relatively steady improvement. Further, DFHQ was significantly less sensitive to $\gamma$, as DQN with $\gamma = 1$ immediately diverged. %This emphasizes that FHTD's discounting focuses more on objective specification, as $H$ explicitly specifies the horizon of interest.
+% AC: Could also mention that \gamma = 0.99 did slightly better maybe because of the importance of urgency, as Kris has noted?
+From the remainder of our sweep, DFHQ appeared relatively insensitive to large hidden layer widths beyond the setting shown, whereas DQN's performance considerably dropped if the width further increased.
+
+DFHQ's good performance may be attributed to the representation learning benefit of predicting many outputs~\cite{unreal2016,hyperbolic2019}; in contrast with auxiliary tasks, however, these outputs are \textit{necessary tasks} for predicting the final horizon. An early assessment of the learned values can be found in Appendix \ref{appdx:deepvals}.
+
+\section{Discussion and future work}
+
+
+In this work, we investigated using \textit{fixed-horizon} returns
+in place of the conventional infinite-horizon return. We derived FHTD methods and compared them to their infinite-horizon counterparts in terms of prediction capability, complexity, and performance. We argued that %storing multiple value functions allows
+FHTD agents are stable under function approximation and have additional predictive power. We showed that the added complexity can be substantially reduced via parallel updates, shared weights, and $n$-step bootstrapping. Theoretically, we proved convergence of FHTD methods with linear and general function approximation. Empirically, we showed that off-policy linear FHTD %successfully
+converges on a classic counterexample for off-policy linear TD. Further, in a tabular control problem, we showed that %as an objective,
+greedifying with respect to estimates of a short, fixed horizon could outperform doing so with respect to longer horizons. Lastly, we demonstrated that FHTD methods can scale well to and perform competitively on a deep reinforcement learning control problem.
+
+There are many avenues for future work. Given that using shorter horizons may be preferable (Figure \ref{fig:results_slippery_maze}), it would be interesting if optimal weightings of horizons could be learned, rather than relying on %the greedification of
+the furthest horizon to act. Developing ways to handle the off-policyness of $n$-step FHTD control (See Appendix \ref{appdx:offpolicyness}), incorporating temporal abstraction, and experiments in more complex environments %, like the Atari or MuJoCo suites,
+would improve our understanding of the scalability of our methods to extremely long horizon tasks.
+Finally, the applications to complex and hyperbolic discounting (Appendix \ref{appdx:arbitraryweights}), exploring the benefits of iteratively deepening the final horizon, and the use of fixed-horizon critics in actor-critic methods might be promising.
+
+% Anonymize!
+\subsubsection*{Acknowledgments}
+The authors thank the Reinforcement Learning and Artificial Intelligence research group, Amii, and the Vector Institute for providing the environment to nurture and support this research. We gratefully acknowledge funding from Alberta Innovates -- Technology Futures, Google Deepmind, and from the Natural Sciences and Engineering Research Council of Canada.
+
+\bibliographystyle{aaai}
+\bibliography{references}
+
+\newpage
+\input{supplementary_fixedhorizon.tex}
+
+\end{document}

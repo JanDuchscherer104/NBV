@@ -1,9 +1,26 @@
-= Foundations <sec:thesis-foundations>
+= Foundations and Related Work <sec:thesis-foundations>
 
-ARIA-NBV combines @aria-synthetic-environments trajectories and GT geometry, local @egocentric-foundation-model-3d evidence, oracle @relative-reconstruction-improvement labels, and VIN-style finite-candidate scoring. @aria-synthetic-environments:short supplies calibrated Aria-like streams and aligned semi-dense maps; @egocentric-voxel-lifting:short supplies frozen local voxel evidence rather than a complete long-horizon scene memory @ProjectAria-ASE-2025 @EFM3D-straub2024 @EVL-Doc-2025. GT OBBs currently define data-generation target tasks, whereas observed or predicted target discovery remains outside the implemented actor path.
+The Introduction located this thesis within active perception: sensing actions
+change the evidence on which later inference depends @ActivePerception-bajcsy1988
+@ActiveVision-aloimonos1988. Three-dimensional view planning turns that principle
+into a repeated choice of where to observe next @ViewPlanningSurvey-scott2003.
+This chapter develops the concepts needed to make that choice scientifically
+meaningful before the oracle, data, and model contracts are introduced.
 
-#include "02-01-related-work.typ"
+The argument follows the dependencies of the decision problem. It first
+separates the next-best-view mechanism from the objective used to rank views,
+then distinguishes target-conditioned reconstruction quality from coverage and
+uncertainty proxies. It next explains why partial observability and delayed
+consequences require a finite-horizon information state, derives the geometric
+properties a candidate scorer should preserve, and finally positions the thesis
+question against the resulting literature dimensions.
 
-#include "02-02-geometric-learning.typ"
+#include "02-01-active-perception-and-view-utility.typ"
 
-The resulting foundation is narrow: active perception motivates action-conditioned sensing, VIN-NBV supplies the quality-driven one-step precedent, ASE and EFM3D define the logged egocentric evidence boundary, and finite-action learning supplies mask and support controls. Coverage and uncertainty remain diagnostics rather than substitutes for target-specific reconstruction quality.
+#include "02-02-targets-actions-and-support.typ"
+
+#include "02-03-finite-horizon-value-learning.typ"
+
+#include "02-04-egocentric-and-geometric-representations.typ"
+
+#include "02-05-literature-positioning.typ"

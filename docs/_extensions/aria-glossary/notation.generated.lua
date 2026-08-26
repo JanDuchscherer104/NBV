@@ -278,6 +278,12 @@ return {
       description = "Acquisition cost of a selected trajectory.",
       thesis_list = true,
     },
+    ["rl.action_mask"] = {
+      tex = "m_{t,i}^{\\mathrm{act}}",
+      typst = "#symb.rl.action_mask",
+      description = "Authoritative physically valid action support.",
+      thesis_list = true,
+    },
     ["rl.action_set"] = {
       tex = "\\mathcal{A}(s_t)",
       typst = "#symb.rl.action_set",
@@ -288,6 +294,12 @@ return {
       tex = "b_t",
       typst = "#symb.rl.budget",
       description = "Remaining acquisition budget at rollout step t.",
+      thesis_list = true,
+    },
+    ["rl.candidate_row_mask"] = {
+      tex = "m_{t,i}^{\\mathrm{cand}}",
+      typst = "#symb.rl.candidate_row_mask",
+      description = "Materialized candidate row versus structural padding.",
       thesis_list = true,
     },
     ["rl.candidate_table"] = {
@@ -326,6 +338,12 @@ return {
       description = "Exact two-step fitted-Q control using factual dense successor one-step rewards.",
       thesis_list = true,
     },
+    ["rl.feasibility_label_mask"] = {
+      tex = "m_{t,i}^{F}",
+      typst = "#symb.rl.feasibility_label_mask",
+      description = "Availability of a trustworthy feasibility label for candidate i.",
+      thesis_list = true,
+    },
     ["rl.feasibility_logits"] = {
       tex = "\\ell_{t,i}^{\\mathrm{feas}}",
       typst = "#symb.rl.feasibility_logits",
@@ -354,6 +372,12 @@ return {
       tex = "\\varepsilon_t^{(2)}",
       typst = "#symb.rl.q2_recursion_error",
       description = "Absolute learned-recursion target error against the exact two-step control.",
+      thesis_list = true,
+    },
+    ["rl.q_label_mask"] = {
+      tex = "m_{t,i}^{Q,h}",
+      typst = "#symb.rl.q_label_mask",
+      description = "Availability of a finite factual value target for candidate i at requested horizon h.",
       thesis_list = true,
     },
     ["rl.qh"] = {
@@ -432,6 +456,18 @@ return {
       tex = "s_t^{\\mathrm{S0-pose}}",
       typst = "#symb.rl.s_pose",
       description = "Implemented fixed-root pose-history state used by qh_cf0_v1.",
+      thesis_list = true,
+    },
+    ["rl.source_role"] = {
+      tex = "\\ell_{t,i}^{\\mathrm{src}}",
+      typst = "#symb.rl.source_role",
+      description = "Actor-oracle source-provenance role for candidate evidence.",
+      thesis_list = true,
+    },
+    ["rl.successor_mask"] = {
+      tex = "m_t^{\\mathrm{succ}}",
+      typst = "#symb.rl.successor_mask",
+      description = "Availability of a factual successor backup for transition t.",
       thesis_list = true,
     },
     ["rl.target"] = {
@@ -821,7 +857,7 @@ return {
       thesis_list = false,
     },
     ["rl.candidate_mask_isolation"] = {
-      tex = "\\operatorname{Mask}(\\boldsymbol{X}_t,\\boldsymbol{m}_t)=\\operatorname{Mask}(\\widetilde{\\boldsymbol{X}}_t,\\boldsymbol{m}_t)",
+      tex = "\\operatorname{Mask}(\\boldsymbol{X}_t,\\boldsymbol{m}_t^{\\mathrm{cand}})=\\operatorname{Mask}(\\widetilde{\\boldsymbol{X}}_t,\\boldsymbol{m}_t^{\\mathrm{cand}})",
       typst = "#eqs.rl.candidate_mask_isolation",
       description = "",
       thesis_list = false,
@@ -929,9 +965,9 @@ return {
       thesis_list = false,
     },
     ["rl.qh_doubleq_index"] = {
-      tex = "B_t^{(h,e)}=Q_{h-1,\\theta^-}(s_{t+1},\\operatorname*{argmax}_{i:m_{t+1,i}=1}Q_{h-1,\\theta}(s_{t+1},i))",
+      tex = "B_t^{(h,e)}=Q_{h-1,\\theta^-}(s_{t+1},\\operatorname*{argmax}_{i\\in\\mathcal{A}_{t+1}^{Q,h-1}}Q_{h-1,\\theta}(s_{t+1},i))",
       typst = "#eqs.rl.qh_doubleq_index",
-      description = "",
+      description = "Successor maximum over the certified horizon-specific support set; terminal continuation is zero.",
       thesis_list = false,
     },
     ["rl.qh_doubleq_target"] = {
@@ -953,7 +989,7 @@ return {
       thesis_list = false,
     },
     ["rl.qh_masked_argmax"] = {
-      tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}=1}Q_{H,\\theta,i}",
+      tex = "a_t^\\theta=\\operatorname*{argmax}_{i:m_{t,i}^{\\mathrm{act}}=1}Q_{H,\\theta,i}",
       typst = "#eqs.rl.qh_masked_argmax",
       description = "",
       thesis_list = false,
@@ -968,6 +1004,12 @@ return {
       tex = "(Q_{h,\\theta,e,i}^{\\mathrm{cond}},\\ell_{t,i}^{\\mathrm{feas}})=f_\\theta(s_t,e,q_{t,i},h),\\quad h=b_t\\ \\mathrm{if\\ omitted},\\quad 1\\le h\\le b_t\\le H_{\\mathrm{max}}",
       typst = "#eqs.rl.qh_scorer_interface",
       description = "Mask-independent scorer output and scalar horizon contract.",
+      thesis_list = false,
+    },
+    ["rl.qh_supported_successor_set"] = {
+      tex = "\\mathcal{A}_{t+1}^{Q,h-1}=\\{i:m_{t+1,i}^{\\mathrm{act}}=1\\land m_{t+1,i}^{Q,h-1}=1\\}",
+      typst = "#eqs.rl.qh_supported_successor_set",
+      description = "Hard-valid successor candidates with factual value support at horizon h-1.",
       thesis_list = false,
     },
     ["rl.qh_uncentered_residual"] = {

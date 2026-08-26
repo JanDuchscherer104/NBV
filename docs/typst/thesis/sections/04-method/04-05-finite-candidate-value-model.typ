@@ -136,7 +136,13 @@ post-hoc filtering. Consequently, an executable one-epoch fit, a valid bundle,
 or even low error on a few supported rows cannot promote $h>2$ when the frozen
 minimum-row, coverage, or tolerance predicate fails.
 
-Double Q is an optional estimator for the learned successor maximum. It uses the online scorer to select
+Double Q is an optional estimator for the learned successor maximum. The
+nonterminal bootstrap first intersects hard action support with factual support
+at horizon $h-1$:
+
+#eqs.rl.qh_supported_successor_set
+
+The online scorer then selects
 
 #eqs.rl.qh_doubleq_index
 
