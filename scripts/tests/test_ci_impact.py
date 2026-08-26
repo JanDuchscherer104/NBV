@@ -359,6 +359,10 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("entry: make graphify-maintain", hooks)
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
+        self.assertIn(
+            "entry: bash -c 'unset GIT_DIR GIT_WORK_TREE; exec make docs-render-core'",
+            hooks,
+        )
         self.assertIn("- pre-push", hooks)
 
     def test_multi_family_diff_unions_selections(self) -> None:

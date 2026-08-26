@@ -45,7 +45,7 @@ repos:
 
       - id: docs-render-core
         name: core docs render
-        entry: make docs-render-core
+        entry: bash -c 'unset GIT_DIR GIT_WORK_TREE; exec make docs-render-core'
         language: system
         pass_filenames: false
         stages:
