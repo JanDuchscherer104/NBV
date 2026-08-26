@@ -14,7 +14,7 @@ touched_owner_paths:
   - scripts/check_graphify_freshness.py
 codex_thread: codex://threads/01a03a4a-114d-7f71-b9ec-140f32b8b20b
 repo_object_format: sha1
-repo_head: a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6
+repo_head: 3471828f262aae5998cf234891fee77ed3cdd27d
 repo_branch: "codex/fix-parentless-graphify-setup"
 worktree_kind: linked
 ---
@@ -74,6 +74,7 @@ create commits.
 - [f7985d470815343fc8ab26217f699fe6cb5e6d54](https://github.com/JanDuchscherer104/ARIA-NBV/commit/f7985d470815343fc8ab26217f699fe6cb5e6d54)
 - [1d151e90e59fbb8b38c61888314750def11d1579](https://github.com/JanDuchscherer104/ARIA-NBV/commit/1d151e90e59fbb8b38c61888314750def11d1579)
 - [a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6](https://github.com/JanDuchscherer104/ARIA-NBV/commit/a448bc598a0e415ab7a7b3ba18af4d96ba8d09a6)
+- [3471828f262aae5998cf234891fee77ed3cdd27d](https://github.com/JanDuchscherer104/ARIA-NBV/commit/3471828f262aae5998cf234891fee77ed3cdd27d)
 
 ## Verification
 Focused seed, reconciliation, freshness, session, setup, guidance, governance,
