@@ -1123,7 +1123,7 @@
     key: "finite-horizon-q-function",
     short: "Q_H",
     long: "Finite-Horizon Q Function",
-    description: "Target-conditioned finite-candidate value function trained from ASE oracle rollout traces. The implemented feature-matched A0/A1-S0-pose/root-moments controls emit an action-mask-independent conditional value and a separate feasibility signal for each materialized candidate; A1 remains the default and adapters apply hard validity masks for training and selection.",
+    description: "Target-conditioned finite-candidate action-value interface for the return after choosing one candidate first.",
     group: "Model",
     custom: (
       anchor: "term-finite-horizon-q-function",
@@ -1137,7 +1137,7 @@
       category: "model.value",
       parent: "target-conditioned-nbv-mdp",
       definition_short: "Finite-horizon candidate-value function for target-conditioned ARIA-NBV.",
-      definition_long: "The thesis-core Q_H interface is one shared bounded-scalar-requested-horizon scorer over finite candidate sets. The implemented A0 independent-row MLP and default A1 candidate-to-state cross-attention receive identical candidate queries and the same fixed-order scene, target, causal-history, remaining-budget, and requested-horizon tokens. Both return one equal-width context and expose the same query/context/product features to the terminal decoder. The controls are feature-matched rather than parameter-matched, so comparisons report parameter count and runtime. Causal selected-pose history has a separate versioned seam: H0 is the checkpoint-compatible masked mean and remains the default; exploratory H1 adds current-camera-relative pose order through relative-age encoding and causal self-attention, but remains S0-pose and carries no selected observation update. They emit conditional Q values and feasibility logits without reading the action mask. The terminal decoder is modular: direct continuous Huber regression is canonical, while provenance-bound CORAL is an ordinal ablation over the same fitted-Q target and decodes back to continuous return units. Lightning and online adapters apply the authoritative hard mask, exclude invalid rows from Q supervision and bootstrap, and select only hard-valid candidates. A dense_valid store proves exact Q-label/action-mask equality on every realized state; historical legacy_unspecified stores promise only subset support. The learner fits all hard-valid candidates at h=1, selected factual transitions at h>1, averages candidates within state and states within horizon, and weights non-empty horizons equally. It reports state-clustered loss and continuous-unit absolute error by horizon; dense h=1 additionally supports within-state pairwise ranking and greedy regret, while longer-horizon selected-transition rows explicitly have zero counterfactual metric support. The bundle binds realized training support by horizon and inference rejects unsupported queries. Train, validation, and test share learning semantics but retain separate candidate-generator, rollout-recipe, and behavior-policy population provenance in the bundle. Exact-Q2 certification separates injected exact-table implementation parity from a bounded, stratified held-out measurement of learned-recursion error against factual dense successor rewards. The qh-exact-q2-certification-receipt-v2 schema binds population, lineage, support, tolerances, scorer configuration, and CORAL saturation where applicable. It treats the ordered-store-manifest digest and scene identity as the independent unit, requires at least five supported units and a pass in every selected unit, and keeps pooled row metrics diagnostic; unsupported census chains remain in the coverage denominator and qh-exact-q2-certification-receipt-v1 artifacts are inspection-only. Learned-recursion agreement and independently evaluated positive held-out headroom jointly gate longer-horizon claims; the persisted terminal-step contrast remains diagnostic only. Learned-only feasibility, candidate-to-candidate interaction, and P(valid) times Q ranking are not thesis-core behavior.",
+      definition_long: "The thesis-core Q_H interface assigns one action-mask-independent conditional value to each materialized row of a target-conditioned finite candidate table. It is the expected target return after that row is chosen first under a named continuation rule. Remaining budget b_t is factual state, while requested horizon h selects the return: 1 <= h <= b_t <= H_max. The default selects h=b_t; h<b_t asks for a shorter return from the same state. Feasibility is a separate prediction. The authoritative hard mask, outside Q_H, determines which rows are supervised, bootstrapped, and selectable. Q_H specifies neither encoder architecture nor training loss.",
       internal_links: (
         "docs/typst/thesis/sections/01-research-questions.typ#ssec:rq2",
         "docs/typst/thesis/development/roadmap.typ#ssec:milestones",
@@ -1192,11 +1192,15 @@
       ),
     ),
   ),
+  // evidence:
+  // - @CORAL-cao2019 -> docs/literature/tex-src/arXiv-VIN-NBV/main.bib:206-215 (local bibliographic record for the original CORAL paper)
+  // - @VIN-NBV-frahm2025 -> docs/literature/tex-src/arXiv-VIN-NBV/sec/3_methods.tex:122-129; sec/8_appendix.tex:14-16 (ordinal RRI use and CORAL layer in a local NBV source)
+  // - ARIA Q-decoder semantics -> aria_nbv/aria_nbv/vin/modules/qh_value_decoders.py; aria_nbv/tests/vin/test_qh_value_decoders.py
   (
     key: "coral-q-decoder",
     short: "Q-CORAL",
     long: "CORAL Q-Value Decoder",
-    description: "Ordinal finite-horizon value decoder that maps continuous fitted-Q targets to fixed cumulative classes and decodes repaired class mass through fixed continuous-Q representatives.",
+    description: "Ordinal Q-decoder ablation that discretizes continuous fitted-Q targets into ordered classes and decodes cumulative threshold outputs to a scalar conditional value through fixed return representatives.",
     group: "Model",
     custom: (
       anchor: "term-coral-q-decoder",
@@ -1208,12 +1212,13 @@
       category: "model.value.decoder",
       parent: "finite-horizon-q-function",
       definition_short: "Ordinal ablation over the same continuous fitted-Q target as direct regression.",
-      definition_long: "Q-CORAL assigns each continuous fitted-Q target to one ordinal class using fixed increasing edges, trains K-1 cumulative thresholds with CORAL loss, repairs any negative class-mass differences for decoding, and averages fixed increasing Q representatives to recover the scalar conditional value used by backup and ranking. CORAL itself supplies order but no metric spacing. Its closed support provenance is either train_fitted_v1, derived from the training split only, or predeclared_physical_v1, derived from a named physical rule; method, source population, split role, ordered input digest, edges, representatives, units, and self-verifying artifact digest are scorer and bundle identity. Historical fixed-edge support remains inspection-only. Hard-invalid and unsupported rows are excluded rather than assigned the lowest class, and below/above representative saturation, outer-class occupancy, and threshold-order violations are reported without clipping continuous targets.",
+      definition_long: "CORAL converts a K-class ordinal label into K-1 cumulative binary targets. The locally archived VIN-NBV method discretizes Oracle RRI into 15 ordered classes and uses CORAL to preserve their order. In the ARIA Q_H ablation, a provenance-bound support maps continuous fitted-Q targets to labels; cumulative threshold logits are decoded through fixed, increasing return representatives to produce the public scalar conditional Q. The support artifact, representative values, non-monotone class-mass repair, and saturation diagnostics are ARIA decoder rules, not properties attributed to CORAL. The ablation never assigns hard-invalid or unsupported rows to the lowest ordinal class.",
       internal_links: (
         "docs/typst/thesis/sections/04-method/04-05-finite-candidate-value-model.typ",
       ),
       citations: (
         "CORAL-cao2019",
+        "VIN-NBV-frahm2025",
       ),
       related: (
         "finite-horizon-q-function",
