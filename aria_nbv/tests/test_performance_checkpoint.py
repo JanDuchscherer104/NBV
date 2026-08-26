@@ -170,7 +170,7 @@ def test_record_checkpoint_invokes_omx_with_wandb_backed_evidence(tmp_path: Path
             return_value=WandbPublication(run_id="wandb-run", run_path="aria-nbv/aria-nbv/wandb-run"),
         ),
     ):
-        outcome = record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig())
+        outcome = record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig(offline=False))
 
     pending_command = run.call_args_list[0].args[0]
     final_command = run.call_args_list[1].args[0]
@@ -205,7 +205,7 @@ def test_record_checkpoint_keeps_omx_blocked_until_wandb_readback(tmp_path: Path
         patch("aria_nbv.performance_checkpoint.subprocess.run", side_effect=checkpoint),
         patch("aria_nbv.performance_checkpoint.log_wandb_result", side_effect=mirror),
     ):
-        outcome = record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig())
+        outcome = record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig(offline=False))
 
     assert events == ["omx-blocked", "wandb", "omx-pass"]
     assert outcome["wandb_run_id"] == "wandb-run"
@@ -218,18 +218,28 @@ def test_wandb_failure_leaves_omx_checkpoint_blocked(tmp_path: Path) -> None:
         patch("aria_nbv.performance_checkpoint.log_wandb_result", side_effect=RuntimeError("offline")),
         pytest.raises(RuntimeError, match="offline"),
     ):
-        record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig())
+        record_checkpoint(_result(tmp_path / "result.json"), wandb_config=WandbConfig(offline=False))
 
     assert run.call_count == 1
     command = run.call_args.args[0]
     assert command[command.index("--status") + 1] == "blocked"
 
 
-def test_wandb_series_uses_acquisition_axis_and_scalar_summary(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "sdk_run_path",
+    [
+        ("aria-nbv", "aria-nbv", "wandb-run"),
+        "aria-nbv/aria-nbv/wandb-run",
+    ],
+)
+def test_wandb_series_uses_acquisition_axis_and_scalar_summary(
+    tmp_path: Path,
+    sdk_run_path: str | tuple[str, str, str],
+) -> None:
     result, result_bytes = load_result_snapshot(_result(tmp_path / "result.json"))
     run = MagicMock()
     run.id = "wandb-run"
-    run.path = ("aria-nbv", "aria-nbv", "wandb-run")
+    run.path = sdk_run_path
     artifact = MagicMock()
     result_file = MagicMock()
     artifact.new_file.return_value.__enter__.return_value = result_file
@@ -260,7 +270,12 @@ def test_wandb_series_uses_acquisition_axis_and_scalar_summary(tmp_path: Path) -
     )
 
     with patch.dict(sys.modules, {"wandb": wandb}):
-        publication = log_wandb_result(result, result_bytes, result_sha256(result_bytes), WandbConfig())
+        publication = log_wandb_result(
+            result,
+            result_bytes,
+            result_sha256(result_bytes),
+            WandbConfig(offline=False),
+        )
 
     assert publication == WandbPublication(
         run_id="wandb-run",

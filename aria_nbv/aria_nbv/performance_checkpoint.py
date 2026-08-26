@@ -208,6 +208,14 @@ def _wandb_tags(result: Mapping[str, Any], configured: Sequence[str] | None) -> 
     return list(dict.fromkeys((*configured, *required) if configured else required))
 
 
+def _normalize_wandb_run_path(value: Any) -> tuple[str, str, str]:
+    """Normalize W&B run paths across SDK tuple and slash-delimited forms."""
+    components = value.split("/") if isinstance(value, str) else tuple(str(component) for component in value)
+    if len(components) != 3 or not all(components):
+        raise RuntimeError("W&B run path must contain entity, project, and run ID")
+    return components[0], components[1], components[2]
+
+
 def _verify_wandb_publication(
     wandb: Any,
     *,
@@ -221,7 +229,7 @@ def _verify_wandb_publication(
     expected_tags = set(_wandb_tags(result, None))
     if published.name != f"[senpai] {result['title']}" or published.group != "senpai":
         raise RuntimeError("published W&B run does not have the required SENPAI identity")
-    if not expected_tags.issubset(set(published.tags)):
+    if not expected_tags.issubset(set(getattr(published, "tags", ()) or ())):
         raise RuntimeError("published W&B run does not have the required SENPAI tags")
     observed_config = published.config.get("aria_autoresearch", {})
     if observed_config != expected_config:
@@ -246,7 +254,7 @@ def log_wandb_result(
         config={"aria_autoresearch": _wandb_provenance(result, digest)},
     )
     run_id = str(run.id)
-    run_path = tuple(str(component) for component in run.path)
+    run_path = _normalize_wandb_run_path(run.path)
     try:
         series = result.get("evidence_series", [])
         acquisition_number = f"aria_autoresearch/{result['series_axis']}"
@@ -359,7 +367,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--wandb-entity")
     parser.add_argument("--dry-run", action="store_true", help="Validate without W&B or OMX side effects")
     args = parser.parse_args(argv)
-    config = WandbConfig(project=args.wandb_project, entity=args.wandb_entity, job_type="performance-goal")
+    config = WandbConfig(
+        project=args.wandb_project,
+        entity=args.wandb_entity,
+        offline=False,
+        job_type="performance-goal",
+    )
     try:
         print(json.dumps(record_checkpoint(args.result, wandb_config=config, dry_run=args.dry_run), sort_keys=True))
     except ResultContractError as exc:
