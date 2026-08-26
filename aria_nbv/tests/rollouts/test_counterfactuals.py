@@ -759,6 +759,15 @@ def test_counterfactual_rollout_greedy_length_and_step_radius() -> None:
     assert torch.allclose(step_lengths, torch.full_like(step_lengths, 0.5), atol=1e-4)
 
 
+def test_counterfactual_greedy_selection_persists_state_keyed_seed() -> None:
+    rollouts = _run_rollouts(horizon=2, branch_factor=1)
+    trajectory = rollouts.trajectories[0]
+    assert [step.selection_rng_seed for step in trajectory.steps] == [
+        derive_selection_seed(0, ()),
+        derive_selection_seed(0, (trajectory.steps[0].selected_shell_index,)),
+    ]
+
+
 def test_counterfactual_rollout_beam_width_caps_frontier() -> None:
     rollouts = _run_rollouts(horizon=2, branch_factor=3, beam_width=2)
     assert len(rollouts.trajectories) == 2

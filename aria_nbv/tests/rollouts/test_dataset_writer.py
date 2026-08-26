@@ -245,8 +245,9 @@ def test_direct_v0_writer_keeps_physical_split_out_of_campaign_hash(tmp_path: Pa
     assert validation.ok, validation.errors
 
 
-def test_zarr_round_trip_persists_state_keyed_selection_seed(tmp_path: Path) -> None:
-    record = build_rollout_records(horizon=2, num_samples=6, seed=51)[1]
+@pytest.mark.parametrize("record_index", [0, 1])
+def test_zarr_round_trip_persists_state_keyed_selection_seed(tmp_path: Path, record_index: int) -> None:
+    record = build_rollout_records(horizon=2, num_samples=6, seed=51)[record_index]
     result = write_rollout_zarr_store(tmp_path / "selection-seed.zarr", [record])
 
     persisted = RolloutZarrStoreReader(result.store_dir).array("steps/selection_seed")

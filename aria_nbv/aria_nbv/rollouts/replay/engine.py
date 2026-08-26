@@ -613,6 +613,7 @@ class CounterfactualPoseGenerator:
             valid_poses=valid_poses,
             trajectory=trajectory,
             branch_count=branch_count,
+            selection_seed=selection_seed,
         )
 
     def _greedy_valid_candidates(
