@@ -338,7 +338,7 @@ class SelectionTests(unittest.TestCase):
             "[`references/graphify-aria-boundary.md`](references/graphify-aria-boundary.md)",
             graphify_branch,
         )
-        self.assertIn("scripts/check_graphify_freshness.py --json", boundary_guidance)
+        self.assertNotIn("scripts/check_graphify_freshness.py", boundary_guidance)
         self.assertIn("make graphify-state-check", boundary_guidance)
         self.assertIn("scripts/setup_worktree_env.sh", boundary_guidance)
         self.assertIn("graphify hook install", boundary_guidance)
@@ -354,8 +354,8 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue((skill_root / "references/query.md").is_file())
 
         hooks = (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-        self.assertIn("id: graphify-usable-check", hooks)
-        self.assertIn("entry: make graphify-usable-check", hooks)
+        self.assertIn("id: graphify-maintain", hooks)
+        self.assertIn("entry: make graphify-maintain", hooks)
         self.assertIn("id: graphify-state-check", hooks)
         self.assertIn("entry: make graphify-state-check", hooks)
         self.assertIn("- pre-push", hooks)

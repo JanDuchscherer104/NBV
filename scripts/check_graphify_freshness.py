@@ -287,6 +287,15 @@ def _owner_reasons(root: Path, owners: dict[str, str]) -> list[str]:
     return reasons
 
 
+def projection_owner_changes(root: Path) -> list[str]:
+    """Return exact projection-owner changes for setup-owned reconciliation."""
+    _local_regular(root, PROJECTION_INDEX, "projection index")
+    _, _, owner_state, owners = _projection_metadata(root / PROJECTION_INDEX)
+    if owner_state == "dirty":
+        raise ValueError("projection was built from a dirty owner worktree")
+    return _owner_reasons(root, owners)
+
+
 def _graphify_interpreter(root: Path) -> str:
     marker = root / INTERPRETER
     _regular(marker, "Graphify interpreter marker")

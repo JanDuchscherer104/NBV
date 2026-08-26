@@ -25,6 +25,7 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         self.sandbox = Path(self.tmp.name)
         self.source = self.sandbox / "source"
         self.destination = self.sandbox / "destination"
+        self.canonical_cache = self.sandbox / "canonical-cache"
         self.source.mkdir()
         self.git("init", "-q")
         self.git("config", "user.email", "test@example.invalid")
@@ -38,6 +39,11 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
             graphify.read_text(encoding="utf-8").splitlines()[0][2:].strip()
         )
         self.write_valid_source()
+        for name in ("semantic", "semantic-deep"):
+            (self.canonical_cache / name).mkdir(parents=True, exist_ok=True)
+            (self.canonical_cache / name / "canonical-entry").write_text(
+                f"canonical-{name}\n", encoding="utf-8"
+            )
 
     def tearDown(self) -> None:
         subprocess.run(
@@ -129,6 +135,8 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
                 str(self.source),
                 "--destination",
                 str(self.destination),
+                "--canonical-cache-root",
+                str(self.canonical_cache),
                 *extra,
             ],
             check=check,
@@ -146,6 +154,8 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
                 "--prepare-cache",
                 "--destination",
                 str(self.destination),
+                "--canonical-cache-root",
+                str(self.canonical_cache),
                 *extra,
             ],
             check=check,
@@ -206,8 +216,8 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
                 str(child_cache.resolve()), sentinel["source_cache_targets"][name]
             )
             self.assertEqual(
-                (child_cache / "parent-entry").read_text(encoding="utf-8"),
-                f"{name}\n",
+                (child_cache / "canonical-entry").read_text(encoding="utf-8"),
+                f"canonical-{name}\n",
             )
         self.assertEqual(
             set(sentinel["files"]),
@@ -270,16 +280,18 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("semantic cache points somewhere else", result.stderr)
 
-    def test_parent_cache_target_is_required_before_publishing(self) -> None:
-        (self.source / "graphify-out/cache/semantic-deep/parent-entry").unlink()
-        (self.source / "graphify-out/cache/semantic-deep").rmdir()
+    def test_source_cache_links_are_not_used_for_publishing(self) -> None:
+        source_cache = self.source / "graphify-out/cache/semantic-deep"
+        (source_cache / "parent-entry").unlink()
+        source_cache.rmdir()
 
         result = self.seed(check=False)
 
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("semantic-deep cache target is unavailable", result.stderr)
-        self.assertFalse(
-            (self.destination / "graphify-out/.aria-worktree-seed.json").exists()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            (self.destination / "graphify-out/cache/semantic-deep/canonical-entry")
+            .read_text(encoding="utf-8"),
+            "canonical-semantic-deep\n",
         )
 
     def test_source_graph_revision_requires_canonical_commit_oid(self) -> None:
@@ -558,6 +570,8 @@ class GraphifyWorktreeSeedTest(unittest.TestCase):
                 str(self.source),
                 "--destination",
                 str(other),
+                "--canonical-cache-root",
+                str(self.canonical_cache),
             ],
             check=False,
             capture_output=True,

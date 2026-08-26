@@ -2,9 +2,15 @@
 # Configure a linked ARIA-NBV worktree without copying the runtime or data cache.
 set -euo pipefail
 
+# See the public Codex boundary: hook-provided bindings are valid only for the
+# hook's administrative directory, not for the independent parent and primary
+# worktree topology checks below.
+unset GIT_DIR GIT_WORK_TREE
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir)"
 shared_root="${ARIA_NBV_SHARED_ROOT:-}"
+canonical_primary="${ARIA_NBV_CANONICAL_PRIMARY:-}"
 check_only=false
 
 usage() {
@@ -66,6 +72,32 @@ done < <(git --git-dir="$source_git_dir" --work-tree="$shared_root" worktree lis
 [[ "$registered_source" == true && "$registered_destination" == true ]] || \
   fail "source and destination must both be registered Git worktrees"
 
+# Cache identity belongs to the registered primary checkout, not to whichever
+# sibling was selected to provide inherited Graphify artifacts.  Authenticate
+# it before invoking a parent runtime or mutating the destination.
+[[ -n "$canonical_primary" && -d "$canonical_primary" ]] || \
+  fail "canonical primary worktree is unavailable"
+canonical_primary="$(cd "$canonical_primary" && pwd -P)"
+canonical_git_dir="$(git -C "$canonical_primary" rev-parse --absolute-git-dir 2>/dev/null)" || \
+  fail "canonical primary worktree is not a Git worktree"
+canonical_common_dir="$(git --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" \
+  rev-parse --git-common-dir 2>/dev/null)" || fail "canonical primary Git metadata is unavailable"
+[[ "$canonical_common_dir" = /* ]] || canonical_common_dir="$canonical_primary/$canonical_common_dir"
+canonical_common_dir="$(cd "$canonical_common_dir" && pwd -P)"
+[[ "$canonical_common_dir" == "$destination_common_dir" && -d "$canonical_primary/.git" ]] || \
+  fail "canonical primary worktree does not own this repository"
+registered_primary=false
+while IFS= read -r worktree_line; do
+  [[ "$worktree_line" == "worktree $canonical_primary" ]] && registered_primary=true
+done < <(git --git-dir="$canonical_git_dir" --work-tree="$canonical_primary" worktree list --porcelain)
+[[ "$registered_primary" == true ]] || fail "canonical primary worktree is not registered"
+canonical_cache_root="$canonical_primary/.data/graphify-semantic-cache"
+for cache_path in "$canonical_primary/.data" "$canonical_cache_root" \
+  "$canonical_cache_root/semantic" "$canonical_cache_root/semantic-deep"; do
+  [[ ! -L "$cache_path" && -d "$cache_path" ]] || \
+    fail "canonical Graphify cache is missing or unsafe: $cache_path"
+done
+
 # Everything above is Git metadata only. Do not invoke a parent-provided
 # executable or create child links until the source topology is proven.
 (
@@ -79,12 +111,13 @@ shared_python="$shared_root/aria_nbv/.venv/bin/python"
   >/dev/null 2>&1 || fail "shared Python cannot run: $shared_python"
 [[ -d "$shared_root/.data" ]] || fail "shared data cache is missing: $shared_root/.data"
 
-shared_graphify_semantic_cache="$shared_root/graphify-out/cache/semantic"
-shared_graphify_semantic_deep_cache="$shared_root/graphify-out/cache/semantic-deep"
+shared_graphify_semantic_cache="$canonical_cache_root/semantic"
+shared_graphify_semantic_deep_cache="$canonical_cache_root/semantic-deep"
 
 if [[ "$check_only" == false ]]; then
   "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
-    --prepare-cache --destination "$repo_root"
+    --prepare-cache --destination "$repo_root" \
+    --canonical-cache-root "$canonical_cache_root"
 fi
 
 shared_graphify_semantic_cache="$(realpath_portable "$shared_graphify_semantic_cache")"
@@ -136,6 +169,7 @@ fi
 # only shared Graphify state.
 seed_args=(--source "$shared_root" --destination "$repo_root")
 seed_args+=(--destination-git-dir "$repo_git_dir")
+seed_args+=(--canonical-cache-root "$canonical_cache_root")
 [[ "$check_only" == true ]] && seed_args+=(--check)
 "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" "${seed_args[@]}"
 
@@ -151,7 +185,8 @@ fi
 # stay local. Clearing either cache increases future extraction cost everywhere
 # but cannot make a stale graph current.
 "$shared_python" "$repo_root/scripts/graphify_worktree_seed.py" \
-  --prepare-cache --destination "$repo_root" --check
+  --prepare-cache --destination "$repo_root" \
+  --canonical-cache-root "$canonical_cache_root" --check
 link_or_check "$shared_graphify_semantic_cache" "graphify-out/cache/semantic"
 link_or_check "$shared_graphify_semantic_deep_cache" "graphify-out/cache/semantic-deep"
 

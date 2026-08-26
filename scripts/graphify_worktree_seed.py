@@ -240,7 +240,9 @@ def validate_interpreter(root: Path) -> None:
 
 
 def validate_source(
-    source: Path, source_git_dir: Path | None
+    source: Path,
+    source_git_dir: Path | None,
+    canonical_cache_root: Path,
 ) -> tuple[list[Path], str, dict[str, str]]:
     for path in (*CORE, Path("graphify-out/needs_update")):
         validate_parent_chain(source, path, "source", require_existing=True)
@@ -251,23 +253,22 @@ def validate_source(
     graph_revision = validate_graph(source, source_git_dir, "source")
     markdown = manifest_markdown(source)
     validate_interpreter(source)
-    cache_targets: dict[str, str] = {}
-    for name in CACHE_NAMES:
-        cache = CACHE / name
-        validate_parent_chain(source, cache, "source", require_existing=True)
-        source_cache = source / cache
-        if not source_cache.exists():
-            fail(f"source Graphify {name} cache target is unavailable")
-        if not source_cache.is_dir():
-            fail(f"source Graphify {name} cache must be a directory: {source / cache}")
-        try:
-            target = source_cache.resolve(strict=True)
-        except (OSError, RuntimeError) as error:
-            fail(f"source Graphify {name} cache target is unavailable: {error}")
-        if not target.is_dir():
-            fail(f"source Graphify {name} cache target must be a directory: {target}")
-        cache_targets[name] = str(target)
+    cache_targets = validate_cache_root(canonical_cache_root)
     return markdown, graph_revision, cache_targets
+
+
+def validate_cache_root(root: Path) -> dict[str, str]:
+    """Validate the independently authenticated canonical semantic cache."""
+    if root.is_symlink() or not root.is_dir():
+        fail(f"canonical Graphify cache root must be a regular directory: {root}")
+    root = root.resolve()
+    targets: dict[str, str] = {}
+    for name in CACHE_NAMES:
+        leaf = root / name
+        if leaf.is_symlink() or not leaf.is_dir():
+            fail(f"canonical Graphify {name} cache must be a regular directory: {leaf}")
+        targets[name] = str(leaf)
+    return targets
 
 
 def owned_files(payload: dict[str, Any]) -> list[Path]:
@@ -331,6 +332,7 @@ def seed(
     check: bool,
     source_git_dir: Path | None,
     destination_git_dir: Path | None,
+    canonical_cache_root: Path,
 ) -> None:
     source, destination = source.resolve(), destination.resolve()
     if not source.is_dir() or not destination.is_dir():
@@ -342,7 +344,9 @@ def seed(
     if sentinel.exists() or sentinel.is_symlink():
         validate_owned(destination, common, destination_git_dir)
         return
-    markdown, graph_revision, cache_targets = validate_source(source, source_git_dir)
+    markdown, graph_revision, cache_targets = validate_source(
+        source, source_git_dir, canonical_cache_root
+    )
     source_head = git(source, source_git_dir, "rev-parse", "HEAD")
     targets = [*CORE, *markdown, ROOT, SENTINEL, *(CACHE / name for name in CACHE_NAMES)]
     for path in targets:
@@ -392,14 +396,18 @@ def seed(
         shutil.rmtree(staged, ignore_errors=True)
 
 
-def prepare_cache(destination: Path, *, check: bool) -> None:
+def prepare_cache(
+    destination: Path, canonical_cache_root: Path, *, check: bool
+) -> None:
     """Prepare only the local parent directory for shared semantic cache leaves."""
     destination = destination.resolve()
     if not destination.is_dir():
         fail("destination must be a directory")
+    canonical_cache_root = canonical_cache_root.resolve()
     guard = CACHE / "semantic"
     if check:
         validate_parent_chain(destination, guard, "destination", require_existing=True)
+        validate_cache_root(canonical_cache_root)
         return
     for directory in (Path("graphify-out"), CACHE):
         validate_parent_chain(
@@ -412,6 +420,17 @@ def prepare_cache(destination: Path, *, check: bool) -> None:
         if not path.exists():
             path.mkdir()
     validate_parent_chain(destination, guard, "destination", require_existing=True)
+    if canonical_cache_root.exists() and canonical_cache_root.is_symlink():
+        fail(f"canonical Graphify cache root must not be a symlink: {canonical_cache_root}")
+    canonical_cache_root.mkdir(parents=True, exist_ok=True)
+    for name in CACHE_NAMES:
+        leaf = canonical_cache_root / name
+        if leaf.exists() or leaf.is_symlink():
+            if leaf.is_symlink() or not leaf.is_dir():
+                fail(f"canonical Graphify {name} cache must be a regular directory: {leaf}")
+        else:
+            leaf.mkdir()
+    validate_cache_root(canonical_cache_root)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -420,23 +439,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--source-git-dir", type=Path)
     parser.add_argument("--destination-git-dir", type=Path)
+    parser.add_argument("--canonical-cache-root", type=Path)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--prepare-cache", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.prepare_cache:
             if args.source or args.source_git_dir or args.destination_git_dir:
-                parser.error("--prepare-cache accepts only --destination and --check")
-            prepare_cache(args.destination, check=args.check)
+                parser.error("--prepare-cache accepts only --destination, --canonical-cache-root, and --check")
+            if args.canonical_cache_root is None:
+                parser.error("--canonical-cache-root is required with --prepare-cache")
+            prepare_cache(args.destination, args.canonical_cache_root, check=args.check)
         else:
             if args.source is None:
                 parser.error("--source is required unless --prepare-cache is used")
+            if args.canonical_cache_root is None:
+                parser.error("--canonical-cache-root is required")
             seed(
                 args.source,
                 args.destination,
                 check=args.check,
                 source_git_dir=args.source_git_dir,
                 destination_git_dir=args.destination_git_dir,
+                canonical_cache_root=args.canonical_cache_root,
             )
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)

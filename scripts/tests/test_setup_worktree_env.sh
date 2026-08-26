@@ -171,7 +171,7 @@ git -C "${SECOND_WORKTREE_ROOT}" config --worktree core.worktree "${SANDBOX}/sta
 [[ "$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --is-inside-work-tree)" == false ]]
 
 run_setup() {
-  ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
+  ARIA_NBV_SHARED_ROOT="${SHARED_ROOT}" ARIA_NBV_CANONICAL_PRIMARY="${SHARED_ROOT}" PATH="${FAKE_BIN}:${PATH}" \
     bash "$1/scripts/setup_worktree_env.sh" "${@:2}"
 }
 
@@ -213,6 +213,21 @@ snapshot_tree() {
   find "${root}" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
 }
 
+# The public Codex boundary rejects malformed mode declarations before it ranks
+# a parent or can mutate the destination, and reports one actionable line.
+mode_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
+if ARIA_NBV_GRAPHIFY_MODES="deep,standard" \
+  run_codex_setup "${STALE_CHILD_ROOT}" "${SHARED_ROOT}" \
+  >"${SANDBOX}/bad-mode.out" 2>"${SANDBOX}/bad-mode.err"; then
+  echo "Codex setup unexpectedly accepted a reordered Graphify mode list" >&2
+  exit 1
+fi
+[[ ! -s "${SANDBOX}/bad-mode.out" ]]
+[[ "$(wc -l <"${SANDBOX}/bad-mode.err")" -eq 1 ]]
+grep -Fqx "error: ARIA_NBV_GRAPHIFY_MODES must be standard, deep, or standard,deep" \
+  "${SANDBOX}/bad-mode.err"
+[[ "$(snapshot_tree "${STALE_CHILD_ROOT}")" == "${mode_before}" ]]
+
 # A foreign explicit parent must fail solely from Git topology. Its executable
 # must not run and an unseeded child must remain byte-for-byte untouched.
 foreign_before="$(snapshot_tree "${FOREIGN_WORKTREE_ROOT}")"
@@ -235,7 +250,7 @@ touch "${SANDBOX}/stale-parent-python-executed"
 EOF
 chmod +x "${SECOND_WORKTREE_ROOT}/aria_nbv/.venv/bin/python"
 stale_before="$(snapshot_tree "${STALE_CHILD_ROOT}")"
-if ARIA_NBV_SHARED_ROOT="${SECOND_WORKTREE_ROOT}" PATH="${PATH}" \
+if ARIA_NBV_SHARED_ROOT="${SECOND_WORKTREE_ROOT}" ARIA_NBV_CANONICAL_PRIMARY="${SHARED_ROOT}" PATH="${PATH}" \
   bash "${STALE_CHILD_ROOT}/scripts/setup_worktree_env.sh" --check \
   >"${SANDBOX}/stale-parent.out" 2>"${SANDBOX}/stale-parent.err"; then
   echo "setup unexpectedly accepted a Graphify-unusable explicit parent" >&2
@@ -327,7 +342,9 @@ done
 # one empty commit so the seeded worktree is its only admitted ancestor.
 git --git-dir="$(git -C "${SECOND_WORKTREE_ROOT}" rev-parse --absolute-git-dir)" \
   --work-tree="${SECOND_WORKTREE_ROOT}" commit --allow-empty -qm "destination ahead"
-ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" ""
+ARIA_TEST_PRIMARY_UNUSABLE=1 run_codex_setup "${SECOND_WORKTREE_ROOT}" "" \
+  >"${SANDBOX}/second-codex.out" 2>"${SANDBOX}/second-codex.err"
+[[ ! -s "${SANDBOX}/second-codex.out" && ! -s "${SANDBOX}/second-codex.err" ]]
 python3 - "${SECOND_WORKTREE_ROOT}/graphify-out/.aria-worktree-seed.json" "${WORKTREE_ROOT}" <<'PY'
 import json
 import sys
@@ -360,7 +377,17 @@ grep -Fq "ambiguous query-admissible Graphify parent candidates" "${SANDBOX}/amb
 
 # A real Codex fork parent remains authoritative even though the canonical
 # primary checkout and an admitted sibling are also available.
-ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}"
+ARIA_TEST_ADMIT_SECOND=1 run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
+  >"${SANDBOX}/explicit-codex.out" 2>"${SANDBOX}/explicit-codex.err"
+[[ ! -s "${SANDBOX}/explicit-codex.out" && ! -s "${SANDBOX}/explicit-codex.err" ]]
+
+# Git hooks export destination bindings. The top-level bridge must discard
+# those bindings before it validates independent sibling and primary paths.
+GIT_DIR="$(git -C "${EXPLICIT_CHILD_ROOT}" rev-parse --absolute-git-dir)" \
+GIT_WORK_TREE="${EXPLICIT_CHILD_ROOT}" ARIA_TEST_ADMIT_SECOND=1 \
+  run_codex_setup "${EXPLICIT_CHILD_ROOT}" "${SECOND_WORKTREE_ROOT}" \
+  >"${SANDBOX}/hook-bound-codex.out" 2>"${SANDBOX}/hook-bound-codex.err"
+[[ ! -s "${SANDBOX}/hook-bound-codex.out" && ! -s "${SANDBOX}/hook-bound-codex.err" ]]
 python3 - "${EXPLICIT_CHILD_ROOT}/graphify-out/.aria-worktree-seed.json" "${SECOND_WORKTREE_ROOT}" <<'PY'
 import json
 import sys

@@ -276,6 +276,7 @@ class AgentStatusTests(unittest.TestCase):
         scripts.mkdir()
         (scripts / "check_graphify_freshness.py").write_text("# fixture\n", encoding="utf-8")
         (scripts / "build_graphify_projection.py").write_text("# fixture\n", encoding="utf-8")
+        (scripts / "setup_codex_worktree_env.sh").write_text("#!/bin/sh\n", encoding="utf-8")
 
         payload = self.assert_immutable(nested, self.root / ".git")
 
@@ -291,7 +292,10 @@ class AgentStatusTests(unittest.TestCase):
             result["readiness"]["runtime"]["next_action"],
             f"cd {self.root / 'aria_nbv'} && uv sync --extra dev",
         )
-        self.assertIn(f"cd {self.root}", result["graphify"]["next_action"])
+        self.assertEqual(
+            result["graphify"]["next_action"],
+            f"cd {self.root} && make graphify-maintain",
+        )
 
     def test_broken_executable_runtime_is_not_healthy(self) -> None:
         runtime = self.root / "aria_nbv" / ".venv" / "bin" / "python"
@@ -432,7 +436,7 @@ class AgentStatusTests(unittest.TestCase):
         self.assertIsNone(payload["result"]["graphify"]["next_action"])
         self.assertTrue(
             any(
-                detail.startswith("Graphify checker next_action:")
+                detail.startswith("Graphify admission owner note:")
                 for detail in payload["result"]["graphify"]["details"]
             )
         )
@@ -443,15 +447,14 @@ class AgentStatusTests(unittest.TestCase):
         scripts.mkdir()
         (scripts / "check_graphify_freshness.py").write_text("# fixture\n", encoding="utf-8")
         (scripts / "build_graphify_projection.py").write_text("# fixture\n", encoding="utf-8")
+        (scripts / "setup_codex_worktree_env.sh").write_text("#!/bin/sh\n", encoding="utf-8")
 
         graphify = _graphify(GitBoundary(self.root), bare=False, kind="standalone")
 
         self.assertEqual(graphify["state"], "unavailable")
         self.assertEqual(
             graphify["next_action"],
-            f"cd {self.root} && python3 scripts/build_graphify_projection.py "
-            '--output graphify-input --aria-code-ref "$(git rev-parse HEAD)" '
-            "&& graphify . --update",
+            f"cd {self.root} && make graphify-maintain",
         )
 
     def test_healthy_graphify_preserves_owner_evidence_without_action(self) -> None:
@@ -468,7 +471,7 @@ class AgentStatusTests(unittest.TestCase):
             graphify = _graphify(GitBoundary(self.root), bare=False, kind="standalone")
         self.assertEqual(graphify["state"], "healthy")
         self.assertIsNone(graphify["next_action"])
-        self.assertIn("Graphify checker next_action: query prose", graphify["details"])
+        self.assertIn("Graphify admission owner note: query prose", graphify["details"])
 
     def test_graphify_rejects_non_object_json_payload(self) -> None:
         (self.root / "graphify-input").mkdir()
@@ -483,11 +486,11 @@ class AgentStatusTests(unittest.TestCase):
         self.assertEqual(graphify["state"], "unusable")
         self.assertIsNone(graphify["next_action"])
         self.assertIn(
-            "Graphify checker JSON payload is not an object", graphify["details"]
+            "Graphify admission payload is not an object", graphify["details"]
         )
-        self.assertIn("Graphify checker exit status: 1", graphify["details"])
-        self.assertIn("Graphify checker stdout: []", graphify["details"])
-        self.assertIn("Graphify checker stderr: checker warning", graphify["details"])
+        self.assertIn("Graphify admission probe exit status: 1", graphify["details"])
+        self.assertIn("Graphify admission probe stdout: []", graphify["details"])
+        self.assertIn("Graphify admission probe stderr: checker warning", graphify["details"])
 
     def test_graphify_rejects_fresh_state_with_nonzero_exit(self) -> None:
         (self.root / "graphify-input").mkdir()
@@ -504,16 +507,16 @@ class AgentStatusTests(unittest.TestCase):
             graphify = _graphify(GitBoundary(self.root), bare=False, kind="standalone")
         self.assertEqual(graphify["state"], "unusable")
         self.assertIsNone(graphify["next_action"])
-        self.assertIn("Graphify checker state: fresh", graphify["details"])
+        self.assertIn("Graphify admission state: fresh", graphify["details"])
         self.assertIn("owner reason", graphify["details"])
-        self.assertIn("Graphify checker next_action: owner prose", graphify["details"])
+        self.assertIn("Graphify admission owner note: owner prose", graphify["details"])
         self.assertIn(
-            "Graphify checker state 'fresh' requires exit status 0, got 9",
+            "Graphify admission state 'fresh' requires exit status 0, got 9",
             graphify["details"],
         )
-        self.assertIn("Graphify checker exit status: 9", graphify["details"])
-        self.assertIn(f"Graphify checker stdout: {stdout}", graphify["details"])
-        self.assertIn("Graphify checker stderr: checker failure", graphify["details"])
+        self.assertIn("Graphify admission probe exit status: 9", graphify["details"])
+        self.assertIn(f"Graphify admission probe stdout: {stdout}", graphify["details"])
+        self.assertIn("Graphify admission probe stderr: checker failure", graphify["details"])
 
     def test_graphify_rejects_unknown_checker_state(self) -> None:
         (self.root / "graphify-input").mkdir()
@@ -530,13 +533,13 @@ class AgentStatusTests(unittest.TestCase):
             graphify = _graphify(GitBoundary(self.root), bare=False, kind="standalone")
         self.assertEqual(graphify["state"], "unusable")
         self.assertIsNone(graphify["next_action"])
-        self.assertIn("Graphify checker state: unknown", graphify["details"])
+        self.assertIn("Graphify admission state: unknown", graphify["details"])
         self.assertIn("owner reason", graphify["details"])
-        self.assertIn("Graphify checker next_action: owner prose", graphify["details"])
-        self.assertIn("Graphify checker returned an unknown state", graphify["details"])
-        self.assertIn("Graphify checker exit status: 1", graphify["details"])
-        self.assertIn(f"Graphify checker stdout: {stdout}", graphify["details"])
-        self.assertIn("Graphify checker stderr: checker warning", graphify["details"])
+        self.assertIn("Graphify admission owner note: owner prose", graphify["details"])
+        self.assertIn("Graphify admission returned an unknown state", graphify["details"])
+        self.assertIn("Graphify admission probe exit status: 1", graphify["details"])
+        self.assertIn(f"Graphify admission probe stdout: {stdout}", graphify["details"])
+        self.assertIn("Graphify admission probe stderr: checker warning", graphify["details"])
 
     def test_graphify_accepts_usable_stale_with_exit_one(self) -> None:
         (self.root / "graphify-input").mkdir()
@@ -555,10 +558,10 @@ class AgentStatusTests(unittest.TestCase):
             graphify = _graphify(GitBoundary(self.root), bare=False, kind="standalone")
         self.assertEqual(graphify["state"], "stale")
         self.assertIsNone(graphify["next_action"])
-        self.assertIn("Graphify checker state: usable-stale", graphify["details"])
+        self.assertIn("Graphify admission state: usable-stale", graphify["details"])
         self.assertIn("stale reason", graphify["details"])
         self.assertIn(
-            "Graphify checker next_action: refresh prose", graphify["details"]
+            "Graphify admission owner note: refresh prose", graphify["details"]
         )
 
     def test_linked_aria_existing_graphify_seed_has_no_generic_action(self) -> None:
@@ -571,6 +574,9 @@ class AgentStatusTests(unittest.TestCase):
         )
         (self.root / "scripts" / "build_graphify_projection.py").write_text(
             "# fixture\n", encoding="utf-8"
+        )
+        (self.root / "scripts" / "setup_codex_worktree_env.sh").write_text(
+            "#!/bin/sh\n", encoding="utf-8"
         )
         (self.root / "graphify-input").mkdir()
         (self.root / "graphify-input" / "index.md").write_text(
@@ -590,10 +596,10 @@ class AgentStatusTests(unittest.TestCase):
         with patch("agent_status.subprocess.run", return_value=checker):
             graphify = _graphify(GitBoundary(self.root), bare=False, kind="linked")
         self.assertEqual(graphify["state"], "unusable")
-        self.assertEqual(graphify["next_action"], f"cd {self.root} && graphify . --update")
-        self.assertIn("Graphify checker state: unusable", graphify["details"])
+        self.assertEqual(graphify["next_action"], f"cd {self.root} && make graphify-maintain")
+        self.assertIn("Graphify admission state: unusable", graphify["details"])
         self.assertIn("fixture reason", graphify["details"])
-        self.assertIn("Graphify checker next_action: repair prose", graphify["details"])
+        self.assertIn("Graphify admission owner note: repair prose", graphify["details"])
 
     def test_json_error_has_the_same_envelope(self) -> None:
         result, payload = self.invoke(self.root.parent / "does-not-exist")

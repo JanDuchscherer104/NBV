@@ -2,12 +2,39 @@
 # Resolve Codex's optional fork parent before running the strict setup owner.
 set -euo pipefail
 
+# Git hooks export these for their own administrative directory.  This setup
+# script deliberately addresses several distinct worktrees, so inherited hook
+# bindings would make every `git -C` query target the committing child instead.
+unset GIT_DIR GIT_WORK_TREE
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 explicit_parent="${CODEX_SOURCE_WORKSPACE_PATH:-}"
+maintain=false
+
+for argument in "$@"; do
+  case "$argument" in
+    --maintain) maintain=true ;;
+    --quiet) ;;
+    *) ;;
+  esac
+done
 
 fail() {
   printf 'error: %s\n' "$*" >&2
   exit 1
+}
+
+validated_graphify_modes() {
+  local modes
+  if [[ -v ARIA_NBV_GRAPHIFY_MODES ]]; then
+    modes="$ARIA_NBV_GRAPHIFY_MODES"
+  else
+    modes="standard"
+  fi
+  case "$modes" in
+    standard|deep|standard,deep) printf '%s\n' "$modes" ;;
+    *) fail "ARIA_NBV_GRAPHIFY_MODES must be standard, deep, or standard,deep" ;;
+  esac
 }
 
 canonical_primary_worktree() {
@@ -36,6 +63,45 @@ canonical_primary_worktree() {
     }
   done < <(git -C "$repo_root" worktree list --porcelain)
   fail "Git's canonical primary worktree is not registered"
+}
+
+validate_canonical_cache_topology() {
+  local primary="$1" primary_git_dir primary_common_dir expected_common_dir cache_path line
+
+  [[ -n "$primary" && -d "$primary" ]] || fail "canonical primary worktree is unavailable"
+  primary="$(cd "$primary" && pwd -P)"
+  primary_git_dir="$(git -C "$primary" rev-parse --absolute-git-dir 2>/dev/null)" || \
+    fail "canonical primary worktree is not a Git worktree"
+  primary_common_dir="$(git --git-dir="$primary_git_dir" --work-tree="$primary" \
+    rev-parse --git-common-dir 2>/dev/null)" || fail "canonical primary Git metadata is unavailable"
+  [[ "$primary_common_dir" = /* ]] || primary_common_dir="$primary/$primary_common_dir"
+  primary_common_dir="$(cd "$primary_common_dir" && pwd -P)"
+  expected_common_dir="$(git -C "$repo_root" rev-parse --git-common-dir)" || \
+    fail "destination Git metadata is unavailable"
+  [[ "$expected_common_dir" = /* ]] || expected_common_dir="$repo_root/$expected_common_dir"
+  expected_common_dir="$(cd "$expected_common_dir" && pwd -P)"
+  [[ "$primary_common_dir" == "$expected_common_dir" && -d "$primary/.git" ]] || \
+    fail "canonical primary worktree does not own this repository"
+  while IFS= read -r line; do
+    [[ "$line" == "worktree $primary" ]] && break
+  done < <(git --git-dir="$primary_git_dir" --work-tree="$primary" worktree list --porcelain)
+  [[ "${line:-}" == "worktree $primary" ]] || fail "canonical primary worktree is not registered"
+  for cache_path in "$primary/.data/graphify-semantic-cache" \
+    "$primary/.data/graphify-semantic-cache/semantic" \
+    "$primary/.data/graphify-semantic-cache/semantic-deep"; do
+    [[ ! -L "$cache_path" && -d "$cache_path" ]] || \
+      fail "canonical Graphify cache is missing or unsafe: $cache_path"
+  done
+}
+
+maintain_graphify() {
+  local primary
+  primary="$(canonical_primary_worktree)"
+  validate_canonical_cache_topology "$primary"
+  if ! python3 "$repo_root/scripts/reconcile_graphify_worktree.py" \
+    --root "$repo_root" >/dev/null 2>&1; then
+    fail "Graphify admission maintenance failed; rerun Codex worktree setup"
+  fi
 }
 
 candidate_rank() {
@@ -139,7 +205,16 @@ parentless_worktree() {
 # Codex 0.149.1 may omit it for project-created worktrees; only then fall back
 # to an unambiguous, query-admissible registered ancestor worktree.
 # The strict setup owner validates both topology and Graphify admission.
+validated_modes="$(validated_graphify_modes)"
+
+if [[ "$maintain" == true ]]; then
+  maintain_graphify
+  exit 0
+fi
+
 shared_root="$explicit_parent"
+canonical_primary="$(canonical_primary_worktree)"
+validate_canonical_cache_topology "$canonical_primary"
 if [[ -z "$shared_root" ]]; then
   common_dir="$(git -C "$repo_root" rev-parse --git-common-dir)" || \
     fail "Git metadata is unavailable for Codex worktree setup"
@@ -148,5 +223,10 @@ if [[ -z "$shared_root" ]]; then
   shared_root="$(parentless_worktree)"
 fi
 
-ARIA_NBV_SHARED_ROOT="$shared_root" \
-  exec bash "$repo_root/scripts/setup_worktree_env.sh" "$@"
+if ! setup_output="$(ARIA_NBV_SHARED_ROOT="$shared_root" \
+  ARIA_NBV_CANONICAL_PRIMARY="$canonical_primary" \
+  ARIA_NBV_GRAPHIFY_MODES="$validated_modes" \
+  bash "$repo_root/scripts/setup_worktree_env.sh" "$@" 2>&1)"; then
+  setup_error="$(printf '%s\n' "$setup_output" | sed -n 's/^error: //p' | tail -n 1)"
+  fail "${setup_error:-Codex worktree setup failed; rerun setup after repairing Graphify admission}"
+fi

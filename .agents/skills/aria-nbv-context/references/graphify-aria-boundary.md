@@ -17,17 +17,16 @@ repository owners remain authoritative for behavior and scientific claims.
    distinct worktrees in the same Git common directory and that the selected
    parent's graph is query-admissible. It then copies that generation locally,
    links the selected parent's content-addressed `semantic` and `semantic-deep` namespaces,
-   regenerates the deterministic child projection, then runs upstream
-   incremental `graphify update` before reporting readiness.
+   regenerates the deterministic child projection, then runs setup-owned
+   upstream incremental maintenance before reporting readiness.
 2. Mutable projection, graph, manifest, stat, interpreter, root, run, and
    provenance state are worktree-local regular-file copies. Only the two
    content-addressed cache namespaces are shared; neither cache identity nor a
    matching commit alone proves graph validity.
-3. Setup admits a session only after `scripts/check_graphify_freshness.py
-   --usable` succeeds. Models query the admitted graph and do not perform
-   freshness repair. `scripts/check_graphify_freshness.py --json` remains the
-   read-only diagnostic view; `--check` verifies setup admission without
-   writing.
+3. Setup admits a session only after its internal admission check succeeds.
+   Models query the admitted graph and do not perform freshness repair. CI and
+   maintainers may inspect admission diagnostics, but that is not a normal
+   agent action.
 4. Query the byte-identical upstream Graphify skill first for `fresh` and
    `usable-stale`. Then open exact repository owners; for `usable-stale`, verify
    every consequential path in the exact bounded `stale_sources` list.
@@ -95,9 +94,8 @@ verification of affected sources.
 - ARIA owns the freshness preflight, `.graphifyignore`, the ignored Markdown
   projection, and source-scoped degradation metadata. Freshness validation must
   not disable a structurally valid graph globally.
-- Build the projection with `python3 scripts/build_graphify_projection.py
-  --output graphify-input --aria-code-ref "$(git rev-parse HEAD)"`, then use the
-  repository root as Graphify's corpus root.
+- Setup owns deterministic projection maintenance; use the repository root as
+  Graphify's corpus root.
 - Do not patch, overlay, append to, or add helper scripts beneath the upstream
   Graphify skill bundle. Use its lifecycle, dispatch, cache, merge, manifest,
   and semantic-reconciliation behavior.
